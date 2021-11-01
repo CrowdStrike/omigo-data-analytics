@@ -164,17 +164,24 @@ class TSV:
         inherit_message2 = inherit_message + ": not_endswith" if (len(inherit_message) > 0) else "not_endswith"
         return self.exclude_filter([col], lambda x: x.endswith(suffix), inherit_message = inherit_message2)
 
-    def group_count(self, cols, new_col):
+    def group_count(self, cols, new_col = None, collapse = True, inherit_message = ""):
         # find the matching cols and indexes
         matching_cols = self.__get_matching_cols__(cols)
 
-        # new col validation
-        if (new_col in self.header_map.keys()):
-            raise Exception("New column already exists:", new_col, str(self.header_fields))
+        # create a new col
+        if (new_col == None):
+            new_col = ":".join(matching_cols)
+
+        # define new columns
+        new_count_col = new_col + ":count"
+        new_ratio_col = new_col + ":ratio"
 
         # call aggregate with collapse=False
-        return self.aggregate(matching_cols, [matching_cols[0]], "", [len], collapse=False, inherit_message = "group_count") \
-            .rename(matching_cols[0] + ":len", new_col)
+        inherit_message2 = inherit_message + ":group_count" if (inherit_message != "") else "group_count"
+        return self.aggregate(matching_cols, [matching_cols[0]], "", [len], collapse = collapse, inherit_message = inherit_message2) \
+            .rename(matching_cols[0] + ":len", new_count_col) \
+            .transform([new_count_col], lambda x: str(int(x) / len(self.data)), new_ratio_col, inherit_message = inherit_message2) \
+            .apply_precision(new_ratio_col, 6, inherit_message = inherit_message2)
 
     def ratio(self, col1, col2, new_col, default = 0.0, precision = 6, inherit_message = ""):
         return self \
