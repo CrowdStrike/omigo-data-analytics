@@ -57,7 +57,7 @@ def linechart(xtsv, xcol, ycols, ylabel = None, subplots = False, xfigsize = 25,
 
     # plot
     df.plot.line(subplots = subplots, x = xcol, ylabel = ylabel, figsize = (xfigsize, yfigsize))
-    
+ 
 def scatterplot(xtsv, xcol, ycol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10):
     # check number of unique class values    
     if (class_col != None and len(xtsv.col_as_array_uniq(class_col)) >= max_class_col):
