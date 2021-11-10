@@ -447,48 +447,6 @@ def sort_func(vs):
     vs_date = [v["date"] for v in vs_sorted]
     return [vs_date[0], ",".join(vs_date[1:])]
  
-def test():
-    b1 = read("data/eyrie-autoq-20210405-20210504.tsv.gz")
-    # print(b1.get_header())
-    b1 \
-        .select(["pattern_name", "date", "hour_of_day", "tags:ATAHunt:aid_count", "tags:ATADiscovery:aid_count"]) \
-        .sample_class("date", "2021-05-04", 0.01, seed=1) \
-        .aggregate(["pattern_name", "date"], ["tags:ATAHunt:aid_count", "tags:ATADiscovery:aid_count"], ":total", [sum]*2, collapse = True) \
-        .sort(["date", "pattern_name"], reorder = False) \
-        .group_by_key(["pattern_name"], ["date", "tags:ATAHunt:aid_count:total"], ["group_by_key_output_head", "group_by_key_output_tail"], sort_func, collapse=True) \
-        .take(10) \
-        .show()
-#test()
-
-if __name__ == "__main__":
-    if (len(sys.argv) <= 1):
-        print("tsvutils.py <read_dir> [options]")
-        sys.exit(0)
-
-    command = sys.argv[1]
-    if (command == "read_dir"):
-        if (len(sys.argv) != 10):
-            print("tsvutils.py read_dir <input-dir> <start-date> <end-date> <prefix> <output-file> <s3_region> <aws-profile> <granularity>")
-            sys.exit(0)
-
-        # command line parameters
-        input_dir = sys.argv[2]
-        start_date_str = sys.argv[3]
-        end_date_str = sys.argv[4]
-        prefix = sys.argv[5]
-        output_file_name = sys.argv[6]
-        s3_region = sys.argv[7]
-        aws_profile = sys.argv[8]
-        granularity = sys.argv[9]
-
-        tsv_file = load_from_dir(input_dir, start_date_str, end_date_str, prefix, s3_region, aws_profile, granularity)
-        save_to_file(tsv_file, output_file_name, s3_region, aws_profile) 
-        sys.exit(0)
-
-    else:
-        print("Unknown command:", command) 
-        sys.exit(0)
-
 # this method returns the arg_or_args as an array of single string if the input is just a string, or return as original array
 # useful for calling method arguments that can take single value or an array of values.
 # TBD: Relies on fact that paths are never single letter strings
