@@ -14,6 +14,8 @@ $ pip3 install dist/tsv_data_analytics-0.0.1.tar.gz
 
 ## Usage
 ```
+Some working examples are in jupyter notebooks directory. Here is a simple example to run in command line.
+
 $ python3
 # import the packages
 from tsv_data_analytics import tsvutils
