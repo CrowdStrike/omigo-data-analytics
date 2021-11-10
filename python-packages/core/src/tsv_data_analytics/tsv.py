@@ -179,7 +179,7 @@ class TSV:
 
         # call aggregate with collapse=False
         inherit_message2 = inherit_message + ":group_count" if (inherit_message != "") else "group_count"
-        return self.aggregate(matching_cols, [matching_cols[0]], "", [len], collapse = collapse, inherit_message = inherit_message2) \
+        return self.aggregate(matching_cols, [matching_cols[0]], [len], collapse = collapse, inherit_message = inherit_message2) \
             .rename(matching_cols[0] + ":len", new_count_col) \
             .transform([new_count_col], lambda x: str(int(x) / len(self.data)), new_ratio_col, inherit_message = inherit_message2) \
             .apply_precision(new_ratio_col, 6, inherit_message = inherit_message2)
@@ -338,12 +338,12 @@ class TSV:
             return TSV(new_header, new_data) \
                 .drop(win_col) \
                 .rename(new_win_col, win_col) \
-                .aggregate(cols2, agg_cols, "", agg_funcs, collapse)
+                .aggregate(cols2, agg_cols, agg_funcs, collapse)
         else:
             cols2 = cols
             cols2.append(new_win_col)
             return TSV(new_header, new_data) \
-                .aggregate(cols2, agg_cols, "", agg_funcs, collapse, precision)
+                .aggregate(cols2, agg_cols, agg_funcs, collapse, precision)
 
     # The signature for agg_func is func(list_of_maps). Each map will get the agg_cols
     def group_by_key(self, grouping_cols, agg_cols, agg_func, suffix = "", collapse = True, inherit_message = ""):
@@ -558,7 +558,7 @@ class TSV:
         # remaining validation done by the group_by_key
         return self.group_by_key(grouping_cols, combined_cols, __arg_max_grouping_func__, suffix = suffix, collapse = collapse)
              
-    def aggregate(self, grouping_col_or_cols, agg_cols, suffix, agg_funcs, collapse = True, precision = 4, use_rolling = False, inherit_message = ""):
+    def aggregate(self, grouping_col_or_cols, agg_cols, agg_funcs, collapse = True, precision = 4, use_rolling = False, inherit_message = ""):
         # get matching columns
         grouping_cols = self.__get_matching_cols__(grouping_col_or_cols)
 
@@ -573,12 +573,7 @@ class TSV:
             raise Exception("Aggregate functions are not of correct size")
       
         # validation
-        indexes = []
-        for col in grouping_cols:
-            if (col not in self.header_map.keys()):
-                raise Exception("Column not found:", str(col), str(self.header_fields))
-                
-            indexes.append(self.header_map[col])
+        indexes = self.__get_col_indexes__(grouping_cols)
 
         # check for column to be aggregated
         new_cols = []
@@ -587,11 +582,7 @@ class TSV:
             if (agg_col not in self.header_map.keys()):
                 raise Exception("Column not found: ", str(agg_col) + ", header:", str(self.header_fields))
 
-            # create new column name
-            if (len(suffix) > 0):
-                new_cols.append(agg_col + ":" + suffix)
-            else:
-                new_cols.append(agg_col + ":" + get_func_name(agg_funcs[i]))
+            new_cols.append(agg_col + ":" + get_func_name(agg_funcs[i]))
 
         # take the indexes
         agg_col_indexes = []
@@ -1489,7 +1480,7 @@ class TSV:
             raise Exception("Sampling ratio has to be between 0 and 1:", sampling_ratio)
 
         # group by and apply the sampling on the value. The assumption is that all rows in the same group should have the same col_value
-        agg_result = self.aggregate(grouping_cols, [col], "", [self.__sample_group_by_col_value_agg_func__(col_value, sampling_ratio, seed, use_numeric)], collapse = False, inherit_message = "sample_group_by_col_value") \
+        agg_result = self.aggregate(grouping_cols, [col], [self.__sample_group_by_col_value_agg_func__(col_value, sampling_ratio, seed, use_numeric)], collapse = False, inherit_message = "sample_group_by_col_value") \
             .values_in("{}:__sample_group_by_col_value_agg_func_inner__".format(col), ["1"]) \
             .drop("{}:__sample_group_by_col_value_agg_func_inner__".format(col))
 
@@ -1518,7 +1509,7 @@ class TSV:
         sample_grouping_cols = [g for g in grouping_cols]
         sample_grouping_cols.append(col)
  
-        agg_result = self.aggregate(grouping_cols, [col], "", [self.__sample_group_by_max_uniq_values_uniq_count__], collapse = False, inherit_message = "sample_group_by_max_uniq_values [1/5]") \
+        agg_result = self.aggregate(grouping_cols, [col], [self.__sample_group_by_max_uniq_values_uniq_count__], collapse = False, inherit_message = "sample_group_by_max_uniq_values [1/5]") \
             .transform(["{}:__sample_group_by_max_uniq_values_uniq_count__".format(col)], lambda c: max_uniq_values / float(c) if (float(c) > max_uniq_values) else 1, "{}:__sample_group_by_max_uniq_values_sampling_ratio__".format(col), inherit_message = "sample_group_by_max_uniq_values [2/5]") \
             .transform(sample_grouping_cols, lambda x: abs(mmh3.hash64("\t".join(x) + str(seed))[1]) / sys.maxsize, "{}:__sample_group_by_max_uniq_values_sampling_key__".format(col), use_array_notation = True, inherit_message = "sample_group_by_max_uniq_values [3/5]") \
             .filter(["{}:__sample_group_by_max_uniq_values_sampling_key__".format(col), "{}:__sample_group_by_max_uniq_values_sampling_ratio__".format(col)], lambda x, y: float(x) <= float(y), inherit_message = "sample_group_by_max_uniq_values [4/5]") \
