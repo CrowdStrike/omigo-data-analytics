@@ -486,11 +486,11 @@ def read_url_json(url, query_params = {}, headers = {}, username = None, passwor
             lines = []
             for v in json_obj:
                 lines.append(utils.url_encode(json.dumps(v)).replace("\n", " "))
-            return tsv.TSV("json_encoded", "\n".join(lines))
+            return tsv.TSV("json_encoded", "\n".join(lines)).validate()
                 #.explode_json("json_encoded", suffix = "json", accepted_cols = accepted_cols, excluded_cols = excluded_cols)
                 #.remove_suffix("json")
         elif (isinstance(json_obj, dict)):
-            return tsv.TSV("json_encoded", [utils.url_encode(response_str).replace("\n", " ")])
+            return tsv.TSV("json_encoded", [utils.url_encode(response_str).replace("\n", " ")]).validate()
                 # .explode_json("json_encoded", suffix = "json", accepted_cols = accepted_cols, excluded_cols = excluded_cols)
                 #.remove_suffix("json")
         else:
@@ -508,7 +508,8 @@ def read_url(url, query_params = {}, headers = {}, sep = None, username = None, 
 
     # check for content type
     if ("content-type" in response.headers and response.headers["content-type"].startswith("text/plain") or "Content-Type" in response.headers and response.headers["Content-Type"].startswith("text/plain")):
-        response_str = response.read().decode("ascii")
+        response_str = response.read().decode("ascii").rstrip("\n")
+        
         # split into lines
         lines = response_str.split("\n")
         header = lines[0]
@@ -522,7 +523,7 @@ def read_url(url, query_params = {}, headers = {}, sep = None, username = None, 
             header = header.replace(sep, "\t")
             data = [x.replace(sep, "\t") for x in data]
         # return
-        return tsv.TSV(header, data)
+        return tsv.TSV(header, data).validate()
     else:
         raise Exception("Unable to parse the text response:", str(response.headers).split("\n"))
  

@@ -215,10 +215,15 @@ def read_file_content_as_lines(path, s3_region = None, aws_profile = None):
             zipf.close()
         else:
             fin = open(path, "r")
-            data = fin.readlines()
             data = [x.rstrip("\n") for x in fin.readlines()]
             fin.close()
-        
+
+    # simple csv parser
+    if (path.endswith(".csv") or path.endswith("csv.gz") or path.endswith(".csv.zip")):
+        utils.warn("Found a CSV file. Only simple csv format is supported")
+        data = [x.replace(",", "\t") for x in data]
+
+    # return
     return data
 
 def parse_date_multiple_formats(date_str):
