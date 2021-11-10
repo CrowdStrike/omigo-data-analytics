@@ -21,7 +21,7 @@ def get_report_progress_min_thresh():
 
 def trace(msg):
     if (is_trace()):
-        print("[TRACe]: {}".format(msg))
+        print("[TRACE]: {}".format(msg))
 
 def debug(msg):
     if (is_debug()):
@@ -123,3 +123,16 @@ def merge_arrays(arr_list):
             result.append(v)
 
     return result
+
+
+def is_array_of_string_values(col_or_cols):
+    if (isinstance(col_or_cols, str)):
+        return False
+
+    is_array = False
+    for c in col_or_cols:
+        if (len(c) > 1):
+            is_array = True
+            break
+    return is_array
+

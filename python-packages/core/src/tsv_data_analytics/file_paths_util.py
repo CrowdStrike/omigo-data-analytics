@@ -3,6 +3,7 @@
 import os
 import gzip
 import datetime
+import zipfile
 
 # local imports
 from tsv_data_analytics import s3_wrapper
@@ -11,7 +12,7 @@ from tsv_data_analytics import utils
 # constant
 NUM_HOURS = 24
 
-# method to read the file paths 
+# method to read the eyrie enriched data
 def read_filepaths(path, start_date_str, end_date_str, fileprefix, s3_region, aws_profile, granularity, ignore_missing = False):
     if (granularity == "hourly"):
         return read_filepaths_hourly(path, start_date_str, end_date_str, fileprefix, s3_region, aws_profile, "", ignore_missing)
@@ -60,16 +61,19 @@ def read_filepaths_hourly(path, start_date_str, end_date_str, fileprefix, s3_reg
             etl_prefix = get_etl_level_prefix(curdatetime, etl_level)
             filepath_tsv = path + etl_prefix + fileprefix + "-" + curdatetime.strftime("%Y%m%d-%H0000") + ".tsv"
             filepath_tsvgz = filepath_tsv + ".gz"
+            filepath_tsvzip = filepath_tsv + ".zip"
 
             # check if this is s3 file
-            if (filepath_tsv.startswith("s3://") or filepath_tsvgz.startswith(".gz")):
+            if (filepath_tsv.startswith("s3://")):
                 if (s3_wrapper.check_path_exists(filepath_tsv, s3_region, aws_profile)):
                     filepaths.append(filepath_tsv)
                 elif (s3_wrapper.check_path_exists(filepath_tsvgz, s3_region, aws_profile)):
                     filepaths.append(filepath_tsvgz)
+                elif (s3_wrapper.check_path_exists(filepath_tsvzip, s3_region, aws_profile)):
+                    filepaths.append(filepath_tsvzip)
                 else:
                     if (ignore_missing == False):
-                        raise Exception("Input files don't exist. Use ignore_missing if want to continue: ", filepath_tsv, filepath_tsvgz)
+                        raise Exception("Input files don't exist. Use ignore_missing if want to continue: ", filepath_tsv, filepath_tsvgz, filepath_tsvzip)
                     else:
                         continue
             else:
@@ -78,9 +82,11 @@ def read_filepaths_hourly(path, start_date_str, end_date_str, fileprefix, s3_reg
                     filepaths.append(filepath_tsv)
                 elif (os.path.exists(filepath_tsvgz)):
                     filepaths.append(filepath_tsvgz)
+                elif (os.path.exists(filepath_tsvzip)):
+                    filepaths.append(filepath_tsvzip)
                 else:
                     if (ignore_missing == False):
-                        raise Exception("Input files don't exist. Use ignore_missing if want to continue: ", filepath_tsv, filepath_tsvgz)
+                        raise Exception("Input files don't exist. Use ignore_missing if want to continue: ", filepath_tsv, filepath_tsvgz, filepath_tsvzip)
                     else:
                         continue
 
@@ -199,20 +205,20 @@ def read_file_content_as_lines(path, s3_region = None, aws_profile = None):
     else:
         if (path.endswith(".gz")):
             fin = gzip.open(path, mode = "rt")
+            data = [x.rstrip("\n") for x in fin.readlines()]
+            fin.close()
+        elif (path.endswith(".zip")):
+            zipf = zipfile.ZipFile(path, "r")
+            fin = zipf.open(zipf.infolist()[0], "r")
+            data = fin.read().decode().split("\n")
+            fin.close()
+            zipf.close()
         else:
             fin = open(path, "r")
-        
-        # initialize
-        try:
             data = fin.readlines()
-            for i in range(len(data)):
-                data[i] = data[i].rstrip("\n")
-        except EOFError as e:
-            print("Exception in reading file:", path)
-            raise(e)
-        finally:
+            data = [x.rstrip("\n") for x in fin.readlines()]
             fin.close()
-
+        
     return data
 
 def parse_date_multiple_formats(date_str):
@@ -330,4 +336,5 @@ def create_local_parent_dir(filepath):
             if (utils.is_debug()):
                 print("Creating local directory:", dir_path)
             os.makedirs(dir_path, exist_ok = True)
+
 

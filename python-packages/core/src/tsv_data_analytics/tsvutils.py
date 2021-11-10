@@ -35,7 +35,7 @@ def merge(tsv_list, merge_def_vals = None):
                 utils.warn("Mismatch in header at index: {}. Cant merge. Using merge_intersect for common intersection. Some of the differences in header: {}".format(
                     index, str(header_diffs)))
             else:
-                utils.warn("Mismatch in order of header fields: {}, {}. Using merge intersect".format(header, t.get_header()))
+                utils.warn("Mismatch in order of header fields: {}, {}. Using merge intersect".format(header.split("\t"), t.get_header().split("\t")))
             return merge_intersect(tsv_list, merge_def_vals)
                 
         index = index + 1
@@ -46,7 +46,7 @@ def merge(tsv_list, merge_def_vals = None):
     else:
         return tsv_list[0].union(tsv_list[1:])
 
-def get_diffs_in_headers(tsv_list):
+def split_headers_in_common_and_diff(tsv_list):
     common = {}
     # get the counts for each header field
     for t in tsv_list:
@@ -62,7 +62,11 @@ def get_diffs_in_headers(tsv_list):
             non_common.append(k)
 
     # return
-    return sorted(non_common)
+    return sorted(common.keys()), sorted(non_common)
+
+def get_diffs_in_headers(tsv_list):
+    common, non_common = split_headers_in_common_and_diff(tsv_list)
+    return non_common
 
 def merge_intersect(tsv_list, merge_def_vals = None):
     # remove zero length tsvs
@@ -141,13 +145,28 @@ def merge_intersect(tsv_list, merge_def_vals = None):
             tsv_list2.append(t.select(same_cols))
         return merge(tsv_list2) 
 
-def read(input_file_or_files, s3_region = None, aws_profile = None):
+def read(input_file_or_files, sep = None, s3_region = None, aws_profile = None):
     input_files = __get_argument_as_array__(input_file_or_files)
     tsv_list = []
     for input_file in input_files:
+        # read file content
         lines = file_paths_util.read_file_content_as_lines(input_file, s3_region, aws_profile)
+
+        # take header and dat
         header = lines[0]
         data = lines[1:]
+
+        # check if a custom separator is defined
+        if (sep != None):
+            # check for validation
+            for line in lines:
+                if ("\t" in line):
+                    raise Exception("Cant parse non tab separated file as it contains tab character:", input_file)
+
+            # create header and data
+            header = header.replace(sep, "\t")
+            data = [x.replace(sep, "\t") for x in data]
+
         tsv_list.append(tsv.TSV(header, data))
 
     return merge(tsv_list)
@@ -163,10 +182,19 @@ def read_with_filter_transform(input_file_or_files, filter_transform_func = None
     # initialize result
     tsv_list = []
 
+    # common keys
+    common_keys = {}
+
     # iterate over all input files
     for input_file in input_files:
         # read the file
         x = read(input_file)
+
+        # update the common
+        for h in x.get_header_fields():
+            if (h not in common_keys.keys()):
+                common_keys[h] = 0
+            common_keys[h] = common_keys[h] + 1
 
         # gather maps of maps
         result_maps = []
@@ -181,28 +209,49 @@ def read_with_filter_transform(input_file_or_files, filter_transform_func = None
                 for k in mp2.keys():
                     keys[k] = 1
 
-        # output keys
-        keys_sorted = sorted(list(keys.keys()))
+        # check for empty maps
+        if (len(keys) > 0):
+            # output keys
+            keys_sorted = []
+            first_file = read(input_files[0])
+            for h in first_file.get_header_fields():
+                if (h in keys.keys()):
+                    keys_sorted.append(h)
 
-        # new header and data
-        header2 = "\t".join(keys_sorted)
-        data2 = []
+            # new header and data
+            header2 = "\t".join(keys_sorted)
+            data2 = []
 
-        # iterate and generate header and data
-        for mp in result_maps:
-            fields = []
-            for k in keys_sorted:
-                fields.append(mp[k])
-            data2.append("\t".join(fields))
+            # iterate and generate header and data
+            for mp in result_maps:
+                fields = []
+                for k in keys_sorted:
+                    fields.append(mp[k])
+                data2.append("\t".join(fields))
 
-        # debugging
-        utils.debug("tsvutils: read_with_filter_transform: file read: {}, after filter num_rows: {}".format(input_file, len(data2)))
+            # debugging
+            utils.debug("tsvutils: read_with_filter_transform: file read: {}, after filter num_rows: {}".format(input_file, len(data2)))
 
-        # result tsv
-        tsv_list.append(tsv.TSV(header2, data2))
+            # result tsv
+            tsv_list.append(tsv.TSV(header2, data2))
 
-    # call merge on tsv_list
-    return merge(tsv_list)
+    # Do a final check to see if all tsvs are empty
+    if (len(tsv_list) > 0):
+        # call merge on tsv_list
+        return merge(tsv_list)
+    else:
+        # create an empty data tsv file with common header fields
+        header_fields = []
+        first_file = read(input_files[0])
+        for h in first_file.get_header_fields():
+            if (common_keys[h] == len(input_files)):
+                header_fields.append(h)
+
+        new_header = "\t".join(header_fields)
+        new_data = []
+
+        # return
+        return tsv.TSV(new_header, new_data)
 
 def read_by_date_range(path, start_date_str, end_date_str, prefix, s3_region = None, aws_profile = None, granularity = "daily"):
     # read filepaths
@@ -228,14 +277,14 @@ def read_by_date_range(path, start_date_str, end_date_str, prefix, s3_region = N
         return tsv_list[0].union(tsv_list[1:])
 
 # this method is needed so that users dont have to interact with file_paths_util
-# TODO: move this to etl tools as there are specific directory construction logic
+# TODO: move this to scar etl tools as there are specific directory construction logic
 def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix, spillover_window = 1, s3_region = None, aws_profile = None):
-    utils.print_code_todo_warning("get_file_paths_by_datetime_range: move this to etl tools as there are specific directory construction logic")
+    utils.print_code_todo_warning("get_file_paths_by_datetime_range: move this to scar etl tools as there are specific directory construction logic")
     return file_paths_util.get_file_paths_by_datetime_range(path,  start_date_str, end_date_str, prefix, spillover_window, s3_region, aws_profile)
     
-# TODO: move this to etl tools as there are specific directory construction logic
+# TODO: move this to scar etl tools as there are specific directory construction logic
 def scan_by_datetime_range(path, start_date_str, end_date_str, prefix, filter_func = None, spillover_window = 1, num_par = 5, timeout_seconds = 600, merge_def_vals = None, s3_region = None, aws_profile = None):
-    utils.print_code_todo_warning("scan_by_datetime_range: move this to etl tools as there are specific directory construction logic")
+    utils.print_code_todo_warning("scan_by_datetime_range: move this to scar etl tools as there are specific directory construction logic")
     utils.warn("scan_by_datetime_range: this method runs in multithreaded mode which can not be stopped without killing process. Wait for timeout_seconds: {}".format(timeout_seconds))
 
     # read filepaths by scanning. this involves listing all the files, and then matching the condititions
@@ -398,6 +447,50 @@ def sort_func(vs):
     vs_date = [v["date"] for v in vs_sorted]
     return [vs_date[0], ",".join(vs_date[1:])]
  
+def test():
+    b1 = read("data/eyrie-autoq-20210405-20210504.tsv.gz")
+    # print(b1.get_header())
+    b1 \
+        .select(["pattern_name", "date", "hour_of_day", "tags:ATAHunt:aid_count", "tags:ATADiscovery:aid_count"]) \
+        .sample_class("date", "2021-05-04", 0.01, seed=1) \
+        .aggregate(["pattern_name", "date"], ["tags:ATAHunt:aid_count", "tags:ATADiscovery:aid_count"], ":total", [sum]*2, collapse = True) \
+        .sort(["date", "pattern_name"], reorder = False) \
+        .group_by_key(["pattern_name"], ["date", "tags:ATAHunt:aid_count:total"], ["group_by_key_output_head", "group_by_key_output_tail"], sort_func, collapse=True) \
+        .take(10) \
+        .show()
+#test()
+
+if __name__ == "__main__":
+    if (len(sys.argv) <= 1):
+        print("tsvutils.py <read_dir> [options]")
+        sys.exit(0)
+
+    command = sys.argv[1]
+    if (command == "read_dir"):
+        if (len(sys.argv) != 10):
+            print("tsvutils.py read_dir <input-dir> <start-date> <end-date> <prefix> <output-file> <s3_region> <aws-profile> <granularity>")
+            sys.exit(0)
+
+        # command line parameters
+        input_dir = sys.argv[2]
+        start_date_str = sys.argv[3]
+        end_date_str = sys.argv[4]
+        prefix = sys.argv[5]
+        output_file_name = sys.argv[6]
+        s3_region = sys.argv[7]
+        aws_profile = sys.argv[8]
+        granularity = sys.argv[9]
+
+        tsv_file = load_from_dir(input_dir, start_date_str, end_date_str, prefix, s3_region, aws_profile, granularity)
+        save_to_file(tsv_file, output_file_name, s3_region, aws_profile) 
+        sys.exit(0)
+
+    else:
+        print("Unknown command:", command) 
+        sys.exit(0)
+
+# this method returns the arg_or_args as an array of single string if the input is just a string, or return as original array
+# useful for calling method arguments that can take single value or an array of values.
 # TBD: Relies on fact that paths are never single letter strings
 def __get_argument_as_array__(arg_or_args):
     is_single_letter = True
@@ -410,3 +503,4 @@ def __get_argument_as_array__(arg_or_args):
         return [arg_or_args]
     else:
         return arg_or_args
+

@@ -3,6 +3,8 @@ import boto3
 import gzip
 import botocore
 import os
+import zipfile
+from io import BytesIO
 
 # local import
 from tsv_data_analytics import utils
@@ -95,6 +97,11 @@ def get_s3_file_content_as_text(bucket_name, object_key, region = None, profile 
     barr = get_s3_file_content(bucket_name, object_key, region, profile)
     if (object_key.endswith(".gz")):
         barr = gzip.decompress(barr)
+    elif(object_key.endswith(".zip")):
+        # get only the filename
+        zfile = zipfile.ZipFile(BytesIO(barr))
+        barr = zfile.open(zfile.infolist()[0]).read()
+        zfile.close()
 
     barr = bytearray(barr)
     return barr.decode().rstrip("\n")
@@ -117,6 +124,13 @@ def put_s3_file_with_text_content(bucket_name, object_key, text, region = None, 
     barr = str.encode(text)
     if (object_key.endswith(".gz")):
         barr = gzip.compress(barr)
+    elif (object_key.endswith(".zip")):
+        # get only the filename
+        object_file_name = object_key.split("/")[-1]
+        mzip = BytesIO()
+        with zipfile.ZipFile(mzip, mode = "w", compression = zipfile.ZIP_DEFLATED) as zfile:
+            zfile.writestr(object_file_name[0:-4], barr)
+        barr = mzip.getvalue()
 
     put_s3_file_content(bucket_name, object_key, barr, region, profile)
 
@@ -215,3 +229,4 @@ def get_directory_listing(path, filter_func = None, fail_if_missing = True, regi
 
     # return
     return filenames
+

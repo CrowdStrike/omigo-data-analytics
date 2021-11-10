@@ -4,7 +4,7 @@ from tsv_data_analytics import utils
 from dateutil import parser
 import datetime
 
-# Extension functions for ETL related stuff
+# extension functions for ETL related stuff
 
 # expects path in the form of s3://x1/x2/dt=yyyymmdd/abc1-abc2-yymmdd-HHMMSS-yymmdd-HHMMSS.tsv.gz
 # returns
@@ -18,6 +18,7 @@ import datetime
 # extension: tsv.gz
 # self.start_date_time: yyyy-MM-ddTHH:MM:SS
 # self.end_date_time: yyyy-MM-ddTHH:MM:SS
+ 
 class EtlDateTimePathFormat:
     # fields 
     dir_prefix = None
@@ -49,6 +50,8 @@ class EtlDateTimePathFormat:
         # it is okay to fail on exception as we are assuming some basic file structure
         if (base_filename.endswith(".tsv.gz")):
             self.extension = "tsv.gz"
+        if (base_filename.endswith(".tsv.zip")):
+            self.extension = "tsv.zip"
         elif (base_filename.endswith(".tsv")):
             self.extension = "tsv"
         else:
@@ -96,3 +99,4 @@ def get_matching_etl_date_time_path(path, new_base_path, new_prefix, new_extensi
      # construct new path
      new_path = "{}/dt={}/{}-{}-{}-{}-{}.{}".format(new_base_path, er.date_part, new_prefix, er.start_date, er.start_time, er.end_date, er.end_time, effective_extension)
      return new_path
+
