@@ -12,7 +12,7 @@ from tsv_data_analytics import utils
 # constant
 NUM_HOURS = 24
 
-# method to read the eyrie enriched data
+# method to read the data 
 def read_filepaths(path, start_date_str, end_date_str, fileprefix, s3_region, aws_profile, granularity, ignore_missing = False):
     if (granularity == "hourly"):
         return read_filepaths_hourly(path, start_date_str, end_date_str, fileprefix, s3_region, aws_profile, "", ignore_missing)
