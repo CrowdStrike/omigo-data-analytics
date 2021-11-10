@@ -28,47 +28,40 @@ $ python3
 from tsv_data_analytics import tsvutils
 
 # read data from public url. Can also use local file or a file in s3
-x = tsvutils.read_url("https://github.com/owid/covid-19-data/raw/master/public/data/owid-covid-data.csv")
+x = tsvutils.read_url("https://github.com/CrowdStrike/tsv-data-analytics/raw/main/notebooks/iris.tsv")
 
 # print the number of rows
 print(x.num_rows())
-132224
+150
 
 # the tsv data can be exported to pandas data frame for general processing
 x.export_to_df(10)
-  iso_code continent     location        date total_cases  ... human_development_index excess_mortality_cumulative_absolute excess_mortality_cumulative excess_mortality excess_mortality_cumulative_per_million
-0      AFG      Asia  Afghanistan  2020-02-24         5.0  ...                   0.511                                                                                                                          
-1      AFG      Asia  Afghanistan  2020-02-25         5.0  ...                   0.511                                                                                                                          
-2      AFG      Asia  Afghanistan  2020-02-26         5.0  ...                   0.511                                                                                                                          
-3      AFG      Asia  Afghanistan  2020-02-27         5.0  ...                   0.511                                                                                                                          
-4      AFG      Asia  Afghanistan  2020-02-28         5.0  ...                   0.511                                                                                                                          
-5      AFG      Asia  Afghanistan  2020-02-29         5.0  ...                   0.511                                                                                                                          
-6      AFG      Asia  Afghanistan  2020-03-01         5.0  ...                   0.511                                                                                                                          
-7      AFG      Asia  Afghanistan  2020-03-02         5.0  ...                   0.511                                                                                                                          
-8      AFG      Asia  Afghanistan  2020-03-03         5.0  ...                   0.511                                                                                                                          
-9      AFG      Asia  Afghanistan  2020-03-04         5.0  ...                   0.511                                                   
+  sepal_length sepal_width petal_length petal_width        class
+0          5.1         3.5          1.4         0.2  Iris-setosa
+1          4.9         3.0          1.4         0.2  Iris-setosa
+2          4.7         3.2          1.3         0.2  Iris-setosa
+3          4.6         3.1          1.5         0.2  Iris-setosa
+4          5.0         3.6          1.4         0.2  Iris-setosa
+5          5.4         3.9          1.7         0.4  Iris-setosa
+6          4.6         3.4          1.4         0.3  Iris-setosa
+7          5.0         3.4          1.5         0.2  Iris-setosa
+8          4.4         2.9          1.4         0.2  Iris-setosa
+9          4.9         3.1          1.5         0.1  Iris-setosa
 
 # simple example of filtering data for USA and selecting specific columns
 y = x \
-    .eq_str("iso_code", "USA") \
-    .select(["date", "new_cases", "new_deaths"])
+    .eq_str("class", "Iris-setosa") \
+    .select(["sepal_width", "sepal_length"])
 
-# example of filling missing values in data and running aggregate to compute monthly cases and deaths
-z = y \
-    .transform("date", lambda x: x[0:7], "date_month") \
-    .set_missing_values(["new_cases", "new_deaths"], "0") \
-    .aggregate("date_month", ["new_cases", "new_deaths"], [sum, sum]) \
-    .sort("date_month")
+y.show(5)
 
-z.show(5)
-
-date_month	new_cases:sum	new_deaths:sum
-2020-01   	            7	             0
-2020-02   	           17	             1
-2020-03   	       192054	          5358
-2020-04   	       888997	         60795
-2020-05   	       718602	         41520
+sepal_width	sepal_length
+3.5        	         5.1
+3.0        	         4.9
+3.2        	         4.7
+3.1        	         4.6
+3.6        	         5.0
 
 # the tsv data can be saved easily to local file system or s3
-tsvutils.save_to_file(z, "output.tsv.gz")
+tsvutils.save_to_file(y, "output.tsv.gz")
 ```
