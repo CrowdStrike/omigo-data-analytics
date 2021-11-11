@@ -242,7 +242,7 @@ class TSV:
         inherit_message2 = inherit_message + ": drop" if (len(inherit_message) > 0) else "drop"
         return self.select(non_matching_cols, inherit_message = inherit_message2)
 
-    def window_aggregate(self, cols, win_col, agg_cols, suffix, agg_funcs, winsize, sliding = False, collapse = True, precision = 2, inherit_message = ""):
+    def window_aggregate(self, cols, win_col, agg_cols, agg_funcs, winsize, sliding = False, collapse = True, suffix = "", precision = 2, inherit_message = ""):
         # get the matching cols
         cols = self.__get_matching_cols__(cols)
 
