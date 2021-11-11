@@ -32,10 +32,12 @@ from tsv_data_analytics import tsvutils
 
 #### Read data from public url. Can also use local file or a file in s3
 ```
-x = tsvutils.read_url("https://github.com/CrowdStrike/tsv-data-analytics/raw/main/notebooks/iris.tsv")
+x = tsvutils.read("data/iris.tsv.gz")
 # other possible options
-# x = tsvutils.read("/path_to_local_file/data.tsv.gz")
+# x = tsvutils.read("data/iris.tsv")
+# x = tsvutils.read("data/iris.tsv.zip")
 # x = tsvutils.read("s3://bucket/path_to_file/data.tsv.gz")
+# x = tsvutils.read_url("https://github.com/CrowdStrike/tsv-data-analytics/raw/main/data/iris.tsv")
 ```
 #### Print the number of rows
 ```

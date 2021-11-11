@@ -4,12 +4,13 @@ from concurrent.futures import ThreadPoolExecutor
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
+from io import BytesIO
 import base64
+import gzip
 import json
 import os
 import time
 import zipfile
-from io import BytesIO
 
 # local imports
 from tsv_data_analytics import tsv
@@ -502,9 +503,24 @@ def read_url_json(url, query_params = {}, headers = {}, username = None, passwor
 
 # TODO: the compressed file handling should be done separately in a function
 def read_url(url, query_params = {}, headers = {}, sep = None, username = None, password = None):
-    # best effort detection for separator
-    if ((url.endswith(".csv") or url.endswith(".csv.gz") or url.endswith(".csv.zip")) and sep == None):
-        sep = ","
+    # use the file extension as alternate way of detecting type of file
+    file_type = None
+    if (url.endswith(".csv") or url.endswith(".tsv")):
+        file_type = "text"
+    elif (url.endswith(".gz")):
+        file_type = "gzip"
+    elif (url.endswith(".zip")):
+        file_type = "zip"
+
+    # detect extension  
+    ext_type = None
+    if (url.endswith(".csv") or url.endswith(".csv.gz") or url.endswith(".csv.zip")):
+        ext_type = "csv"
+        utils.warn("CSV file detected. Only simple csv files are supported where comma and tabs are not part of any data.")
+    elif (url.endswith(".tsv") or url.endswith(".tsv.gz") or url.endswith(".tsv.zip")): 
+        ext_type = "tsv"
+    else:
+        utils.warn("Unknown file extension. Doing best effort in content type detection")
 
     # read response
     response = __read_base_url(url, query_params, headers, username, password)
@@ -520,11 +536,11 @@ def read_url(url, query_params = {}, headers = {}, sep = None, username = None, 
 
     # get response
     response_str = None
-    if (content_type.startswith("text/plain"):
+    if (content_type.startswith("text/plain") or file_type == "text"):
         response_str = response.read().decode("ascii").rstrip("\n")
-    elif (content_type.startswith("application/x-gzip-compressed")):
+    elif (content_type.startswith("application/x-gzip-compressed") or file_type == "gzip"):
         response_str = str(gzip.decompress(response.read()), "utf-8").rstrip("\n")
-    elif (content_type.startswith("application/x-zip-compressed")):
+    elif (content_type.startswith("application/x-zip-compressed") or file_type == "zip"):
         barr = response.read()
         zfile = zipfile.ZipFile(BytesIO(barr))
         response_str = zfile.open(zfile.infolist()[0]).read().decode().rstrip("\n")
@@ -537,11 +553,20 @@ def read_url(url, query_params = {}, headers = {}, sep = None, username = None, 
     header = lines[0]
     data = lines[1:]
 
+    # check for separator
+    if (sep == None and "\t" not in response_str):
+        if ("," in header or ext_type == "csv"):
+            sep = ","
+
     # check for other separators
-    if (sep != None):
+    if (sep != None and sep != "\t"):
+        # do a better version of separator detection
         if ("\t" in response_str):
-            raise Exception("Cant parse non tab separated file as this contains tabs")
-        # replace
+            utils.warn("Non TSV input file has tabs. Converting tabs to spaces")
+            header = header.replace("\t", " ")
+            data = [x.replace("\t", " ") for x in data]
+ 
+        # replace separator with tabs
         header = header.replace(sep, "\t")
         data = [x.replace(sep, "\t") for x in data]
 
