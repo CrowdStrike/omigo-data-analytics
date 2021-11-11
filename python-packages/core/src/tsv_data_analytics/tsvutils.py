@@ -8,6 +8,8 @@ import base64
 import json
 import os
 import time
+import zipfile
+from io import BytesIO
 
 # local imports
 from tsv_data_analytics import tsv
@@ -498,35 +500,54 @@ def read_url_json(url, query_params = {}, headers = {}, username = None, passwor
     else:
         raise Exception("Unable to parse the json response:", json_obj)
 
+# TODO: the compressed file handling should be done separately in a function
 def read_url(url, query_params = {}, headers = {}, sep = None, username = None, password = None):
     # best effort detection for separator
-    if (url.endswith(".csv") and sep == None):
+    if ((url.endswith(".csv") or url.endswith(".csv.gz") or url.endswith(".csv.zip")) and sep == None):
         sep = ","
 
     # read response
     response = __read_base_url(url, query_params, headers, username, password)
 
     # check for content type
-    if ("content-type" in response.headers and response.headers["content-type"].startswith("text/plain") or "Content-Type" in response.headers and response.headers["Content-Type"].startswith("text/plain")):
-        response_str = response.read().decode("ascii").rstrip("\n")
-        
-        # split into lines
-        lines = response_str.split("\n")
-        header = lines[0]
-        data = lines[1:]
+    content_type = None
+    if ("content-type" in response.headers):
+        content_type = response.headers["content-type"].lower()
+    elif ("Content-Type" in response.headers):
+        content_type = response.headers["Content-Type"].lower()
+    else:
+        raise Exception("Cant find content type in response headers:", str(response.headers))
 
-        # check for other separators
-        if (sep != None):
-            if ("\t" in response_str):
-                raise Exception("Cant parse non tab separated file as this contains tabs")
-            # replace
-            header = header.replace(sep, "\t")
-            data = [x.replace(sep, "\t") for x in data]
-        # return
-        return tsv.TSV(header, data).validate()
+    # get response
+    response_str = None
+    if (content_type.startswith("text/plain"):
+        response_str = response.read().decode("ascii").rstrip("\n")
+    elif (content_type.startswith("application/x-gzip-compressed")):
+        response_str = str(gzip.decompress(response.read()), "utf-8").rstrip("\n")
+    elif (content_type.startswith("application/x-zip-compressed")):
+        barr = response.read()
+        zfile = zipfile.ZipFile(BytesIO(barr))
+        response_str = zfile.open(zfile.infolist()[0]).read().decode().rstrip("\n")
+        zfile.close()
     else:
         raise Exception("Unable to parse the text response:", str(response.headers).split("\n"))
- 
+        
+    # split into lines
+    lines = response_str.split("\n")
+    header = lines[0]
+    data = lines[1:]
+
+    # check for other separators
+    if (sep != None):
+        if ("\t" in response_str):
+            raise Exception("Cant parse non tab separated file as this contains tabs")
+        # replace
+        header = header.replace(sep, "\t")
+        data = [x.replace(sep, "\t") for x in data]
+
+    # return
+    return tsv.TSV(header, data).validate()
+    
 # this method returns the arg_or_args as an array of single string if the input is just a string, or return as original array
 # useful for calling method arguments that can take single value or an array of values.
 # TBD: Relies on fact that paths are never single letter strings
