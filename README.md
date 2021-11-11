@@ -102,7 +102,7 @@ sepal_width	sepal_length
 >>> tsvutils.save_to_file(y, "output.tsv.gz")
 ```
 ## Notes from the author
-* This library is built for functionality and robustness. Engineering good practices are followed slowly.
-* There are 100+ helper APIs to work with data. Detailed documentation is coming soon.
+* This library is built for simplicity, functionality and robustness. Engineering good practices are followed slowly.
+* There are 100+ helper APIs to work with the data. Detailed documentation is coming soon.
 * The primary use case is to work with data collected through regular ETL jobs over long periods of time. The design is not finalized yet, though feel free to reach out on how to use the same. 
 * Contact: amit.jaiswal@gmail.com
