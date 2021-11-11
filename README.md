@@ -28,12 +28,12 @@ $ pip3 install dist/tsv_data_analytics_ext-0.0.1.tar.gz
 #### Import the package to read data
 ```
 $ python3
-from tsv_data_analytics import tsvutils
+>>> from tsv_data_analytics import tsvutils
 ```
 
 #### Read data from public url. Can also use local file or a file in s3
 ```
-x = tsvutils.read("data/iris.tsv.gz")
+>>> x = tsvutils.read("data/iris.tsv.gz")
 # other possible options
 # x = tsvutils.read("data/iris.tsv")
 # x = tsvutils.read("data/iris.tsv.zip")
@@ -42,13 +42,13 @@ x = tsvutils.read("data/iris.tsv.gz")
 ```
 #### Print the number of rows
 ```
-print(x.num_rows())
+>>> print(x.num_rows())
 150
 ```
 
 #### The tsv data can be exported to pandas data frame for general processing
 ```
-x.export_to_df(10)
+>>> x.export_to_df(10)
   sepal_length sepal_width petal_length petal_width        class
 0          5.1         3.5          1.4         0.2  Iris-setosa
 1          4.9         3.0          1.4         0.2  Iris-setosa
@@ -64,11 +64,11 @@ x.export_to_df(10)
 
 #### Example of filtering data for specific column value and select specific columns
 ```
-y = x \
+>>> y = x \
     .eq_str("class", "Iris-setosa") \
     .select(["sepal_width", "sepal_length"])
 
-y.show(5)
+>>> y.show(5)
 
 sepal_width	sepal_length
 3.5        	         5.1
@@ -79,18 +79,18 @@ sepal_width	sepal_length
 ```
 #### Import the graph extension package for creating charts
 ```
-from tsv_data_analytics_ext import graphext
-x.extend_class(graphext.VisualTSV).density("sepal_width")
+>>> from tsv_data_analytics_ext import graphext
+>>> x.extend_class(graphext.VisualTSV).density("sepal_width")
 ```
 ![iris sepal_width histogram](images/iris-hist.png)
 
 #### Some of the more advanced graphs are also available
 ```
-x.extend_class(graphext.VisualTSV).pairplot(["sepal_length", "sepal_width"], kind = "kde", diag_kind = "auto")
+>>> x.extend_class(graphext.VisualTSV).pairplot(["sepal_length", "sepal_width"], kind = "kde", diag_kind = "auto")
 ```
 ![iris sepal_width pairplot](images/iris-pairplot.png)
 
 #### The tsv file can be saved to local file system or s3
 ```
-tsvutils.save_to_file(y, "output.tsv.gz")
+>>> tsvutils.save_to_file(y, "output.tsv.gz")
 ```
