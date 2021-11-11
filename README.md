@@ -6,7 +6,14 @@
 
 ## Build and Install Instructions
 There are two packages - core and extensions. The core package is built on core python and out of the box without many dependencies
-to keep it stable. The extensions package contains libraries for plotting, and can have lot of dependencies. 
+to keep it stable. The extensions package contains libraries for plotting, and can have lot of dependencies.
+
+To build and install both packages:
+```
+$ ./install.sh
+```
+
+To build the packages separately: 
 ```
 # update the build module
 $ python3 -m pip install --upgrade build
