@@ -80,13 +80,13 @@ sepal_width	sepal_length
 #### Import the graph extension package for creating charts
 ```
 from tsv_data_analytics_ext import graphext
-graphext.density(x, "sepal_width")
+x.extend_class(graphext.VisualTSV).density("sepal_width")
 ```
 ![iris sepal_width histogram](images/iris-hist.png)
 
 #### Some of the more advanced graphs are also available
 ```
-graphext.pairplot(x, ["sepal_length", "sepal_width"], kind = "kde", diag_kind = "auto")
+x.extend_class(graphext.VisualTSV).pairplot(["sepal_length", "sepal_width"], kind = "kde", diag_kind = "auto")
 ```
 ![iris sepal_width pairplot](images/iris-pairplot.png)
 
