@@ -97,4 +97,5 @@ sepal_width	sepal_length
 ## Notes from the author
 * This library is built for functionality and robustness. Engineering good practices are followed slowly.
 * There are 100+ helper APIs to work with data. Detailed documentation is coming soon.
-* The primary use case is to work with time series data collected through regular ETL jobs. The design is not finalized, though feel free to reach out on how to use the same. 
+* The primary use case is to work with data collected through regular ETL jobs over long periods of time. The design is not finalized yet, though feel free to reach out on how to use the same. 
+* Contact: amit.jaiswal@gmail.com
