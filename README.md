@@ -86,7 +86,7 @@ graphext.density(x, "sepal_width")
 
 #### Some of the more advanced graphs are also available
 ```
-graphext.pairplot(x, ["sepal_length", "sepal_width"], kind = "kde")
+graphext.pairplot(x, ["sepal_length", "sepal_width"], kind = "kde", diag_kind = "auto")
 ```
 ![iris sepal_width pairplot](images/iris-pairplot.png)
 
