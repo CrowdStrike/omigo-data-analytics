@@ -79,7 +79,7 @@ sepal_width	sepal_length
 #### Import the graph extension package for creating charts
 ```
 from tsv_data_analytics_ext import graphext
-graphext.density(x2, "sepal_width")
+graphext.density(x, "sepal_width")
 ```
 ![iris sepal_width histogram](images/iris-hist.png)
 
