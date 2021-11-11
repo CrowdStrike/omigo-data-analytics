@@ -85,11 +85,11 @@ graphext.density(x, "sepal_width")
 
 #### Some of the more advanced graphs are also available
 ```
-graphext.pairplot(x5, ["sepal_length", "sepal_width"], kind = "kde")
+graphext.pairplot(x, ["sepal_length", "sepal_width"], kind = "kde")
 ```
 ![iris sepal_width pairplot](images/iris-pairplot.png)
 
-#### TSV data file can be saved to local file system or s3
+#### The tsv file can be saved to local file system or s3
 ```
 tsvutils.save_to_file(y, "output.tsv.gz")
 ```
