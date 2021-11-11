@@ -22,21 +22,26 @@ $ pip3 install dist/tsv_data_analytics_ext-0.0.1.tar.gz
 ```
 
 ## Usage
-```
 Some working examples are in jupyter notebooks directory. Here is a simple example to run in command line.
 
+```
 $ python3
 # import the packages
 from tsv_data_analytics import tsvutils
+```
 
-# read data from public url. Can also use local file or a file in s3
+Read data from public url. Can also use local file or a file in s3
+```
 x = tsvutils.read_url("https://github.com/CrowdStrike/tsv-data-analytics/raw/main/notebooks/iris.tsv")
-
-# print the number of rows
+```
+Print the number of rows
+```
 print(x.num_rows())
 150
+```
 
-# the tsv data can be exported to pandas data frame for general processing
+The tsv data can be exported to pandas data frame for general processing
+```
 x.export_to_df(10)
   sepal_length sepal_width petal_length petal_width        class
 0          5.1         3.5          1.4         0.2  Iris-setosa
@@ -49,8 +54,9 @@ x.export_to_df(10)
 7          5.0         3.4          1.5         0.2  Iris-setosa
 8          4.4         2.9          1.4         0.2  Iris-setosa
 9          4.9         3.1          1.5         0.1  Iris-setosa
-
-# simple example of filtering data for USA and selecting specific columns
+```
+Example of filtering data for USA and selecting specific columns
+```
 y = x \
     .eq_str("class", "Iris-setosa") \
     .select(["sepal_width", "sepal_length"])
@@ -63,7 +69,8 @@ sepal_width	sepal_length
 3.2        	         4.7
 3.1        	         4.6
 3.6        	         5.0
-
-# the tsv data can be saved easily to local file system or s3
+```
+TSV data fiel can be saved to local file system or s3
+```
 tsvutils.save_to_file(y, "output.tsv.gz")
 ```
