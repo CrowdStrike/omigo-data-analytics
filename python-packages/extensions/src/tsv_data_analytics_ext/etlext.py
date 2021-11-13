@@ -50,7 +50,7 @@ class EtlDateTimePathFormat:
         # it is okay to fail on exception as we are assuming some basic file structure
         if (base_filename.endswith(".tsv.gz")):
             self.extension = "tsv.gz"
-        if (base_filename.endswith(".tsv.zip")):
+        elif (base_filename.endswith(".tsv.zip")):
             self.extension = "tsv.zip"
         elif (base_filename.endswith(".tsv")):
             self.extension = "tsv"
