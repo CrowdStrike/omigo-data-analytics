@@ -572,6 +572,29 @@ def read_url(url, query_params = {}, headers = {}, sep = None, username = None, 
 
     # return
     return tsv.TSV(header, data).validate()
+
+# convert from data frame
+def read_df(df):
+    # get the map of col -> Series
+    cols_map = {}
+    for k, vs in df.items():
+        cols_map[k] = vs
+
+    # get the ordered list of columns as defined in data frame
+    cols = df.columns
+    header = "\t".join(cols)
+    data = []
+
+    # iterate over all the column series to construct data
+    for i in range(len(cols_map)):
+        fields = []
+        for c in cols:
+            fields.append(str(cols_map[c][i]))
+        data.append("\t".join(fields))
+
+    # return
+    return tsv.TSV(header, data)
+    
     
 # this method returns the arg_or_args as an array of single string if the input is just a string, or return as original array
 # useful for calling method arguments that can take single value or an array of values.
