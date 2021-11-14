@@ -575,22 +575,14 @@ def read_url(url, query_params = {}, headers = {}, sep = None, username = None, 
 
 # convert from data frame
 def read_df(df):
-    # get the map of col -> Series
-    cols_map = {}
-    for k, vs in df.items():
-        cols_map[k] = vs
+    # get the csv str
+    tsv_lines = df.to_csv(sep = "\t").rstrip("\n").split("\n")
 
-    # get the ordered list of columns as defined in data frame
-    cols = df.columns
-    header = "\t".join(cols)
+    # get header and data
+    header = tsv_lines[0]
     data = []
-
-    # iterate over all the column series to construct data
-    for i in range(len(cols_map)):
-        fields = []
-        for c in cols:
-            fields.append(str(cols_map[c][i]))
-        data.append("\t".join(fields))
+    if (len(tsv_lines) > 1):
+        data = tsv_lines[1:]
 
     # return
     return tsv.TSV(header, data)

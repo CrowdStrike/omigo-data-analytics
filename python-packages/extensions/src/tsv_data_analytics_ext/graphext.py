@@ -12,8 +12,8 @@ class VisualTSV(tsv.TSV):
     def __init__(self, header, data):
         super().__init__(header, data)
 
-    def linechart(self, xcol, ycols, ylabel = None, subplots = False, xfigsize = 25, yfigsize = 5):
-        return __pd_linechart__(self, xcol, ycols, ylabel, subplots, xfigsize, yfigsize)
+    def linechart(self, xcol, ycols, ylabel = None, title = None, subplots = False, xfigsize = 25, yfigsize = 5):
+        return __pd_linechart__(self, xcol, ycols, ylabel, title, subplots, xfigsize, yfigsize)
  
     def scatterplot(self, xcol, ycol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10):
         return __sns_scatterplot__(self, xcol, ycol, class_col, title, xfigsize, yfigsize, max_rows, max_class_col)
@@ -68,13 +68,17 @@ def __create_data_frame_with_types__(xtsv, xcol = None, ycols = None, zcol = Non
     
     return pd.DataFrame(mp)
         
-def __pd_linechart__(xtsv, xcol, ycols, ylabel, subplots, xfigsize, yfigsize):
+def __pd_linechart__(xtsv, xcol, ycols, ylabel, title, subplots, xfigsize, yfigsize):
     # validate ycols
     ycols = xtsv.__get_matching_cols__(ycols)
     
     # ylabel
     if (len(ycols) == 1 and ylabel == None):
         ylabel = ycols[0]
+
+    # title
+    if (title == None):
+        title = ylabel
 
     # sort based on xcol
     xtsv = xtsv.sort(xcol)
@@ -83,10 +87,10 @@ def __pd_linechart__(xtsv, xcol, ycols, ylabel, subplots, xfigsize, yfigsize):
     df = __create_data_frame_with_types__(xtsv, xcol, ycols)
 
     # plot
-    df.plot.line(subplots = subplots, x = xcol, ylabel = ylabel, figsize = (xfigsize, yfigsize))
+    df.plot.line(subplots = subplots, x = xcol, ylabel = ylabel, figsize = (xfigsize, yfigsize), title = title)
 
     # return
-    return tsv.TSV(xtsv.get_header(), xtsv.get_data())
+    return VisualTSV(xtsv.get_header(), xtsv.get_data())
  
 def __sns_scatterplot__(xtsv, xcol, ycol, class_col, title, xfigsize, yfigsize, max_rows, max_class_col):
     # check number of unique class values    
@@ -118,7 +122,7 @@ def __sns_scatterplot__(xtsv, xcol, ycol, class_col, title, xfigsize, yfigsize, 
     sns.scatterplot(ax = ax, x = xcol, y = ycol, hue = class_col, data = df)
 
     # return
-    return tsv.TSV(xtsv.get_header(), xtsv.get_data())
+    return VisualTSV(xtsv.get_header(), xtsv.get_data())
     
 def __sns_histogram__(xtsv, xcol, class_col, bins, title, binwidth, kde, multiple, xfigsize, yfigsize, max_class_col):
     # check number of unique class values
@@ -137,7 +141,7 @@ def __sns_histogram__(xtsv, xcol, class_col, bins, title, binwidth, kde, multipl
         sns.histplot(data = df, x = xcol, hue = class_col, bins = bins, kde = kde, multiple = multiple, shrink = 0.8)
 
     # return
-    return tsv.TSV(xtsv.get_header(), xtsv.get_data())
+    return VisualTSV(xtsv.get_header(), xtsv.get_data())
         
 def __sns_density__(xtsv, ycols, xfigsize, yfigsize):
     # create df
@@ -149,7 +153,7 @@ def __sns_density__(xtsv, ycols, xfigsize, yfigsize):
     sns.kdeplot(data = df)
 
     # return
-    return tsv.TSV(xtsv.get_header(), xtsv.get_data())
+    return VisualTSV(xtsv.get_header(), xtsv.get_data())
         
 def __sns_barplot__(xtsv, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, max_class_col):
     # check number of unique class values
@@ -173,7 +177,7 @@ def __sns_barplot__(xtsv, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, m
     sns.barplot(data = df, x = xcol, y = ycol, hue = class_col)
 
     # return
-    return tsv.TSV(xtsv.get_header(), xtsv.get_data())
+    return VisualTSV(xtsv.get_header(), xtsv.get_data())
 
 def __sns_boxplot__(xtsv, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, max_class_col):
     # check number of unique class values
@@ -197,7 +201,7 @@ def __sns_boxplot__(xtsv, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, m
     sns.boxplot(data = df, x = xcol, y = ycol, hue = class_col)
 
     # return
-    return tsv.TSV(xtsv.get_header(), xtsv.get_data())
+    return VisualTSV(xtsv.get_header(), xtsv.get_data())
     
 def __sns_corr_heatmp__(xtsv, cols, xfigsize, yfigsize, max_rows):
     # validation for number of columns. if the number of unique values is too high, then raise exception
@@ -218,7 +222,7 @@ def __sns_corr_heatmp__(xtsv, cols, xfigsize, yfigsize, max_rows):
     sns.heatmap(df.corr(), annot = True)
 
     # return
-    return tsv.TSV(xtsv.get_header(), xtsv.get_data())
+    return VisualTSV(xtsv.get_header(), xtsv.get_data())
     
 def __sns_pairplot__(xtsv, cols, class_col, kind, diag_kind, xfigsize, yfigsize, max_rows, max_class_col):
     # check number of unique class values
@@ -241,5 +245,5 @@ def __sns_pairplot__(xtsv, cols, class_col, kind, diag_kind, xfigsize, yfigsize,
     sns.pairplot(df, hue = class_col, kind = kind, diag_kind = diag_kind, aspect = aspect, height = yfigsize)
 
     # return
-    return tsv.TSV(xtsv.get_header(), xtsv.get_data())
+    return VisualTSV(xtsv.get_header(), xtsv.get_data())
 

@@ -141,6 +141,18 @@ class TSV:
     def is_nonzero(self, col):
         return self.filter([col], lambda x: x != "" and float(x) != 0)
 
+    def lt_str(self, col, value):
+        return self.filter([col], lambda x: x < value)
+
+    def le_str(self, col, value):
+        return self.filter([col], lambda x: x <= value)
+
+    def gt_str(self, col, value):
+        return self.filter([col], lambda x: x > value)
+
+    def ge_str(self, col, value):
+        return self.filter([col], lambda x: x >= value)
+
     def gt(self, col, value):
         return self.filter([col], lambda x: x != "" and float(x) > float(value))
 
@@ -242,17 +254,21 @@ class TSV:
         inherit_message2 = inherit_message + ": drop" if (len(inherit_message) > 0) else "drop"
         return self.select(non_matching_cols, inherit_message = inherit_message2)
 
-    def window_aggregate(self, cols, win_col, agg_cols, agg_funcs, winsize, sliding = False, collapse = True, suffix = "", precision = 2, inherit_message = ""):
+    # TODO: the select_cols is not implemented properly
+    def window_aggregate(self, win_col, agg_cols, agg_funcs, winsize, select_cols = None, sliding = False, collapse = True, suffix = "", precision = 2, inherit_message = ""):
         # get the matching cols
-        cols = self.__get_matching_cols__(cols)
+        if (select_cols == None):
+            select_cols = []
+        select_cols = self.__get_matching_cols__(select_cols)
 
-        # check for validity
-        for col in cols:
-            if (col not in self.header_map.keys()):
-                raise Exception("Column not found:", str(col), str(self.header_fields))
+        # do validation on window column. All values should be unique
+        if (len(self.col_as_array(win_col)) != len(self.col_as_array_uniq(win_col))):
+            utils.warn("The windowing column has non unique values: total: {}, uniq: {}. The results may not be correct.".format(len(self.col_as_array(win_col)),  len(self.col_as_array_uniq(win_col))))
                 
         # this takes unique values for agg column, split them into windows and then run the loop
         win_col_values = sorted(list(set(self.col_as_array(win_col))))
+
+        # store the number of values
         num_win_col_values = len(win_col_values)
 
         # find number of windows
@@ -333,14 +349,14 @@ class TSV:
 
         # return
         if (collapse):
-            cols2 = cols
+            cols2 = select_cols 
             cols2.append(win_col)
             return TSV(new_header, new_data) \
                 .drop(win_col) \
                 .rename(new_win_col, win_col) \
                 .aggregate(cols2, agg_cols, agg_funcs, collapse)
         else:
-            cols2 = cols
+            cols2 = select_cols 
             cols2.append(new_win_col)
             return TSV(new_header, new_data) \
                 .aggregate(cols2, agg_cols, agg_funcs, collapse, precision)
@@ -2496,6 +2512,10 @@ class TSV:
     # col_or_cols is a special variable that can be either single column name or an array. python
     # treats a string as an array of characters, so little hacky but a more intuitive api wise
     def __get_matching_cols__(self, col_or_cols):
+        # handle boundary conditions
+        if (col_or_cols == None or len(col_or_cols) == 0):
+            return []
+
         # check if there is comma. If yes, then map it to array
         if ("," in col_or_cols):
             col_or_cols = col_or_cols.split(",")
@@ -2532,7 +2552,6 @@ class TSV:
 
         # return
         return matching_cols
-
 
     def __has_matching_cols__(self, col_or_cols):
         try:
