@@ -1570,7 +1570,18 @@ class TSV:
         else:
             utils.warn("sample_column_by_max_uniq_values: max sample size: {} more than number of uniq values: {}".format(max_uniq_values, len(uniq_values)))
             return self 
- 
+
+    # create descriptive methods for join 
+    def left_join(self, that, lkeys, rkeys = None, lsuffix = "", rsuffix = "", default_val = "", def_val_map = None):
+        return self.join(that, lkeys, rkeys, join_type = "left", lsuffix, rsuffix, default_val, def_val_map)
+
+    def right_join(self, that, lkeys, rkeys = None, lsuffix = "", rsuffix = "", default_val = "", def_val_map = None):
+        return self.join(that, lkeys, rkeys, join_type = "right", lsuffix, rsuffix, default_val, def_val_map)
+
+    def inner_join(self, that, lkeys, rkeys = None, lsuffix = "", rsuffix = "", default_val = "", def_val_map = None):
+        return self.join(that, lkeys, rkeys, join_type = "inner", lsuffix, rsuffix, default_val, def_val_map)
+
+    # primary join method
     def join(self, that, lkeys, rkeys = None, join_type = "inner", lsuffix = "", rsuffix = "", default_val = "", def_val_map = None):
         # matching
         lkeys = self.__get_matching_cols__(lkeys)
@@ -2466,32 +2477,6 @@ class TSV:
     def set_missing_values(self, cols, default_val, inherit_message = ""):
         inherit_message2 = inherit_message + ": set_missing_values" if (len(inherit_message) > 0) else "set_missing_values"
         return self.transform_inline(cols, lambda x: x if (x != "") else default_val, inherit_message = inherit_message2)
-
-    def plot_linechart(self, xcol, ycols, ylabel, xfigsize = 15, yfigsize = 5):
-        # validate xcol
-        if (xcol not in self.header_map.keys()):
-            raise Exception("xcol doesnt exist:", xcol, str(self.header_fields))
-
-        # validate ycols
-        ycols = self.__get_matching_cols__(ycols)
-
-        # merge the two columns
-        combined_cols = []
-        combined_cols.append(xcol)
-        for c in ycols:
-            combined_cols.append(c)
-        
-        # get dataframe      
-        mp = {}              
-        mp[xcol] = self.col_as_array(xcol)
-        for ycol in ycols:   
-            mp[ycol] = self.col_as_float_array(ycol)
-
-        # create dataframe
-        df = pd.DataFrame(mp)
-               
-        # plot 
-        df.plot.line(x = xcol, ylabel = ylabel, figsize = (xfigsize, yfigsize))
 
     def extend_class(self, newclass):
         return newclass(self.header, self.data) 
