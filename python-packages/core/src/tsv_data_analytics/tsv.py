@@ -1403,7 +1403,6 @@ class TSV:
         if (n < 1):
             raise Exception("n cant be negative or less than 1:", n) 
 
-        
         random.seed(seed)
         n = min(int(n), self.num_rows()) 
         return TSV(self.header, random.sample(self.data, n))
@@ -1569,6 +1568,7 @@ class TSV:
             inherit_message2 = inherit_message + ": sample_column_by_max_uniq_values" if (inherit_message != "") else "sample_column_by_max_uniq_values"
             return self.values_in(col, selected_values, inherit_message = inherit_message2)
         else:
+            utils.warn("sample_column_by_max_uniq_values: max sample size: {} more than number of uniq values: {}".format(max_uniq_values, len(uniq_values)))
             return self 
  
     def join(self, that, lkeys, rkeys = None, join_type = "inner", lsuffix = "", rsuffix = "", default_val = "", def_val_map = None):
