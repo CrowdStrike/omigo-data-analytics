@@ -7,7 +7,7 @@
  * Simple APIs for doing arithmetic operations, filtering, and more complex APIs for doing join, aggregate, sampling and work with time series data.
  * Support for ETL kind of data collected periodically over long period of time.
  * APIs designed to work with data having 100s of columns.
- * Support for schema migration.
+ * Support for reading data where schema has changed over time.
  * Visualization APIs to provide simple interface to matplotlib, seaborn, pyplot and other popular libraries.
  * Goal is to avoid writing boiler plate code and focus on analytics.
 
