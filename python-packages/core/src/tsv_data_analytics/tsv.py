@@ -823,8 +823,18 @@ class TSV:
                     result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4], col_values[5], col_values[6], col_values[7], col_values[8])
                 elif (num_cols == 10):
                     result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4], col_values[5], col_values[6], col_values[7], col_values[8], col_values[9])
+                elif (num_cols == 11):
+                    result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4], col_values[5], col_values[6], col_values[7], col_values[8], col_values[9], col_values[10])
+                elif (num_cols == 12):
+                    result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4], col_values[5], col_values[6], col_values[7], col_values[8], col_values[9], col_values[10], col_values[11])
+                elif (num_cols == 13):
+                    result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4], col_values[5], col_values[6], col_values[7], col_values[8], col_values[9], col_values[10], col_values[11], col_values[12])
+                elif (num_cols == 14):
+                    result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4], col_values[5], col_values[6], col_values[7], col_values[8], col_values[9], col_values[10], col_values[11], col_values[12], col_values[13])
+                elif (num_cols == 15):
+                    result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4], col_values[5], col_values[6], col_values[7], col_values[8], col_values[9], col_values[10], col_values[11], col_values[12], col_values[13], col_values[15])
                 else:
-                    raise Exception("Number of columns is not supported beyond 10. Probably try to use use_array_notation approach:" + str(cols))
+                    raise Exception("Number of columns is not supported beyond 15. Probably try to use use_array_notation approach:" + str(cols))
             else:
                 result = func(col_values)
                 
@@ -856,7 +866,7 @@ class TSV:
                 if (num_new_cols >= 10): 
                     result_arr.append(str(result[9]))
                 if (num_new_cols >= 11):
-                    raise Exception("Number of new columns is not supported beyond 11. Probably try to use use_array_notation approach:" + str(new_cols))
+                    raise Exception("Number of new columns is not supported beyond 10. Probably try to use use_array_notation approach:" + str(new_cols))
             else:
                 # check how many columns to expect.
                 if (num_new_cols == 1):
