@@ -40,14 +40,10 @@ $ pip3 install dist/tsv_data_analytics_ext-0.0.1.tar.gz
 ## Usage
 *Note*: Some working examples are in jupyter ![example-notebooks](example-notebooks) directory. Here is a simple example to run in command line.
 
-#### Import the package to read data
+#### Read data from public url. Can also use local file or a file in s3
 ```
 $ python3
 >>> from tsv_data_analytics import tsvutils
-```
-
-#### Read data from public url. Can also use local file or a file in s3
-```
 >>> x = tsvutils.read("data/iris.tsv.gz")
 # other possible options
 # x = tsvutils.read("data/iris.tsv")
@@ -55,13 +51,13 @@ $ python3
 # x = tsvutils.read("s3://bucket/path_to_file/data.tsv.gz")
 # x = tsvutils.read_url("https://github.com/CrowdStrike/tsv-data-analytics/raw/main/data/iris.tsv")
 ```
-#### Print the number of rows
+#### Print basic stats like the number of rows
 ```
 >>> print(x.num_rows())
 150
 ```
 
-#### The tsv data can be exported to pandas data frame for general processing
+#### Export to pandas data frame for nice display, or use any of pandas apis. 
 ```
 >>> x.export_to_df(10)
   sepal_length sepal_width petal_length petal_width        class
@@ -81,15 +77,14 @@ $ python3
 ```
 >>> y = x \
     .eq_str("class", "Iris-setosa") \
+    .gt("sepal_width", 3.1) \
     .select(["sepal_width", "sepal_length"])
 
 >>> y.show(5)
 
 sepal_width	sepal_length
 3.5        	         5.1
-3.0        	         4.9
 3.2        	         4.7
-3.1        	         4.6
 3.6        	         5.0
 ```
 #### Import the graph extension package for creating charts
