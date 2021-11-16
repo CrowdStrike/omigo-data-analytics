@@ -155,7 +155,7 @@ def __sns_density__(xtsv, ycols, xfigsize, yfigsize):
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
         
-def __sns_barplot__(xtsv, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, max_class_col):
+def __sns_barplot__(xtsv, xcol, ycol, class_col, resort, xfigsize, yfigsize, max_rows, max_class_col):
     # check number of unique class values
     if (class_col != None and len(xtsv.col_as_array_uniq(class_col)) >= max_class_col):
         raise Exception("Number of class column values is more than {}: {}. Probably not a class column. Try max_class_col".format(max_class_col, len(xtsv.col_as_array_uniq(class_col))))

@@ -4,12 +4,11 @@
  * Python library to do end to end data analytics from loading the data to filtering, transformation, analysis and visualization.
  * Primary data format for storage and data manipulation is TSV, but other formats are supported for reading and writing.
  * 100+ APIs for simple data transformation and manipulation to get insights. Functional programming style interface for expressing business logic.
- * Simple APIs for doing arithmetic operations, filtering, and more complex APIs for doing join, aggregate, sampling and work with time series data.
+ * Advanced APIs for doing join, aggregate, sampling, time window, and json data.
  * Support for ETL kind of data collected periodically over long period of time.
- * APIs designed to work with data having 100s of columns.
- * Support for reading data where schema has changed over time.
- * Visualization APIs to provide simple interface to matplotlib, seaborn, pyplot and other popular libraries.
- * Goal is to avoid writing boiler plate code and focus on analytics.
+ * APIs designed to work with 100s of columns.
+ * Support for schema evolution.
+ * Visualization APIs to provide simple interface to matplotlib, seaborn, and other popular libraries.
 
 ## Build and Install Instructions
 There are two packages - core and extensions. The core package is built on core python and out of the box without many dependencies
@@ -110,6 +109,4 @@ sepal_width	sepal_length
 ```
 ## Notes from the author
 * This library is built for simplicity, functionality and robustness. Engineering good practices are followed slowly.
-* There are 100+ helper APIs to work with the data. Detailed documentation is coming soon.
-* The primary use case is to work with data collected through regular ETL jobs over long periods of time. The design is not finalized yet, though feel free to reach out on how to use the same. 
 * Contact: amit.jaiswal@gmail.com
