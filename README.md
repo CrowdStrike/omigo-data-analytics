@@ -36,7 +36,7 @@ $ pip3 install dist/tsv_data_analytics_ext-0.0.1.tar.gz
 ```
 
 ## Usage
-*Note*: Some working examples are in jupyter notebooks directory. Here is a simple example to run in command line.
+*Note*: Some working examples are in jupyter ![example-notebooks](example-notebooks) directory. Here is a simple example to run in command line.
 
 #### Import the package to read data
 ```
