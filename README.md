@@ -2,12 +2,14 @@
 
 ## Data Analytics package for python
  * Python library to do end to end data analytics from loading the data to filtering, transformation, analysis and visualization.
- * Primary data format for storage and data manipulation is TSV, but other formats are supported for reading and writing.
- * 100+ APIs for simple data transformation and manipulation to get insights. Functional programming style interface for expressing business logic.
+ * Support for reading and writing multiple data formats from local machine or S3.
+ * TSV as the primary data format for data processing.
+ * 100+ APIs for simple data transformation and manipulation to get insights.
+ * Functional programming style interface for expressing business logic.
  * Advanced APIs for doing join, aggregate, sampling, time window, and json data.
  * Support for ETL kind of data collected periodically over long period of time.
  * APIs designed to work with 100s of columns.
- * Support for schema evolution.
+ * Out of the box support for data with changing schema.
  * Visualization APIs to provide simple interface to matplotlib, seaborn, and other popular libraries.
 
 ## Build and Install Instructions
