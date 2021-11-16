@@ -40,12 +40,14 @@ $ pip3 install dist/tsv_data_analytics_ext-0.0.1.tar.gz
 ## Usage
 *Note*: Some working examples are in jupyter ![example-notebooks](example-notebooks) directory. Here is a simple example to run in command line.
 
-#### Read data from public url. Can also use local file or a file in s3
+#### Read data from local filesystem. Can also use s3 or web url.
 ```
 $ python3
 >>> from tsv_data_analytics import tsvutils
 >>> x = tsvutils.read("data/iris.tsv.gz")
+#
 # other possible options
+#
 # x = tsvutils.read("data/iris.tsv")
 # x = tsvutils.read("data/iris.tsv.zip")
 # x = tsvutils.read("s3://bucket/path_to_file/data.tsv.gz")
