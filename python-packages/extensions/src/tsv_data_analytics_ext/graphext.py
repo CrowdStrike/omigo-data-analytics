@@ -24,8 +24,8 @@ class VisualTSV(tsv.TSV):
     def density(self, ycols, xfigsize = 25, yfigsize = 5):
         return __sns_density__(self, ycols, xfigsize, yfigsize)
 
-    def barchart(self, xcol, ycol, class_col = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10):
-        return __sns_barplot__(self, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, max_class_col)
+    def barchart(self, xcol, ycol, class_col = None, resort = True, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10):
+        return __sns_barplot__(self, xcol, ycol, class_col, resort, xfigsize, yfigsize, max_rows, max_class_col)
 
     def boxplot(self, xcol, ycol, class_col = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10):
         return __sns_boxplot__(self, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, max_class_col)
@@ -166,7 +166,8 @@ def __sns_barplot__(xtsv, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, m
         xtsv = xtsv.sample_column_by_max_uniq_values(xcol, max_rows)
 
     # sort the xcol
-    xtsv = xtsv.sort(xcol)
+    if (resort == True):
+        xtsv = xtsv.sort(xcol)
     
     # create df
     df = __create_data_frame_with_types__(xtsv, xcol, ycol, class_col)
