@@ -708,16 +708,11 @@ class TSV:
             return TSV(new_header, new_data).to_numeric(new_cols, precision, inherit_message = inherit_message)
 
     def filter(self, cols, func, include_cond = True, inherit_message = ""):
-        # validation
-        for col in cols:
-            if (col not in self.header_map.keys()):
-                raise Exception("Column not found:", str(col) + ": " + str(cols), self.header_fields)
+        cols = self.__get_matching_cols__(cols)
+        indexes = self.__get_col_indexes__(cols)
 
         # count the number of columns
         num_cols = len(cols)
-        indexes = []
-        for col in cols:
-            indexes.append(self.header_map[col])
 
         # new data
         new_data = []
@@ -738,8 +733,20 @@ class TSV:
                 result = func(col_values[0], col_values[1], col_values[2])
             elif (num_cols == 4):
                 result = func(col_values[0], col_values[1], col_values[2], col_values[3])
+            elif (num_cols == 5):
+                result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4])
+            elif (num_cols == 6):
+                result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4], col_values[5])
+            elif (num_cols == 7):
+                result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4], col_values[5], col_values[6])
+            elif (num_cols == 8):
+                result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4], col_values[5], col_values[6], col_values[7])
+            elif (num_cols == 9):
+                result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4], col_values[5], col_values[6], col_values[7], col_values[8])
+            elif (num_cols == 10):
+                result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4], col_values[5], col_values[6], col_values[7], col_values[8], col_values[9])
             else:
-                raise Exception("Number of columns is not supported beyond 4" + str(cols))
+                raise Exception("Number of columns is not supported beyond 10" + str(cols))
               
             if (result == include_cond): 
                 new_data.append(line)
@@ -1004,7 +1011,7 @@ class TSV:
         # return 
         return TSV(new_header, new_data)
 
-    def show(self, n = 100, max_col_width = 40, label = None):
+    def show(self, n = 100, max_col_width = 40, title = None):
         spaces = " ".join([""]*max_col_width)
 
         # validation
@@ -1038,9 +1045,9 @@ class TSV:
             all_data.append(line)
 
         # print label
-        if (label != None):
+        if (title != None):
             print("=============================================================================================================================================")
-            print(label)
+            print(title)
             print("=============================================================================================================================================")
             
         # iterate and print. +1 for header
