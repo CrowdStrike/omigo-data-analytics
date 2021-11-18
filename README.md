@@ -1,6 +1,6 @@
 # TSV-DATA-ANALYTICS 
 
-## Data Analytics package for python
+## Data analytics library for python
  * Python library to do end to end data analytics from reading to transformation, analysis and visualization.
  * Support for reading and writing multiple data formats from local machine or S3.
  * TSV as the primary data format for data processing.
