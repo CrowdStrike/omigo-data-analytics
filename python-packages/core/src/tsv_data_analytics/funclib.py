@@ -128,6 +128,23 @@ def get_str_map_without_keys(mp, excluded_keys):
 
     return mp2
 
+
+# TODO
 def datetime_to_timestamp(x):
-    return int(parser.parse(x).timestamp())
+    if (x.endswith("UTC") or x.endswith("GMT") or x.endswith("Z") or x.endswith("+00:00")):
+        return int(parser.parse(x).timestamp())
+    elif (len(x) == 10):
+        # 2021-11-01
+        x = x + "T00:00:00Z"
+        return int(parser.parse(x).timestamp())
+    elif (len(x) == 19):
+        # 2021-11-01T00:00:00
+        x = x + "Z"
+        return int(parser.parse(x).timestamp())
+    elif (len(x) == 26):
+        # 2021-11-01T00:00:00.000000
+        x = x + "Z"
+        return int(parser.parse(x).timestamp())
+    else:
+        raise Exception("Unknown date format. Problem with UTC: {}".format(x))
 

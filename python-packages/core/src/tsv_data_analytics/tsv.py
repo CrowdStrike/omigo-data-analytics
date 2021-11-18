@@ -708,6 +708,7 @@ class TSV:
             return TSV(new_header, new_data).to_numeric(new_cols, precision, inherit_message = inherit_message)
 
     def filter(self, cols, func, include_cond = True, inherit_message = ""):
+        # TODO: Filter should not use regex. Need to add warning as the order of fields matter
         cols = self.__get_matching_cols__(cols)
         indexes = self.__get_col_indexes__(cols)
 
