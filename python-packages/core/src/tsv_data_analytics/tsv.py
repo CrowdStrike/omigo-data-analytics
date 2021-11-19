@@ -1012,12 +1012,11 @@ class TSV:
         # return 
         return TSV(new_header, new_data)
 
-    def show(self, n = 100, max_col_width = 40, title = None):
+    def show(self, n = 100, max_col_width = 40, label = None):
+        return self.take(n).__show_topn__(max_col_width, label)
+                                         
+    def __show_topn__(self, max_col_width, label):
         spaces = " ".join([""]*max_col_width)
-
-        # validation
-        if (n <= 0):
-            raise Exception("n needs to be a positive number:", n)
 
         # gather data about width of columns
         col_widths = {}
@@ -1052,7 +1051,7 @@ class TSV:
             print("=============================================================================================================================================")
             
         # iterate and print. +1 for header
-        for i in range(min(n+1, len(all_data))):
+        for i in range(len(all_data)):
             line = all_data[i]
             fields = line.split("\t")
             row = []
