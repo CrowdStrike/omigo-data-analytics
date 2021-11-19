@@ -145,6 +145,7 @@ def __sns_histogram__(xtsv, xcol, class_col, bins, title, binwidth, kde, multipl
         
 def __sns_density__(xtsv, ycols, xfigsize, yfigsize):
     # create df
+    ycols = xtsv.__get_matching_cols__(ycols)
     df = __create_data_frame_with_types__(xtsv, ycols = ycols)
 
     figsize = (xfigsize, yfigsize)
@@ -205,6 +206,8 @@ def __sns_boxplot__(xtsv, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, m
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
     
 def __sns_corr_heatmp__(xtsv, cols, xfigsize, yfigsize, max_rows):
+    cols = xtsv.__get_matching_cols__(cols)
+
     # validation for number of columns. if the number of unique values is too high, then raise exception
     if (len(cols) > max_rows):
         raise Exception("Number of columns is too high: {}. Max allowed: {}. Try max_rows".format(len(cols), max_rows))
@@ -226,6 +229,7 @@ def __sns_corr_heatmp__(xtsv, cols, xfigsize, yfigsize, max_rows):
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
     
 def __sns_pairplot__(xtsv, cols, class_col, kind, diag_kind, xfigsize, yfigsize, max_rows, max_class_col):
+    cols = xtsv.__get_matching_cols__(cols)
     # check number of unique class values
     if (class_col != None and len(xtsv.col_as_array_uniq(class_col)) >= max_class_col):
         raise Exception("Number of class column values is more than {}. Max allowed: {}. Probably not a class column. Try max_class_col".format(max_class_col, len(xtsv.col_as_array_uniq(class_col))))
