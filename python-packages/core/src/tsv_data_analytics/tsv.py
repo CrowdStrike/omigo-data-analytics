@@ -1012,10 +1012,10 @@ class TSV:
         # return 
         return TSV(new_header, new_data)
 
-    def show(self, n = 100, max_col_width = 40, label = None):
-        return self.take(n).__show_topn__(max_col_width, label)
+    def show(self, n = 100, max_col_width = 40, title = None):
+        return self.take(n).__show_topn__(max_col_width, title)
                                          
-    def __show_topn__(self, max_col_width, label):
+    def __show_topn__(self, max_col_width, title):
         spaces = " ".join([""]*max_col_width)
 
         # gather data about width of columns
@@ -1068,6 +1068,9 @@ class TSV:
                 
                 row.append(str(value))
             print("\t".join(row))
+
+        if (title != None):
+            print("=============================================================================================================================================")
 
         # return self
         return self
@@ -1631,13 +1634,13 @@ class TSV:
 
     # create descriptive methods for join 
     def left_join(self, that, lkeys, rkeys = None, lsuffix = "", rsuffix = "", default_val = "", def_val_map = None):
-        return self.join(that, lkeys, rkeys, join_type = "left", lsuffix, rsuffix, default_val, def_val_map)
+        return self.join(that, lkeys, rkeys, join_type = "left", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map)
 
     def right_join(self, that, lkeys, rkeys = None, lsuffix = "", rsuffix = "", default_val = "", def_val_map = None):
-        return self.join(that, lkeys, rkeys, join_type = "right", lsuffix, rsuffix, default_val, def_val_map)
+        return self.join(that, lkeys, rkeys, join_type = "right", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map)
 
     def inner_join(self, that, lkeys, rkeys = None, lsuffix = "", rsuffix = "", default_val = "", def_val_map = None):
-        return self.join(that, lkeys, rkeys, join_type = "inner", lsuffix, rsuffix, default_val, def_val_map)
+        return self.join(that, lkeys, rkeys, join_type = "inner", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map)
 
     # primary join method
     def join(self, that, lkeys, rkeys = None, join_type = "inner", lsuffix = "", rsuffix = "", default_val = "", def_val_map = None):
