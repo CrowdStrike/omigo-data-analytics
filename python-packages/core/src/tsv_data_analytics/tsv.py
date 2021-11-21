@@ -917,9 +917,9 @@ class TSV:
             new_fields = []
             for i in range(len(fields)):
                 if (i in indexes):
-                    new_fields.append(func(fields[i]))
+                    new_fields.append(str(func(fields[i])))
                 else:
-                    new_fields.append(fields[i])
+                    new_fields.append(str(fields[i]))
 
             new_data.append("\t".join(new_fields))
 
