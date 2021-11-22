@@ -21,8 +21,8 @@ class VisualTSV(tsv.TSV):
     def histogram(self, xcol, class_col = None, bins = 10, title = None, binwidth = None, kde = False, multiple = "dodge", xfigsize = 25, yfigsize = 5, max_class_col = 10):
         return __sns_histogram__(self, xcol, class_col, bins, title, binwidth, kde, multiple, xfigsize, yfigsize, max_class_col)
 
-    def density(self, ycols, xfigsize = 25, yfigsize = 5):
-        return __sns_density__(self, ycols, xfigsize, yfigsize)
+    def density(self, ycols, class_col = None, xfigsize = 25, yfigsize = 5):
+        return __sns_density__(self, ycols, class_col, xfigsize, yfigsize)
 
     def barchart(self, xcol, ycol, class_col = None, resort = True, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10):
         return __sns_barplot__(self, xcol, ycol, class_col, resort, xfigsize, yfigsize, max_rows, max_class_col)
@@ -84,7 +84,7 @@ def __pd_linechart__(xtsv, xcol, ycols, ylabel, title, subplots, xfigsize, yfigs
     xtsv = xtsv.sort(xcol)
 
     # create dataframe
-    df = __create_data_frame_with_types__(xtsv, xcol, ycols)
+    df = __create_data_frame_with_types__(xtsv, xcol, ycols, None)
 
     # plot
     df.plot.line(subplots = subplots, x = xcol, ylabel = ylabel, figsize = (xfigsize, yfigsize), title = title)
@@ -142,16 +142,24 @@ def __sns_histogram__(xtsv, xcol, class_col, bins, title, binwidth, kde, multipl
 
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
-        
-def __sns_density__(xtsv, ycols, xfigsize, yfigsize):
+    
+# the syntax is non intuitive. need to follow row major or column major. splitting by class_col is not possible 
+def __sns_density__(xtsv, ycols, class_col, xfigsize, yfigsize):
     # create df
     ycols = xtsv.__get_matching_cols__(ycols)
-    df = __create_data_frame_with_types__(xtsv, ycols = ycols)
+    df = __create_data_frame_with_types__(xtsv, None, ycols, class_col)
 
     figsize = (xfigsize, yfigsize)
     fig, ax = pyplot.subplots(figsize = figsize)
 
-    sns.kdeplot(data = df)
+    # TODO: This is not clean
+    if (class_col != None):
+        if (len(ycols) == 1):
+            sns.kdeplot(data = df, x = ycols[0], hue = class_col, multiple = "stack")
+        else:
+            raise Exception("__sns_density__: class_col with multiple ycols is not supported")
+    else:
+       sns.kdeplot(data = df, multiple = "stack")
 
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
@@ -163,7 +171,7 @@ def __sns_barplot__(xtsv, xcol, ycol, class_col, resort, xfigsize, yfigsize, max
 
     # if xcol or ycol are non numeric then need to down sample the data
     if (len(xtsv.col_as_array_uniq(xcol)) > max_rows):
-        utils.warn("Number of categorical values on x axis is too high. Doing downsampling for clean display to max_rows: {}".format(max_rows))
+        utils.warn("Number of categorical values on x axis is too high: {}. Doing downsampling for clean display to max_rows: {}".format(len(xtsv.col_as_array_uniq(xcol)), max_rows))
         xtsv = xtsv.sample_column_by_max_uniq_values(xcol, max_rows)
 
     # sort the xcol
@@ -188,7 +196,7 @@ def __sns_boxplot__(xtsv, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, m
 
     # if xcol or ycol are non numeric then need to down sample the data
     if (len(xtsv.col_as_array_uniq(xcol)) > max_rows):
-        utils.warn("Number of categorical values on x axis is too high. Doing downsampling for clean display to max_rows: {}".format(max_rows))
+        utils.warn("Number of categorical values on x axis is too high: {}. Doing downsampling for clean display to max_rows: {}".format(len(xtsv.col_as_array_uniq(xcol)), max_rows))
         xtsv = xtsv.sample_column_by_max_uniq_values(xcol, max_rows)
 
     # sort the xcol

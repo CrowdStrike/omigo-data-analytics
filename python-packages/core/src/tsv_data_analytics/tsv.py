@@ -574,7 +574,7 @@ class TSV:
         # remaining validation done by the group_by_key
         return self.group_by_key(grouping_cols, combined_cols, __arg_max_grouping_func__, suffix = suffix, collapse = collapse)
              
-    def aggregate(self, grouping_col_or_cols, agg_cols, agg_funcs, collapse = True, precision = 4, use_rolling = False, inherit_message = ""):
+    def aggregate(self, grouping_col_or_cols, agg_cols, agg_funcs, collapse = True, precision = 6, use_rolling = False, inherit_message = ""):
         # get matching columns
         grouping_cols = self.__get_matching_cols__(grouping_col_or_cols)
 
@@ -904,7 +904,7 @@ class TSV:
 
         # print which columns are going to be transformed
         if (len(matching_cols) != len(cols) and len(matching_cols) != 1):
-            print("transform_inline: list of columns that will be transformed:", str(matching_cols))
+            utils.info("transform_inline: list of columns that will be transformed: {}".format(str(matching_cols)))
 
         # create new data
         new_data = []
@@ -978,7 +978,7 @@ class TSV:
 
         return mps
 
-    def __convert_to_numeric__(self, x, precision = 4):
+    def __convert_to_numeric__(self, x, precision = 6):
         try:
             if (int(float(x)) == float(x)):
                 return str(int(float(x)))
@@ -989,7 +989,7 @@ class TSV:
             return str(x)
 
     # TODO
-    def to_numeric(self, cols, precision = 4, inherit_message = ""):
+    def to_numeric(self, cols, precision = 6, inherit_message = ""):
         inherit_message2 = inherit_message + ": to_numeric" if (len(inherit_message) > 0) else "to_numeric"
         return self.transform_inline(cols, lambda x: self.__convert_to_numeric__(x, precision), inherit_message = inherit_message2)
 
@@ -1013,7 +1013,9 @@ class TSV:
         return TSV(new_header, new_data)
 
     def show(self, n = 100, max_col_width = 40, title = None):
-        return self.take(n).__show_topn__(max_col_width, title)
+        self.take(n).__show_topn__(max_col_width, title)
+        # return the original tsv
+        return self
                                          
     def __show_topn__(self, max_col_width, title):
         spaces = " ".join([""]*max_col_width)
@@ -1102,16 +1104,13 @@ class TSV:
         return list(dict.fromkeys(values))
 
     # this method returns hashmap of key->map[k:v]
+    # TODO: keys should be changed to single column
     def cols_as_map(self, key_cols, value_cols):
         # validation
-        for key_col in key_cols:
-            if (key_col not in self.header_map.keys()):
-                raise Exception("Column not found: ", str(key_col), str(self.header_fields))
+        keys_cols = self.__get_matching_cols__(keys_cols)
 
         # check for all columns in the value part
-        for value_col in value_cols:
-            if (value_col not in self.header_map.keys()):
-                raise Exception("Value Column not found: ", str(value_col), str(self.header_fields))
+        value_cols = self.__get_matching_cols__(value_cols)
 
         # create map
         mp = {}
@@ -1174,6 +1173,9 @@ class TSV:
             return TSV(self.header, new_data).reorder(matching_cols, inherit_message = "sort")
         else:
             return TSV(self.header, new_data)
+
+    def reverse_sort(self, cols, reorder = False, all_numeric = None):
+        return self.sort(cols, reverse = True, reorder = reorder, all_numeric = all_numeric)
 
     # reorder the specific columns
     def reorder(self, cols, inherit_message = ""):
