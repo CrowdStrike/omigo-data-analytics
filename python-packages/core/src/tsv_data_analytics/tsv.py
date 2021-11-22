@@ -2528,8 +2528,11 @@ class TSV:
         else:
             raise Exception("Length of values is more than 10. Not supported." + str(vs))
 
-    def custom_func(self, func):
-        result = func(self)
+    def custom_func(self, func, *args, **kwargs):
+        # call function
+        result = func(self, *args, **kwargs)
+
+        # the result must be of type tsv.TSV
         if (type(result) != TSV):
             raise Exception("custom function must return an instance of type TSV:", type(result))
         
@@ -2541,8 +2544,8 @@ class TSV:
         inherit_message2 = inherit_message + ": set_missing_values" if (len(inherit_message) > 0) else "set_missing_values"
         return self.transform_inline(cols, lambda x: x if (x != "") else default_val, inherit_message = inherit_message2)
 
-    def extend_class(self, newclass):
-        return newclass(self.header, self.data) 
+    def extend_class(self, newclass, *args, **kwargs):
+        return newclass(self.header, self.data, *args, **kwargs) 
 
     def __convert_to_maps__(self):
         result = []
