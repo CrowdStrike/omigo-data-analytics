@@ -1,5 +1,6 @@
 # package to do web service REST calls in an efficient way
 from tsv_data_analytics import tsv
+from tsv_data_analytics import tsvutils
 from tsv_data_analytics import utils 
 
 class WebServiceTSV(tsv.TSV):
@@ -7,7 +8,7 @@ class WebServiceTSV(tsv.TSV):
         super().__init__(header, data)
         self.timeout_sec = timeout_sec
 
-    def __call_web_service_exp_func__(self, url, query_params, header_params, username, password, url_cols, header_params_cols, new_col):
+    def __call_web_service_exp_func__(self, url, query_params, header_params, username, password, url_cols, query_params_cols, header_params_cols, new_col, include_resolved_values):
         def __call_web_service_exp_func_inner__(mp):
             # resolve url
             url_resolved = url
@@ -30,24 +31,26 @@ class WebServiceTSV(tsv.TSV):
                     query_params_resolved[k] = query_params_resolved[k].replace(cstr, mp[c])
 
             # call web service. TODO: Need HTTP Response codes for better error handling, back pressure etc
-            response = ""
+            response_str = ""
             response_err = ""
             try:
-                response = tsvutils.read_url_json(url_resolved, query_params_resolved, header_params_resolved, username, password, timeout = self.timeout_sec)
+                response_str = tsvutils.read_url_response(url_resolved, query_params_resolved, header_params_resolved, username, password, timeout_sec = self.timeout_sec)
             except BaseException as err:
+                print(err)
                 response_err = str(err)
                 
-            # check for any tab characters
-            if (response.find("\t") != -1):
-                utils.warn("Tab character found in web service response and is not supported. Replacing with space")
-                response = response.replace("\t", " ")
-
             # create response map          
             result_mp = {}
-            if (response == None):
+            if (response_str == None):
                 response = ""
-            result_mp[new_col + ":json"] = response
+            result_mp[new_col + ":url_encoded"] = utils.url_encode(response_str)
             result_mp[new_col + ":error"] = response_err
+
+            # additioanl debugging information
+            if (include_resolved_values == True):
+                result_mp[new_col + ":url"] = url_resolved
+                result_mp[new_col + ":query_params"] = str(query_params_resolved)
+                result_mp[new_col + ":header_params"] = str(header_params_resolved)
 
             # return
             return [result_mp]
@@ -55,7 +58,7 @@ class WebServiceTSV(tsv.TSV):
         # return the inner function
         return __call_web_service_exp_func_inner__
 
-    def call_web_service(self, url, new_col, cols = None, query_params = None, header_params = None, username = None, password = None):
+    def call_web_service(self, url, new_col, cols = None, query_params = None, header_params = None, username = None, password = None, include_resolved_values = False):
         # resolve cols
         if (cols == None):
             sel_cols = self.get_header_fields()
@@ -112,5 +115,5 @@ class WebServiceTSV(tsv.TSV):
 
         # run transforms multiple times to generate resolved state of each variable
         return self \
-            .explode(all_sel_cols, self.__call_web_service_exp_func__(url, query_params, header_params, username, password, url_cols, query_params_cols, header_params_cols, new_col)) \
+            .explode(all_sel_cols, self.__call_web_service_exp_func__(url, query_params, header_params, username, password, url_cols, query_params_cols, header_params_cols, new_col, include_resolved_values)) \
             .remove_suffix("__call_web_service_exp_func_inner__")

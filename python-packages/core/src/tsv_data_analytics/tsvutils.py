@@ -479,49 +479,21 @@ def __read_base_url__(url, query_params = {}, headers = {}, username = None, pas
 
 def read_url_json(url, query_params = {}, headers = {}, username = None, password = None, timeout_sec = 5):
     # read response
-    response = __read_base_url__(url, query_params, headers, username, password, timeout_sec = timeout_sec)
+    response_str = read_url_response(url, query_params, headers, username, password, timeout_sec = timeout_sec)
 
-    # check for content type
-    if ("content-type" in response.headers and response.headers["content-type"] == "application/json"):
-        response_str = response.read().decode("ascii")
-        json_obj = json.loads(response_str)
-        if (isinstance(json_obj, list)):
-            lines = []
-            for v in json_obj:
-                lines.append(utils.url_encode(json.dumps(v)).replace("\n", " "))
-            return tsv.TSV("json_encoded", "\n".join(lines)).validate()
-                #.explode_json("json_encoded", suffix = "json", accepted_cols = accepted_cols, excluded_cols = excluded_cols)
-                #.remove_suffix("json")
-        elif (isinstance(json_obj, dict)):
-            return tsv.TSV("json_encoded", [utils.url_encode(response_str).replace("\n", " ")]).validate()
-                # .explode_json("json_encoded", suffix = "json", accepted_cols = accepted_cols, excluded_cols = excluded_cols)
-                #.remove_suffix("json")
-        else:
-            raise Exception("Unable to parse the json response:", json_obj)
+    # parse json object
+    json_obj = json.loads(response_str)
+    if (isinstance(json_obj, list)):
+        lines = []
+        for v in json_obj:
+            lines.append(utils.url_encode(json.dumps(v)).replace("\n", " "))
+        return tsv.TSV("json_encoded", "\n".join(lines)).validate()
+    elif (isinstance(json_obj, dict)):
+        return tsv.TSV("json_encoded", [utils.url_encode(response_str).replace("\n", " ")]).validate()
     else:
-        raise Exception("Unable to parse the json response:", json_obj)
+        raise Exception("Unable to parse the json response:", response_str)
 
-# TODO: the compressed file handling should be done separately in a function
-def read_url(url, query_params = {}, headers = {}, sep = None, username = None, password = None, timeout_sec = 30):
-    # use the file extension as alternate way of detecting type of file
-    file_type = None
-    if (url.endswith(".csv") or url.endswith(".tsv")):
-        file_type = "text"
-    elif (url.endswith(".gz")):
-        file_type = "gzip"
-    elif (url.endswith(".zip")):
-        file_type = "zip"
-
-    # detect extension  
-    ext_type = None
-    if (url.endswith(".csv") or url.endswith(".csv.gz") or url.endswith(".csv.zip")):
-        ext_type = "csv"
-        utils.warn("CSV file detected. Only simple csv files are supported where comma and tabs are not part of any data.")
-    elif (url.endswith(".tsv") or url.endswith(".tsv.gz") or url.endswith(".tsv.zip")): 
-        ext_type = "tsv"
-    else:
-        utils.warn("Unknown file extension. Doing best effort in content type detection")
-
+def read_url_response(url, query_params = {}, headers = {}, sep = None, username = None, password = None, timeout_sec = 30):
     # read response
     response = __read_base_url__(url, query_params, headers, username, password, timeout_sec = timeout_sec)
 
@@ -547,7 +519,34 @@ def read_url(url, query_params = {}, headers = {}, sep = None, username = None, 
         zfile.close()
     else:
         raise Exception("Unable to parse the text response:", str(response.headers).split("\n"))
+
+    # return
+    return response_str
         
+# TODO: the compressed file handling should be done separately in a function
+def read_url(url, query_params = {}, headers = {}, sep = None, username = None, password = None, timeout_sec = 30):
+    # use the file extension as alternate way of detecting type of file
+    file_type = None
+    if (url.endswith(".csv") or url.endswith(".tsv")):
+        file_type = "text"
+    elif (url.endswith(".gz")):
+        file_type = "gzip"
+    elif (url.endswith(".zip")):
+        file_type = "zip"
+
+    # detect extension  
+    ext_type = None
+    if (url.endswith(".csv") or url.endswith(".csv.gz") or url.endswith(".csv.zip")):
+        ext_type = "csv"
+        utils.warn("CSV file detected. Only simple csv files are supported where comma and tabs are not part of any data.")
+    elif (url.endswith(".tsv") or url.endswith(".tsv.gz") or url.endswith(".tsv.zip")): 
+        ext_type = "tsv"
+    else:
+        utils.warn("Unknown file extension. Doing best effort in content type detection")
+
+    # read response
+    response_str = read_url_response(url, query_params, headers, username, password, timeout_sec = timeout_sec)
+
     # split into lines
     lines = response_str.split("\n")
     header = lines[0]

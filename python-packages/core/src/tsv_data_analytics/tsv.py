@@ -1986,7 +1986,7 @@ class TSV:
 
         return TSV(new_header, new_data)
 
-    # TODO: Need better naming
+    # TODO: Need better naming. The suffix semantics have been changed.
     def explode(self, cols, exp_func, suffix = "", default_val = None, exclude_cols = True, inherit_message = ""):
         # update message
         inherit_message2 = inherit_message + ": explode" if (len(inherit_message) > 0) else "explode"
@@ -2039,7 +2039,7 @@ class TSV:
 
         # create new names based on suffix
         exploded_keys_new_names = []
-        name_suffix = suffix if (suffix != "") else get_func_name(explode)
+        name_suffix = suffix if (suffix != "") else get_func_name(exp_func)
         for e in exploded_keys_sorted:
             exploded_keys_new_names.append(e + ":" + name_suffix)
 
