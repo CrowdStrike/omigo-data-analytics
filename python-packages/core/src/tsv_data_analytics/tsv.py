@@ -1986,6 +1986,7 @@ class TSV:
 
         return TSV(new_header, new_data)
 
+    # TODO: Need better naming
     def explode(self, cols, exp_func, suffix = "", default_val = None, exclude_cols = True, inherit_message = ""):
         # update message
         inherit_message2 = inherit_message + ": explode" if (len(inherit_message) > 0) else "explode"
@@ -2375,7 +2376,8 @@ class TSV:
 
         # return the inner function
         return __explode_json_transform_func_inner__ 
- 
+
+    # TODO: Need better name 
     def explode_json(self, col, suffix = "", accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None,
         merge_list_method = "cogroup", collapse_primitive_list = True):
 

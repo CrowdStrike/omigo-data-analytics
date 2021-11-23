@@ -453,7 +453,7 @@ def sort_func(vs):
     vs_date = [v["date"] for v in vs_sorted]
     return [vs_date[0], ",".join(vs_date[1:])]
 
-def __read_base_url(url, query_params = {}, headers = {}, username = None, password = None):
+def __read_base_url__(url, query_params = {}, headers = {}, username = None, password = None, timeout_sec = 5):
     # check for query params
     if (len(query_params) > 0):
         params_encoded_str = urlencode(query_params)
@@ -469,7 +469,7 @@ def __read_base_url(url, query_params = {}, headers = {}, username = None, passw
         request.add_header("Authorization", "Basic {}".format(base64str))
 
     # call urlopen and get response
-    response = urlopen(request)
+    response = urlopen(request, timeout = timeout_sec)
         
     # check for error code
     if (response.status != 200):
@@ -477,9 +477,9 @@ def __read_base_url(url, query_params = {}, headers = {}, username = None, passw
 
     return response
 
-def read_url_json(url, query_params = {}, headers = {}, username = None, password = None):
+def read_url_json(url, query_params = {}, headers = {}, username = None, password = None, timeout_sec = 5):
     # read response
-    response = __read_base_url(url, query_params, headers, username, password)
+    response = __read_base_url__(url, query_params, headers, username, password, timeout_sec = timeout_sec)
 
     # check for content type
     if ("content-type" in response.headers and response.headers["content-type"] == "application/json"):
@@ -502,7 +502,7 @@ def read_url_json(url, query_params = {}, headers = {}, username = None, passwor
         raise Exception("Unable to parse the json response:", json_obj)
 
 # TODO: the compressed file handling should be done separately in a function
-def read_url(url, query_params = {}, headers = {}, sep = None, username = None, password = None):
+def read_url(url, query_params = {}, headers = {}, sep = None, username = None, password = None, timeout_sec = 30):
     # use the file extension as alternate way of detecting type of file
     file_type = None
     if (url.endswith(".csv") or url.endswith(".tsv")):
@@ -523,7 +523,7 @@ def read_url(url, query_params = {}, headers = {}, sep = None, username = None, 
         utils.warn("Unknown file extension. Doing best effort in content type detection")
 
     # read response
-    response = __read_base_url(url, query_params, headers, username, password)
+    response = __read_base_url__(url, query_params, headers, username, password, timeout_sec = timeout_sec)
 
     # check for content type
     content_type = None
