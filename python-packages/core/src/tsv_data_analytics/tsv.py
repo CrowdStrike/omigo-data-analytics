@@ -181,7 +181,7 @@ class TSV:
         inherit_message2 = inherit_message + ": not_endswith" if (len(inherit_message) > 0) else "not_endswith"
         return self.exclude_filter([col], lambda x: x.endswith(suffix), inherit_message = inherit_message2)
 
-    def group_count(self, cols, new_col, collapse = True, inherit_message = ""):
+    def group_count(self, cols, new_col, collapse = True, precision = 6, inherit_message = ""):
         # find the matching cols and indexes
         matching_cols = self.__get_matching_cols__(cols)
 
@@ -194,22 +194,23 @@ class TSV:
         return self.aggregate(matching_cols, [matching_cols[0]], [len], collapse = collapse, inherit_message = inherit_message2) \
             .rename(matching_cols[0] + ":len", new_count_col) \
             .transform([new_count_col], lambda x: str(int(x) / len(self.data)), new_ratio_col, inherit_message = inherit_message2) \
-            .apply_precision(new_ratio_col, 6, inherit_message = inherit_message2)
+            .apply_precision(new_ratio_col, precision, inherit_message = inherit_message2)
 
     def ratio(self, col1, col2, new_col, default = 0.0, precision = 6, inherit_message = ""):
         return self \
             .transform([col1, col2], lambda x, y: float(x) / float(y) if (float(y) != 0) else default, new_col) \
             .apply_precision(new_col, precision, inherit_message = inherit_message)
 
-    def ratio_const(self, col1, denominator, new_col, precision = 6, inherit_message = ""):
+    def ratio_const(self, col, denominator, new_col, precision = 6, inherit_message = ""):
         return self \
-            .transform([col1], lambda x: float(x) / float(denominator) if (float(denominator) != 0) else default, new_col) \
+            .transform([col], lambda x: float(x) / float(denominator) if (float(denominator) != 0) else default, new_col) \
             .apply_precision(new_col, precision, inherit_message = inherit_message)
        
     def apply_precision(self, col, precision, inherit_message = ""):
         inherit_message2 = inherit_message + ": apply_precision" if (len(inherit_message) > 0) else "apply_precision"
         return self.transform_inline([col], lambda x: ("{:." + str(precision) + "f}").format(float(x)), inherit_message = inherit_message2)
-        
+
+    # TODO: use skip_rows for better name        
     def skip(self, count):
         if (count > 0):
             if (count > len(self.data)):
@@ -217,6 +218,9 @@ class TSV:
             return TSV(self.header, self.data[count - 1:])
         else:
             return self
+
+    def skip_rows(self, count):
+        return self.skip(count)
 
     def last(self, count):
         if (count > len(self.data)):
@@ -240,6 +244,7 @@ class TSV:
 
         return TSV(self.header, new_data)
 
+    # TODO: use drop_cols instead coz of better name
     def drop(self, col_or_cols, inherit_message = ""):
         # get matching column and indexes
         matching_cols = self.__get_matching_cols__(col_or_cols)
@@ -253,6 +258,9 @@ class TSV:
         # return
         inherit_message2 = inherit_message + ": drop" if (len(inherit_message) > 0) else "drop"
         return self.select(non_matching_cols, inherit_message = inherit_message2)
+
+    def drop_cols(self, col_or_cols, inherit_message = ""):
+        return self.drop(col_or_cols, inherit_message)
 
     # TODO: the select_cols is not implemented properly
     def window_aggregate(self, win_col, agg_cols, agg_funcs, winsize, select_cols = None, sliding = False, collapse = True, suffix = "", precision = 2, inherit_message = ""):
@@ -1215,7 +1223,7 @@ class TSV:
         inherit_message2 = inherit_message + ": reorder_reverse" if (len(inherit_message) > 0) else "reorder_reverse"
         return self.reorder(rcols, inherit_message = inherit_message2)
 
-    def noop(self, funcstr):
+    def noop(self, *args, **kwargs):
         return self
 
     def export_to_df(self, n = -1):
