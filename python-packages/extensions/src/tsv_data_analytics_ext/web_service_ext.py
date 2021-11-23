@@ -8,7 +8,7 @@ class WebServiceTSV(tsv.TSV):
         super().__init__(header, data)
         self.timeout_sec = timeout_sec
 
-    def __call_web_service_exp_func__(self, url, query_params, header_params, username, password, url_cols, query_params_cols, header_params_cols, new_col, include_resolved_values):
+    def __call_web_service_exp_func__(self, url, query_params, header_params, username, password, url_cols, query_params_cols, header_params_cols, include_resolved_values):
         def __call_web_service_exp_func_inner__(mp):
             # resolve url
             url_resolved = url
@@ -43,14 +43,14 @@ class WebServiceTSV(tsv.TSV):
             result_mp = {}
             if (response_str == None):
                 response = ""
-            result_mp[new_col + ":url_encoded"] = utils.url_encode(response_str)
-            result_mp[new_col + ":error"] = response_err
+            result_mp["url_encoded"] = utils.url_encode(response_str)
+            result_mp["error"] = response_err
 
             # additioanl debugging information
             if (include_resolved_values == True):
-                result_mp[new_col + ":url"] = url_resolved
-                result_mp[new_col + ":query_params"] = str(query_params_resolved)
-                result_mp[new_col + ":header_params"] = str(header_params_resolved)
+                result_mp["url"] = url_resolved
+                result_mp["query_params"] = str(query_params_resolved)
+                result_mp["header_params"] = str(header_params_resolved)
 
             # return
             return [result_mp]
@@ -58,16 +58,12 @@ class WebServiceTSV(tsv.TSV):
         # return the inner function
         return __call_web_service_exp_func_inner__
 
-    def call_web_service(self, url, new_col, cols = None, query_params = None, header_params = None, username = None, password = None, include_resolved_values = False):
+    def call_web_service(self, url, suffix, cols = None, query_params = None, header_params = None, username = None, password = None, include_resolved_values = False):
         # resolve cols
         if (cols == None):
             sel_cols = self.get_header_fields()
         else:
             sel_cols = self.__get_matching_cols__(cols)
-
-        # validation
-        if (new_col in self.get_header_fields()):
-            raise Exception("New column already exists:", new_col, str(self.get_header_fields()))
 
         # initialize variables
         if (query_params == None):
@@ -115,5 +111,4 @@ class WebServiceTSV(tsv.TSV):
 
         # run transforms multiple times to generate resolved state of each variable
         return self \
-            .explode(all_sel_cols, self.__call_web_service_exp_func__(url, query_params, header_params, username, password, url_cols, query_params_cols, header_params_cols, new_col, include_resolved_values)) \
-            .remove_suffix("__call_web_service_exp_func_inner__")
+            .explode(all_sel_cols, self.__call_web_service_exp_func__(url, query_params, header_params, username, password, url_cols, query_params_cols, header_params_cols, include_resolved_values), suffix = suffix)

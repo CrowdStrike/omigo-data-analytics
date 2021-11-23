@@ -1987,7 +1987,7 @@ class TSV:
         return TSV(new_header, new_data)
 
     # TODO: Need better naming. The suffix semantics have been changed.
-    def explode(self, cols, exp_func, suffix = "", default_val = None, exclude_cols = True, inherit_message = ""):
+    def explode(self, cols, exp_func, new_cols_prefix, default_val = None, exclude_cols = True, inherit_message = ""):
         # update message
         inherit_message2 = inherit_message + ": explode" if (len(inherit_message) > 0) else "explode"
 
@@ -2039,9 +2039,9 @@ class TSV:
 
         # create new names based on suffix
         exploded_keys_new_names = []
-        name_suffix = suffix if (suffix != "") else get_func_name(exp_func)
+        name_prefix = new_cols_prefix if (new_cols_prefix != "") else get_func_name(exp_func)
         for e in exploded_keys_sorted:
-            exploded_keys_new_names.append(e + ":" + name_suffix)
+            exploded_keys_new_names.append(name_prefix + ":" + e)
 
         # check if any of new keys clash with old columns
         for k in exploded_keys_new_names:
@@ -2378,7 +2378,7 @@ class TSV:
         return __explode_json_transform_func_inner__ 
 
     # TODO: Need better name 
-    def explode_json(self, col, suffix = "", accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None,
+    def explode_json(self, col, new_cols_prefix, accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None,
         merge_list_method = "cogroup", collapse_primitive_list = True):
 
         # warn
@@ -2389,13 +2389,9 @@ class TSV:
         if (col not in self.header_map.keys()):
             raise Exception("Column not found:", str(col), str(self.header_fields))
 
-        # add suffix
-        if (suffix == ""):
-            suffix = col
-
         # validation on the name suffux
-        if (self.__has_matching_cols__(".*:{}".format(suffix))):
-            raise Exception("Please use a different suffix paramter as there are name clash with this suffix:", suffix)
+        if (self.__has_matching_cols__("{}:.*".format(new_cols_prefix))):
+            raise Exception("Please use a different suffix paramter as there are name clash with this prefix:", new_cols_prefix)
 
         # check for explode function
         exp_func = self.__explode_json_transform_func__(col, accepted_cols = accepted_cols, excluded_cols = excluded_cols, single_value_list_cols = single_value_list_cols,
@@ -2405,7 +2401,7 @@ class TSV:
         # use explode to do this parsing  
         return self \
             .add_seq_num(col + ":__index__", inherit_message = "explode_json") \
-            .explode([col], exp_func, suffix = suffix, default_val = "", exclude_cols = True, inherit_message = "explode_json")
+            .explode([col], exp_func, new_cols_prefix = new_cols_prefix, default_val = "", exclude_cols = True, inherit_message = "explode_json")
 
     def transpose(self, num_rows = 1):
         # correct the value of n
