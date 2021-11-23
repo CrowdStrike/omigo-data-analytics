@@ -1987,7 +1987,7 @@ class TSV:
         return TSV(new_header, new_data)
 
     # TODO: Need better naming. The suffix semantics have been changed.
-    def explode(self, cols, exp_func, new_cols_prefix, default_val = None, exclude_cols = True, inherit_message = ""):
+    def explode(self, cols, exp_func, new_cols_prefix = None, default_val = None, exclude_cols = True, inherit_message = ""):
         # update message
         inherit_message2 = inherit_message + ": explode" if (len(inherit_message) > 0) else "explode"
 
@@ -2039,7 +2039,13 @@ class TSV:
 
         # create new names based on suffix
         exploded_keys_new_names = []
-        name_prefix = new_cols_prefix if (new_cols_prefix != "") else get_func_name(exp_func)
+        if (new_cols_prefix != None):
+            name_prefix = new_cols_prefix
+        else:
+            utils.warn("explode: new_cols_prefix is None. Using the col name as the prefix.")
+            name_prefix = col
+
+        # append new names to the exploded keys
         for e in exploded_keys_sorted:
             exploded_keys_new_names.append(name_prefix + ":" + e)
 
@@ -2378,7 +2384,7 @@ class TSV:
         return __explode_json_transform_func_inner__ 
 
     # TODO: Need better name 
-    def explode_json(self, col, new_cols_prefix, accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None,
+    def explode_json(self, col, new_cols_prefix = None, accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None,
         merge_list_method = "cogroup", collapse_primitive_list = True):
 
         # warn
@@ -2393,6 +2399,11 @@ class TSV:
         if (self.__has_matching_cols__("{}:.*".format(new_cols_prefix))):
             raise Exception("Please use a different suffix paramter as there are name clash with this prefix:", new_cols_prefix)
 
+        # name prefix
+        if (new_cols_prefix == None):
+            utils.warn("explode_json: new_cols_prefix is None. Using col as the name prefix")
+            new_cols_prefix = col
+
         # check for explode function
         exp_func = self.__explode_json_transform_func__(col, accepted_cols = accepted_cols, excluded_cols = excluded_cols, single_value_list_cols = single_value_list_cols,
             transpose_col_groups = transpose_col_groups,
@@ -2400,7 +2411,7 @@ class TSV:
 
         # use explode to do this parsing  
         return self \
-            .add_seq_num(col + ":__index__", inherit_message = "explode_json") \
+            .add_seq_num(new_cols_prefix + ":__index__", inherit_message = "explode_json") \
             .explode([col], exp_func, new_cols_prefix = new_cols_prefix, default_val = "", exclude_cols = True, inherit_message = "explode_json")
 
     def transpose(self, num_rows = 1):
