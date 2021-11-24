@@ -475,6 +475,7 @@ def __read_base_url__(url, query_params = {}, headers = {}, username = None, pas
     if (response.status != 200):
         raise exception("HTTP response is not 200 OK. Returning:" + response.msg)
 
+    # return response
     return response
 
 def read_url_json(url, query_params = {}, headers = {}, username = None, password = None, timeout_sec = 5):
@@ -493,7 +494,7 @@ def read_url_json(url, query_params = {}, headers = {}, username = None, passwor
     else:
         raise Exception("Unable to parse the json response:", response_str)
 
-def read_url_response(url, query_params = {}, headers = {}, sep = None, username = None, password = None, timeout_sec = 30):
+def read_url_response(url, query_params = {}, headers = {}, username = None, password = None, timeout_sec = 30):
     # read response
     response = __read_base_url__(url, query_params, headers, username, password, timeout_sec = timeout_sec)
 
@@ -508,15 +509,18 @@ def read_url_response(url, query_params = {}, headers = {}, sep = None, username
 
     # get response
     response_str = None
-    if (content_type.startswith("text/plain") or file_type == "text"):
-        response_str = response.read().decode("ascii").rstrip("\n")
-    elif (content_type.startswith("application/x-gzip-compressed") or file_type == "gzip"):
+    if (content_type.startswith("application/x-gzip-compressed")):
         response_str = str(gzip.decompress(response.read()), "utf-8").rstrip("\n")
-    elif (content_type.startswith("application/x-zip-compressed") or file_type == "zip"):
+    elif (content_type.startswith("application/x-zip-compressed")):
         barr = response.read()
         zfile = zipfile.ZipFile(BytesIO(barr))
         response_str = zfile.open(zfile.infolist()[0]).read().decode().rstrip("\n")
         zfile.close()
+    elif (content_type.startswith("text/plain") or content_type.startswith("application/json")):
+        response_str = response.read().decode("ascii").rstrip("\n")
+    else:
+        utils.warn("Content Type not detected: {}. Using plain ascii.".format(content_type))
+        response_str = response.read().decode("ascii").rstrip("\n")
     else:
         raise Exception("Unable to parse the text response:", str(response.headers).split("\n"))
 
@@ -572,7 +576,7 @@ def read_url(url, query_params = {}, headers = {}, sep = None, username = None, 
     # return
     return tsv.TSV(header, data).validate()
 
-# convert from data frame
+# convert from data frame. TODO: df can have multiple header lines coz of indexes
 def read_df(df):
     # get the csv str
     tsv_lines = df.to_csv(sep = "\t").rstrip("\n").split("\n")
