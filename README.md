@@ -12,11 +12,10 @@
  * Out of the box support for data with changing schema.
  * Visualization APIs to provide simple interface to matplotlib, seaborn, and other popular libraries.
 
-## Build and Install Instructions
+## Install Instructions
 There are two packages - core and extensions. The core package is built on core python and out of the box without many dependencies
 to keep it stable. The extensions package contains libraries for plotting, and can have lot of dependencies.
 
-To build and install both packages:
 ```
 $ pip3 install tsv-data-analytics
 $ pip3 install tsv-data-analytics-ext
