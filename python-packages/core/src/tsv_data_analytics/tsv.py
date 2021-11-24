@@ -127,6 +127,7 @@ class TSV:
         return self.filter([col], lambda x: x != "" and float(x) == float(value))
 
     def eq_int(self, col, value):
+        utils.warn("this implicit checking of NA is not good.")
         return self.filter([col], lambda x: x != "" and int(float(x)) == value)
 
     def eq_float(self, col, value):
@@ -1114,6 +1115,7 @@ class TSV:
     # this method returns hashmap of key->map[k:v]
     # TODO: keys should be changed to single column
     def cols_as_map(self, key_cols, value_cols):
+        utils.warn("This api has changed from prev implementation")
         # validation
         keys_cols = self.__get_matching_cols__(keys_cols)
 
@@ -1129,19 +1131,20 @@ class TSV:
             for key_col in key_cols:
                 key = fields[self.header_map[key_col]]
                 keys.append(key)
+            keys_tuple = self.__expand_to_tuple__(keys)
 
-            keys_str = "\t".join(keys)
             # check for non duplicate keys
-            if (keys_str in mp.keys()):
+            if (keys_tuple in mp.keys()):
                 raise Exception("keys is not unique:", keys)
 
-            values_map = {} 
+            values = {} 
             for value_col in value_cols:
                 value = fields[self.header_map[value_col]]
-                values_map[value_col] = str(value)
+                values.append(str(value))
+            values_tuple = self.__expand_to_tuple__(values)
 
             # store value in hashmap
-            mp[keys_str] = values_map 
+            mp[keys_tuple] = values_tuple
 
         return mp
 
@@ -1288,7 +1291,13 @@ class TSV:
     def url_decode(self, col, newcol):
         return self.transform([col], lambda x: urllib.parse.unquote_plus(x), newcol)
 
-    def union(self, that_arr):
+    def union(self, tsv_or_that_arr):
+        # check if this is a single element TSV or an array
+        if (type(tsv_or_that_arr) == TSV):
+            that_arr = [tsv_or_that_arr]
+        else:
+            that_arr = tsv_or_that_arr
+
         # boundary condition
         if (len(that_arr) == 0):
             return self
@@ -1327,6 +1336,46 @@ class TSV:
             inherit_message2 = inherit_message + ": add_const_if_missing" if (len(inherit_message) > 0) else "add_const_if_missing"
             return self.add_const(col, value, inherit_message = inherit_message2)
 
+    def add_row(self, row_fields):
+        # validation
+        if (len(row_fields) != self.num_cols()):
+            raise Exception("Number of fields is not matching with number of columns: {} != {}".format(len(row_fields), self.num_cols()))
+
+        # create new row
+        new_line = "\t".join(row_fields)
+
+        # remember to do deep copy
+        new_data = []
+        for line in self.data:
+            new_data.append(line)
+        new_data.append(new_line)
+
+        # return
+        return TSV(self.header, new_data)
+
+    def add_map_as_row(self, mp, default_val = None):
+        # validation
+        for k in mp.keys():
+            if (k not in self.header_fields):
+                raise Exception("Column not in existing data: {}, {}".format(k, str(self.header_fields)))
+
+        # check for default values
+        for h in self.header_fields:
+            if (h not in mp.keys()):
+                if (default_val == None):
+                    raise Exception("Column not present in map and default value is not defined: {}. Try using default_val".format(h))
+
+        # add the map as new row
+        new_fields = []
+        for h in self.header_fields:
+            if (h in mp.keys()):
+                new_fields.append(str(mp[h]))
+            else:
+                new_fields.append(default_val)
+
+        # create new row
+        return self.add_row(new_fields)
+        
     def assign_value(self, col, value, inherit_message = ""):
         inherit_message2 = inherit_message + ": assign_value" if (len(inherit_message) > 0) else "assign_value"
         return self.transform_inline(col, lambda x: value, inherit_message = inherit_message2)
@@ -1419,7 +1468,12 @@ class TSV:
         new_header = "\t".join(list([h if (h not in mp.keys()) else mp[h] for h in self.header_fields]))
         return TSV(new_header, self.data)
 
-    def sample(self, sampling_ratio, seed = 0):
+    def sample(self, sampling_ratio, seed = 0, with_replacement = False):
+        # TODO
+        if (with_replacement == True):
+            raise Exception("sampling with replacement not implemented yet.")
+
+        # set seed
         random.seed(seed)
 
         new_data = []
@@ -1428,6 +1482,12 @@ class TSV:
                 new_data.append(line)
 
         return TSV(self.header, new_data)
+
+    def sample_without_replacement(self, sampling_ratio, seed = 0):
+        return self.sample(sampling_ratio, seed, with_replacement = False)
+
+    def sample_with_replacement(self, sampling_ratio, seed = 0):
+        return self.sample(sampling_ratio, seed, with_replacement = True)
 
     def sample_rows(self, n, seed = 0):
         if (n < 1):
