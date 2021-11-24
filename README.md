@@ -18,23 +18,8 @@ to keep it stable. The extensions package contains libraries for plotting, and c
 
 To build and install both packages:
 ```
-$ ./install.sh
-```
-
-To build the packages separately: 
-```
-# update the build module
-$ python3 -m pip install --upgrade build
-
-# for core package
-$ cd python-packages/core
-$ python3 -m build
-$ pip3 install dist/tsv_data_analytics-0.0.1.tar.gz
-
-# for extensions package
-$ cd python-packages/extensions
-$ python3 -m build
-$ pip3 install dist/tsv_data_analytics_ext-0.0.1.tar.gz
+$ pip3 install tsv-data-analytics
+$ pip3 install tsv-data-analytics-ext
 ```
 
 ## Usage
