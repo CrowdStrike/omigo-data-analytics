@@ -521,8 +521,6 @@ def read_url_response(url, query_params = {}, headers = {}, username = None, pas
     else:
         utils.warn("Content Type not detected: {}. Using plain ascii.".format(content_type))
         response_str = response.read().decode("ascii").rstrip("\n")
-    else:
-        raise Exception("Unable to parse the text response:", str(response.headers).split("\n"))
 
     # return
     return response_str
