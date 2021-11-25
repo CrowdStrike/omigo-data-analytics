@@ -2246,6 +2246,12 @@ class TSV:
                 # get value
                 v = json_mp[k]
 
+                # handle null scenario. json string can have a special value called null to represent empty or null value, which is converted to None in json parser.
+                # such null value should be okay to read as empty string
+                if (v == None):
+                    utils.debug("__explode_json_transform_func_expand_json__: None type value found. Taking it as empty string. Key: {}".format(k))
+                    v = ""
+
                 # for each data type, there is a different kind of handling
                 if (isinstance(v, (str, int, float))):
                     single_results[k] = str(v)
