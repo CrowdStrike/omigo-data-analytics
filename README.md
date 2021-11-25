@@ -93,4 +93,3 @@ sepal_width	sepal_length
 ## Notes from the author
 * This library is built for simplicity, functionality and robustness. Engineering good practices are followed slowly.
 * Detailed documentation is currently in progress. Feel free to reach out for any questions or help.
-* Contact: amit.jaiswal@gmail.com
