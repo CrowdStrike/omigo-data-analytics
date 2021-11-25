@@ -130,7 +130,7 @@ def get_str_map_without_keys(mp, excluded_keys):
 
 
 # TODO
-def datetime_to_timestamp(x):
+def datetime_to_utctimestamp(x):
     if (x.endswith("UTC") or x.endswith("GMT") or x.endswith("Z") or x.endswith("+00:00")):
         return int(parser.parse(x).timestamp())
     elif (len(x) == 10):
@@ -147,4 +147,7 @@ def datetime_to_timestamp(x):
         return int(parser.parse(x).timestamp())
     else:
         raise Exception("Unknown date format. Problem with UTC: {}".format(x))
+
+def datetime_to_timestamp(x):
+    raise Exception("Please use datetime_to_utctimestamp")
 
