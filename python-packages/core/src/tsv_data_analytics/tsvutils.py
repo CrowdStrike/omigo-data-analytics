@@ -1,9 +1,9 @@
 """utlity methods to read and write tsv data."""
 
 from concurrent.futures import ThreadPoolExecutor
-from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+#from urllib.request import Request, urlopen
+#from urllib.error import HTTPError, URLError
 from io import BytesIO
 import base64
 import gzip
@@ -11,6 +11,7 @@ import json
 import os
 import time
 import zipfile
+import requests
 
 # local imports
 from tsv_data_analytics import tsv
@@ -18,6 +19,9 @@ from tsv_data_analytics import file_paths_util
 from tsv_data_analytics import file_paths_data_reader
 from tsv_data_analytics import file_io_wrapper
 from tsv_data_analytics import utils
+
+# TODO: find the difference between ascii and utf-8 encoding
+# requests.post doesnt take data properly. Use json parameter.
 
 def merge(tsv_list, merge_def_vals = None):
     # remove zero length tsvs
@@ -453,38 +457,67 @@ def sort_func(vs):
     vs_date = [v["date"] for v in vs_sorted]
     return [vs_date[0], ",".join(vs_date[1:])]
 
-def __read_base_url__(url, query_params = {}, headers = {}, username = None, password = None, timeout_sec = 5):
+def __read_base_url__(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 5):
     # check for query params
     if (len(query_params) > 0):
         params_encoded_str = urlencode(query_params)
         url = "{}?{}".format(url, params_encoded_str)
-    
-    # create request        
-    request = Request(url, headers = headers)
 
-    # check for username, password authorization
-    if (username != None and password != None and "Authorization" not in headers.keys()):
-        # create the authorization header
-        base64str = base64.b64encode("{}:{}".format(username, password).encode("ascii")).decode("ascii")
-        request.add_header("Authorization", "Basic {}".format(base64str))
-
-    # call urlopen and get response
-    try:
-        response = urlopen(request, timeout = timeout_sec)
-    except BaseException as e:
-        print("__read_base_url__: exception:", e, url, query_params, headers)
-        raise e
-
-    # check for error code
-    if (response.status != 200):
-        raise Exception("HTTP response is not 200 OK. Returning:" + response.msg)
+    # call the web service    
+    if (body == None):
+        if (username != None and password != None):
+            response = requests.get(url, auth = (username, password), headers = headers)
+        else:
+            response = requests.get(url, headers = headers)
+    else:
+        if (username != None and password != None):
+            response = requests.post(url, auth = (username, password), json = json.loads(body), headers = headers)
+        else:
+            response = requests.post(url, json = json.loads(body), headers = headers)
 
     # return response
     return response
 
-def read_url_json(url, query_params = {}, headers = {}, username = None, password = None, timeout_sec = 5):
+# def __read_base_url_v0__(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 5):
+#    # check for query params
+#    if (len(query_params) > 0):
+#        params_encoded_str = urlencode(query_params)
+#        url = "{}?{}".format(url, params_encoded_str)
+#    
+#    # create request
+#    if (body == None):
+#        request = Request(url, headers = headers)
+#    else:
+#        if (isinstance(body, dict)):
+#            request = Request(url, headers = headers, data = urlencode(body).encode("ascii"))
+#        elif (isinstance(body, str)):
+#            request = Request(url, headers = headers, data = body.encode("ascii"))
+#        else:
+#            raise Exception("Unknown data type for body:", body)
+# 
+#    # check for username, password authorization
+#    if (username != None and password != None and "Authorization" not in headers.keys()):
+#        # create the authorization header
+#        base64str = base64.b64encode("{}:{}".format(username, password).encode("ascii")).decode("ascii")
+#        request.add_header("Authorization", "Basic {}".format(base64str))
+# 
+#    # call urlopen and get response
+#    try:
+#        response = urlopen(request, timeout = timeout_sec)
+#    except BaseException as e:
+#        print("__read_base_url__: exception:", e, url, query_params, headers)
+#        raise e
+# 
+#    # check for error code
+#    if (response.status != 200):
+#        raise Exception("HTTP response is not 200 OK. Returning:" + response.msg)
+# 
+#    # return response
+#    return response
+
+def read_url_json(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 5):
     # read response
-    response_str = read_url_response(url, query_params, headers, username, password, timeout_sec = timeout_sec)
+    response_str = read_url_response(url, query_params, headers, body = body, username = username, password = password, timeout_sec = timeout_sec)
 
     # parse json object
     json_obj = json.loads(response_str)
@@ -498,9 +531,13 @@ def read_url_json(url, query_params = {}, headers = {}, username = None, passwor
     else:
         raise Exception("Unable to parse the json response:", response_str)
 
-def read_url_response(url, query_params = {}, headers = {}, username = None, password = None, timeout_sec = 30):
+def read_url_response(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 30):
     # read response
-    response = __read_base_url__(url, query_params, headers, username, password, timeout_sec = timeout_sec)
+    response = __read_base_url__(url, query_params, headers, body = body, username = username, password = password, timeout_sec = timeout_sec)
+
+    # check for error codes
+    if (response.status_code != 200):
+        raise Exception("Non 200 OK status code found:", response.status_code, response.reason)
 
     # check for content type
     content_type = None
@@ -511,20 +548,32 @@ def read_url_response(url, query_params = {}, headers = {}, username = None, pas
     else:
         raise Exception("Cant find content type in response headers:", str(response.headers))
 
+    # best guess file type
+    file_type = None
+    if (url.endswith(".csv") or url.endswith(".tsv")):
+        file_type = "text"
+    elif (url.endswith(".gz")):
+        file_type = "gzip"
+    elif (url.endswith(".zip")):
+        file_type = "zip"
+
     # get response
     response_str = None
-    if (content_type.startswith("application/x-gzip-compressed")):
-        response_str = str(gzip.decompress(response.read()), "utf-8").rstrip("\n")
-    elif (content_type.startswith("application/x-zip-compressed")):
-        barr = response.read()
+    if (content_type.startswith("application/x-gzip-compressed") or content_type.startswith("application/gzip") or file_type == "gzip"):
+        response_str = str(gzip.decompress(response.content), "utf-8").rstrip("\n")
+    elif (content_type.startswith("application/x-zip-compressed") or content_type.startswith("application/zip") or file_type == "zip"):
+        barr = response.content
         zfile = zipfile.ZipFile(BytesIO(barr))
         response_str = zfile.open(zfile.infolist()[0]).read().decode().rstrip("\n")
         zfile.close()
-    elif (content_type.startswith("text/plain") or content_type.startswith("application/json")):
-        response_str = response.read().decode("ascii").rstrip("\n")
+    elif (content_type.startswith("text/plain") or content_type.startswith("application/json") or file_type == "text"):
+        response_str = response.content.decode("ascii").rstrip("\n")
+    elif (content_type.startswith("application/octet-stream")):
+        utils.warn("Content Type is octet stream. Using gzip.".format(content_type))
+        response_str = str(gzip.decompress(response.content), "utf-8").rstrip("\n")
     else:
-        utils.warn("Content Type not detected: {}. Using plain ascii.".format(content_type))
-        response_str = response.read().decode("ascii").rstrip("\n")
+        utils.warn("Content Type is not known: {}. Using plain text ascii.".format(content_type))
+        response_str = response.content.decode("ascii").rstrip("\n")
 
     # return
     return response_str
@@ -551,7 +600,7 @@ def read_url(url, query_params = {}, headers = {}, sep = None, username = None, 
         utils.warn("Unknown file extension. Doing best effort in content type detection")
 
     # read response
-    response_str = read_url_response(url, query_params, headers, username, password, timeout_sec = timeout_sec)
+    response_str = read_url_response(url, query_params, headers, body = None, username = username, password = password, timeout_sec = timeout_sec)
 
     # split into lines
     lines = response_str.split("\n")

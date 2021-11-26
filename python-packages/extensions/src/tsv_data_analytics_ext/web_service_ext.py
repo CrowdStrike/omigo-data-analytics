@@ -8,7 +8,7 @@ class WebServiceTSV(tsv.TSV):
         super().__init__(header, data)
         self.timeout_sec = timeout_sec
 
-    def call_web_service(self, url, prefix, cols = None, query_params = None, header_params = None, username = None, password = None, include_resolved_values = False):
+    def call_web_service(self, url, prefix, cols = None, query_params = None, header_params = None, body_params = None, username = None, password = None, include_resolved_values = False):
         # resolve cols
         if (cols == None):
             sel_cols = self.get_header_fields()
@@ -26,6 +26,7 @@ class WebServiceTSV(tsv.TSV):
         url_cols = []
         query_params_cols = []
         header_params_cols = []
+        body_params_cols = []
         all_sel_cols = []
 
         # iterate over all the columns and find where all they exist
@@ -48,12 +49,26 @@ class WebServiceTSV(tsv.TSV):
                     header_params_cols.append(c)
                     all_sel_cols.append(c)
 
+            # check body
+            if (body_params != None):
+                if (isinstance(body_params, dict)):
+                    for k in body_params.keys():
+                        if (body_params[k].find(cstr) != -1 and c not in body_params_cols):
+                            body_params_cols.append(c)
+                            all_sel_cols.append(c)
+                elif (isinstance(body_params, str)):
+                    if (body_params.find(cstr) != -1 and c not in body_params_cols):
+                        body_params_cols.append(c)
+                        all_sel_cols.append(c)
+                else:
+                    raise Exception("Unknown data type for body:", body_params)
+
         # distinct all_sel_cols
         all_sel_cols = list(set(all_sel_cols))
 
         # print
-        utils.debug("call_web_service: url: {}, query_params: {}, header_params: {}".format(str(url), str(query_params), str(header_params)))
-        utils.debug("call_web_service: url_cols: {}, query_params_cols: {}, header_params_cols: {}".format(str(url_cols), str(query_params_cols), str(header_params_cols)))
+        utils.debug("call_web_service: url: {}, query_params: {}, header_params: {}".format(str(url), str(query_params), str(header_params), str(body_params)))
+        utils.debug("call_web_service: url_cols: {}, query_params_cols: {}, header_params_cols: {}, body_params_cols".format(str(url_cols), str(query_params_cols), str(header_params_cols), str(body_params_cols)))
 
         # do some sanity check
         if (cols != None and len(sel_cols) != len(all_sel_cols)):
@@ -62,10 +77,10 @@ class WebServiceTSV(tsv.TSV):
 
         # run transforms multiple times to generate resolved state of each variable
         return self \
-            .explode(all_sel_cols, self.__call_web_service_exp_func__(url, query_params, header_params, username, password, url_cols,
-                query_params_cols, header_params_cols, include_resolved_values), prefix = prefix, collapse = False)
+            .explode(all_sel_cols, self.__call_web_service_exp_func__(url, query_params, header_params, body_params, username, password, url_cols,
+                query_params_cols, header_params_cols, body_params_cols, include_resolved_values), prefix = prefix, collapse = False)
 
-    def __call_web_service_exp_func__(self, url, query_params, header_params, username, password, url_cols, query_params_cols, header_params_cols, include_resolved_values):
+    def __call_web_service_exp_func__(self, url, query_params, header_params, body_params, username, password, url_cols, query_params_cols, header_params_cols, body_params_cols, include_resolved_values):
         def __call_web_service_exp_func_inner__(mp):
             # resolve url
             url_resolved = url
@@ -89,19 +104,39 @@ class WebServiceTSV(tsv.TSV):
                     cstr = "{" + c + "}"
                     header_params_resolved[h] = header_params_resolved[h].replace(cstr, mp[c])
 
+            # resolve body_params
+            if (body_params != None):
+                if (isinstance(body_params, dict)):
+                    body_params_resolved = {}
+                    for k in body_params.keys():
+                        body_params_resolved[k] = body_params[k]
+                        for c in body_params_cols:
+                            cstr = "{" + c + "}"
+                            body_params_resolved[k] = body_params_resolved[k].replace(cstr, mp[c])
+                elif(isinstance(body_params, str)):
+                    body_params_resolved = body_params
+                    for c in body_params_cols:
+                        cstr = "{" + c + "}"
+                        body_params_resolved = body_params_resolved.replace(cstr, mp[c])
+                else:
+                    raise Exception("Unknown data type for body_params:", body_params)
+            else:
+                body_params_resolved = None
+
             # debug
             utils.debug("__call_web_service_exp_func_inner__: mp: {}".format(mp))
-            utils.debug("__call_web_service_exp_func_inner__: url: {}, query_params: {}, header_params: {}".format(url, query_params, header_params)) 
-            utils.debug("__call_web_service_exp_func_inner__: url_resolved: {}, query_params_resolved: {}, header_params_resolved: {}".format(url_resolved, query_params_resolved, header_params_resolved)) 
+            utils.debug("__call_web_service_exp_func_inner__: url: {}, query_params: {}, header_params: {}, body_params: {}".format(url, query_params, header_params, body_params)) 
+            utils.debug("__call_web_service_exp_func_inner__: url_resolved: {}, query_params_resolved: {}, header_params_resolved: {}, body_params_resolved: {}".format(url_resolved, query_params_resolved, header_params_resolved, body_params_resolved)) 
 
             # call web service. TODO: Need HTTP Response codes for better error handling, back pressure etc
             response_str = ""
             response_err = ""
             try:
-                response_str = tsvutils.read_url_response(url_resolved, query_params_resolved, header_params_resolved, username, password, timeout_sec = self.timeout_sec)
+                response_str = tsvutils.read_url_response(url_resolved, query_params_resolved, header_params_resolved, body = body_params_resolved, username = username, password = password, timeout_sec = self.timeout_sec)
             except BaseException as err:
-                print("__call_web_service_exp_func_inner__: error: {}, url: {}, query_params: {}, header_params: {}".format(err, url_resolved, query_params_resolved, header_params_resolved))
+                print("__call_web_service_exp_func_inner__: error: {}, url: {}, query_params: {}, header_params: {}, body_params: {}".format(err, url_resolved, query_params_resolved, header_params_resolved, body_params_resolved))
                 response_err = str(err)
+                raise err
                 
             # create response map          
             result_mp = {}
@@ -115,6 +150,7 @@ class WebServiceTSV(tsv.TSV):
                 result_mp["request:url"] = url_resolved
                 result_mp["request:query_params"] = str(query_params_resolved)
                 result_mp["request:header_params"] = str(header_params_resolved)
+                result_mp["request:body_params"] = str(body_params_resolved)
                 for k in mp.keys():
                     result_mp[k] = str(mp[k]) 
 
