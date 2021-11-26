@@ -98,7 +98,7 @@ class WebServiceTSV(tsv.TSV):
 
             # resolve header_params
             header_params_resolved = {}
-            for h in header_params_resolved.keys():
+            for h in header_params.keys():
                 header_params_resolved[h] = header_params[h]
                 for c in header_params_cols:
                     cstr = "{" + c + "}"
@@ -124,9 +124,9 @@ class WebServiceTSV(tsv.TSV):
                 body_params_resolved = None
 
             # debug
-            utils.debug("__call_web_service_exp_func_inner__: mp: {}".format(mp))
-            utils.debug("__call_web_service_exp_func_inner__: url: {}, query_params: {}, header_params: {}, body_params: {}".format(url, query_params, header_params, body_params)) 
-            utils.debug("__call_web_service_exp_func_inner__: url_resolved: {}, query_params_resolved: {}, header_params_resolved: {}, body_params_resolved: {}".format(url_resolved, query_params_resolved, header_params_resolved, body_params_resolved)) 
+            #utils.debug("__call_web_service_exp_func_inner__: mp: {}".format(mp))
+            #utils.debug("__call_web_service_exp_func_inner__: url: {}, query_params: {}, header_params: {}, body_params: {}".format(url, query_params, header_params, body_params)) 
+            #utils.debug("__call_web_service_exp_func_inner__: url_resolved: {}, query_params_resolved: {}, header_params_resolved: {}, body_params_resolved: {}".format(url_resolved, query_params_resolved, header_params_resolved, body_params_resolved)) 
 
             # call web service. TODO: Need HTTP Response codes for better error handling, back pressure etc
             response_str = ""
@@ -136,7 +136,6 @@ class WebServiceTSV(tsv.TSV):
             except BaseException as err:
                 print("__call_web_service_exp_func_inner__: error: {}, url: {}, query_params: {}, header_params: {}, body_params: {}".format(err, url_resolved, query_params_resolved, header_params_resolved, body_params_resolved))
                 response_err = str(err)
-                raise err
                 
             # create response map          
             result_mp = {}
@@ -150,7 +149,7 @@ class WebServiceTSV(tsv.TSV):
                 result_mp["request:url"] = url_resolved
                 result_mp["request:query_params"] = str(query_params_resolved)
                 result_mp["request:header_params"] = str(header_params_resolved)
-                result_mp["request:body_params"] = str(body_params_resolved)
+                result_mp["request:body_params:url_encoded"] = utils.url_encode(body_params_resolved)
                 for k in mp.keys():
                     result_mp[k] = str(mp[k]) 
 

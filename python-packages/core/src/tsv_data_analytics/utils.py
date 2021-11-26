@@ -53,9 +53,15 @@ def print_code_todo_warning(msg):
         print("[CODE TODO WARNING]: " + msg)
 
 def url_encode(s):
+    if (s == None):
+        return "" 
+
     return urllib.parse.quote_plus(s)
 
 def url_decode(s):
+    if (s == None):
+        return "" 
+
     return urllib.parse.unquote_plus(s)
 
 # move this to utils
