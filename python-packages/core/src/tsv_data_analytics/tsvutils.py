@@ -506,7 +506,6 @@ def read_url_response(url, query_params = {}, headers = {}, body = None, usernam
 
     # check for error codes
     if (response.status_code != 200):
-        utils.error("Non 200 OK status code found: {}, {}".format(response.status_code, response.reason))
         return "", response.status_code, response.reason
 
     # check for content type
@@ -516,7 +515,6 @@ def read_url_response(url, query_params = {}, headers = {}, body = None, usernam
     elif ("Content-Type" in response.headers):
         content_type = response.headers["Content-Type"].lower()
     else:
-        utils.error("Cant find content type in response headers: {}".format(str(response.headers)))
         return "", 0, "Missing content-type: {}".format(str(response.headers))
 
     # best guess file type

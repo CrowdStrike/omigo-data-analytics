@@ -1229,6 +1229,9 @@ class TSV:
     def noop(self, *args, **kwargs):
         return self
 
+    def to_df(self, n = -1):
+        return self.export_to_df(n)
+
     def export_to_df(self, n = -1):
         # find how many rows to select
         nrows = len(self.data)

@@ -8,7 +8,9 @@ class WebServiceTSV(tsv.TSV):
         super().__init__(header, data)
         self.timeout_sec = timeout_sec
 
-    def call_web_service(self, url, prefix, cols = None, query_params = None, header_params = None, body_params = None, username = None, password = None, include_resolved_values = False):
+    def call_web_service(self, url, prefix, cols = None, query_params = None, header_params = None, body_params = None, username = None, password = None, include_resolved_values = False,
+        selective_execution_func = None):
+
         # resolve cols
         if (cols == None):
             sel_cols = self.get_header_fields()
@@ -68,7 +70,7 @@ class WebServiceTSV(tsv.TSV):
 
         # print
         utils.debug("call_web_service: url: {}, query_params: {}, header_params: {}".format(str(url), str(query_params), str(header_params), str(body_params)))
-        utils.debug("call_web_service: url_cols: {}, query_params_cols: {}, header_params_cols: {}, body_params_cols".format(str(url_cols), str(query_params_cols), str(header_params_cols), str(body_params_cols)))
+        utils.debug("call_web_service: url_cols: {}, query_params_cols: {}, header_params_cols: {}, body_params_cols: {}".format(str(url_cols), str(query_params_cols), str(header_params_cols), str(body_params_cols)))
 
         # do some sanity check
         if (cols != None and len(sel_cols) != len(all_sel_cols)):
@@ -78,9 +80,11 @@ class WebServiceTSV(tsv.TSV):
         # run transforms multiple times to generate resolved state of each variable
         return self \
             .explode(all_sel_cols, self.__call_web_service_exp_func__(url, query_params, header_params, body_params, username, password, url_cols,
-                query_params_cols, header_params_cols, body_params_cols, include_resolved_values), prefix = prefix, collapse = False)
+                query_params_cols, header_params_cols, body_params_cols, include_resolved_values, selective_execution_func), prefix = prefix, collapse = False)
 
-    def __call_web_service_exp_func__(self, url, query_params, header_params, body_params, username, password, url_cols, query_params_cols, header_params_cols, body_params_cols, include_resolved_values):
+    def __call_web_service_exp_func__(self, url, query_params, header_params, body_params, username, password, url_cols, query_params_cols, header_params_cols, body_params_cols,
+        include_resolved_values, selective_execution_func):
+
         def __call_web_service_exp_func_inner__(mp):
             # resolve url
             url_resolved = url
@@ -128,21 +132,30 @@ class WebServiceTSV(tsv.TSV):
             #utils.debug("__call_web_service_exp_func_inner__: url: {}, query_params: {}, header_params: {}, body_params: {}".format(url, query_params, header_params, body_params)) 
             #utils.debug("__call_web_service_exp_func_inner__: url_resolved: {}, query_params_resolved: {}, header_params_resolved: {}, body_params_resolved: {}".format(url_resolved, query_params_resolved, header_params_resolved, body_params_resolved)) 
 
-            # call web service. TODO: Need HTTP Response codes for better error handling, back pressure etc
-            response_str = ""
-            response_err = ""
-            try:
-                response_str = tsvutils.read_url_response(url_resolved, query_params_resolved, header_params_resolved, body = body_params_resolved, username = username, password = password, timeout_sec = self.timeout_sec)
-            except BaseException as err:
-                print("__call_web_service_exp_func_inner__: error: {}, url: {}, query_params: {}, header_params: {}, body_params: {}".format(err, url_resolved, query_params_resolved, header_params_resolved, body_params_resolved))
-                response_err = str(err)
-                
-            # create response map          
+            # create response map
             result_mp = {}
-            if (response_str == None):
-                response = ""
-            result_mp["response:url_encoded"] = utils.url_encode(response_str)
-            result_mp["response:error"] = response_err
+
+            # check if there is special execution logic
+            do_execute = True
+            if (selective_execution_func != None and selective_execution_func(mp) == False):
+                do_execute = False
+
+            # check whether to execute or not
+            if (do_execute == True):
+                # call web service. TODO: Need HTTP Response codes for better error handling, back pressure etc
+                resp_str, resp_status_code, resp_err = tsvutils.read_url_response(url_resolved, query_params_resolved, header_params_resolved, body = body_params_resolved, username = username, password = password, timeout_sec = self.timeout_sec)
+                result_mp["response:success"] = "1" if (str(resp_status_code).startswith("2")) else "0"
+                result_mp["response:selective_execution"] = "1"
+            else:
+                # for some reason, this row is not meant to be executed. Ignore.
+                resp_str, resp_status_code, resp_err = "", 0, ""
+                result_mp["response:success"] = "0"
+                result_mp["response:selective_execution"] = "0"
+            
+            # fill rest of the result map    
+            result_mp["response:url_encoded"] = str(utils.url_encode(resp_str))
+            result_mp["response:status_code"] = str(resp_status_code)
+            result_mp["response:error"] = str(resp_err)
 
             # additioanl debugging information
             if (include_resolved_values == True):

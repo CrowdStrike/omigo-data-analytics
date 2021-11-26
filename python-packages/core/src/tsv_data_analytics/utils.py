@@ -30,6 +30,9 @@ def debug(msg):
 def info(msg):
     print("[INFO]: {}".format(msg))
 
+def error(msg):
+    print("[ERROR]: {}".format(msg))
+
 def enable_debug_mode():
     os.environ["TSV_DATA_ANALYTICS_DEBUG"] = "1"
 
