@@ -457,6 +457,7 @@ def sort_func(vs):
     vs_date = [v["date"] for v in vs_sorted]
     return [vs_date[0], ",".join(vs_date[1:])]
 
+# TODO: the body has to be a json payload. This is because of some bug in python requests.post api
 def __read_base_url__(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 5):
     # check for query params
     if (len(query_params) > 0):
@@ -466,58 +467,26 @@ def __read_base_url__(url, query_params = {}, headers = {}, body = None, usernam
     # call the web service    
     if (body == None):
         if (username != None and password != None):
-            response = requests.get(url, auth = (username, password), headers = headers)
+            response = requests.get(url, auth = (username, password), headers = headers, timeout = timeout_sec)
         else:
-            response = requests.get(url, headers = headers)
+            response = requests.get(url, headers = headers, timeout = timeout_sec)
     else:
         if (username != None and password != None):
-            response = requests.post(url, auth = (username, password), json = json.loads(body), headers = headers)
+            response = requests.post(url, auth = (username, password), json = json.loads(body), headers = headers, timeout = timeout_sec)
         else:
-            response = requests.post(url, json = json.loads(body), headers = headers)
+            response = requests.post(url, json = json.loads(body), headers = headers, timeout = timeout_sec)
 
     # return response
     return response
 
-# def __read_base_url_v0__(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 5):
-#    # check for query params
-#    if (len(query_params) > 0):
-#        params_encoded_str = urlencode(query_params)
-#        url = "{}?{}".format(url, params_encoded_str)
-#    
-#    # create request
-#    if (body == None):
-#        request = Request(url, headers = headers)
-#    else:
-#        if (isinstance(body, dict)):
-#            request = Request(url, headers = headers, data = urlencode(body).encode("ascii"))
-#        elif (isinstance(body, str)):
-#            request = Request(url, headers = headers, data = body.encode("ascii"))
-#        else:
-#            raise Exception("Unknown data type for body:", body)
-# 
-#    # check for username, password authorization
-#    if (username != None and password != None and "Authorization" not in headers.keys()):
-#        # create the authorization header
-#        base64str = base64.b64encode("{}:{}".format(username, password).encode("ascii")).decode("ascii")
-#        request.add_header("Authorization", "Basic {}".format(base64str))
-# 
-#    # call urlopen and get response
-#    try:
-#        response = urlopen(request, timeout = timeout_sec)
-#    except BaseException as e:
-#        print("__read_base_url__: exception:", e, url, query_params, headers)
-#        raise e
-# 
-#    # check for error code
-#    if (response.status != 200):
-#        raise Exception("HTTP response is not 200 OK. Returning:" + response.msg)
-# 
-#    # return response
-#    return response
-
+# TODO: the semantics of this api are not clear
 def read_url_json(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 5):
     # read response
-    response_str = read_url_response(url, query_params, headers, body = body, username = username, password = password, timeout_sec = timeout_sec)
+    response_str, status_code, error_msg = read_url_response(url, query_params, headers, body = body, username = username, password = password, timeout_sec = timeout_sec)
+
+    # check for status code
+    if (status_code != 200):
+        raise Exception("read_url_json failed. Status: {}, Reason: {}".format(status_code, error_msg))
 
     # parse json object
     json_obj = json.loads(response_str)
@@ -537,7 +506,8 @@ def read_url_response(url, query_params = {}, headers = {}, body = None, usernam
 
     # check for error codes
     if (response.status_code != 200):
-        raise Exception("Non 200 OK status code found:", response.status_code, response.reason)
+        utils.error("Non 200 OK status code found: {}, {}".format(response.status_code, response.reason))
+        return "", response.status_code, response.reason
 
     # check for content type
     content_type = None
@@ -546,7 +516,8 @@ def read_url_response(url, query_params = {}, headers = {}, body = None, usernam
     elif ("Content-Type" in response.headers):
         content_type = response.headers["Content-Type"].lower()
     else:
-        raise Exception("Cant find content type in response headers:", str(response.headers))
+        utils.error("Cant find content type in response headers: {}".format(str(response.headers)))
+        return "", 0, "Missing content-type: {}".format(str(response.headers))
 
     # best guess file type
     file_type = None
@@ -576,11 +547,12 @@ def read_url_response(url, query_params = {}, headers = {}, body = None, usernam
         response_str = response.content.decode("ascii").rstrip("\n")
 
     # return
-    return response_str
+    return response_str, response.status_code, ""
         
 # TODO: the compressed file handling should be done separately in a function
 def read_url(url, query_params = {}, headers = {}, sep = None, username = None, password = None, timeout_sec = 30):
     # use the file extension as alternate way of detecting type of file
+    # TODO: move the file type and extension detection to separate function
     file_type = None
     if (url.endswith(".csv") or url.endswith(".tsv")):
         file_type = "text"
@@ -600,7 +572,11 @@ def read_url(url, query_params = {}, headers = {}, sep = None, username = None, 
         utils.warn("Unknown file extension. Doing best effort in content type detection")
 
     # read response
-    response_str = read_url_response(url, query_params, headers, body = None, username = username, password = password, timeout_sec = timeout_sec)
+    response_str, status_code, error_msg, = read_url_response(url, query_params, headers, body = None, username = username, password = password, timeout_sec = timeout_sec)
+
+    # check for status code
+    if (status_code != 200):
+        raise Exception("read_url failed. Status: {}, Reason: {}".format(status_code, error_msg))
 
     # split into lines
     lines = response_str.split("\n")
