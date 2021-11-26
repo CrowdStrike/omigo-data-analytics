@@ -469,11 +469,15 @@ def __read_base_url__(url, query_params = {}, headers = {}, username = None, pas
         request.add_header("Authorization", "Basic {}".format(base64str))
 
     # call urlopen and get response
-    response = urlopen(request, timeout = timeout_sec)
-        
+    try:
+        response = urlopen(request, timeout = timeout_sec)
+    except BaseException as e:
+        print("__read_base_url__: exception:", e, url, query_params, headers)
+        raise e
+
     # check for error code
     if (response.status != 200):
-        raise exception("HTTP response is not 200 OK. Returning:" + response.msg)
+        raise Exception("HTTP response is not 200 OK. Returning:" + response.msg)
 
     # return response
     return response
