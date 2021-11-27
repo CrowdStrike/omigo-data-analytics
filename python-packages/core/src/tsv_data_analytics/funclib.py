@@ -3,6 +3,7 @@
 import statistics
 import numpy as np
 from dateutil import parser
+import datetime
 
 def parse_image_file_base_name(x):
     if (len(x) <= 1):
@@ -128,7 +129,6 @@ def get_str_map_without_keys(mp, excluded_keys):
 
     return mp2
 
-
 # TODO
 def datetime_to_utctimestamp(x):
     if (x.endswith("UTC") or x.endswith("GMT") or x.endswith("Z") or x.endswith("+00:00")):
@@ -147,6 +147,15 @@ def datetime_to_utctimestamp(x):
         return int(parser.parse(x).timestamp())
     else:
         raise Exception("Unknown date format. Problem with UTC: {}".format(x))
+
+# TODO: Converts seconds format only
+def utctimestamp_to_datetime_str(x):
+    if (len(str(x)) == 10):
+        return datetime.datetime.utcfromtimestamp(x).replace(tzinfo = datetime.timezone.utc).isoformat()
+    elif (len(str(x)) == 13):
+        return datetime.datetime.utcfromtimestamp(int(x/1000)).replace(tzinfo = datetime.timezone.utc).isoformat()
+    else:
+        raise Exception("Unknown timestamp format:", x)
 
 def datetime_to_timestamp(x):
     raise Exception("Please use datetime_to_utctimestamp")

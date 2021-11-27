@@ -1490,6 +1490,50 @@ class TSV:
         # return
         return TSV("\t".join(new_header_fields), self.data)
 
+    def rename_prefix(self, old_prefix, new_prefix, cols = None):
+        # either selective columns can be renamed or all matching ones
+        if (cols == None):
+            # use the prefix patterns for determing cols
+            cols = "{}:.*".format(old_prefix)
+
+        # resolve
+        cols = self.__get_matching_cols__(cols)
+
+        # create new header_fields
+        new_header_fields = []
+
+        # iterate and set the new name
+        for h in self.header_fields:
+            if (h in cols):
+                new_header_fields.append(new_prefix + h[len(old_prefix):])
+            else:
+                new_header_fields.append(h)
+
+        # return
+        return TSV("\t".join(new_header_fields), self.data)
+
+    def rename_suffix(self, old_suffix, new_suffix, cols = None):
+        # either selective columns can be renamed or all matching ones
+        if (cols == None):
+            # use the prefix patterns for determing cols
+            cols = ".*:{}".format(old_suffix)
+
+        # resolve
+        cols = self.__get_matching_cols__(cols)
+
+        # create new header_fields
+        new_header_fields = []
+
+        # iterate and set the new name
+        for h in self.header_fields:
+            if (h in cols):
+                new_header_fields.append(h[0:-1*len(old_suffix) + new_suffix])
+            else:
+                new_header_fields.append(h)
+
+        # return
+        return TSV("\t".join(new_header_fields), self.data)
+
     def remove_prefix(self, prefix):
         # create a map
         mp = {}
@@ -2244,15 +2288,15 @@ class TSV:
         # return
         return TSV(new_header, self.data)
 
-    def __explode_json_transform_func__(self, col, accepted_cols, excluded_cols, single_value_list_cols, transpose_col_groups, merge_list_method, collapse_primitive_list, join_col = ","):
+    def __explode_json_transform_func__(self, url_encoded_col, accepted_cols, excluded_cols, single_value_list_cols, transpose_col_groups, merge_list_method, collapse_primitive_list, join_col = ","):
         def __explode_json_transform_func_inner__(mp):
             # some validation.
-            if (col not in mp.keys() or mp[col] == "" or mp[col] == None):
-                utils.debug("__explode_json_transform_func_inner__: invalid json response found. Need more debugging: {}, {}".format(col, mp))
+            if (url_encoded_col not in mp.keys() or mp[url_encoded_col] == "" or mp[url_encoded_col] == None):
+                utils.debug("__explode_json_transform_func_inner__: invalid json response found. Need more debugging: {}, {}".format(url_encoded_col, mp))
                 return []
 
             # parse json
-            json_mp = json.loads(utils.url_decode(mp[col]))
+            json_mp = json.loads(utils.url_decode(mp[url_encoded_col]))
             return __explode_json_transform_func_inner_helper__(json_mp)
 
         def __explode_json_transform_func_inner_helper__(json_mp):
@@ -2263,7 +2307,7 @@ class TSV:
             # check if top level is a list
             if (isinstance(json_mp, list)):
                 print("top level is a list. converting to a map")
-                return __explode_json_transform_func_inner_helper__({col: json_mp})
+                return __explode_json_transform_func_inner_helper__({url_encoded_col: json_mp})
 
             # use inner functions to parse the json
             results = __explode_json_transform_func_expand_json__(json_mp)
@@ -2495,8 +2539,9 @@ class TSV:
         # return the inner function
         return __explode_json_transform_func_inner__ 
 
-    # TODO: Need better name 
-    def explode_json(self, col, prefix = None, accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None,
+    # TODO: Need better name
+    # the json col is expected to be in url_encoded form 
+    def explode_json(self, url_encoded_col, prefix = None, accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None,
         merge_list_method = "cogroup", collapse_primitive_list = True, collapse = True):
 
         # warn
@@ -2504,8 +2549,8 @@ class TSV:
             utils.warn("explode_json: excluded_cols is work in progress and may not work in all scenarios")
 
         # validation
-        if (col not in self.header_map.keys()):
-            raise Exception("Column not found:", str(col), str(self.header_fields))
+        if (url_encoded_col not in self.header_map.keys()):
+            raise Exception("Column not found:", str(url_encoded_col), str(self.header_fields))
 
         # name prefix
         if (prefix == None):
@@ -2513,14 +2558,14 @@ class TSV:
             prefix = col
 
         # check for explode function
-        exp_func = self.__explode_json_transform_func__(col, accepted_cols = accepted_cols, excluded_cols = excluded_cols, single_value_list_cols = single_value_list_cols,
+        exp_func = self.__explode_json_transform_func__(url_encoded_col, accepted_cols = accepted_cols, excluded_cols = excluded_cols, single_value_list_cols = single_value_list_cols,
             transpose_col_groups = transpose_col_groups,
             merge_list_method = merge_list_method, collapse_primitive_list = collapse_primitive_list)
 
         # use explode to do this parsing  
         return self \
-            .add_seq_num(prefix + ":__index__", inherit_message = "explode_json") \
-            .explode([col], exp_func, prefix = prefix, default_val = "", collapse = collapse, inherit_message = "explode_json")
+            .add_seq_num(prefix + ":__json_index__", inherit_message = "explode_json") \
+            .explode([url_encoded_col], exp_func, prefix = prefix, default_val = "", collapse = collapse, inherit_message = "explode_json")
 
     def transpose(self, num_rows = 1):
         # correct the value of n
