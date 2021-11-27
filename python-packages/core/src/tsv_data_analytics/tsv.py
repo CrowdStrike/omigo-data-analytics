@@ -1021,6 +1021,11 @@ class TSV:
         # return 
         return TSV(new_header, new_data)
 
+    def show_transpose(self, n = 1, title = None):
+        max_width = 200
+        max_col_width = int(max_width / (n + 1))
+        return self.transpose(n).show(n = self.num_cols(), max_col_width = max_col_width, title = title)
+
     def show(self, n = 100, max_col_width = 40, title = None):
         self.take(n).__show_topn__(max_col_width, title)
         # return the original tsv
@@ -2345,80 +2350,83 @@ class TSV:
                 # for each data type, there is a different kind of handling
                 if (isinstance(v, (str, int, float))):
                     single_results[k] = str(v)
-                elif (isinstance(v, list) and len(v) > 0):
-                    if (len(list_results_arr) > 0 and utils.is_debug()):
-                        print("[WARN] explode_json: multiple lists are not fully supported. Confirm data parsing or Use accepted_cols or excluded_cols: {}".format(str(k)))
-
-                    # create a new entry for holding the list array
-                    list_results_arr.append([])
-
-                    if (isinstance(v[0], (str,int,float))):
-                        # treat primitive lists as single value or as yet another list
-                        if (collapse_primitive_list == True):
-                            single_results[k] = join_col.join(sorted(list([str(t) for t in v])))
-                        else:
-                            for v1 in v:
-                                mp2_new = {}
-                                mp2_new[k] = str(v1)
-                                list_results_arr[-1].append(mp2_new)
-                    elif (isinstance(v[0], dict)):
-                        # append all the expanded version of the list
-                        for v1 in v:
-                             mp2_list = __explode_json_transform_func_expand_json__(v1, parent_prefix = parent_with_child_key)
-                             for mp2 in mp2_list:
-                                 mp2_new = {}
-                                 for k1 in mp2.keys():
-                                     mp2_new[k + ":" + k1] = mp2[k1]
-                                 list_results_arr[-1].append(mp2_new)
-                    elif (isinstance(v[0], list)):
-                        # check for non supported case
-                        if (len(v) > 1):
-                            raise Exception("Inner lists are not supported. Use accepted_cols or excluded_cols: {}, number of values:{}".format(str(k)), len(v))
-
-                        # check if there is flag to use only the first column
-                        if (single_value_list_cols != None and k in single_value_list_cols):
-                             mp2_list = __explode_json_transform_func_expand_json__(v[0], parent_prefix = parent_with_child_key)
-                             for mp2 in mp2_list:
-                                 mp2_new = {}
-                                 for k1 in mp2.keys():
-                                     mp2_new[k + ":" + k1] = mp2[k1]
-                                 list_results_arr[-1].append(mp2_new)
-                        else:
-                            raise Exception("Inner lists are not supported. Use accepted_cols or excluded_cols: {}".format(str(k)))
-                    else:
-                        raise Exception("Unknown data type:", type(v[0]))
-                elif (isinstance(v, dict) and len(v) > 0):
-                    # warn for non trivial case 
-                    if (len(dict_results) > 0 and utils.is_debug()):
-                        print("[WARN] explode_json: multiple maps are not fully supported. Confirm data parsing or Use accepted_cols or excluded_cols: {}".format(str(k)))
-
-                    # recursive call
-                    mp2_list = __explode_json_transform_func_expand_json__(v, parent_prefix = parent_with_child_key)
-
-                    #if (parent_prefix == "resources"):
-                    #    print("parent_prefix is resources:", mp2_list)
-
-                    # check if it was a flat hashmap or a nested. if flat, use dict_list else use list_results_arr
-                    if (len(mp2_list) > 1):
-                        list_results_arr.append([])
-                        
-                        # create a new map with correct key
-                        for mp2 in mp2_list:
-                            mp2_new = {}
-                            for k1 in mp2.keys():
-                                mp2_new[k + ":" + k1] = mp2[k1]
-                            list_results_arr[-1].append(mp2_new)
-                    else:
-                       # create a new map with correct key
-                       for mp2 in mp2_list:
-                           mp2_new = {}
-                           for k1 in mp2.keys():
-                               mp2_new[k + ":" + k1] = mp2[k1]
-                           dict_results.append(mp2_new)
-                elif (len(v) == 0):
-                    pass
                 else:
-                    raise Exception("Unknown data type: {}, {}".format(k, type(v)))
+                    # TODO :Added on 2021-11-27. Need the counts for arrays and dict to handle 0 count errors. Splitting the single if-elif-else to two level
+                    single_results[k + ":__explode_json_len__"] = str(len(v))
+                    if (isinstance(v, list) and len(v) > 0):
+                        if (len(list_results_arr) > 0 and utils.is_debug()):
+                            print("[WARN] explode_json: multiple lists are not fully supported. Confirm data parsing or Use accepted_cols or excluded_cols: {}".format(str(k)))
+
+                        # create a new entry for holding the list array
+                        list_results_arr.append([])
+
+                        if (isinstance(v[0], (str,int,float))):
+                            # treat primitive lists as single value or as yet another list
+                            if (collapse_primitive_list == True):
+                                single_results[k] = join_col.join(sorted(list([str(t) for t in v])))
+                            else:
+                                for v1 in v:
+                                    mp2_new = {}
+                                    mp2_new[k] = str(v1)
+                                    list_results_arr[-1].append(mp2_new)
+                        elif (isinstance(v[0], dict)):
+                            # append all the expanded version of the list
+                            for v1 in v:
+                                 mp2_list = __explode_json_transform_func_expand_json__(v1, parent_prefix = parent_with_child_key)
+                                 for mp2 in mp2_list:
+                                     mp2_new = {}
+                                     for k1 in mp2.keys():
+                                         mp2_new[k + ":" + k1] = mp2[k1]
+                                     list_results_arr[-1].append(mp2_new)
+                        elif (isinstance(v[0], list)):
+                            # check for non supported case
+                            if (len(v) > 1):
+                                raise Exception("Inner lists are not supported. Use accepted_cols or excluded_cols: {}, number of values:{}".format(str(k)), len(v))
+
+                            # check if there is flag to use only the first column
+                            if (single_value_list_cols != None and k in single_value_list_cols):
+                                 mp2_list = __explode_json_transform_func_expand_json__(v[0], parent_prefix = parent_with_child_key)
+                                 for mp2 in mp2_list:
+                                     mp2_new = {}
+                                     for k1 in mp2.keys():
+                                         mp2_new[k + ":" + k1] = mp2[k1]
+                                     list_results_arr[-1].append(mp2_new)
+                            else:
+                                raise Exception("Inner lists are not supported. Use accepted_cols or excluded_cols: {}".format(str(k)))
+                        else:
+                            raise Exception("Unknown data type:", type(v[0]))
+                    elif (isinstance(v, dict) and len(v) > 0):
+                        # warn for non trivial case 
+                        if (len(dict_results) > 0 and utils.is_debug()):
+                            print("[WARN] explode_json: multiple maps are not fully supported. Confirm data parsing or Use accepted_cols or excluded_cols: {}".format(str(k)))
+
+                        # recursive call
+                        mp2_list = __explode_json_transform_func_expand_json__(v, parent_prefix = parent_with_child_key)
+
+                        #if (parent_prefix == "resources"):
+                        #    print("parent_prefix is resources:", mp2_list)
+
+                        # check if it was a flat hashmap or a nested. if flat, use dict_list else use list_results_arr
+                        if (len(mp2_list) > 1):
+                            list_results_arr.append([])
+                            
+                            # create a new map with correct key
+                            for mp2 in mp2_list:
+                                mp2_new = {}
+                                for k1 in mp2.keys():
+                                    mp2_new[k + ":" + k1] = mp2[k1]
+                                list_results_arr[-1].append(mp2_new)
+                        else:
+                           # create a new map with correct key
+                           for mp2 in mp2_list:
+                               mp2_new = {}
+                               for k1 in mp2.keys():
+                                   mp2_new[k + ":" + k1] = mp2[k1]
+                               dict_results.append(mp2_new)
+                    elif (len(v) == 0):
+                        pass
+                    else:
+                        raise Exception("Unknown data type: {}, {}".format(k, type(v)))
 
             # now collapse single_results and dict_results into one giant hashmap
             combined_map = {}
