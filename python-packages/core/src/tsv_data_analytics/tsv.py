@@ -1448,6 +1448,48 @@ class TSV:
         new_header = "\t".join(list([h if (h not in mp.keys()) else mp[h] for h in self.header_fields]))
         return TSV(new_header, self.data)
 
+    def add_prefix(self, prefix, cols = None):
+        # by default all columns are renamed
+        if (cols == None):
+            cols = self.header_fields
+ 
+        # resolve columns
+        cols = self.__get_matching_cols__(cols)
+
+        # create new header_fields
+        new_header_fields = []
+
+        # iterate and set the new name
+        for h in self.header_fields:
+            if (h in cols):
+                new_header_fields.append(prefix + ":" + h)
+            else:
+                new_header_fields.append(h)
+
+        # return
+        return TSV("\t".join(new_header_fields), self.data)
+
+    def add_suffix(self, suffix, cols = None):
+        # by default all columns are renamed
+        if (cols == None):
+            cols = self.header_fields
+ 
+        # resolve columns
+        cols = self.__get_matching_cols__(cols)
+
+        # create new header_fields
+        new_header_fields = []
+
+        # iterate and set the new name
+        for h in self.header_fields:
+            if (h in cols):
+                new_header_fields.append(h + ":" + suffix)
+            else:
+                new_header_fields.append(h)
+
+        # return
+        return TSV("\t".join(new_header_fields), self.data)
+
     def remove_prefix(self, prefix):
         # create a map
         mp = {}
@@ -2455,7 +2497,7 @@ class TSV:
 
     # TODO: Need better name 
     def explode_json(self, col, prefix = None, accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None,
-        merge_list_method = "cogroup", collapse_primitive_list = True, collapse = False):
+        merge_list_method = "cogroup", collapse_primitive_list = True, collapse = True):
 
         # warn
         if (excluded_cols != None):

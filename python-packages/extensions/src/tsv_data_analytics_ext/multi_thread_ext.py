@@ -28,9 +28,11 @@ class MultiThreadTSV(tsv.TSV):
             combined_result = __parallelize__(self, func, *args, **kwargs)
         else:
             # run thread pool
-            with ThreadPoolExecutor(max_workers = self.num_par) as executor: 
+            with ThreadPoolExecutor(max_workers = self.num_par) as executor:
+                # execute batches concurrently based on num_par and batch_size 
                 for i in range(self.num_par):
-                    future_results.append(executor.submit(__parallelize__, self.skip(batch_size * i).take(batch_size), func, *args, **kwargs))
+                    batch_i = self.skip(batch_size * i).take(batch_size)
+                    future_results.append(executor.submit(__parallelize__, batch_i, func, *args, **kwargs))
 
                 # run while loop
                 while True:

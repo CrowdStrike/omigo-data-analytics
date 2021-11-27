@@ -481,24 +481,37 @@ def __read_base_url__(url, query_params = {}, headers = {}, body = None, usernam
 
 # TODO: the semantics of this api are not clear
 def read_url_json(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 5):
+    utils.warn("read_url_json will flatten json that comes out as list. This api is still under development")
+
     # read response
     response_str, status_code, error_msg = read_url_response(url, query_params, headers, body = body, username = username, password = password, timeout_sec = timeout_sec)
 
-    # check for status code
-    if (status_code != 200):
-        raise Exception("read_url_json failed. Status: {}, Reason: {}".format(status_code, error_msg))
+    # construct header
+    header = "\t".join(["json_encoded", "status_code", "error_msg"])
+    data = []
 
-    # parse json object
-    json_obj = json.loads(response_str)
-    if (isinstance(json_obj, list)):
-        lines = []
-        for v in json_obj:
-            lines.append(utils.url_encode(json.dumps(v)).replace("\n", " "))
-        return tsv.TSV("json_encoded", "\n".join(lines)).validate()
-    elif (isinstance(json_obj, dict)):
-        return tsv.TSV("json_encoded", [utils.url_encode(response_str).replace("\n", " ")]).validate()
+    # look for error conditions
+    if (status_code == 200):
+        # parse json object
+        json_obj = json.loads(response_str)
+
+        # based on the type of the response, flatten the structure
+        if (isinstance(json_obj, list)):
+            # iterate and add as row
+            for v in json_obj:
+                fields = [utils.url_encode(json.dumps(v)).replace("\n", " "), str(status_code), str(error_msg)]
+                data.append("\t".join(fields)) 
+        elif (isinstance(json_obj, dict)):
+            fields = [utils.url_encode(json.dumps(response_str)).replace("\n", " "), str(status_code), str(error_msg)]
+            data.append("\t".join(fields)) 
+        else:
+            fields = ["", "0", "Unable to parse the json response: {}".format(response_str)]
+            data.append("\t".join(fields)) 
     else:
-        raise Exception("Unable to parse the json response:", response_str)
+        fields = ["", "0", "Unable to parse the json response: {}".format(utils.url_encode(response_str).replace("\n", " "))]
+        data.append("\t".join(fields))
+ 
+    return tsv.TSV(header, data).validate()
 
 def read_url_response(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 30):
     # read response
