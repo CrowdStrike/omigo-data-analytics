@@ -17,8 +17,8 @@ There are two packages - core and extensions. The core package is built on core 
 to keep it stable. The extensions package contains libraries for plotting, and can have lot of dependencies.
 
 ```
-$ pip3 install tsv-data-analytics
-$ pip3 install tsv-data-analytics-ext
+$ pip3 install tsv-data-analytics==0.0.4
+$ pip3 install tsv-data-analytics-ext==0.0.4
 ```
 
 ## Usage
