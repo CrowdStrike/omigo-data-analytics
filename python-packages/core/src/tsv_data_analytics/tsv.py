@@ -2316,7 +2316,7 @@ class TSV:
         def __explode_json_transform_func_inner__(mp):
             # some validation.
             if (url_encoded_col not in mp.keys() or mp[url_encoded_col] == "" or mp[url_encoded_col] == None):
-                utils.debug("__explode_json_transform_func_inner__: invalid json response found. Need more debugging: {}, {}".format(url_encoded_col, mp))
+                utils.warn_once("__explode_json_transform_func_inner__: invalid json response found. Need more debugging: {}, {}".format(url_encoded_col, mp))
                 return []
 
             # parse json
@@ -2724,20 +2724,6 @@ class TSV:
             return (vs[0], vs[1], vs[2], vs[3], vs[4], vs[5], vs[6], vs[7], vs[8], vs[9], vs[10], vs[11], vs[12], vs[13], vs[14])
         else:
             raise Exception("Length of values is more than 10. Not supported." + str(vs))
-
-    def custom_func(self, func, *args, **kwargs):
-        # print the custom function
-        utils.debug("custom_func: func: {}, args: {}, kwargs: {}".format(func, *args, **kwargs))
-
-        # call function
-        result = func(self, *args, **kwargs)
-
-        # the result must be of type tsv.TSV
-        if (type(result) != TSV):
-            raise Exception("custom function must return an instance of type TSV:", type(result))
-        
-        # return
-        return result
 
     # this method sets the missing values for columns
     def set_missing_values(self, cols, default_val, inherit_message = ""):

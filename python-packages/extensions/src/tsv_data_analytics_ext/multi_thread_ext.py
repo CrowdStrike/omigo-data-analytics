@@ -68,9 +68,8 @@ class MultiThreadTSV(tsv.TSV):
         utils.debug("parallelize: time taken: {} sec".format((ts_end - ts_start)))
         return combined_result
 
-    def transform_par(self, *args, **kwargs):
-        return self.parallelize(tsv.TSV.transform, *args, **kwargs)
-
 def __parallelize__(xtsv, func, *args, **kwargs):
-    return xtsv.custom_func(func, *args, **kwargs)
+    # return xtsv.custom_func(func, *args, **kwargs)
+    return func(xtsv, *args, **kwargs)
+    #return xtsv
 

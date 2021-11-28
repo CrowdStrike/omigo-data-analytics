@@ -7,6 +7,12 @@ from json.decoder import JSONDecodeError
 import os
 import math
 
+INFO_MSG_CACHE = {}
+WARN_MSG_CACHE = {}
+DEBUG_MSG_CACHE = {}
+ERROR_MSG_CACHE = {}
+MSG_CACHE_MAX_LEN = 10000
+
 def is_debug():
     return str(os.environ.get("TSV_DATA_ANALYTICS_DEBUG", "0")) == "1"
 
@@ -30,12 +36,49 @@ def debug(msg):
     if (is_debug()):
         print("[DEBUG]: {}".format(msg))
 
+def debug_once(msg):
+    # check if msg is already displayed
+    if (msg not in DEBUG_MSG_CACHE.keys()):
+         if (is_debug()):
+             print("[DEBUG ONCE ONLY]: {}".format(msg))
+         DEBUG_MSG_CACHE[msg] = 1
+
+         # clear the cache if it has become too big
+         if (len(DEBUG_MSG_CACHE) >= MSG_CACHE_MAX_LEN):
+             DEBUG_MSG_CACHE = {} 
+    else:
+        trace(msg)
+ 
 def info(msg):
     print("[INFO]: {}".format(msg))
 
+def info_once(msg):
+    # check if msg is already displayed
+    if (msg not in INFO_MSG_CACHE.keys()):
+         print("[INFO ONCE ONLY]: {}".format(msg))
+         INFO_MSG_CACHE[msg] = 1
+
+         # clear the cache if it has become too big
+         if (len(INFO_MSG_CACHE) >= MSG_CACHE_MAX_LEN):
+             INFO_MSG_CACHE = {} 
+    else:
+        trace(msg)
+ 
 def error(msg):
     print("[ERROR]: {}".format(msg))
 
+def error_once(msg):
+    # check if msg is already displayed
+    if (msg not in ERROR_MSG_CACHE.keys()):
+         print("[ERROR ONCE ONLY]: {}".format(msg))
+         ERROR_MSG_CACHE[msg] = 1
+
+         # clear the cache if it has become too big
+         if (len(ERROR_MSG_CACHE) >= MSG_CACHE_MAX_LEN):
+             ERROR_MSG_CACHE = {} 
+    else:
+        trace(msg)
+ 
 def enable_debug_mode():
     os.environ["TSV_DATA_ANALYTICS_DEBUG"] = "1"
 
@@ -51,6 +94,19 @@ def disable_trace_mode():
 def warn(msg):
     print("[WARN]: " + msg)
 
+def warn_once(msg):
+    # check if msg is already displayed
+    if (msg not in WARN_MSG_CACHE.keys()):
+        print("[WARN ONCE ONLY]: " + msg)
+        WARN_MSG_CACHE[msg] = 1
+
+        # check if the cache has become too big
+        if (len(WARN_MSG_CACHE) >= MSG_CACHE_MAX_LEN):
+            WARN_MSG_CACHE = {}
+
+    else:
+        trace(msg)
+  
 def is_code_todo_warning():
     return str(os.environ.get("TSV_DATA_ANALYTICS_CODE_TODO_WARNING", "0")) == "1"
 
