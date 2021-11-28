@@ -69,7 +69,5 @@ class MultiThreadTSV(tsv.TSV):
         return combined_result
 
 def __parallelize__(xtsv, func, *args, **kwargs):
-    # return xtsv.custom_func(func, *args, **kwargs)
     return func(xtsv, *args, **kwargs)
-    #return xtsv
 
