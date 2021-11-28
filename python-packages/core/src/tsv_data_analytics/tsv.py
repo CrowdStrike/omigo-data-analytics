@@ -280,7 +280,7 @@ class TSV:
                 result = result.drop(cols)
             except:
                 # ignore
-                utils.debug("Column (pattern) not found or already deleted during batch deletion: {}", c)
+                utils.debug("Column (pattern) not found or already deleted during batch deletion: {}".format(c))
         
         # return
         return result
@@ -2164,9 +2164,6 @@ class TSV:
 
     # TODO: Need better naming. The suffix semantics have been changed.
     def explode(self, cols, exp_func, prefix, default_val = None, collapse = True, inherit_message = ""):
-        # update message
-        inherit_message2 = inherit_message + ": explode" if (len(inherit_message) > 0) else "explode"
-
         # get matching column and indexes
         matching_cols = self.__get_matching_cols__(cols)
         indexes = self.__get_col_indexes__(matching_cols)
@@ -2177,7 +2174,7 @@ class TSV:
         for line in self.data:
             # progress
             counter = counter + 1
-            utils.report_progress("explode: [1/2] calling explode functions", inherit_message2, counter, len(self.data))
+            utils.report_progress("explode: [1/2] calling explode functions", inherit_message, counter, len(self.data))
 
             # process data
             fields = line.split("\t")
@@ -2237,7 +2234,7 @@ class TSV:
         for i in range(len(self.data)):
             # progress
             counter = counter + 1
-            utils.report_progress("explode: [2/2] generating data", inherit_message2, counter, len(self.data))
+            utils.report_progress("explode: [2/2] generating data", inherit_message, counter, len(self.data))
 
             # process data
             line = self.data[i]

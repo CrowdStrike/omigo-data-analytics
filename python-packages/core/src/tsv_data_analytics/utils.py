@@ -19,6 +19,9 @@ def get_report_progress():
 def get_report_progress_min_thresh():
     return float(os.environ.get("TSV_DATA_ANALYTICS_DEBUG_REPORT_PROGRESS_MIN_THRESH", "100000"))
 
+def set_report_progress_min_thresh(thresh):
+    os.environ["TSV_DATA_ANALYTICS_DEBUG_REPORT_PROGRESS_MIN_THRESH"] = str(thresh)
+
 def trace(msg):
     if (is_trace()):
         print("[TRACE]: {}".format(msg))
