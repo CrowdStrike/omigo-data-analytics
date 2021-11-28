@@ -263,6 +263,28 @@ class TSV:
     def drop_cols(self, col_or_cols, inherit_message = ""):
         return self.drop(col_or_cols, inherit_message)
 
+    def drop_if_exists(self, col_or_cols, inherit_message = ""):
+        # validation
+        if (col_or_cols == None or len(col_or_cols) == 0):
+            return self
+
+        # convert to array form
+        if (isinstance(col_or_cols, str)):
+            col_or_cols = [col_or_cols]
+
+        # iterate through each element and call drop
+        result = self
+        for c in col_or_cols:
+            try:
+                cols = result.__get_matching_cols__(c)
+                result = result.drop(cols)
+            except:
+                # ignore
+                utils.debug("Column (pattern) not found or already deleted during batch deletion: {}", c)
+        
+        # return
+        return result
+
     # TODO: the select_cols is not implemented properly
     def window_aggregate(self, win_col, agg_cols, agg_funcs, winsize, select_cols = None, sliding = False, collapse = True, suffix = "", precision = 2, inherit_message = ""):
         # get the matching cols
@@ -1022,7 +1044,7 @@ class TSV:
         return TSV(new_header, new_data)
 
     def show_transpose(self, n = 1, title = None):
-        max_width = 200
+        max_width = 180
         max_col_width = int(max_width / (n + 1))
         return self.transpose(n).show(n = self.num_cols(), max_col_width = max_col_width, title = title)
 
@@ -2707,6 +2729,9 @@ class TSV:
             raise Exception("Length of values is more than 10. Not supported." + str(vs))
 
     def custom_func(self, func, *args, **kwargs):
+        # print the custom function
+        utils.debug("custom_func: func: {}, args: {}, kwargs: {}".format(func, *args, **kwargs))
+
         # call function
         result = func(self, *args, **kwargs)
 

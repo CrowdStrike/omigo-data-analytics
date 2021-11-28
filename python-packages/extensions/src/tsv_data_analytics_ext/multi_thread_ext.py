@@ -16,6 +16,9 @@ class MultiThreadTSV(tsv.TSV):
         self.sleep_interval_sec = sleep_interval_sec
 
     def parallelize(self, func, *args, **kwargs):
+        # debug
+        utils.debug("parallelize: func: {}, args: {}, kwargs: {}".format(func, *args, **kwargs))
+
         # split the data into num_par partitions
         batch_size = int(math.ceil(self.num_rows() / self.num_par))
         future_results = []
@@ -40,6 +43,9 @@ class MultiThreadTSV(tsv.TSV):
                     for f in future_results:
                         if (f.done() == True):
                             done_count = done_count + 1
+
+                    # debug
+                    utils.debug("parallelize: done_count: {}, total: {}".format(done_count, len(future_results)))
 
                     # check if all are done
                     if (done_count < len(future_results)):
