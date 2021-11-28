@@ -23,6 +23,7 @@ from tsv_data_analytics import utils
 # TODO: find the difference between ascii and utf-8 encoding
 # requests.post doesnt take data properly. Use json parameter.
 
+# TODO: need to document that a simple union can be achieved by setting merge_def_vals = {}
 def merge(tsv_list, merge_def_vals = None):
     # remove zero length tsvs
     tsv_list = list(filter(lambda x: len(x.get_header()) > 0, tsv_list))
@@ -118,7 +119,7 @@ def merge_intersect(tsv_list, merge_def_vals = None):
                     utils.warn("merge_intersect: assigning default value for {}: {}".format(h, merge_def_vals[h]))
                     effective_merge_def_vals[h] = merge_def_vals[h]
                 else:
-                    utils.warn("merge_intersect: assigning empty string as default value to column:", h)
+                    utils.warn("merge_intersect: assigning empty string as default value to column: {}".format(h))
                     effective_merge_def_vals[h] = ""
         
             # get the list of keys in order

@@ -60,7 +60,8 @@ class MultiThreadTSV(tsv.TSV):
             for f in future_results:
                 results.append(f.result())
 
-            combined_result = tsvutils.merge(results)
+            # merge the tsvs using a common union.
+            combined_result = tsvutils.merge(results, merge_def_vals = {})
 
         # take end_time 
         ts_end = time.time()

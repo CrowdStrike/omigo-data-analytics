@@ -7,6 +7,7 @@ from json.decoder import JSONDecodeError
 import os
 import math
 
+# TODO: these caches dont work in multithreaded env. 
 INFO_MSG_CACHE = {}
 WARN_MSG_CACHE = {}
 DEBUG_MSG_CACHE = {}
