@@ -17,10 +17,13 @@ def is_trace():
     return str(os.environ.get("TSV_DATA_ANALYTICS_TRACE", "0")) == "1"
 
 def get_report_progress():
-    return float(os.environ.get("TSV_DATA_ANALYTICS_DEBUG_REPORT_PROGRESS", "0"))
+    return float(os.environ.get("TSV_DATA_ANALYTICS_DEBUG_REPORT_PROGRESS_PERC", "0"))
 
 def get_report_progress_min_thresh():
     return float(os.environ.get("TSV_DATA_ANALYTICS_DEBUG_REPORT_PROGRESS_MIN_THRESH", "100000"))
+
+def set_report_progress_perc(perc):
+    os.environ["TSV_DATA_ANALYTICS_DEBUG_REPORT_PROGRESS_PERC"] = str(perc)
 
 def set_report_progress_min_thresh(thresh):
     os.environ["TSV_DATA_ANALYTICS_DEBUG_REPORT_PROGRESS_MIN_THRESH"] = str(thresh)

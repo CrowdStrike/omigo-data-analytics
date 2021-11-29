@@ -2543,7 +2543,7 @@ class TSV:
             raise Exception("Column not found:", str(url_encoded_col), str(self.header_fields))
 
         # warn on risky combinations
-        if (merge_list_method = "cogroup"):
+        if (merge_list_method == "cogroup"):
             utils.warn("explode_json: merge_list_method = cogroup is only meant for data exploration. Use merge_list_method = join for generating all combinations for multiple list values")
 
         # name prefix
