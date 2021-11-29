@@ -2275,43 +2275,6 @@ class TSV:
         # result
         return TSV(new_header, new_data)
 
-    def rename_cols_suffix(self, old_suffix, new_suffix):
-        # validation
-        if (len(old_suffix) == 0 or old_suffix == None):
-            raise Exception("Invalid suffix to be replaced:", old_suffix)
-
-        # find old column names and the new column names
-        rename_cols = {}
-        for col in self.header_fields:
-            if (col.endswith(old_suffix)):
-                # check for validity
-                if (len(col) <= len(old_suffix)):
-                    raise Exception("Conflict in column name. Can not remove the suffix:", col)
-
-                # create new name
-                new_name = str(col[0:-len(old_suffix)]) + str(new_suffix)
-                if (new_name in self.header_map.keys()):
-                    raise Exception("Conflict in new name which already exists:", col, new_name)
-
-                # put into map
-                rename_cols[col] = new_name
-
-        # check if any column found
-        if (len(rename_cols) == 0):
-            raise Exception("No columns found with suffix:", old_suffix)
-
-        # create new header
-        new_header_fields = []
-        for h in self.header_fields:
-            if (h in rename_cols.keys()):
-                new_header_fields.append(rename_cols[h])
-            else:
-                new_header_fields.append(h)
-        new_header = "\t".join(new_header_fields)
-
-        # return
-        return TSV(new_header, self.data)
-
     def __explode_json_transform_func__(self, url_encoded_col, accepted_cols, excluded_cols, single_value_list_cols, transpose_col_groups, merge_list_method, collapse_primitive_list, join_col = ","):
         def __explode_json_transform_func_inner__(mp):
             # some validation.
@@ -2578,6 +2541,10 @@ class TSV:
         # validation
         if (url_encoded_col not in self.header_map.keys()):
             raise Exception("Column not found:", str(url_encoded_col), str(self.header_fields))
+
+        # warn on risky combinations
+        if (merge_list_method = "cogroup"):
+            utils.warn("explode_json: merge_list_method = cogroup is only meant for data exploration. Use merge_list_method = join for generating all combinations for multiple list values")
 
         # name prefix
         if (prefix == None):
