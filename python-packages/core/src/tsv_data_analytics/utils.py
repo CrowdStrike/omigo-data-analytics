@@ -8,10 +8,6 @@ import os
 import math
 
 # TODO: these caches dont work in multithreaded env. 
-INFO_MSG_CACHE = {}
-WARN_MSG_CACHE = {}
-DEBUG_MSG_CACHE = {}
-ERROR_MSG_CACHE = {}
 MSG_CACHE_MAX_LEN = 10000
 
 def is_debug():
@@ -37,46 +33,46 @@ def debug(msg):
     if (is_debug()):
         print("[DEBUG]: {}".format(msg))
 
-def debug_once(msg):
+def debug_once(msg, msg_cache):
     # check if msg is already displayed
-    if (msg not in DEBUG_MSG_CACHE.keys()):
+    if (msg not in msg_cache.keys()):
          if (is_debug()):
              print("[DEBUG ONCE ONLY]: {}".format(msg))
-         DEBUG_MSG_CACHE[msg] = 1
+         msg_cache[msg] = 1
 
          # clear the cache if it has become too big
-         if (len(DEBUG_MSG_CACHE) >= MSG_CACHE_MAX_LEN):
-             DEBUG_MSG_CACHE = {} 
+         if (len(msg_cache) >= MSG_CACHE_MAX_LEN):
+             msg_cache = {} 
     else:
         trace(msg)
  
 def info(msg):
     print("[INFO]: {}".format(msg))
 
-def info_once(msg):
+def info_once(msg, msg_cache):
     # check if msg is already displayed
-    if (msg not in INFO_MSG_CACHE.keys()):
+    if (msg not in msg_cache.keys()):
          print("[INFO ONCE ONLY]: {}".format(msg))
-         INFO_MSG_CACHE[msg] = 1
+         msg_cache[msg] = 1
 
          # clear the cache if it has become too big
-         if (len(INFO_MSG_CACHE) >= MSG_CACHE_MAX_LEN):
-             INFO_MSG_CACHE = {} 
+         if (len(msg_cache) >= MSG_CACHE_MAX_LEN):
+             msg_cache = {} 
     else:
         trace(msg)
  
 def error(msg):
     print("[ERROR]: {}".format(msg))
 
-def error_once(msg):
+def error_once(msg, msg_cache):
     # check if msg is already displayed
-    if (msg not in ERROR_MSG_CACHE.keys()):
+    if (msg not in msg_cache.keys()):
          print("[ERROR ONCE ONLY]: {}".format(msg))
-         ERROR_MSG_CACHE[msg] = 1
+         msg_cache[msg] = 1
 
          # clear the cache if it has become too big
-         if (len(ERROR_MSG_CACHE) >= MSG_CACHE_MAX_LEN):
-             ERROR_MSG_CACHE = {} 
+         if (len(msg_cache) >= MSG_CACHE_MAX_LEN):
+             msg_cache = {} 
     else:
         trace(msg)
  
@@ -95,15 +91,15 @@ def disable_trace_mode():
 def warn(msg):
     print("[WARN]: " + msg)
 
-def warn_once(msg):
+def warn_once(msg, msg_cache):
     # check if msg is already displayed
-    if (msg not in WARN_MSG_CACHE.keys()):
+    if (msg not in msg_cache.keys()):
         print("[WARN ONCE ONLY]: " + msg)
-        WARN_MSG_CACHE[msg] = 1
+        msg_cache[msg] = 1
 
         # check if the cache has become too big
-        if (len(WARN_MSG_CACHE) >= MSG_CACHE_MAX_LEN):
-            WARN_MSG_CACHE = {}
+        if (len(msg_cache) >= MSG_CACHE_MAX_LEN):
+            msg_cache = {}
 
     else:
         trace(msg)

@@ -15,6 +15,11 @@ class MultiThreadTSV(tsv.TSV):
         self.status_check_interval_sec = status_check_interval_sec
         self.sleep_interval_sec = sleep_interval_sec
 
+        # check if num_par is more than number of rows
+        if (self.num_rows() < self.num_par):
+            utils.warn("MultiThreadTSV: num_rows: {} < num_par: {}. Adjusting the value".format(self.num_rows(), self.num_par))
+            self.num_par = self.num_rows()
+
     def parallelize(self, func, *args, **kwargs):
         # debug
         utils.debug("parallelize: func: {}, args: {}, kwargs: {}".format(func, *args, **kwargs))
@@ -50,7 +55,7 @@ class MultiThreadTSV(tsv.TSV):
                     # check if all are done
                     if (done_count < len(future_results)):
                         # sleep for some additional time to allow notebook stop method to work
-                        utils.debug("transform_par: futures not completed yet. Sleeping for {} seconds".format(self.status_check_interval_sec))
+                        utils.debug("parallelize: futures not completed yet. Sleeping for {} seconds".format(self.status_check_interval_sec))
                         time.sleep(self.status_check_interval_sec)
                     else:
                         break 
