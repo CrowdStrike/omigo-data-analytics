@@ -121,17 +121,18 @@ class TSV:
         return self.filter([col], lambda x: (re.match(pattern, x) != None) == condition, inherit_message = inherit_message2)
 
     def not_eq(self, col, value):
-        return self.filter([col], lambda x: x != "" and float(x) != float(value))
+        utils.warn("This api can have side effects because of implicit data types conversion in python. Use not_eq_int, not_eq_str or not_eq_float") 
+        return self.filter([col], lambda x: x != value)
 
     def eq(self, col, value):
-        return self.filter([col], lambda x: x != "" and float(x) == float(value))
+        utils.warn("This api can have side effects because of implicit data types conversion in python. Use eq_int, eq_str or eq_float") 
+        return self.filter([col], lambda x: x == value)
 
     def eq_int(self, col, value):
-        utils.warn("this implicit checking of NA is not good.")
-        return self.filter([col], lambda x: x != "" and int(float(x)) == value)
+        return self.filter([col], lambda x: int(float(x)) == value)
 
     def eq_float(self, col, value):
-        return self.filter([col], lambda x: x != "" and float(x) == value)
+        return self.filter([col], lambda x: float(x) == value)
 
     def eq_str(self, col, value):
         return self.filter([col], lambda x: str(x) == str(value))
@@ -140,7 +141,7 @@ class TSV:
         return self.filter([col], lambda x: str(x) != str(value))
 
     def is_nonzero(self, col):
-        return self.filter([col], lambda x: x != "" and float(x) != 0)
+        return self.filter([col], lambda x: float(x) != 0)
 
     def lt_str(self, col, value):
         return self.filter([col], lambda x: x < value)
@@ -155,16 +156,16 @@ class TSV:
         return self.filter([col], lambda x: x >= value)
 
     def gt(self, col, value):
-        return self.filter([col], lambda x: x != "" and float(x) > float(value))
+        return self.filter([col], lambda x: float(x) > float(value))
 
     def ge(self, col, value):
-        return self.filter([col], lambda x: x != "" and float(x) >= float(value))
+        return self.filter([col], lambda x: float(x) >= float(value))
 
     def lt(self, col, value):
-        return self.filter([col], lambda x: x != "" and float(x) < float(value))
+        return self.filter([col], lambda x: float(x) < float(value))
 
     def le(self, col, value):
-        return self.filter([col], lambda x: x != "" and float(x) <= float(value))
+        return self.filter([col], lambda x: float(x) <= float(value))
 
     def startswith(self, col, prefix, inherit_message = ""):
         inherit_message2 = inherit_message + ": startswith" if (len(inherit_message) > 0) else "startswith"
