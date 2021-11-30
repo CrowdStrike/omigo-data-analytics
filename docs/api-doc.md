@@ -3,7 +3,7 @@ This library is designed to make simple and robust APIs to do complex processing
 
 1. **Data Ingestion**: This is provided through static methods available in the **tsv** package.
 
-2. **Data Transformation and Analytics**: These are availabe in the **tsv.TSV** class.
+2. **Data Transformation**: These are availabe in the **tsv.TSV** class.
 
 3. **Visualization and Advanced Functionalities**: These are part of different extension packages.
 
