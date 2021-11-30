@@ -50,10 +50,10 @@ Iris-virginica 	           4.500
 
 Examples:
 ```
->>> read("data/iris.tsv")
->>> read("s3://bucket-name/path/iris.tsv")
->>> read(["data/file1.tsv.gz", "data/file2.tsv.gz"]
->>> read("https://github.com/CrowdStrike/tsv-data-analytics/raw/main/data/iris.tsv")
+>>> xtsv = read("data/iris.tsv")
+>>> xtsv = read("s3://bucket-name/path/iris.tsv")
+>>> xtsv = read(["data/file1.tsv.gz", "data/file2.tsv.gz"]
+>>> xtsv = read("https://github.com/CrowdStrike/tsv-data-analytics/raw/main/data/iris.tsv")
 >>> write(xtsv, "data/output_file.tsv.gz")
 >>> merge([xtsv1, xtsv2])
 >>> exists("data/iris.tsv")
@@ -68,16 +68,34 @@ These APIs are part of TSV class. Once the data is loaded as TSV, all these meth
     def get_columns: Returns the list of columns in the tsv object.
     def get_size_in_bytes: Returns the size of the tsv object in bytes.
 
-#### Pretty Print
-    def show
-    def show_transpose
+Examples:
+```
+>>> xtsv.num_cols()
+>>> xtsv.num_rows()
+>>> xtsv.get_columns()
+>>> xtsv.get_size_in_bytes()
+```
 
-#### Static Data Transformations
-    def add_seq_num
-    def assign_value
-    def copy
-    def replicate_rows
-    def set_missing_values
+#### Pretty Print
+    def show(n, max_col_width, title): Pretty prints the first 'n' rows, each column restricted to max_col_width, and title which is displayed at the top.
+    def show_transpose(n, title): Transposes the tsv object and does pretty print.
+
+Examples:
+```
+>>> xtsv.show(3)
+sepal_length	sepal_width	petal_length	petal_width	class      
+5.1         	        3.5	         1.4	        0.2	Iris-setosa
+4.9         	        3.0	         1.4	        0.2	Iris-setosa
+4.7         	        3.2	         1.3	        0.2	Iris-setosa
+>>>
+>>> xtsv.show_transpose(3)
+col_name    	row:1      	row:2      	row:3      
+sepal_length	5.1        	4.9        	4.7        
+sepal_width 	3.5        	3.0        	3.2        
+petal_length	1.4        	1.4        	1.3        
+petal_width 	0.2        	0.2        	0.2        
+class       	Iris-setosa	Iris-setosa	Iris-setosa
+```
 
 #### Arithmetic Comparison 
     def eq_int
@@ -232,15 +250,22 @@ These APIs are part of TSV class. Once the data is loaded as TSV, all these meth
     def add_const
     def add_const_if_missing
 
-## Visualization, Statistics and Machine Learning
-Any functionality that needs extensive 3rd party libraries like matplotlib, seaborn or scikit as provided as extension packages. Not all extension packages might be 
-relevant for all users, and please refer to the documentation section of individual packages for further details. Here are some basic explained for visualization.
+#### Static Data Transformations
+    def add_seq_num
+    def assign_value
+    def copy
+    def replicate_rows
+    def set_missing_values
 
 #### Enable / Disable Debug Information 
     def enable_debug_mode
     def disable_debug_mode
     def set_report_progress_perc
     def set_report_progress_min_thresh
+
+## Visualization, Statistics and Machine Learning
+Any functionality that needs extensive 3rd party libraries like matplotlib, seaborn or scikit as provided as extension packages. Not all extension packages might be 
+relevant for all users, and please refer to the documentation section of individual packages for further details. Here are some basic explained for visualization.
 
 #### Basic Plots 
     def linechart

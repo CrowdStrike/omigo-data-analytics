@@ -8,6 +8,7 @@ import mmh3
 import random
 import json
 import urllib
+from tsv_data_analytics import tsvutils
 from tsv_data_analytics import utils
 from tsv_data_analytics import funclib 
 import sys
@@ -2608,7 +2609,7 @@ class TSV:
         new_header_fields = []
         new_header_fields.append("col_name")
         for i in range(num_rows):
-            new_header_fields.append("row:" + str(i))
+            new_header_fields.append("row:" + str(i + 1))
         new_header = "\t".join(new_header_fields)
 
         # create col arrays and new_data
