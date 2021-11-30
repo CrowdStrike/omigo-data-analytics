@@ -63,10 +63,10 @@ Examples:
 These APIs are part of TSV class. Once the data is loaded as TSV, all these methods can be used.
 
 #### Basic Summary
-    def num_cols
-    def num_rows
-    def get_columns 
-    def get_size_in_bytes
+    def num_cols: Returns the number of columns in the tsv object.
+    def num_rows: Returns the number of rows in the tsv object.
+    def get_columns: Returns the list of columns in the tsv object.
+    def get_size_in_bytes: Returns the size of the tsv object in bytes.
 
 #### Pretty Print
     def show
