@@ -49,7 +49,7 @@ Iris-virginica 	           4.500
 
 Supported File Formats: tsv, simple csv and gzip/zip compressed versions.
 
-Examples:
+#### Examples
 ```
 >>> xtsv = read("data/iris.tsv")
 >>> xtsv = read("s3://bucket-name/path/iris.tsv")
