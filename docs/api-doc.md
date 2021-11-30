@@ -37,7 +37,6 @@ or the tutorial section where different apis are used together for different dat
     is_nonzero_float
 
 ### String Comparison
-    not_eq_str
     eq_str
     ge_str
     gt_str
@@ -45,9 +44,10 @@ or the tutorial section where different apis are used together for different dat
     lt_str
     startswith
     endswith
+    match
+    not_eq_str
     not_startswith
     not_endswith
-    match
     not_match
 
 ### Basic Filter and Transformtion
@@ -74,20 +74,23 @@ or the tutorial section where different apis are used together for different dat
     url_encode
     url_encode_inline
 
-### Sampling
+### Sampling Rows
     sample
+    sample_rows
+    sample_with_replacement
+    sample_without_replacement
+
+### Sampling Groups
     sample_class
-    sample_column_by_max_uniq_values
     sample_group_by_col_value
     sample_group_by_key
     sample_group_by_max_uniq_values
-    sample_rows
+    sample_group_by_max_uniq_values_per_class
 
 ### Simple Grouping and Aggregation
     group_by_key
     aggregate
     distinct
-    union
     group_count
     cumulative_sum
 
@@ -163,3 +166,5 @@ or the tutorial section where different apis are used together for different dat
     col_as_int_array
     export_to_maps
 
+### Merging Multiple
+    union
