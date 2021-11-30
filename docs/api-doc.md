@@ -39,10 +39,10 @@ Iris-virginica 	           4.500
 ## Data Ingestion
 
 #### Read and Write from Local FileSystem, S3 or Web
-    def read(_path or paths_)
-    def write(_tsv_object_, _path_)
-    def merge(_list of tsvs_)
-    def exists(_path_)
+    def read(paths)
+    def write(tsv_obj, path)
+    def merge(tsv_objs)
+    def exists(path)
 
 #### Enable / Disable Debug Information 
     def enable_debug_mode
