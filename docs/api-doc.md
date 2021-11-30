@@ -137,6 +137,7 @@ or the tutorial section where different apis are used together for different dat
 
 #### Select Rows Slice
     def skip
+    def skip_rows
     def last
     def take
 
