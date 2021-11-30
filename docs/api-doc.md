@@ -37,13 +37,12 @@ Iris-virginica 	           4.500
 # API Documentation 
 
 ## Data Ingestion
-Following APIs are provided to get data loaded as TSV and also debug different methods.
 
 #### Read and Write from Local FileSystem, S3 or Web
-    def read
-    def write
-    def merge
-    def exists
+    def read(_path or paths_)
+    def write(_tsv_object_, _path_)
+    def merge(_list of tsvs_)
+    def exists(_path_)
 
 #### Enable / Disable Debug Information 
     def enable_debug_mode
