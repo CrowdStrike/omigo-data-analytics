@@ -18,11 +18,11 @@ For example, selecting all columns that start with prefix _petal_ from the iris 
 xtsv.select("petal.*") 
 ```
 
-The APIs are meant for usability, and both single regular expression, or a set of columns and/or regular expressions can be specified wherever applicable.
+Both single or set of columns and/or regular expressions can be specified wherever applicable.
 Another example to mix and match column names and regular expressions:
 ```
 xtsv.select(["petal_length", "sepal.*"])
-xtsv.sort(["petal.*"])
+xtsv.sort("petal.*")
 ```
 
 All advanced api like **aggregate()** follows simple naming convention to create new names with appropriate prefix or suffixes to help with selecting them in groups.
