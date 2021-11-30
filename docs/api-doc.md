@@ -27,7 +27,8 @@ xtsv.select("petal.*")
 The APIs are meant for usability, and both single regular expression, or a set of columns and/or regular expressions can be specified wherever applicable.
 Another example to mix and match column names and regular expressions:
 ```
-xtsv.select(["petal_length", "sepal.*"]
+xtsv.select(["petal_length", "sepal.*"])
+xtsv.sort(["petal.*"])
 ```
 
 
