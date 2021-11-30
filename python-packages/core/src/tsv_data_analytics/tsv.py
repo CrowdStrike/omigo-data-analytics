@@ -1483,16 +1483,8 @@ class TSV:
         return TSV(new_header, new_data)
 
     def add_col_prefix(self, cols, prefix):
-        matching_cols = self.__get_matching_cols__(cols)
-        mp = {}
-        for c in matching_cols:
-            new_col = prefix + ":" + c
-            if (new_col in self.header_fields):
-                raise Exception("Duplicate names. Cant do the prefix:", c, new_col, str(self.header_fields))
-            mp[c] = new_col
-
-        new_header = "\t".join(list([h if (h not in mp.keys()) else mp[h] for h in self.header_fields]))
-        return TSV(new_header, self.data)
+        utils.warn("Deprecated: Use add_prefix instead")
+        return self.add_prefix(self, prefix, cols)
 
     def remove_suffix(self, suffix):
         # create a map
