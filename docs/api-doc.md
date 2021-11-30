@@ -1,8 +1,5 @@
-This document is split into different sections grouping similar set of APIs together. Each API shows the most basic usage, and please refer to source for further details,
-or the tutorial section where different apis are used together for different data analytics use cases.
-
 ## Introduction
-The APIs are divided into three groups:
+This library is designed to make simple and robust APIs to do complex processing easily. This document describes basic functionality, and provides simple usage of the APis. The APIs are divided into three groups:
 
 1. **Data Ingestion**: This is provided through static methods available in the **tsv** package.
 
