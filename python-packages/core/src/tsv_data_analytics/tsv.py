@@ -1037,6 +1037,9 @@ class TSV:
     def get_header_fields(self):
         return self.header_fields
 
+    def get_columns():
+        return self.get_header_fields()
+
     def export_to_maps(self):
         mps = []
         for line in self.data:
