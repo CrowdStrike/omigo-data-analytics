@@ -47,7 +47,7 @@ Iris-virginica 	           4.500
     
    - **def exists(path)**: Check whether the specified path exists or not. Useful for implementing fast forwarding.
 
-Supported File Formats: tsv, simple csv and gzip/zip compressions
+Supported File Formats: tsv, simple csv and gzip/zip compressed versions.
 
 Examples:
 ```
@@ -63,11 +63,11 @@ Examples:
 ## Data Transformation and Analytics
 These APIs are part of TSV class. Once the data is loaded as TSV, all these methods can be used.
 
-#### Basic Summary
-    def num_cols: Returns the number of columns in the tsv object.
-    def num_rows: Returns the number of rows in the tsv object.
-    def get_columns: Returns the list of columns in the tsv object.
-    def get_size_in_bytes: Returns the size of the tsv object in bytes.
+### Basic Summary
+   - **def num_cols()**: Returns the number of columns in the tsv object.
+   - **def num_rows()**: Returns the number of rows in the tsv object.
+   - **def get_columns()**: Returns the list of columns in the tsv object.
+   - **def get_size_in_bytes()**: Returns the size of the tsv object in bytes.
 
 Examples:
 ```
