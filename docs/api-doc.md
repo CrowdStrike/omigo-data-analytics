@@ -16,8 +16,7 @@ The APIs are divided into three groups:
 Existing libraries for data analysis were designed atleast 5-10 years back when there were usually 10-20 columns in a dataset. Modern datasets have columns in the 100s or even 1000s. This become
 more evident when datasets are joined for enrichement, and new features are created adding more and more columns. 
 
-This library provides simple APIs to work with such wide column datasets. Methods like select(), drop(), sort() take regular expression for getting the list of columns. Any advanced api like 
-aggregate() follows simple naming convention to create new names with appropriate prefix or suffixes to help with selecting them in groups.
+This library provides simple APIs to work with such wide column datasets. Methods like select(), drop(), sort() take regular expression for getting the list of columns.
 
 For example, selecting all columns that start with prefix _petal_ from the iris dataset:
 ```
@@ -31,6 +30,14 @@ xtsv.select(["petal_length", "sepal.*"])
 xtsv.sort(["petal.*"])
 ```
 
+All advanced api like **aggregate()** follows simple naming convention to create new names with appropriate prefix or suffixes to help with selecting them in groups.
+```
+>>> xtsv.aggregate("class", ["petal_length"], [min]).show()
+class          	petal_length:min
+Iris-setosa    	           1.000
+Iris-versicolor	           3.000
+Iris-virginica 	           4.500 
+```
 
 ## Data Ingestion
 Following APIs are provided to get data loaded as TSV and also debug different methods.
