@@ -28,6 +28,7 @@ The APIs are meant for usability, and both single regular expression, or a set o
 Another example to mix and match column names and regular expressions:
 ```
 xtsv.select(["petal_length", "sepal.*"]
+```
 
 
 ## Data Ingestion
