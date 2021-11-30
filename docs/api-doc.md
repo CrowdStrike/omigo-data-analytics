@@ -85,6 +85,7 @@ These APIs are part of TSV class. Once the data is loaded as TSV, all these meth
 #### Examples
 ```
 >>> xtsv.show(3)
+>>>
 sepal_length	sepal_width	petal_length	petal_width	class      
 5.1         	        3.5	         1.4	        0.2	Iris-setosa
 4.9         	        3.0	         1.4	        0.2	Iris-setosa
@@ -93,6 +94,7 @@ sepal_length	sepal_width	petal_length	petal_width	class
 
 ```
 >>> xtsv.show_transpose(3)
+>>>
 col_name    	row:1      	row:2      	row:3      
 sepal_length	5.1        	4.9        	4.7        
 sepal_width 	3.5        	3.0        	3.2        
