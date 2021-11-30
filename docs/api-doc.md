@@ -38,10 +38,6 @@ These APIs are part of TSV class. Once the data is loaded as TSV, all these meth
     def get_columns 
     def get_size_in_bytes
 
-#### Get Underlying Data
-    def get_header
-    def get_data
-
 #### Pretty Print
     def show
     def show_transpose
