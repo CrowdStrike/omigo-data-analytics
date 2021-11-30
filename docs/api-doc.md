@@ -14,7 +14,7 @@ The APIs are divided into three groups:
 
 Note: Only the tsv_data_analytics.tsv package should be used. The other packages under tsv_data_analytics are not meant to be called directly, and are subject to change without notice.
 
-#### 1. Data Ingestion
+### 1. Data Ingestion
 Following APIs are provided to get data loaded as TSV and also debug different methods.
 
 #### Read / Write from Local FileSystem, S3 or Web
@@ -35,7 +35,7 @@ Following APIs are provided to get data loaded as TSV and also debug different m
     def tsv.set_report_progress_perc
     def tsv.set_report_progress_min_thresh
 
-#### 2. Data Transformation and Analytics
+### 2. Data Transformation and Analytics
 These APIs are part of TSV class. Once the data is loaded as TSV, all these methods can be used.
 
 #### Basic Summary
@@ -44,7 +44,7 @@ These APIs are part of TSV class. Once the data is loaded as TSV, all these meth
     def get_header_fields
     def get_size_in_bytes
 
-## Pretty Print
+#### Pretty Print
     def show
     def show_transpose
 
