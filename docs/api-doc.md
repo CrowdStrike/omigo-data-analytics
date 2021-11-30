@@ -78,7 +78,7 @@ These APIs are part of TSV class. Once the data is loaded as TSV, all these meth
 >>> xtsv.get_size_in_bytes()
 ```
 
-#### Pretty Print
+### Pretty Print
     def show(n, max_col_width, title): Pretty prints the first 'n' rows, each column restricted to max_col_width, and title which is displayed at the top.
     def show_transpose(n, title): Transposes the tsv object and does pretty print.
 
@@ -99,7 +99,7 @@ petal_width 	0.2        	0.2        	0.2
 class       	Iris-setosa	Iris-setosa	Iris-setosa
 ```
 
-#### Arithmetic Comparison 
+### Arithmetic Comparison 
     def eq_int
     def ge_int
     def gt_int
@@ -113,7 +113,7 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
     def is_nonzero_int
     def is_nonzero_float
 
-#### String Comparison
+### String Comparison
     def eq_str
     def ge_str
     def gt_str
@@ -129,7 +129,7 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
     def not_match
     def not_regex_match
 
-#### Basic Filter and Transformation
+### Basic Filter and Transformation
     def filter
     def exclude_filter
     def values_in
@@ -137,7 +137,7 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
     def transform
     def transform_inline
 
-#### Advanced Filter and Transformation
+### Advanced Filter and Transformation
     def cap_max
     def cap_max_inline
     def cap_min
@@ -148,86 +148,86 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
     def ratio
     def ratio_const
 
-#### URL Encoding and Decoding
+### URL Encoding and Decoding
     def url_decode
     def url_decode_inline 
     def url_encode
     def url_encode_inline
 
-#### Sampling Rows
+### Sampling Rows
     def sample
     def sample_rows
     def sample_with_replacement
     def sample_without_replacement
 
-#### Sampling Groups
+### Sampling Groups
     def sample_class
     def sample_group_by_col_value
     def sample_group_by_key
     def sample_group_by_max_uniq_values
     def sample_group_by_max_uniq_values_per_class
 
-#### Simple Grouping and Aggregation
+### Simple Grouping and Aggregation
     def aggregate
     def distinct
     def group_count
     def cumulative_sum
 
-#### Advanced Grouping and Aggregation
+### Advanced Grouping and Aggregation
     def arg_max
     def arg_min
     def group_by_key
     def window_aggregate
 
-#### Generic JSON Parsing
+### Generic JSON Parsing
     def explode_json
 
-#### Join
+### Join
     def join
     def inner_join()
     def left_join()
     def right_join()
     def natural_join
 
-#### Column Add, Delete, Rename
+### Column Add, Delete, Rename
     def drop
     def drop_cols
     def drop_if_exists
     def concat_as_cols
     def rename
 
-#### Add or Rename Column Prefix and Suffixes
+### Add or Rename Column Prefix and Suffixes
     def rename_suffix
     def rename_prefix
     def remove_suffix
     def rename_prefix
     def add_prefix
 
-#### Sorting
+### Sorting
     def sort
     def reverse_sort
 
-#### Reorder Columns
+### Reorder Columns
     def reorder
     def reverse_reorder
 
-#### Select Columns
+### Select Columns
     def select
 
-#### Select Rows Slice
+### Select Rows Slice
     def skip
     def skip_rows
     def last
     def take
 
-#### Transpose from Row to Column Format
+### Transpose from Row to Column Format
     def transpose
     def reverse_transpose
 
-#### Extending to Other Derived Classes
+### Extending to Other Derived Classes
     def extend_class
 
-#### Conversion to Other Data Formats
+### Conversion to Other Data Formats
     def to_json_records
     def to_numeric
     def to_tuples
@@ -236,30 +236,30 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
     def export_to_df
     def export_to_maps
 
-#### Getting Column Values as Arrays
+### Getting Column Values as Arrays
     def cols_as_map
     def col_as_array
     def col_as_array_uniq
     def col_as_float_array
     def col_as_int_array
 
-#### Merging Multiple TSVs
+### Merging Multiple TSVs
     def union
 
-#### Appending Rows and Columns
+### Appending Rows and Columns
     def add_row
     def add_map_as_row
     def add_const
     def add_const_if_missing
 
-#### Static Data Transformations
+### Static Data Transformations
     def add_seq_num
     def assign_value
     def copy
     def replicate_rows
     def set_missing_values
 
-#### Enable / Disable Debug Information 
+### Enable / Disable Debug Information 
     def enable_debug_mode
     def disable_debug_mode
     def set_report_progress_perc
@@ -269,7 +269,7 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
 Any functionality that needs extensive 3rd party libraries like matplotlib, seaborn or scikit as provided as extension packages. Not all extension packages might be 
 relevant for all users, and please refer to the documentation section of individual packages for further details. Here are some basic explained for visualization.
 
-#### Basic Plots 
+### Basic Plots 
     def linechart
     def scatterplot
     def histogram
@@ -277,7 +277,7 @@ relevant for all users, and please refer to the documentation section of individ
     def barchart
     def boxplot 
 
-#### Advanced Plots
+### Advanced Plots
     def corr_heatmap 
     def pairplot
 
