@@ -124,7 +124,7 @@ or the tutorial section where different apis are used together for different dat
     def remove_suffix
     def rename_prefix
 
-#### Sort
+#### Sorting
     def sort
     def reverse_sort
 
