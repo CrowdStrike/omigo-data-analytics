@@ -2932,3 +2932,26 @@ def is_float_with_fraction(xtsv, col):
 
     return False 
 
+def read(paths, sep = None):
+    return tsvutils.read(paths, sep)
+
+def write(xtsv, path):
+    return tsvutils.save_to_file(xtsv, path)
+
+def merge(xtsvs, do_union = False, def_val = None, def_val_map = None):
+    return tsvutils.merge(xtsvs, do_union = do_union, def_val = def_val, def_val_map = def_val_map)
+
+def exists(path):
+    return tsvutils.check_exists(path)
+
+def enable_debug_mode():
+    utils.enable_debug_mode()
+
+def disable_debug_mode():
+    utils.disable_debug_mode()
+
+def set_report_progress_perc(perc):
+    utils.set_report_progress_perc(perc)
+
+def set_report_progress_min_thresh(thresh):
+    utils.set_report_progress_min_thresh(thresh)

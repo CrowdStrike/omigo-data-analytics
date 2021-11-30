@@ -18,22 +18,18 @@ Note: Only the tsv_data_analytics.tsv package should be used. The other packages
 Following APIs are provided to get data loaded as TSV and also debug different methods.
 
 #### Read / Write from Local FileSystem, S3 or Web
-    def tsv.read
-    def tsv.write
-    def tsv.merge
+    def read
+    def write
+    def merge
 
 #### Helper Methods to Check for File Existence
-    def tsv.exists
+    def exists
 
 #### Logging and Debugging
-    def tsv.debug
-    def tsv.info
-    def tsv.error
-    def tsv.warn
-    def tsv.enable_debug_mode
-    def tsv.disable_debug_mode
-    def tsv.set_report_progress_perc
-    def tsv.set_report_progress_min_thresh
+    def enable_debug_mode
+    def disable_debug_mode
+    def set_report_progress_perc
+    def set_report_progress_min_thresh
 
 ### 2. Data Transformation and Analytics
 These APIs are part of TSV class. Once the data is loaded as TSV, all these methods can be used.
