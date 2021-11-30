@@ -57,14 +57,14 @@ These APIs are part of TSV class. Once the data is loaded as TSV, all these meth
 
 #### Arithmetic Comparison 
     def eq_int
-    def eq_float
     def ge_int
-    def ge_float
     def gt_int
-    def gt_float
     def le_int
-    def le_float
     def lt_int
+    def eq_float
+    def ge_float
+    def gt_float
+    def le_float
     def lt_float
     def is_nonzero_int
     def is_nonzero_float
