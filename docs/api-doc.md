@@ -209,13 +209,6 @@ These APIs are part of TSV class. Once the data is loaded as TSV, all these meth
     def add_const
     def add_const_if_missing
 
-## Print Messages and Stats 
-    def print
-    def print_stats
-
-## Debugging
-    def noop
-
 ## 3. Visualization, Statistics and Machine Learning
 Any functionality that needs extensive 3rd party libraries like matplotlib, seaborn or scikit as provided as extension packages. Not all extension packages might be 
 relevant for all users, and please refer to the documentation section of individual packages for further details. Here are some basic explained for visualization.
