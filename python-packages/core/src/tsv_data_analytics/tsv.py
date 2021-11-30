@@ -141,6 +141,12 @@ class TSV:
         return self.filter([col], lambda x: str(x) != str(value))
 
     def is_nonzero(self, col):
+        return self.is_nonzero_float(col)
+
+    def is_nonzero_int(self, col):
+        return self.filter([col], lambda x: int(x) != 0)
+
+    def is_nonzero_float(self, col):
         return self.filter([col], lambda x: float(x) != 0)
 
     def lt_str(self, col, value):
@@ -156,15 +162,39 @@ class TSV:
         return self.filter([col], lambda x: x >= value)
 
     def gt(self, col, value):
+        return self.gt_float(col, value)
+
+    def gt_int(self, col, value):
+        return self.filter([col], lambda x: float(x) > float(value))
+
+    def gt_float(self, col, value):
         return self.filter([col], lambda x: float(x) > float(value))
 
     def ge(self, col, value):
+        return self.ge_float(col, value)
+
+    def ge_int(self, col, value):
+        return self.filter([col], lambda x: int(x) >= int(value))
+
+    def ge_float(self, col, value):
         return self.filter([col], lambda x: float(x) >= float(value))
 
     def lt(self, col, value):
+        return self.lt_float(col, value)
+
+    def lt_int(self, col, value):
+        return self.filter([col], lambda x: int(x) < int(value))
+
+    def lt_float(self, col, value):
         return self.filter([col], lambda x: float(x) < float(value))
 
     def le(self, col, value):
+        return self.filter([col], lambda x: float(x) <= float(value))
+
+    def le_int(self, col, value):
+        return self.filter([col], lambda x: int(x) <= int(value))
+
+    def le_float(self, col, value):
         return self.filter([col], lambda x: float(x) <= float(value))
 
     def startswith(self, col, prefix, inherit_message = ""):
@@ -1239,8 +1269,12 @@ class TSV:
         inherit_message2 = inherit_message + ": reorder" if (len(inherit_message) > 0) else "reorder"
         return self.select(new_header_fields, inherit_message = inherit_message2)
 
-    # reorder for pushing the columns to the end
     def reorder_reverse(self, cols, inherit_message = ""):
+        utils.warn("Please use reverse_reorder instead")
+        return self.reverse_reorder(cols, inherit_message)
+
+    # reorder for pushing the columns to the end
+    def reverse_reorder(self, cols, inherit_message = ""):
         # get matching column and indexes
         matching_cols = self.__get_matching_cols__(cols)
 
