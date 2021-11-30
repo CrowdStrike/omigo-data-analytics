@@ -1,5 +1,3 @@
-# API Documentation
-
 This document is split into different sections grouping similar set of APIs together. Each API shows the most basic usage, and please refer to source for further details,
 or the tutorial section where different apis are used together for different data analytics use cases.
 
@@ -38,6 +36,8 @@ Iris-setosa    	           1.000
 Iris-versicolor	           3.000
 Iris-virginica 	           4.500 
 ```
+
+# API Documentation 
 
 ## Data Ingestion
 Following APIs are provided to get data loaded as TSV and also debug different methods.
