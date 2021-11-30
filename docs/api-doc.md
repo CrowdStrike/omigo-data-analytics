@@ -3,7 +3,7 @@
 This document is split into different sections grouping similar set of APIs together. Each API shows the most basic usage, and please refer to source for further details,
 or the tutorial section where different apis are used together for different data analytics use cases.
 
-### Basic getters and summary 
+### Basic Getters 
     get_data
     get_header
     get_header_fields
@@ -12,7 +12,7 @@ or the tutorial section where different apis are used together for different dat
     num_cols
     num_rows
 
-### Static data transformations
+### Static Data Transformations
     add_col_prefix
     add_const
     add_const_if_missing
@@ -83,7 +83,6 @@ or the tutorial section where different apis are used together for different dat
     sample_group_by_max_uniq_values
     sample_rows
 
-
 ### Simple Grouping and Aggregation
     group_by_key
     aggregate
@@ -98,30 +97,15 @@ or the tutorial section where different apis are used together for different dat
     explode
     window_aggregate
 
-# Generic JSON Parsing
+### Generic JSON Parsing
     explode_json(self, col, suffix = "", accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None,
 
 ### Join
     join
-    natural_join
     inner_join()
     left_join()
     right_join()
-
-### Conversion to other data formats
-    to_json_records
-    to_numeric
-    to_string
-    to_tuples
-    to_csv
-    to_df()
-    export_to_df
-    cols_as_map
-    col_as_array
-    col_as_array_uniq
-    col_as_float_array
-    col_as_int_array
-    export_to_maps
+    natural_join
 
 ### Column add, delete, rename, prefix and suffix
     drop
@@ -163,4 +147,19 @@ or the tutorial section where different apis are used together for different dat
     show
     show_transpose
     validate
+
+### Conversion to other data formats
+    to_json_records
+    to_numeric
+    to_string
+    to_tuples
+    to_csv
+    to_df()
+    export_to_df
+    cols_as_map
+    col_as_array
+    col_as_array_uniq
+    col_as_float_array
+    col_as_int_array
+    export_to_maps
 
