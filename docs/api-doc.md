@@ -10,7 +10,7 @@ The APIs are divided into three groups:
 
 2. **Data Transformation and Analytics**: These are availabe in the **tsv_data_analytics.tsv.TSV** class.
 
-3. **Visualization, and Advanced Functionalities**: These are part of extensions package, either provided in this repository as **tsv_data_analytics_ext** or any 3rd party package.
+3. **Visualization and Advanced Functionalities**: These are part of different extension packages.
 
 ### 1. Data Ingestion
 Following APIs are provided to get data loaded as TSV and also debug different methods.
