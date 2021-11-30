@@ -14,18 +14,18 @@ The APIs are divided into three groups:
 
 Note: Only the tsv_data_analytics.tsv package should be used. The other packages under tsv_data_analytics are not meant to be called directly, and are subject to change without notice.
 
-### 1. Data Ingestion
+#### 1. Data Ingestion
 Following APIs are provided to get data loaded as TSV and also debug different methods.
 
-### Read / Write from Local FileSystem, S3 or Web
+#### Read / Write from Local FileSystem, S3 or Web
     def tsv.read
     def tsv.write
     def tsv.merge
 
-### Helper Methods to Check for File Existence
+#### Helper Methods to Check for File Existence
     def tsv.exists
 
-### Logging and Debugging
+#### Logging and Debugging
     def tsv.debug
     def tsv.info
     def tsv.error
@@ -35,10 +35,10 @@ Following APIs are provided to get data loaded as TSV and also debug different m
     def tsv.set_report_progress_perc
     def tsv.set_report_progress_min_thresh
 
-### 2. Data Transformation and Analytics
+#### 2. Data Transformation and Analytics
 These APIs are part of TSV class. Once the data is loaded as TSV, all these methods can be used.
 
-### Basic Summary
+#### Basic Summary
     def num_cols
     def num_rows
     def get_header_fields
@@ -48,14 +48,14 @@ These APIs are part of TSV class. Once the data is loaded as TSV, all these meth
     def show
     def show_transpose
 
-### Static Data Transformations
+#### Static Data Transformations
     def add_seq_num
     def assign_value
     def copy
     def replicate_rows
     def set_missing_values
 
-### Arithmetic Comparison 
+#### Arithmetic Comparison 
     def eq_int
     def eq_float
     def ge_int
@@ -69,7 +69,7 @@ These APIs are part of TSV class. Once the data is loaded as TSV, all these meth
     def is_nonzero_int
     def is_nonzero_float
 
-### String Comparison
+#### String Comparison
     def eq_str
     def ge_str
     def gt_str
@@ -85,7 +85,7 @@ These APIs are part of TSV class. Once the data is loaded as TSV, all these meth
     def not_match
     def not_regex_match
 
-### Basic Filter and Transformation
+#### Basic Filter and Transformation
     def filter
     def exclude_filter
     def values_in
@@ -93,7 +93,7 @@ These APIs are part of TSV class. Once the data is loaded as TSV, all these meth
     def transform
     def transform_inline
 
-### Advanced Filter and Transformation
+#### Advanced Filter and Transformation
     def cap_max
     def cap_max_inline
     def cap_min
@@ -104,93 +104,93 @@ These APIs are part of TSV class. Once the data is loaded as TSV, all these meth
     def ratio
     def ratio_const
 
-### URL Encoding and Decoding
+#### URL Encoding and Decoding
     def url_decode
     def url_decode_inline 
     def url_encode
     def url_encode_inline
 
-### Sampling Rows
+#### Sampling Rows
     def sample
     def sample_rows
     def sample_with_replacement
     def sample_without_replacement
 
-### Sampling Groups
+#### Sampling Groups
     def sample_class
     def sample_group_by_col_value
     def sample_group_by_key
     def sample_group_by_max_uniq_values
     def sample_group_by_max_uniq_values_per_class
 
-### Simple Grouping and Aggregation
+#### Simple Grouping and Aggregation
     def aggregate
     def distinct
     def group_count
     def cumulative_sum
 
-### Advanced Grouping and Aggregation
+#### Advanced Grouping and Aggregation
     def arg_max
     def arg_min
     def group_by_key
     def window_aggregate
 
-### Generic JSON Parsing
+#### Generic JSON Parsing
     def explode_json
 
-### Join
+#### Join
     def join
     def inner_join()
     def left_join()
     def right_join()
     def natural_join
 
-### Column Add, Delete, Rename
+#### Column Add, Delete, Rename
     def drop
     def drop_cols
     def drop_if_exists
     def concat_as_cols
     def rename
 
-### Add or Rename Column Prefix and Suffixes
+#### Add or Rename Column Prefix and Suffixes
     def rename_suffix
     def rename_prefix
     def remove_suffix
     def rename_prefix
     def add_prefix
 
-### Sorting
+#### Sorting
     def sort
     def reverse_sort
 
-### Reorder Columns
+#### Reorder Columns
     def reorder
     def reverse_reorder
 
-### Select Columns
+#### Select Columns
     def select
 
-### Select Rows Slice
+#### Select Rows Slice
     def skip
     def skip_rows
     def last
     def take
 
-### Transpose from Row to Column Format
+#### Transpose from Row to Column Format
     def transpose
     def reverse_transpose
 
-### Extending to Other Derived Classes
+#### Extending to Other Derived Classes
     def extend_class
 
-### Basic Getters 
+#### Basic Getters 
     def get_data
     def get_header
     def get_header_map
     def to_string
     def validate
 
-### Conversion to Other Data Formats
+#### Conversion to Other Data Formats
     def to_json_records
     def to_numeric
     def to_tuples
@@ -199,17 +199,17 @@ These APIs are part of TSV class. Once the data is loaded as TSV, all these meth
     def export_to_df
     def export_to_maps
 
-### Getting Column Values as Arrays
+#### Getting Column Values as Arrays
     def cols_as_map
     def col_as_array
     def col_as_array_uniq
     def col_as_float_array
     def col_as_int_array
 
-### Merging Multiple TSVs
+#### Merging Multiple TSVs
     def union
 
-### Appending Rows and Columns
+#### Appending Rows and Columns
     def add_row
     def add_map_as_row
     def add_const
@@ -226,27 +226,27 @@ These APIs are part of TSV class. Once the data is loaded as TSV, all these meth
 Any functionality that needs extensive 3rd party libraries like matplotlib, seaborn or scikit as provided as extension packages. Not all extension packages might be 
 relevant for all users, and please refer to the documentation section of individual packages for further details. Here are some basic explained for visualization.
 
-### Line Chart
+#### Line Chart
     def linechart
 
-### Scatter Plot
+#### Scatter Plot
     def scatterplot
 
-### Histogram
+#### Histogram
     def histogram
 
-### Density
+#### Density
     def density
 
-### Bar Chart
+#### Bar Chart
     def barchart
 
-### Boxplot 
+#### Boxplot 
     def boxplot 
 
-### Correlation Heatmap
+#### Correlation Heatmap
     def corr_heatmap 
 
-### Pair Plot
+#### Pair Plot
     def pairplot
 
