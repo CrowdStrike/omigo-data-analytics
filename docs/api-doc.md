@@ -4,167 +4,178 @@ This document is split into different sections grouping similar set of APIs toge
 or the tutorial section where different apis are used together for different data analytics use cases.
 
 ### Basic Getters 
-    get_data
-    get_header
-    get_header_fields
-    get_header_map
-    get_size_in_bytes
-    num_cols
-    num_rows
+    def get_data
+    def get_header
+    def get_header_fields
+    def get_header_map
+    def get_size_in_bytes
+    def num_cols
+    def num_rows
+    def to_string
 
 ### Static Data Transformations
-    add_col_prefix
-    add_const
-    add_const_if_missing
-    add_seq_num
-    assign_value
-    copy
-    replicate_rows
-    set_missing_values
+    def add_col_prefix
+    def add_seq_num
+    def assign_value
+    def copy
+    def replicate_rows
+    def set_missing_values
 
 ### Arithmetic Operations
-    eq_int
-    eq_float
-    ge_int
-    ge_float
-    gt_int
-    gt_float
-    le_int
-    le_float
-    lt_int
-    lt_float
-    is_nonzero_int
-    is_nonzero_float
+    def eq_int
+    def eq_float
+    def ge_int
+    def ge_float
+    def gt_int
+    def gt_float
+    def le_int
+    def le_float
+    def lt_int
+    def lt_float
+    def is_nonzero_int
+    def is_nonzero_float
 
 ### String Comparison
-    eq_str
-    ge_str
-    gt_str
-    le_str
-    lt_str
-    startswith
-    endswith
-    match
-    not_eq_str
-    not_startswith
-    not_endswith
-    not_match
+    def eq_str
+    def ge_str
+    def gt_str
+    def le_str
+    def lt_str
+    def startswith
+    def endswith
+    def match
+    def regex_match
+    def not_eq_str
+    def not_startswith
+    def not_endswith
+    def not_match
+    def not_regex_match
 
-### Basic Filter and Transformtion
-    filter
-    exclude_filter
-    values_in
-    values_not_in
-    transform
-    transform_inline
+### Basic Filter and Transformation
+    def filter
+    def exclude_filter
+    def values_in
+    def values_not_in
+    def transform
+    def transform_inline
 
 ### Advanced Filter and Transformation
-    cap_max
-    cap_max_inline
-    cap_min
-    cap_min_inline
-    apply_precision
-    flatmap
-    ratio
-    ratio_const
+    def cap_max
+    def cap_max_inline
+    def cap_min
+    def cap_min_inline
+    def apply_precision
+    def explode
+    def flatmap
+    def ratio
+    def ratio_const
 
 # URL Encoding and Decoding
-    url_decode
-    url_decode_inline 
-    url_encode
-    url_encode_inline
+    def url_decode
+    def url_decode_inline 
+    def url_encode
+    def url_encode_inline
 
 ### Sampling Rows
-    sample
-    sample_rows
-    sample_with_replacement
-    sample_without_replacement
+    def sample
+    def sample_rows
+    def sample_with_replacement
+    def sample_without_replacement
 
 ### Sampling Groups
-    sample_class
-    sample_group_by_col_value
-    sample_group_by_key
-    sample_group_by_max_uniq_values
-    sample_group_by_max_uniq_values_per_class
+    def sample_class
+    def sample_group_by_col_value
+    def sample_group_by_key
+    def sample_group_by_max_uniq_values
+    def sample_group_by_max_uniq_values_per_class
 
 ### Simple Grouping and Aggregation
-    group_by_key
-    aggregate
-    distinct
-    group_count
-    cumulative_sum
+    def group_by_key
+    def aggregate
+    def distinct
+    def group_count
+    def cumulative_sum
 
 ### Advanced Grouping and Aggregation
-    arg_max
-    arg_min
-    explode
-    window_aggregate
+    def arg_max
+    def arg_min
+    def window_aggregate
 
 ### Generic JSON Parsing
-    explode_json(self, col, suffix = "", accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None,
+    def explode_json
 
 ### Join
-    join
-    inner_join()
-    left_join()
-    right_join()
-    natural_join
+    def join
+    def inner_join()
+    def left_join()
+    def right_join()
+    def natural_join
 
-### Column add, delete, rename, prefix and suffix
-    drop
-    drop_if_exists
-    concat_as_cols
-    rename
-    rename_suffix
-    rename_prefix
-    remove_suffix
-    rename_prefix
+### Column Add, Delete, Rename
+    def drop
+    def drop_cols
+    def drop_if_exists
+    def concat_as_cols
+    def rename
+
+### Renaming Column Prefix and Suffix
+    def rename_suffix
+    def rename_prefix
+    def remove_suffix
+    def rename_prefix
 
 ### Sort
-    sort
-    reverse_sort
+    def sort
+    def reverse_sort
 
 ### Reorder Columns
-    reorder
-    reverse_reorder
+    def reorder
+    def reverse_reorder
 
 ### Select Columns
-    select
+    def select
 
 ### Select Rows Slice
-    skip
-    last
-    take
+    def skip
+    def last
+    def take
 
-### Transpose from row to column format
-    transpose
-    reverse_transpose
+### Transpose from Row to Column Format
+    def transpose
+    def reverse_transpose
 
-### Extending to other derived classes
-    extend_class
+### Extending to Other Derived Classes
+    def extend_class
 
-### Get basic summary and stats
-    noop
-    print
-    print_stats
-    show
-    show_transpose
-    validate
+### Basic Summary and Stats
+    def noop
+    def print
+    def print_stats
+    def show
+    def show_transpose
+    def validate
 
-### Conversion to other data formats
-    to_json_records
-    to_numeric
-    to_string
-    to_tuples
-    to_csv
-    to_df()
-    export_to_df
-    cols_as_map
-    col_as_array
-    col_as_array_uniq
-    col_as_float_array
-    col_as_int_array
-    export_to_maps
+### Conversion to Other Data Formats
+    def to_json_records
+    def to_numeric
+    def to_tuples
+    def to_csv
+    def to_df
+    def export_to_df
+    def export_to_maps
 
-### Merging Multiple
-    union
+### Getting Column Values as Arrays
+    def cols_as_map
+    def col_as_array
+    def col_as_array_uniq
+    def col_as_float_array
+    def col_as_int_array
+
+### Merging Multiple TSVs
+    def union
+
+### Appending Rows and Columns
+    def add_row
+    def add_map_as_row
+    def add_const
+    def add_const_if_missing
