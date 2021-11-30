@@ -58,6 +58,7 @@ Supported File Formats: tsv, simple csv and gzip/zip compressed versions.
 >>> write(xtsv, "data/output_file.tsv.gz")
 >>> ytsv = merge([xtsv1, xtsv2])
 >>> exists("data/iris.tsv")
+>>> exists("s3://bucket-name/path/iris.tsv")
 ```
 
 ## Data Transformation and Analytics
