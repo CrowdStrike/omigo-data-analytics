@@ -56,7 +56,7 @@ Supported File Formats: tsv, simple csv and gzip/zip compressed versions.
 >>> xtsv = read(["data/file1.tsv.gz", "data/file2.tsv.gz"]
 >>> xtsv = read("https://github.com/CrowdStrike/tsv-data-analytics/raw/main/data/iris.tsv")
 >>> write(xtsv, "data/output_file.tsv.gz")
->>> merge([xtsv1, xtsv2])
+>>> ytsv = merge([xtsv1, xtsv2])
 >>> exists("data/iris.tsv")
 ```
 
@@ -69,7 +69,7 @@ These APIs are part of TSV class. Once the data is loaded as TSV, all these meth
    - **def get_columns()**: Returns the list of columns in the tsv object.
    - **def get_size_in_bytes()**: Returns the size of the tsv object in bytes.
 
-Examples:
+#### Examples
 ```
 >>> xtsv.num_cols()
 >>> xtsv.num_rows()
