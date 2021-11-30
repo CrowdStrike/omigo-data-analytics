@@ -96,17 +96,17 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
 ```
 
 ### Arithmetic Comparison 
-    def eq_int(col, value): Returns all rows where the int value of _col_ is equal to _value_.
-    def ge_int(col, value): Returns all rows where the int value of _col_ is less than or equal to _value_.
-    def gt_int(col, value): Returns all rows where the int value of _col_ is greater than _value_.
-    def le_int(col, value): Returns all rows where the int value of _col_ is less than or equal to _value_.
-    def lt_int(col, value): Returns all rows where the int value of _col_ is less than _value_.
-    def eq_float(col, value): Returns all rows where the float value of _col_ is equal to _value_.
-    def ge_float(col, value): Returns all rows where the float value of _col_ is less than or equal to _value_.
-    def gt_float(col, value): Returns all rows where the float value of _col_ is greater than _value_.
-    def le_float(col, value): Returns all rows where the float value of _col_ is less than or equal to _value_.
-    def lt_float(col, value): Returns all rows where the float value of _col_ is less than _value_.
-    def is_nonzero(col): Returns all rows where the float value of _col_ is not zero.
+   - **def eq_int(col, value)**: Returns all rows where the int value of _col_ is equal to _value_.
+   - **def ge_int(col, value)**: Returns all rows where the int value of _col_ is less than or equal to _value_.
+   - **def gt_int(col, value)**: Returns all rows where the int value of _col_ is greater than _value_.
+   - **def le_int(col, value)**: Returns all rows where the int value of _col_ is less than or equal to _value_.
+   - **def lt_int(col, value)**: Returns all rows where the int value of _col_ is less than _value_.
+   - **def eq_float(col, value)**: Returns all rows where the float value of _col_ is equal to _value_.
+   - **def ge_float(col, value)**: Returns all rows where the float value of _col_ is less than or equal to _value_.
+   - **def gt_float(col, value)**: Returns all rows where the float value of _col_ is greater than _value_.
+   - **def le_float(col, value)**: Returns all rows where the float value of _col_ is less than or equal to _value_.
+   - **def lt_float(col, value)**: Returns all rows where the float value of _col_ is less than _value_.
+   - **def is_nonzero(col)**: Returns all rows where the float value of _col_ is not zero.
 
 ### String Comparison
     def eq_str
