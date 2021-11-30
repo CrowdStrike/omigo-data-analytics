@@ -82,14 +82,16 @@ These APIs are part of TSV class. Once the data is loaded as TSV, all these meth
     def show(n, max_col_width, title): Pretty prints the first 'n' rows, each column restricted to max_col_width, and title which is displayed at the top.
     def show_transpose(n, title): Transposes the tsv object and does pretty print.
 
-Examples:
+#### Examples
 ```
 >>> xtsv.show(3)
 sepal_length	sepal_width	petal_length	petal_width	class      
 5.1         	        3.5	         1.4	        0.2	Iris-setosa
 4.9         	        3.0	         1.4	        0.2	Iris-setosa
 4.7         	        3.2	         1.3	        0.2	Iris-setosa
->>>
+```
+
+```
 >>> xtsv.show_transpose(3)
 col_name    	row:1      	row:2      	row:3      
 sepal_length	5.1        	4.9        	4.7        
