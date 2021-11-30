@@ -12,6 +12,19 @@ The APIs are divided into three groups:
 
 3. **Visualization and Advanced Functionalities**: These are part of different extension packages.
 
+## Working with Data Having 100s of Columns
+Existing libraries for data analysis were design 5-10 years back when there were 10-20 columns in the dataset. Modern datasets especially that are collecting event stream data joined with different
+second sources have 100s or even 1000s of columns. That make even basic operations like selecting columns.
+
+This library provides simple APIs to work with such wide column datasets. Methods like select(), drop(), sort() take regular expression for getting the list of columns. Any advanced api like 
+aggregate() follows simple naming convention to create new names with appropriate prefix or suffixes to help with selecting them in groups.
+
+For example, from the iris dataset:
+```
+xtsv.select("petal.*") 
+```
+will select all columns that start with the prefix _petal_.
+
 ## Data Ingestion
 Following APIs are provided to get data loaded as TSV and also debug different methods.
 
