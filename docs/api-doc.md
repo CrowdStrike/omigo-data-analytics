@@ -35,7 +35,7 @@ These APIs are part of TSV class. Once the data is loaded as TSV, all these meth
 #### Basic Summary
     def num_cols
     def num_rows
-    def get_header_fields
+    def get_columns 
     def get_size_in_bytes
 
 #### Getters 
