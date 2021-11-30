@@ -90,7 +90,6 @@ or the tutorial section where different apis are used together for different dat
     def sample_group_by_max_uniq_values_per_class
 
 #### Simple Grouping and Aggregation
-    def group_by_key
     def aggregate
     def distinct
     def group_count
@@ -99,6 +98,7 @@ or the tutorial section where different apis are used together for different dat
 #### Advanced Grouping and Aggregation
     def arg_max
     def arg_min
+    def group_by_key
     def window_aggregate
 
 #### Generic JSON Parsing
