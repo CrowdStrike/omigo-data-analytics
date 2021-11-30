@@ -12,7 +12,7 @@ The APIs are divided into three groups:
 
 3. **Visualization and Advanced Functionalities**: These are part of different extension packages.
 
-### 1. Data Ingestion
+## Data Ingestion
 Following APIs are provided to get data loaded as TSV and also debug different methods.
 
 #### Read and Write from Local FileSystem, S3 or Web
@@ -27,7 +27,7 @@ Following APIs are provided to get data loaded as TSV and also debug different m
     def set_report_progress_perc
     def set_report_progress_min_thresh
 
-### 2. Data Transformation and Analytics
+## Data Transformation and Analytics
 These APIs are part of TSV class. Once the data is loaded as TSV, all these methods can be used.
 
 #### Basic Summary
@@ -200,7 +200,7 @@ These APIs are part of TSV class. Once the data is loaded as TSV, all these meth
     def add_const
     def add_const_if_missing
 
-## 3. Visualization, Statistics and Machine Learning
+## Visualization, Statistics and Machine Learning
 Any functionality that needs extensive 3rd party libraries like matplotlib, seaborn or scikit as provided as extension packages. Not all extension packages might be 
 relevant for all users, and please refer to the documentation section of individual packages for further details. Here are some basic explained for visualization.
 
