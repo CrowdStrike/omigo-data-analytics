@@ -38,6 +38,12 @@ These APIs are part of TSV class. Once the data is loaded as TSV, all these meth
     def get_header_fields
     def get_size_in_bytes
 
+#### Getters 
+    def get_data
+    def get_header
+    def get_header_map
+    def to_string
+
 #### Pretty Print
     def show
     def show_transpose
@@ -176,13 +182,6 @@ These APIs are part of TSV class. Once the data is loaded as TSV, all these meth
 
 #### Extending to Other Derived Classes
     def extend_class
-
-#### Basic Getters 
-    def get_data
-    def get_header
-    def get_header_map
-    def to_string
-    def validate
 
 #### Conversion to Other Data Formats
     def to_json_records
