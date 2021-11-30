@@ -39,13 +39,13 @@ Iris-virginica 	           4.500
 ## Data Ingestion
 
 #### Read and Write from Local FileSystem, S3 or Web
-   def read(paths): Reads the data present in the list of file paths.
+   1. def read(paths): Reads the data present in the list of file paths.
 
-   def write(tsv_obj, path): Writes the tsv object to the specified path.
+   1. def write(tsv_obj, path): Writes the tsv object to the specified path.
 
-   def merge(tsv_objs): Merges the list of tsv objects into one.
+   1. def merge(tsv_objs): Merges the list of tsv objects into one.
 
-   def exists(path): Check whether the specified path exists or not. Useful for implementing fast forwarding.
+   1. def exists(path): Check whether the specified path exists or not. Useful for implementing fast forwarding.
 
 **Supported File Formats**: tsv, simple csv
 
