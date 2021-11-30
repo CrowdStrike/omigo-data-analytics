@@ -45,6 +45,7 @@ Iris-virginica 	           4.500
     def exists(path): Check whether the specified path exists or not. Useful for implementing fast forwarding.
 
 **Supported File Formats**: tsv, simple csv
+
 **Supported Compression Types**: plain text, gzip, zip
 
 Examples:
