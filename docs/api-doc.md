@@ -67,16 +67,8 @@ These APIs are part of TSV class. Once the data is loaded as TSV, all these meth
 ### Basic Summary
    - **def num_cols()**: Returns the number of columns in the tsv object.
    - **def num_rows()**: Returns the number of rows in the tsv object.
-   - **def get_columns()**: Returns the list of columns in the tsv object.
-   - **def get_size_in_bytes()**: Returns the size of the tsv object in bytes.
-
-#### Examples
-```
->>> xtsv.num_cols()
->>> xtsv.num_rows()
->>> xtsv.get_columns()
->>> xtsv.get_size_in_bytes()
-```
+   - **def columns()**: Returns the list of columns in the tsv object.
+   - **def size_in_bytes()**: Returns the size of the tsv object in bytes.
 
 ### Pretty Print
     def show(n, max_col_width, title): Pretty prints the first 'n' rows, each column restricted to max_col_width, and title which is displayed at the top.
@@ -104,18 +96,17 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
 ```
 
 ### Arithmetic Comparison 
-    def eq_int
-    def ge_int
-    def gt_int
-    def le_int
-    def lt_int
-    def eq_float
-    def ge_float
-    def gt_float
-    def le_float
-    def lt_float
-    def is_nonzero_int
-    def is_nonzero_float
+    def eq_int(col, value): Returns all rows where the int value of _col_ is equal to _value_.
+    def ge_int(col, value): Returns all rows where the int value of _col_ is less than or equal to _value_.
+    def gt_int(col, value): Returns all rows where the int value of _col_ is greater than _value_.
+    def le_int(col, value): Returns all rows where the int value of _col_ is less than or equal to _value_.
+    def lt_int(col, value): Returns all rows where the int value of _col_ is less than _value_.
+    def eq_float(col, value): Returns all rows where the float value of _col_ is equal to _value_.
+    def ge_float(col, value): Returns all rows where the float value of _col_ is less than or equal to _value_.
+    def gt_float(col, value): Returns all rows where the float value of _col_ is greater than _value_.
+    def le_float(col, value): Returns all rows where the float value of _col_ is less than or equal to _value_.
+    def lt_float(col, value): Returns all rows where the float value of _col_ is less than _value_.
+    def is_nonzero(col): Returns all rows where the float value of _col_ is not zero.
 
 ### String Comparison
     def eq_str

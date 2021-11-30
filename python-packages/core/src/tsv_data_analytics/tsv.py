@@ -1030,6 +1030,10 @@ class TSV:
         return len(self.header_map)
 
     def get_size_in_bytes(self):
+        utils.warn("Please use size_in_bytes() instead")
+        return self.size_in_bytes()
+
+    def size_in_bytes(self):
         total = len(self.header)
         for line in self.data:
             total = total + len(line)
@@ -1038,7 +1042,7 @@ class TSV:
     def get_header_fields(self):
         return self.header_fields
 
-    def get_columns():
+    def columns():
         return self.get_header_fields()
 
     def export_to_maps(self):
