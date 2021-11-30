@@ -6,11 +6,11 @@ or the tutorial section where different apis are used together for different dat
 ### Introduction
 The APIs are divided into three groups:
 
-1. Data Ingestion: This is provided through static methods available in the *tsv_data_analytics.tsv* package. Eg. tsv.read()
+1. Data Ingestion: This is provided through static methods available in the **tsv_data_analytics.tsv** package. Eg. tsv.read()
 
-2. Data Transformation and Analytics: These are availabe in the *tsv_data_analytics.tsv.TSV* class.
+2. Data Transformation and Analytics: These are availabe in the **tsv_data_analytics.tsv.TSV** class.
 
-3. Visualization, and Advanced Functionalities: These are part of extensions package, either provided in this repository as tsv_data_analytics_ext or any 3rd party package.
+3. Visualization, and Advanced Functionalities: These are part of extensions package, either provided in this repository as **tsv_data_analytics_ext** or any 3rd party package.
 
 Note: Only the tsv_data_analytics.tsv package should be used. The other packages under tsv_data_analytics are not meant to be called directly, and are subject to change without notice.
 
