@@ -44,14 +44,19 @@ Iris-virginica 	           4.500
     def merge(tsv_objs): Merges the list of tsv objects into one.
     def exists(path): Check whether the specified path exists or not. Useful for implementing fast forwarding.
 
-Supported File Formats: tsv, csv
-Supported Compression Types: plain text, gzip, zip
+**Supported File Formats**: tsv, simple csv
+**Supported Compression Types**: plain text, gzip, zip
 
-#### Enable / Disable Debug Information 
-    def enable_debug_mode
-    def disable_debug_mode
-    def set_report_progress_perc
-    def set_report_progress_min_thresh
+Examples:
+```
+>>> read("data/iris.tsv")
+>>> read("s3://bucket-name/path/iris.tsv")
+>>> read(["data/file1.tsv.gz", "data/file2.tsv.gz"]
+>>> read("https://github.com/CrowdStrike/tsv-data-analytics/raw/main/data/iris.tsv")
+>>> write(xtsv, "data/output_file.tsv.gz")
+>>> merge([xtsv1, xtsv2])
+>>> exists("data/iris.tsv")
+```
 
 ## Data Transformation and Analytics
 These APIs are part of TSV class. Once the data is loaded as TSV, all these methods can be used.
@@ -229,6 +234,12 @@ These APIs are part of TSV class. Once the data is loaded as TSV, all these meth
 ## Visualization, Statistics and Machine Learning
 Any functionality that needs extensive 3rd party libraries like matplotlib, seaborn or scikit as provided as extension packages. Not all extension packages might be 
 relevant for all users, and please refer to the documentation section of individual packages for further details. Here are some basic explained for visualization.
+
+#### Enable / Disable Debug Information 
+    def enable_debug_mode
+    def disable_debug_mode
+    def set_report_progress_perc
+    def set_report_progress_min_thresh
 
 #### Basic Plots 
     def linechart
