@@ -17,7 +17,7 @@ Note: Only the **tsv_data_analytics.tsv** package should be used directly. The o
 ### 1. Data Ingestion
 Following APIs are provided to get data loaded as TSV and also debug different methods.
 
-#### Read / Write from Local FileSystem, S3 or Web
+#### Read and Write from Local FileSystem, S3 or Web
     def read
     def write
     def merge
