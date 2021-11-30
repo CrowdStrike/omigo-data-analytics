@@ -220,27 +220,15 @@ These APIs are part of TSV class. Once the data is loaded as TSV, all these meth
 Any functionality that needs extensive 3rd party libraries like matplotlib, seaborn or scikit as provided as extension packages. Not all extension packages might be 
 relevant for all users, and please refer to the documentation section of individual packages for further details. Here are some basic explained for visualization.
 
-#### Line Chart
+#### Basic Plots 
     def linechart
-
-#### Scatter Plot
     def scatterplot
-
-#### Histogram
     def histogram
-
-#### Density
     def density
-
-#### Bar Chart
     def barchart
-
-#### Boxplot 
     def boxplot 
 
-#### Correlation Heatmap
+#### Advanced Plots
     def corr_heatmap 
-
-#### Pair Plot
     def pairplot
 
