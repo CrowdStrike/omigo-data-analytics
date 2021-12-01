@@ -516,6 +516,6 @@ These plots are best described in the [example-notebooks/graphs].
 There are certain flags that enable or disable internal log messages. These are meant for advanced users only. 
    - **tsv.enable_debug_mode**
    - **tsv.disable_debug_mode**
-   - **tsv.set_report_progress_perc**
-   - **tsv.set_report_progress_min_thresh**
+   - **tsv.set_report_progress_perc**(perc): Displays a progress bar when the operations are finished in multiples of _perc_.
+   - **tsv.set_report_progress_min_thresh**(thresh): Sets the debugging only on operations where number of rows is more than _thresh_.
 
