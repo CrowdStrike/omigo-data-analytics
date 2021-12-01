@@ -40,11 +40,8 @@ Iris-virginica 	           4.500
 
 ### Read and Write from Local FileSystem, S3 or Web
    - **read**(paths): Reads the data present in the list of file paths.
-    
    - **write**(tsv_obj, path): Writes the tsv object to the specified path.
-    
    - **merge**(tsv_objs): Merges the list of tsv objects into one.
-    
    - **exists**(path): Check whether the specified path exists or not. Useful for implementing fast forwarding.
 
 Supported File Formats: tsv, simple csv and gzip/zip compressed versions.
