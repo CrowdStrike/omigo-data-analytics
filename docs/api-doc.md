@@ -249,12 +249,17 @@ unique values. Useful for scenarios where all the rows matching the specific col
    - **sample_group_by_max_uniq_values_per_class**(grouping_cols, class_col, col, max_uniq_values_map, _def_max_uniq_values_, _seed_): This api samples different values of _class_col_ differently based on 
 _max_uniq_values_map_ map. This is explained in detail in the [sampling documentation].
 
-### Simple Grouping and Aggregation
-   - **aggregate**
-   - **distinct**
+#### Example
+```
+>>> x.sample_class("class", "Iris-setosa", 0.1)
+```
 
-### Advance Grouping and Aggregation
-   - **window_aggregate**
+### Grouping and Aggregation
+   - **aggregate**(grouping_cols, agg_cols, agg_funcs): This is one of the most useful apis for aggregating data based on set of _grouping_cols_, and applying multiple aggregation functions. The _agg_cols_
+are the list of columns on which _agg_funcs_ are applied in pairwise manner. 
+   - **window_aggregate**(win_col, agg_cols, agg_funcs, winsize, _sliding_): This api is an extension of aggregate where data slices are created using windows of size _winsize_. For each window, _agg_funcs_
+are applied on _agg_cols_. If _sliding_ is true, then a sliding window logic is used. Mostly useful for time series data where win_col is date or timestamp, and moving averages are needed.
+   - **distinct**(): This api removes all duplicate rows.
 
 ### Generic JSON Parsing
    - **explode_json**
