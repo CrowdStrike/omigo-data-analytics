@@ -115,19 +115,19 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
 ```
 
 ### String Comparison
-   - def **eq_str**(col, value): Returns rows where string value of _col_ is equal to _value_. 
-   - def **ge_str**(col, value): Returns rows where string value of _col_ is greater than or equal to _value_.
-   - def **gt_str**(col, value): Returns rows where string value of _col_ is greater than _value_.
-   - def **le_str(**col, value): Returns rows where string value of _col_ is less than or equal to _value_.
-   - def **lt_str**(col, value): Returns rows where string value of _col_ is less than _value_.
-   - def **startswith**(col, value): Returns rows where string value of _col_ starts with _value_.
-   - def **endswith**(col, value): Returns rows where string value of _col_ ends with  _value_.
-   - def **match**(col, value): Returns rows where string value of _col_ matches the regular expression in _value_.
-   - def **not_eq_str**(col, value): Returns rows where string value of _col_ not equal to  _value_.
-   - def **not_startswith**(col, value): Returns rows where string value of _col_ does not start with  _value_.
-   - def **not_endswith**(col, value): Returns rows where string value of _col_ does not end with _value_.
-   - def **not_match**(col, value): Returns rows where string value of _col_ does not match regular expression in _value_.
-   - def **not_regex_match**(col, value): Returns rows where string value of _col_ does not match regular expression in _value_.
+   - **eq_str**(col, value): Returns rows where string value of _col_ is equal to _value_. 
+   - **ge_str**(col, value): Returns rows where string value of _col_ is greater than or equal to _value_.
+   - **gt_str**(col, value): Returns rows where string value of _col_ is greater than _value_.
+   - **le_str(**col, value): Returns rows where string value of _col_ is less than or equal to _value_.
+   - **lt_str**(col, value): Returns rows where string value of _col_ is less than _value_.
+   - **startswith**(col, value): Returns rows where string value of _col_ starts with _value_.
+   - **endswith**(col, value): Returns rows where string value of _col_ ends with  _value_.
+   - **match**(col, value): Returns rows where string value of _col_ matches the regular expression in _value_.
+   - **not_eq_str**(col, value): Returns rows where string value of _col_ not equal to  _value_.
+   - **not_startswith**(col, value): Returns rows where string value of _col_ does not start with  _value_.
+   - **not_endswith**(col, value): Returns rows where string value of _col_ does not end with _value_.
+   - **not_match**(col, value): Returns rows where string value of _col_ does not match regular expression in _value_.
+   - **not_regex_match**(col, value): Returns rows where string value of _col_ does not match regular expression in _value_.
 
 #### Examples
 ```
@@ -136,23 +136,23 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
 ```
  
 ### Basic Filter and Transformation
-   - def **filter**(cols, lambda_func):
-   - def **values_in**(col, vals): TBD
-   - def **transform**(cols, lambda_func, output_col_names):  TBD
-   - def **transform_inline**(cols, func): TBD 
-   - def **values_not_in**(col, vals): This is negation of values_in() api.
-   - def **exclude_filter**(cols, func): This is negation of filter() api.
+   - **filter**(cols, lambda_func):
+   - **values_in**(col, vals): TBD
+   - **transform**(cols, lambda_func, output_col_names):  TBD
+   - **transform_inline**(cols, func): TBD 
+   - **values_not_in**(col, vals): This is negation of values_in() api.
+   - **exclude_filter**(cols, func): This is negation of filter() api.
 
 ### Advanced Filter and Transformation
-    def cap_max
-    def cap_max_inline
-    def cap_min
-    def cap_min_inline
-    def apply_precision
-    def explode
-    def flatmap
-    def ratio
-    def ratio_const
+   - cap_max
+   - cap_max_inline
+   - cap_min
+   - cap_min_inline
+   - apply_precision
+   - explode
+   - flatmap
+   - ratio
+   - ratio_const
 
 ### URL Encoding and Decoding
     def url_decode
