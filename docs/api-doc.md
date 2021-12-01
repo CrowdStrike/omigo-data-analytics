@@ -120,7 +120,7 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
    - **eq_str**(col, value): Returns rows where string value of _col_ is equal to _value_. 
    - **ge_str**(col, value): Returns rows where string value of _col_ is greater than or equal to _value_.
    - **gt_str**(col, value): Returns rows where string value of _col_ is greater than _value_.
-   - **le_str(**col, value): Returns rows where string value of _col_ is less than or equal to _value_.
+   - **le_str**(col, value): Returns rows where string value of _col_ is less than or equal to _value_.
    - **lt_str**(col, value): Returns rows where string value of _col_ is less than _value_.
    - **startswith**(col, value): Returns rows where string value of _col_ starts with _value_.
    - **endswith**(col, value): Returns rows where string value of _col_ ends with  _value_.
