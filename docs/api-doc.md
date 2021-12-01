@@ -264,22 +264,22 @@ are applied on _agg_cols_. If _sliding_ is true, then a sliding window logic is 
 #### Examples
 Compute total sum of petal_length and other attributes in iris data. Notice the convention in the output columns.
 ```
->>> x.aggregate("class", ["petal_length", "petal_width", "sepal_length", "sepal_width"], [sum, sum, max, max]).show()
+>>> x.aggregate("class", ["petal_length", "petal_width"], [sum, sum]).show()
 
-class          	petal_length:sum	petal_width:sum	sepal_length:max	sepal_width:max
-Iris-setosa    	           73.20	          12.20	            5.80	           4.40
-Iris-versicolor	          213.00	          66.30	            7.00	           3.40
-Iris-virginica 	          277.60	         101.30	            7.90	           3.80
+class          	petal_length:sum	petal_width:sum
+Iris-setosa    	           73.20	          12.20
+Iris-versicolor	          213.00	          66.30
+Iris-virginica 	          277.60	         101.30
 ```
 
 Use collapse = False to get all the original rows. Useful for debugging, or chaining multiple aggregate() functions together.
 ```
->>> x.aggregate("class", ["petal_length", "petal_width", "sepal_length", "sepal_width"], [sum, sum, max, max], collapse = False).show()
+>>> x.aggregate("class", ["petal_length", "petal_width"], [sum, sum], collapse = False).show()
 
-sepal_length	sepal_width	petal_length	petal_width	class      	petal_length:sum	petal_width:sum	sepal_length:max	sepal_width:max
-5.10        	       3.50	        1.40	       0.20	Iris-setosa	           73.20	          12.20	            5.80	           4.40
-4.90        	       3.00	        1.40	       0.20	Iris-setosa	           73.20	          12.20	            5.80	           4.40
-4.70        	       3.20	        1.30	       0.20	Iris-setosa	           73.20	          12.20	            5.80	           4.40
+sepal_length	sepal_width	petal_length	petal_width	class      	petal_length:sum	petal_width:sum
+5.10        	       3.50	        1.40	       0.20	Iris-setosa	           73.20	          12.20
+4.90        	       3.00	        1.40	       0.20	Iris-setosa	           73.20	          12.20
+4.70        	       3.20	        1.30	       0.20	Iris-setosa	           73.20	          12.20
 ```
 
 ### Generic JSON Parsing
