@@ -2748,8 +2748,13 @@ class TSV:
         inherit_message2 = inherit_message + ": set_missing_values" if (len(inherit_message) > 0) else "set_missing_values"
         return self.transform_inline(cols, lambda x: x if (x != "") else default_val, inherit_message = inherit_message2)
 
+    # calls class that inherits TSV
     def extend_class(self, newclass, *args, **kwargs):
         return newclass(self.header, self.data, *args, **kwargs) 
+
+    # custom function to call user defined apis
+    def custom_func(self, func, *args, **kwargs):
+        return func(self, *args, **kwargs)
 
     def __convert_to_maps__(self):
         result = []
