@@ -139,7 +139,7 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
    - **filter**(cols, lambda_func): Returns rows that satisfy applying lambda function on the values of the given columns.
    - **transform**(cols, lambda_func, output_cols): Applies lambda function to the given _cols_. The lambda function can return single or multiple values. The _output_cols_ should match the list of values in the output.
    - **transform_inline**(cols, func): This applies the lambda function on each of the given _cols_ and returns new values under the same column names. 
-   - **values_not_in**(col, list_of_values): This is negation of _values_in()_ api.
+   - **values_not_in**(col, values): This is negation of _values_in()_ api.
    - **exclude_filter**(cols, lambda_func): This is negation of _filter()_ api.
    - **ratio**(col1, col2, new_col, _default = 0_): Returns the ratio of _col1_ / _col2_ as _new_col_. If denominator is 0, then uses _default_ as the default value.
 
@@ -204,8 +204,6 @@ sepal_width	petal_width	class      	len_col:dim_name	lencols:dim_value
 ### Sampling Rows
    - **sample**
    - **sample_n**
-   - **sample_with_replacement**
-   - **sample_without_replacement**
 
 ### Sampling Groups
    - **sample_class**
@@ -219,9 +217,6 @@ sepal_width	petal_width	class      	len_col:dim_name	lencols:dim_value
    - **distinct**
 
 ### Advanced Grouping and Aggregation
-   - **arg_max**
-   - **arg_min**
-   - **group_by_key**
    - **window_aggregate**
 
 ### Generic JSON Parsing
@@ -232,7 +227,7 @@ sepal_width	petal_width	class      	len_col:dim_name	lencols:dim_value
    - **left_join**
    - **right_join**
 
-### Column Add, Delete, Rename
+### Drop and Rename Columns 
    - **drop**
    - **drop_if_exists**
    - **concat_as_cols**
@@ -244,6 +239,7 @@ sepal_width	petal_width	class      	len_col:dim_name	lencols:dim_value
    - **remove_suffix**
    - **rename_prefix**
    - **add_prefix**
+   - **add_suffix**
 
 ### Sorting
    - **sort**
