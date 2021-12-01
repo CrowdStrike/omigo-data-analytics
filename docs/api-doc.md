@@ -116,6 +116,32 @@ petal_width 	0.2        	0.2        	0.2
 class       	Iris-setosa	Iris-setosa	Iris-setosa
 ```
 
+### Select Columns
+   - **select**(cols): Selects the given columns which can be a single column, pattern or an array of columns.
+
+#### Example
+>>> x.select(["class", "petal.*"]).show(3)
+
+class      	petal_length	petal_width
+Iris-setosa	         1.4	        0.2
+Iris-setosa	         1.4	        0.2
+Iris-setosa	         1.3	        0.2
+```
+
+### Select Rows Slice
+   - **skip**(n): Skips the first _n_ rows.
+   - **last**(n): Takes the last _n_ rows.
+   - **take**: Takes the first _n_ rows.
+
+#### Example
+```
+>>> x.take(2).show()
+
+sepal_length	sepal_width	petal_length	petal_width	class      
+5.1         	        3.5	         1.4	        0.2	Iris-setosa
+4.9         	        3.0	         1.4	        0.2	Iris-setosa
+```
+
 ### Arithmetic Comparison 
    - **eq_int**(col, value): Returns all rows where the int value of _col_ is equal to _value_.
    - **ge_int**(col, value): Returns all rows where the int value of _col_ is less than or equal to _value_.
@@ -380,32 +406,6 @@ class      	sepal_length	sepal_width	petal_length	petal_width
 Iris-setosa	         5.1	        3.5	         1.4	        0.2
 Iris-setosa	         4.9	        3.0	         1.4	        0.2
 Iris-setosa	         4.7	        3.2	         1.3	        0.2
-
-### Select Columns
-   - **select**(cols): Selects the given columns which can be a single column, pattern or an array of columns.
-
-#### Example
->>> x.select(["class", "petal.*"]).show(3)
-
-class      	petal_length	petal_width
-Iris-setosa	         1.4	        0.2
-Iris-setosa	         1.4	        0.2
-Iris-setosa	         1.3	        0.2
-```
-
-### Select Rows Slice
-   - **skip**(n): Skips the first _n_ rows.
-   - **last**(n): Takes the last _n_ rows.
-   - **take**: Takes the first _n_ rows.
-
-#### Example
-```
->>> x.take(2).show()
-
-sepal_length	sepal_width	petal_length	petal_width	class      
-5.1         	        3.5	         1.4	        0.2	Iris-setosa
-4.9         	        3.0	         1.4	        0.2	Iris-setosa
-```
 
 ### Transpose from Row to Column Format
    - **transpose**(_n_): This api transposes the list of rows and columns. Useful for looking at data with lot of columns that don't fit into the width of the screen.
