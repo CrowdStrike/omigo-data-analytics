@@ -146,74 +146,69 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
    - **exclude_filter**(cols, lambda_func): This is negation of _filter()_ api.
 
 ### Advanced Filter and Transformation
-   - cap_max
-   - cap_max_inline
-   - cap_min
-   - cap_min_inline
-   - apply_precision
-   - explode
-   - flatmap
-   - ratio
-   - ratio_const
+   - **cap_max**
+   - **cap_max_inline**
+   - **cap_min**
+   - **cap_min_inline**
+   - **apply_precision**
+   - **explode**
+   - **flatmap**
+   - **ratio**
+   - **ratio_const**
 
 ### URL Encoding and Decoding
-    def url_decode
-    def url_decode_inline 
-    def url_encode
-    def url_encode_inline
+   - **url_decode**
+   - **url_decode_inline**
+   - **url_encode**
+   - **url_encode_inline**
 
 ### Sampling Rows
-    def sample
-    def sample_rows
-    def sample_with_replacement
-    def sample_without_replacement
+   - **sample**
+   - **sample_rows**
+   - **sample_with_replacement**
+   - **sample_without_replacement**
 
 ### Sampling Groups
-    def sample_class
-    def sample_group_by_col_value
-    def sample_group_by_key
-    def sample_group_by_max_uniq_values
-    def sample_group_by_max_uniq_values_per_class
+   - **sample_class**
+   - **sample_group_by_col_value**
+   - **sample_group_by_key**
+   - **sample_group_by_max_uniq_values**
+   - **sample_group_by_max_uniq_values_per_class**
 
 ### Simple Grouping and Aggregation
-    def aggregate
-    def distinct
-    def group_count
-    def cumulative_sum
+   - **aggregate**
+   - **distinct**
 
 ### Advanced Grouping and Aggregation
-    def arg_max
-    def arg_min
-    def group_by_key
-    def window_aggregate
+   - **arg_max**
+   - **arg_min**
+   - **group_by_key**
+   - **window_aggregate**
 
 ### Generic JSON Parsing
-    def explode_json
+   - **explode_json**
 
 ### Join
-    def join
-    def inner_join()
-    def left_join()
-    def right_join()
-    def natural_join
+   - **inner_join**
+   - **left_join**
+   - **right_join**
 
 ### Column Add, Delete, Rename
-    def drop
-    def drop_cols
-    def drop_if_exists
-    def concat_as_cols
-    def rename
+   - **drop**
+   - **drop_if_exists**
+   - **concat_as_cols**
+   - **rename**
 
 ### Add or Rename Column Prefix and Suffixes
-    def rename_suffix
-    def rename_prefix
-    def remove_suffix
-    def rename_prefix
-    def add_prefix
+   - **rename_suffix**
+   - **rename_prefix**
+   - **remove_suffix**
+   - **rename_prefix**
+   - **add_prefix**
 
 ### Sorting
-    def sort
-    def reverse_sort
+   - **sort**
+   - **reverse_sort**
 
 ### Reorder Columns
     def reorder
