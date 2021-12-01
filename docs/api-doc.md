@@ -65,10 +65,10 @@ Supported File Formats: tsv, simple csv and gzip/zip compressed versions.
 These APIs are part of TSV class. Once the data is loaded as TSV, all these methods can be used.
 
 ### Basic Summary
-   - def **num_cols(): Returns the number of columns in the tsv object.
-   - def **num_rows(): Returns the number of rows in the tsv object.
-   - def **columns(): Returns the list of columns in the tsv object.
-   - def **size_in_bytes(): Returns the size of the tsv object in bytes.
+   - **num_cols**(): Returns the number of columns in the tsv object.
+   - **num_rows**(): Returns the number of rows in the tsv object.
+   - **columns**(): Returns the list of columns in the tsv object.
+   - **size_in_bytes**(): Returns the size of the tsv object in bytes.
 
 ### Pretty Print
     def show(n, max_col_width, title): Pretty prints the first 'n' rows, each column restricted to max_col_width, and title which is displayed at the top.
