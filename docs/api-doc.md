@@ -309,10 +309,31 @@ Iris-versicolor	             5.1	            2.5	             3.0	            1.
 Iris-versicolor	             5.1	            2.5	             3.0	            1.1	              6.9	             3.1	              4.9	             1.5
 ```
 
-### Drop and Rename Columns 
+### Delete and Rename Columns 
    - **drop**(cols): This api deletes the columns from the TSV object. Throws error if any of the column or pattern is missing.
    - **drop_if_exists**(cols): This api deletes the columns from the TSV object. Doesnt throw any error if any of the columns or patterns are missing.
    - **rename**(col, new_col): This api renames the old _col_ as _new_col_. 
+
+#### Example
+Drop columns
+```
+>>> x.drop("petal.*").show(3)
+
+sepal_length	sepal_width	class      
+5.1         	        3.5	Iris-setosa
+4.9         	        3.0	Iris-setosa
+4.7         	        3.2	Iris-setosa
+```
+
+Rename column
+```
+>>> x.rename("class", "class_label").show(3)
+
+sepal_length	sepal_width	petal_length	petal_width	class_label
+5.1         	        3.5	         1.4	        0.2	Iris-setosa
+4.9         	        3.0	         1.4	        0.2	Iris-setosa
+4.7         	        3.2	         1.3	        0.2	Iris-setosa
+```
 
 ### Add or Rename Column Prefix and Suffixes
    - **rename_suffix**(old_suffix, new_suffix): This api renames all columns that have the suffix _old_suffix_ with the _new_suffix_.
