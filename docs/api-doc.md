@@ -22,10 +22,10 @@ Both single or set of columns and/or regular expressions can be specified wherev
 Another example to mix and match column names and regular expressions:
 ```
 >>> x.select(["petal_length", "sepal.*"])
->>> x.sort("petal.*")
+>>> x.drop("petal.*").show(4)
 ```
 
-All advanced api like **aggregate()** follows simple naming convention to create new names with appropriate prefix or suffixes to help with selecting them in groups.
+All advanced apis like **aggregate()** follows simple naming convention to create new names with appropriate prefix or suffixes to help with selecting them in groups.
 ```
 >>> x.aggregate("class", ["petal_length"], [min]).show()
 class          	petal_length:min
