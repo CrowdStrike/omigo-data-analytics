@@ -218,21 +218,35 @@ sepal_width	petal_width	class      	len_col:dim_name	lencols:dim_value
 
 ```
 
-
 ### URL Encoding and Decoding
-   - **url_encode**
-   - **url_decode**
+   - **url_encode**(col, new_col): URL encode the values in _col_ and create a new column with name _new_col_
+   - **url_decode**(col, new_col): URL decode the values in _col_ and create a new column with name _new_col_
 
 ### Sampling Rows
-   - **sample**
-   - **sample_n**
+   - **sample**(sampling_ratio, _seed_): Randomly samples _perc_ rows from the data using the given seed. 
+   - **sample_n**(n, _seed_): Randomly samples _n_ rows from the data using the given seed.
+
+#### Example
+```
+>>> x.sample_n(3).show()
+
+sepal_length	sepal_width	petal_length	petal_width	class          
+5.1         	        2.5	         3.0	        1.1	Iris-versicolor
+7.3         	        2.9	         6.3	        1.8	Iris-virginica 
+5.4         	        3.7	         1.5	        0.2	Iris-setosa 
+```
 
 ### Sampling Groups
-   - **sample_class**
-   - **sample_group_by_col_value**
-   - **sample_group_by_key**
-   - **sample_group_by_max_uniq_values**
-   - **sample_group_by_max_uniq_values_per_class**
+   - **sample_class**(col, col_value, sampling_ratio, _seed_): This api randomly samples _sampling_ratio_ rows for column _col_ that only on rows that have value _col_value_.
+Useful for doing downsamling of negative class columns.
+   - **sample_group_by_col_value**(grouping_cols, col, col_value, sampling_ratio, _seed_): This api groups data using the _grouping_cols_, and does sampling of
+given column and its value within that group. Useful for downsampling data where there is lot of skewness in few col values within specific groups.
+   - **sample_group_by_key**(grouping_cols, sampling_ratio): This api does random sampling of data within each group. Useful for cases where only few groups have highly skewed data and need to be
+downsampled.
+   - **sample_group_by_max_uniq_values**(grouping_cols, col, max_uniq_values): This api samples data for a specific _col_ but instead of random sampling, takes all the unique values and samples a percentage of the
+unique values. Useful for scenarios where all the rows matching the specific column value need to be present.
+   - **sample_group_by_max_uniq_values_per_class**(grouping_cols, class_col, col, max_uniq_values_map, _def_max_uniq_values_, _seed_): This api samples different values of _class_col_ differently based on 
+_max_uniq_values_map_ map. This is explained in detail in the [sampling documentation].
 
 ### Simple Grouping and Aggregation
    - **aggregate**
