@@ -53,8 +53,17 @@ Supported File Formats: tsv, simple csv and gzip/zip compressed versions.
 >>> x = tsv.read("s3://bucket-name/path/iris.tsv")
 >>> x = tsv.read(["data/file1.tsv.gz", "data/file2.tsv.gz"]
 >>> x = tsv.read("https://github.com/CrowdStrike/tsv-data-analytics/raw/main/data/iris.tsv")
+```
+Saving TSV object to file
+```
 >>> tsv.write(x, "data/output_file.tsv.gz")
+```
+Merging mutliple TSV objects
+```
 >>> ytsv = tsv.merge([x1, x2])
+```
+Checking for existence of file path
+```
 >>> flag = tsv.exists("data/iris.tsv")
 >>> flag = tsv.exists("s3://bucket-name/path/iris.tsv")
 ```
