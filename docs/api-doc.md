@@ -327,12 +327,12 @@ renames the columns having suffix _suffix_ by removing the suffix from their nam
 ```
 >>> x.transform_inline("petal.*", lambda x: float(x)*0.4).add_prefix("approx_inches", "petal.*").show(3)
 
-sepal_length	sepal_width	approx:petal_length	approx:petal_width	class      
-5.1         	        3.5	                1.4	               0.2	Iris-setosa
-4.9         	        3.0	                1.4	               0.2	Iris-setosa
-4.7         	        3.2	                1.3	               0.2	Iris-setosa
-
+sepal_length	sepal_width	approx_inches:petal_length	approx_inches:petal_width	class      
+5.1         	        3.5	                      0.56	                     0.08	Iris-setosa
+4.9         	        3.0	                      0.56	                     0.08	Iris-setosa
+4.7         	        3.2	                      0.52	                     0.08	Iris-setosa
 ```
+
 ### Sorting
    - **sort**(cols): Sorts the data using the given columns. 
    - **reverse_sort**(cols): This is a wrapper api over _sort()_ for doing sorting in reverse.
@@ -348,15 +348,42 @@ sepal_length	sepal_width	petal_length	petal_width	class
 ```
 
 ### Reorder Columns
-   - **reorder**(cols): This api reorders the columns in the TSV object for ease of use in jupyter notebooks.
+   - **reorder**(cols): This api reorders the columns in the TSV object for ease of use in jupyter notebooks. In case of multiple columns in _cols_, the original relative ordering is preserved.
+
+#### Example
+```
+>>> x.reordre("class").show(3)
+
+class      	sepal_length	sepal_width	petal_length	petal_width
+Iris-setosa	         5.1	        3.5	         1.4	        0.2
+Iris-setosa	         4.9	        3.0	         1.4	        0.2
+Iris-setosa	         4.7	        3.2	         1.3	        0.2
 
 ### Select Columns
    - **select**(cols): Selects the given columns which can be a single column, pattern or an array of columns.
 
+#### Example
+>>> x.select(["class", "petal.*"]).show(3)
+
+class      	petal_length	petal_width
+Iris-setosa	         1.4	        0.2
+Iris-setosa	         1.4	        0.2
+Iris-setosa	         1.3	        0.2
+```
+
 ### Select Rows Slice
-   - **skip**
-   - **last**
-   - **take**
+   - **skip**(n): Skips the first _n_ rows.
+   - **last**(n): Takes the last _n_ rows.
+   - **take**: Takes the first _n_ rows.
+
+#### Example
+```
+>>> x.take(2).show()
+
+sepal_length	sepal_width	petal_length	petal_width	class      
+5.1         	        3.5	         1.4	        0.2	Iris-setosa
+4.9         	        3.0	         1.4	        0.2	Iris-setosa
+```
 
 ### Transpose from Row to Column Format
    - **transpose**
