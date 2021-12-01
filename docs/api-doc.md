@@ -212,7 +212,7 @@ As the name suggests, this api can explode the number of rows and columns, and s
 >>>
 >>> x.explode(["petal_length", "sepal_length"], my_explode_func, "len_col").show(3)
 
-sepal_width	petal_width	class      	len_col:dim_name	lencols:dim_value
+sepal_width	petal_width	class      	len_col:dim_name	len_col:dim_value
 3.5        	        0.2	Iris-setosa	petal_length    	              1.4
 3.5        	        0.2	Iris-setosa	sepal_length    	              5.1
 3.0        	        0.2	Iris-setosa	petal_length    	              1.4
