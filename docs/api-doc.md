@@ -61,7 +61,7 @@ Supported File Formats: tsv, simple csv and gzip/zip compressed versions.
 >>> exists("s3://bucket-name/path/iris.tsv")
 ```
 
-## B. Data Transformation and Analytics
+## B. Data Transformation and Analysis
 These APIs are part of TSV class. Once the data is loaded as TSV, all these methods can be used. 
 
 **Note**: The optional arguments are shown in _italics_.
