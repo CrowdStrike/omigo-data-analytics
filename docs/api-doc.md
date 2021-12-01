@@ -73,7 +73,7 @@ These APIs are part of TSV class. Once the data is loaded as TSV, all these meth
    - **size_in_bytes**(): Returns the size of the tsv object in bytes.
 
 ### Pretty Print
-   - **show**(_n_, _max_col_width_, _title_): Pretty prints the first 'n' rows, each column restricted to max_col_width, and title which is displayed at the top.
+   - **show**(_n_, _max_col_width_, _title_): Pretty prints the first 'n' rows, each upto max_col_width wide and title which is displayed at the top.
    - **show_transpose**(_n_, _title_): Transposes the tsv object and does pretty print.
 
 #### Examples
