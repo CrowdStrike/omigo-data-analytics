@@ -62,7 +62,9 @@ Supported File Formats: tsv, simple csv and gzip/zip compressed versions.
 ```
 
 ## Data Transformation and Analytics
-These APIs are part of TSV class. Once the data is loaded as TSV, all these methods can be used. The optional arguments are shown in _italics_.
+These APIs are part of TSV class. Once the data is loaded as TSV, all these methods can be used. 
+
+**Note**: The optional arguments are shown in _italics_.
 
 ### Basic Summary
    - **num_cols**(): Returns the number of columns in the tsv object.
