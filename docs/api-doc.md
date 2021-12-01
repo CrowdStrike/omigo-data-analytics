@@ -62,7 +62,7 @@ Supported File Formats: tsv, simple csv and gzip/zip compressed versions.
 ```
 
 ## Data Transformation and Analytics
-These APIs are part of TSV class. Once the data is loaded as TSV, all these methods can be used.
+These APIs are part of TSV class. Once the data is loaded as TSV, all these methods can be used. The optional arguments are shown in _italics_.
 
 ### Basic Summary
    - **num_cols**(): Returns the number of columns in the tsv object.
@@ -71,8 +71,8 @@ These APIs are part of TSV class. Once the data is loaded as TSV, all these meth
    - **size_in_bytes**(): Returns the size of the tsv object in bytes.
 
 ### Pretty Print
-   - **show**(n, max_col_width, title): Pretty prints the first 'n' rows, each column restricted to max_col_width, and title which is displayed at the top.
-   - **show_transpose**(n, title): Transposes the tsv object and does pretty print.
+   - **show**(_n_, _max_col_width_, _title_): Pretty prints the first 'n' rows, each column restricted to max_col_width, and title which is displayed at the top.
+   - **show_transpose**(_n_, _title_): Transposes the tsv object and does pretty print.
 
 #### Examples
 ```
