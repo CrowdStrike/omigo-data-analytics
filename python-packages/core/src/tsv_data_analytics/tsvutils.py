@@ -617,18 +617,34 @@ def read_url(url, query_params = {}, headers = {}, sep = None, username = None, 
     return tsv.TSV(header, data).validate()
 
 # convert from data frame. TODO: df can have multiple header lines coz of indexes
-def read_df(df):
+def from_df(df):
+    utils.warn("This api doesnt support data frames with indexed columns yet.")
+
     # get the csv str
     tsv_lines = df.to_csv(sep = "\t").rstrip("\n").split("\n")
 
     # get header and data
     header = tsv_lines[0]
+    header_fields = header.split("\t")
+
+    # number of columns to skip with empty column name
+    skip_count = 0
+    for h in header_fields:
+        if (h == ""):
+            skip_count = skip_count + 1
+
+    # remove the skip_count columns
+    header_fields = header_fields[skip_count:]
+
+    # generate data
     data = []
     if (len(tsv_lines) > 1):
-        data = tsv_lines[1:]
+        for line in tsv_lines[1:]:
+            fields = line.split("\t")[skip_count:]
+            data.append("\t".join(fields))
 
     # return
-    return tsv.TSV(header, data)
+    return tsv.TSV("\t".join(header_fields), data).validate()
     
     
 # this method returns the arg_or_args as an array of single string if the input is just a string, or return as original array

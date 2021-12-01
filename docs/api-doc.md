@@ -43,7 +43,7 @@ Iris-virginica 	           4.500
    - **tsv.write**(tsv_obj, path): Writes the tsv object to the specified path.
    - **tsv.merge**(tsv_objs): Merges the list of tsv objects into one.
    - **tsv.exists**(path): Check whether the specified path exists or not. Useful for implementing fast forwarding.
-   - **read_df**(df): Converts a pandas dataframe to TSV.
+   - **from_df**(df): Converts a pandas dataframe to TSV.
 
 Supported File Formats: tsv, simple csv and gzip/zip compressed versions.
 
@@ -57,6 +57,12 @@ Supported File Formats: tsv, simple csv and gzip/zip compressed versions.
 >>> ytsv = tsv.merge([x1, x2])
 >>> flag = tsv.exists("data/iris.tsv")
 >>> flag = tsv.exists("s3://bucket-name/path/iris.tsv")
+```
+Converting pandas dataframe to TSV
+```
+>>> import pandas as pd
+>>> df = pandas.read_csv("data/iris.csv")
+>>> x = tsv.from_df(df)
 ```
 
 ## B. Data Transformation and Analysis
