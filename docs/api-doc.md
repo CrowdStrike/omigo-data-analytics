@@ -283,12 +283,19 @@ sepal_length	sepal_width	petal_length	petal_width	class      	petal_length:sum	p
 ```
 
 ### Generic JSON Parsing
-   - **explode_json**
+   - **explode_json**(url_encoded_col, prefix): This api provides out of the box support for reading simple json blobs and converting to tabular format for data analysis. If there are lists in 
+different sections of json, the default merging strategy is similar to cogroup. A more correct way is to use _merge_list_method = join_ where cartisian product will be created. Useful for parsing
+json response from web services which are mostly simple in nature, and a default parser can atleast help in looking at the raw data in a simpler way.
+
+A detailed example is provided in [example-notebooks/json-parsing] notebook.
 
 ### Join
-   - **inner_join**
-   - **left_join**
-   - **right_join**
+   - **join**(that, lkeys, _rkeys_, join_type_, _lsuffix_, _rsuffix_, _default_val_, _def_val_map_): This is the primary api for joining two TSV objects. The _lkeys_ is the list of columns on
+the left side to use for joining. If the names of join columns in right side are different, the specify the same in _rkeys_. join_type is _inner_, _left_ or _right_. For any outer joins, the
+missing values can be either specific at each column in _def_val_map_ or have a fallback global value in _default_val_.
+   - **inner_join**(that, lkeys, _rkeys_, _lsuffix_, _rsuffix_, _default_val_, _def_val_map_): This is a wrapper over _join()_ api with _join_type = inner_.
+   - **left_join**(that, lkeys, _rkeys_, _lsuffix_, _rsuffix_, _default_val_, _def_val_map_): This is a wrapper over _join()_ api with _join_type = inner_.
+   - **right_join**(that, lkeys, _rkeys_, _lsuffix_, _rsuffix_, _default_val_, _def_val_map_): This is a wrapper over _join()_ api with _join_type = inner_.
 
 ### Drop and Rename Columns 
    - **drop**
