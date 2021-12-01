@@ -316,7 +316,7 @@ json response from web services which are mostly simple in nature, and a default
 
 A detailed example is provided in [example-notebooks/json-parsing] notebook.
 
-### Join and Union
+### 14. Join and Union
    - **join**(that, lkeys, _rkeys_, join_type_, _lsuffix_, _rsuffix_, _default_val_, _def_val_map_): This is the primary api for joining two TSV objects. The _lkeys_ is the list of columns on
 the left side to use for joining. If the names of join columns in right side are different, the specify the same in _rkeys_. join_type is _inner_, _left_ or _right_. For any outer joins, the
 missing values can be either specific at each column in _def_val_map_ or have a fallback global value in _default_val_.
@@ -337,7 +337,7 @@ Iris-versicolor	             5.1	            2.5	             3.0	            1.
 Iris-versicolor	             5.1	            2.5	             3.0	            1.1	              6.9	             3.1	              4.9	             1.5
 ```
 
-### 14. Drop and Rename Columns 
+### 15. Drop and Rename Columns 
    - **drop**(cols): This api deletes the columns from the TSV object. Throws error if any of the column or pattern is missing.
    - **drop_if_exists**(cols): This api deletes the columns from the TSV object. Doesnt throw any error if any of the columns or patterns are missing.
    - **rename**(col, new_col): This api renames the old _col_ as _new_col_. 
@@ -363,7 +363,7 @@ sepal_length	sepal_width	petal_length	petal_width	class_label
 4.7         	        3.2	         1.3	        0.2	Iris-setosa
 ```
 
-### 15. Add or Rename Column Prefix and Suffixes
+### 16. Add or Rename Column Prefix and Suffixes
    - **rename_suffix**(old_suffix, new_suffix): This api renames all columns that have the suffix _old_suffix_ with the _new_suffix_.
    - **rename_prefix**(old_prefix, new_prefix): This api renames all columns that have the prefix _old_prefix_ with the _new_prefix_.
    - **remove_suffix**(suffix): This api renames the columns having suffix _suffix_ by removing the suffix from their names.
@@ -382,7 +382,7 @@ sepal_length	sepal_width	approx_inches:petal_length	approx_inches:petal_width	cl
 4.7         	        3.2	                      0.52	                     0.08	Iris-setosa
 ```
 
-### 16. Sorting
+### 17. Sorting
    - **sort**(cols): Sorts the data using the given columns. 
    - **reverse_sort**(cols): This is a wrapper api over _sort()_ for doing sorting in reverse.
 
@@ -396,7 +396,7 @@ sepal_length	sepal_width	petal_length	petal_width	class
 5.8         	        4.0	         1.2	        0.2	Iris-setosa
 ```
 
-### 17. Reorder Columns
+### 18. Reorder Columns
    - **reorder**(cols): This api reorders the columns in the TSV object for ease of use in jupyter notebooks. In case of multiple columns in _cols_, the original relative ordering is preserved.
 
 #### Examples
@@ -409,7 +409,7 @@ Iris-setosa	         4.9	        3.0	         1.4	        0.2
 Iris-setosa	         4.7	        3.2	         1.3	        0.2
 ```
 
-### 18. Transpose from Row to Column Format
+### 19. Transpose from Row to Column Format
    - **transpose**(_n_): This api transposes the list of rows and columns. Useful for looking at data with lot of columns that don't fit into the width of the screen.
 
 #### Examples
@@ -423,7 +423,7 @@ petal_width 	0.2        	0.2        	0.2
 class       	Iris-setosa	Iris-setosa	Iris-setosa
 ```
 
-### 19. Extending to Other Derived Classes
+### 20. Extending to Other Derived Classes
    - **extend_class**(derived_class, *args, **kwargs): This is an advanced function to plugin extensions and other 3rd party modules. For more details, see [example-notebooks/extend-class-example].
 
 ### Conversion to Other Data Formats
@@ -444,7 +444,7 @@ json
 {"sepal_length": "4.7", "sepal_width": "3.2", "petal_length": "1.3", "petal_width": "0.2", "class": "Iris-setosa"}
 ```
 
-### 20. Getting Column Values as Arrays
+### 21. Getting Column Values as Arrays
    - **col_as_array**(col): This api returns all the values of the given _col_ as a string array.
    - **col_as_array_uniq**(col): This api all the unique values of the given _col_ as a string array.
    - **col_as_float_array**(col): This api returns all the values of the given _col_ as float array.
@@ -461,7 +461,7 @@ json
 [1.4, 1.4, 1.3, 1.5]
 ```
 
-### 21. Appending Rows and Columns
+### 22. Appending Rows and Columns
    - **add_row**(row_fields): This api adds all the values in the _row_fields_ as column values in the given order to the current TSV.
    - **add_map_as_row**(mp, _default_val_): This api takes all the key values in map _mp_ as column names and values and add to the current TSV. If any column is missing, then _default_val_ is used
 to take the default value if it is defined, else throw error.
@@ -480,7 +480,7 @@ sno	sepal_length	sepal_width	petal_length	petal_width	class
 3  	         4.7	        3.2	         1.3	        0.2	Iris-setosa
 ```
 
-### 22. Static Data Transformations
+### 23. Static Data Transformations
    - **assign_value**(col, value): This api assigns a constant value to an existing column.
    - **copy**(col, new_col): This api copies the column _col_ to _new_col_.
    - **set_missing_values**(cols, default_val): This api sets the value of each column specific in _cols_ as _default_val_ wherever its value is empty.
