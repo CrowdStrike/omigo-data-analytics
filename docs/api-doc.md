@@ -262,7 +262,7 @@ are applied on _agg_cols_. If _sliding_ is true, then a sliding window logic is 
    - **distinct**(): This api removes all duplicate rows.
 
 #### Examples
-Compute total sum of petal_length and other attributes in iris data. Notice the convention in the output columns.
+Compute total sum of petal_length and petal_width in iris data. Notice the convention in the output columns.
 ```
 >>> x.aggregate("class", ["petal_length", "petal_width"], [sum, sum]).show()
 
