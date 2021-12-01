@@ -108,29 +108,41 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
    - **def lt_float(col, value)**: Returns all rows where the float value of _col_ is less than _value_.
    - **def is_nonzero(col)**: Returns all rows where the float value of _col_ is not zero.
 
-### String Comparison
-    def eq_str
-    def ge_str
-    def gt_str
-    def le_str
-    def lt_str
-    def startswith
-    def endswith
-    def match
-    def regex_match
-    def not_eq_str
-    def not_startswith
-    def not_endswith
-    def not_match
-    def not_regex_match
+#### Examples
+```
+>>> xtsv.gt_float("petal_length", 1.4)
+>>> xtsv.eq_float("sepal_length", 5.1)
+```
 
+### String Comparison
+   - **def eq_str(col, value)**: Returns rows where string value of _col_ is equal to _value_. 
+   - **def ge_str(col, value)**: Returns rows where string value of _col_ is greater than or equal to _value_.
+   - **def gt_str(col, value)**: Returns rows where string value of _col_ is greater than _value_.
+   - **def le_str(col, value)**: Returns rows where string value of _col_ is less than or equal to _value_.
+   - **def lt_str(col, value)**: Returns rows where string value of _col_ is less than _value_.
+   - **def startswith(col, value)**: Returns rows where string value of _col_ starts with _value_.
+   - **def endswith(col, value)**: Returns rows where string value of _col_ ends with  _value_.
+   - **def match(col, value)**: Returns rows where string value of _col_ matches the regular expression in _value_.
+   - **def regex_match(col, value)**: Returns rows where string value of _col_ matches the regular expression in  _value_.
+   - **def not_eq_str(col, value)**: Returns rows where string value of _col_ not equal to  _value_.
+   - **def not_startswith(col, value)**: Returns rows where string value of _col_ does not start with  _value_.
+   - **def not_endswith(col, value)**: Returns rows where string value of _col_ does not end with _value_.
+   - **def not_match(col, value)**: Returns rows where string value of _col_ does not match regular expression in _value_.
+   - **def not_regex_match(col, value)**: Returns rows where string value of _col_ does not match regular expression in _value_.
+
+#### Examples
+```
+>>> xtsv.eq_str("class", "Iris-setosa")
+>>> xtsv.match("class", ".*setosa")
+```
+ 
 ### Basic Filter and Transformation
-    def filter
-    def exclude_filter
-    def values_in
-    def values_not_in
-    def transform
-    def transform_inline
+   - **def filter(cols, lambda_func)**:
+   - **def values_in(col, vals)**: TBD
+   - **def transform(cols, lambda_func, output_col_names)**:  TBD
+   - **def transform_inline(cols, func)**: TBD 
+   - **def values_not_in(col, vals)**: This is negation of values_in() api.
+   - **def exclude_filter(cols, func)**: This is negation of filter() api.
 
 ### Advanced Filter and Transformation
     def cap_max
