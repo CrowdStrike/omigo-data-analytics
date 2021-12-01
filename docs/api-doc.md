@@ -301,7 +301,7 @@ missing values can be either specific at each column in _def_val_map_ or have a 
 ```
 >>> low_size = x.le_float("petal_length", 3)
 >>> high_size = x.gt_float("petal_length", 3)
->>> low_size.inner_join(high_size, lkeys = "class", lsuffix = "low", rsuffix = "high").show(3)
+>>> low_size.inner_join(high_size, lkeys = "class", lsuffix = "low", rsuffix = "high").select(["class", "petal_length:.*"]).show(3)
 
 class          	sepal_length:low	sepal_width:low	petal_length:low	petal_width:low	sepal_length:high	sepal_width:high	petal_length:high	petal_width:high
 Iris-versicolor	             5.1	            2.5	             3.0	            1.1	              7.0	             3.2	              4.7	             1.4
@@ -310,18 +310,18 @@ Iris-versicolor	             5.1	            2.5	             3.0	            1.
 ```
 
 ### Drop and Rename Columns 
-   - **drop**
-   - **drop_if_exists**
-   - **concat_as_cols**
-   - **rename**
+   - **drop**(cols): This api deletes the columns from the TSV object. Throws error if any of the column or pattern is missing.
+   - **drop_if_exists**(cols): This api deletes the columns from the TSV object. Doesnt throw any error if any of the columns or patterns are missing.
+   - **rename**(col, new_col): This api renames the old _col_ as _new_col_. 
 
 ### Add or Rename Column Prefix and Suffixes
-   - **rename_suffix**
-   - **rename_prefix**
-   - **remove_suffix**
-   - **rename_prefix**
-   - **add_prefix**
-   - **add_suffix**
+   - **rename_suffix**(old_suffix, new_suffix): This api renames all columns that have the suffix _old_suffix_ with the _new_suffix_.
+   - **rename_prefix**(old_prefix, new_prefix): This api renames all columns that have the prefix _old_prefix_ with the _new_prefix_.
+   - **remove_suffix**(suffix): This api renames the columns having suffix _suffix_ by removing the suffix from their names.
+   - **rename_prefix**: This api renames the columns having prefix _prefix_ by removing the prefix from their names.
+   - **add_prefix**(prefix, _cols_): This api adds prefix to all the given _cols_. If _cols = None_ then prefix is added to all columns. 
+renames the columns having suffix _suffix_ by removing the suffix from their names.
+   - **add_prefix**(suffix, _cols_): This api adds suffix to all the given _cols_. If _cols = None_ then prefix is added to all columns. 
 
 ### Sorting
    - **sort**
