@@ -176,17 +176,34 @@ sepal_length	sepal_width	petal_length	petal_width	class      	petal_length_2x	pe
 ```
 
 ### Advanced Filter and Transformation
-   - **explode**
+   - **explode**(cols, lambda_func, prefix): This method creates a map of the _cols_ in each row, and passes to the given _lambda_func_. The output of the _lambda_func_
+should be an array of maps where each output map will get added as new row with the key-values in the output map as col values.
+
+#### Examples
+```
+>>> def my_explode_func(mp):
+>>>     mps = []
+>>>     mps.append({"dim_name": "petal_length", "dim_value": str(mp["petal_length"])})
+>>>     mps.append({"dim_name": "sepal_length", "dim_value": str(mp["sepal_length"])})
+>>>     return mps
+>>>
+>>> x.explode(["petal_length", "sepal_length"], my_explode_func, "len_col").show(3)
+
+sepal_width	petal_width	class      	len_col:dim_name	lencols:dim_value
+3.5        	        0.2	Iris-setosa	petal_length    	              1.4
+3.5        	        0.2	Iris-setosa	sepal_length    	              5.1
+3.0        	        0.2	Iris-setosa	petal_length    	              1.4
+
+```
+
 
 ### URL Encoding and Decoding
    - **url_encode**
    - **url_decode**
-   - **url_encode_inline**
-   - **url_decode_inline**
 
 ### Sampling Rows
    - **sample**
-   - **sample_rows**
+   - **sample_n**
    - **sample_with_replacement**
    - **sample_without_replacement**
 
