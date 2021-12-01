@@ -119,7 +119,7 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
 ### Select Columns
    - **select**(cols): Selects the given columns which can be a single column, pattern or an array of columns.
 
-#### Example
+#### Examples
 ```
 >>> x.select(["class", "petal.*"]).show(3)
 
@@ -134,7 +134,7 @@ Iris-setosa	         1.3	        0.2
    - **last**(n): Takes the last _n_ rows.
    - **take**: Takes the first _n_ rows.
 
-#### Example
+#### Examples
 ```
 >>> x.take(2).show()
 
@@ -254,7 +254,7 @@ sepal_width	petal_width	class      	len_col:dim_name	len_col:dim_value
    - **sample**(sampling_ratio, _seed_): Randomly samples _perc_ rows from the data using the given seed. 
    - **sample_n**(n, _seed_): Randomly samples _n_ rows from the data using the given seed.
 
-#### Example
+#### Examples
 ```
 >>> x.sample_n(3).show()
 
@@ -276,7 +276,7 @@ unique values. Useful for scenarios where all the rows matching the specific col
    - **sample_group_by_max_uniq_values_per_class**(grouping_cols, class_col, col, max_uniq_values_map, _def_max_uniq_values_, _seed_): This api samples different values of _class_col_ differently based on 
 _max_uniq_values_map_ map. This is explained in detail in the [sampling documentation].
 
-#### Example
+#### Examples
 ```
 >>> x.sample_class("class", "Iris-setosa", 0.1)
 ```
@@ -342,7 +342,7 @@ Iris-versicolor	             5.1	            2.5	             3.0	            1.
    - **drop_if_exists**(cols): This api deletes the columns from the TSV object. Doesnt throw any error if any of the columns or patterns are missing.
    - **rename**(col, new_col): This api renames the old _col_ as _new_col_. 
 
-#### Example
+#### Examples
 Drop columns
 ```
 >>> x.drop("petal.*").show(3)
@@ -372,7 +372,7 @@ sepal_length	sepal_width	petal_length	petal_width	class_label
 renames the columns having suffix _suffix_ by removing the suffix from their names.
    - **add_prefix**(suffix, _cols_): This api adds suffix to all the given _cols_. If _cols = None_ then prefix is added to all columns. 
 
-#### Example
+#### Examples
 ```
 >>> x.transform_inline("petal.*", lambda x: float(x)*0.4).add_prefix("approx_inches", "petal.*").show(3)
 
@@ -386,7 +386,7 @@ sepal_length	sepal_width	approx_inches:petal_length	approx_inches:petal_width	cl
    - **sort**(cols): Sorts the data using the given columns. 
    - **reverse_sort**(cols): This is a wrapper api over _sort()_ for doing sorting in reverse.
 
-#### Example
+#### Examples
 ```
 >>> x.sort("petal_length").show(3)
 
@@ -399,7 +399,7 @@ sepal_length	sepal_width	petal_length	petal_width	class
 ### Reorder Columns
    - **reorder**(cols): This api reorders the columns in the TSV object for ease of use in jupyter notebooks. In case of multiple columns in _cols_, the original relative ordering is preserved.
 
-#### Example
+#### Examples
 ```
 >>> x.reordre("class").show(3)
 
@@ -411,7 +411,7 @@ Iris-setosa	         4.7	        3.2	         1.3	        0.2
 ### Transpose from Row to Column Format
    - **transpose**(_n_): This api transposes the list of rows and columns. Useful for looking at data with lot of columns that don't fit into the width of the screen.
 
-#### Example
+#### Examples
 ```
 >>> x.transpose(3).show(10)
 col_name    	row:1      	row:2      	row:3      
@@ -449,7 +449,7 @@ json
    - **col_as_float_array**(col): This api returns all the values of the given _col_ as float array.
    - **col_as_int_array**(col): This api returns all the values of the given _col_ as int array.
 
-#### Example
+#### Examples
 ```
 >>> x.col_as_array_uniq("class")
 
