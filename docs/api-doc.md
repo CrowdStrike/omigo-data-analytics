@@ -44,6 +44,7 @@ Iris-virginica 	           4.500
    - **tsv.merge**(tsv_objs): Merges the list of tsv objects into one.
    - **tsv.exists**(path): Check whether the specified path exists or not. Useful for implementing fast forwarding.
    - **from_df**(df): Converts a pandas dataframe to TSV.
+   - **from_maps(mps): Converts the given array of maps to TSV
 
 Supported File Formats: tsv, simple csv and gzip/zip compressed versions.
 
@@ -426,7 +427,7 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
 ### 20. Extending to Other Derived Classes
    - **extend_class**(derived_class, *args, **kwargs): This is an advanced function to plugin extensions and other 3rd party modules. For more details, see [example-notebooks/extend-class-example].
 
-### Conversion to Other Data Formats
+### 21. Conversion to Other Data Formats
    - **to_json_records**(): This api converts each row into a json object of a map. Each row in the output will be a json string.
    - **to_csv**(): This api converts the TSV into simple CSV format file, which means commas(,) and double quotes as special characters are not supported within the fields.
    - **to_df**(): This api converts the TSV object into a pandas dataframe.
@@ -444,7 +445,7 @@ json
 {"sepal_length": "4.7", "sepal_width": "3.2", "petal_length": "1.3", "petal_width": "0.2", "class": "Iris-setosa"}
 ```
 
-### 21. Getting Column Values as Arrays
+### 22. Getting Column Values as Arrays
    - **col_as_array**(col): This api returns all the values of the given _col_ as a string array.
    - **col_as_array_uniq**(col): This api all the unique values of the given _col_ as a string array.
    - **col_as_float_array**(col): This api returns all the values of the given _col_ as float array.
@@ -461,7 +462,7 @@ json
 [1.4, 1.4, 1.3, 1.5]
 ```
 
-### 22. Appending Rows and Columns
+### 23. Appending Rows and Columns
    - **add_row**(row_fields): This api adds all the values in the _row_fields_ as column values in the given order to the current TSV.
    - **add_map_as_row**(mp, _default_val_): This api takes all the key values in map _mp_ as column names and values and add to the current TSV. If any column is missing, then _default_val_ is used
 to take the default value if it is defined, else throw error.
@@ -480,7 +481,7 @@ sno	sepal_length	sepal_width	petal_length	petal_width	class
 3  	         4.7	        3.2	         1.3	        0.2	Iris-setosa
 ```
 
-### 23. Static Data Transformations
+### 24. Static Data Transformations
    - **assign_value**(col, value): This api assigns a constant value to an existing column.
    - **copy**(col, new_col): This api copies the column _col_ to _new_col_.
    - **set_missing_values**(cols, default_val): This api sets the value of each column specific in _cols_ as _default_val_ wherever its value is empty.

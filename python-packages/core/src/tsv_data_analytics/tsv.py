@@ -2972,6 +2972,9 @@ def exists(path):
 def from_df(df):
     return tsvutils.from_df(df)
 
+def from_maps(mps):
+    return tsvutils.load_from_array_of_map(mps)
+
 def enable_debug_mode():
     utils.enable_debug_mode()
 
