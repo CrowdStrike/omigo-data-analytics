@@ -508,7 +508,7 @@ These plots are best described in the [example-notebooks/graphs].
    - **barchart**
    - **boxplot**
 
-### Advance Plots
+### Advanced Plots
    - **corr_heatmap** 
    - **pairplot**
 
