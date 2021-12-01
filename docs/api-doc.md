@@ -297,6 +297,18 @@ missing values can be either specific at each column in _def_val_map_ or have a 
    - **left_join**(that, lkeys, _rkeys_, _lsuffix_, _rsuffix_, _default_val_, _def_val_map_): This is a wrapper over _join()_ api with _join_type = inner_.
    - **right_join**(that, lkeys, _rkeys_, _lsuffix_, _rsuffix_, _default_val_, _def_val_map_): This is a wrapper over _join()_ api with _join_type = inner_.
 
+#### Examples
+```
+>>> low_size = x.le_float("petal_length", 3)
+>>> high_size = x.gt_float("petal_length", 3)
+>>> low_size.inner_join(high_size, lkeys = "class", lsuffix = "low", rsuffix = "high").show(3)
+
+class          	sepal_length:low	sepal_width:low	petal_length:low	petal_width:low	sepal_length:high	sepal_width:high	petal_length:high	petal_width:high
+Iris-versicolor	             5.1	            2.5	             3.0	            1.1	              7.0	             3.2	              4.7	             1.4
+Iris-versicolor	             5.1	            2.5	             3.0	            1.1	              6.4	             3.2	              4.5	             1.5
+Iris-versicolor	             5.1	            2.5	             3.0	            1.1	              6.9	             3.1	              4.9	             1.5
+```
+
 ### Drop and Rename Columns 
    - **drop**
    - **drop_if_exists**
