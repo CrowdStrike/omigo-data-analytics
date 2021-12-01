@@ -135,12 +135,36 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
 ```
  
 ### Basic Filter and Transformation
-   - **filter**(cols, lambda_func): Returns rows that satisfy applying lambda function on the values of the given columns.
    - **values_in**(col, _values_): Returns rows where the value of the _col_ is one of the provided _values_.
+   - **filter**(cols, lambda_func): Returns rows that satisfy applying lambda function on the values of the given columns.
    - **transform**(cols, lambda_func, output_cols): Applies lambda function to the given _cols_. The lambda function can return single or multiple values. The _output_cols_ should match the list of values in the output.
-   - **transform_inline**(cols, func): TBD 
+   - **transform_inline**(cols, func): This applies the lambda function on each of the given _cols_ and returns new values under the same column names. 
    - **values_not_in**(col, list_of_values): This is negation of _values_in()_ api.
    - **exclude_filter**(cols, lambda_func): This is negation of _filter()_ api.
+
+#### Examples
+```
+>>> x.values_in("class", ["Iris-setosa", "Iris-versicolor"])
+```
+
+```
+>>> x.filter(["sepal_length"], lambda x: float(x) != 0)
+>>> x.filter(["petal_length", "petal_width"], lambda x, y: float(x) > 1.4 and float(y) > 2.0)
+```
+
+```
+>>> x.transform(["petal_length", "petal_width"], lambda x,y: float(x) * float(y), "petal_length_and_width")
+sepal_length	sepal_width	petal_length	petal_width	class      	petal_length_and_width
+5.1         	        3.5	      1.4000	     0.2000	Iris-setosa	                0.2800
+4.9         	        3.0	      1.4000	     0.2000	Iris-setosa	                0.2800
+4.7         	        3.2	      1.3000	     0.2000	Iris-setosa	                0.2600
+
+>>> x.transform(["petal_length", "petal_width"], lambda x, y: (float(x) * float(y), float(x) + float(y)), ["petal_mult", "petal_sum"]).show(3)
+sepal_length	sepal_width	petal_length	petal_width	class      	petal_mult	petal_sum
+5.1         	        3.5	      1.4000	     0.2000	Iris-setosa	    0.2800	   1.6000
+4.9         	        3.0	      1.4000	     0.2000	Iris-setosa	    0.2800	   1.6000
+4.7         	        3.2	      1.3000	     0.2000	Iris-setosa	    0.2600	   1.5000
+```
 
 ### Advanced Filter and Transformation
    - **cap_max**
