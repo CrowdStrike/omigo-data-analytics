@@ -154,16 +154,20 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
 
 ```
 >>> x.transform(["petal_length", "petal_width"], lambda x,y: float(x) * float(y), "petal_length_and_width")
+
 sepal_length	sepal_width	petal_length	petal_width	class      	petal_length_and_width
 5.1         	        3.5	      1.4000	     0.2000	Iris-setosa	                0.2800
 4.9         	        3.0	      1.4000	     0.2000	Iris-setosa	                0.2800
 4.7         	        3.2	      1.3000	     0.2000	Iris-setosa	                0.2600
+```
 
->>> x.transform(["petal_length", "petal_width"], lambda x, y: (float(x) * float(y), float(x) + float(y)), ["petal_mult", "petal_sum"]).show(3)
-sepal_length	sepal_width	petal_length	petal_width	class      	petal_mult	petal_sum
-5.1         	        3.5	      1.4000	     0.2000	Iris-setosa	    0.2800	   1.6000
-4.9         	        3.0	      1.4000	     0.2000	Iris-setosa	    0.2800	   1.6000
-4.7         	        3.2	      1.3000	     0.2000	Iris-setosa	    0.2600	   1.5000
+```
+>>> x.transform(["petal_length", "petal_width"], lambda x, y: (float(x)*2, float(y)*2), ["petal_length_2x", "petal_width_2x"]).show(3)
+
+sepal_length	sepal_width	petal_length	petal_width	class      	petal_length_2x	petal_width_2x
+5.1         	        3.5	      1.4000	     0.2000	Iris-setosa	         2.8000	        0.4000
+4.9         	        3.0	      1.4000	     0.2000	Iris-setosa	         2.8000	        0.4000
+4.7         	        3.2	      1.3000	     0.2000	Iris-setosa	         2.6000	        0.4000
 ```
 
 ### Advanced Filter and Transformation
