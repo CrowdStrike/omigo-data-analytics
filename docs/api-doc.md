@@ -363,7 +363,7 @@ sepal_length	sepal_width	petal_length	petal_width	class_label
 4.7         	        3.2	         1.3	        0.2	Iris-setosa
 ```
 
-### 16. Add or Rename Column Prefix and Suffixes
+### 16. Add or Rename Column Prefix and Suffix
    - **rename_suffix**(old_suffix, new_suffix): This api renames all columns that have the suffix _old_suffix_ with the _new_suffix_.
    - **rename_prefix**(old_prefix, new_prefix): This api renames all columns that have the prefix _old_prefix_ with the _new_prefix_.
    - **remove_suffix**(suffix): This api renames the columns having suffix _suffix_ by removing the suffix from their names.
