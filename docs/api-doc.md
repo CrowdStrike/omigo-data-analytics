@@ -139,11 +139,11 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
  
 ### Basic Filter and Transformation
    - **filter**(cols, lambda_func):
-   - **values_in**(col, vals): TBD
+   - **values_in**(col, list_of_values): TBD
    - **transform**(cols, lambda_func, output_col_names):  TBD
    - **transform_inline**(cols, func): TBD 
-   - **values_not_in**(col, vals): This is negation of values_in() api.
-   - **exclude_filter**(cols, func): This is negation of filter() api.
+   - **values_not_in**(col, list_of_values): This is negation of values_in() api.
+   - **exclude_filter**(cols, lambda_func): This is negation of filter() api.
 
 ### Advanced Filter and Transformation
    - cap_max
