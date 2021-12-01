@@ -54,8 +54,8 @@ Supported File Formats: tsv, simple csv and gzip/zip compressed versions.
 >>> xtsv = tsv.read("https://github.com/CrowdStrike/tsv-data-analytics/raw/main/data/iris.tsv")
 >>> tsv.write(xtsv, "data/output_file.tsv.gz")
 >>> ytsv = tsv.merge([xtsv1, xtsv2])
->>> tsv.exists("data/iris.tsv")
->>> tsv.exists("s3://bucket-name/path/iris.tsv")
+>>> flag = tsv.exists("data/iris.tsv")
+>>> flag = tsv.exists("s3://bucket-name/path/iris.tsv")
 ```
 
 ## B. Data Transformation and Analysis
