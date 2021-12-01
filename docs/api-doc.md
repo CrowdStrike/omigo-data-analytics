@@ -175,7 +175,7 @@ sepal_length	sepal_width	petal_length	petal_width	class      	petal_length_2x	pe
 4.7         	        3.2	      1.3000	     0.2000	Iris-setosa	         2.6000	         3.9000
 ```
 
-### Advanced Filter and Transformation
+### Advance Filter and Transformation
    - **explode**(cols, lambda_func, prefix): This method creates a map of the _cols_ in each row, and passes to the given _lambda_func_. The output of the _lambda_func_
 should be an array of maps where each output map will get added as new row with the key-values in the output map as col values.
 
@@ -216,7 +216,7 @@ sepal_width	petal_width	class      	len_col:dim_name	lencols:dim_value
    - **aggregate**
    - **distinct**
 
-### Advanced Grouping and Aggregation
+### Advance Grouping and Aggregation
    - **window_aggregate**
 
 ### Generic JSON Parsing
@@ -304,7 +304,7 @@ relevant for all users, and please refer to the documentation section of individ
    - **barchart**
    - **boxplot**
 
-### Advanced Plots
+### Advance Plots
    - **corr_heatmap** 
    - **pairplot**
 
