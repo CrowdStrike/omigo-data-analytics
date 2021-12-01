@@ -156,7 +156,7 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
 >>> x.match("class", ".*setosa")
 ```
  
-### Basic Filter and Transformation
+### Basic Filtering and Transformation
    - **values_in**(col, _values_): Returns rows where the value of the _col_ is one of the provided _values_.
    - **filter**(cols, lambda_func): Returns rows that satisfy lambda function on the values of the given columns.
    - **transform**(cols, lambda_func, output_cols): Applies lambda function to the given _cols_. The lambda function can return single or multiple values. The _output_cols_ should match the list of values in the output.
