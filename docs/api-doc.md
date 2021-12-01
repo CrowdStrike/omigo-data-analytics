@@ -272,7 +272,7 @@ Iris-versicolor	          213.00	          66.30
 Iris-virginica 	          277.60	         101.30
 ```
 
-Use collapse = False to get all the original rows. Useful for debugging, or chaining multiple aggregate() functions together.
+Use **collapse = False** to get all the original rows. Useful for debugging, or chaining multiple aggregate() functions together.
 ```
 >>> x.aggregate("class", ["petal_length", "petal_width"], [sum, sum], collapse = False).show(3)
 
