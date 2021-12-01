@@ -15,19 +15,19 @@ This library provides simple APIs to work with such wide column datasets. Method
 
 For example, selecting all columns that start with prefix _petal_ from the iris dataset:
 ```
->>> xtsv.select("petal.*") 
+>>> x.select("petal.*") 
 ```
 
 Both single or set of columns and/or regular expressions can be specified wherever applicable.
 Another example to mix and match column names and regular expressions:
 ```
->>> xtsv.select(["petal_length", "sepal.*"])
->>> xtsv.sort("petal.*")
+>>> x.select(["petal_length", "sepal.*"])
+>>> x.sort("petal.*")
 ```
 
 All advanced api like **aggregate()** follows simple naming convention to create new names with appropriate prefix or suffixes to help with selecting them in groups.
 ```
->>> xtsv.aggregate("class", ["petal_length"], [min]).show()
+>>> x.aggregate("class", ["petal_length"], [min]).show()
 class          	petal_length:min
 Iris-setosa    	           1.000
 Iris-versicolor	           3.000
@@ -48,12 +48,12 @@ Supported File Formats: tsv, simple csv and gzip/zip compressed versions.
 
 #### Examples
 ```
->>> xtsv = tsv.read("data/iris.tsv")
->>> xtsv = tsv.read("s3://bucket-name/path/iris.tsv")
->>> xtsv = tsv.read(["data/file1.tsv.gz", "data/file2.tsv.gz"]
->>> xtsv = tsv.read("https://github.com/CrowdStrike/tsv-data-analytics/raw/main/data/iris.tsv")
->>> tsv.write(xtsv, "data/output_file.tsv.gz")
->>> ytsv = tsv.merge([xtsv1, xtsv2])
+>>> x = tsv.read("data/iris.tsv")
+>>> x = tsv.read("s3://bucket-name/path/iris.tsv")
+>>> x = tsv.read(["data/file1.tsv.gz", "data/file2.tsv.gz"]
+>>> x = tsv.read("https://github.com/CrowdStrike/tsv-data-analytics/raw/main/data/iris.tsv")
+>>> tsv.write(x, "data/output_file.tsv.gz")
+>>> ytsv = tsv.merge([x1, x2])
 >>> flag = tsv.exists("data/iris.tsv")
 >>> flag = tsv.exists("s3://bucket-name/path/iris.tsv")
 ```
@@ -75,7 +75,7 @@ These APIs are part of TSV class. Once the data is loaded as TSV, all these meth
 
 #### Examples
 ```
->>> xtsv.show(3)
+>>> x.show(3)
 >>>
 sepal_length	sepal_width	petal_length	petal_width	class      
 5.1         	        3.5	         1.4	        0.2	Iris-setosa
@@ -84,7 +84,7 @@ sepal_length	sepal_width	petal_length	petal_width	class
 ```
 
 ```
->>> xtsv.show_transpose(3)
+>>> x.show_transpose(3)
 >>>
 col_name    	row:1      	row:2      	row:3      
 sepal_length	5.1        	4.9        	4.7        
@@ -109,8 +109,8 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
 
 #### Examples
 ```
->>> xtsv.gt_float("petal_length", 1.4)
->>> xtsv.eq_float("sepal_length", 5.1)
+>>> x.gt_float("petal_length", 1.4)
+>>> x.eq_float("sepal_length", 5.1)
 ```
 
 ### String Comparison
@@ -130,8 +130,8 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
 
 #### Examples
 ```
->>> xtsv.eq_str("class", "Iris-setosa")
->>> xtsv.match("class", ".*setosa")
+>>> x.eq_str("class", "Iris-setosa")
+>>> x.match("class", ".*setosa")
 ```
  
 ### Basic Filter and Transformation
