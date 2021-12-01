@@ -177,8 +177,6 @@ sepal_length	sepal_width	petal_length	petal_width	class      	petal_length_2x	pe
 
 ### Advanced Filter and Transformation
    - **explode**
-   - **flatmap**
-   - **to_tuples**
 
 ### URL Encoding and Decoding
    - **url_encode**
