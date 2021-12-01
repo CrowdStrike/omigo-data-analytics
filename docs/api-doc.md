@@ -436,7 +436,7 @@ Convert each record into json
 ```
 >>> x.to_json_records().show(3, max_col_width = 200)
 
-json                                                                                                              
+json
 {"sepal_length": "5.1", "sepal_width": "3.5", "petal_length": "1.4", "petal_width": "0.2", "class": "Iris-setosa"}
 {"sepal_length": "4.9", "sepal_width": "3.0", "petal_length": "1.4", "petal_width": "0.2", "class": "Iris-setosa"}
 {"sepal_length": "4.7", "sepal_width": "3.2", "petal_length": "1.3", "petal_width": "0.2", "class": "Iris-setosa"}
