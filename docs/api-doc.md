@@ -36,7 +36,7 @@ Iris-virginica 	           4.500
 
 # API Documentation 
 
-## Data Ingestion
+## A. Data Ingestion
 
 ### Read and Write from Local FileSystem, S3 or Web
    - def **read**(paths): Reads the data present in the list of file paths.
@@ -61,7 +61,7 @@ Supported File Formats: tsv, simple csv and gzip/zip compressed versions.
 >>> exists("s3://bucket-name/path/iris.tsv")
 ```
 
-## Data Transformation and Analytics
+## B. Data Transformation and Analytics
 These APIs are part of TSV class. Once the data is loaded as TSV, all these methods can be used. 
 
 **Note**: The optional arguments are shown in _italics_.
@@ -268,7 +268,7 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
     def set_report_progress_perc
     def set_report_progress_min_thresh
 
-## Visualization, Statistics and Machine Learning
+## C. Visualization, Statistics and Machine Learning
 Any functionality that needs extensive 3rd party libraries like matplotlib, seaborn or scikit as provided as extension packages. Not all extension packages might be 
 relevant for all users, and please refer to the documentation section of individual packages for further details. Here are some basic explained for visualization.
 
