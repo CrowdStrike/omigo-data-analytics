@@ -419,7 +419,7 @@ sepal_width 	3.5        	3.0        	3.2
 petal_length	1.4        	1.4        	1.3        
 petal_width 	0.2        	0.2        	0.2        
 class       	Iris-setosa	Iris-setosa	Iris-setosa
-<tsv_data_analytics.tsv.TSV object at 0x1028637c0>
+```
 
 ### Extending to Other Derived Classes
    - **extend_class**(derived_class, *args, **kwargs): This is an advanced function to plugin extensions and other 3rd party modules. For more details, see [example-notebooks/extend-class-example].
