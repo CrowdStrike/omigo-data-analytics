@@ -143,15 +143,18 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
    - **exclude_filter**(cols, lambda_func): This is negation of _filter()_ api.
 
 #### Examples
+values_in() to take rows with specific values for column _class_.
 ```
 >>> x.values_in("class", ["Iris-setosa", "Iris-versicolor"])
 ```
 
+filter() with single and multiple input columns.
 ```
 >>> x.filter(["sepal_length"], lambda x: float(x) != 0)
 >>> x.filter(["petal_length", "petal_width"], lambda x, y: float(x) > 1.4 and float(y) > 2.0)
 ```
 
+transform() with multiple input columns.
 ```
 >>> x.transform(["petal_length", "petal_width"], lambda x,y: float(x) * float(y), "petal_length_and_width")
 
@@ -161,13 +164,14 @@ sepal_length	sepal_width	petal_length	petal_width	class      	petal_length_and_w
 4.7         	        3.2	      1.3000	     0.2000	Iris-setosa	                0.2600
 ```
 
+transform() with multiple output columns.
 ```
->>> x.transform(["petal_length", "petal_width"], lambda x, y: (float(x)*2, float(y)*2), ["petal_length_2x", "petal_width_2x"]).show(3)
+>>> x.transform("petal_length", lambda x: (float(x)*2, float(x)*3), ["petal_length_2x", "petal_length_3x"]).show(3)
 
-sepal_length	sepal_width	petal_length	petal_width	class      	petal_length_2x	petal_width_2x
-5.1         	        3.5	      1.4000	     0.2000	Iris-setosa	         2.8000	        0.4000
-4.9         	        3.0	      1.4000	     0.2000	Iris-setosa	         2.8000	        0.4000
-4.7         	        3.2	      1.3000	     0.2000	Iris-setosa	         2.6000	        0.4000
+sepal_length	sepal_width	petal_length	petal_width	class      	petal_length_2x	petal_length_3x
+5.1         	        3.5	      1.4000	     0.2000	Iris-setosa	         2.8000	         4.2000
+4.9         	        3.0	      1.4000	     0.2000	Iris-setosa	         2.8000	         4.2000
+4.7         	        3.2	      1.3000	     0.2000	Iris-setosa	         2.6000	         3.9000
 ```
 
 ### Advanced Filter and Transformation
