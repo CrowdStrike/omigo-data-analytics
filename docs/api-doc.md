@@ -85,13 +85,13 @@ These APIs are part of TSV class. Once the data is loaded as TSV, all these meth
 
 **Note**: The optional arguments are shown in _italics_.
 
-### Basic Summary
+### 1. Basic Summary
    - **num_cols**(): Returns the number of columns in the tsv object.
    - **num_rows**(): Returns the number of rows in the tsv object.
    - **columns**(): Returns the list of columns in the tsv object.
    - **size_in_bytes**(): Returns the size of the tsv object in bytes.
 
-### Pretty Print
+### 2. Pretty Print
    - **show**(_n_, _max_col_width_, _title_): Pretty prints the first 'n' rows, each upto max_col_width wide and title which is displayed at the top.
    - **show_transpose**(_n_, _title_): Transposes the tsv object and does pretty print.
 
@@ -116,7 +116,7 @@ petal_width 	0.2        	0.2        	0.2
 class       	Iris-setosa	Iris-setosa	Iris-setosa
 ```
 
-### Select Columns
+### 3. Select Columns
    - **select**(cols): Selects the given columns which can be a single column, pattern or an array of columns.
 
 #### Examples
@@ -129,7 +129,7 @@ Iris-setosa	         1.4	        0.2
 Iris-setosa	         1.3	        0.2
 ```
 
-### Select Rows Slice
+### 4. Select Rows Slice
    - **skip**(n): Skips the first _n_ rows.
    - **last**(n): Takes the last _n_ rows.
    - **take**: Takes the first _n_ rows.
@@ -143,7 +143,7 @@ sepal_length	sepal_width	petal_length	petal_width	class
 4.9         	        3.0	         1.4	        0.2	Iris-setosa
 ```
 
-### Arithmetic Comparison 
+### 5. Arithmetic Comparison 
    - **eq_int**(col, value): Returns all rows where the int value of _col_ is equal to _value_.
    - **ge_int**(col, value): Returns all rows where the int value of _col_ is less than or equal to _value_.
    - **gt_int**(col, value): Returns all rows where the int value of _col_ is greater than _value_.
@@ -162,7 +162,7 @@ sepal_length	sepal_width	petal_length	petal_width	class
 >>> x.eq_float("sepal_length", 5.1)
 ```
 
-### String Comparison
+### 6. String Comparison
    - **eq_str**(col, value): Returns rows where string value of _col_ is equal to _value_. 
    - **ge_str**(col, value): Returns rows where string value of _col_ is greater than or equal to _value_.
    - **gt_str**(col, value): Returns rows where string value of _col_ is greater than _value_.
@@ -183,7 +183,7 @@ sepal_length	sepal_width	petal_length	petal_width	class
 >>> x.match("class", ".*setosa")
 ```
  
-### Basic Filtering and Transformation
+### 7. Basic Filtering and Transformation
    - **values_in**(col, _values_): Returns rows where the value of the _col_ is one of the provided _values_.
    - **filter**(cols, lambda_func): Returns rows that satisfy lambda function on the values of the given columns.
    - **transform**(cols, lambda_func, output_cols): Applies lambda function to the given _cols_. The lambda function can return single or multiple values. The _output_cols_ should match the list of values in the output.
@@ -224,7 +224,7 @@ sepal_length	sepal_width	petal_length	petal_width	class      	petal_length_2x	pe
 4.7         	        3.2	      1.3000	     0.2000	Iris-setosa	         2.6000	         3.9000
 ```
 
-### Advance Filter and Transformation
+### 8. Advanced Filter and Transformation
    - **explode**(cols, lambda_func, prefix): This method creates a map of the _cols_ in each row, and passes to the given _lambda_func_. The output of the _lambda_func_
 should be an array of maps where each output map will get added as new row with the key-values as col values.
 As the name suggests, this api can explode the number of rows and columns, and should be used carefully.
@@ -246,11 +246,11 @@ sepal_width	petal_width	class      	len_col:dim_name	len_col:dim_value
 
 ```
 
-### URL Encoding and Decoding
+### 9. URL Encoding and Decoding
    - **url_encode**(col, new_col): URL encode the values in _col_ and create a new column with name _new_col_
    - **url_decode**(col, new_col): URL decode the values in _col_ and create a new column with name _new_col_
 
-### Sampling Rows
+### 10. Sampling Rows
    - **sample**(sampling_ratio, _seed_): Randomly samples _perc_ rows from the data using the given seed. 
    - **sample_n**(n, _seed_): Randomly samples _n_ rows from the data using the given seed.
 
@@ -264,7 +264,7 @@ sepal_length	sepal_width	petal_length	petal_width	class
 5.4         	        3.7	         1.5	        0.2	Iris-setosa 
 ```
 
-### Sampling Groups
+### 11. Sampling Groups
    - **sample_class**(col, col_value, sampling_ratio, _seed_): This api randomly samples _sampling_ratio_ rows for column _col_ that only on rows that have value _col_value_.
 Useful for doing downsamling of negative class columns.
    - **sample_group_by_col_value**(grouping_cols, col, col_value, sampling_ratio, _seed_): This api groups data using the _grouping_cols_, and does sampling of
@@ -281,7 +281,7 @@ _max_uniq_values_map_ map. This is explained in detail in the [sampling document
 >>> x.sample_class("class", "Iris-setosa", 0.1)
 ```
 
-### Grouping and Aggregation
+### 12. Grouping and Aggregation
    - **aggregate**(grouping_cols, agg_cols, agg_funcs, _collapse_): This is one of the most useful apis for aggregating data based on set of _grouping_cols_, and applying multiple aggregation functions. The _agg_cols_
 are the list of columns on which _agg_funcs_ are applied in pairwise manner. 
    - **window_aggregate**(win_col, agg_cols, agg_funcs, winsize, _sliding_, _collapse_): This api is an extension of aggregate where data slices are created using windows of size _winsize_. For each window, _agg_funcs_
@@ -309,7 +309,7 @@ sepal_length	sepal_width	petal_length	petal_width	class      	petal_length:sum	p
 4.70        	       3.20	        1.30	       0.20	Iris-setosa	           73.20	          12.20
 ```
 
-### Generic JSON Parsing
+### 13. Generic JSON Parsing
    - **explode_json**(url_encoded_col, prefix): This api provides out of the box support for reading simple json blobs and converting to tabular format for data analysis. If there are lists in 
 different sections of json, the default merging strategy is similar to cogroup. A more correct way is to use _merge_list_method = join_ where cartisian product will be created. Useful for parsing
 json response from web services which are mostly simple in nature, and a default parser can atleast help in looking at the raw data in a simpler way.
@@ -337,7 +337,7 @@ Iris-versicolor	             5.1	            2.5	             3.0	            1.
 Iris-versicolor	             5.1	            2.5	             3.0	            1.1	              6.9	             3.1	              4.9	             1.5
 ```
 
-### Drop and Rename Columns 
+### 14. Drop and Rename Columns 
    - **drop**(cols): This api deletes the columns from the TSV object. Throws error if any of the column or pattern is missing.
    - **drop_if_exists**(cols): This api deletes the columns from the TSV object. Doesnt throw any error if any of the columns or patterns are missing.
    - **rename**(col, new_col): This api renames the old _col_ as _new_col_. 
@@ -363,7 +363,7 @@ sepal_length	sepal_width	petal_length	petal_width	class_label
 4.7         	        3.2	         1.3	        0.2	Iris-setosa
 ```
 
-### Add or Rename Column Prefix and Suffixes
+### 15. Add or Rename Column Prefix and Suffixes
    - **rename_suffix**(old_suffix, new_suffix): This api renames all columns that have the suffix _old_suffix_ with the _new_suffix_.
    - **rename_prefix**(old_prefix, new_prefix): This api renames all columns that have the prefix _old_prefix_ with the _new_prefix_.
    - **remove_suffix**(suffix): This api renames the columns having suffix _suffix_ by removing the suffix from their names.
@@ -382,7 +382,7 @@ sepal_length	sepal_width	approx_inches:petal_length	approx_inches:petal_width	cl
 4.7         	        3.2	                      0.52	                     0.08	Iris-setosa
 ```
 
-### Sorting
+### 16. Sorting
    - **sort**(cols): Sorts the data using the given columns. 
    - **reverse_sort**(cols): This is a wrapper api over _sort()_ for doing sorting in reverse.
 
@@ -396,7 +396,7 @@ sepal_length	sepal_width	petal_length	petal_width	class
 5.8         	        4.0	         1.2	        0.2	Iris-setosa
 ```
 
-### Reorder Columns
+### 17. Reorder Columns
    - **reorder**(cols): This api reorders the columns in the TSV object for ease of use in jupyter notebooks. In case of multiple columns in _cols_, the original relative ordering is preserved.
 
 #### Examples
@@ -409,7 +409,7 @@ Iris-setosa	         4.9	        3.0	         1.4	        0.2
 Iris-setosa	         4.7	        3.2	         1.3	        0.2
 ```
 
-### Transpose from Row to Column Format
+### 18. Transpose from Row to Column Format
    - **transpose**(_n_): This api transposes the list of rows and columns. Useful for looking at data with lot of columns that don't fit into the width of the screen.
 
 #### Examples
@@ -423,7 +423,7 @@ petal_width 	0.2        	0.2        	0.2
 class       	Iris-setosa	Iris-setosa	Iris-setosa
 ```
 
-### Extending to Other Derived Classes
+### 19. Extending to Other Derived Classes
    - **extend_class**(derived_class, *args, **kwargs): This is an advanced function to plugin extensions and other 3rd party modules. For more details, see [example-notebooks/extend-class-example].
 
 ### Conversion to Other Data Formats
@@ -444,7 +444,7 @@ json
 {"sepal_length": "4.7", "sepal_width": "3.2", "petal_length": "1.3", "petal_width": "0.2", "class": "Iris-setosa"}
 ```
 
-### Getting Column Values as Arrays
+### 20. Getting Column Values as Arrays
    - **col_as_array**(col): This api returns all the values of the given _col_ as a string array.
    - **col_as_array_uniq**(col): This api all the unique values of the given _col_ as a string array.
    - **col_as_float_array**(col): This api returns all the values of the given _col_ as float array.
@@ -461,7 +461,7 @@ json
 [1.4, 1.4, 1.3, 1.5]
 ```
 
-### Appending Rows and Columns
+### 21. Appending Rows and Columns
    - **add_row**(row_fields): This api adds all the values in the _row_fields_ as column values in the given order to the current TSV.
    - **add_map_as_row**(mp, _default_val_): This api takes all the key values in map _mp_ as column names and values and add to the current TSV. If any column is missing, then _default_val_ is used
 to take the default value if it is defined, else throw error.
@@ -480,7 +480,7 @@ sno	sepal_length	sepal_width	petal_length	petal_width	class
 3  	         4.7	        3.2	         1.3	        0.2	Iris-setosa
 ```
 
-### Static Data Transformations
+### 22. Static Data Transformations
    - **assign_value**(col, value): This api assigns a constant value to an existing column.
    - **copy**(col, new_col): This api copies the column _col_ to _new_col_.
    - **set_missing_values**(cols, default_val): This api sets the value of each column specific in _cols_ as _default_val_ wherever its value is empty.
