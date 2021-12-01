@@ -200,7 +200,6 @@ sepal_length	sepal_width	petal_length	petal_width	class      	petal_length_2x	pe
 ### Advance Filter and Transformation
    - **explode**(cols, lambda_func, prefix): This method creates a map of the _cols_ in each row, and passes to the given _lambda_func_. The output of the _lambda_func_
 should be an array of maps where each output map will get added as new row with the key-values in the output map as col values.
-
 As the name suggests, this api can explode the number of rows and columns, and should be used carefully.
 
 #### Examples
