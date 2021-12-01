@@ -309,7 +309,7 @@ Iris-versicolor	             5.1	            2.5	             3.0	            1.
 Iris-versicolor	             5.1	            2.5	             3.0	            1.1	              6.9	             3.1	              4.9	             1.5
 ```
 
-### Delete and Rename Columns 
+### Drop and Rename Columns 
    - **drop**(cols): This api deletes the columns from the TSV object. Throws error if any of the column or pattern is missing.
    - **drop_if_exists**(cols): This api deletes the columns from the TSV object. Doesnt throw any error if any of the columns or patterns are missing.
    - **rename**(col, new_col): This api renames the old _col_ as _new_col_. 
