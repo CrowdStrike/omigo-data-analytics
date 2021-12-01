@@ -434,6 +434,10 @@ class TSV:
 
     # The signature for agg_func is func(list_of_maps). Each map will get the agg_cols
     def group_by_key(self, grouping_cols, agg_cols, agg_func, suffix = "", collapse = True, inherit_message = ""):
+        # resolve grouping and agg_cols
+        grouping_cols = self.__get_matching_cols__(grouping_cols)
+        agg_cols = self.__get_matching_cols__(agg_cols)
+
         # check for validity
         if (len(grouping_cols) == 0):
             raise Exception("No input columns:", grouping_cols)
