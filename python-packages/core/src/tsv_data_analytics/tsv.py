@@ -247,9 +247,9 @@ class TSV:
             .transform([col], lambda x: float(x) / float(denominator) if (float(denominator) != 0) else default, new_col) \
             .apply_precision(new_col, precision, inherit_message = inherit_message)
        
-    def apply_precision(self, col, precision, inherit_message = ""):
+    def apply_precision(self, cols, precision, inherit_message = ""):
         inherit_message2 = inherit_message + ": apply_precision" if (len(inherit_message) > 0) else "apply_precision"
-        return self.transform_inline([col], lambda x: ("{:." + str(precision) + "f}").format(float(x)), inherit_message = inherit_message2)
+        return self.transform_inline(cols, lambda x: ("{:." + str(precision) + "f}").format(float(x)), inherit_message = inherit_message2)
 
     # TODO: use skip_rows for better name        
     def skip(self, count):

@@ -255,11 +255,32 @@ _max_uniq_values_map_ map. This is explained in detail in the [sampling document
 ```
 
 ### Grouping and Aggregation
-   - **aggregate**(grouping_cols, agg_cols, agg_funcs): This is one of the most useful apis for aggregating data based on set of _grouping_cols_, and applying multiple aggregation functions. The _agg_cols_
+   - **aggregate**(grouping_cols, agg_cols, agg_funcs, _collapse_): This is one of the most useful apis for aggregating data based on set of _grouping_cols_, and applying multiple aggregation functions. The _agg_cols_
 are the list of columns on which _agg_funcs_ are applied in pairwise manner. 
-   - **window_aggregate**(win_col, agg_cols, agg_funcs, winsize, _sliding_): This api is an extension of aggregate where data slices are created using windows of size _winsize_. For each window, _agg_funcs_
+   - **window_aggregate**(win_col, agg_cols, agg_funcs, winsize, _sliding_, _collapse_): This api is an extension of aggregate where data slices are created using windows of size _winsize_. For each window, _agg_funcs_
 are applied on _agg_cols_. If _sliding_ is true, then a sliding window logic is used. Mostly useful for time series data where win_col is date or timestamp, and moving averages are needed.
    - **distinct**(): This api removes all duplicate rows.
+
+#### Examples
+Compute total sum of petal_length and other attributes in iris data. Notice the convention in the output columns.
+```
+>>> x.aggregate("class", ["petal_length", "petal_width", "sepal_length", "sepal_width"], [sum, sum, max, max]).show()
+
+class          	petal_length:sum	petal_width:sum	sepal_length:max	sepal_width:max
+Iris-setosa    	           73.20	          12.20	            5.80	           4.40
+Iris-versicolor	          213.00	          66.30	            7.00	           3.40
+Iris-virginica 	          277.60	         101.30	            7.90	           3.80
+```
+
+Use collapse = False to get all the original rows. Useful for debugging, or chaining multiple aggregate() functions together.
+```
+>>> x.aggregate("class", ["petal_length", "petal_width", "sepal_length", "sepal_width"], [sum, sum, max, max], collapse = False).show()
+
+sepal_length	sepal_width	petal_length	petal_width	class      	petal_length:sum	petal_width:sum	sepal_length:max	sepal_width:max
+5.10        	       3.50	        1.40	       0.20	Iris-setosa	           73.20	          12.20	            5.80	           4.40
+4.90        	       3.00	        1.40	       0.20	Iris-setosa	           73.20	          12.20	            5.80	           4.40
+4.70        	       3.20	        1.30	       0.20	Iris-setosa	           73.20	          12.20	            5.80	           4.40
+```
 
 ### Generic JSON Parsing
    - **explode_json**
