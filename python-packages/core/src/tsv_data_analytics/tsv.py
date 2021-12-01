@@ -1649,6 +1649,10 @@ class TSV:
         return self.sample(sampling_ratio, seed, with_replacement = True)
 
     def sample_rows(self, n, seed = 0):
+        utils.warn("Please use sample_n")
+        return self.sample_n(n, seed)
+
+    def sample_n(self, n, seed = 0):
         if (n < 1):
             raise Exception("n cant be negative or less than 1:", n) 
 
