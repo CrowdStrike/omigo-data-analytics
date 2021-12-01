@@ -323,15 +323,35 @@ Iris-versicolor	             5.1	            2.5	             3.0	            1.
 renames the columns having suffix _suffix_ by removing the suffix from their names.
    - **add_prefix**(suffix, _cols_): This api adds suffix to all the given _cols_. If _cols = None_ then prefix is added to all columns. 
 
+#### Example
+```
+>>> x.transform_inline("petal.*", lambda x: float(x)*0.4).add_prefix("approx_inches", "petal.*").show(3)
+
+sepal_length	sepal_width	approx:petal_length	approx:petal_width	class      
+5.1         	        3.5	                1.4	               0.2	Iris-setosa
+4.9         	        3.0	                1.4	               0.2	Iris-setosa
+4.7         	        3.2	                1.3	               0.2	Iris-setosa
+
+```
 ### Sorting
-   - **sort**
-   - **reverse_sort**
+   - **sort**(cols): Sorts the data using the given columns. 
+   - **reverse_sort**(cols): This is a wrapper api over _sort()_ for doing sorting in reverse.
+
+#### Example
+```
+>>> x.sort("petal_length").show(3)
+
+sepal_length	sepal_width	petal_length	petal_width	class      
+4.6         	        3.6	         1.0	        0.2	Iris-setosa
+4.3         	        3.0	         1.1	        0.1	Iris-setosa
+5.8         	        4.0	         1.2	        0.2	Iris-setosa
+```
 
 ### Reorder Columns
-   - **reorder**
+   - **reorder**(cols): This api reorders the columns in the TSV object for ease of use in jupyter notebooks.
 
 ### Select Columns
-   - **select**
+   - **select**(cols): Selects the given columns which can be a single column, pattern or an array of columns.
 
 ### Select Rows Slice
    - **skip**
