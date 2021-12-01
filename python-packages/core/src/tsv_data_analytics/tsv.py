@@ -2956,6 +2956,9 @@ def merge(xtsvs, do_union = False, def_val = None, def_val_map = None):
 def exists(path):
     return tsvutils.check_exists(path)
 
+def read_df(df):
+    return tsvutils.read_df(df)
+
 def enable_debug_mode():
     utils.enable_debug_mode()
 

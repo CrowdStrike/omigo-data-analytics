@@ -39,10 +39,11 @@ Iris-virginica 	           4.500
 ## A. Data Ingestion
 
 ### Read and Write from Local FileSystem, S3 or Web
-   - **tsv.read**(paths): Reads the data present in the list of file paths.
+   - **tsv.read**(paths): Reads the data present in the list of file paths and urls.
    - **tsv.write**(tsv_obj, path): Writes the tsv object to the specified path.
    - **tsv.merge**(tsv_objs): Merges the list of tsv objects into one.
    - **tsv.exists**(path): Check whether the specified path exists or not. Useful for implementing fast forwarding.
+   - **read_df**(df): Converts a pandas dataframe to TSV.
 
 Supported File Formats: tsv, simple csv and gzip/zip compressed versions.
 
