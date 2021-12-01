@@ -157,7 +157,7 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
 
 **transform()** with multiple input columns.
 ```
->>> x.transform(["petal_length", "petal_width"], lambda x,y: float(x) * float(y), "petal_length_and_width")
+>>> x.transform(["petal_length", "petal_width"], lambda x,y: float(x) * float(y), "petal_length_and_width").show(3)
 
 sepal_length	sepal_width	petal_length	petal_width	class      	petal_length_and_width
 5.1         	        3.5	      1.4000	     0.2000	Iris-setosa	                0.2800
