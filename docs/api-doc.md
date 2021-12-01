@@ -443,24 +443,35 @@ json
 ```
 
 ### Getting Column Values as Arrays
-   - **cols_as_map**
-   - **col_as_array**
-   - **col_as_array_uniq**
-   - **col_as_float_array**
-   - **col_as_int_array**
+   - **col_as_array**(col): This api returns all the values of the given _col_ as a string array.
+   - **col_as_array_uniq**(col): This api all the unique values of the given _col_ as a string array.
+   - **col_as_float_array**(col): This api returns all the values of the given _col_ as float array.
+   - **col_as_int_array**(col): This api returns all the values of the given _col_ as int array.
+
+#### Example
+```
+>>> x.col_as_array_uniq("class")
+
+['Iris-setosa', 'Iris-versicolor', 'Iris-virginica']
+
+>>> x.col_as_float_array("petal_length")[0:4]
+
+[1.4, 1.4, 1.3, 1.5]
+```
 
 ### Appending Rows and Columns
-   - **add_row**
-   - **add_map_as_row**
-   - **add_const**
-   - **add_const_if_missing**
+   - **add_row**(row_fields): This api adds all the values in the _row_fields_ as column values in the given order to the current TSV.
+   - **add_map_as_row**(mp, _default_val_): This api takes all the key values in map _mp_ as column names and values and add to the current TSV. If any column is missing, then _default_val_ is used
+to take the default value if it is defined, else throw error.
+   - **add_const**(col, value): This api adds a new column _col_ with the given _value_.
+   - **add_const_if_missing**: This api adds a new column _col_ with the given _value_ only if the column is not present already.
+   - **add_seq_num**(col): This api assigns a unique sequence number to each row with the name _col_.
+   - **replicate_rows**(col): This api reads the value of column _col_, and replicates each row according to the value of the given column.
 
 ### Static Data Transformations
-   - **add_seq_num**
-   - **assign_value**
-   - **copy**
-   - **replicate_rows**
-   - **set_missing_values**
+   - **assign_value**(col, value): This api assigns a constant value to an existing column.
+   - **copy**(col, new_col): This api copies the column _col_ to _new_col_.
+   - **set_missing_values**(cols, default_val): This api sets the value of each column specific in _cols_ as _default_val_ wherever its value is empty.
 
 ## C. Visualization, Statistics and Machine Learning
 Any functionality that needs extensive 3rd party libraries like matplotlib, seaborn or scikit as provided as extension packages. Not all extension packages might be 

@@ -2184,10 +2184,14 @@ class TSV:
         # return
         return TSV(new_header, new_data)
 
-    def replicate_rows(self, col, new_col, max_repl = 0):
+    def replicate_rows(self, col, new_col = None, max_repl = 0):
         # check for presence of col
         if (col not in self.header_map.keys()):
             raise Exception("Column not found:", str(col), str(self.header_fields))
+
+        # create new column if it is not existing
+        if (new_col == None):
+            new_col = "{}:replicate_rows".format(col)
 
         # check new col
         if (new_col in self.header_map.keys()):
