@@ -152,6 +152,8 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
    - **flatmap**
    - **ratio**
    - **ratio_const**
+   - **to_numeric**
+   - **to_tuples**
 
 ### URL Encoding and Decoding
    - **url_decode**
@@ -208,76 +210,71 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
    - **reverse_sort**
 
 ### Reorder Columns
-    def reorder
-    def reverse_reorder
+   - **reorder**
 
 ### Select Columns
-    def select
+   - **select**
 
 ### Select Rows Slice
-    def skip
-    def skip_rows
-    def last
-    def take
+   - **skip**
+   - **last**
+   - **take**
 
 ### Transpose from Row to Column Format
-    def transpose
-    def reverse_transpose
+   - **transpose**
 
 ### Extending to Other Derived Classes
-    def extend_class
+   - **extend_class**
 
 ### Conversion to Other Data Formats
-    def to_json_records
-    def to_numeric
-    def to_tuples
-    def to_csv
-    def to_df
-    def export_to_df
-    def export_to_maps
+   - **to_json_records**
+   - **to_csv**
+   - **to_df**
+   - **export_to_df**
+   - **export_to_maps**
 
 ### Getting Column Values as Arrays
-    def cols_as_map
-    def col_as_array
-    def col_as_array_uniq
-    def col_as_float_array
-    def col_as_int_array
+   - **cols_as_map**
+   - **col_as_array**
+   - **col_as_array_uniq**
+   - **col_as_float_array**
+   - **col_as_int_array**
 
 ### Merging Multiple TSVs
-    def union
+   - **union**
 
 ### Appending Rows and Columns
-    def add_row
-    def add_map_as_row
-    def add_const
-    def add_const_if_missing
+   - **add_row**
+   - **add_map_as_row**
+   - **add_const**
+   - **add_const_if_missing**
 
 ### Static Data Transformations
-    def add_seq_num
-    def assign_value
-    def copy
-    def replicate_rows
-    def set_missing_values
-
-### Enable / Disable Debug Information 
-    def enable_debug_mode
-    def disable_debug_mode
-    def set_report_progress_perc
-    def set_report_progress_min_thresh
+   - **add_seq_num**
+   - **assign_value**
+   - **copy**
+   - **replicate_rows**
+   - **set_missing_values**
 
 ## C. Visualization, Statistics and Machine Learning
 Any functionality that needs extensive 3rd party libraries like matplotlib, seaborn or scikit as provided as extension packages. Not all extension packages might be 
 relevant for all users, and please refer to the documentation section of individual packages for further details. Here are some basic explained for visualization.
 
 ### Basic Plots 
-    def linechart
-    def scatterplot
-    def histogram
-    def density
-    def barchart
-    def boxplot 
+   - **linechart**
+   - **scatterplot**
+   - **histogram**
+   - **density**
+   - **barchart**
+   - **boxplot**
 
 ### Advanced Plots
-    def corr_heatmap 
-    def pairplot
+   - **corr_heatmap** 
+   - **pairplot**
+
+### D. Enable / Disable Debug Messages 
+   - **tsv.enable_debug_mode**
+   - **tsv.disable_debug_mode**
+   - **tsv.set_report_progress_perc**
+   - **tsv.set_report_progress_min_thresh**
 
