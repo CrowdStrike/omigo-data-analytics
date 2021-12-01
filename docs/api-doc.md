@@ -137,12 +137,12 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
 ```
  
 ### Basic Filter and Transformation
-   - **def filter(cols, lambda_func)**:
-   - **def values_in(col, vals)**: TBD
-   - **def transform(cols, lambda_func, output_col_names)**:  TBD
-   - **def transform_inline(cols, func)**: TBD 
-   - **def values_not_in(col, vals)**: This is negation of values_in() api.
-   - **def exclude_filter(cols, func)**: This is negation of filter() api.
+   - def **filter**(cols, lambda_func):
+   - def **values_in**(col, vals): TBD
+   - def **transform**(cols, lambda_func, output_col_names):  TBD
+   - def **transform_inline**(cols, func): TBD 
+   - def **values_not_in**(col, vals): This is negation of values_in() api.
+   - def exclude_filter**(cols, func): This is negation of filter() api.
 
 ### Advanced Filter and Transformation
     def cap_max
