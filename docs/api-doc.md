@@ -371,7 +371,7 @@ relevant for all users, and please refer to the documentation section of individ
    - **corr_heatmap** 
    - **pairplot**
 
-### D. Enable / Disable Debug Messages 
+## D. Enable / Disable Debug Messages 
    - **tsv.enable_debug_mode**
    - **tsv.disable_debug_mode**
    - **tsv.set_report_progress_perc**
