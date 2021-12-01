@@ -39,13 +39,13 @@ Iris-virginica 	           4.500
 ## Data Ingestion
 
 ### Read and Write from Local FileSystem, S3 or Web
-   - **def read(paths)**: Reads the data present in the list of file paths.
+   - def **read**(paths): Reads the data present in the list of file paths.
     
-   - **def write(tsv_obj, path)**: Writes the tsv object to the specified path.
+   - def **write**(tsv_obj, path): Writes the tsv object to the specified path.
     
-   - **def merge(tsv_objs)**: Merges the list of tsv objects into one.
+   - def **merge**(tsv_objs): Merges the list of tsv objects into one.
     
-   - **def exists(path)**: Check whether the specified path exists or not. Useful for implementing fast forwarding.
+   - def **exists**(path): Check whether the specified path exists or not. Useful for implementing fast forwarding.
 
 Supported File Formats: tsv, simple csv and gzip/zip compressed versions.
 
@@ -65,10 +65,10 @@ Supported File Formats: tsv, simple csv and gzip/zip compressed versions.
 These APIs are part of TSV class. Once the data is loaded as TSV, all these methods can be used.
 
 ### Basic Summary
-   - **def num_cols()**: Returns the number of columns in the tsv object.
-   - **def num_rows()**: Returns the number of rows in the tsv object.
-   - **def columns()**: Returns the list of columns in the tsv object.
-   - **def size_in_bytes()**: Returns the size of the tsv object in bytes.
+   - def **num_cols(): Returns the number of columns in the tsv object.
+   - def **num_rows(): Returns the number of rows in the tsv object.
+   - def **columns(): Returns the list of columns in the tsv object.
+   - def **size_in_bytes(): Returns the size of the tsv object in bytes.
 
 ### Pretty Print
     def show(n, max_col_width, title): Pretty prints the first 'n' rows, each column restricted to max_col_width, and title which is displayed at the top.
@@ -96,17 +96,17 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
 ```
 
 ### Arithmetic Comparison 
-   - **def eq_int(col, value)**: Returns all rows where the int value of _col_ is equal to _value_.
-   - **def ge_int(col, value)**: Returns all rows where the int value of _col_ is less than or equal to _value_.
-   - **def gt_int(col, value)**: Returns all rows where the int value of _col_ is greater than _value_.
-   - **def le_int(col, value)**: Returns all rows where the int value of _col_ is less than or equal to _value_.
-   - **def lt_int(col, value)**: Returns all rows where the int value of _col_ is less than _value_.
-   - **def eq_float(col, value)**: Returns all rows where the float value of _col_ is equal to _value_.
-   - **def ge_float(col, value)**: Returns all rows where the float value of _col_ is less than or equal to _value_.
-   - **def gt_float(col, value)**: Returns all rows where the float value of _col_ is greater than _value_.
-   - **def le_float(col, value)**: Returns all rows where the float value of _col_ is less than or equal to _value_.
-   - **def lt_float(col, value)**: Returns all rows where the float value of _col_ is less than _value_.
-   - **def is_nonzero(col)**: Returns all rows where the float value of _col_ is not zero.
+   - def **eq_int(col, value): Returns all rows where the int value of _col_ is equal to _value_.
+   - def **ge_int(col, value): Returns all rows where the int value of _col_ is less than or equal to _value_.
+   - def **gt_int(col, value): Returns all rows where the int value of _col_ is greater than _value_.
+   - def **le_int(col, value): Returns all rows where the int value of _col_ is less than or equal to _value_.
+   - def **lt_int(col, value): Returns all rows where the int value of _col_ is less than _value_.
+   - def **eq_float(col, value): Returns all rows where the float value of _col_ is equal to _value_.
+   - def **ge_float(col, value): Returns all rows where the float value of _col_ is less than or equal to _value_.
+   - def **gt_float(col, value): Returns all rows where the float value of _col_ is greater than _value_.
+   - def **le_float(col, value): Returns all rows where the float value of _col_ is less than or equal to _value_.
+   - def **lt_float(col, value): Returns all rows where the float value of _col_ is less than _value_.
+   - def **is_nonzero(col): Returns all rows where the float value of _col_ is not zero.
 
 #### Examples
 ```
@@ -115,20 +115,19 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
 ```
 
 ### String Comparison
-   - **def eq_str(col, value)**: Returns rows where string value of _col_ is equal to _value_. 
-   - **def ge_str(col, value)**: Returns rows where string value of _col_ is greater than or equal to _value_.
-   - **def gt_str(col, value)**: Returns rows where string value of _col_ is greater than _value_.
-   - **def le_str(col, value)**: Returns rows where string value of _col_ is less than or equal to _value_.
-   - **def lt_str(col, value)**: Returns rows where string value of _col_ is less than _value_.
-   - **def startswith(col, value)**: Returns rows where string value of _col_ starts with _value_.
-   - **def endswith(col, value)**: Returns rows where string value of _col_ ends with  _value_.
-   - **def match(col, value)**: Returns rows where string value of _col_ matches the regular expression in _value_.
-   - **def regex_match(col, value)**: Returns rows where string value of _col_ matches the regular expression in  _value_.
-   - **def not_eq_str(col, value)**: Returns rows where string value of _col_ not equal to  _value_.
-   - **def not_startswith(col, value)**: Returns rows where string value of _col_ does not start with  _value_.
-   - **def not_endswith(col, value)**: Returns rows where string value of _col_ does not end with _value_.
-   - **def not_match(col, value)**: Returns rows where string value of _col_ does not match regular expression in _value_.
-   - **def not_regex_match(col, value)**: Returns rows where string value of _col_ does not match regular expression in _value_.
+   - def **eq_str**(col, value): Returns rows where string value of _col_ is equal to _value_. 
+   - def **ge_str**(col, value): Returns rows where string value of _col_ is greater than or equal to _value_.
+   - def **gt_str**(col, value): Returns rows where string value of _col_ is greater than _value_.
+   - def **le_str(**col, value): Returns rows where string value of _col_ is less than or equal to _value_.
+   - def **lt_str**(col, value): Returns rows where string value of _col_ is less than _value_.
+   - def **startswith**(col, value): Returns rows where string value of _col_ starts with _value_.
+   - def **endswith**(col, value): Returns rows where string value of _col_ ends with  _value_.
+   - def **match**(col, value): Returns rows where string value of _col_ matches the regular expression in _value_.
+   - def **not_eq_str**(col, value): Returns rows where string value of _col_ not equal to  _value_.
+   - def **not_startswith**(col, value): Returns rows where string value of _col_ does not start with  _value_.
+   - def **not_endswith**(col, value): Returns rows where string value of _col_ does not end with _value_.
+   - def **not_match**(col, value): Returns rows where string value of _col_ does not match regular expression in _value_.
+   - def **not_regex_match**(col, value): Returns rows where string value of _col_ does not match regular expression in _value_.
 
 #### Examples
 ```
@@ -142,7 +141,7 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
    - def **transform**(cols, lambda_func, output_col_names):  TBD
    - def **transform_inline**(cols, func): TBD 
    - def **values_not_in**(col, vals): This is negation of values_in() api.
-   - def exclude_filter**(cols, func): This is negation of filter() api.
+   - def **exclude_filter**(cols, func): This is negation of filter() api.
 
 ### Advanced Filter and Transformation
     def cap_max
