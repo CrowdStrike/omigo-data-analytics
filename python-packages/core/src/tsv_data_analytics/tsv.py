@@ -1188,7 +1188,7 @@ class TSV:
 
     # this method returns hashmap of key->map[k:v]
     # TODO: keys should be changed to single column
-    def cols_as_map(self, key_cols, value_cols):
+    def cols_as_map(self, keys_cols, value_cols):
         utils.warn("This api has changed from prev implementation")
         # validation
         keys_cols = self.__get_matching_cols__(keys_cols)

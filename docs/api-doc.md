@@ -289,13 +289,14 @@ json response from web services which are mostly simple in nature, and a default
 
 A detailed example is provided in [example-notebooks/json-parsing] notebook.
 
-### Join
+### Join and Union
    - **join**(that, lkeys, _rkeys_, join_type_, _lsuffix_, _rsuffix_, _default_val_, _def_val_map_): This is the primary api for joining two TSV objects. The _lkeys_ is the list of columns on
 the left side to use for joining. If the names of join columns in right side are different, the specify the same in _rkeys_. join_type is _inner_, _left_ or _right_. For any outer joins, the
 missing values can be either specific at each column in _def_val_map_ or have a fallback global value in _default_val_.
    - **inner_join**(that, lkeys, _rkeys_, _lsuffix_, _rsuffix_, _default_val_, _def_val_map_): This is a wrapper over _join()_ api with _join_type = inner_.
    - **left_join**(that, lkeys, _rkeys_, _lsuffix_, _rsuffix_, _default_val_, _def_val_map_): This is a wrapper over _join()_ api with _join_type = inner_.
    - **right_join**(that, lkeys, _rkeys_, _lsuffix_, _rsuffix_, _default_val_, _def_val_map_): This is a wrapper over _join()_ api with _join_type = inner_.
+   - **union**(tsv_list): This api appends all the TSVs from the tsvlist in the current TSV object. The _tsv_list_ can be a single tsv or an array.
 
 #### Examples
 ```
@@ -407,17 +408,39 @@ sepal_length	sepal_width	petal_length	petal_width	class
 ```
 
 ### Transpose from Row to Column Format
-   - **transpose**
+   - **transpose**(_n_): This api transposes the list of rows and columns. Useful for looking at data with lot of columns that don't fit into the width of the screen.
+
+#### Example
+```
+>>> x.transpose(3).show(10)
+col_name    	row:1      	row:2      	row:3      
+sepal_length	5.1        	4.9        	4.7        
+sepal_width 	3.5        	3.0        	3.2        
+petal_length	1.4        	1.4        	1.3        
+petal_width 	0.2        	0.2        	0.2        
+class       	Iris-setosa	Iris-setosa	Iris-setosa
+<tsv_data_analytics.tsv.TSV object at 0x1028637c0>
 
 ### Extending to Other Derived Classes
-   - **extend_class**
+   - **extend_class**(derived_class, *args, **kwargs): This is an advanced function to plugin extensions and other 3rd party modules. For more details, see [example-notebooks/extend-class-example].
 
 ### Conversion to Other Data Formats
-   - **to_json_records**
-   - **to_csv**
-   - **to_df**
-   - **export_to_df**
-   - **export_to_maps**
+   - **to_json_records**(): This api converts each row into a json object of a map. Each row in the output will be a json string.
+   - **to_csv**(): This api converts the TSV into simple CSV format file, which means commas(,) and double quotes as special characters are not supported within the fields.
+   - **to_df**(): This api converts the TSV object into a pandas dataframe.
+   - **export_to_df**(): This is same as _to_df_.
+   - **export_to_maps**: This api converts each row into a map and returns a list of those maps.
+
+#### Examples
+Convert each record into json
+```
+>>> x.to_json_records().show(3, max_col_width = 200)
+
+json                                                                                                              
+{"sepal_length": "5.1", "sepal_width": "3.5", "petal_length": "1.4", "petal_width": "0.2", "class": "Iris-setosa"}
+{"sepal_length": "4.9", "sepal_width": "3.0", "petal_length": "1.4", "petal_width": "0.2", "class": "Iris-setosa"}
+{"sepal_length": "4.7", "sepal_width": "3.2", "petal_length": "1.3", "petal_width": "0.2", "class": "Iris-setosa"}
+```
 
 ### Getting Column Values as Arrays
    - **cols_as_map**
@@ -425,9 +448,6 @@ sepal_length	sepal_width	petal_length	petal_width	class
    - **col_as_array_uniq**
    - **col_as_float_array**
    - **col_as_int_array**
-
-### Merging Multiple TSVs
-   - **union**
 
 ### Appending Rows and Columns
    - **add_row**
