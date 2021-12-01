@@ -1188,10 +1188,10 @@ class TSV:
 
     # this method returns hashmap of key->map[k:v]
     # TODO: keys should be changed to single column
-    def cols_as_map(self, keys_cols, value_cols):
+    def cols_as_map(self, key_cols, value_cols):
         utils.warn("This api has changed from prev implementation")
         # validation
-        keys_cols = self.__get_matching_cols__(keys_cols)
+        key_cols = self.__get_matching_cols__(key_cols)
 
         # check for all columns in the value part
         value_cols = self.__get_matching_cols__(value_cols)
@@ -1211,7 +1211,7 @@ class TSV:
             if (keys_tuple in mp.keys()):
                 raise Exception("keys is not unique:", keys)
 
-            values = {} 
+            values = [] 
             for value_col in value_cols:
                 value = fields[self.header_map[value_col]]
                 values.append(str(value))
