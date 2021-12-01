@@ -120,6 +120,7 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
    - **select**(cols): Selects the given columns which can be a single column, pattern or an array of columns.
 
 #### Example
+```
 >>> x.select(["class", "petal.*"]).show(3)
 
 class      	petal_length	petal_width
