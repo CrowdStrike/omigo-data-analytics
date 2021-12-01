@@ -191,7 +191,7 @@ sepal_length	sepal_width	petal_length	petal_width	class
    - **transform_inline**(cols, func): This applies the lambda function on each of the given _cols_ and returns new values under the same column names. 
    - **values_not_in**(col, values): This is negation of _values_in()_ api.
    - **exclude_filter**(cols, lambda_func): This is negation of _filter()_ api.
-   - **ratio**(col1, col2, new_col, _default = 0_): Returns the ratio of _col1_ / _col2_ as _new_col_. If denominator is 0, then uses _default_ as the default value.
+   - **ratio**(col1, col2, new_col, _default = 0_): Returns the ratio of _col1_ / _col2_ as _new_col_. If denominator is 0, then returns _default_ value.
 
 #### Examples
 **values_in()** to take rows with specific values for column _class_.
