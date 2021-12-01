@@ -133,7 +133,7 @@ Iris-setosa	         1.3	        0.2
 ### 4. Select Rows Slice
    - **skip**(n): Skips the first _n_ rows.
    - **last**(n): Takes the last _n_ rows.
-   - **take**: Takes the first _n_ rows.
+   - **take**(n): Takes the first _n_ rows.
 
 #### Examples
 ```
