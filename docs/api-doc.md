@@ -44,7 +44,7 @@ Iris-virginica 	           4.500
    - **tsv.merge**(tsv_objs): Merges the list of tsv objects into one.
    - **tsv.exists**(path): Check whether the specified path exists or not. Useful for implementing fast forwarding.
    - **from_df**(df): Converts a pandas dataframe to TSV.
-   - **from_maps(mps): Converts the given array of maps to TSV
+   - **from_maps**(mps): Converts the given array of maps to TSV
 
 Supported File Formats: tsv, simple csv and gzip/zip compressed versions.
 
