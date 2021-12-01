@@ -39,23 +39,23 @@ Iris-virginica 	           4.500
 ## A. Data Ingestion
 
 ### Read and Write from Local FileSystem, S3 or Web
-   - **read**(paths): Reads the data present in the list of file paths.
-   - **write**(tsv_obj, path): Writes the tsv object to the specified path.
-   - **merge**(tsv_objs): Merges the list of tsv objects into one.
-   - **exists**(path): Check whether the specified path exists or not. Useful for implementing fast forwarding.
+   - **tsv.read**(paths): Reads the data present in the list of file paths.
+   - **tsv.write**(tsv_obj, path): Writes the tsv object to the specified path.
+   - **tsv.merge**(tsv_objs): Merges the list of tsv objects into one.
+   - **tsv.exists**(path): Check whether the specified path exists or not. Useful for implementing fast forwarding.
 
 Supported File Formats: tsv, simple csv and gzip/zip compressed versions.
 
 #### Examples
 ```
->>> xtsv = read("data/iris.tsv")
->>> xtsv = read("s3://bucket-name/path/iris.tsv")
->>> xtsv = read(["data/file1.tsv.gz", "data/file2.tsv.gz"]
->>> xtsv = read("https://github.com/CrowdStrike/tsv-data-analytics/raw/main/data/iris.tsv")
->>> write(xtsv, "data/output_file.tsv.gz")
->>> ytsv = merge([xtsv1, xtsv2])
->>> exists("data/iris.tsv")
->>> exists("s3://bucket-name/path/iris.tsv")
+>>> xtsv = tsv.read("data/iris.tsv")
+>>> xtsv = tsv.read("s3://bucket-name/path/iris.tsv")
+>>> xtsv = tsv.read(["data/file1.tsv.gz", "data/file2.tsv.gz"]
+>>> xtsv = tsv.read("https://github.com/CrowdStrike/tsv-data-analytics/raw/main/data/iris.tsv")
+>>> tsv.write(xtsv, "data/output_file.tsv.gz")
+>>> ytsv = tsv.merge([xtsv1, xtsv2])
+>>> tsv.exists("data/iris.tsv")
+>>> tsv.exists("s3://bucket-name/path/iris.tsv")
 ```
 
 ## B. Data Transformation and Analysis
