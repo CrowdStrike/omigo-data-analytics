@@ -27,15 +27,15 @@ $ pip3 install tsv-data-analytics-ext==0.0.4
 #### Read data from local filesystem. Can also use s3 or web url.
 ```
 $ python3
->>> from tsv_data_analytics import tsvutils
->>> x = tsvutils.read("data/iris.tsv.gz")
+>>> from tsv_data_analytics import tsv
+>>> x = tsv.read("data/iris.tsv.gz")
 #
 # other possible options
 #
-# x = tsvutils.read("data/iris.tsv")
-# x = tsvutils.read("data/iris.tsv.zip")
-# x = tsvutils.read("s3://bucket/path_to_file/data.tsv.gz")
-# x = tsvutils.read_url("https://github.com/CrowdStrike/tsv-data-analytics/raw/main/data/iris.tsv")
+# x = tsv.read("data/iris.tsv")
+# x = tsv.read("data/iris.tsv.zip")
+# x = tsv.read("s3://bucket/path_to_file/data.tsv.gz")
+# x = tsv.read("https://github.com/CrowdStrike/tsv-data-analytics/raw/main/data/iris.tsv")
 ```
 #### Print basic stats like the number of rows
 ```
@@ -45,7 +45,7 @@ $ python3
 
 #### Export to pandas data frame for nice display, or use any of pandas apis. 
 ```
->>> x.export_to_df(10)
+>>> x.to_df(10)
   sepal_length sepal_width petal_length petal_width        class
 0          5.1         3.5          1.4         0.2  Iris-setosa
 1          4.9         3.0          1.4         0.2  Iris-setosa
@@ -88,7 +88,7 @@ sepal_width	sepal_length
 
 #### The tsv file can be saved to local file system or s3
 ```
->>> tsvutils.save_to_file(y, "output.tsv.gz")
+>>> tsv.write(y, "output.tsv.gz")
 ```
 ## Notes from the author
 * This library is built for simplicity, functionality and robustness. Engineering good practices are followed slowly.

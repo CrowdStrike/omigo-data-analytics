@@ -468,10 +468,30 @@ to take the default value if it is defined, else throw error.
    - **add_seq_num**(col): This api assigns a unique sequence number to each row with the name _col_.
    - **replicate_rows**(col): This api reads the value of column _col_, and replicates each row according to the value of the given column.
 
+#### Examples
+```
+>>> x.add_seq_num("sno").show(3)
+
+sno	sepal_length	sepal_width	petal_length	petal_width	class      
+1  	         5.1	        3.5	         1.4	        0.2	Iris-setosa
+2  	         4.9	        3.0	         1.4	        0.2	Iris-setosa
+3  	         4.7	        3.2	         1.3	        0.2	Iris-setosa
+```
+
 ### Static Data Transformations
    - **assign_value**(col, value): This api assigns a constant value to an existing column.
    - **copy**(col, new_col): This api copies the column _col_ to _new_col_.
    - **set_missing_values**(cols, default_val): This api sets the value of each column specific in _cols_ as _default_val_ wherever its value is empty.
+
+#### Examples
+```
+>>> x.assign_value("petal_length", "1.0").show(3)
+
+sepal_length	sepal_width	petal_length	petal_width	class      
+5.1         	        3.5	         1.0	        0.2	Iris-setosa
+4.9         	        3.0	         1.0	        0.2	Iris-setosa
+4.7         	        3.2	         1.0	        0.2	Iris-setosa
+```
 
 ## C. Visualization, Statistics and Machine Learning
 Any functionality that needs extensive 3rd party libraries like matplotlib, seaborn or scikit as provided as extension packages. Not all extension packages might be 
