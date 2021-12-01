@@ -407,6 +407,7 @@ class      	sepal_length	sepal_width	petal_length	petal_width
 Iris-setosa	         5.1	        3.5	         1.4	        0.2
 Iris-setosa	         4.9	        3.0	         1.4	        0.2
 Iris-setosa	         4.7	        3.2	         1.3	        0.2
+```
 
 ### Transpose from Row to Column Format
    - **transpose**(_n_): This api transposes the list of rows and columns. Useful for looking at data with lot of columns that don't fit into the width of the screen.
