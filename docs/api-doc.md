@@ -274,7 +274,7 @@ Iris-virginica 	          277.60	         101.30
 
 Use collapse = False to get all the original rows. Useful for debugging, or chaining multiple aggregate() functions together.
 ```
->>> x.aggregate("class", ["petal_length", "petal_width"], [sum, sum], collapse = False).show()
+>>> x.aggregate("class", ["petal_length", "petal_width"], [sum, sum], collapse = False).show(3)
 
 sepal_length	sepal_width	petal_length	petal_width	class      	petal_length:sum	petal_width:sum
 5.10        	       3.50	        1.40	       0.20	Iris-setosa	           73.20	          12.20
