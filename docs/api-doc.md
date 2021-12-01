@@ -136,7 +136,7 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
  
 ### Basic Filter and Transformation
    - **values_in**(col, _values_): Returns rows where the value of the _col_ is one of the provided _values_.
-   - **filter**(cols, lambda_func): Returns rows that satisfy applying lambda function on the values of the given columns.
+   - **filter**(cols, lambda_func): Returns rows that satisfy lambda function on the values of the given columns.
    - **transform**(cols, lambda_func, output_cols): Applies lambda function to the given _cols_. The lambda function can return single or multiple values. The _output_cols_ should match the list of values in the output.
    - **transform_inline**(cols, func): This applies the lambda function on each of the given _cols_ and returns new values under the same column names. 
    - **values_not_in**(col, values): This is negation of _values_in()_ api.
