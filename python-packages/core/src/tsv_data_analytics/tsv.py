@@ -1050,6 +1050,10 @@ class TSV:
         return self.get_header_fields()
 
     def export_to_maps(self):
+        utils.warn("Please use to_maps()")
+        return self.to_maps()
+
+    def to_maps(self):
         mps = []
         for line in self.data:
             fields = line.split("\t")
