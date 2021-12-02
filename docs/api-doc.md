@@ -1,5 +1,7 @@
 # Overview 
-This library is designed to make simple and robust APIs to do complex processing easily. This document describes basic functionality, and provides simple usage of the APis. The APIs are divided into three groups:
+This library is designed to do complex data processing easily. This document describes basic functionality, and provides simple usage of the APIs. More detailed options are documented in the source code.
+
+The APIs are divided into three groups:
 
 1. **Data Ingestion**: This is provided through static methods available in the **tsv** package.
 
