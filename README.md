@@ -6,7 +6,7 @@
  * TSV as the primary data format for data processing.
  * 100+ APIs for simple data transformation to get insights.
  * Functional programming style interface for expressing business logic.
- * Advanced APIs for doing join, aggregate, sampling, time window, and json data.
+ * Advanced APIs for doing join, aggregate, sampling, time window, and processing json data.
  * Support for ETL kind of data collected periodically over long period of time.
  * APIs designed to work with 100s of columns.
  * Out of the box support for data with changing schema.
