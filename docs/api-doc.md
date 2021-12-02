@@ -321,8 +321,8 @@ A detailed example is provided in [example-notebooks/json-parsing] notebook.
 the left side to use for joining. If the names of join columns in right side are different, the specify the same in _rkeys_. join_type is _inner_, _left_ or _right_. For any outer joins, the
 missing values can be either specific at each column in _def_val_map_ or have a fallback global value in _default_val_.
    - **inner_join**(that, lkeys, _rkeys_, _lsuffix_, _rsuffix_, _default_val_, _def_val_map_): This is a wrapper over _join()_ api with _join_type = inner_.
-   - **left_join**(that, lkeys, _rkeys_, _lsuffix_, _rsuffix_, _default_val_, _def_val_map_): This is a wrapper over _join()_ api with _join_type = inner_.
-   - **right_join**(that, lkeys, _rkeys_, _lsuffix_, _rsuffix_, _default_val_, _def_val_map_): This is a wrapper over _join()_ api with _join_type = inner_.
+   - **left_join**(that, lkeys, _rkeys_, _lsuffix_, _rsuffix_, _default_val_, _def_val_map_): This is a wrapper over _join()_ api with _join_type = left_.
+   - **right_join**(that, lkeys, _rkeys_, _lsuffix_, _rsuffix_, _default_val_, _def_val_map_): This is a wrapper over _join()_ api with _join_type = right_.
    - **union**(tsv_list): This api appends all the TSVs from the tsvlist in the current TSV object. The _tsv_list_ can be a single tsv or an array.
 
 #### Examples
