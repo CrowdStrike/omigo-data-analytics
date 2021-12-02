@@ -92,4 +92,4 @@ sepal_width	sepal_length
 ```
 ## Notes from the author
 * This library is built for simplicity, functionality and robustness. Engineering good practices are followed slowly.
-* Detailed API documentation is in docs directly. More examples with real life use cases is in progress. Feel free to reach out for any questions or help.
+* More examples with real life use cases is currently in progress. Feel free to reach out for any questions or help.
