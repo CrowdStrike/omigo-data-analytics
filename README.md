@@ -12,6 +12,18 @@
  * Out of the box support for data with changing schema.
  * Visualization APIs to provide simple interface to matplotlib, seaborn, and other popular libraries.
 
+## Best for following scenarios
+ * Data Exploration phase when we don't know what we are looking for, and what might work.
+ * Wide datasets with 100s or 1000s of columns.
+ * Need for lot of custom processing, filtering, sampling in non trivial ways.
+ * Working with data collected over long period of time.
+
+## How and why is TSV format used
+ * Input data can be different formats like TSV, CSV, JSON, or read from external sources like S3, Web, Database, and compressed as gzip or zip.
+ * Internal in-memory data storage format is TSV which is very simple especially for adding new data processing APIs.
+ * Binary formats are best for getting good performance in large scale system.
+ * Text format is best for looking into data easily without any additional library.
+
 ## Install Instructions
 There are two packages - core and extensions. The core package is built on core python and out of the box without many dependencies
 to keep it stable. The extensions package contains libraries for plotting, and can have lot of dependencies.
