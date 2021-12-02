@@ -12,10 +12,10 @@
  * Out of the box support for data with changing schema.
  * Visualization APIs to provide simple interface to matplotlib, seaborn, and other popular libraries.
 
-## Best for following scenarios
+## Primary use cases 
  * Data Exploration phase when we don't know what we are looking for, and what might work.
  * Wide datasets with 100s or 1000s of columns.
- * Need for lot of custom processing, filtering, sampling in non trivial ways.
+ * Need ability to integrate custom APIs or modules for both data ingestion and processing.
  * Working with data collected over long period of time.
 
 ## How and why is TSV format used
