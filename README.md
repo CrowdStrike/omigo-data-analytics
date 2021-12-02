@@ -19,8 +19,8 @@
  * Working with data collected over long period of time.
 
 ## How and why is TSV format used
- * Input data can be different formats like TSV, CSV, JSON, GZIP/ZIP compressed, or read from external sources like S3 or Web.
- * Internal in-memory data storage format is TSV which is very easy to work with especially for adding new data processing APIs.
+ * Input data can be different formats and read locally or from external sources like S3 or web.
+ * Internal in-memory data storage format is TSV which is very easy to work with.
  * Binary formats are best for getting good performance in large scale system.
  * Text format is best for looking into data easily without any additional library.
 
