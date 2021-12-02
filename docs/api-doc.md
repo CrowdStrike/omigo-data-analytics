@@ -430,8 +430,7 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
    - **to_json_records**(): This api converts each row into a json object of a map. Each row in the output will be a json string.
    - **to_csv**(): This api converts the TSV into simple CSV format file, which means commas(,) and double quotes as special characters are not supported within the fields.
    - **to_df**(): This api converts the TSV object into a pandas dataframe.
-   - **export_to_df**(): This is same as _to_df_.
-   - **export_to_maps**: This api converts each row into a map and returns a list of those maps.
+   - **to_maps**(): This api converts each row into a map and returns a list of those maps.
 
 #### Examples
 Convert each record into json
