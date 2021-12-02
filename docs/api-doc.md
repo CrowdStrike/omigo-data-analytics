@@ -265,9 +265,9 @@ sepal_length	sepal_width	petal_length	petal_width	class
 ```
 
 ### 11. Sampling Groups
-   - **sample_class**(col, col_value, sampling_ratio, _seed_): This api randomly samples _sampling_ratio_ rows for column _col_ that only on rows that have value _col_value_.
-Useful for doing downsamling of negative class columns.
-   - **sample_group_by_col_value**(grouping_cols, col, col_value, sampling_ratio, _seed_): This api groups data using the _grouping_cols_, and does sampling of
+   - **sample_class**(col, col_value, sampling_ratio, _seed_): This api randomly samples _sampling_ratio_ rows for column _col_ but only for row that have value as _col_value_.
+Useful for doing downsampling of specific class only.
+   - **sample_group_by_col_value**(grouping_cols, col, col_value, sampling_ratio, _seed_): This api groups data using the _grouping_cols_, and then does sampling of
 given column and its value within that group. Useful for downsampling data where there is lot of skewness in few col values within specific groups.
    - **sample_group_by_key**(grouping_cols, sampling_ratio): This api does random sampling of data within each group. Useful for cases where only few groups have highly skewed data and need to be
 downsampled.
