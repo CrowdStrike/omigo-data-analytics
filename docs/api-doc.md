@@ -465,7 +465,7 @@ json
    - **add_map_as_row**(mp, _default_val_): This api takes all the key values in map _mp_ as column names and values and add to the current TSV. If any column is missing, then _default_val_ is used
 to take the default value if it is defined, else throw error.
    - **add_const**(col, value): This api adds a new column _col_ with the given _value_.
-   - **add_const_if_missing**: This api adds a new column _col_ with the given _value_ only if the column is not present already.
+   - **add_const_if_missing**(): This api adds a new column _col_ with the given _value_ only if the column is not present already.
    - **add_seq_num**(col): This api assigns a unique sequence number to each row with the name _col_.
    - **replicate_rows**(col): This api reads the value of column _col_, and replicates each row according to the value of the given column.
 
