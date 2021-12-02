@@ -1,6 +1,6 @@
 # TSV-DATA-ANALYTICS 
 
-## Data analytics library for python
+## Overview
  * Python library to do end to end data analytics from reading to transformation, analysis and visualization.
  * Support for reading and writing multiple data formats from local machine or S3.
  * TSV as the primary data format for data processing.
@@ -18,7 +18,7 @@
  * Need ability to integrate custom APIs or modules for both data ingestion and processing.
  * Working with data collected over long period of time.
 
-## How and why is TSV format used
+## How and why TSV format is used
  * Input data can be different formats and read locally or from external sources like S3 or web.
  * Internal in-memory data storage format is TSV which is very easy to work with.
  * Binary formats are best for getting good performance in large scale system.
