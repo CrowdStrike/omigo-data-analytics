@@ -19,10 +19,9 @@
  * Working with data collected over long period of time.
 
 ## How and why TSV format is used
- * Input data can be different formats and read locally or from external sources like S3 or web.
+ * Input data can be of different formats and read either locally or from external sources like S3 or web.
  * Internal in-memory data storage format is TSV which is very easy to work with.
- * Binary formats are best for getting good performance in large scale system.
- * Text format is best for looking into data easily without any additional library.
+ * Binary formats are best for getting good performance, though plain text is best for looking into data easily without any additional tools.
 
 ## Install Instructions
 There are two packages - core and extensions. The core package is built on core python and out of the box without many dependencies

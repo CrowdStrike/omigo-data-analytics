@@ -1,5 +1,5 @@
 # Overview 
-This library is designed to do complex data processing easily. This document describes basic functionality, and provides simple usage of the APIs. More detailed options are documented in the source code.
+This document describes basic functionality in the library, and provides simple usage of the APIs. More detailed options are documented in the source code.
 
 The APIs are divided into three groups:
 
