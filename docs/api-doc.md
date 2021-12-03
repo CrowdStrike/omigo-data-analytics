@@ -50,7 +50,7 @@ Iris-virginica 	           4.500
 
 Supported File Formats: tsv, simple csv and gzip/zip compressed versions.
 
-#### Examples
+*Examples*
 ```
 >>> x = tsv.read("data/iris.tsv")
 >>> x = tsv.read("s3://bucket-name/path/iris.tsv")
@@ -98,7 +98,7 @@ These APIs are part of TSV class. Once the data is loaded as TSV, all these meth
    - **show**(_n_, _max_col_width_, _title_): Pretty prints the first 'n' rows, each upto max_col_width wide and title which is displayed at the top.
    - **show_transpose**(_n_, _title_): Transposes the tsv object and does pretty print.
 
-#### Examples
+*Examples*
 ```
 >>> x.show(3)
 >>>
@@ -122,7 +122,7 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
 ### 3. Select Columns
    - **select**(cols): Selects the given columns which can be a single column, pattern or an array of columns.
 
-#### Examples
+*Examples*
 ```
 >>> x.select(["class", "petal.*"]).show(3)
 
@@ -137,7 +137,7 @@ Iris-setosa	         1.3	        0.2
    - **last**(n): Takes the last _n_ rows.
    - **take**(n): Takes the first _n_ rows.
 
-#### Examples
+*Examples*
 ```
 >>> x.take(2).show()
 
@@ -159,7 +159,7 @@ sepal_length	sepal_width	petal_length	petal_width	class
    - **lt_float**(col, value): Returns all rows where the float value of _col_ is less than _value_.
    - **is_nonzero**(col): Returns all rows where the float value of _col_ is not zero.
 
-#### Examples
+*Examples*
 ```
 >>> x.gt_float("petal_length", 1.4)
 >>> x.eq_float("sepal_length", 5.1)
@@ -179,7 +179,7 @@ sepal_length	sepal_width	petal_length	petal_width	class
    - **not_endswith**(col, value): Returns rows where string value of _col_ does not end with _value_.
    - **not_match**(col, value): Returns rows where string value of _col_ does not match regular expression in _value_.
 
-#### Examples
+*Examples*
 ```
 >>> x.eq_str("class", "Iris-setosa")
 >>> x.match("class", ".*setosa")
@@ -194,7 +194,7 @@ sepal_length	sepal_width	petal_length	petal_width	class
    - **exclude_filter**(cols, lambda_func): This is negation of _filter()_ api.
    - **ratio**(col1, col2, new_col, _default = 0_): Returns the ratio of _col1_ / _col2_ as _new_col_. If denominator is 0, then returns _default_ value.
 
-#### Examples
+*Examples*
 **values_in()** to take rows with specific values for column _class_.
 ```
 >>> x.values_in("class", ["Iris-setosa", "Iris-versicolor"])
@@ -231,7 +231,7 @@ sepal_length	sepal_width	petal_length	petal_width	class      	petal_length_2x	pe
 should be an array of maps where each output map will get added as new row with the key-values as col values.
 As the name suggests, this api can explode the number of rows and columns, and should be used carefully.
 
-#### Examples
+*Examples*
 ```
 >>> def my_explode_func(mp):
 >>>     mps = []
@@ -256,7 +256,7 @@ sepal_width	petal_width	class      	len_col:dim_name	len_col:dim_value
    - **sample**(sampling_ratio, _seed_): Randomly samples _perc_ rows from the data using the given seed. 
    - **sample_n**(n, _seed_): Randomly samples _n_ rows from the data using the given seed.
 
-#### Examples
+*Examples*
 ```
 >>> x.sample_n(3).show()
 
@@ -278,7 +278,7 @@ unique values. Useful for scenarios where all the rows matching the specific col
    - **sample_group_by_max_uniq_values_per_class**(grouping_cols, class_col, col, max_uniq_values_map, _def_max_uniq_values_, _seed_): This api samples different values of _class_col_ differently based on 
 _max_uniq_values_map_ map. This is explained in detail in the [sampling documentation].
 
-#### Examples
+*Examples*
 ```
 >>> x.sample_class("class", "Iris-setosa", 0.1)
 ```
@@ -290,7 +290,7 @@ are the list of columns on which _agg_funcs_ are applied in pairwise manner.
 are applied on _agg_cols_. If _sliding_ is true, then a sliding window logic is used. Mostly useful for time series data where win_col is date or timestamp, and moving averages are needed.
    - **distinct**(): This api removes all duplicate rows.
 
-#### Examples
+*Examples*
 Compute total sum of petal_length and petal_width in iris data. Notice the convention in the output columns.
 ```
 >>> x.aggregate("class", ["petal_length", "petal_width"], [sum, sum]).show()
@@ -327,7 +327,7 @@ missing values can be either specific at each column in _def_val_map_ or have a 
    - **right_join**(that, lkeys, _rkeys_, _lsuffix_, _rsuffix_, _default_val_, _def_val_map_): This is a wrapper over _join()_ api with _join_type = right_.
    - **union**(tsv_list): This api appends all the TSVs from the tsvlist in the current TSV object. The _tsv_list_ can be a single tsv or an array.
 
-#### Examples
+*Examples*
 ```
 >>> low_size = x.le_float("petal_length", 3)
 >>> high_size = x.gt_float("petal_length", 3)
@@ -344,7 +344,7 @@ Iris-versicolor	             5.1	            2.5	             3.0	            1.
    - **drop_if_exists**(cols): This api deletes the columns from the TSV object. Doesnt throw any error if any of the columns or patterns are missing.
    - **rename**(col, new_col): This api renames the old _col_ as _new_col_. 
 
-#### Examples
+*Examples*
 Drop columns
 ```
 >>> x.drop("petal.*").show(3)
@@ -374,7 +374,7 @@ sepal_length	sepal_width	petal_length	petal_width	class_label
 renames the columns having suffix _suffix_ by removing the suffix from their names.
    - **add_prefix**(suffix, _cols_): This api adds suffix to all the given _cols_. If _cols = None_ then prefix is added to all columns. 
 
-#### Examples
+*Examples*
 ```
 >>> x.transform_inline("petal.*", lambda x: float(x)*0.4).add_prefix("approx_inches", "petal.*").show(3)
 
@@ -388,7 +388,7 @@ sepal_length	sepal_width	approx_inches:petal_length	approx_inches:petal_width	cl
    - **sort**(cols): Sorts the data using the given columns. 
    - **reverse_sort**(cols): This is a wrapper api over _sort()_ for doing sorting in reverse.
 
-#### Examples
+*Examples*
 ```
 >>> x.sort("petal_length").show(3)
 
@@ -401,7 +401,7 @@ sepal_length	sepal_width	petal_length	petal_width	class
 ### 18. Reorder Columns
    - **reorder**(cols): This api reorders the columns in the TSV object for ease of use in jupyter notebooks. In case of multiple columns in _cols_, the original relative ordering is preserved.
 
-#### Examples
+*Examples*
 ```
 >>> x.reordre("class").show(3)
 
@@ -414,7 +414,7 @@ Iris-setosa	         4.7	        3.2	         1.3	        0.2
 ### 19. Transpose from Row to Column Format
    - **transpose**(_n_): This api transposes the list of rows and columns. Useful for looking at data with lot of columns that don't fit into the width of the screen.
 
-#### Examples
+*Examples*
 ```
 >>> x.transpose(3).show(10)
 col_name    	row:1      	row:2      	row:3      
@@ -434,7 +434,7 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
    - **to_df**(): This api converts the TSV object into a pandas dataframe.
    - **to_maps**(): This api converts each row into a map and returns a list of those maps.
 
-#### Examples
+*Examples*
 Convert each record into json
 ```
 >>> x.to_json_records().show(3, max_col_width = 200)
@@ -451,7 +451,7 @@ json
    - **col_as_float_array**(col): This api returns all the values of the given _col_ as float array.
    - **col_as_int_array**(col): This api returns all the values of the given _col_ as int array.
 
-#### Examples
+*Examples*
 ```
 >>> x.col_as_array_uniq("class")
 
@@ -471,7 +471,7 @@ to take the default value if it is defined, else throw error.
    - **add_seq_num**(col): This api assigns a unique sequence number to each row with the name _col_.
    - **replicate_rows**(col): This api reads the value of column _col_, and replicates each row according to the value of the given column.
 
-#### Examples
+*Examples*
 ```
 >>> x.add_seq_num("sno").show(3)
 
@@ -486,7 +486,7 @@ sno	sepal_length	sepal_width	petal_length	petal_width	class
    - **copy**(col, new_col): This api copies the column _col_ to _new_col_.
    - **set_missing_values**(cols, default_val): This api sets the value of each column specific in _cols_ as _default_val_ wherever its value is empty.
 
-#### Examples
+*Examples*
 ```
 >>> x.assign_value("petal_length", "1.0").show(3)
 

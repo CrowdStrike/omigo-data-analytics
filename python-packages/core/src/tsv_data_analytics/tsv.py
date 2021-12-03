@@ -222,13 +222,13 @@ class TSV:
         inherit_message2 = inherit_message + ": not_endswith" if (len(inherit_message) > 0) else "not_endswith"
         return self.exclude_filter([col], lambda x: x.endswith(suffix), inherit_message = inherit_message2)
 
-    def group_count(self, cols, new_col, collapse = True, precision = 6, inherit_message = ""):
+    def group_count(self, cols, prefix, collapse = True, precision = 6, inherit_message = ""):
         # find the matching cols and indexes
         matching_cols = self.__get_matching_cols__(cols)
 
         # define new columns
-        new_count_col = new_col + ":count"
-        new_ratio_col = new_col + ":ratio"
+        new_count_col = prefix + ":count"
+        new_ratio_col = prefix + ":ratio"
 
         # call aggregate with collapse=False
         inherit_message2 = inherit_message + ":group_count" if (inherit_message != "") else "group_count"
@@ -2620,7 +2620,10 @@ class TSV:
             .add_seq_num(prefix + ":__json_index__", inherit_message = "explode_json") \
             .explode([url_encoded_col], exp_func, prefix = prefix, default_val = "", collapse = collapse, inherit_message = "explode_json")
 
-    def transpose(self, num_rows = 1):
+    def transpose(self, n = 1):
+        return self.take(n).__transpose_topn__()
+
+    def __transpose_topn__(self):
         # correct the value of n
         if (num_rows > self.num_rows()):
             num_rows = self.num_rows()
