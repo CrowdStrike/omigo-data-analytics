@@ -521,7 +521,7 @@ sepal_length	sepal_width	petal_length	petal_width	class
 Any functionality that needs extensive 3rd party libraries like matplotlib, seaborn or scikit as provided as extension packages. Not all extension packages might be 
 relevant for all users, and please refer to the documentation section of individual packages for further details. Here are some basic explained for visualization.
 
-### Basic Plots
+### 1. Basic Plots
 These plots are best described in the [example-notebooks/graphs]. 
    - **linechart**
    - **scatterplot**
@@ -530,9 +530,12 @@ These plots are best described in the [example-notebooks/graphs].
    - **barchart**
    - **boxplot**
 
-### Advanced Plots
+### 2. Advanced Plots
    - **corr_heatmap** 
    - **pairplot**
+
+### 3. Statistics and Machine Learning
+This is work in progress.
 
 ## D. Enable / Disable Debug Messages
 There are certain flags that enable or disable internal log messages. These are meant for advanced users only. 
