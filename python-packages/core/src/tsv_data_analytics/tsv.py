@@ -2947,8 +2947,6 @@ def is_pure_float_col(xtsv, col):
     except:
         return False
 
-    return True
-
 def is_float_with_fraction(xtsv, col):
     if (is_float_col(xtsv, col) == False):
         return False
