@@ -1148,13 +1148,13 @@ class TSV:
             line = all_data[i]
             fields = line.split("\t")
             row = []
-            for i in range(len(fields)):
-                col_width = col_widths[self.header_index_map[i]]
-                value = str(fields[i])
+            for j in range(len(fields)):
+                col_width = col_widths[self.header_index_map[j]]
+                value = str(fields[j])
                 if (len(value) > col_width):
                     value = value[0:col_width]
                 elif (len(value) < col_width):
-                    if (i > 0 and is_numeric_type_map[self.header_index_map[i]] == True):
+                    if (j > 0 and is_numeric_type_map[self.header_index_map[j]] == True):
                         value = spaces[0:col_width - len(value)] + value
                     else:
                         value = value + spaces[0:col_width - len(value)]
