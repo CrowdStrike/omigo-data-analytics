@@ -1,7 +1,5 @@
 """FilePathsReader class"""
 
-import sys
-
 class FilePathsReader:
     """A simple class to read filepaths data"""
 
