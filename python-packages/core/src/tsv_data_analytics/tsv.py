@@ -2966,8 +2966,8 @@ def read(paths, sep = None):
 def write(xtsv, path):
     return tsvutils.save_to_file(xtsv, path)
 
-def merge(xtsvs, do_union = False, def_val = None, def_val_map = None):
-    return tsvutils.merge(xtsvs, do_union = do_union, def_val = def_val, def_val_map = def_val_map)
+def merge(xtsvs, def_val_map = None):
+    return tsvutils.merge(xtsvs, def_val_map = def_val_map)
 
 def exists(path):
     return tsvutils.check_exists(path)
