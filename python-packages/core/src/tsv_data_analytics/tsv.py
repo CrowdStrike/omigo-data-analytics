@@ -515,9 +515,6 @@ class TSV:
         # check for collapse flag and add the agg func value
         result = {}
 
-        # new columns
-        new_cols_str = "\t".join(new_cols_names)
-
         # create header
         new_header = None
         if (collapse == True):
