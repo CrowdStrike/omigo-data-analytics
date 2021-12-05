@@ -1704,7 +1704,8 @@ class TSV:
 
             # check if we need to resample this column value
             if (cv == col_value):
-                if (random.random() <= sampling_ratio):
+                # this random number is only for basic sampling and not for doing anything sensitive.
+                if (random.random() <= sampling_ratio):  # nosec
                     new_data.append(line)
             else:
                 new_data.append(line) 
