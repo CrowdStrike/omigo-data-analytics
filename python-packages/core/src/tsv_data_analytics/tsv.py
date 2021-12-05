@@ -1,6 +1,5 @@
 """TSV Class"""
 import re
-import statistics
 import math
 import pandas as pd
 import gzip
