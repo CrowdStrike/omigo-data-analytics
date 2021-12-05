@@ -1637,11 +1637,13 @@ class TSV:
             raise Exception("sampling with replacement not implemented yet.")
 
         # set seed
-        random.seed(seed)
+        # this random number is only for basic sampling and not for doing anything sensitive.
+        random.seed(seed)  # nosec
 
         new_data = []
         for line in self.data:
-            if (random.random() <= sampling_ratio):
+            # this random number is only for basic sampling and not for doing anything sensitive.
+            if (random.random() <= sampling_ratio):  # nosec
                 new_data.append(line)
 
         return TSV(self.header, new_data)
@@ -1728,8 +1730,9 @@ class TSV:
                 vs0 = str(vs0)
                 value0 = str(value)
 
-            # check the value
-            if (vs0 != value0 or random.random() <= sampling_ratio):
+            # check the value. 
+            # this random number is only for basic sampling and not for doing anything sensitive.
+            if (vs0 != value0 or random.random() <= sampling_ratio):  # nosec
                  return "1"
             else:
                  return "0"
@@ -1860,9 +1863,11 @@ class TSV:
     # sample by taking only n number of unique values for a specific column
     def sample_column_by_max_uniq_values(self, col, max_uniq_values, seed = 0, inherit_message = ""):
         uniq_values = self.col_as_array_uniq(col)
-        random.seed(seed)
+        # this random number is only for basic sampling and not for doing anything sensitive.
+        random.seed(seed)  # nosec
         if (len(uniq_values) > max_uniq_values):
-            selected_values = random.sample(uniq_values, max_uniq_values)
+            # this random number is only for basic sampling and not for doing anything sensitive.
+            selected_values = random.sample(uniq_values, max_uniq_values)  # nosec`
             inherit_message2 = inherit_message + ": sample_column_by_max_uniq_values" if (inherit_message != "") else "sample_column_by_max_uniq_values"
             return self.values_in(col, selected_values, inherit_message = inherit_message2)
         else:
