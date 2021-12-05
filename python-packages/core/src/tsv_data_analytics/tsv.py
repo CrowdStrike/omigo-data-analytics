@@ -2624,14 +2624,10 @@ class TSV:
         return self.take(n).__transpose_topn__()
 
     def __transpose_topn__(self):
-        # correct the value of n
-        if (num_rows > self.num_rows()):
-            num_rows = self.num_rows()
-
         # construct new header
         new_header_fields = []
         new_header_fields.append("col_name")
-        for i in range(num_rows):
+        for i in range(self.num_rows()):
             new_header_fields.append("row:" + str(i + 1))
         new_header = "\t".join(new_header_fields)
 
@@ -2640,7 +2636,7 @@ class TSV:
         for h in self.header_fields:
             new_fields = []
             new_fields.append(h)
-            for v in self.take(num_rows).col_as_array(h):
+            for v in self.col_as_array(h):
                 new_fields.append(v)
             new_data.append("\t".join(new_fields))
 
