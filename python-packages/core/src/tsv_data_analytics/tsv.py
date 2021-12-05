@@ -1,6 +1,5 @@
 """TSV Class"""
 import re
-import statistics
 import math
 import pandas as pd
 import gzip
@@ -10,7 +9,6 @@ import json
 import urllib
 from tsv_data_analytics import tsvutils
 from tsv_data_analytics import utils
-from tsv_data_analytics import funclib 
 import sys
 
 class TSV:
@@ -517,9 +515,6 @@ class TSV:
         # check for collapse flag and add the agg func value
         result = {}
 
-        # new columns
-        new_cols_str = "\t".join(new_cols_names)
-
         # create header
         new_header = None
         if (collapse == True):
@@ -693,7 +688,8 @@ class TSV:
 
         # create a map to store array of values
         value_map_arr = [{} for i in range(len(agg_col_indexes))]
-        rolling_value_map_arr = [{} for i in range(len(agg_col_indexes))]
+        # TODO: This rolling aggregation needs to be removed
+        # rolling_value_map_arr = [{} for i in range(len(agg_col_indexes))]
 
         # iterate over the data
         counter = 0
@@ -1046,7 +1042,7 @@ class TSV:
     def get_header_fields(self):
         return self.header_fields
 
-    def columns():
+    def columns(self):
         return self.get_header_fields()
 
     def export_to_maps(self):
@@ -1148,13 +1144,13 @@ class TSV:
             line = all_data[i]
             fields = line.split("\t")
             row = []
-            for i in range(len(fields)):
-                col_width = col_widths[self.header_index_map[i]]
-                value = str(fields[i])
+            for j in range(len(fields)):
+                col_width = col_widths[self.header_index_map[j]]
+                value = str(fields[j])
                 if (len(value) > col_width):
                     value = value[0:col_width]
                 elif (len(value) < col_width):
-                    if (i > 0 and is_numeric_type_map[self.header_index_map[i]] == True):
+                    if (j > 0 and is_numeric_type_map[self.header_index_map[j]] == True):
                         value = spaces[0:col_width - len(value)] + value
                     else:
                         value = value + spaces[0:col_width - len(value)]
@@ -1641,11 +1637,13 @@ class TSV:
             raise Exception("sampling with replacement not implemented yet.")
 
         # set seed
-        random.seed(seed)
+        # this random number is only for basic sampling and not for doing anything sensitive.
+        random.seed(seed)  # nosec
 
         new_data = []
         for line in self.data:
-            if (random.random() <= sampling_ratio):
+            # this random number is only for basic sampling and not for doing anything sensitive.
+            if (random.random() <= sampling_ratio):  # nosec
                 new_data.append(line)
 
         return TSV(self.header, new_data)
@@ -1706,7 +1704,8 @@ class TSV:
 
             # check if we need to resample this column value
             if (cv == col_value):
-                if (random.random() <= sampling_ratio):
+                # this random number is only for basic sampling and not for doing anything sensitive.
+                if (random.random() <= sampling_ratio):  # nosec
                     new_data.append(line)
             else:
                 new_data.append(line) 
@@ -1732,8 +1731,9 @@ class TSV:
                 vs0 = str(vs0)
                 value0 = str(value)
 
-            # check the value
-            if (vs0 != value0 or random.random() <= sampling_ratio):
+            # check the value. 
+            # this random number is only for basic sampling and not for doing anything sensitive.
+            if (vs0 != value0 or random.random() <= sampling_ratio):  # nosec
                  return "1"
             else:
                  return "0"
@@ -1864,9 +1864,11 @@ class TSV:
     # sample by taking only n number of unique values for a specific column
     def sample_column_by_max_uniq_values(self, col, max_uniq_values, seed = 0, inherit_message = ""):
         uniq_values = self.col_as_array_uniq(col)
-        random.seed(seed)
+        # this random number is only for basic sampling and not for doing anything sensitive.
+        random.seed(seed)  # nosec
         if (len(uniq_values) > max_uniq_values):
-            selected_values = random.sample(uniq_values, max_uniq_values)
+            # this random number is only for basic sampling and not for doing anything sensitive.
+            selected_values = random.sample(uniq_values, max_uniq_values)  # nosec`
             inherit_message2 = inherit_message + ": sample_column_by_max_uniq_values" if (inherit_message != "") else "sample_column_by_max_uniq_values"
             return self.values_in(col, selected_values, inherit_message = inherit_message2)
         else:
@@ -2946,8 +2948,6 @@ def is_pure_float_col(xtsv, col):
             return False
     except:
         return False
-
-    return True
 
 def is_float_with_fraction(xtsv, col):
     if (is_float_col(xtsv, col) == False):

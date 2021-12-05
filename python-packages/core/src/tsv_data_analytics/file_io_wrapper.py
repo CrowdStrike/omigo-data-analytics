@@ -1,6 +1,5 @@
 """FileReader / FileWriter class"""
 
-import sys
 import gzip
 import zipfile
 

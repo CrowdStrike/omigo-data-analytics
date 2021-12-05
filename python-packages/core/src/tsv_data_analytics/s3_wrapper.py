@@ -1,7 +1,6 @@
 """wrapper methods to work with S3"""
 import boto3
 import gzip
-import botocore
 import os
 import zipfile
 from io import BytesIO
