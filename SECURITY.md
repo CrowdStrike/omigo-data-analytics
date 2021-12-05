@@ -6,7 +6,7 @@
 This document outlines security policy and procedures for the CrowdStrike `tsv-data-analytics` project.
 
 + [Supported Python versions](#supported-python-versions)
-+ [Supported FalconPy versions](#supported-falconpy-versions)
++ [Supported versions](#supported-versions)
 + [Reporting a potential security vulnerability](#reporting-a-potential-security-vulnerability)
 + [Disclosure and Mitigation Process](#disclosure-and-mitigation-process)
 
@@ -28,9 +28,9 @@ This unit testing is performed using Windows, MacOS, and Ubuntu Linux.
 
 | Operating System | Most Recent Result |
 | :--- | :--- |
-| MacOS | [![Unit testing (MacOS)](https://github.com/CrowdStrike/falconpy/actions/workflows/unit_testing_macos.yml/badge.svg)](https://github.com/CrowdStrike/falconpy/actions/workflows/unit_testing_macos.yml) |
-| Ubuntu Linux | [![Unit testing (Ubuntu)](https://github.com/CrowdStrike/falconpy/actions/workflows/unit_testing_ubuntu.yml/badge.svg)](https://github.com/CrowdStrike/falconpy/actions/workflows/unit_testing_ubuntu.yml) |
-| Windows | [![Unit testing (Windows)](https://github.com/CrowdStrike/falconpy/actions/workflows/unit_testing_windows.yml/badge.svg)](https://github.com/CrowdStrike/falconpy/actions/workflows/unit_testing_windows.yml) |
+| MacOS | [![Unit testing (MacOS)](https://github.com/CrowdStrike/tsv-data-analytics/actions/workflows/unit_testing_macos.yml/badge.svg)](https://github.com/CrowdStrike/tsv-data-analytics/actions/workflows/unit_testing_macos.yml) |
+| Ubuntu Linux | [![Unit testing (Ubuntu)](https://github.com/CrowdStrike/tsv-data-analytics/actions/workflows/unit_testing_ubuntu.yml/badge.svg)](https://github.com/CrowdStrike/tsv-data-analytics/actions/workflows/unit_testing_ubuntu.yml) |
+| Windows | [![Unit testing (Windows)](https://github.com/CrowdStrike/tsv-data-analytics/actions/workflows/unit_testing_windows.yml/badge.svg)](https://github.com/CrowdStrike/tsv-data-analytics/actions/workflows/unit_testing_windows.yml) |
 -->
 ## Supported versions
 
@@ -42,7 +42,7 @@ We accept security-related vulnerability reports via bug reports or pull request
 
 Please report suspected security vulnerabilities by:
 + Submitting a [bug](https://github.com/CrowdStrike/tsv-data-analytics/issues/new?assignees=&labels=bug+%3Abug%3A&template=bug_report.md&title=%5B+BUG+%5D+...).
-+ Submitting a [pull request](https://github.com/CrowdStrike/falconpy/pulls) to potentially resolve the issue.
++ Submitting a [pull request](https://github.com/CrowdStrike/tsv-data-analytics/pulls) to potentially resolve the issue.
 
 
 ## Disclosure and mitigation process
