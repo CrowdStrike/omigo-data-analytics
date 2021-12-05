@@ -188,7 +188,7 @@ def read(input_file_or_files, sep = None, s3_region = None, aws_profile = None):
 
 def read_with_filter_transform(input_file_or_files, filter_transform_func = None, s3_region = None, aws_profile = None):
     # check if filter_func is defined
-    if (filter_transform_func == None):
+    if (filter_transform_func is None):
         return read(input_file_or_files, s3_region = s3_region, aws_profile = aws_profile)
 
     # resolve input
@@ -471,7 +471,7 @@ def __read_base_url__(url, query_params = {}, headers = {}, body = None, usernam
         url = "{}?{}".format(url, params_encoded_str)
 
     # call the web service    
-    if (body == None):
+    if (body is None):
         if (username != None and password != None):
             response = requests.get(url, auth = (username, password), headers = headers, timeout = timeout_sec)
         else:
@@ -601,7 +601,7 @@ def read_url(url, query_params = {}, headers = {}, sep = None, username = None, 
     data = lines[1:]
 
     # check for separator
-    if (sep == None and "\t" not in response_str):
+    if (sep is None and "\t" not in response_str):
         if ("," in header or ext_type == "csv"):
             sep = ","
 

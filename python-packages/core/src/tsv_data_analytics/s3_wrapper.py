@@ -135,20 +135,20 @@ def put_s3_file_with_text_content(bucket_name, object_key, text, region = None, 
     put_s3_file_content(bucket_name, object_key, barr, region, profile)
 
 def resolve_region_profile(region = None, profile = None):
-    if (region == "" or region == None):
+    if (region == "" or region is None):
         region = os.getenv("S3_REGION")
 
-    if (profile == "" or profile == None):
+    if (profile == "" or profile is None):
         profile = os.getenv("AWS_PROFILE")
 
-    if (region == "" or region == None):
+    if (region == "" or region is None):
         # warn only once
         #if (S3_WARNING_GIVEN == "0"):
         #    print ("[WARN] S3 region not defined. Please set environment variable S3_REGION and AWS_PROFILE. Using 'us-west-1'")
         #    S3_WARNING_GIVEN = "1" 
         region = S3_DEFAULT_REGION
 
-    if (profile == "" or profile == None):
+    if (profile == "" or profile is None):
         # warn only once
         #if (S3_WARNING_GIVEN == "0"):
         #    print ("[WARN] AWS Profile not defined. Please set environment variable S3_REGION and AWS_PROFILE. Using 'default'")

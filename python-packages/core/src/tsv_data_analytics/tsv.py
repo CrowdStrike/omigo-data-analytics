@@ -305,7 +305,7 @@ class TSV:
 
     def drop_if_exists(self, col_or_cols, inherit_message = ""):
         # validation
-        if (col_or_cols == None or len(col_or_cols) == 0):
+        if (col_or_cols is None or len(col_or_cols) == 0):
             return self
 
         # convert to array form
@@ -328,7 +328,7 @@ class TSV:
     # TODO: the select_cols is not implemented properly
     def window_aggregate(self, win_col, agg_cols, agg_funcs, winsize, select_cols = None, sliding = False, collapse = True, suffix = "", precision = 2, inherit_message = ""):
         # get the matching cols
-        if (select_cols == None):
+        if (select_cols is None):
             select_cols = []
         select_cols = self.__get_matching_cols__(select_cols)
 
@@ -1247,7 +1247,7 @@ class TSV:
         indexes = self.__get_col_indexes__(matching_cols)
 
         # check if all are numeric or not
-        if (all_numeric == None):
+        if (all_numeric is None):
             has_alpha = False
             for col in matching_cols:
                 if (is_float_col(self, col) == False):
@@ -1451,7 +1451,7 @@ class TSV:
         # check for default values
         for h in self.header_fields:
             if (h not in mp.keys()):
-                if (default_val == None):
+                if (default_val is None):
                     raise Exception("Column not present in map and default value is not defined: {}. Try using default_val".format(h))
 
         # add the map as new row
@@ -1528,7 +1528,7 @@ class TSV:
 
     def add_prefix(self, prefix, cols = None):
         # by default all columns are renamed
-        if (cols == None):
+        if (cols is None):
             cols = self.header_fields
  
         # resolve columns
@@ -1549,7 +1549,7 @@ class TSV:
 
     def add_suffix(self, suffix, cols = None):
         # by default all columns are renamed
-        if (cols == None):
+        if (cols is None):
             cols = self.header_fields
  
         # resolve columns
@@ -1570,7 +1570,7 @@ class TSV:
 
     def rename_prefix(self, old_prefix, new_prefix, cols = None):
         # either selective columns can be renamed or all matching ones
-        if (cols == None):
+        if (cols is None):
             # use the prefix patterns for determing cols
             cols = "{}:.*".format(old_prefix)
 
@@ -1592,7 +1592,7 @@ class TSV:
 
     def rename_suffix(self, old_suffix, new_suffix, cols = None):
         # either selective columns can be renamed or all matching ones
-        if (cols == None):
+        if (cols is None):
             # use the prefix patterns for determing cols
             cols = ".*:{}".format(old_suffix)
 
@@ -1809,7 +1809,7 @@ class TSV:
             raise Exception("Column not found:", str(class_col), str(self.header_fields))
 
         # correctly define def_max_uniq_values
-        if (def_max_uniq_values == None):
+        if (def_max_uniq_values is None):
             def_max_uniq_values = self.num_rows()
 
         # validation on def_max_uniq_values
@@ -2198,7 +2198,7 @@ class TSV:
             raise Exception("Column not found:", str(col), str(self.header_fields))
 
         # create new column if it is not existing
-        if (new_col == None):
+        if (new_col is None):
             new_col = "{}:replicate_rows".format(col)
 
         # check new col
@@ -2337,7 +2337,7 @@ class TSV:
     def __explode_json_transform_func__(self, url_encoded_col, accepted_cols, excluded_cols, single_value_list_cols, transpose_col_groups, merge_list_method, collapse_primitive_list, join_col = ","):
         def __explode_json_transform_func_inner__(mp):
             # some validation.
-            if (url_encoded_col not in mp.keys() or mp[url_encoded_col] == "" or mp[url_encoded_col] == None):
+            if (url_encoded_col not in mp.keys() or mp[url_encoded_col] == "" or mp[url_encoded_col] is None):
                 utils.warn("__explode_json_transform_func_inner__: invalid json response found. Need more debugging: {}, {}".format(url_encoded_col, mp))
                 return []
 
@@ -2384,7 +2384,7 @@ class TSV:
 
                 # handle null scenario. json string can have a special value called null to represent empty or null value, which is converted to None in json parser.
                 # such null value should be okay to read as empty string
-                if (v == None):
+                if (v is None):
                     utils.debug("__explode_json_transform_func_expand_json__: None type value found. Taking it as empty string. Key: {}".format(k))
                     v = ""
 
@@ -2606,7 +2606,7 @@ class TSV:
             utils.warn("explode_json: merge_list_method = cogroup is only meant for data exploration. Use merge_list_method = join for generating all combinations for multiple list values")
 
         # name prefix
-        if (prefix == None):
+        if (prefix is None):
             utils.warn("explode_json: prefix is None. Using col as the name prefix")
             prefix = col
 
@@ -2784,7 +2784,7 @@ class TSV:
     # treats a string as an array of characters, so little hacky but a more intuitive api wise
     def __get_matching_cols__(self, col_or_cols):
         # handle boundary conditions
-        if (col_or_cols == None or len(col_or_cols) == 0):
+        if (col_or_cols is None or len(col_or_cols) == 0):
             return []
 
         # check if there is comma. If yes, then map it to array
