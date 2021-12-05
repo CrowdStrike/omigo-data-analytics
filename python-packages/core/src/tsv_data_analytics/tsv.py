@@ -9,7 +9,6 @@ import json
 import urllib
 from tsv_data_analytics import tsvutils
 from tsv_data_analytics import utils
-from tsv_data_analytics import funclib 
 import sys
 
 class TSV:
