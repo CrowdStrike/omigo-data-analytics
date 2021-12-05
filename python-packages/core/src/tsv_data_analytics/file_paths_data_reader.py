@@ -72,7 +72,7 @@ class FilePathsDataReader:
     # has next returns boolean if there is still some data left
     def has_next(self):
         # check if no data block loaded
-        if (self.cur_data == None):
+        if (self.cur_data is None):
             return False
 
         return True

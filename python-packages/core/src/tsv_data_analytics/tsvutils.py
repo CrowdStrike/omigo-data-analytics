@@ -23,8 +23,8 @@ from tsv_data_analytics import utils
 # TODO: find the difference between ascii and utf-8 encoding
 # requests.post doesnt take data properly. Use json parameter.
 
-# TODO: need to document that a simple union can be achieved by setting merge_def_vals = {}
-def merge(tsv_list, merge_def_vals = None):
+# TODO: need to document that a simple union can be achieved by setting def_val_map = {}
+def merge(tsv_list, def_val_map = None):
     # remove zero length tsvs
     tsv_list = list(filter(lambda x: len(x.get_header()) > 0, tsv_list))
 
@@ -47,7 +47,7 @@ def merge(tsv_list, merge_def_vals = None):
                     index, str(header_diffs)))
             else:
                 utils.warn("Mismatch in order of header fields: {}, {}. Using merge intersect".format(header.split("\t"), t.get_header().split("\t")))
-            return merge_intersect(tsv_list, merge_def_vals)
+            return merge_intersect(tsv_list, def_val_map)
                 
         index = index + 1
 
@@ -79,7 +79,7 @@ def get_diffs_in_headers(tsv_list):
     common, non_common = split_headers_in_common_and_diff(tsv_list)
     return non_common
 
-def merge_intersect(tsv_list, merge_def_vals = None):
+def merge_intersect(tsv_list, def_val_map = None):
     # remove zero length tsvs
     tsv_list = list(filter(lambda x: x.num_rows() > 0, tsv_list))
 
@@ -103,24 +103,24 @@ def merge_intersect(tsv_list, merge_def_vals = None):
         utils.warn("merge_intersect: missing columns: {}".format(str(diff_cols)))
 
         # check which of the columns among the diff have default values
-        if (merge_def_vals != None):
+        if (def_val_map != None):
             # create effective map with empty string as default value
-            effective_merge_def_vals = {}
+            effective_def_val_map = {}
 
             # some validation. the default value columns should exist somewhere
-            for h in merge_def_vals.keys():
+            for h in def_val_map.keys():
                 # check if all default columns exist 
                 if (h not in diff_cols and h not in same_cols):
                     raise Exception("Default value for a column given which does not exist:", h)
 
             # assign empty string to the columns for which default value was not defined
             for h in diff_cols:
-                if (h in merge_def_vals.keys()):
-                    utils.warn("merge_intersect: assigning default value for {}: {}".format(h, merge_def_vals[h]))
-                    effective_merge_def_vals[h] = merge_def_vals[h]
+                if (h in def_val_map.keys()):
+                    utils.warn("merge_intersect: assigning default value for {}: {}".format(h, def_val_map[h]))
+                    effective_def_val_map[h] = def_val_map[h]
                 else:
                     utils.warn("merge_intersect: assigning empty string as default value to column: {}".format(h))
-                    effective_merge_def_vals[h] = ""
+                    effective_def_val_map[h] = ""
         
             # get the list of keys in order
             keys_order = []
@@ -137,7 +137,7 @@ def merge_intersect(tsv_list, merge_def_vals = None):
             for t in tsv_list:
                 t1 = t
                 for d in diff_cols:
-                    t1 = t1.add_const_if_missing(d, effective_merge_def_vals[d])
+                    t1 = t1.add_const_if_missing(d, effective_def_val_map[d])
                 new_tsvs.append(t1.select(keys_order))
 
             # return after merging
@@ -188,7 +188,7 @@ def read(input_file_or_files, sep = None, s3_region = None, aws_profile = None):
 
 def read_with_filter_transform(input_file_or_files, filter_transform_func = None, s3_region = None, aws_profile = None):
     # check if filter_func is defined
-    if (filter_transform_func == None):
+    if (filter_transform_func is None):
         return read(input_file_or_files, s3_region = s3_region, aws_profile = aws_profile)
 
     # resolve input
@@ -298,7 +298,7 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
     return file_paths_util.get_file_paths_by_datetime_range(path,  start_date_str, end_date_str, prefix, spillover_window, s3_region, aws_profile)
     
 # TODO: move this to scar etl tools as there are specific directory construction logic
-def scan_by_datetime_range(path, start_date_str, end_date_str, prefix, filter_func = None, spillover_window = 1, num_par = 5, timeout_seconds = 600, merge_def_vals = None, s3_region = None, aws_profile = None):
+def scan_by_datetime_range(path, start_date_str, end_date_str, prefix, filter_func = None, spillover_window = 1, num_par = 5, timeout_seconds = 600, def_val_map = None, s3_region = None, aws_profile = None):
     utils.print_code_todo_warning("scan_by_datetime_range: move this to scar etl tools as there are specific directory construction logic")
     utils.warn("scan_by_datetime_range: this method runs in multithreaded mode which can not be stopped without killing process. Wait for timeout_seconds: {}".format(timeout_seconds))
 
@@ -365,7 +365,7 @@ def scan_by_datetime_range(path, start_date_str, end_date_str, prefix, filter_fu
     utils.debug("scan_by_datetime_range: Finished reading the files. Calling merge.")
        
     # combine all together
-    tsv_combined = merge(tsv_list, merge_def_vals)
+    tsv_combined = merge(tsv_list, def_val_map)
     utils.debug("scan_by_datetime_range: Number of records: {}".format(tsv_combined.num_rows()))
        
     return tsv_combined
@@ -471,7 +471,7 @@ def __read_base_url__(url, query_params = {}, headers = {}, body = None, usernam
         url = "{}?{}".format(url, params_encoded_str)
 
     # call the web service    
-    if (body == None):
+    if (body is None):
         if (username != None and password != None):
             response = requests.get(url, auth = (username, password), headers = headers, timeout = timeout_sec)
         else:
@@ -601,7 +601,7 @@ def read_url(url, query_params = {}, headers = {}, sep = None, username = None, 
     data = lines[1:]
 
     # check for separator
-    if (sep == None and "\t" not in response_str):
+    if (sep is None and "\t" not in response_str):
         if ("," in header or ext_type == "csv"):
             sep = ","
 

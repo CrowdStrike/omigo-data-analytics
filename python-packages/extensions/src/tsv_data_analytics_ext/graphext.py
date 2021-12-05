@@ -73,11 +73,11 @@ def __pd_linechart__(xtsv, xcol, ycols, ylabel, title, subplots, xfigsize, yfigs
     ycols = xtsv.__get_matching_cols__(ycols)
     
     # ylabel
-    if (len(ycols) == 1 and ylabel == None):
+    if (len(ycols) == 1 and ylabel is None):
         ylabel = ycols[0]
 
     # title
-    if (title == None):
+    if (title is None):
         title = ylabel
 
     # sort based on xcol
@@ -114,7 +114,7 @@ def __sns_scatterplot__(xtsv, xcol, ycol, class_col, title, xfigsize, yfigsize, 
     fig, ax = pyplot.subplots(figsize = figsize)
     
     # title
-    if (title == None):
+    if (title is None):
         title = "{} vs {}".format(xcol, ycol)
         
     #df.plot.scatter(x = xcol, y = ycol, figsize = figsize, title = title)    
