@@ -688,7 +688,8 @@ class TSV:
 
         # create a map to store array of values
         value_map_arr = [{} for i in range(len(agg_col_indexes))]
-        rolling_value_map_arr = [{} for i in range(len(agg_col_indexes))]
+        # TODO: This rolling aggregation needs to be removed
+        # rolling_value_map_arr = [{} for i in range(len(agg_col_indexes))]
 
         # iterate over the data
         counter = 0
