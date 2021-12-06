@@ -9,7 +9,7 @@
  * Advanced APIs for doing join, aggregate, sampling, time window, and processing json data.
  * Support for ETL kind of data collected periodically over long period of time.
  * APIs designed to work with 100s of columns.
- * Out of the box support for data with changing schema.
+ * Out of the box support for schema evolution.
  * Visualization APIs to provide simple interface to matplotlib, seaborn, and other popular libraries.
 
 ## Primary use cases 
