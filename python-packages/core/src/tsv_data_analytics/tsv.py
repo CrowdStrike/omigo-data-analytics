@@ -222,7 +222,7 @@ class TSV:
 
     def group_count(self, cols, prefix, collapse = True, precision = 6, inherit_message = ""):
         # find the matching cols and indexes
-        matching_cols = self.__get_matching_cols__(cols)
+        cols = self.__get_matching_cols__(cols)
 
         # define new columns
         new_count_col = prefix + ":count"
@@ -230,7 +230,7 @@ class TSV:
 
         # call aggregate with collapse=False
         inherit_message2 = inherit_message + ":group_count" if (inherit_message != "") else "group_count"
-        return self.aggregate(matching_cols, [matching_cols[0]], [len], collapse = collapse, inherit_message = inherit_message2) \
+        return self.aggregate(cols, [cols[0]], [len], collapse = collapse, inherit_message = inherit_message2) \
             .rename(matching_cols[0] + ":len", new_count_col) \
             .transform([new_count_col], lambda x: str(int(x) / len(self.data)), new_ratio_col, inherit_message = inherit_message2) \
             .apply_precision(new_ratio_col, precision, inherit_message = inherit_message2)
