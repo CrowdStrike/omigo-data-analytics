@@ -27,7 +27,7 @@ Another example to mix and match column names and regular expressions:
 >>> x.drop("petal.*")
 ```
 
-All advanced apis like **aggregate()** follows simple naming convention to create new names with appropriate prefix or suffixes to help with selecting them in groups.
+All advanced apis like **aggregate()** follow simple naming convention to create new names with appropriate prefix or suffixes to help with selecting them in groups.
 ```
 >>> x.aggregate("class", ["petal_length"], [min]).show()
 class          	petal_length:min
