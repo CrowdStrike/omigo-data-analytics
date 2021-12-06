@@ -24,8 +24,8 @@
  * Binary formats are best for getting good performance, though plain text is best for looking into data easily without any additional tools.
 
 ## Install Instructions
-There are two packages - core and extensions. The core package is built on core python and out of the box without many dependencies
-to keep it stable. The extensions package contains libraries for plotting, and can have lot of dependencies.
+There are two packages - core and extensions. The core package is built on core python without many external dependencies
+to keep it stable. The extensions package contains libraries for advanced functionalities like plotting, and can have lot of dependencies.
 
 ```
 $ pip3 install tsv-data-analytics==0.0.9
