@@ -66,7 +66,7 @@ Each project has one or more project maintainers/community leaders. These indivi
 accountable to enforce the code of conduct within a given project.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the community leaders. All ccomplaints will be reviewed and
+reported to the community leaders. All complaints will be reviewed and
 investigated promptly and fairly.
 
 All community leaders are obligated to respect the privacy and security of the
