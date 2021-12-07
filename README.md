@@ -3,20 +3,15 @@
 ## Overview
  * Python library to do end to end data analytics from reading to transformation, analysis and visualization.
  * Support for reading and writing multiple data formats from local machine or S3.
- * TSV as the primary data format for data processing.
- * 100+ APIs for simple data transformation to get insights.
- * Functional programming style interface for expressing business logic.
- * Advanced APIs for doing join, aggregate, sampling, time window, and processing json data.
- * Support for ETL kind of data collected periodically over long period of time.
- * APIs designed to work with 100s of columns.
- * Out of the box support for schema evolution.
+ * Functional programming style APIs.
+ * Advanced APIs for doing join, aggregate, sampling, and processing time series data.
+ * Schema evolution.
  * Visualization APIs to provide simple interface to matplotlib, seaborn, and other popular libraries.
 
 ## Primary use cases 
  * Data Exploration phase when we don't know what we are looking for, and what might work.
  * Wide datasets with 100s or 1000s of columns.
- * Need ability to integrate custom APIs or modules for both data ingestion and processing.
- * Working with data collected over long period of time.
+ * Complex business logic is involved. 
 
 ## How and why TSV format is used
  * Input data can be of different formats and read either locally or from external sources like S3 or web.
@@ -24,8 +19,10 @@
  * Binary formats are best for getting good performance, though plain text is best for looking into data easily without any additional tools.
 
 ## Install Instructions
-There are two packages - core and extensions. The core package is built on core python without many external dependencies
-to keep it stable. The extensions package contains libraries for advanced functionalities like plotting, and can have lot of dependencies.
+There are two packages - core and extensions. 
+
+The core package is built on core python without many external dependencies to keep it stable. The extensions package contains libraries for advanced
+functionalities like plotting, and can have lot of dependencies.
 
 ```
 $ pip3 install tsv-data-analytics==0.0.9
