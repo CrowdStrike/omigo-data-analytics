@@ -417,7 +417,7 @@ class TSV:
                 new_data.append(line + "\t" + str(namexy))
 
         # return
-        if (collapse):
+        if (collapse == True):
             cols2 = select_cols 
             cols2.append(win_col)
             return TSV(new_header, new_data) \
@@ -767,7 +767,7 @@ class TSV:
                 cols_key_map[cols_key] = 1
      
         # return 
-        if (collapse):
+        if (collapse == True):
             # uniq cols
             uniq_cols = []
             for col in grouping_cols:
