@@ -9,7 +9,7 @@ import math
 import time
 
 class MultiThreadTSV(tsv.TSV):
-    def __init__(self, header, data, num_par = 1, status_check_interval_sec = 10, sleep_interval_sec = 0.01):
+    def __init__(self, header, data, num_par = 1, status_check_interval_sec = 10, sleep_interval_sec = 0.01, num_batches = 10):
         super().__init__(header, data)
         self.num_par = num_par
         self.status_check_interval_sec = status_check_interval_sec
@@ -20,12 +20,15 @@ class MultiThreadTSV(tsv.TSV):
             utils.warn("MultiThreadTSV: num_rows: {} < num_par: {}. Adjusting the value".format(self.num_rows(), self.num_par))
             self.num_par = self.num_rows()
 
+        # set the num_batches for better splitting
+        self.num_batches = num_batches if (num_batches > num_par) else num_par
+
     def parallelize(self, func, *args, **kwargs):
         # debug
         utils.debug("parallelize: func: {}, args: {}, kwargs: {}".format(func, *args, **kwargs))
 
         # split the data into num_par partitions
-        batch_size = int(math.ceil(self.num_rows() / self.num_par))
+        batch_size = int(math.ceil(self.num_rows() / self.num_batches))
         future_results = []
 
         # take start_time
@@ -38,7 +41,7 @@ class MultiThreadTSV(tsv.TSV):
             # run thread pool
             with ThreadPoolExecutor(max_workers = self.num_par) as executor:
                 # execute batches concurrently based on num_par and batch_size 
-                for i in range(self.num_par):
+                for i in range(self.num_batches):
                     batch_i = self.skip(batch_size * i).take(batch_size)
                     future_results.append(executor.submit(__parallelize__, batch_i, func, *args, **kwargs))
 
