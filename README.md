@@ -8,7 +8,7 @@
  * Schema evolution.
  * Visualization APIs to provide simple interface to matplotlib, seaborn, and other popular libraries.
 
-## Primary use cases 
+## Primary Use Cases 
  * Data Exploration phase when we don't know what we are looking for, and what might work.
  * Wide datasets with 100s or 1000s of columns.
  * Complex business logic is involved. 
