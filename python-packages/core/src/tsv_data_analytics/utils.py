@@ -33,14 +33,14 @@ def trace(msg):
         print("[TRACE]: {}".format(msg))
 
 def trace_once(msg, msg_cache):
+    # check if the cache has become too big
+    if (len(msg_cache) >= MSG_CACHE_MAX_LEN):
+        msg_cache = {}
+
     # check if msg is already displayed
     if (msg not in msg_cache.keys()):
         print("[TRACE ONCE ONLY]: " + msg)
         msg_cache[msg] = 1
-
-        # check if the cache has become too big
-        if (len(msg_cache) >= MSG_CACHE_MAX_LEN):
-            msg_cache = {}
 
 def debug(msg):
     if (is_debug()):
