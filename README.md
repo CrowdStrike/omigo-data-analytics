@@ -100,4 +100,4 @@ sepal_width	sepal_length
 ```
 ## Notes from the author
 * This library is built for simplicity, functionality and robustness. Engineering good practices are followed slowly.
-* More examples with real life use cases is currently in progress. Feel free to reach out for any questions or help.
+* More examples with real life use cases is currently in progress. Feel free to reach out for any questions. 
