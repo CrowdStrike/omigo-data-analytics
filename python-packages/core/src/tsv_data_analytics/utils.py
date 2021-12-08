@@ -204,3 +204,45 @@ def is_array_of_string_values(col_or_cols):
             break
     return is_array
 
+def is_int_col(xtsv, col):
+    try:
+        for v in xtsv.col_as_array(col):
+            if (str(int(v)) != v):
+                return False
+    except:
+        return False
+
+    return True
+
+def is_float_col(xtsv, col):
+    try:
+        xtsv.col_as_float_array(col)
+    except:
+        return False
+
+    return True
+
+def is_pure_float_col(xtsv, col):
+    try:
+        found = False
+        for v in xtsv.col_as_float_array(col):
+            if (float(int(v)) != v):
+                found = True
+        if (found == True):
+            return True
+        else:
+            return False
+    except:
+        return False
+
+def is_float_with_fraction(xtsv, col):
+    if (is_float_col(xtsv, col) == False):
+        return False
+
+    found = False
+    for v in xtsv.col_as_array(col):
+        if ("." in v):
+            return True
+
+    return False 
+

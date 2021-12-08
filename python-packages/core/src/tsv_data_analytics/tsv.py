@@ -417,7 +417,7 @@ class TSV:
                 new_data.append(line + "\t" + str(namexy))
 
         # return
-        if (collapse):
+        if (collapse == True):
             cols2 = select_cols 
             cols2.append(win_col)
             return TSV(new_header, new_data) \
@@ -767,7 +767,7 @@ class TSV:
                 cols_key_map[cols_key] = 1
      
         # return 
-        if (collapse):
+        if (collapse == True):
             # uniq cols
             uniq_cols = []
             for col in grouping_cols:
@@ -1246,7 +1246,7 @@ class TSV:
         if (all_numeric is None):
             has_alpha = False
             for col in matching_cols:
-                if (is_float_col(self, col) == False):
+                if (utils.is_float_col(self, col) == False):
                     has_alpha = True
                     break
             if (has_alpha == True):
@@ -2917,48 +2917,6 @@ def get_rolling_func_closing(arr, func_name):
         return arr[0]
     else:
         raise Exception("rolling agg func not supported:", func_name)
-
-def is_int_col(xtsv, col):
-    try:
-        for v in xtsv.col_as_array(col):
-            if (str(int(v)) != v):
-                return False
-    except:
-        return False
-
-    return True
-
-def is_float_col(xtsv, col):
-    try:
-        xtsv.col_as_float_array(col)
-    except:
-        return False
-
-    return True
-
-def is_pure_float_col(xtsv, col):
-    try:
-        found = False
-        for v in xtsv.col_as_float_array(col):
-            if (float(int(v)) != v):
-                found = True
-        if (found == True):
-            return True
-        else:
-            return False
-    except:
-        return False
-
-def is_float_with_fraction(xtsv, col):
-    if (is_float_col(xtsv, col) == False):
-        return False
-
-    found = False
-    for v in xtsv.col_as_array(col):
-        if ("." in v):
-            return True
-
-    return False 
 
 def read(paths, sep = None):
     return tsvutils.read(paths, sep)
