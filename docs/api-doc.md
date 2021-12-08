@@ -419,7 +419,7 @@ sepal_length	sepal_width	petal_length	petal_width	class
 *Examples*
 
 ```
->>> x.reordre("class").show(3)
+>>> x.reorder("class").show(3)
 
 class      	sepal_length	sepal_width	petal_length	petal_width
 Iris-setosa	         5.1	        3.5	         1.4	        0.2
