@@ -9,7 +9,7 @@ import math
 import time
 
 class MultiThreadTSV(tsv.TSV):
-    def __init__(self, header, data, num_par = 1, status_check_interval_sec = 10, sleep_interval_sec = 0.01, num_batches = 10):
+    def __init__(self, header, data, num_par = 1, status_check_interval_sec = 5, sleep_interval_sec = 0.01, num_batches = 10):
         super().__init__(header, data)
         self.num_par = num_par
         self.status_check_interval_sec = status_check_interval_sec
@@ -24,8 +24,8 @@ class MultiThreadTSV(tsv.TSV):
         self.num_batches = num_batches if (num_batches > num_par) else num_par
 
     def parallelize(self, func, *args, **kwargs):
-        # debug
-        utils.debug("parallelize: func: {}, args: {}, kwargs: {}".format(func, *args, **kwargs))
+        # trace
+        utils.trace("MultiThreadTSV: parallelize: func: {}, args: {}, kwargs: {}".format(func, *args, **kwargs))
 
         # split the data into num_par partitions
         batch_size = int(math.ceil(self.num_rows() / self.num_batches))
@@ -53,12 +53,12 @@ class MultiThreadTSV(tsv.TSV):
                             done_count = done_count + 1
 
                     # debug
-                    utils.debug("parallelize: done_count: {}, total: {}".format(done_count, len(future_results)))
+                    utils.debug("MultiThreadTSV: parallelize: done_count: {}, total: {}".format(done_count, len(future_results)))
 
                     # check if all are done
                     if (done_count < len(future_results)):
                         # sleep for some additional time to allow notebook stop method to work
-                        utils.debug("parallelize: futures not completed yet. Sleeping for {} seconds".format(self.status_check_interval_sec))
+                        utils.debug("MultiThreadTSV: parallelize: futures not completed yet. Sleeping for {} seconds".format(self.status_check_interval_sec))
                         time.sleep(self.status_check_interval_sec)
                     else:
                         break 
@@ -74,7 +74,7 @@ class MultiThreadTSV(tsv.TSV):
         # take end_time 
         ts_end = time.time()
 
-        utils.debug("parallelize: time taken: {} sec".format((ts_end - ts_start)))
+        utils.debug("MultiThreadTSV: parallelize: time taken: {} sec".format(int(ts_end - ts_start)))
         return combined_result
 
 def __parallelize__(xtsv, func, *args, **kwargs):
