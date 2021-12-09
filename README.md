@@ -99,5 +99,5 @@ sepal_width	sepal_length
 >>> tsv.write(y, "output.tsv.gz")
 ```
 ## Notes from the author
-* This library is built for simplicity, functionality and robustness. Engineering good practices are followed slowly.
+* This library is built for simplicity, functionality and robustness. Good engineering practices are being followed slowly.
 * More examples with real life use cases is currently in progress. Feel free to reach out for any questions. 
