@@ -2340,7 +2340,7 @@ class TSV:
         def __explode_json_transform_func_inner__(mp):
             # some validation.
             if (url_encoded_col not in mp.keys() or mp[url_encoded_col] == "" or mp[url_encoded_col] is None):
-                utils.warn("__explode_json_transform_func_inner__: invalid json response found. Need more debugging: {}, {}".format(url_encoded_col, mp))
+                utils.trace("__explode_json_transform_func_inner__: potentially invalid json response found. Usually it is okay. But better to check: {}, {}".format(url_encoded_col, mp))
                 return []
 
             # parse json
@@ -2387,7 +2387,7 @@ class TSV:
                 # handle null scenario. json string can have a special value called null to represent empty or null value, which is converted to None in json parser.
                 # such null value should be okay to read as empty string
                 if (v is None):
-                    utils.debug("__explode_json_transform_func_expand_json__: None type value found. Taking it as empty string. Key: {}".format(k))
+                    utils.trace("__explode_json_transform_func_expand_json__: None type value found. Taking it as empty string. Key: {}".format(k))
                     v = ""
 
                 # for each data type, there is a different kind of handling
@@ -2597,7 +2597,7 @@ class TSV:
 
         # warn
         if (excluded_cols != None):
-            utils.warn("explode_json: excluded_cols is work in progress and may not work in all scenarios")
+            utils.print_code_todo_warning("explode_json: excluded_cols is work in progress and may not work in all scenarios")
 
         # validation
         if (url_encoded_col not in self.header_map.keys()):
@@ -2605,7 +2605,7 @@ class TSV:
 
         # warn on risky combinations
         if (merge_list_method == "cogroup"):
-            utils.warn("explode_json: merge_list_method = cogroup is only meant for data exploration. Use merge_list_method = join for generating all combinations for multiple list values")
+            utils.print_code_todo_warning("explode_json: merge_list_method = cogroup is only meant for data exploration. Use merge_list_method = join for generating all combinations for multiple list values")
 
         # name prefix
         if (prefix is None):
