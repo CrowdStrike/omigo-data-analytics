@@ -6,6 +6,7 @@ import json
 from json.decoder import JSONDecodeError
 import os
 import math
+import mmh3
 
 # TODO: these caches dont work in multithreaded env. 
 MSG_CACHE_MAX_LEN = 10000
@@ -256,3 +257,5 @@ def is_float_with_fraction(xtsv, col):
 
     return False 
 
+def compute_hash(x, seed = 0):
+    return mmh3.hash64(str(x) + str(seed))[1]

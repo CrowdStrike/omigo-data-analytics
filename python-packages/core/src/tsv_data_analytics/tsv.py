@@ -3,7 +3,6 @@ import re
 import math
 import pandas as pd
 import gzip
-import mmh3 
 import random
 import json
 import urllib
@@ -1855,7 +1854,7 @@ class TSV:
                 keys.append(fields[self.header_map[g]])
 
             keys_str = "\t".join(keys)
-            sample_key = abs(mmh3.hash64(keys_str + str(seed))[1]) / sys.maxsize            
+            sample_key = abs(utils.compute_hash(keys_str, seed)) / sys.maxsize            
             if (sample_key <= sampling_ratio):
                 new_data.append(line)
 
