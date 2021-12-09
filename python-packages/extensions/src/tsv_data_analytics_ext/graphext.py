@@ -57,7 +57,7 @@ def __create_data_frame_with_types__(xtsv, xcol = None, ycols = None, zcol = Non
     # create map for data frame
     mp = {}
     for col in combined_cols:
-        if (tsv.is_float_col(xtsv, col)):
+        if (utils.is_float_col(xtsv, col)):
             mp[col] = xtsv.col_as_float_array(col)
         else:
             mp[col] = xtsv.col_as_array(col)
@@ -99,7 +99,7 @@ def __sns_scatterplot__(xtsv, xcol, ycol, class_col, title, xfigsize, yfigsize, 
         
     # if xcol or ycol are non numeric then need to down sample the data
     if (max_rows < xtsv.num_rows()):
-        if (tsv.is_float_col(xtsv, xcol) == False or tsv.is_float_col(xtsv, ycol) == False):
+        if (utils.is_float_col(xtsv, xcol) == False or utils.is_float_col(xtsv, ycol) == False):
             utils.warn("Scatter plot on non numeric column(s). Doing downsampling for clean display to max_rows: {}".format(max_rows))
             xtsv = xtsv.sample_column_by_max_uniq_values(xcol, max_rows)
             
@@ -222,7 +222,7 @@ def __sns_corr_heatmp__(xtsv, cols, xfigsize, yfigsize, max_rows):
         
     # check on the data type. Correlation is defined only on numerical columns
     for col in cols:
-        if (tsv.is_float_col(xtsv, col) == False):
+        if (utils.is_float_col(xtsv, col) == False):
             raise Exception("Non numeric column found for correlation: {}".format(col))
 
     # create df
@@ -248,7 +248,7 @@ def __sns_pairplot__(xtsv, cols, class_col, kind, diag_kind, xfigsize, yfigsize,
         
     # check on the data type. Correlation is defined only on numerical columns
     for col in cols:
-        if (tsv.is_float_col(xtsv, col) == False):
+        if (utils.is_float_col(xtsv, col) == False):
             raise Exception("Non numeric column found for correlation: {}".format(col))
 
     # create df
