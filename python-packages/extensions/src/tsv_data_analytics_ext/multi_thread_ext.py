@@ -9,7 +9,7 @@ import math
 import time
 
 class MultiThreadTSV(tsv.TSV):
-    def __init__(self, header, data, num_par = 1, status_check_interval_sec = 5, sleep_interval_sec = 0.01, num_batches = 10):
+    def __init__(self, header, data, num_par = 1, status_check_interval_sec = 10, sleep_interval_sec = 0.11, num_batches = 10):
         super().__init__(header, data)
         self.num_par = num_par
         self.status_check_interval_sec = status_check_interval_sec
@@ -31,6 +31,10 @@ class MultiThreadTSV(tsv.TSV):
         batch_size = int(math.ceil(self.num_rows() / self.num_batches))
         future_results = []
 
+        # print batch size
+        utils.info("MultiThreadTSV: num_rows: {}, num_par: {}, num_batches: {}, batch_size: {}, status_check_interval_sec: {}, sleep_interval_sec: {}".format(
+            self.num_rows(), self.num_par, self.num_batches, batch_size, self.status_check_interval_sec, self.sleep_interval_sec))
+
         # take start_time
         ts_start = time.time()
 
@@ -43,7 +47,9 @@ class MultiThreadTSV(tsv.TSV):
                 # execute batches concurrently based on num_par and batch_size 
                 for i in range(self.num_batches):
                     batch_i = self.skip(batch_size * i).take(batch_size)
-                    future_results.append(executor.submit(__parallelize__, batch_i, func, *args, **kwargs))
+                    # TODO: rewrite this logic. Right now dont submit empty batches
+                    if (batch_i.num_rows() > 0):
+                        future_results.append(executor.submit(__parallelize__, batch_i, func, *args, **kwargs))
 
                 # run while loop
                 while True:
@@ -74,7 +80,7 @@ class MultiThreadTSV(tsv.TSV):
         # take end_time 
         ts_end = time.time()
 
-        utils.debug("MultiThreadTSV: parallelize: time taken: {} sec".format(int(ts_end - ts_start)))
+        utils.debug("MultiThreadTSV: parallelize: time taken: {} sec, num_rows: {}".format(int(ts_end - ts_start), combined_result.num_rows()))
         return combined_result
 
 def __parallelize__(xtsv, func, *args, **kwargs):

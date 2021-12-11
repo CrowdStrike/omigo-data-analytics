@@ -3,7 +3,6 @@ import re
 import math
 import pandas as pd
 import gzip
-import mmh3 
 import random
 import json
 import urllib
@@ -65,7 +64,8 @@ class TSV:
             count = count + 1
             fields = line.split("\t")
             if (len(fields) != len(self.header_fields)):
-                raise Exception("Header length is not matching with data length. position: {}, header: {}, len(fields): {}, fields: {}".format(count, len(self.header_fields), len(fields), str(fields)))
+                raise Exception("Header length is not matching with data length. position: {}, len(header): {}, header: {}, len(fields): {}, fields: {}".format(
+                    count, len(self.header_fields), self.header_fields, len(fields), str(fields)))
 
         # return
         return self
@@ -251,10 +251,12 @@ class TSV:
 
     # TODO: use skip_rows for better name        
     def skip(self, count):
+        # validate
         if (count > 0):
-            if (count > len(self.data)):
-                count = len(self.data)
-            return TSV(self.header, self.data[count - 1:])
+            if (count >= len(self.data)):
+                return TSV(self.header, [])
+            else:
+                return TSV(self.header, self.data[count - 1:])
         else:
             return self
 
@@ -268,6 +270,7 @@ class TSV:
         return TSV(self.header, self.data[-count:])
  
     def take(self, count):
+        # return result
         if (count > len(self.data)):
             count = len(self.data)
 
@@ -1095,6 +1098,11 @@ class TSV:
         return TSV(new_header, new_data)
 
     def show_transpose(self, n = 1, title = None):
+        # validation and doing min
+        if (self.num_rows() < n):
+            n = self.num_rows()
+
+        # max width of screen to determine per column width
         max_width = 180
         max_col_width = int(max_width / (n + 1))
         return self.transpose(n).show(n = self.num_cols(), max_col_width = max_col_width, title = title)
@@ -1365,16 +1373,16 @@ class TSV:
         return TSV(new_header, new_data)
 
     def url_encode_inline(self, col):
-        return self.transform_inline([col], lambda x: urllib.parse.quote_plus(x))
+        return self.transform_inline([col], lambda x: utils.url_encode(x))
 
     def url_decode_inline(self, col_or_cols): 
-        return self.transform_inline(col_or_cols, lambda x: urllib.parse.unquote_plus(x))
+        return self.transform_inline(col_or_cols, lambda x: utils.url_decode(x))
 
     def url_encode(self, col, newcol):
-        return self.transform([col], lambda x: urllib.parse.quote_plus(x), newcol)
+        return self.transform([col], lambda x: utils.url_encode(x), newcol)
 
     def url_decode(self, col, newcol):
-        return self.transform([col], lambda x: urllib.parse.unquote_plus(x), newcol)
+        return self.transform([col], lambda x: utils.url_decode(x), newcol)
 
     def union(self, tsv_or_that_arr):
         # check if this is a single element TSV or an array
@@ -1397,14 +1405,14 @@ class TSV:
         for line in self.get_data():
             fields = line.split("\t")
             if (len(fields) != len(self.header_fields)):
-                raise Exception("Invalid input data. Fields size are not same as header: header: {}, fields: {}".format(len(self.header_fields), len(fields)))
+                raise Exception("Invalid input data. Fields size are not same as header: header: {}, fields: {}".format(self.header_fields, fields))
             new_data.append(line)
 
         for that in that_arr:
             for line in that.get_data():
                 fields = line.split("\t")
                 if (len(fields) != len(self.header_fields)):
-                    raise Exception("Invalid input data. Fields size are not same as header: header: {}, fields: {}".format(len(self.header_fields), len(fields)))
+                    raise Exception("Invalid input data. Fields size are not same as header: header: {}, fields: {}".format(self.header_fields, fields))
                 new_data.append(line)
 
         return TSV(self.header, new_data)
@@ -1855,7 +1863,7 @@ class TSV:
                 keys.append(fields[self.header_map[g]])
 
             keys_str = "\t".join(keys)
-            sample_key = abs(mmh3.hash64(keys_str + str(seed))[1]) / sys.maxsize            
+            sample_key = abs(utils.compute_hash(keys_str, seed)) / sys.maxsize            
             if (sample_key <= sampling_ratio):
                 new_data.append(line)
 
@@ -2333,8 +2341,9 @@ class TSV:
                 # TODO: move this to a proper function
                 new_data.append("\t".join(utils.merge_arrays([new_fields, new_vals])))
 
-        # result
-        return TSV(new_header, new_data)
+        # result. json expansion needs to be validated because of potential noise in the data.
+        return TSV(new_header, new_data) \
+            .validate()
 
     def __explode_json_transform_func__(self, url_encoded_col, accepted_cols, excluded_cols, single_value_list_cols, transpose_col_groups, merge_list_method, collapse_primitive_list, join_col = ","):
         def __explode_json_transform_func_inner__(mp):
@@ -2392,7 +2401,7 @@ class TSV:
 
                 # for each data type, there is a different kind of handling
                 if (isinstance(v, (str, int, float))):
-                    single_results[k] = str(v)
+                    single_results[k] = str(v).replace("\t", " ")
                 else:
                     # TODO :Added on 2021-11-27. Need the counts for arrays and dict to handle 0 count errors. Splitting the single if-elif-else to two level
                     single_results[k + ":__explode_json_len__"] = str(len(v))
@@ -2410,7 +2419,7 @@ class TSV:
                             else:
                                 for v1 in v:
                                     mp2_new = {}
-                                    mp2_new[k] = str(v1)
+                                    mp2_new[k] = str(v1).replace("\t", " ")
                                     list_results_arr[-1].append(mp2_new)
                         elif (isinstance(v[0], dict)):
                             # append all the expanded version of the list
@@ -2620,7 +2629,8 @@ class TSV:
         # use explode to do this parsing  
         return self \
             .add_seq_num(prefix + ":__json_index__", inherit_message = "explode_json") \
-            .explode([url_encoded_col], exp_func, prefix = prefix, default_val = "", collapse = collapse, inherit_message = "explode_json")
+            .explode([url_encoded_col], exp_func, prefix = prefix, default_val = "", collapse = collapse, inherit_message = "explode_json") \
+            .validate()
 
     def transpose(self, n = 1):
         return self.take(n).__transpose_topn__()
@@ -2764,6 +2774,11 @@ class TSV:
     # custom function to call user defined apis
     def custom_func(self, func, *args, **kwargs):
         return func(self, *args, **kwargs)
+
+    # taking the clipboard functionality from pandas
+    def to_clipboard(self):
+        self.to_df().to_clipboard()
+        return self
 
     def __convert_to_maps__(self):
         result = []
