@@ -555,13 +555,13 @@ def read_url_response(url, query_params = {}, headers = {}, body = None, usernam
         response_str = zfile.open(zfile.infolist()[0]).read().decode().rstrip("\n")
         zfile.close()
     elif (content_type.startswith("text/plain") or content_type.startswith("application/json") or file_type == "text"):
-        response_str = response.content.decode("ascii").rstrip("\n")
+        response_str = response.content.decode().rstrip("\n")
     elif (content_type.startswith("application/octet-stream")):
         utils.warn("Content Type is octet stream. Using gzip.".format(content_type))
         response_str = str(gzip.decompress(response.content), "utf-8").rstrip("\n")
     else:
-        utils.warn("Content Type is not known: {}. Using plain text ascii.".format(content_type))
-        response_str = response.content.decode("ascii").rstrip("\n")
+        utils.warn("Content Type is not known: {}. Using default decoding from str.decode().".format(content_type))
+        response_str = response.content.decode().rstrip("\n")
 
     # return
     return response_str, response.status_code, ""

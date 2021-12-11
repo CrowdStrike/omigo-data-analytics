@@ -131,11 +131,12 @@ def url_encode(s):
 
     return urllib.parse.quote_plus(s)
 
+# TODO: this replaces TAB character
 def url_decode(s):
     if (s is None):
         return "" 
 
-    return urllib.parse.unquote_plus(s)
+    return urllib.parse.unquote_plus(s).replace("\t", " ")
 
 # move this to utils
 def parse_encoded_json(s):
@@ -146,7 +147,7 @@ def parse_encoded_json(s):
         return {}
 
     try:
-        decoded = urllib.parse.unquote_plus(s)
+        decoded = url_decode(s)
         if (decoded == ""):
             return {}
 
@@ -156,7 +157,7 @@ def parse_encoded_json(s):
         return {}
 
 def encode_json_obj(json_obj):
-    return urllib.parse.quote_plus(json.dumps(json_obj))
+    return utl_encode(json.dumps(json_obj))
 
 # TODO: make it more robust. The object key doesnt have / prefix or suffix
 def split_s3_path(path):
