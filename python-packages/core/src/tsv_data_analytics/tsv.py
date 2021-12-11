@@ -2341,8 +2341,9 @@ class TSV:
                 # TODO: move this to a proper function
                 new_data.append("\t".join(utils.merge_arrays([new_fields, new_vals])))
 
-        # result
-        return TSV(new_header, new_data).validate()
+        # result. json expansion needs to be validated because of potential noise in the data.
+        return TSV(new_header, new_data) \
+            .validate()
 
     def __explode_json_transform_func__(self, url_encoded_col, accepted_cols, excluded_cols, single_value_list_cols, transpose_col_groups, merge_list_method, collapse_primitive_list, join_col = ","):
         def __explode_json_transform_func_inner__(mp):
