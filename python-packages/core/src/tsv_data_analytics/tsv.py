@@ -2251,14 +2251,6 @@ class TSV:
             for i in indexes:
                 col_values_map[self.header_fields[i]] = fields[i]
             exploded_values.append(exp_func(col_values_map))
-            for i1 in range(len(exploded_values[-1])):
-                mp1 = exploded_values[-1][i1]
-                for mpk1 in mp1.keys():
-                    if  (mp1[mpk1].find("\t") != -1):
-                        raise Exception("Found tab in mp:", mp1)
-                    print(exploded_values[-1][i1])
-                #if ("resources:SHA1HashData" in exploded_values[-1][i1].keys() and exploded_values[-1][i1]["resources:SHA1HashData"].startswith("000000") == False):
-                #    raise Exception("exp_func(col_values_map):[{}]: {}".format(i1, exploded_values[-1][i1])) 
 
         # get the list of keys
         exploded_keys = {}
@@ -2272,7 +2264,7 @@ class TSV:
  
         # create an ordered list of keys
         exploded_keys_sorted = sorted(list(exploded_keys.keys()))
-        print(exploded_keys_sorted)
+
         # new header and data
         new_data = []
         

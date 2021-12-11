@@ -72,7 +72,6 @@ class MultiThreadTSV(tsv.TSV):
             # combine the results
             results = []
             for f in future_results:
-                utils.debug("Appending Result with rows: {}".format(f.result().num_rows()))
                 results.append(f.result())
 
             # merge the tsvs using a common union.
