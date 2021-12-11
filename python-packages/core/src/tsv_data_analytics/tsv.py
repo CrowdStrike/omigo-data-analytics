@@ -2775,6 +2775,11 @@ class TSV:
     def custom_func(self, func, *args, **kwargs):
         return func(self, *args, **kwargs)
 
+    # taking the clipboard functionality from pandas
+    def to_clipboard(self):
+        self.to_df().to_clipboard()
+        return self
+
     def __convert_to_maps__(self):
         result = []
         for line in self.data:
