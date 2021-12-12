@@ -1897,7 +1897,7 @@ class TSV:
     def join(self, that, lkeys, rkeys = None, join_type = "inner", lsuffix = "", rsuffix = "", default_val = "", def_val_map = None):
         # matching
         lkeys = self.__get_matching_cols__(lkeys)
-        rkeys = self.__get_matching_cols__(rkeys) if (rkeys != None) else lkeys 
+        rkeys = that.__get_matching_cols__(rkeys) if (rkeys != None) else lkeys 
  
         # check the lengths
         if (len(lkeys) != len(rkeys)):
@@ -2345,16 +2345,20 @@ class TSV:
         return TSV(new_header, new_data) \
             .validate()
 
-    def __explode_json_transform_func__(self, url_encoded_col, accepted_cols, excluded_cols, single_value_list_cols, transpose_col_groups, merge_list_method, collapse_primitive_list, join_col = ","):
+    def __explode_json_transform_func__(self, url_encoded_col, accepted_cols, excluded_cols, single_value_list_cols, transpose_col_groups, merge_list_method, encode_cols, collapse_primitive_list, join_col = ","):
         def __explode_json_transform_func_inner__(mp):
             # some validation.
             if (url_encoded_col not in mp.keys() or mp[url_encoded_col] == "" or mp[url_encoded_col] is None):
                 utils.trace("__explode_json_transform_func_inner__: potentially invalid json response found. Usually it is okay. But better to check: {}, {}".format(url_encoded_col, mp))
-                return []
+                mp = {"__explode_json_len__": "0"}
+                return [mp]
 
             # parse json
             json_mp = json.loads(utils.url_decode(mp[url_encoded_col]))
-            return __explode_json_transform_func_inner_helper__(json_mp)
+            results = __explode_json_transform_func_inner_helper__(json_mp)
+
+            # return
+            return results
 
         def __explode_json_transform_func_inner_helper__(json_mp):
             # validation
@@ -2401,7 +2405,12 @@ class TSV:
 
                 # for each data type, there is a different kind of handling
                 if (isinstance(v, (str, int, float))):
-                    single_results[k] = str(v).replace("\t", " ")
+                    v1 = str(v).replace("\t", " ")
+                    # check if encoding needs to be done
+                    if (encode_cols != None and k in encode_cols):
+                        v1 = utils.url_encode(v1)
+                    single_results[k] = v1 
+                    
                 else:
                     # TODO :Added on 2021-11-27. Need the counts for arrays and dict to handle 0 count errors. Splitting the single if-elif-else to two level
                     single_results[k + ":__explode_json_len__"] = str(len(v))
@@ -2415,11 +2424,19 @@ class TSV:
                         if (isinstance(v[0], (str,int,float))):
                             # treat primitive lists as single value or as yet another list
                             if (collapse_primitive_list == True):
-                                single_results[k] = join_col.join(sorted(list([str(t) for t in v])))
+                                # do the encoding
+                                v1 = join_col.join(sorted(list([str(t).replace("\t", " ") for t in v])))
+                                if (encode_cols != None and k in encode_cols):
+                                    v1 = utils.url_encode(v1)
+                                single_results[k] = v1
                             else:
-                                for v1 in v:
+                                for vt in v:
                                     mp2_new = {}
-                                    mp2_new[k] = str(v1).replace("\t", " ")
+                                    # do the encoding
+                                    v1 = str(vt).replace("\t", " ")
+                                    if (encode_cols != None and k in encode_cols):
+                                        v1 = utils.url_encode(v1)
+                                    mp2_new[k] = v1
                                     list_results_arr[-1].append(mp2_new)
                         elif (isinstance(v[0], dict)):
                             # append all the expanded version of the list
@@ -2602,7 +2619,7 @@ class TSV:
     # TODO: Need better name
     # the json col is expected to be in url_encoded form 
     def explode_json(self, url_encoded_col, prefix = None, accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None,
-        merge_list_method = "cogroup", collapse_primitive_list = True, collapse = True):
+        merge_list_method = "cogroup", collapse_primitive_list = True, encode_cols = None, collapse = True):
 
         # warn
         if (excluded_cols != None):
@@ -2624,7 +2641,7 @@ class TSV:
         # check for explode function
         exp_func = self.__explode_json_transform_func__(url_encoded_col, accepted_cols = accepted_cols, excluded_cols = excluded_cols, single_value_list_cols = single_value_list_cols,
             transpose_col_groups = transpose_col_groups,
-            merge_list_method = merge_list_method, collapse_primitive_list = collapse_primitive_list)
+            merge_list_method = merge_list_method, encode_cols, collapse_primitive_list = collapse_primitive_list)
 
         # use explode to do this parsing  
         return self \
@@ -2860,7 +2877,7 @@ class TSV:
 
     # print some status
     def print_stats(self, msg):
-        msg2 = "{}: num_rows: {}, num_cols: {}, header: {}".format(msg, self.num_rows(), self.num_cols(), str(self.get_header_fields()))
+        msg2 = "{}: num_rows: {}, num_cols: {}".format(msg, self.num_rows(), self.num_cols())
         print(msg2)
         return self
 
