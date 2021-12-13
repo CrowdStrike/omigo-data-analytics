@@ -1750,14 +1750,12 @@ class TSV:
 
     # sampling method where each sample group is restricted by the max values for a specific col-value. Useful for reducing skewness in dataset
     def sample_group_by_col_value(self, grouping_cols, col, col_value, sampling_ratio, seed = 0, use_numeric = False):
+        # resolve grouping_cols
+        grouping_cols = self.__get_matching_cols__(grouping_cols)
+
         # validation
         if (col not in self.header_map.keys()):
             raise Exception("Column not found:", str(col), str(self.header_fields))
-
-        # check grouping cols
-        for k in grouping_cols:
-            if (k not in self.header_map.keys()): 
-                raise Exception("Grouping Column not found:", str(k), str(self.header_fields))
 
         # check sampling ratio
         if (sampling_ratio < 0 or sampling_ratio > 1):
@@ -1776,6 +1774,9 @@ class TSV:
 
     # sampling method to take a grouping key, and a column where the number of unique values for column are capped.
     def sample_group_by_max_uniq_values(self, grouping_cols, col, max_uniq_values, seed = 0):
+        # resolve grouping_cols
+        grouping_cols = self.__get_matching_cols__(grouping_cols)
+
         # validation
         if (col not in self.header_map.keys()):
             raise Exception("Column not found:", str(col), str(self.header_fields))
@@ -1795,7 +1796,7 @@ class TSV:
  
         agg_result = self.aggregate(grouping_cols, [col], [self.__sample_group_by_max_uniq_values_uniq_count__], collapse = False, inherit_message = "sample_group_by_max_uniq_values [1/5]") \
             .transform(["{}:__sample_group_by_max_uniq_values_uniq_count__".format(col)], lambda c: max_uniq_values / float(c) if (float(c) > max_uniq_values) else 1, "{}:__sample_group_by_max_uniq_values_sampling_ratio__".format(col), inherit_message = "sample_group_by_max_uniq_values [2/5]") \
-            .transform(sample_grouping_cols, lambda x: abs(mmh3.hash64("\t".join(x) + str(seed))[1]) / sys.maxsize, "{}:__sample_group_by_max_uniq_values_sampling_key__".format(col), use_array_notation = True, inherit_message = "sample_group_by_max_uniq_values [3/5]") \
+            .transform(sample_grouping_cols, lambda x: abs(utils.compute_hash("\t".join(x), seed)) / sys.maxsize, "{}:__sample_group_by_max_uniq_values_sampling_key__".format(col), use_array_notation = True, inherit_message = "sample_group_by_max_uniq_values [3/5]") \
             .filter(["{}:__sample_group_by_max_uniq_values_sampling_key__".format(col), "{}:__sample_group_by_max_uniq_values_sampling_ratio__".format(col)], lambda x, y: float(x) <= float(y), inherit_message = "sample_group_by_max_uniq_values [4/5]") \
             .drop("{}:__sample_group_by_max_uniq_values_.*".format(col), inherit_message = "sample_group_by_max_uniq_values [5/5]")
 
@@ -1836,7 +1837,7 @@ class TSV:
         agg_result = self.aggregate(grouping_cols, [col], "", [self.__sample_group_by_max_uniq_values_per_class_uniq_count__], collapse = False, inherit_message = "sample_group_by_max_uniq_values_per_class [1/6]") \
             .transform([class_col], lambda c: str(max_uniq_values_map[c]) if (c in max_uniq_values_map.keys()) else str(def_max_uniq_values), "{}:__sample_group_by_max_uniq_values_per_class_max_uniq_values__".format(col), inherit_message = "sample_group_by_max_uniq_values_per_class [2/6]") \
             .transform(["{}:__sample_group_by_max_uniq_values_per_class_uniq_count__".format(col), "{}:__sample_group_by_max_uniq_values_per_class_max_uniq_values__".format(col)], lambda c, m: float(m) / float(c) if (float(c) > float(m)) else 1, "{}:__sample_group_by_max_uniq_values_per_class_sampling_ratio__".format(col), inherit_message = "sample_group_by_max_uniq_values_per_class [3/6]") \
-            .transform(sample_grouping_cols, lambda x: abs(mmh3.hash64("\t".join(x) + str(seed))[1]) / sys.maxsize, "{}:__sample_group_by_max_uniq_values_per_class_sampling_key__".format(col), use_array_notation = True, inherit_message = "sample_group_by_max_uniq_values_per_class [4/6]") \
+            .transform(sample_grouping_cols, lambda x: abs(utils.compute_hash("\t".join(x), seed)) / sys.maxsize, "{}:__sample_group_by_max_uniq_values_per_class_sampling_key__".format(col), use_array_notation = True, inherit_message = "sample_group_by_max_uniq_values_per_class [4/6]") \
             .filter(["{}:__sample_group_by_max_uniq_values_per_class_sampling_key__".format(col), "{}:__sample_group_by_max_uniq_values_per_class_sampling_ratio__".format(col)], lambda x, y: float(x) <= float(y), inherit_message = "sample_group_by_max_uniq_values_per_class [5/6]") \
             .drop("{}:__sample_group_by_max_uniq_values_per_class.*".format(col), inherit_message = "sample_group_by_max_uniq_values_per_class [6/6]")
 
@@ -1845,10 +1846,8 @@ class TSV:
 
     # random sampling within a group
     def sample_group_by_key(self, grouping_cols, sampling_ratio, seed = 0):
-        # check grouping cols
-        for k in grouping_cols:
-            if (k not in self.header_map.keys()): 
-                raise Exception("Grouping Column not found:", str(k), str(self.header_fields))
+        # resolve grouping_cols
+        grouping_cols = self.__get_matching_cols__(grouping_cols)
 
         # check sampling ratio
         if (sampling_ratio < 0 or sampling_ratio > 1):
@@ -1872,6 +1871,7 @@ class TSV:
     # sample by taking only n number of unique values for a specific column
     def sample_column_by_max_uniq_values(self, col, max_uniq_values, seed = 0, inherit_message = ""):
         uniq_values = self.col_as_array_uniq(col)
+
         # this random number is only for basic sampling and not for doing anything sensitive.
         random.seed(seed)  # nosec
         if (len(uniq_values) > max_uniq_values):
@@ -1893,11 +1893,14 @@ class TSV:
     def inner_join(self, that, lkeys, rkeys = None, lsuffix = "", rsuffix = "", default_val = "", def_val_map = None):
         return self.join(that, lkeys, rkeys, join_type = "inner", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map)
 
+    def outer_join(self, that, lkeys, rkeys = None, lsuffix = "", rsuffix = "", default_val = "", def_val_map = None):
+        return self.join(that, lkeys, rkeys, join_type = "outer", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map)
+
     # primary join method
     def join(self, that, lkeys, rkeys = None, join_type = "inner", lsuffix = "", rsuffix = "", default_val = "", def_val_map = None):
         # matching
         lkeys = self.__get_matching_cols__(lkeys)
-        rkeys = self.__get_matching_cols__(rkeys) if (rkeys != None) else lkeys 
+        rkeys = that.__get_matching_cols__(rkeys) if (rkeys != None) else lkeys 
  
         # check the lengths
         if (len(lkeys) != len(rkeys)):
@@ -2345,16 +2348,36 @@ class TSV:
         return TSV(new_header, new_data) \
             .validate()
 
-    def __explode_json_transform_func__(self, url_encoded_col, accepted_cols, excluded_cols, single_value_list_cols, transpose_col_groups, merge_list_method, collapse_primitive_list, join_col = ","):
+    def __explode_json_transform_func__(self, col, accepted_cols, excluded_cols, single_value_list_cols, transpose_col_groups, merge_list_method, url_encoded_cols, collapse_primitive_list, join_col = ","):
         def __explode_json_transform_func_inner__(mp):
             # some validation.
-            if (url_encoded_col not in mp.keys() or mp[url_encoded_col] == "" or mp[url_encoded_col] is None):
-                utils.trace("__explode_json_transform_func_inner__: potentially invalid json response found. Usually it is okay. But better to check: {}, {}".format(url_encoded_col, mp))
-                return []
+            if (col not in mp.keys() or mp[col] == "" or mp[col] is None):
+                utils.trace("__explode_json_transform_func_inner__: potentially invalid json response found. Usually it is okay. But better to check: {}, {}".format(col, mp))
+                mp = {"__explode_json_len__": "0"}
+                return [mp]
 
-            # parse json
-            json_mp = json.loads(utils.url_decode(mp[url_encoded_col]))
-            return __explode_json_transform_func_inner_helper__(json_mp)
+            # fetch the json string, it might be url encoded or not though recommendation is to use url encoding.
+            json_str = mp[col]
+            json_mp = None
+
+            # best effort in detecting the type and parsing for robustness
+            if (json_str.startswith("%7B") == False and json_str.startswith("%5B") == False):
+                if (json_str.startswith("{") or json_str.startswith("[")):
+                    utils.warn("explode_json called with column that is not url encoded json. Assuming plain json string")
+                    json_mp = json.loads(json_str)
+                else:
+                    json_str10 = json_str[0:10] + "..." if (len(json_str) > 10) else json_str
+                    utils.warn("explode_json called with invalid value in the string. Ignoring parsing: {}".format(json_str10))
+                    mp = {"__explode_json_len__": "0"}
+                    return [mp]
+            else:
+                json_mp = json.loads(utils.url_decode(json_str))
+
+            # call internal methods
+            results = __explode_json_transform_func_inner_helper__(json_mp)
+
+            # return
+            return results
 
         def __explode_json_transform_func_inner_helper__(json_mp):
             # validation
@@ -2364,7 +2387,7 @@ class TSV:
             # check if top level is a list
             if (isinstance(json_mp, list)):
                 print("top level is a list. converting to a map")
-                return __explode_json_transform_func_inner_helper__({url_encoded_col: json_mp})
+                return __explode_json_transform_func_inner_helper__({col: json_mp})
 
             # use inner functions to parse the json
             results = __explode_json_transform_func_expand_json__(json_mp)
@@ -2372,6 +2395,7 @@ class TSV:
             # return
             return results
 
+        # TODO: Do the url encoding outside as a common thing
         def __explode_json_transform_func_expand_json__(json_mp, parent_prefix = None):
             # create some basic structures
             results = []
@@ -2401,7 +2425,13 @@ class TSV:
 
                 # for each data type, there is a different kind of handling
                 if (isinstance(v, (str, int, float))):
-                    single_results[k] = str(v).replace("\t", " ")
+                    v1 = str(v).replace("\t", " ")
+                    # check if encoding needs to be done
+                    if (url_encoded_cols != None and k in url_encoded_cols):
+                        v1 = utils.url_encode(v1)
+                        single_results[k + ":url_encoded"] = v1
+                    else:
+                        single_results[k] = v1
                 else:
                     # TODO :Added on 2021-11-27. Need the counts for arrays and dict to handle 0 count errors. Splitting the single if-elif-else to two level
                     single_results[k + ":__explode_json_len__"] = str(len(v))
@@ -2412,14 +2442,31 @@ class TSV:
                         # create a new entry for holding the list array
                         list_results_arr.append([])
 
+                        # check for base data types
                         if (isinstance(v[0], (str,int,float))):
                             # treat primitive lists as single value or as yet another list
                             if (collapse_primitive_list == True):
-                                single_results[k] = join_col.join(sorted(list([str(t) for t in v])))
+                                # do the encoding
+                                v1 = join_col.join(sorted(list([str(t).replace("\t", " ") for t in v])))
+                                if (url_encoded_cols != None and k in url_encoded_cols):
+                                    v1 = utils.url_encode(v1)
+                                    single_results[k + ":url_encoded"] = v1
+                                else:
+                                    single_results[k] = v1
                             else:
-                                for v1 in v:
+                                for vt in v:
+                                    # create map to store values
                                     mp2_new = {}
-                                    mp2_new[k] = str(v1).replace("\t", " ")
+
+                                    # do the encoding
+                                    v1 = str(vt).replace("\t", " ")
+                                    if (url_encoded_cols != None and k in url_encoded_cols):
+                                        v1 = utils.url_encode(v1)
+                                        mp2_new[k + ":url_encoded"] = v1
+                                    else:
+                                        mp2_new[k] = v1
+
+                                    # append the map to the list
                                     list_results_arr[-1].append(mp2_new)
                         elif (isinstance(v[0], dict)):
                             # append all the expanded version of the list
@@ -2600,17 +2647,18 @@ class TSV:
         return __explode_json_transform_func_inner__ 
 
     # TODO: Need better name
-    # the json col is expected to be in url_encoded form 
-    def explode_json(self, url_encoded_col, prefix = None, accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None,
-        merge_list_method = "cogroup", collapse_primitive_list = True, collapse = True):
+    # TODO: the json col is expected to be in url_encoded form otherwise does best effort guess
+    # TODO: url_encoded_cols, excluded_cols, accepted_cols are actually json hashmap keys and not xpath 
+    def explode_json(self, col, prefix = None, accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None,
+        merge_list_method = "cogroup", collapse_primitive_list = True, url_encoded_cols = None, collapse = True):
 
         # warn
         if (excluded_cols != None):
             utils.print_code_todo_warning("explode_json: excluded_cols is work in progress and may not work in all scenarios")
 
         # validation
-        if (url_encoded_col not in self.header_map.keys()):
-            raise Exception("Column not found:", str(url_encoded_col), str(self.header_fields))
+        if (col not in self.header_map.keys()):
+            raise Exception("Column not found:", str(col), str(self.header_fields))
 
         # warn on risky combinations
         if (merge_list_method == "cogroup"):
@@ -2622,14 +2670,13 @@ class TSV:
             prefix = col
 
         # check for explode function
-        exp_func = self.__explode_json_transform_func__(url_encoded_col, accepted_cols = accepted_cols, excluded_cols = excluded_cols, single_value_list_cols = single_value_list_cols,
-            transpose_col_groups = transpose_col_groups,
-            merge_list_method = merge_list_method, collapse_primitive_list = collapse_primitive_list)
+        exp_func = self.__explode_json_transform_func__(col, accepted_cols = accepted_cols, excluded_cols = excluded_cols, single_value_list_cols = single_value_list_cols,
+            transpose_col_groups = transpose_col_groups, merge_list_method = merge_list_method, url_encoded_cols = url_encoded_cols, collapse_primitive_list = collapse_primitive_list)
 
         # use explode to do this parsing  
         return self \
             .add_seq_num(prefix + ":__json_index__", inherit_message = "explode_json") \
-            .explode([url_encoded_col], exp_func, prefix = prefix, default_val = "", collapse = collapse, inherit_message = "explode_json") \
+            .explode([col], exp_func, prefix = prefix, default_val = "", collapse = collapse, inherit_message = "explode_json") \
             .validate()
 
     def transpose(self, n = 1):
@@ -2860,7 +2907,7 @@ class TSV:
 
     # print some status
     def print_stats(self, msg):
-        msg2 = "{}: num_rows: {}, num_cols: {}, header: {}".format(msg, self.num_rows(), self.num_cols(), str(self.get_header_fields()))
+        msg2 = "{}: num_rows: {}, num_cols: {}".format(msg, self.num_rows(), self.num_cols())
         print(msg2)
         return self
 

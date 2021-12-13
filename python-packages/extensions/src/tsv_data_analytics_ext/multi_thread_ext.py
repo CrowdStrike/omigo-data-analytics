@@ -32,8 +32,8 @@ class MultiThreadTSV(tsv.TSV):
         future_results = []
 
         # print batch size
-        utils.info("MultiThreadTSV: num_rows: {}, num_par: {}, num_batches: {}, batch_size: {}, status_check_interval_sec: {}, sleep_interval_sec: {}".format(
-            self.num_rows(), self.num_par, self.num_batches, batch_size, self.status_check_interval_sec, self.sleep_interval_sec))
+        utils.info("MultiThreadTSV: num_rows: {}, num_par: {}, num_batches: {}, batch_size: {}, status_check_interval_sec: {}".format(
+            self.num_rows(), self.num_par, self.num_batches, batch_size, self.status_check_interval_sec))
 
         # take start_time
         ts_start = time.time()
@@ -51,6 +51,8 @@ class MultiThreadTSV(tsv.TSV):
                     if (batch_i.num_rows() > 0):
                         future_results.append(executor.submit(__parallelize__, batch_i, func, *args, **kwargs))
 
+                # track total waiting time
+                time_elapsed = 0
                 # run while loop
                 while True:
                     done_count = 0
@@ -64,8 +66,9 @@ class MultiThreadTSV(tsv.TSV):
                     # check if all are done
                     if (done_count < len(future_results)):
                         # sleep for some additional time to allow notebook stop method to work
-                        utils.debug("MultiThreadTSV: parallelize: futures not completed yet. Sleeping for {} seconds".format(self.status_check_interval_sec))
+                        utils.debug("MultiThreadTSV: parallelize: futures not completed yet. Sleeping for {} sec. Time elapsed: {} sec".format(self.status_check_interval_sec, time_elapsed))
                         time.sleep(self.status_check_interval_sec)
+                        time_elapsed = time_elapsed + self.status_check_interval_sec
                     else:
                         break 
  

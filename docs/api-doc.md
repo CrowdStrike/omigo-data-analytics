@@ -330,12 +330,13 @@ json response from web services which are mostly simple in nature, and a default
 A detailed example is provided in [example-notebooks/json-parsing] notebook.
 
 ### 14. Join and Union
-   - **join**(that, lkeys, _rkeys_, join_type_, _lsuffix_, _rsuffix_, _default_val_, _def_val_map_): This is the primary api for joining two TSV objects. The _lkeys_ is the list of columns on
+   - **join**(that, lkeys, _rkeys_, _join_type_, _lsuffix_, _rsuffix_, _default_val_, _def_val_map_): This is the primary api for joining two TSV objects. The _lkeys_ is the list of columns on
 the left side to use for joining. If the names of join columns in right side are different, the specify the same in _rkeys_. join_type is _inner_, _left_ or _right_. For any outer joins, the
 missing values can be either specific at each column in _def_val_map_ or have a fallback global value in _default_val_.
-   - **inner_join**(that, lkeys, _rkeys_, _lsuffix_, _rsuffix_, _default_val_, _def_val_map_): This is a wrapper over _join()_ api with _join_type = inner_.
-   - **left_join**(that, lkeys, _rkeys_, _lsuffix_, _rsuffix_, _default_val_, _def_val_map_): This is a wrapper over _join()_ api with _join_type = left_.
-   - **right_join**(that, lkeys, _rkeys_, _lsuffix_, _rsuffix_, _default_val_, _def_val_map_): This is a wrapper over _join()_ api with _join_type = right_.
+   - **inner_join**(that, lkeys, _rkeys_, _lsuffix_, _rsuffix_, _default_val_, _def_val_map_): Wrapper over _join()_ api with _join_type = inner_.
+   - **outer_join**(that, lkeys, _rkeys_, _lsuffix_, _rsuffix_, _default_val_, _def_val_map_): Wrapper over _join()_ api with _join_type = outer_.
+   - **left_join**(that, lkeys, _rkeys_, _lsuffix_, _rsuffix_, _default_val_, _def_val_map_): Wrapper over _join()_ api with _join_type = left_.
+   - **right_join**(that, lkeys, _rkeys_, _lsuffix_, _rsuffix_, _default_val_, _def_val_map_): Wrapper over _join()_ api with _join_type = right_.
    - **union**(tsv_list): This api appends all the TSVs from the tsvlist in the current TSV object. The _tsv_list_ can be a single tsv or an array.
 
 *Examples*
@@ -343,12 +344,14 @@ missing values can be either specific at each column in _def_val_map_ or have a 
 ```
 >>> low_size = x.le_float("petal_length", 3)
 >>> high_size = x.gt_float("petal_length", 3)
->>> low_size.inner_join(high_size, lkeys = "class", lsuffix = "low", rsuffix = "high").select(["class", "petal_length:.*"]).show(3)
+>>> low_size.inner_join(high_size, lkeys = "class", lsuffix = "low", rsuffix = "high") \
+    .select(["class", "petal_length:.*"]) \
+    .show(3)
 
-class          	sepal_length:low	sepal_width:low	petal_length:low	petal_width:low	sepal_length:high	sepal_width:high	petal_length:high	petal_width:high
-Iris-versicolor	             5.1	            2.5	             3.0	            1.1	              7.0	             3.2	              4.7	             1.4
-Iris-versicolor	             5.1	            2.5	             3.0	            1.1	              6.4	             3.2	              4.5	             1.5
-Iris-versicolor	             5.1	            2.5	             3.0	            1.1	              6.9	             3.1	              4.9	             1.5
+class          	petal_length:low	petal_length:high
+Iris-versicolor	             3.0	              4.7
+Iris-versicolor	             3.0	              4.5
+Iris-versicolor	             3.0	              4.9
 ```
 
 ### 15. Drop and Rename Columns 
