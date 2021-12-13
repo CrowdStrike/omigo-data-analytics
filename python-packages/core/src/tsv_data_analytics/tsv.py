@@ -1893,6 +1893,9 @@ class TSV:
     def inner_join(self, that, lkeys, rkeys = None, lsuffix = "", rsuffix = "", default_val = "", def_val_map = None):
         return self.join(that, lkeys, rkeys, join_type = "inner", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map)
 
+    def outer_join(self, that, lkeys, rkeys = None, lsuffix = "", rsuffix = "", default_val = "", def_val_map = None):
+        return self.join(that, lkeys, rkeys, join_type = "outer", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map)
+
     # primary join method
     def join(self, that, lkeys, rkeys = None, join_type = "inner", lsuffix = "", rsuffix = "", default_val = "", def_val_map = None):
         # matching
