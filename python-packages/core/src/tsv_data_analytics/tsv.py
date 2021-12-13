@@ -1750,14 +1750,12 @@ class TSV:
 
     # sampling method where each sample group is restricted by the max values for a specific col-value. Useful for reducing skewness in dataset
     def sample_group_by_col_value(self, grouping_cols, col, col_value, sampling_ratio, seed = 0, use_numeric = False):
+        # resolve grouping_cols
+        grouping_cols = self.__get_matching_cols__(grouping_cols)
+
         # validation
         if (col not in self.header_map.keys()):
             raise Exception("Column not found:", str(col), str(self.header_fields))
-
-        # check grouping cols
-        for k in grouping_cols:
-            if (k not in self.header_map.keys()): 
-                raise Exception("Grouping Column not found:", str(k), str(self.header_fields))
 
         # check sampling ratio
         if (sampling_ratio < 0 or sampling_ratio > 1):
@@ -1776,6 +1774,9 @@ class TSV:
 
     # sampling method to take a grouping key, and a column where the number of unique values for column are capped.
     def sample_group_by_max_uniq_values(self, grouping_cols, col, max_uniq_values, seed = 0):
+        # resolve grouping_cols
+        grouping_cols = self.__get_matching_cols__(grouping_cols)
+
         # validation
         if (col not in self.header_map.keys()):
             raise Exception("Column not found:", str(col), str(self.header_fields))
@@ -1795,7 +1796,7 @@ class TSV:
  
         agg_result = self.aggregate(grouping_cols, [col], [self.__sample_group_by_max_uniq_values_uniq_count__], collapse = False, inherit_message = "sample_group_by_max_uniq_values [1/5]") \
             .transform(["{}:__sample_group_by_max_uniq_values_uniq_count__".format(col)], lambda c: max_uniq_values / float(c) if (float(c) > max_uniq_values) else 1, "{}:__sample_group_by_max_uniq_values_sampling_ratio__".format(col), inherit_message = "sample_group_by_max_uniq_values [2/5]") \
-            .transform(sample_grouping_cols, lambda x: abs(mmh3.hash64("\t".join(x) + str(seed))[1]) / sys.maxsize, "{}:__sample_group_by_max_uniq_values_sampling_key__".format(col), use_array_notation = True, inherit_message = "sample_group_by_max_uniq_values [3/5]") \
+            .transform(sample_grouping_cols, lambda x: abs(utils.compute_hash("\t".join(x), seed)) / sys.maxsize, "{}:__sample_group_by_max_uniq_values_sampling_key__".format(col), use_array_notation = True, inherit_message = "sample_group_by_max_uniq_values [3/5]") \
             .filter(["{}:__sample_group_by_max_uniq_values_sampling_key__".format(col), "{}:__sample_group_by_max_uniq_values_sampling_ratio__".format(col)], lambda x, y: float(x) <= float(y), inherit_message = "sample_group_by_max_uniq_values [4/5]") \
             .drop("{}:__sample_group_by_max_uniq_values_.*".format(col), inherit_message = "sample_group_by_max_uniq_values [5/5]")
 
@@ -1836,7 +1837,7 @@ class TSV:
         agg_result = self.aggregate(grouping_cols, [col], "", [self.__sample_group_by_max_uniq_values_per_class_uniq_count__], collapse = False, inherit_message = "sample_group_by_max_uniq_values_per_class [1/6]") \
             .transform([class_col], lambda c: str(max_uniq_values_map[c]) if (c in max_uniq_values_map.keys()) else str(def_max_uniq_values), "{}:__sample_group_by_max_uniq_values_per_class_max_uniq_values__".format(col), inherit_message = "sample_group_by_max_uniq_values_per_class [2/6]") \
             .transform(["{}:__sample_group_by_max_uniq_values_per_class_uniq_count__".format(col), "{}:__sample_group_by_max_uniq_values_per_class_max_uniq_values__".format(col)], lambda c, m: float(m) / float(c) if (float(c) > float(m)) else 1, "{}:__sample_group_by_max_uniq_values_per_class_sampling_ratio__".format(col), inherit_message = "sample_group_by_max_uniq_values_per_class [3/6]") \
-            .transform(sample_grouping_cols, lambda x: abs(mmh3.hash64("\t".join(x) + str(seed))[1]) / sys.maxsize, "{}:__sample_group_by_max_uniq_values_per_class_sampling_key__".format(col), use_array_notation = True, inherit_message = "sample_group_by_max_uniq_values_per_class [4/6]") \
+            .transform(sample_grouping_cols, lambda x: abs(utils.compute_hash("\t".join(x), seed)) / sys.maxsize, "{}:__sample_group_by_max_uniq_values_per_class_sampling_key__".format(col), use_array_notation = True, inherit_message = "sample_group_by_max_uniq_values_per_class [4/6]") \
             .filter(["{}:__sample_group_by_max_uniq_values_per_class_sampling_key__".format(col), "{}:__sample_group_by_max_uniq_values_per_class_sampling_ratio__".format(col)], lambda x, y: float(x) <= float(y), inherit_message = "sample_group_by_max_uniq_values_per_class [5/6]") \
             .drop("{}:__sample_group_by_max_uniq_values_per_class.*".format(col), inherit_message = "sample_group_by_max_uniq_values_per_class [6/6]")
 
@@ -1845,10 +1846,8 @@ class TSV:
 
     # random sampling within a group
     def sample_group_by_key(self, grouping_cols, sampling_ratio, seed = 0):
-        # check grouping cols
-        for k in grouping_cols:
-            if (k not in self.header_map.keys()): 
-                raise Exception("Grouping Column not found:", str(k), str(self.header_fields))
+        # resolve grouping_cols
+        grouping_cols = self.__get_matching_cols__(grouping_cols)
 
         # check sampling ratio
         if (sampling_ratio < 0 or sampling_ratio > 1):
@@ -1872,6 +1871,7 @@ class TSV:
     # sample by taking only n number of unique values for a specific column
     def sample_column_by_max_uniq_values(self, col, max_uniq_values, seed = 0, inherit_message = ""):
         uniq_values = self.col_as_array_uniq(col)
+
         # this random number is only for basic sampling and not for doing anything sensitive.
         random.seed(seed)  # nosec
         if (len(uniq_values) > max_uniq_values):

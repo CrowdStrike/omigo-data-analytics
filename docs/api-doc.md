@@ -348,10 +348,10 @@ missing values can be either specific at each column in _def_val_map_ or have a 
     .select(["class", "petal_length:.*"]) \
     .show(3)
 
-class          	sepal_length:low	sepal_width:low	petal_length:low	petal_width:low	sepal_length:high	sepal_width:high	petal_length:high	petal_width:high
-Iris-versicolor	             5.1	            2.5	             3.0	            1.1	              7.0	             3.2	              4.7	             1.4
-Iris-versicolor	             5.1	            2.5	             3.0	            1.1	              6.4	             3.2	              4.5	             1.5
-Iris-versicolor	             5.1	            2.5	             3.0	            1.1	              6.9	             3.1	              4.9	             1.5
+class          	petal_length:low	petal_length:high
+Iris-versicolor	             3.0	              4.7
+Iris-versicolor	             3.0	              4.5
+Iris-versicolor	             3.0	              4.9
 ```
 
 ### 15. Drop and Rename Columns 
