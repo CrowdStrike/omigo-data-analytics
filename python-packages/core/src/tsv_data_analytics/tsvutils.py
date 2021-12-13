@@ -622,7 +622,7 @@ def read_url(url, query_params = {}, headers = {}, sep = None, username = None, 
 
 # convert from data frame. TODO: df can have multiple header lines coz of indexes
 def from_df(df):
-    utils.warn("This api doesnt support data frames with indexed columns yet.")
+    utils.warn("from_df() api doesnt support reading indexed columns in pandas dataframes yet.")
 
     # get the csv str
     tsv_lines = df.to_csv(sep = "\t").rstrip("\n").split("\n")

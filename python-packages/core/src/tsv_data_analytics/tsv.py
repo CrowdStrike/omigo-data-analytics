@@ -2345,16 +2345,32 @@ class TSV:
         return TSV(new_header, new_data) \
             .validate()
 
-    def __explode_json_transform_func__(self, url_encoded_col, accepted_cols, excluded_cols, single_value_list_cols, transpose_col_groups, merge_list_method, encode_cols, collapse_primitive_list, join_col = ","):
+    def __explode_json_transform_func__(self, col, accepted_cols, excluded_cols, single_value_list_cols, transpose_col_groups, merge_list_method, url_encoded_cols, collapse_primitive_list, join_col = ","):
         def __explode_json_transform_func_inner__(mp):
             # some validation.
-            if (url_encoded_col not in mp.keys() or mp[url_encoded_col] == "" or mp[url_encoded_col] is None):
-                utils.trace("__explode_json_transform_func_inner__: potentially invalid json response found. Usually it is okay. But better to check: {}, {}".format(url_encoded_col, mp))
+            if (col not in mp.keys() or mp[col] == "" or mp[col] is None):
+                utils.trace("__explode_json_transform_func_inner__: potentially invalid json response found. Usually it is okay. But better to check: {}, {}".format(col, mp))
                 mp = {"__explode_json_len__": "0"}
                 return [mp]
 
-            # parse json
-            json_mp = json.loads(utils.url_decode(mp[url_encoded_col]))
+            # fetch the json string, it might be url encoded or not though recommendation is to use url encoding.
+            json_str = mp[col]
+            json_mp = None
+
+            # best effort in detecting the type and parsing for robustness
+            if (json_str.startswith("%7B") == False and json_str.startswith("%5B") == False):
+                if (json_str.startswith("{") or json_str.startswith("[")):
+                    utils.warn("explode_json called with column that is not url encoded json. Assuming plain json string")
+                    json_mp = json.loads(json_str)
+                else:
+                    json_str10 = json_str[0:10] + "..." if (len(json_str) > 10) else json_str
+                    utils.warn("explode_json called with invalid value in the string. Ignoring parsing: {}".format(json_str10))
+                    mp = {"__explode_json_len__": "0"}
+                    return [mp]
+            else:
+                json_mp = json.loads(utils.url_decode(json_str))
+
+            # call internal methods
             results = __explode_json_transform_func_inner_helper__(json_mp)
 
             # return
@@ -2368,7 +2384,7 @@ class TSV:
             # check if top level is a list
             if (isinstance(json_mp, list)):
                 print("top level is a list. converting to a map")
-                return __explode_json_transform_func_inner_helper__({url_encoded_col: json_mp})
+                return __explode_json_transform_func_inner_helper__({col: json_mp})
 
             # use inner functions to parse the json
             results = __explode_json_transform_func_expand_json__(json_mp)
@@ -2376,6 +2392,7 @@ class TSV:
             # return
             return results
 
+        # TODO: Do the url encoding outside as a common thing
         def __explode_json_transform_func_expand_json__(json_mp, parent_prefix = None):
             # create some basic structures
             results = []
@@ -2407,10 +2424,11 @@ class TSV:
                 if (isinstance(v, (str, int, float))):
                     v1 = str(v).replace("\t", " ")
                     # check if encoding needs to be done
-                    if (encode_cols != None and k in encode_cols):
+                    if (url_encoded_cols != None and k in url_encoded_cols):
                         v1 = utils.url_encode(v1)
-                    single_results[k] = v1 
-                    
+                        single_results[k + ":url_encoded"] = v1
+                    else:
+                        single_results[k] = v1
                 else:
                     # TODO :Added on 2021-11-27. Need the counts for arrays and dict to handle 0 count errors. Splitting the single if-elif-else to two level
                     single_results[k + ":__explode_json_len__"] = str(len(v))
@@ -2421,22 +2439,31 @@ class TSV:
                         # create a new entry for holding the list array
                         list_results_arr.append([])
 
+                        # check for base data types
                         if (isinstance(v[0], (str,int,float))):
                             # treat primitive lists as single value or as yet another list
                             if (collapse_primitive_list == True):
                                 # do the encoding
                                 v1 = join_col.join(sorted(list([str(t).replace("\t", " ") for t in v])))
-                                if (encode_cols != None and k in encode_cols):
+                                if (url_encoded_cols != None and k in url_encoded_cols):
                                     v1 = utils.url_encode(v1)
-                                single_results[k] = v1
+                                    single_results[k + ":url_encoded"] = v1
+                                else:
+                                    single_results[k] = v1
                             else:
                                 for vt in v:
+                                    # create map to store values
                                     mp2_new = {}
+
                                     # do the encoding
                                     v1 = str(vt).replace("\t", " ")
-                                    if (encode_cols != None and k in encode_cols):
+                                    if (url_encoded_cols != None and k in url_encoded_cols):
                                         v1 = utils.url_encode(v1)
-                                    mp2_new[k] = v1
+                                        mp2_new[k + ":url_encoded"] = v1
+                                    else:
+                                        mp2_new[k] = v1
+
+                                    # append the map to the list
                                     list_results_arr[-1].append(mp2_new)
                         elif (isinstance(v[0], dict)):
                             # append all the expanded version of the list
@@ -2617,17 +2644,18 @@ class TSV:
         return __explode_json_transform_func_inner__ 
 
     # TODO: Need better name
-    # the json col is expected to be in url_encoded form 
-    def explode_json(self, url_encoded_col, prefix = None, accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None,
-        merge_list_method = "cogroup", collapse_primitive_list = True, encode_cols = None, collapse = True):
+    # TODO: the json col is expected to be in url_encoded form otherwise does best effort guess
+    # TODO: url_encoded_cols, excluded_cols, accepted_cols are actually json hashmap keys and not xpath 
+    def explode_json(self, col, prefix = None, accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None,
+        merge_list_method = "cogroup", collapse_primitive_list = True, url_encoded_cols = None, collapse = True):
 
         # warn
         if (excluded_cols != None):
             utils.print_code_todo_warning("explode_json: excluded_cols is work in progress and may not work in all scenarios")
 
         # validation
-        if (url_encoded_col not in self.header_map.keys()):
-            raise Exception("Column not found:", str(url_encoded_col), str(self.header_fields))
+        if (col not in self.header_map.keys()):
+            raise Exception("Column not found:", str(col), str(self.header_fields))
 
         # warn on risky combinations
         if (merge_list_method == "cogroup"):
@@ -2639,14 +2667,13 @@ class TSV:
             prefix = col
 
         # check for explode function
-        exp_func = self.__explode_json_transform_func__(url_encoded_col, accepted_cols = accepted_cols, excluded_cols = excluded_cols, single_value_list_cols = single_value_list_cols,
-            transpose_col_groups = transpose_col_groups,
-            merge_list_method = merge_list_method, encode_cols, collapse_primitive_list = collapse_primitive_list)
+        exp_func = self.__explode_json_transform_func__(col, accepted_cols = accepted_cols, excluded_cols = excluded_cols, single_value_list_cols = single_value_list_cols,
+            transpose_col_groups = transpose_col_groups, merge_list_method = merge_list_method, url_encoded_cols = url_encoded_cols, collapse_primitive_list = collapse_primitive_list)
 
         # use explode to do this parsing  
         return self \
             .add_seq_num(prefix + ":__json_index__", inherit_message = "explode_json") \
-            .explode([url_encoded_col], exp_func, prefix = prefix, default_val = "", collapse = collapse, inherit_message = "explode_json") \
+            .explode([col], exp_func, prefix = prefix, default_val = "", collapse = collapse, inherit_message = "explode_json") \
             .validate()
 
     def transpose(self, n = 1):
