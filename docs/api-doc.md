@@ -327,7 +327,7 @@ sepal_length	sepal_width	petal_length	petal_width	class      	petal_length:sum	p
 different sections of json, the default merging strategy is similar to cogroup. A more correct way is to use _merge_list_method = join_ where cartisian product will be created. Useful for parsing
 json response from web services which are mostly simple in nature, and a default parser can atleast help in looking at the raw data in a simpler way.
 
-A detailed example is provided in [example-notebooks/json-parsing] notebook.
+A detailed example is provided in the [json parsing](example-notebooks/json-parsing.ipynb) notebook.
 
 ### 14. Join and Union
    - **join**(that, lkeys, _rkeys_, _join_type_, _lsuffix_, _rsuffix_, _default_val_, _def_val_map_): This is the primary api for joining two TSV objects. The _lkeys_ is the list of columns on

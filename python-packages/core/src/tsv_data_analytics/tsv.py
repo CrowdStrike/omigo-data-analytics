@@ -886,6 +886,7 @@ class TSV:
             # check which notation is used to do the function call
             if (use_array_notation == False):
                 if (num_cols == 1):
+                    # TODO: this if condition is not able to do error check when number of output columns doesnt match number of input cols
                     result = func(col_values[0])
                 elif (num_cols == 2):
                     result = func(col_values[0], col_values[1])

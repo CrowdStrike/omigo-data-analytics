@@ -9,7 +9,7 @@ import math
 import time
 
 class MultiThreadTSV(tsv.TSV):
-    def __init__(self, header, data, num_par = 1, status_check_interval_sec = 10, sleep_interval_sec = 0.11, num_batches = 10):
+    def __init__(self, header, data, num_par = 0, status_check_interval_sec = 10, sleep_interval_sec = 0.11, num_batches = 10):
         super().__init__(header, data)
         self.num_par = num_par
         self.status_check_interval_sec = status_check_interval_sec
@@ -31,17 +31,18 @@ class MultiThreadTSV(tsv.TSV):
         batch_size = int(math.ceil(self.num_rows() / self.num_batches))
         future_results = []
 
-        # print batch size
-        utils.info("MultiThreadTSV: num_rows: {}, num_par: {}, num_batches: {}, batch_size: {}, status_check_interval_sec: {}".format(
-            self.num_rows(), self.num_par, self.num_batches, batch_size, self.status_check_interval_sec))
-
         # take start_time
         ts_start = time.time()
 
         # check for single threaded
-        if (self.num_par == 1):
+        if (self.num_par == 0):
+            utils.info("MultiThreadTSV: running in single threaded mode.")
             combined_result = __parallelize__(self, func, *args, **kwargs)
         else:
+            # print batch size
+            utils.info("MultiThreadTSV: num_rows: {}, num_par: {}, num_batches: {}, batch_size: {}, status_check_interval_sec: {}".format(
+                self.num_rows(), self.num_par, self.num_batches, batch_size, self.status_check_interval_sec))
+
             # run thread pool
             with ThreadPoolExecutor(max_workers = self.num_par) as executor:
                 # execute batches concurrently based on num_par and batch_size 

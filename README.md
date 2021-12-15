@@ -18,6 +18,15 @@
  * Internal in-memory data storage format is TSV which is very easy to work with.
  * Binary formats are best for getting good performance, though plain text is best for looking into data easily without any additional tools.
 
+## Run through Docker
+#### Build image (first time only)
+```
+$ docker build -t tsv-data-analytics -f deploy/Dockerfile .
+```
+#### Run image
+```
+$ docker run --rm -p 8888:8888 -it -v $PWD:/code tsv-data-analytics
+
 ## Install Instructions
 There are two packages - core and extensions. 
 
@@ -30,7 +39,7 @@ $ pip3 install tsv-data-analytics-ext==0.1.4
 ```
 
 ## Usage
-*Note*: Some working examples are in jupyter ![example-notebooks](example-notebooks) directory. Here is a simple example to run in command line.
+*Note*: Some working examples are in jupyter [example-notebooks](example-notebooks) directory. Here is a simple example to run in command line.
 
 #### Read data from local filesystem. Can also use s3 or web url.
 ```
@@ -98,6 +107,12 @@ sepal_width	sepal_length
 ```
 >>> tsv.write(y, "output.tsv.gz")
 ```
+
+## Documentation
+* [README](README.md): Good starting point to get a basic overview of the library.
+* [API Documentation](https://github.com/CrowdStrike/tsv-data-analytics/wiki/API-Documentation): Detailed API docs with simple examples to illustrate the usage.
+* [example-notebooks](example-notebooks): Working examples to show different use cases.
+
 ## Notes from the author
 * This library is built for simplicity, functionality and robustness. Good engineering practices are being followed slowly.
 * More examples with real life use cases is currently in progress. Feel free to reach out for any questions. 
