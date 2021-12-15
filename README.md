@@ -30,7 +30,7 @@ $ pip3 install tsv-data-analytics-ext==0.1.4
 ```
 
 ## Usage
-*Note*: Some working examples are in jupyter ![example-notebooks](example-notebooks) directory. Here is a simple example to run in command line.
+*Note*: Some working examples are in jupyter [example-notebooks](example-notebooks) directory. Here is a simple example to run in command line.
 
 #### Read data from local filesystem. Can also use s3 or web url.
 ```
