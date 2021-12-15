@@ -98,6 +98,12 @@ sepal_width	sepal_length
 ```
 >>> tsv.write(y, "output.tsv.gz")
 ```
+
+## Documentation
+#### 1. ![README](README.md): This is a good starting point to get a basic overview with simple examples.
+#### 2. ![API Documentation](https://github.com/CrowdStrike/tsv-data-analytics/wiki): This has details of all the APIs with simple examples to illustrate the usage.
+#### 3. ![example-notebooks](example-notebooks): This has working examples to show different use cases.
+
 ## Notes from the author
 * This library is built for simplicity, functionality and robustness. Good engineering practices are being followed slowly.
 * More examples with real life use cases is currently in progress. Feel free to reach out for any questions. 
