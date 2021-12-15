@@ -18,6 +18,15 @@
  * Internal in-memory data storage format is TSV which is very easy to work with.
  * Binary formats are best for getting good performance, though plain text is best for looking into data easily without any additional tools.
 
+## Run through Docker
+#### Build image (first time only)
+```
+$ docker build -t tsv-data-analytics -f deploy/Dockerfile .
+```
+#### Run image
+```
+$ docker run --rm -p 8888:8888 -it -v $PWD:/code/data tsv-data-analytics
+
 ## Install Instructions
 There are two packages - core and extensions. 
 
