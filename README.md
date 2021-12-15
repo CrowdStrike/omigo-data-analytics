@@ -100,9 +100,9 @@ sepal_width	sepal_length
 ```
 
 ## Documentation
-#### 1. ![README](README.md): Good starting point to get a basic overview of the library.
-#### 2. ![API Documentation](https://github.com/CrowdStrike/tsv-data-analytics/wiki/API-Documentation): Detailed API docs with simple examples to illustrate the usage.
-#### 3. ![example-notebooks](example-notebooks): Working examples to show different use cases.
+#### 1. [README](README.md): Good starting point to get a basic overview of the library.
+#### 2. [API Documentation](https://github.com/CrowdStrike/tsv-data-analytics/wiki/API-Documentation): Detailed API docs with simple examples to illustrate the usage.
+#### 3. [example-notebooks](example-notebooks): Working examples to show different use cases.
 
 ## Notes from the author
 * This library is built for simplicity, functionality and robustness. Good engineering practices are being followed slowly.
