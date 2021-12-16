@@ -26,6 +26,7 @@ $ docker build -t tsv-data-analytics -f deploy/Dockerfile .
 #### Run image
 ```
 $ docker run --rm -p 8888:8888 -it -v $PWD:/code tsv-data-analytics
+```
 
 ## Install Instructions
 There are two packages - core and extensions. 
