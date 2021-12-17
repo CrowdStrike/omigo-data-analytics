@@ -251,14 +251,7 @@ class TSV:
 
     # TODO: use skip_rows for better name        
     def skip(self, count):
-        # validate
-        if (count > 0):
-            if (count >= len(self.data)):
-                return TSV(self.header, [])
-            else:
-                return TSV(self.header, self.data[count - 1:])
-        else:
-            return self
+        return TSV(self.header, self.data[count:])
 
     def skip_rows(self, count):
         return self.skip(count)
@@ -1246,7 +1239,11 @@ class TSV:
 
         return tuple(values)
 
-    def sort(self, cols, reverse = False, reorder = False, all_numeric = None):
+    def sort(self, cols = None, reverse = False, reorder = False, all_numeric = None):
+        # if nothing is specified sort on all columns
+        if (cols == None):
+            cols = self.get_header_fields()
+
         # find the matching cols and indexes
         matching_cols = self.__get_matching_cols__(cols)
         indexes = self.__get_col_indexes__(matching_cols)
@@ -1272,8 +1269,8 @@ class TSV:
         else:
             return TSV(self.header, new_data)
 
-    def reverse_sort(self, cols, reorder = False, all_numeric = None):
-        return self.sort(cols, reverse = True, reorder = reorder, all_numeric = all_numeric)
+    def reverse_sort(self, cols = None, reorder = False, all_numeric = None):
+        return self.sort(cols = cols, reverse = True, reorder = reorder, all_numeric = all_numeric)
 
     # reorder the specific columns
     def reorder(self, cols, inherit_message = ""):
@@ -1885,20 +1882,20 @@ class TSV:
             return self 
 
     # create descriptive methods for join 
-    def left_join(self, that, lkeys, rkeys = None, lsuffix = "", rsuffix = "", default_val = "", def_val_map = None):
+    def left_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None):
         return self.join(that, lkeys, rkeys, join_type = "left", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map)
 
-    def right_join(self, that, lkeys, rkeys = None, lsuffix = "", rsuffix = "", default_val = "", def_val_map = None):
+    def right_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None):
         return self.join(that, lkeys, rkeys, join_type = "right", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map)
 
-    def inner_join(self, that, lkeys, rkeys = None, lsuffix = "", rsuffix = "", default_val = "", def_val_map = None):
+    def inner_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None):
         return self.join(that, lkeys, rkeys, join_type = "inner", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map)
 
-    def outer_join(self, that, lkeys, rkeys = None, lsuffix = "", rsuffix = "", default_val = "", def_val_map = None):
+    def outer_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None):
         return self.join(that, lkeys, rkeys, join_type = "outer", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map)
 
     # primary join method
-    def join(self, that, lkeys, rkeys = None, join_type = "inner", lsuffix = "", rsuffix = "", default_val = "", def_val_map = None):
+    def join(self, that, lkeys, rkeys = None, join_type = "inner", lsuffix = None, rsuffix = None, default_val = "", def_val_map = None):
         # matching
         lkeys = self.__get_matching_cols__(lkeys)
         rkeys = that.__get_matching_cols__(rkeys) if (rkeys != None) else lkeys 
@@ -1982,7 +1979,7 @@ class TSV:
         # add the left side columns
         for i in range(len(self.header_fields)):
             if (self.header_fields[i] not in lkeys):
-                if (lsuffix != ""):
+                if (lsuffix != None):
                     new_header_fields.append(self.header_fields[i] + ":" + lsuffix)
                 else:
                     new_header_fields.append(self.header_fields[i])
@@ -2094,81 +2091,90 @@ class TSV:
 
         return TSV(new_header, new_data)
 
-    # TODO: check this implementation
-    def natural_join(self, that):
-        # find the list of columns that are common
-        grouping_cols = [] 
-        for k in self.header.split("\t"):
-            if (k in that.header_map.keys()):
-                grouping_cols.append(k)
+    # method to do map join. The right side is stored in a hashmap. only applicable to inner joins
+    def natural_join(self, that, inherit_message = ""):
+        # find the list of common cols
+        keys = list(set(self.get_header_fields()).intersection(set(that.get_header_fields())))
 
-        # create a set
-        grouping_cols_set = set(grouping_cols)
+        # create hashmap
+        rmap = {}
+        for line in that.get_data():
+            fields = line.split("\t")
+            rvalues_k = []
+            rvalues_v = []
 
-        # validation
-        if (len(grouping_cols) == 0):
-            raise Exception("No grouping columns found:", self.header_fields, that.header_fields)
+            # iterate over all columns and splitting into keys and values
+            for i in range(len(that.get_header_fields())):
+                k = that.get_header_fields()[i]
+                # split into key or value side
+                if (k in keys):
+                    rvalues_k.append(fields[i])
+                else:
+                    rvalues_v.append(fields[i])
 
-        # number of rows should be unique
-        uniq_rows_1 = self.select(grouping_cols, inherit_message = "natural_join:this").distinct().num_rows()
-        uniq_rows_2 = that.select(grouping_cols, inherit_message = "natural_join:that").distinct().num_rows()
-        if (uniq_rows_1 != uniq_rows_2):
-            raise Exception("Number of rows with grouping keys should be exactly the same:", uniq_rows_1, uniq_rows_2) 
- 
-        # append the cols
+            # append to the rmap
+            rvalues_key_str = "\t".join(rvalues_k)
+
+            # create the keys if it does not exist
+            if (rvalues_key_str not in rmap.keys()):
+                rmap[rvalues_key_str] = []
+
+            # append the values
+            rmap[rvalues_key_str].append(rvalues_v)
+
+        # for each type of join, merge the values
         new_header_fields = []
-        for k in grouping_cols:
-            new_header_fields.append(k)
-        for h in self.header.split("\t"):
-            if (h not in grouping_cols_set):
-                new_header_fields.append(h)
-        for h in that.header.split("\t"):
-            if (h not in grouping_cols_set):
-                new_header_fields.append(h)
 
+        # create the keys
+        for k in self.get_header_fields():
+            new_header_fields.append(k)
+
+        # take only the value part from right side
+        for k in that.get_header_fields():
+            if (k not in keys):
+                new_header_fields.append(k)
+
+        # construct new_header
         new_header = "\t".join(new_header_fields)
 
-        # convert both tsvs to hashmaps
-        maps_1 = self.__convert_to_maps__()
-        maps_2 = that.__convert_to_maps__()
-
-        # join
-        combined = {}
-
-        # iterate over all rows of maps_1
-        for mp in maps_1:
-            keys = []
-            vs = []
-            for k in self.header_fields:
-                if (k in grouping_cols_set):
-                    keys.append(str(mp[k]))
-                else:
-                    vs.append(str(mp[k]))
-
-            keys_str = "\t".join(keys)
-            vs_str = "\t".join(vs)
-            combined[keys_str] = vs_str
-
-        # iterate over all rows of maps_2
-        for mp in maps_2:
-            keys = []
-            vs = []
-            for k in that.header_fields:
-                if (k in grouping_cols_set):
-                    keys.append(str(mp[k]))
-                else:
-                    vs.append(str(mp[k]))
-
-            keys_str = "\t".join(keys)
-            vs_str = "\t".join(vs)
-            # FIXME: this is prone to empty strings
-            combined[keys_str] = combined[keys_str] + "\t" + vs_str
-
-        # iterate over combined
+        # iterate through left side and add new values using the hash_map
         new_data = []
-        for k, v in combined.items():
-            new_data.append(k + "\t" + v)
-            
+        counter = 0
+        for line in self.get_data():
+            # report progress
+            counter = counter + 1
+            utils.report_progress("natural_map_join: [1/1] adding values from hashmap", inherit_message, counter, len(self.data))
+
+            # split line and get fields
+            fields = line.split("\t")
+
+            # get the key and value
+            lvalues_k = []
+            lvalues_v = []
+
+            # create the key and value part
+            for i in range(len(self.get_header_fields())):
+                k = self.get_header_fields()[i]
+
+                # store into key or value part
+                if (k in keys):
+                    lvalues_k.append(fields[i])
+                else:
+                    lvalues_v.append(fields[i])
+
+            # create the key and value str
+            lvalue_key_str = "\t".join(lvalues_k)
+
+            # pick the value from hashmap
+            if (lvalue_key_str not in rmap.keys()):
+                raise Exception("key not found in that tsv: ", lvalue_key_str)
+
+            # get the list of all values from right side
+            vs_list = rmap[lvalue_key_str]
+            for vs in vs_list:
+                new_data.append("\t".join(utils.merge_arrays([fields, vs])))
+
+        # return
         return TSV(new_header, new_data)
 
     def cumulative_sum(self, col, new_col, as_int = True):
