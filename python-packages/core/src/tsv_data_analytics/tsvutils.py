@@ -464,7 +464,7 @@ def sort_func(vs):
     return [vs_date[0], ",".join(vs_date[1:])]
 
 # TODO: the body has to be a json payload. This is because of some bug in python requests.post api
-def __read_base_url__(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 5):
+def __read_base_url__(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 5, verify = True):
     # check for query params
     if (len(query_params) > 0):
         params_encoded_str = urlencode(query_params)
@@ -473,24 +473,24 @@ def __read_base_url__(url, query_params = {}, headers = {}, body = None, usernam
     # call the web service    
     if (body is None):
         if (username != None and password != None):
-            response = requests.get(url, auth = (username, password), headers = headers, timeout = timeout_sec)
+            response = requests.get(url, auth = (username, password), headers = headers, timeout = timeout_sec, verify = verify)
         else:
-            response = requests.get(url, headers = headers, timeout = timeout_sec)
+            response = requests.get(url, headers = headers, timeout = timeout_sec, verify = verify)
     else:
         if (username != None and password != None):
-            response = requests.post(url, auth = (username, password), json = json.loads(body), headers = headers, timeout = timeout_sec)
+            response = requests.post(url, auth = (username, password), json = json.loads(body), headers = headers, timeout = timeout_sec, verify = verify)
         else:
-            response = requests.post(url, json = json.loads(body), headers = headers, timeout = timeout_sec)
+            response = requests.post(url, json = json.loads(body), headers = headers, timeout = timeout_sec, verify = verify)
 
     # return response
     return response
 
 # TODO: the semantics of this api are not clear
-def read_url_json(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 5):
+def read_url_json(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 5, verify = True):
     utils.warn("read_url_json will flatten json that comes out as list. This api is still under development")
 
     # read response
-    response_str, status_code, error_msg = read_url_response(url, query_params, headers, body = body, username = username, password = password, timeout_sec = timeout_sec)
+    response_str, status_code, error_msg = read_url_response(url, query_params, headers, body = body, username = username, password = password, timeout_sec = timeout_sec, verify = verify)
 
     # construct header
     header = "\t".join(["json_encoded", "status_code", "error_msg"])
@@ -519,9 +519,9 @@ def read_url_json(url, query_params = {}, headers = {}, body = None, username = 
  
     return tsv.TSV(header, data).validate()
 
-def read_url_response(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 30):
+def read_url_response(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 30, verify = True):
     # read response
-    response = __read_base_url__(url, query_params, headers, body = body, username = username, password = password, timeout_sec = timeout_sec)
+    response = __read_base_url__(url, query_params, headers, body = body, username = username, password = password, timeout_sec = timeout_sec, verify = verify)
 
     # check for error codes
     if (response.status_code != 200):
@@ -567,7 +567,7 @@ def read_url_response(url, query_params = {}, headers = {}, body = None, usernam
     return response_str, response.status_code, ""
         
 # TODO: the compressed file handling should be done separately in a function
-def read_url(url, query_params = {}, headers = {}, sep = None, username = None, password = None, timeout_sec = 30):
+def read_url(url, query_params = {}, headers = {}, sep = None, username = None, password = None, timeout_sec = 30, verify = True):
     # use the file extension as alternate way of detecting type of file
     # TODO: move the file type and extension detection to separate function
     file_type = None
@@ -589,7 +589,7 @@ def read_url(url, query_params = {}, headers = {}, sep = None, username = None, 
         utils.warn("Unknown file extension. Doing best effort in content type detection")
 
     # read response
-    response_str, status_code, error_msg, = read_url_response(url, query_params, headers, body = None, username = username, password = password, timeout_sec = timeout_sec)
+    response_str, status_code, error_msg, = read_url_response(url, query_params, headers, body = None, username = username, password = password, timeout_sec = timeout_sec, verify = verify)
 
     # check for status code
     if (status_code != 200):

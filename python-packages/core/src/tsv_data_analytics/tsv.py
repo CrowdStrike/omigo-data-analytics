@@ -570,11 +570,11 @@ class TSV:
         return TSV(new_header, new_data)
 
     # FIXME
-    def arg_min(self, grouping_cols, argcols, valcols, suffix = "arg_min", topk = 1, sep = "|", collapse = False):
+    def arg_min(self, grouping_cols, argcols, valcols, suffix = "arg_min", topk = 1, sep = "|", collapse = True):
         utils.warn("arg_min is not implemented correctly. Too complicated")
         return self.__arg_min_or_max_common__(grouping_cols, argcols, valcols, suffix, topk, sep, -1, collapse = collapse)
 
-    def arg_max(self, grouping_cols, argcols, valcols, suffix = "arg_max", topk = 1, sep = "|", collapse = False):
+    def arg_max(self, grouping_cols, argcols, valcols, suffix = "arg_max", topk = 1, sep = "|", collapse = True):
         utils.warn("arg_max is not implemented correctly. Too complicated")
         return self.__arg_min_or_max_common__(grouping_cols, argcols, valcols, suffix, topk, sep, 1, collapse = collapse)
 

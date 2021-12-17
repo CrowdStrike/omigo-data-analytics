@@ -29,6 +29,7 @@ WORKDIR /code
 RUN python3 -m pip install --upgrade build
 RUN pip3 install tsv_data_analytics tsv_data_analytics_ext --upgrade
 RUN pip3 install jupyterlab
+RUN pip3 install yfinance 
 
 # entrypoint
-ENTRYPOINT ["./docker-entrypoint.sh"]
+ENTRYPOINT ["./deploy/docker-entrypoint.sh"]
