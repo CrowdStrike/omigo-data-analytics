@@ -16,7 +16,7 @@ class FilePathsReader:
 
     # has next returns true if there is still data to be read
     def has_next(self):
-       return self.filepaths != None and self.cur_index < len(self.filepaths)
+       return self.filepaths is not None and self.cur_index < len(self.filepaths)
 
     # close the file reader
     def close(self):

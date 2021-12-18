@@ -214,7 +214,7 @@ def get_directory_listing(path, filter_func = None, fail_if_missing = True, regi
             utils.trace("object_key: {}, filename: {}, extracted_key: {}, base_filename: {}".format(object_key, filename, extracted_key, base_filename))
 
             # collect all the paths found
-            if (base_filename != None):
+            if (base_filename is not None):
                 # extract the last part and then prepend the bucket and object key to construct full path
                 filenames.append(path + "/" + base_filename)
 
@@ -223,7 +223,7 @@ def get_directory_listing(path, filter_func = None, fail_if_missing = True, regi
 
     # dedup
     filenames = sorted(list(set(filenames)))
-    if (filter_func != None):
+    if (filter_func is not None):
         filenames = list(filter(lambda t: filter_func(t), filenames))
 
     # return

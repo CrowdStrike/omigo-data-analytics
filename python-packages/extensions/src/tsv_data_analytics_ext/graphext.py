@@ -38,7 +38,7 @@ class VisualTSV(tsv.TSV):
     
 def __create_data_frame_with_types__(xtsv, xcol = None, ycols = None, zcol = None):
     # convert to array
-    if (ycols != None):
+    if (ycols is not None):
         if (utils.is_array_of_string_values(ycols) == False):
             ycols = [ycols]
             
@@ -46,11 +46,11 @@ def __create_data_frame_with_types__(xtsv, xcol = None, ycols = None, zcol = Non
     combined_cols = []
 
     # xcol
-    if (xcol != None):
+    if (xcol is not None):
         combined_cols.append(xcol)
         
     # ycols
-    if (ycols != None):
+    if (ycols is not None):
         for col in ycols:
             combined_cols.append(col)
            
@@ -63,7 +63,7 @@ def __create_data_frame_with_types__(xtsv, xcol = None, ycols = None, zcol = Non
             mp[col] = xtsv.col_as_array(col)
             
     # zcols are returned without any extra transformation
-    if (zcol != None):
+    if (zcol is not None):
         mp[zcol] = xtsv.col_as_array(zcol)
     
     return pd.DataFrame(mp)
@@ -94,7 +94,7 @@ def __pd_linechart__(xtsv, xcol, ycols, ylabel, title, subplots, xfigsize, yfigs
  
 def __sns_scatterplot__(xtsv, xcol, ycol, class_col, title, xfigsize, yfigsize, max_rows, max_class_col):
     # check number of unique class values    
-    if (class_col != None and len(xtsv.col_as_array_uniq(class_col)) >= max_class_col):
+    if (class_col is not None and len(xtsv.col_as_array_uniq(class_col)) >= max_class_col):
         raise Exception("Number of class column values is more than {}: {}. Probably not a class column. Try max_class_col".format(max_class_col, len(xtsv.col_as_array_uniq(class_col))))
         
     # if xcol or ycol are non numeric then need to down sample the data
@@ -126,7 +126,7 @@ def __sns_scatterplot__(xtsv, xcol, ycol, class_col, title, xfigsize, yfigsize, 
     
 def __sns_histogram__(xtsv, xcol, class_col, bins, title, binwidth, kde, multiple, xfigsize, yfigsize, max_class_col):
     # check number of unique class values
-    if (class_col != None and len(xtsv.col_as_array_uniq(class_col)) >= max_class_col):
+    if (class_col is not None and len(xtsv.col_as_array_uniq(class_col)) >= max_class_col):
         raise Exception("Number of class column values is more than {}: {}. Probably not a class column. Try max_class_col".format(max_class_col, len(xtsv.col_as_array_uniq(class_col))))
     
     df = __create_data_frame_with_types__(xtsv, xcol, None, class_col)
@@ -135,7 +135,7 @@ def __sns_histogram__(xtsv, xcol, class_col, bins, title, binwidth, kde, multipl
     fig, ax = pyplot.subplots(figsize = figsize)
     
     # binwidth overrides bins
-    if (binwidth != None):
+    if (binwidth is not None):
         sns.histplot(data = df, x = xcol, hue = class_col, binwidth = binwidth, kde = kde, multiple = multiple, shrink = 0.8)
     else:
         sns.histplot(data = df, x = xcol, hue = class_col, bins = bins, kde = kde, multiple = multiple, shrink = 0.8)
@@ -153,7 +153,7 @@ def __sns_density__(xtsv, ycols, class_col, xfigsize, yfigsize):
     fig, ax = pyplot.subplots(figsize = figsize)
 
     # TODO: This is not clean
-    if (class_col != None):
+    if (class_col is not None):
         if (len(ycols) == 1):
             sns.kdeplot(data = df, x = ycols[0], hue = class_col, multiple = "stack")
         else:
@@ -166,7 +166,7 @@ def __sns_density__(xtsv, ycols, class_col, xfigsize, yfigsize):
         
 def __sns_barplot__(xtsv, xcol, ycol, class_col, resort, xfigsize, yfigsize, max_rows, max_class_col):
     # check number of unique class values
-    if (class_col != None and len(xtsv.col_as_array_uniq(class_col)) >= max_class_col):
+    if (class_col is not None and len(xtsv.col_as_array_uniq(class_col)) >= max_class_col):
         raise Exception("Number of class column values is more than {}: {}. Probably not a class column. Try max_class_col".format(max_class_col, len(xtsv.col_as_array_uniq(class_col))))
 
     # if xcol or ycol are non numeric then need to down sample the data
@@ -191,7 +191,7 @@ def __sns_barplot__(xtsv, xcol, ycol, class_col, resort, xfigsize, yfigsize, max
 
 def __sns_boxplot__(xtsv, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, max_class_col):
     # check number of unique class values
-    if (class_col != None and len(xtsv.col_as_array_uniq(class_col)) >= max_class_col):
+    if (class_col is not None and len(xtsv.col_as_array_uniq(class_col)) >= max_class_col):
         raise Exception("Number of class column values is more than {}: {}. Probably not a class column. Try max_class_col".format(max_class_col, len(xtsv.col_as_array_uniq(class_col))))
 
     # if xcol or ycol are non numeric then need to down sample the data
@@ -239,7 +239,7 @@ def __sns_corr_heatmp__(xtsv, cols, xfigsize, yfigsize, max_rows):
 def __sns_pairplot__(xtsv, cols, class_col, kind, diag_kind, xfigsize, yfigsize, max_rows, max_class_col):
     cols = xtsv.__get_matching_cols__(cols)
     # check number of unique class values
-    if (class_col != None and len(xtsv.col_as_array_uniq(class_col)) >= max_class_col):
+    if (class_col is not None and len(xtsv.col_as_array_uniq(class_col)) >= max_class_col):
         raise Exception("Number of class column values is more than {}. Max allowed: {}. Probably not a class column. Try max_class_col".format(max_class_col, len(xtsv.col_as_array_uniq(class_col))))
     
     # validation for number of columns. if the number of unique values is too high, then raise exception

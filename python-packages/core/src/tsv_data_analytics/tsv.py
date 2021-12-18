@@ -125,7 +125,7 @@ class TSV:
 
     def regex_match(self, col, pattern, condition = True, inherit_message = ""):
         inherit_message2 = inherit_message + ": regex_match" if (inherit_message != "") else "regex_match"
-        return self.filter([col], lambda x: (re.match(pattern, x) != None) == condition, inherit_message = inherit_message2)
+        return self.filter([col], lambda x: (re.match(pattern, x) is not None) == condition, inherit_message = inherit_message2)
 
     def not_eq(self, col, value):
         utils.warn("This api can have side effects because of implicit data types conversion in python. Use not_eq_int, not_eq_str or not_eq_float") 
@@ -1136,7 +1136,7 @@ class TSV:
             all_data.append(line)
 
         # print label
-        if (title != None):
+        if (title is not None):
             print("=============================================================================================================================================")
             print(title)
             print("=============================================================================================================================================")
@@ -1160,7 +1160,7 @@ class TSV:
                 row.append(str(value))
             print("\t".join(row))
 
-        if (title != None):
+        if (title is not None):
             print("=============================================================================================================================================")
 
         # return self
@@ -1898,7 +1898,7 @@ class TSV:
     def join(self, that, lkeys, rkeys = None, join_type = "inner", lsuffix = None, rsuffix = None, default_val = "", def_val_map = None):
         # matching
         lkeys = self.__get_matching_cols__(lkeys)
-        rkeys = that.__get_matching_cols__(rkeys) if (rkeys != None) else lkeys 
+        rkeys = that.__get_matching_cols__(rkeys) if (rkeys is not None) else lkeys 
  
         # check the lengths
         if (len(lkeys) != len(rkeys)):
@@ -1979,7 +1979,7 @@ class TSV:
         # add the left side columns
         for i in range(len(self.header_fields)):
             if (self.header_fields[i] not in lkeys):
-                if (lsuffix != None):
+                if (lsuffix is not None):
                     new_header_fields.append(self.header_fields[i] + ":" + lsuffix)
                 else:
                     new_header_fields.append(self.header_fields[i])
@@ -1987,7 +1987,7 @@ class TSV:
         # add the right side columns
         for i in range(len(that.header_fields)):
             if (that.header_fields[i] not in rkeys):
-                if (rsuffix != None):
+                if (rsuffix is not None):
                     new_header_fields.append(that.header_fields[i] + ":" + rsuffix)
                 else:
                     if (that.header_fields[i] not in new_header_fields):
@@ -2002,7 +2002,7 @@ class TSV:
         default_lvals = []
         for h in self.header_fields:
             if (h not in lkeys):
-                if (def_val_map != None and h in def_val_map.keys()):
+                if (def_val_map is not None and h in def_val_map.keys()):
                     default_lvals.append(def_val_map[h])
                 else:
                     default_lvals.append(default_val)
@@ -2012,7 +2012,7 @@ class TSV:
         default_rvals = []
         for h in that.header_fields:
             if (h not in rkeys):
-                if (def_val_map != None and h in def_val_map.keys()):
+                if (def_val_map is not None and h in def_val_map.keys()):
                     default_rvals.append(def_val_map[h])
                 else:
                     default_rvals.append(default_val)
@@ -2343,7 +2343,7 @@ class TSV:
                     if (k in evm.keys()):
                         new_vals.append(evm[k])
                     else:
-                        if (default_val != None):
+                        if (default_val is not None):
                             new_vals.append(default_val)
                         else:
                             raise Exception("Not all output values are returned from function:", str(evm), str(exploded_keys_sorted))
@@ -2388,7 +2388,7 @@ class TSV:
 
         def __explode_json_transform_func_inner_helper__(json_mp):
             # validation
-            if (transpose_col_groups != None and merge_list_method == "join"):
+            if (transpose_col_groups is not None and merge_list_method == "join"):
                 raise Exception("transpose_col_groups can not be used with join method. Please use cogroup or unset transpose_col_groups")
 
             # check if top level is a list
@@ -2413,13 +2413,13 @@ class TSV:
             # iterate over all key values
             for k in json_mp.keys():
                 # check for inclusion and exclusion
-                if (accepted_cols != None and k not in accepted_cols):
+                if (accepted_cols is not None and k not in accepted_cols):
                     continue
-                if (excluded_cols != None and k in excluded_cols):
+                if (excluded_cols is not None and k in excluded_cols):
                     continue
 
                 # create this combo key for recursion
-                parent_with_child_key = parent_prefix + ":" + k if (parent_prefix != None) else k
+                parent_with_child_key = parent_prefix + ":" + k if (parent_prefix is not None) else k
 
                 # get value
                 v = json_mp[k]
@@ -2434,7 +2434,7 @@ class TSV:
                 if (isinstance(v, (str, int, float))):
                     v1 = str(v).replace("\t", " ")
                     # check if encoding needs to be done
-                    if (url_encoded_cols != None and k in url_encoded_cols):
+                    if (url_encoded_cols is not None and k in url_encoded_cols):
                         v1 = utils.url_encode(v1)
                         single_results[k + ":url_encoded"] = v1
                     else:
@@ -2455,7 +2455,7 @@ class TSV:
                             if (collapse_primitive_list == True):
                                 # do the encoding
                                 v1 = join_col.join(sorted(list([str(t).replace("\t", " ") for t in v])))
-                                if (url_encoded_cols != None and k in url_encoded_cols):
+                                if (url_encoded_cols is not None and k in url_encoded_cols):
                                     v1 = utils.url_encode(v1)
                                     single_results[k + ":url_encoded"] = v1
                                 else:
@@ -2467,7 +2467,7 @@ class TSV:
 
                                     # do the encoding
                                     v1 = str(vt).replace("\t", " ")
-                                    if (url_encoded_cols != None and k in url_encoded_cols):
+                                    if (url_encoded_cols is not None and k in url_encoded_cols):
                                         v1 = utils.url_encode(v1)
                                         mp2_new[k + ":url_encoded"] = v1
                                     else:
@@ -2490,7 +2490,7 @@ class TSV:
                                 raise Exception("Inner lists are not supported. Use accepted_cols or excluded_cols: {}, number of values:{}".format(str(k)), len(v))
 
                             # check if there is flag to use only the first column
-                            if (single_value_list_cols != None and k in single_value_list_cols):
+                            if (single_value_list_cols is not None and k in single_value_list_cols):
                                  mp2_list = __explode_json_transform_func_expand_json__(v[0], parent_prefix = parent_with_child_key)
                                  for mp2 in mp2_list:
                                      mp2_new = {}
@@ -2543,7 +2543,7 @@ class TSV:
                     combined_map[k] = str(mp[k])
 
             # look for prefixes that needed to be transposed and moved from combined map to list_results_arr
-            if (transpose_col_groups != None):
+            if (transpose_col_groups is not None):
                 if (utils.is_debug()):
                     print("WARN: This API is not working as expected and is experimental")
 
@@ -2560,7 +2560,7 @@ class TSV:
 
                     # iterate and find all the matching ones
                     for k in combined_map.keys():
-                        if (parent_prefix != None and parent_prefix == transpose_col_group_prefix):
+                        if (parent_prefix is not None and parent_prefix == transpose_col_group_prefix):
                             #print("combined_map: key:", k, parent_prefix)
                             key_list_results.append({ "__key__": str(k) })
                             value_list_results.append({ "__value__": str(combined_map[k]) })
@@ -2660,7 +2660,7 @@ class TSV:
         merge_list_method = "cogroup", collapse_primitive_list = True, url_encoded_cols = None, collapse = True):
 
         # warn
-        if (excluded_cols != None):
+        if (excluded_cols is not None):
             utils.print_code_todo_warning("explode_json: excluded_cols is work in progress and may not work in all scenarios")
 
         # validation
@@ -2878,7 +2878,7 @@ class TSV:
             # iterate through header
             for h in self.header_fields:
                 # check for match
-                if ((col_pattern.find(".*") != -1 and re.match(col_pattern, h) != None) or (col_pattern == h)):
+                if ((col_pattern.find(".*") != -1 and re.match(col_pattern, h) is not None) or (col_pattern == h)):
                     col_pattern_found = True
                     # if not in existing list then add
                     if (h not in matching_cols):
