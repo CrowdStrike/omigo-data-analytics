@@ -2115,6 +2115,7 @@ class TSV:
         keys = list(set(self.get_header_fields()).intersection(set(that.get_header_fields())))
 
         # need to get keys on both sides in the same order
+        that = that.reorder(keys, use_existing_order = False)
 
         # create hashmap
         rmap = {}
