@@ -536,7 +536,7 @@ def read_url_response(url, query_params = {}, headers = {}, body = None, usernam
 
     # check for errors
     if (response is None):
-        return "", 500, str(e)
+        return "", 500, str(resp_exception)
 
     # check for error codes
     if (response.status_code != 200):
