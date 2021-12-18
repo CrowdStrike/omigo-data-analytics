@@ -2808,6 +2808,7 @@ class TSV:
 
         # progress counters
         counter = 0
+        inherit_message2 = inherit_message + ": to_tuples" if (inherit_message != "") else inherit_message
         for line in self.select(cols, inherit_message = inherit_message2).get_data():
             # progress
             counter = counter + 1
