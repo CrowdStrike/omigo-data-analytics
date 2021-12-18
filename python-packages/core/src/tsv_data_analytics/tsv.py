@@ -1273,11 +1273,29 @@ class TSV:
         return self.sort(cols = cols, reverse = True, reorder = reorder, all_numeric = all_numeric)
 
     # reorder the specific columns
-    def reorder(self, cols, inherit_message = ""):
+    def reorder(self, cols, use_existing_order = True, inherit_message = ""):
         # get matching column and indexes
         matching_cols = self.__get_matching_cols__(cols)
         indexes = self.__get_col_indexes__(matching_cols)
 
+        # do a full reorder if asked
+        if (use_existing_order == False):
+            # get the non matching cols
+            non_matching_cols = []
+            for c in self.get_header_fields():
+                if (c not in matching_cols):
+                    non_matching_cols.append(c)
+
+            # all cols
+            all_cols = []
+            for c in matching_cols:
+                all_cols.apppend(c)
+            for c in non_matching_cols:
+                all_cols.apppend(c)
+
+            # return
+            return self.select(all_cols).reorder(cols, use_existing_order = False, inherit_message = inherit_message)
+      
         # create a map of columns that match the criteria
         new_header_fields = []
 
@@ -2096,6 +2114,8 @@ class TSV:
         # find the list of common cols
         keys = list(set(self.get_header_fields()).intersection(set(that.get_header_fields())))
 
+        # need to get keys on both sides in the same order
+
         # create hashmap
         rmap = {}
         for line in that.get_data():
@@ -2122,7 +2142,7 @@ class TSV:
             # append the values
             rmap[rvalues_key_str].append(rvalues_v)
 
-        # for each type of join, merge the values
+        # create new header
         new_header_fields = []
 
         # create the keys

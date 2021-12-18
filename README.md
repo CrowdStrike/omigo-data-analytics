@@ -36,8 +36,8 @@ The core package is built on core python without many external dependencies to k
 functionalities like plotting, and can have lot of dependencies.
 
 ```
-$ pip3 install tsv-data-analytics==0.2.1
-$ pip3 install tsv-data-analytics-ext==0.2.1
+$ pip3 install tsv-data-analytics==0.2.2
+$ pip3 install tsv-data-analytics-ext==0.2.2
 ```
 
 ## Usage
