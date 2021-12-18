@@ -103,7 +103,7 @@ def merge_intersect(tsv_list, def_val_map = None):
         utils.warn("merge_intersect: missing columns: {}".format(str(diff_cols)))
 
         # check which of the columns among the diff have default values
-        if (def_val_map != None):
+        if (def_val_map is not None):
             # create effective map with empty string as default value
             effective_def_val_map = {}
 
@@ -172,7 +172,7 @@ def read(input_file_or_files, sep = None, s3_region = None, aws_profile = None):
             data = lines[1:]
 
             # check if a custom separator is defined
-            if (sep != None):
+            if (sep is not None):
                 # check for validation
                 for line in lines:
                     if ("\t" in line):
@@ -218,7 +218,7 @@ def read_with_filter_transform(input_file_or_files, filter_transform_func = None
         # iterate over the records of each map and generate a new one
         for mp in x.export_to_maps():
             mp2 = filter_transform_func(mp)
-            if (mp2 != None):
+            if (mp2 is not None):
                 if (len(mp2) > 0):
                     result_maps.append(mp2)
                 for k in mp2.keys():
@@ -353,7 +353,7 @@ def scan_by_datetime_range(path, start_date_str, end_date_str, prefix, filter_fu
                 total_wait = total_wait + wait_time
                 
                 # check if total wait time has exceeded the limit
-                if (timeout_seconds != None and total_wait >= timeout_seconds):
+                if (timeout_seconds is not None and total_wait >= timeout_seconds):
                     print("scan_by_datetime_range: timeout of {} seconds reached. Shutting down...".format(timeout_seconds))
                     executor.shutdown()
                     print("scan_by_datetime_range: shutdown complete. Raising exception")
@@ -475,12 +475,12 @@ def __read_base_url__(url, query_params = {}, headers = {}, body = None, usernam
 
     # call the web service    
     if (body is None):
-        if (username != None and password != None):
+        if (username is not None and password is not None):
             response = requests.get(url, auth = (username, password), headers = headers, timeout = timeout_sec, verify = verify)
         else:
             response = requests.get(url, headers = headers, timeout = timeout_sec, verify = verify)
     else:
-        if (username != None and password != None):
+        if (username is not None and password is not None):
             response = requests.post(url, auth = (username, password), json = json.loads(body), headers = headers, timeout = timeout_sec, verify = verify)
         else:
             response = requests.post(url, json = json.loads(body), headers = headers, timeout = timeout_sec, verify = verify)
@@ -609,7 +609,7 @@ def read_url(url, query_params = {}, headers = {}, sep = None, username = None, 
             sep = ","
 
     # check for other separators
-    if (sep != None and sep != "\t"):
+    if (sep is not None and sep != "\t"):
         # do a better version of separator detection
         if ("\t" in response_str):
             utils.warn("Non TSV input file has tabs. Converting tabs to spaces")

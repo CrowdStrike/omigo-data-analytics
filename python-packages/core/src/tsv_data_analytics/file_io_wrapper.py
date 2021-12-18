@@ -44,9 +44,9 @@ class FileWriter:
                     output_file.write(line) 
 
             # close
-            if (output_file != None):
+            if (output_file is not None):
                 output_file.close()
-            if (output_zipf != None):
+            if (output_zipf is not None):
                 output_zipf.close()
 
             # set data to None

@@ -94,7 +94,7 @@ class EtlDateTimePathFormat:
 def get_matching_etl_date_time_path(path, new_base_path, new_prefix, new_extension = None):
      # parse the old path
      er = EtlDateTimePathFormat(path)
-     effective_extension = new_extension if (new_extension != None) else er.extension
+     effective_extension = new_extension if (new_extension is not None) else er.extension
 
      # construct new path
      new_path = "{}/dt={}/{}-{}-{}-{}-{}.{}".format(new_base_path, er.date_part, new_prefix, er.start_date, er.start_time, er.end_date, er.end_time, effective_extension)
