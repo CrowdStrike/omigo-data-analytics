@@ -9,15 +9,16 @@ import math
 import time
 
 class MultiThreadTSV(tsv.TSV):
-    def __init__(self, header, data, num_par = 0, status_check_interval_sec = 10, sleep_interval_sec = 0.11, num_batches = 10):
+    def __init__(self, header, data, num_par = 0, status_check_interval_sec = 10, sleep_interval_sec = 0.11, num_batches = 10, inherit_message = ""):
         super().__init__(header, data)
         self.num_par = num_par
         self.status_check_interval_sec = status_check_interval_sec
         self.sleep_interval_sec = sleep_interval_sec
+        self.inherit_message = inherit_message + ": MultiThreadTSV" if (inherit_message != "") else "MultiThreadTSV"
 
         # check if num_par is more than number of rows
         if (self.num_rows() < self.num_par):
-            utils.warn("MultiThreadTSV: num_rows: {} < num_par: {}. Adjusting the value".format(self.num_rows(), self.num_par))
+            utils.warn("{}: num_rows: {} < num_par: {}. Adjusting the value".format(self.inherit_message, self.num_rows(), self.num_par))
             self.num_par = self.num_rows()
 
         # set the num_batches for better splitting
@@ -25,7 +26,7 @@ class MultiThreadTSV(tsv.TSV):
 
     def parallelize(self, func, *args, **kwargs):
         # trace
-        utils.trace("MultiThreadTSV: parallelize: func: {}, args: {}, kwargs: {}".format(func, *args, **kwargs))
+        utils.trace("{}: parallelize: func: {}, args: {}, kwargs: {}".format(self.inherit_message, func, *args, **kwargs))
 
         # split the data into num_par partitions
         batch_size = int(math.ceil(self.num_rows() / self.num_batches))
@@ -36,11 +37,11 @@ class MultiThreadTSV(tsv.TSV):
 
         # check for single threaded
         if (self.num_par == 0):
-            utils.info("MultiThreadTSV: running in single threaded mode.")
+            utils.info("{}: running in single threaded mode.".format(self.inherit_message))
             combined_result = __parallelize__(self, func, *args, **kwargs)
         else:
             # print batch size
-            utils.info("MultiThreadTSV: num_rows: {}, num_par: {}, num_batches: {}, batch_size: {}, status_check_interval_sec: {}".format(
+            utils.info("{}: num_rows: {}, num_par: {}, num_batches: {}, batch_size: {}, status_check_interval_sec: {}".format(self.inherit_message, 
                 self.num_rows(), self.num_par, self.num_batches, batch_size, self.status_check_interval_sec))
 
             # run thread pool
@@ -62,12 +63,12 @@ class MultiThreadTSV(tsv.TSV):
                             done_count = done_count + 1
 
                     # debug
-                    utils.debug("MultiThreadTSV: parallelize: done_count: {}, total: {}".format(done_count, len(future_results)))
+                    utils.debug("{}: parallelize: done_count: {}, total: {}".format(self.inherit_message, done_count, len(future_results)))
 
                     # check if all are done
                     if (done_count < len(future_results)):
                         # sleep for some additional time to allow notebook stop method to work
-                        utils.debug("MultiThreadTSV: parallelize: futures not completed yet. Sleeping for {} sec. Time elapsed: {} sec".format(self.status_check_interval_sec, time_elapsed))
+                        utils.debug("{}: parallelize: futures not completed yet. Sleeping for {} sec. Time elapsed: {} sec".format(self.inherit_message, self.status_check_interval_sec, time_elapsed))
                         time.sleep(self.status_check_interval_sec)
                         time_elapsed = time_elapsed + self.status_check_interval_sec
                     else:
@@ -84,7 +85,7 @@ class MultiThreadTSV(tsv.TSV):
         # take end_time 
         ts_end = time.time()
 
-        utils.debug("MultiThreadTSV: parallelize: time taken: {} sec, num_rows: {}".format(int(ts_end - ts_start), combined_result.num_rows()))
+        utils.debug("{}: parallelize: time taken: {} sec, num_rows: {}".format(self.inherit_message, int(ts_end - ts_start), combined_result.num_rows()))
         return combined_result
 
 def __parallelize__(xtsv, func, *args, **kwargs):

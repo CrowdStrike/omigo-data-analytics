@@ -2206,7 +2206,7 @@ class TSV:
 
             # pick the value from hashmap. TODO
             if (lvalue_key_str not in rmap.keys()):
-                utils.warn("key not found in right side tsv: {}: {}: {}. Eventually this warning will become exception.".format(keys, lvalues_k, rmap.keys()))
+                utils.trace("key not found in right side tsv: {}: {}: {}. This warning might become exception.".format(keys, lvalues_k, rmap.keys()))
             else:
                 # get the list of all values from right side
                 vs_list = rmap[lvalue_key_str]
@@ -2808,6 +2808,7 @@ class TSV:
 
         # progress counters
         counter = 0
+        inherit_message2 = inherit_message + ": to_tuples" if (inherit_message != "") else inherit_message
         for line in self.select(cols, inherit_message = inherit_message2).get_data():
             # progress
             counter = counter + 1
