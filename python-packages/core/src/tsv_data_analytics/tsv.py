@@ -2167,7 +2167,7 @@ class TSV:
 
             # pick the value from hashmap
             if (lvalue_key_str not in rmap.keys()):
-                utils.warn("key not found in that tsv: {}. Eventually this warning will become exception.".format(keys, lvalues_k))
+                utils.warn("key not found in that tsv: {}: {}. Eventually this warning will become exception.".format(keys, lvalues_k))
             else:
                 # get the list of all values from right side
                 vs_list = rmap[lvalue_key_str]
