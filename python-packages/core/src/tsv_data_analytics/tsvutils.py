@@ -437,6 +437,9 @@ def load_from_array_of_map(map_arr):
     return tsv.TSV(header, data)
 
 def save_to_file(tsvfile, output_file_name, s3_region = None, aws_profile = None):
+    # do some validation
+    tsvfile_valid = tsvfile.validate()
+
     # check if it is a local file or s3
     if (output_file_name.startswith("s3://") == False):
         file_paths_util.create_local_parent_dir(output_file_name)
@@ -445,8 +448,8 @@ def save_to_file(tsvfile, output_file_name, s3_region = None, aws_profile = None
     output_file = file_io_wrapper.FileWriter(output_file_name, s3_region, aws_profile)
 
     # write the data
-    output_file.write(tsvfile.get_header() + "\n")
-    for line in tsvfile.get_data():
+    output_file.write(tsvfile_valid.get_header() + "\n")
+    for line in tsvfile_valid.get_data():
         output_file.write(line + "\n")
 
     # close file

@@ -1987,7 +1987,7 @@ class TSV:
         # add the right side columns
         for i in range(len(that.header_fields)):
             if (that.header_fields[i] not in rkeys):
-                if (rsuffix != ""):
+                if (rsuffix != None):
                     new_header_fields.append(that.header_fields[i] + ":" + rsuffix)
                 else:
                     if (that.header_fields[i] not in new_header_fields):
