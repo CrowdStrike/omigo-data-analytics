@@ -2167,12 +2167,12 @@ class TSV:
 
             # pick the value from hashmap
             if (lvalue_key_str not in rmap.keys()):
-                utils.warn("key not found in that tsv: {}: {}. Eventually this warning will become exception.".format(lvalues_k, lvalues_v))
-
-            # get the list of all values from right side
-            vs_list = rmap[lvalue_key_str]
-            for vs in vs_list:
-                new_data.append("\t".join(utils.merge_arrays([fields, vs])))
+                utils.warn("key not found in that tsv: {}. Eventually this warning will become exception.".format(keys, lvalues_k))
+            else:
+                # get the list of all values from right side
+                vs_list = rmap[lvalue_key_str]
+                for vs in vs_list:
+                    new_data.append("\t".join(utils.merge_arrays([fields, vs])))
 
         # return
         return TSV(new_header, new_data)
