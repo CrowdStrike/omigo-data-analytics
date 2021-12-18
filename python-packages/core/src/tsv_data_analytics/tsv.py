@@ -2186,9 +2186,9 @@ class TSV:
             # create the key and value str
             lvalue_key_str = "\t".join(lvalues_k)
 
-            # pick the value from hashmap
+            # pick the value from hashmap. TODO
             if (lvalue_key_str not in rmap.keys()):
-                utils.warn("key not found in that tsv: {}: {}. Eventually this warning will become exception.".format(keys, lvalues_k))
+                utils.warn("key not found in right side tsv: {}: {}. Eventually this warning will become exception.".format(keys, lvalues_k))
             else:
                 # get the list of all values from right side
                 vs_list = rmap[lvalue_key_str]
