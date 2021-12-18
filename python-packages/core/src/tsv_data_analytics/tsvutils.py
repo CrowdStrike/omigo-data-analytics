@@ -19,6 +19,7 @@ from tsv_data_analytics import file_paths_util
 from tsv_data_analytics import file_paths_data_reader
 from tsv_data_analytics import file_io_wrapper
 from tsv_data_analytics import utils
+from requests import exceptions
 
 # TODO: find the difference between ascii and utf-8 encoding
 # requests.post doesnt take data properly. Use json parameter.
@@ -467,27 +468,34 @@ def sort_func(vs):
     return [vs_date[0], ",".join(vs_date[1:])]
 
 # TODO: the body has to be a json payload. This is because of some bug in python requests.post api
+# TODO: allow_redirects=False
+# TODO: https://docs.python-requests.org/en/latest/user/quickstart/: Check the WARNINGS
 def __read_base_url__(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 5, verify = True):
     # check for query params
     if (len(query_params) > 0):
         params_encoded_str = urlencode(query_params)
         url = "{}?{}".format(url, params_encoded_str)
 
-    # call the web service    
-    if (body is None):
-        if (username is not None and password is not None):
-            response = requests.get(url, auth = (username, password), headers = headers, timeout = timeout_sec, verify = verify)
+    # exception handling
+    try:
+        # call the web service    
+        if (body is None):
+            if (username is not None and password is not None):
+                response = requests.get(url, auth = (username, password), headers = headers, timeout = timeout_sec, verify = verify)
+            else:
+                response = requests.get(url, headers = headers, timeout = timeout_sec, verify = verify)
         else:
-            response = requests.get(url, headers = headers, timeout = timeout_sec, verify = verify)
-    else:
-        if (username is not None and password is not None):
-            response = requests.post(url, auth = (username, password), json = json.loads(body), headers = headers, timeout = timeout_sec, verify = verify)
-        else:
-            response = requests.post(url, json = json.loads(body), headers = headers, timeout = timeout_sec, verify = verify)
-
-    # return response
-    return response
-
+            if (username is not None and password is not None):
+                response = requests.post(url, auth = (username, password), json = json.loads(body), headers = headers, timeout = timeout_sec, verify = verify)
+            else:
+                response = requests.post(url, json = json.loads(body), headers = headers, timeout = timeout_sec, verify = verify)
+    
+        # return response
+        return response, None
+    except exceptions.RequestException as e:
+        utils.warn("__read_base_url__: Found exception while making request: {}".format(e))
+        return None, e
+        
 # TODO: the semantics of this api are not clear
 def read_url_json(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 5, verify = True):
     utils.warn("read_url_json will flatten json that comes out as list. This api is still under development")
@@ -524,7 +532,11 @@ def read_url_json(url, query_params = {}, headers = {}, body = None, username = 
 
 def read_url_response(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 30, verify = True):
     # read response
-    response = __read_base_url__(url, query_params, headers, body = body, username = username, password = password, timeout_sec = timeout_sec, verify = verify)
+    response, resp_exception = __read_base_url__(url, query_params, headers, body = body, username = username, password = password, timeout_sec = timeout_sec, verify = verify)
+
+    # check for errors
+    if (response == None):
+        return "", 500, str(e)
 
     # check for error codes
     if (response.status_code != 200):
