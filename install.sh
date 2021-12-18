@@ -8,7 +8,7 @@ cd python-packages/core
 python3 -m build
 
 echo "Installing core package"
-pip3 install dist/tsv_data_analytics-0.2.4.tar.gz
+pip3 install dist/tsv_data_analytics-0.2.5.tar.gz
 
 echo "Building extensions package"
 cd -
@@ -16,5 +16,5 @@ cd python-packages/extensions
 python3 -m build
 
 echo "Installing extensions package"
-pip3 install dist/tsv_data_analytics_ext-0.2.4.tar.gz
+pip3 install dist/tsv_data_analytics_ext-0.2.5.tar.gz
 

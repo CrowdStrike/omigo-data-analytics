@@ -24,8 +24,11 @@ def create_session_key(region = None, profile = None):
 
 def get_s3_session(region = None, profile = None):
     region, profile = resolve_region_profile(region, profile)
+
+    # generate s3_session
     session = boto3.session.Session(region_name = region, profile_name = profile)
 
+    # return
     return session
 
 def get_s3_session_cache(region = None, profile = None):
