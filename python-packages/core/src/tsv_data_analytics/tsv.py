@@ -1241,7 +1241,7 @@ class TSV:
 
     def sort(self, cols = None, reverse = False, reorder = False, all_numeric = None):
         # if nothing is specified sort on all columns
-        if (cols == None):
+        if (cols is None):
             cols = self.get_header_fields()
 
         # find the matching cols and indexes
