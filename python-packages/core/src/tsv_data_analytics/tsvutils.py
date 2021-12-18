@@ -535,7 +535,7 @@ def read_url_response(url, query_params = {}, headers = {}, body = None, usernam
     response, resp_exception = __read_base_url__(url, query_params, headers, body = body, username = username, password = password, timeout_sec = timeout_sec, verify = verify)
 
     # check for errors
-    if (response == None):
+    if (response is None):
         return "", 500, str(e)
 
     # check for error codes

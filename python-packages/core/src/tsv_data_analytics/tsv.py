@@ -1241,7 +1241,7 @@ class TSV:
 
     def sort(self, cols = None, reverse = False, reorder = False, all_numeric = None):
         # if nothing is specified sort on all columns
-        if (cols == None):
+        if (cols is None):
             cols = self.get_header_fields()
 
         # find the matching cols and indexes
@@ -1900,20 +1900,24 @@ class TSV:
             return self 
 
     # create descriptive methods for join 
-    def left_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None):
-        return self.join(that, lkeys, rkeys, join_type = "left", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map)
+    def left_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, inherit_message = ""):
+        inherit_message2 = inherit_message + ": left_join" if (inherit_message != "") else "left_join"
+        return self.join(that, lkeys, rkeys, join_type = "left", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, inherit_message = inherit_message2)
 
-    def right_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None):
-        return self.join(that, lkeys, rkeys, join_type = "right", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map)
+    def right_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, inherit_message = ""):
+        inherit_message2 = inherit_message + ": left_join" if (inherit_message != "") else "right_join"
+        return self.join(that, lkeys, rkeys, join_type = "right", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, inherit_message = inherit_message2)
 
-    def inner_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None):
-        return self.join(that, lkeys, rkeys, join_type = "inner", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map)
+    def inner_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, inherit_message = ""):
+        inherit_message2 = inherit_message + ": left_join" if (inherit_message != "") else "inner_join"
+        return self.join(that, lkeys, rkeys, join_type = "inner", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, inherit_message = inherit_message2)
 
-    def outer_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None):
-        return self.join(that, lkeys, rkeys, join_type = "outer", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map)
+    def outer_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, inherit_message = ""):
+        inherit_message2 = inherit_message + ": left_join" if (inherit_message != "") else "outer_join"
+        return self.join(that, lkeys, rkeys, join_type = "outer", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, inherit_message = inherit_message2)
 
     # primary join method
-    def join(self, that, lkeys, rkeys = None, join_type = "inner", lsuffix = None, rsuffix = None, default_val = "", def_val_map = None):
+    def join(self, that, lkeys, rkeys = None, join_type = "inner", lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, inherit_message = ""):
         # matching
         lkeys = self.__get_matching_cols__(lkeys)
         rkeys = that.__get_matching_cols__(rkeys) if (rkeys is not None) else lkeys 
@@ -1924,7 +1928,13 @@ class TSV:
 
         # create a hashmap of left key values
         lvkeys = {}
+        counter = 0
         for line in self.data:
+            # report progress
+            counter = counter + 1
+            utils.report_progress("join: [1/3] building map for left side", inherit_message, counter, len(self.data))
+
+            # parse data
             fields = line.split("\t")
             lvals1 = []
             lvals2 = []
@@ -1951,7 +1961,13 @@ class TSV:
 
         # create a hashmap of right key values
         rvkeys = {}
+        counter = 0
         for line in that.data:
+            # report progress
+            counter = counter + 1
+            utils.report_progress("join: [2/3] building map for right side", inherit_message, counter, len(that.data))
+
+            # parse data
             fields = line.split("\t")
             rvals1 = []
             rvals2 = []
@@ -2040,7 +2056,13 @@ class TSV:
         new_data = []
 
         # iterate over left side
+        counter = 0
         for line in self.data:
+            # report progress
+            counter = counter + 1
+            utils.report_progress("join: [3/3] join the two groups", inherit_message, counter, len(self.data))
+
+            # parse data
             fields = line.split("\t")
             lvals1 = []
             for lkey in lkeys:
@@ -2112,9 +2134,7 @@ class TSV:
     # method to do map join. The right side is stored in a hashmap. only applicable to inner joins
     def natural_join(self, that, inherit_message = ""):
         # find the list of common cols
-        keys = list(set(self.get_header_fields()).intersection(set(that.get_header_fields())))
-
-        # need to get keys on both sides in the same order
+        keys = sorted(list(set(self.get_header_fields()).intersection(set(that.get_header_fields()))))
 
         # create hashmap
         rmap = {}
@@ -2123,14 +2143,14 @@ class TSV:
             rvalues_k = []
             rvalues_v = []
 
-            # iterate over all columns and splitting into keys and values
-            for i in range(len(that.get_header_fields())):
-                k = that.get_header_fields()[i]
-                # split into key or value side
-                if (k in keys):
-                    rvalues_k.append(fields[i])
-                else:
-                    rvalues_v.append(fields[i])
+            # generate the key string
+            for k in keys:
+                rvalues_k.append(fields[that.header_map[k]])
+
+            # generate the value string
+            for h in that.get_header_fields():
+                if (h not in keys):
+                    rvalues_v.append(fields[that.header_map[h]])
 
             # append to the rmap
             rvalues_key_str = "\t".join(rvalues_k)
@@ -2163,7 +2183,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("natural_map_join: [1/1] adding values from hashmap", inherit_message, counter, len(self.data))
+            utils.report_progress("natural_join: [1/1] adding values from hashmap", inherit_message, counter, len(self.data))
 
             # split line and get fields
             fields = line.split("\t")
@@ -2172,22 +2192,21 @@ class TSV:
             lvalues_k = []
             lvalues_v = []
 
-            # create the key and value part
-            for i in range(len(self.get_header_fields())):
-                k = self.get_header_fields()[i]
+            # generate the keys string
+            for k in keys:
+                lvalues_k.append(fields[self.header_map[k]])
 
-                # store into key or value part
-                if (k in keys):
-                    lvalues_k.append(fields[i])
-                else:
-                    lvalues_v.append(fields[i])
+            # create the value part
+            for h in self.get_header_fields():
+                if (h not in keys):
+                    lvalues_v.append(fields[self.header_map[h]])
 
             # create the key and value str
             lvalue_key_str = "\t".join(lvalues_k)
 
-            # pick the value from hashmap
+            # pick the value from hashmap. TODO
             if (lvalue_key_str not in rmap.keys()):
-                utils.warn("key not found in that tsv: {}: {}. Eventually this warning will become exception.".format(keys, lvalues_k))
+                utils.warn("key not found in right side tsv: {}: {}: {}. Eventually this warning will become exception.".format(keys, lvalues_k, rmap.keys()))
             else:
                 # get the list of all values from right side
                 vs_list = rmap[lvalue_key_str]
@@ -2789,11 +2808,10 @@ class TSV:
 
         # progress counters
         counter = 0
-        inherit_message2 = inherit_message + ": to_tuples" if (len(inherit_message) > 0) else "to_tuples"
         for line in self.select(cols, inherit_message = inherit_message2).get_data():
             # progress
             counter = counter + 1
-            utils.report_progress("to_tuples: [1/1] converting to tuples", inherit_message2, counter, len(self.data))
+            utils.report_progress("to_tuples: [1/1] converting to tuples", inherit_message, counter, len(self.data))
 
             fields = line.split("\t")
             result.append(self.__expand_to_tuple__(fields))
