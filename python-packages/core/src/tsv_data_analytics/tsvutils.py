@@ -457,7 +457,7 @@ def save_to_file(tsvfile, output_file_name, s3_region = None, aws_profile = None
     output_file.close()
 
     # debug
-    utils.debug("save_to_file: file saved to: {}".format(output_file_name))
+    utils.debug("save_to_file: file saved to: {}, num_rows: {}, num_cols{}".format(output_file_name, tsvfile.num_rows(), tsvfile.num_cols()))
 
 def check_exists(tsvfile, s3_region = None, aws_profile = None):
     return file_paths_util.check_exists(tsvfile, s3_region, aws_profile)
