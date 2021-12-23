@@ -117,11 +117,11 @@ class TSV:
 
     def not_regex_match(self, col, pattern, inherit_message = ""):
         inherit_message2 = inherit_message + ": not_regex_match" if (inherit_message != "") else "not_regex_match"
-        return self.match(col, pattern, condition = False, inherit_message = inherit_message2)
+        return self.regex_match(col, pattern, condition = False, inherit_message = inherit_message2)
 
     def match(self, col, pattern, inherit_message = ""):
         utils.warn("Please use regex_match instead")
-        return self.regex_match(col, pattern, condition = True, inherit_message = inherit_message)
+        return self.regex_match(col, pattern, inherit_message = inherit_message)
 
     def regex_match(self, col, pattern, condition = True, inherit_message = ""):
         inherit_message2 = inherit_message + ": regex_match" if (inherit_message != "") else "regex_match"
