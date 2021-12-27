@@ -3,8 +3,8 @@
 import gzip
 import zipfile
 
-from tsv_data_analytics import s3_wrapper
-from tsv_data_analytics import utils
+from omigo_core import s3_wrapper
+from omigo_core import utils
 
 class FileWriter:
     """FileWriter class to write data into files"""

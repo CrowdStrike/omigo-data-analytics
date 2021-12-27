@@ -1,6 +1,6 @@
 """EtlDateTimePathFormat class"""
 
-from tsv_data_analytics import utils
+from omigo_core import utils
 from dateutil import parser
 import datetime
 

@@ -1,9 +1,9 @@
 # package for doing multi threading on specific apis
 
 from concurrent.futures import ThreadPoolExecutor
-from tsv_data_analytics import tsv
-from tsv_data_analytics import tsvutils
-from tsv_data_analytics import utils
+from omigo_core import tsv
+from omigo_core import tsvutils
+from omigo_core import utils
 
 import math
 import time

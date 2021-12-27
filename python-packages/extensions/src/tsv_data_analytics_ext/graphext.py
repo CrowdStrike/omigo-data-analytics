@@ -5,8 +5,8 @@ import numpy as np
 import pandas as pd
 import math
 
-from tsv_data_analytics import tsv
-from tsv_data_analytics import utils 
+from omigo_core import tsv
+from omigo_core import utils 
 
 class VisualTSV(tsv.TSV):
     def __init__(self, header, data):
