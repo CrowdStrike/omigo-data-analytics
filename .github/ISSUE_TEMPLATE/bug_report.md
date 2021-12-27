@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Create a report to help tsv-data-analytics improve.
+about: Create a report to help omigo-data-analytics improve.
 title: "[ BUG ] ..."
 labels: "bug :bug:"
 assignees: ''
@@ -19,7 +19,7 @@ A clear and concise description of what you expected to happen.
 **Environment (please complete the following information):**
  - OS: [e.g. Red Hat Enterprise Linux 8.3]
  - Python: [e.g. 3.9]
- - tsv-data-analytics: [e.g. 0.1.2]
+ - omigo-data-analytics: [e.g. 0.1.2]
 
 **Additional context**
 Add any other context about the problem here.
