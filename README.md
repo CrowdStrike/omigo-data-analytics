@@ -82,7 +82,7 @@ $ python3
 ```
 >>> y = x \
     .eq_str("class", "Iris-setosa") \
-    .gt("sepal_width", 3.1) \
+    .gt_float("sepal_width", 3.1) \
     .select(["sepal_width", "sepal_length"])
 
 >>> y.show(5)
