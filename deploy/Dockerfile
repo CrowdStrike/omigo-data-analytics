@@ -1,4 +1,4 @@
-FROM ubuntu AS tsv-data-analytics 
+FROM ubuntu AS omigo-data-analytics 
 
 # base package update
 RUN apt-get update
@@ -27,7 +27,7 @@ WORKDIR /code
 
 # build
 RUN python3 -m pip install --upgrade build
-RUN pip3 install tsv_data_analytics tsv_data_analytics_ext --upgrade
+RUN pip3 install omigo_core omigo_ext --upgrade
 RUN pip3 install jupyterlab
 RUN pip3 install yfinance 
 
