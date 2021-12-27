@@ -1,7 +1,6 @@
 # package for plotting graph
 import seaborn as sns
 import matplotlib.pyplot as pyplot
-import numpy as np
 import pandas as pd
 import math
 

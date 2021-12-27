@@ -5,10 +5,8 @@ from urllib.parse import urlencode
 #from urllib.request import Request, urlopen
 #from urllib.error import HTTPError, URLError
 from io import BytesIO
-import base64
 import gzip
 import json
-import os
 import time
 import zipfile
 import requests
