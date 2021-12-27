@@ -2,7 +2,6 @@
 import seaborn as sns
 import matplotlib.pyplot as pyplot
 import pandas as pd
-import math
 
 from omigo_core import tsv
 from omigo_core import utils 
