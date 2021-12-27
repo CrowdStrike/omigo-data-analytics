@@ -5,20 +5,18 @@ from urllib.parse import urlencode
 #from urllib.request import Request, urlopen
 #from urllib.error import HTTPError, URLError
 from io import BytesIO
-import base64
 import gzip
 import json
-import os
 import time
 import zipfile
 import requests
 
 # local imports
-from tsv_data_analytics import tsv
-from tsv_data_analytics import file_paths_util
-from tsv_data_analytics import file_paths_data_reader
-from tsv_data_analytics import file_io_wrapper
-from tsv_data_analytics import utils
+from omigo_core import tsv
+from omigo_core import file_paths_util
+from omigo_core import file_paths_data_reader
+from omigo_core import file_io_wrapper
+from omigo_core import utils
 from requests import exceptions
 
 # TODO: find the difference between ascii and utf-8 encoding

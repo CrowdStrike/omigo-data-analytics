@@ -6,7 +6,7 @@ import zipfile
 from io import BytesIO
 
 # local import
-from tsv_data_analytics import utils
+from omigo_core import utils
 
 # define some global variables for caching s3 bucket and session
 S3_RESOURCE = {}

@@ -6,8 +6,8 @@ import datetime
 import zipfile
 
 # local imports
-from tsv_data_analytics import s3_wrapper
-from tsv_data_analytics import utils
+from omigo_core import s3_wrapper
+from omigo_core import utils
 
 # constant
 NUM_HOURS = 24

@@ -13,20 +13,19 @@
  * Wide datasets with 100s or 1000s of columns.
  * Complex business logic is involved. 
 
-## How and why TSV format is used
+## Internal Data Format
+ * TSV is used as the in-memory data format for simplicity.
  * Input data can be of different formats and read either locally or from external sources like S3 or web.
- * Internal in-memory data storage format is TSV which is very easy to work with.
- * Binary formats are best for getting good performance, though plain text is best for looking into data easily without any additional tools.
 
 ## Run through Docker
 #### Build image (first time only)
 ```
-$ docker build -t tsv-data-analytics -f deploy/Dockerfile .
+$ docker build -t omigo-data-analytics -f deploy/Dockerfile .
 ```
 
 #### Run docker image
 ```
-$ docker run --rm -p 8888:8888 -it -v $PWD:/code tsv-data-analytics
+$ docker run --rm -p 8888:8888 -it -v $PWD:/code omigo-data-analytics
 ```
 
 ## Install Instructions
@@ -36,8 +35,8 @@ The core package is built on core python without many external dependencies to k
 functionalities like plotting, and can have lot of dependencies.
 
 ```
-$ pip3 install tsv-data-analytics==0.2.8
-$ pip3 install tsv-data-analytics-ext==0.2.8
+$ pip3 install omigo-data-analytics==0.2.8
+$ pip3 install omigo-data-analytics-ext==0.2.8
 ```
 
 ## Usage
@@ -46,7 +45,7 @@ $ pip3 install tsv-data-analytics-ext==0.2.8
 #### Read data from local filesystem. Can also use s3 or web url.
 ```
 $ python3
->>> from tsv_data_analytics import tsv
+>>> from omigo_core import tsv
 >>> x = tsv.read("data/iris.tsv.gz")
 #
 # other possible options
@@ -54,7 +53,7 @@ $ python3
 # x = tsv.read("data/iris.tsv")
 # x = tsv.read("data/iris.tsv.zip")
 # x = tsv.read("s3://bucket/path_to_file/data.tsv.gz")
-# x = tsv.read("https://github.com/CrowdStrike/tsv-data-analytics/raw/main/data/iris.tsv")
+# x = tsv.read("https://github.com/CrowdStrike/omigo-data-analytics/raw/main/data/iris.tsv")
 ```
 #### Print basic stats like the number of rows
 ```
@@ -82,7 +81,7 @@ $ python3
 ```
 >>> y = x \
     .eq_str("class", "Iris-setosa") \
-    .gt("sepal_width", 3.1) \
+    .gt_float("sepal_width", 3.1) \
     .select(["sepal_width", "sepal_length"])
 
 >>> y.show(5)
@@ -94,7 +93,7 @@ sepal_width	sepal_length
 ```
 #### Import the graph extension package for creating charts
 ```
->>> from tsv_data_analytics_ext import graphext
+>>> from omigo_ext import graphext
 >>> x.extend_class(graphext.VisualTSV).histogram("sepal_length", "class", yfigsize = 8)
 ```
 ![iris sepal_width histogram](images/iris-hist.png)
@@ -112,7 +111,7 @@ sepal_width	sepal_length
 
 ## Documentation
 * [README](README.md): Good starting point to get a basic overview of the library.
-* [API Documentation](https://github.com/CrowdStrike/tsv-data-analytics/wiki/API-Documentation): Detailed API docs with simple examples to illustrate the usage.
+* [API Documentation](https://github.com/CrowdStrike/omigo-data-analytics/wiki/API-Documentation): Detailed API docs with simple examples to illustrate the usage.
 * [example-notebooks](example-notebooks): Working examples to show different use cases.
 
 ## Notes from the author

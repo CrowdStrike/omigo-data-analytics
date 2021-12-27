@@ -2,12 +2,10 @@
 import re
 import math
 import pandas as pd
-import gzip
 import random
 import json
-import urllib
-from tsv_data_analytics import tsvutils
-from tsv_data_analytics import utils
+from omigo_core import tsvutils
+from omigo_core import utils
 import sys
 
 class TSV:
