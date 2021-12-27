@@ -35,8 +35,8 @@ The core package is built on core python without many external dependencies to k
 functionalities like plotting, and can have lot of dependencies.
 
 ```
-$ pip3 install omigo-data-analytics==0.2.8
-$ pip3 install omigo-data-analytics-ext==0.2.8
+$ pip3 install omigo-data-analytics==0.2.9
+$ pip3 install omigo-data-analytics-ext==0.2.9
 ```
 
 ## Usage
