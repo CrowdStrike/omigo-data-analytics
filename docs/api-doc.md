@@ -183,6 +183,7 @@ sepal_length	sepal_width	petal_length	petal_width	class
    - **not_startswith**(col, value): Returns rows where string value of _col_ does not start with  _value_.
    - **not_endswith**(col, value): Returns rows where string value of _col_ does not end with _value_.
    - **not_match**(col, value): Returns rows where string value of _col_ does not match regular expression in _value_.
+   - **replace_str**(col, old_str, new_str): Replaces the occurrences of substring _old_str_ with _new_str_ in column _col_.
 
 *Examples*
 
