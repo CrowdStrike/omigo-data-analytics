@@ -35,8 +35,7 @@ The core package is built on core python without many external dependencies to k
 functionalities like plotting, and can have lot of dependencies.
 
 ```
-$ pip3 install omigo-core==0.2.9
-$ pip3 install omigo-ext==0.2.9
+$ pip3 install omigo-core omigo-ext --upgrade
 ```
 
 ## Usage
