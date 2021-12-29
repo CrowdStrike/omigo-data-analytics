@@ -455,7 +455,7 @@ def save_to_file(tsvfile, output_file_name, s3_region = None, aws_profile = None
     output_file.close()
 
     # debug
-    utils.debug("save_to_file: file saved to: {}, num_rows: {}, num_cols{}".format(output_file_name, tsvfile.num_rows(), tsvfile.num_cols()))
+    utils.debug("save_to_file: file saved to: {}, num_rows: {}, num_cols: {}".format(output_file_name, tsvfile.num_rows(), tsvfile.num_cols()))
 
 def check_exists(tsvfile, s3_region = None, aws_profile = None):
     return file_paths_util.check_exists(tsvfile, s3_region, aws_profile)
@@ -528,7 +528,7 @@ def read_url_json(url, query_params = {}, headers = {}, body = None, username = 
  
     return tsv.TSV(header, data).validate()
 
-def read_url_response(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 30, verify = True):
+def read_url_response(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 30, verify = True, num_retries = 1, retry_sleep_sec = 1):
     # read response
     response, resp_exception = __read_base_url__(url, query_params, headers, body = body, username = username, password = password, timeout_sec = timeout_sec, verify = verify)
 
@@ -538,7 +538,18 @@ def read_url_response(url, query_params = {}, headers = {}, body = None, usernam
 
     # check for error codes
     if (response.status_code != 200):
-        return "", response.status_code, response.reason
+        if (response.status_code == 429):
+            # too many requests. wait and try again.
+            if (num_retries > 0):
+                utils.debug("read_url_response: url: {}, query_params: {}, got 429. Attempts remaining: {}. Retrying after sleeping for {} seconds".format(url, query_params, num_retries, retry_sleep_sec))
+                time.sleep(retry_sleep_sec)
+                return read_url_response(url, query_params = query_params, headers = headers, body = body, username = username, password = password, timeout_sec = timeout_sec, verify = verify,
+                    num_retries = num_retries - 1, retry_sleep_sec = retry_sleep_sec * 2)
+            else:
+                utils.debug("read_url_response: url: {}, getting 429 too many requests. Use num_retries parameter to for backoff and retry.".format(url))
+                return "", response.status_code, response.reason
+        else:
+            return "", response.status_code, response.reason
 
     # check for content type
     content_type = None
