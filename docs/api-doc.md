@@ -183,6 +183,7 @@ sepal_length	sepal_width	petal_length	petal_width	class
    - **not_startswith**(col, value): Returns rows where string value of _col_ does not start with  _value_.
    - **not_endswith**(col, value): Returns rows where string value of _col_ does not end with _value_.
    - **not_match**(col, value): Returns rows where string value of _col_ does not match regular expression in _value_.
+   - **replace_str_inline**(cols, old_str, new_str): Replaces the occurrences of substring _old_str_ with _new_str_ in column _col_.
 
 *Examples*
 
@@ -446,7 +447,7 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
 ```
 
 ### 20. Extending to Other Derived Classes
-   - **extend_class**(derived_class, *args, **kwargs): This is an advanced function to plugin extensions and other 3rd party modules. For more details, see [example-notebooks/extend-class-example].
+   - **extend_class**(derived_class, *args, **kwargs): This is an advanced function to plugin extensions and other 3rd party modules. For more details, see [extend-class](example-notebooks/extend_class.ipynb) example.
 
 ### 21. Conversion to Other Data Formats
    - **to_json_records**(): This api converts each row into a json object of a map. Each row in the output will be a json string.

@@ -218,6 +218,10 @@ class TSV:
         inherit_message2 = inherit_message + ": not_endswith" if (len(inherit_message) > 0) else "not_endswith"
         return self.exclude_filter([col], lambda x: x.endswith(suffix), inherit_message = inherit_message2)
 
+    def replace_str_inline(self, cols, old_str, new_str, inherit_message = ""):
+        inherit_message2 = inherit_message + ": replace_str_inline" if (len(inherit_message) > 0) else "replace_str_inline"
+        return self.transform_inline(cols, lambda x: x.replace(old_str, new_str), inherit_message = inherit_message2)
+        
     def group_count(self, cols, prefix, collapse = True, precision = 6, inherit_message = ""):
         # find the matching cols and indexes
         cols = self.__get_matching_cols__(cols)
