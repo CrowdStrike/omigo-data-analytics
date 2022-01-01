@@ -447,7 +447,7 @@ class       	Iris-setosa	Iris-setosa	Iris-setosa
 ```
 
 ### 20. Extending to Other Derived Classes
-   - **extend_class**(derived_class, *args, **kwargs): This is an advanced function to plugin extensions and other 3rd party modules. For more details, see [example-notebooks/extend-class-example].
+   - **extend_class**(derived_class, *args, **kwargs): This is an advanced function to plugin extensions and other 3rd party modules. For more details, see [example-notebooks/extend-class.ipynb](extend-class) example.
 
 ### 21. Conversion to Other Data Formats
    - **to_json_records**(): This api converts each row into a json object of a map. Each row in the output will be a json string.
