@@ -29,10 +29,12 @@ $ docker run --rm -p 8888:8888 -it -v $PWD:/code omigo-data-analytics
 ```
 
 ## Install Instructions
-There are two packages - core and extensions. 
+There are two packages: core and extensions. 
 
-The core package is built on core python without many external dependencies to keep it stable. The extensions package contains libraries for advanced
-functionalities like plotting, and can have lot of dependencies.
+The core package is built using core python with minimal external dependencies to keep it stable.
+The extensions package contains libraries for advanced functionalities like visualization, and can have lot of dependencies.
+
+There are APIs provided to create new extension packages for custom needs and plugin easily into the existing code (See [extend-class](example-notebooks/extend-class.ipynb)).
 
 ```
 $ pip3 install omigo-core omigo-ext --upgrade
