@@ -33,7 +33,7 @@ class KafkaClient:
         self.url_encoded_cols = url_encoded_cols
         self.nested_cols = nested_cols
 
-        utils.warn("This KafkaConsumer is Work in Progress.")
+        # utils.warn("This KafkaConsumer is Work in Progress.")
 
     # method to read n messages from the topic.
     def read(self, n = 0, max_duration_sec = 0, sampling_rate = 1.0, seed = 0):
