@@ -10,10 +10,14 @@ from kafka import KafkaConsumer
 # https://github.com/dask/fastparquet/issues/459
 class KafkaClient:
     # constructor. group_id is created uniquely if not specified.
-    def __init__(self, topic, bootstrap_servers, group_id = None, auto_offset_reset = "latest", value_deserializer = lambda x: x.decode()):
+    def __init__(self, topic, bootstrap_servers, group_id = None, auto_offset_reset = "latest", value_deserializer = None):
         # create a new group_id
         if (group_id is None):
             group_id = "{}:{}:{}".format(topic, bootstrap_servers, time.time())
+
+        # check for value_deserializer
+        if (value_deserializer is None):
+            value_deserializer = lambda x: x.decode()
 
         # create consumer
         self.consumer = KafkaConsumer(
