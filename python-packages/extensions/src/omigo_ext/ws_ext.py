@@ -2,7 +2,7 @@
 from omigo_core import tsv
 from omigo_core import tsvutils
 from omigo_core import utils 
-from omigo_ext import multi_thread_ext
+from omigo_ext import multithread_ext
 
 # TODO: This extension needs to be part of public github repo after it is working fine.
 # TODO: before enabling multi threading, the cache needs to be fixed.
@@ -21,7 +21,7 @@ class WebServiceTSV(tsv.TSV):
 
     def call_web_service(self, *args, **kwargs):
         return self \
-            .extend_class(multi_thread_ext.MultiThreadTSV, num_par = self.num_par, num_batches = self.num_batches, status_check_interval_sec = self.status_check_interval_sec) \
+            .extend_class(multithread_ext.MultiThreadTSV, num_par = self.num_par, num_batches = self.num_batches, status_check_interval_sec = self.status_check_interval_sec) \
             .parallelize(__call_web_service__, self.timeout_sec, self.verify, self.enable_opt_exec, self.inherit_message, *args, **kwargs)
 
 # call web service function.
