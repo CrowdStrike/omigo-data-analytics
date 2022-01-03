@@ -34,11 +34,11 @@ There are two packages: core and extensions.
 The core package is built using core python with minimal external dependencies to keep it stable.
 The extensions package contains libraries for advanced functionalities like visualization, and can have lot of dependencies.
 
-There are APIs provided to create new extension packages for custom needs and plugin easily into the existing code (See [extend-class](example-notebooks/extend-class.ipynb)).
-
 ```
 $ pip3 install omigo-core omigo-ext --upgrade
 ```
+
+There are APIs provided to create new extension packages for custom needs and plugin easily into the existing code (See [extend-class](example-notebooks/extend-class.ipynb)).
 
 ## Usage
 *Note*: Some working examples are in jupyter [example-notebooks](example-notebooks) directory. Here is a simple example to run in command line.
