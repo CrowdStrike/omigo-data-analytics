@@ -128,6 +128,9 @@ This extension allows reading the data through Kafka and return as tsv object. L
 ### 5. Pandas Extension
 This extension is a placeholder for wrapping any interesting pandas apis like reading parquet file (local or s3).
 
+### 6. ETL Extension
+This extension provides APIS to read data that is stored in some ETL format. Useful for reading time series data stored in a partitioned manner.
+
 ## Documentation
 * [README](README.md): Good starting point to get a basic overview of the library.
 * [API Documentation](https://github.com/CrowdStrike/omigo-data-analytics/wiki/API-Documentation): Detailed API docs with simple examples to illustrate the usage.
