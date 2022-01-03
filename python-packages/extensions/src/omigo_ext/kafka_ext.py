@@ -12,7 +12,7 @@ class KafkaClient:
     # constructor. group_id is created uniquely if not specified.
     def __init__(self, topic, bootstrap_servers, group_id = None, auto_offset_reset = "latest", value_deserializer = lambda x: x.decode()):
         # create a new group_id
-        if (group_id == None):
+        if (group_id is None):
             group_id = "{}:{}:{}".format(topic, bootstrap_servers, time.time())
 
         # create consumer
