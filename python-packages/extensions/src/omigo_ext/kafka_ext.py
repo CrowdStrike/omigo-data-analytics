@@ -8,12 +8,12 @@ from kafka import KafkaConsumer
 # pip uninstall snappy python-snappy
 # pip install python-snappy
 # https://github.com/dask/fastparquet/issues/459
+
+# Work In Progress
 class KafkaClient:
     # constructor. group_id is created uniquely if not specified.
-    def __init__(self, topic, bootstrap_servers, group_id = None, auto_offset_reset = "latest", value_deserializer = None):
-        # create a new group_id
-        if (group_id is None):
-            group_id = "{}:{}:{}".format(topic, bootstrap_servers, time.time())
+    def __init__(self, topic, bootstrap_servers, group_id, auto_offset_reset = "latest", value_deserializer = None, excluded_cols = None, url_encoded_cols = None,
+        nested_cols = None):
 
         # check for value_deserializer
         if (value_deserializer is None):
@@ -28,8 +28,15 @@ class KafkaClient:
             value_deserializer = value_deserializer
         )
 
+        # json parsing need some tuning parameters
+        self.excluded_cols = excluded_cols
+        self.url_encoded_cols = url_encoded_cols
+        self.nested_cols = nested_cols
+
+        utils.warn("This KafkaConsumer is Work in Progress.")
+
     # method to read n messages from the topic.
-    def read(self, prefix, n = 0, max_duration_sec = 0, sampling_rate = 1.0, seed = 0):
+    def read(self, n = 0, max_duration_sec = 0, sampling_rate = 1.0, seed = 0):
         # validtion. either n or max_duration_sec must be non zero
         if (n <= 0 and max_duration_sec <= 0):
             raise Exception("Either n or max_duration_sec must be non zero")
@@ -41,7 +48,8 @@ class KafkaClient:
         ts_start = time.time()
         
         # iterate
-        new_header = prefix + ":json"
+        internal_prefix = "__KafkaClient_read__"
+        new_header = internal_prefix
         new_data = []
         for message in self.consumer:
             # apply sampling
@@ -49,13 +57,15 @@ class KafkaClient:
                 new_data.append(utils.url_encode(message.value))
             
             # check if all messages have been received, or time interval has been reached
-            ts_end = time.time()
             if (n > 0 and len(new_data) >= n):
                 break
 
+            # check if max_duration is exceeded
+            ts_end = time.time()
             if (max_duration_sec > 0 and int(ts_end - ts_start) >= max_duration_sec):
                 break
 
         # convert json to tsv
         return tsv.TSV(new_header, new_data) \
-            .explode_json(prefix + ":json", prefix)
+            .explode_json(internal_prefix, internal_prefix, excluded_cols = self.excluded_cols, url_encoded_cols = self.url_encoded_cols, nested_cols = self.nested_cols) \
+            .remove_prefix(internal_prefix)

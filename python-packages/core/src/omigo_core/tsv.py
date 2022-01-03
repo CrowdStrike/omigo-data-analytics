@@ -2396,7 +2396,9 @@ class TSV:
         return TSV(new_header, new_data) \
             .validate()
 
-    def __explode_json_transform_func__(self, col, accepted_cols, excluded_cols, single_value_list_cols, transpose_col_groups, merge_list_method, url_encoded_cols, collapse_primitive_list, join_col = ","):
+    def __explode_json_transform_func__(self, col, accepted_cols, excluded_cols, single_value_list_cols, transpose_col_groups, merge_list_method, url_encoded_cols,
+        nested_cols, collapse_primitive_list, join_col = ","):
+
         def __explode_json_transform_func_inner__(mp):
             # some validation.
             if (col not in mp.keys() or mp[col] == "" or mp[col] is None):
@@ -2471,8 +2473,11 @@ class TSV:
                     utils.trace("__explode_json_transform_func_expand_json__: None type value found. Taking it as empty string. Key: {}".format(k))
                     v = ""
 
+                # handle nested_cols scenario where the entire value is to be set as url encoded json blob
+                if (nested_cols is not None and k in nested_cols):
+                    single_results[k + ":json:url_encoded"] = utils.url_encode(json.dumps(v))
                 # for each data type, there is a different kind of handling
-                if (isinstance(v, (str, int, float))):
+                elif (isinstance(v, (str, int, float))):
                     v1 = str(v).replace("\t", " ")
                     # check if encoding needs to be done
                     if (url_encoded_cols is not None and k in url_encoded_cols):
@@ -2482,8 +2487,8 @@ class TSV:
                         single_results[k] = v1
                 else:
                     # TODO :Added on 2021-11-27. Need the counts for arrays and dict to handle 0 count errors. Splitting the single if-elif-else to two level
-                    single_results[k + ":__explode_json_len__"] = str(len(v))
                     if (isinstance(v, list) and len(v) > 0):
+                        single_results[k + ":__explode_json_len__"] = str(len(v))
                         if (len(list_results_arr) > 0 and utils.is_debug()):
                             print("[WARN] explode_json: multiple lists are not fully supported. Confirm data parsing or Use accepted_cols or excluded_cols: {}".format(str(k)))
 
@@ -2698,7 +2703,7 @@ class TSV:
     # TODO: the json col is expected to be in url_encoded form otherwise does best effort guess
     # TODO: url_encoded_cols, excluded_cols, accepted_cols are actually json hashmap keys and not xpath 
     def explode_json(self, col, prefix = None, accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None,
-        merge_list_method = "cogroup", collapse_primitive_list = True, url_encoded_cols = None, collapse = True):
+        merge_list_method = "cogroup", collapse_primitive_list = True, url_encoded_cols = None, nested_cols = None, collapse = True):
 
         # warn
         if (excluded_cols is not None):
@@ -2719,7 +2724,7 @@ class TSV:
 
         # check for explode function
         exp_func = self.__explode_json_transform_func__(col, accepted_cols = accepted_cols, excluded_cols = excluded_cols, single_value_list_cols = single_value_list_cols,
-            transpose_col_groups = transpose_col_groups, merge_list_method = merge_list_method, url_encoded_cols = url_encoded_cols, collapse_primitive_list = collapse_primitive_list)
+            transpose_col_groups = transpose_col_groups, merge_list_method = merge_list_method, url_encoded_cols = url_encoded_cols, nested_cols = nested_cols, collapse_primitive_list = collapse_primitive_list)
 
         # use explode to do this parsing  
         return self \
