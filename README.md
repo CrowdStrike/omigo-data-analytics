@@ -110,6 +110,24 @@ sepal_width	sepal_length
 >>> tsv.write(y, "output.tsv.gz")
 ```
 
+## Extensions
+There are lot of extensions to add advanced functionalities
+### 1. Graph Extension
+This extension provides visualization APIs. 
+
+### 2. Web Service Extension
+This extension provides APIs to call external web service for all the rows in the data. All web service parameters can be templatized and mapped to individual columns including url, query parameters, 
+headers, and payload. The extension supports multi threading.
+
+### 3. Multi Thread Extension
+This extension provides a simple wrapper to call different APIs within a thread pool. Usually used inside other extensions.
+
+### 4. Kafka Extension
+This extension allows reading the data through Kafka and return as tsv object. Lot of custom parameters are provided to simplify parsing of the data.
+
+### 5. Pandas Extension
+This extension is a placeholder for wrapping any interesting pandas apis like reading parquet file (local or s3).
+
 ## Documentation
 * [README](README.md): Good starting point to get a basic overview of the library.
 * [API Documentation](https://github.com/CrowdStrike/omigo-data-analytics/wiki/API-Documentation): Detailed API docs with simple examples to illustrate the usage.
