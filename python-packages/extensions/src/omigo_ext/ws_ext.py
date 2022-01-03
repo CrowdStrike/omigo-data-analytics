@@ -29,10 +29,10 @@ def __call_web_service__(xtsv, xtsv_timeout_sec, xtsv_verify, xtsv_enable_opt_ex
     body_params = None, username = None, password = None, include_resolved_values = False, selective_execution_func = None, inherit_message = ""):
 
     # initialize variables
-    if (query_params == None):
+    if (query_params is None):
         query_params = {}
 
-    if (header_params == None):
+    if (header_params is None):
         header_params = {}
 
     # prepare a list of columns that need to be replaced
