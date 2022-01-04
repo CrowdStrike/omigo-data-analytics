@@ -18,7 +18,7 @@ class MySQLClient:
 
     # internal method to run a query
     def __query__(self, query_str):
-        # fetch the cursor
+        # fetch the cursory10
         cursor = self.client.cursor()
  
         # execute the query
@@ -44,7 +44,7 @@ class MySQLClient:
     def select(self, table, cols = None, where_clause = None, limit = None, offset = None):
         # create basic query
         cols_str = "*" if (cols is None) else ",".join(["{}".format(c) for c in cols])
-        query_str = "select {} from {}".format(cols_str, table)
+        query_str = "select %s from {}".format(table)
 
         # add where clause
         if (where_clause is not None):
@@ -61,8 +61,14 @@ class MySQLClient:
         # output cols
         output_cols = cols if (cols is not None) else self.__get_cols__(table)
 
-        # run query to get results
-        results = self.__query__(query_str)
+        # fetch the cursory10
+        cursor = self.client.cursor()
+ 
+        # execute the query
+        cursor.execute(query_str, cols_str)
+
+        # get the results
+        results = cursor.fetchall()
 
         # create header
         header = "\t".join(output_cols)
