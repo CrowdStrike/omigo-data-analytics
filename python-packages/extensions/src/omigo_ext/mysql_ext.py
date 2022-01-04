@@ -1,6 +1,5 @@
 # extension for reading data from mysql
 from omigo_core import tsv
-from omigo_core import utils
 import mysql.connector
 import numpy as np
 
