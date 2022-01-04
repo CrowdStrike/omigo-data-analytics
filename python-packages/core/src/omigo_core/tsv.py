@@ -2892,6 +2892,10 @@ class TSV:
 
         return result
 
+    # placeholder for new method to do xpath based filtering for json blobs
+    def filter_json_by_xpath(self, col, xpath_filter, inherit_message = ""):
+        raise Exception("Not implemented yet")
+
     # this is a utility function that takes list of column names that support regular expression.
     # col_or_cols is a special variable that can be either single column name or an array. python
     # treats a string as an array of characters, so little hacky but a more intuitive api wise
