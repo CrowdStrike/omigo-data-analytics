@@ -41,9 +41,16 @@ class MySQLClient:
 
     # method to call select
     def select(self, table, cols = None, where_clause = None, limit = None, offset = None):
+        # validation on column names
+        table_cols = self.__get_cols__(table)
+        if (cols is not None):
+            for c in cols:
+                if (c not in table_cols):
+                    raise Exception("Column not found in the table: {}. all columns: {}".format(c, table_cols))
+
         # create basic query
         cols_str = "*" if (cols is None) else ",".join(["{}".format(c) for c in cols])
-        query_str = "select %s from %s"
+        query_str = "select {} from {}".format(cols_str, table)
 
         # add where clause
         if (where_clause is not None):
@@ -58,16 +65,10 @@ class MySQLClient:
            query_str = "{} offset {}".format(query_str, offset)
 
         # output cols
-        output_cols = cols if (cols is not None) else self.__get_cols__(table)
+        output_cols = cols if (cols is not None) else table_cols
 
-        # fetch the cursory10
-        cursor = self.client.cursor()
- 
         # execute the query
-        cursor.execute(query_str, (cols_str, table))
-
-        # get the results
-        results = cursor.fetchall()
+        results = self.__query__(query_str)
 
         # create header
         header = "\t".join(output_cols)
