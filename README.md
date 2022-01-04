@@ -112,23 +112,23 @@ sepal_width	sepal_length
 
 ## Extensions
 There are lot of extensions to add advanced functionalities
-#### 1. Graph Extension
-This extension provides visualization APIs. 
+#### 1. Graphics and Visualization
+This extension provides visualization APIs like linechart, barchart. 
 
-#### 2. Web Service Extension
+#### 2. Read from Web Services
 This extension provides APIs to call external web service for all the rows in the data. All web service parameters can be templatized and mapped to individual columns including url, query parameters, 
 headers, and payload. The extension supports multi threading.
 
-#### 3. Multi Thread Extension
+#### 3. Multi Threading
 This extension provides a simple wrapper to call different APIs within a thread pool. Usually used inside other extensions.
 
-#### 4. Kafka Extension
+#### 4. Kafka Reader
 This extension allows reading the data through Kafka and return as tsv object. Lot of custom parameters are provided to simplify parsing of the data.
 
-#### 5. Pandas Extension
+#### 5. Pandas
 This extension is a placeholder for wrapping any interesting pandas apis like reading parquet file (local or s3).
 
-#### 6. ETL Extension
+#### 6. ETL
 This extension provides APIS to read data that is stored in some ETL format. Useful for reading time series data stored in a partitioned manner.
 
 ## Documentation
