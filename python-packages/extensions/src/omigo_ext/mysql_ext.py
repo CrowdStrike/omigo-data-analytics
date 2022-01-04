@@ -44,7 +44,7 @@ class MySQLClient:
     def select(self, table, cols = None, where_clause = None, limit = None, offset = None):
         # create basic query
         cols_str = "*" if (cols is None) else ",".join(["{}".format(c) for c in cols])
-        query_str = "select %s from {}".format(table)
+        query_str = "select %s from %s"
 
         # add where clause
         if (where_clause is not None):
@@ -65,7 +65,7 @@ class MySQLClient:
         cursor = self.client.cursor()
  
         # execute the query
-        cursor.execute(query_str, cols_str)
+        cursor.execute(query_str, (table, cols_str))
 
         # get the results
         results = cursor.fetchall()
