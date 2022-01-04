@@ -39,10 +39,28 @@ class MySQLClient:
         # return
         return cols
 
+    def __get_tables__(self):
+        results = self.__get_tables__("show tables")
+
+        # get table names
+        table_names = []
+        for result in results:
+            table_names.append(result[0])
+
+        # return
+        return table_names
+
     # method to call select
     def select(self, table, cols = None, where_clause = None, limit = None, offset = None):
         # validation on column names
         table_cols = self.__get_cols__(table)
+        table_names = self.__get_tables__()
+
+        # check table name
+        if (table not in table_names):
+            raise Exception("Table not found in the database: {}, {}".format(table, table_names))
+
+        # check column names
         if (cols is not None):
             for c in cols:
                 if (c not in table_cols):
