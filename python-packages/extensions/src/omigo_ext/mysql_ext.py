@@ -64,7 +64,7 @@ class MySQLClient:
         cursor = self.client.cursor()
  
         # execute the query
-        cursor.execute(query_str, (table, cols_str))
+        cursor.execute(query_str, (cols_str, table))
 
         # get the results
         results = cursor.fetchall()
