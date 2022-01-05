@@ -93,7 +93,6 @@ def __call_web_service__(xtsv, xtsv_timeout_sec, xtsv_verify, xtsv_enable_opt_ex
             xtsv.num_rows(), hash_tsv.num_rows(), xtsv_enable_opt_exec))
 
     # avoid making duplicate calls to the web service by hashing the all_sel_cols
-    # check if the difference is more than (say) 100
     if (xtsv_enable_opt_exec == True):
         # optimize the calls 
         hash_explode_tsv = hash_tsv \
