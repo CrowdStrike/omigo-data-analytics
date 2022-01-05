@@ -4,9 +4,6 @@ from omigo_core import tsvutils
 from omigo_core import utils 
 from omigo_ext import multithread_ext
 
-# TODO: This extension needs to be part of public github repo after it is working fine.
-# TODO: before enabling multi threading, the cache needs to be fixed.
-# TODO: sensitive_cols is hard coded and not so clear.
 # TODO: selective_execution doesnt feel like a good design pattern.
 class WebServiceTSV(tsv.TSV):
     def __init__(self, header, data, num_par = 0, timeout_sec = 5, num_batches = 10, status_check_interval_sec = 30, verify = True, enable_opt_exec = True, inherit_message = ""):
