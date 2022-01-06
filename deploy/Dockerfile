@@ -9,8 +9,9 @@ RUN sh -c "echo 'deb http://download.opensuse.org/repositories/network:/messagin
 
 # install go compiler
 RUN apt-get install -y cron wget
-RUN apt-get install -y python3 python3-pip python3-venv
-RUN apt-get install graphviz
+RUN apt-get install -y python3 python3-pip python3-venv 
+# TODO this graphviz installation is not working for some reason and shows prompts to select country and timezone.
+# RUN apt-get install -y graphviz
 
 # environment variables
 #ENV PATH="$PATH:/usr/local/go/bin"
@@ -31,6 +32,7 @@ RUN python3 -m pip install --upgrade build
 RUN pip3 install omigo-core omigo-ext --upgrade
 RUN pip3 install jupyterlab
 RUN pip3 install yfinance 
+RUN pip3 install graphviz 
 
 # entrypoint
 ENTRYPOINT ["./deploy/docker-entrypoint.sh"]
