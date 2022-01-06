@@ -4,8 +4,8 @@ BASEDIR="/code"
 
 cd $BASEDIR
 
+apt-get install -y graphviz
 echo "Installing any updated version of the packages"
-pip3 install graphviz
 pip3 install omigo_core omigo_ext --upgrade
 
 echo "Running jupyter"
