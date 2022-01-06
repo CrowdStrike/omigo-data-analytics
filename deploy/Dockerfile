@@ -1,17 +1,14 @@
-FROM ubuntu AS omigo-data-analytics 
+FROM ubuntu:20.04 AS omigo-data-analytics
+ENV DEBIAN_FRONTEND=noninteractive
 
 # base package update
 RUN apt-get update
 RUN apt-get install -y wget curl apt-utils cron vim
 
-# define repo
-RUN sh -c "echo 'deb http://download.opensuse.org/repositories/network:/messaging:/zeromq:/release-stable/xUbuntu_18.04/ /' > /etc/apt/sources.list.d/network:messaging:zeromq:release-stable.list"
-
 # install go compiler
 RUN apt-get install -y cron wget
 RUN apt-get install -y python3 python3-pip python3-venv 
-# TODO this graphviz installation is not working for some reason and shows prompts to select country and timezone.
-# RUN apt-get install -y graphviz
+RUN apt-get install -y graphviz
 
 # environment variables
 #ENV PATH="$PATH:/usr/local/go/bin"
