@@ -4,9 +4,6 @@ from omigo_core import tsvutils
 from omigo_core import utils 
 from omigo_ext import multithread_ext
 
-# TODO: This extension needs to be part of public github repo after it is working fine.
-# TODO: before enabling multi threading, the cache needs to be fixed.
-# TODO: sensitive_cols is hard coded and not so clear.
 # TODO: selective_execution doesnt feel like a good design pattern.
 class WebServiceTSV(tsv.TSV):
     def __init__(self, header, data, num_par = 0, timeout_sec = 5, num_batches = 10, status_check_interval_sec = 30, verify = True, enable_opt_exec = True, inherit_message = ""):
@@ -96,7 +93,6 @@ def __call_web_service__(xtsv, xtsv_timeout_sec, xtsv_verify, xtsv_enable_opt_ex
             xtsv.num_rows(), hash_tsv.num_rows(), xtsv_enable_opt_exec))
 
     # avoid making duplicate calls to the web service by hashing the all_sel_cols
-    # check if the difference is more than (say) 100
     if (xtsv_enable_opt_exec == True):
         # optimize the calls 
         hash_explode_tsv = hash_tsv \
