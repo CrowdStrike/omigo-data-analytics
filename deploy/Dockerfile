@@ -10,6 +10,7 @@ RUN sh -c "echo 'deb http://download.opensuse.org/repositories/network:/messagin
 # install go compiler
 RUN apt-get install -y cron wget
 RUN apt-get install -y python3 python3-pip python3-venv
+RUN apt-get install graphviz
 
 # environment variables
 #ENV PATH="$PATH:/usr/local/go/bin"

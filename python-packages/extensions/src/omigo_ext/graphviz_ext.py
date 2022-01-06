@@ -2,6 +2,10 @@ from omigo_core import tsv
 from omigo_core import utils 
 import graphviz
 
+# Note: graphviz libraries need to be in systems path
+# brew install graphviz
+# apt-get install graphviz
+
 # default styling function. This can return differnt style options according to the content of the data
 # style and shape are reserved keywords in graphviz. This will throw error if those keys are part of the data
 def __dot_func_default__(mp):
