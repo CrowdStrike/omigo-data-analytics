@@ -647,7 +647,8 @@ class TSV:
         grouping_cols = self.__get_matching_cols__(grouping_col_or_cols)
 
         # define rolling functions
-        rolling_agg_funcs_map = {"sum": get_rolling_func_update_sum, "min": get_rolling_func_update_min, "max": get_rolling_func_update_max, "mean": get_rolling_func_update_mean, "len": get_rolling_func_update_len}
+        rolling_agg_funcs_map = {"sum": get_rolling_func_update_sum, "min": get_rolling_func_update_min, "max": get_rolling_func_update_max, "mean": get_rolling_func_update_mean,
+            "len": get_rolling_func_update_len}
 
         # check for validity
         if (len(grouping_cols) == 0 or len(agg_cols) == 0):
