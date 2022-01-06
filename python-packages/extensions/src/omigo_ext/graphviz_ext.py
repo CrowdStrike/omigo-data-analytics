@@ -17,7 +17,7 @@ def __dot_func_default__(mp):
 
 def __plot_graph__(vertex_map, edges_maps, node_props, edge_props, vertex_id_col, edge_src_col, edge_dest_col, vertex_display_id_col, display_func, max_len):
     # check for custom display
-    if (display_func == None):
+    if (display_func is None):
         display_func = __dot_func_default__
         
     # initialize the digraph structure
@@ -46,7 +46,7 @@ def __plot_graph__(vertex_map, edges_maps, node_props, edge_props, vertex_id_col
             kv_str = "[{} = {}]".format(k1, v1)
             
             # truncate the value if it exceeds a specific threshold
-            if (max_len != None and len(kv_str) > max_len):
+            if (max_len is not None and len(kv_str) > max_len):
                 if (max_len > 3):
                     kv_str = kv_str[0:(max_len - 3)] + "..."
                 else:
@@ -79,7 +79,7 @@ def __plot_graph__(vertex_map, edges_maps, node_props, edge_props, vertex_id_col
         edge_str = "    \"{}\" -> \"{}\"".format(src, dest)
 
         # generate edge props
-        if (edge_props != None and len(edge_props) > 0):
+        if (edge_props is not None and len(edge_props) > 0):
             ed_props = []
 
             # iterate over all edge properties
@@ -89,7 +89,7 @@ def __plot_graph__(vertex_map, edges_maps, node_props, edge_props, vertex_id_col
                 kv_str = "{}".format(v1)
                 
                 # truncate the value if it exceeds a specific threshold
-                if (max_len != None and len(kv_str) > max_len):
+                if (max_len is not None and len(kv_str) > max_len):
                     if (max_len > 3):
                         kv_str = kv_str[0:(max_len - 3)] + "..."
                     else:
@@ -148,15 +148,15 @@ def plot_graph(vtsv, etsv, vertex_id_col, src_edge_col, dest_edge_col, vertex_di
         vtsv = tsv.merge([vtsv, mtsv], def_val_map = {})
 
     # vertex display can be different
-    if (vertex_display_id_col == None):
+    if (vertex_display_id_col is None):
         vertex_display_id_col = vertex_id_col
         
     # node_props default to all columns in vertex tsv
-    if (node_props == None):
+    if (node_props is None):
         node_props = vtsv.drop([vertex_id_col]).columns()
         
     # edge_props default to all columns in edges tsv
-    if (edge_props == None):
+    if (edge_props is None):
         edge_props = etsv.drop([src_edge_col, dest_edge_col]).columns()
         
     # create map holding vertex_id and its properties
