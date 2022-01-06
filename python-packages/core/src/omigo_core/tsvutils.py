@@ -42,8 +42,10 @@ def merge(tsv_list, def_val_map = None):
         if (header != t.get_header()):
             header_diffs = get_diffs_in_headers(tsv_list)
             if (len(header_diffs) > 0):
-                utils.warn("Mismatch in header at index: {}. Cant merge. Using merge_intersect for common intersection. Some of the differences in header: {}".format(
-                    index, str(header_diffs)))
+                # TODO
+                if (def_val_map is None):
+                    utils.warn("Mismatch in header at index: {}. Cant merge. Using merge_intersect for common intersection. Some of the differences in header: {}".format(
+                        index, str(header_diffs)))
             else:
                 utils.warn("Mismatch in order of header fields: {}, {}. Using merge intersect".format(header.split("\t"), t.get_header().split("\t")))
             return merge_intersect(tsv_list, def_val_map)
@@ -99,7 +101,7 @@ def merge_intersect(tsv_list, def_val_map = None):
     # print if number of unique headers are more than 1
     if (len(diff_cols) > 0):
         # debug
-        utils.warn("merge_intersect: missing columns: {}".format(str(diff_cols)))
+        utils.debug("merge_intersect: missing columns: {}".format(str(diff_cols)))
 
         # check which of the columns among the diff have default values
         if (def_val_map is not None):
@@ -115,10 +117,10 @@ def merge_intersect(tsv_list, def_val_map = None):
             # assign empty string to the columns for which default value was not defined
             for h in diff_cols:
                 if (h in def_val_map.keys()):
-                    utils.warn("merge_intersect: assigning default value for {}: {}".format(h, def_val_map[h]))
+                    utils.debug("merge_intersect: assigning default value for {}: {}".format(h, def_val_map[h]))
                     effective_def_val_map[h] = def_val_map[h]
                 else:
-                    utils.warn("merge_intersect: assigning empty string as default value to column: {}".format(h))
+                    utils.debug("merge_intersect: assigning empty string as default value to column: {}".format(h))
                     effective_def_val_map[h] = ""
         
             # get the list of keys in order
