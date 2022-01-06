@@ -94,14 +94,14 @@ sepal_width	sepal_length
 ```
 #### Import the graph extension package for creating charts
 ```
->>> from omigo_ext import graphext
->>> x.extend_class(graphext.VisualTSV).histogram("sepal_length", "class", yfigsize = 8)
+>>> from omigo_ext import graph_ext
+>>> x.extend_class(graph_ext.VisualTSV).histogram("sepal_length", "class", yfigsize = 8)
 ```
 ![iris sepal_width histogram](images/iris-hist.png)
 
 #### Some of the more advanced graphs are also available
 ```
->>> x.extend_class(graphext.VisualTSV).pairplot(["sepal_length", "sepal_width"], kind = "kde", diag_kind = "auto")
+>>> x.extend_class(graph_ext.VisualTSV).pairplot(["sepal_length", "sepal_width"], kind = "kde", diag_kind = "auto")
 ```
 ![iris sepal_width pairplot](images/iris-pairplot.png)
 
