@@ -46,7 +46,7 @@ def __plot_graph__(vertex_map, edges_maps, node_props, edge_props, vertex_id_col
         # iterate over all properties of the vertex
         for k1 in node_props:
             # get the value and generate key-value string
-            v1 = str(mp[k1])
+            v1 = str(mp[k1]) if (k1 in mp.keys()) else ""
             kv_str = "[{} = {}]".format(k1, v1)
             
             # truncate the value if it exceeds a specific threshold
@@ -57,7 +57,7 @@ def __plot_graph__(vertex_map, edges_maps, node_props, edge_props, vertex_id_col
                     kv_str = kv_str[0:max_len]
 
             # append to the list of attributes
-            if (v1 != "" and k1 != vertex_id_col):
+            if (v1 != ""):
                 mp_props.append(kv_str)
 
         # add style information
@@ -89,7 +89,7 @@ def __plot_graph__(vertex_map, edges_maps, node_props, edge_props, vertex_id_col
             # iterate over all edge properties
             for k1 in edge_props:
                 # get the value and generate key-value string
-                v1 = str(mp[k1])
+                v1 = str(mp[k1]) if (k1 in mp.keys()) else ""
                 kv_str = "{}".format(v1)
                 
                 # truncate the value if it exceeds a specific threshold
@@ -131,7 +131,7 @@ def plot_graph(vtsv, etsv, vertex_id_col, src_edge_col, dest_edge_col, vertex_di
     # the vertex tsv must be distinct
     if (len(vertex_ids) != vtsv.num_rows()):
         utils.warn("Vertex TSV is not unique")
-        vtsv.group_count(vertex_id_col, "group").gt_int("group:count", 1).show()
+        vtsv.group_count(vertex_id_col, "group").gt_int("group:count", 1).show(max_col_width = 1000)
         
     # ideally all edge ids must be present in the vertices. fallback to create missing vertices
     missing_edge_ids = edge_ids.difference(vertex_ids)
@@ -139,17 +139,22 @@ def plot_graph(vtsv, etsv, vertex_id_col, src_edge_col, dest_edge_col, vertex_di
     
     # display warning and check if there needs to be fallback
     if (len(missing_edge_ids) > 0):
-        utils.warn("There are edges that dont have vertex information: {}".format(missing_edge_ids))
+        utils.warn("There are edge ids that dont have vertex information: {}".format(missing_edge_ids))
         
     # display warning for vertices that dont have edges
     if (len(no_edge_vertex_ids) > 0):
         utils.warn("There are vertices that dont have edges: {}".format(no_edge_vertex_ids))
         
     # check if need to create proxy vertices for which there are edges but no vertex properties
-    if (create_missing_vertices == True and len(missing_edge_ids) > 0):
-        mtsv = tsv.TSV(vertex_id_col, [str(t) for t in missing_edge_ids])
-        utils.info("Creating a fallback vertex map with the vertex id")
-        vtsv = tsv.merge([vtsv, mtsv], def_val_map = {})
+    if (len(missing_edge_ids) > 0):
+        if (create_missing_vertices == True):
+            mtsv = tsv.TSV(vertex_id_col, [str(t) for t in missing_edge_ids])
+            utils.info("Creating a fallback vertex map with the vertex id")
+            vtsv = tsv.merge([vtsv, mtsv], def_val_map = {})
+        else:
+           etsv = etsv \
+               .values_not_in(src_edge_col, missing_edge_ids) \
+               .values_not_in(dest_edge_col, missing_edge_ids)
 
     # vertex display can be different
     if (vertex_display_id_col is None):

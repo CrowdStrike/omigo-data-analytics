@@ -975,7 +975,7 @@ class TSV:
 
         # print which columns are going to be transformed
         if (len(matching_cols) != len(cols) and len(matching_cols) != 1):
-            utils.info("transform_inline: list of columns that will be transformed: {}".format(str(matching_cols)))
+            utils.debug("transform_inline: list of columns that will be transformed: {}".format(str(matching_cols)))
 
         # create new data
         new_data = []
