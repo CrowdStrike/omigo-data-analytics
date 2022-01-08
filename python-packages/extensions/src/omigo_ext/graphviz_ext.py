@@ -20,7 +20,7 @@ def __default_dot_style_func__(mp):
     return props
 
 # TODO: Use graphviz apis instead of constructing strings
-def __plot_graph__(vertex_map, edges_maps, node_props, edge_props, vertex_id_col, edge_src_col, edge_dest_col, vertex_display_id, style_func, max_len):
+def __plot_graph__(vertex_map, edges_maps, node_props, edge_props, vertex_id_col, edge_src_col, edge_dest_col, vertex_display_id_col, style_func, max_len):
     # check for custom display
     if (style_func is None):
         style_func = __default_dot_style_func__
@@ -36,7 +36,7 @@ def __plot_graph__(vertex_map, edges_maps, node_props, edge_props, vertex_id_col
         
         # set the display id
         vertex_id_val = str(mp[vertex_id_col])
-        vertex_display_id_val = str(mp[vertex_display_id]) if (str(mp[vertex_display_id]) != "") else vertex_id_val
+        vertex_display_id_val = str(mp[vertex_display_id_col]) if (str(mp[vertex_display_id_col]) != "") else vertex_id_val
         
         # use a fallback as sometimes the display column is not present
         mp_props.append("{}".format(vertex_display_id_val))
@@ -118,12 +118,12 @@ def __plot_graph__(vertex_map, edges_maps, node_props, edge_props, vertex_id_col
     # return
     return graphviz.Source(digraph_str)
 
-def plot_graph(vtsv, etsv, vertex_id_col, src_edge_col, dest_edge_col, vertex_display_id = None, node_props = None, edge_props = None, style_func = None,
+def plot_graph(vtsv, etsv, vertex_id_col, src_edge_col, dest_edge_col, vertex_display_id_col = None, node_props = None, edge_props = None, style_func = None,
     max_len = None, create_missing_vertices = False):
 
     # default for vertex display
-    if (vertex_display_id is None):
-        vertex_display_id = vertex_id_col
+    if (vertex_display_id_col is None):
+        vertex_display_id_col = vertex_id_col
     
     # do some validation on vertices and edges
     vertex_ids = set(vtsv.col_as_array_uniq(vertex_id_col))
@@ -170,5 +170,5 @@ def plot_graph(vtsv, etsv, vertex_id_col, src_edge_col, dest_edge_col, vertex_di
         edges_maps[(mp[src_edge_col], mp[dest_edge_col])] = mp
 
     # get the graphviz output
-    return __plot_graph__(vertex_map, edges_maps, node_props, edge_props, vertex_id_col, src_edge_col, dest_edge_col, vertex_display_id, style_func, max_len)
+    return __plot_graph__(vertex_map, edges_maps, node_props, edge_props, vertex_id_col, src_edge_col, dest_edge_col, vertex_display_id_col, style_func, max_len)
 
