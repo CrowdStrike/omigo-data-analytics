@@ -8,7 +8,7 @@ import graphviz
 
 # default styling function. This can return differnt style options according to the content of the data
 # style and shape are reserved keywords in graphviz. This will throw error if those keys are part of the data
-def __dot_func_default__(mp):
+def __default_dot_style_func__(mp):
     # create a new props
     props = {}
     
@@ -19,10 +19,11 @@ def __dot_func_default__(mp):
     # return
     return props
 
-def __plot_graph__(vertex_map, edges_maps, node_props, edge_props, vertex_id_col, edge_src_col, edge_dest_col, vertex_display_id_col, display_func, max_len):
+# TODO: Use graphviz apis instead of constructing strings
+def __plot_graph__(vertex_map, edges_maps, node_props, edge_props, vertex_id_col, edge_src_col, edge_dest_col, vertex_display_id, style_func, max_len):
     # check for custom display
-    if (display_func is None):
-        display_func = __dot_func_default__
+    if (style_func is None):
+        style_func = __default_dot_style_func__
         
     # initialize the digraph structure
     digraph_arr = []
@@ -35,33 +36,31 @@ def __plot_graph__(vertex_map, edges_maps, node_props, edge_props, vertex_id_col
         
         # set the display id
         vertex_id_val = str(mp[vertex_id_col])
-        vertex_display_id_val = str(mp[vertex_display_id_col])
+        vertex_display_id_val = str(mp[vertex_display_id]) if (str(mp[vertex_display_id]) != "") else vertex_id_val
         
         # use a fallback as sometimes the display column is not present
-        if (vertex_display_id_val != ""):
-            mp_props.append("{}".format(vertex_display_id_val))
-        else:
-            mp_props.append("{}".format(vertex_id_val))
+        mp_props.append("{}".format(vertex_display_id_val))
         
         # iterate over all properties of the vertex
-        for k1 in node_props:
-            # get the value and generate key-value string
-            v1 = str(mp[k1]) if (k1 in mp.keys()) else ""
-            kv_str = "[{} = {}]".format(k1, v1)
-            
-            # truncate the value if it exceeds a specific threshold
-            if (max_len is not None and len(kv_str) > max_len):
-                if (max_len > 3):
-                    kv_str = kv_str[0:(max_len - 3)] + "..."
-                else:
-                    kv_str = kv_str[0:max_len]
+        if (node_props is not None and len(node_props) > 0):
+            for k1 in node_props:
+                # get the value and generate key-value string
+                v1 = str(mp[k1]) if (k1 in mp.keys()) else ""
+                kv_str = "[{} = {}]".format(k1, v1)
+                
+                # truncate the value if it exceeds a specific threshold
+                if (max_len is not None and len(kv_str) > max_len):
+                    if (max_len > 3):
+                        kv_str = kv_str[0:(max_len - 3)] + "..."
+                    else:
+                        kv_str = kv_str[0:max_len]
 
-            # append to the list of attributes
-            if (v1 != ""):
-                mp_props.append(kv_str)
+                # append to the list of attributes
+                if (v1 != ""):
+                    mp_props.append(kv_str)
 
         # add style information
-        dot_props = display_func(mp)
+        dot_props = style_func(mp)
         dot_props_str = ", ".join(["\"{}\" = \"{}\"".format(k2, dot_props[k2]) for k2 in dot_props.keys()])
         vertex_str = "    \"{}\" [\"label\" = \"{}\", {} ]".format(k, "\n".join(mp_props), dot_props_str)
         
@@ -119,8 +118,12 @@ def __plot_graph__(vertex_map, edges_maps, node_props, edge_props, vertex_id_col
     # return
     return graphviz.Source(digraph_str)
 
-def plot_graph(vtsv, etsv, vertex_id_col, src_edge_col, dest_edge_col, vertex_display_id_col = None, node_props = None, edge_props = None, custom_display_func = None,
+def plot_graph(vtsv, etsv, vertex_id_col, src_edge_col, dest_edge_col, vertex_display_id = None, node_props = None, edge_props = None, style_func = None,
     max_len = None, create_missing_vertices = False):
+
+    # default for vertex display
+    if (vertex_display_id is None):
+        vertex_display_id = vertex_id_col
     
     # do some validation on vertices and edges
     vertex_ids = set(vtsv.col_as_array_uniq(vertex_id_col))
@@ -156,18 +159,6 @@ def plot_graph(vtsv, etsv, vertex_id_col, src_edge_col, dest_edge_col, vertex_di
                .values_not_in(src_edge_col, missing_edge_ids) \
                .values_not_in(dest_edge_col, missing_edge_ids)
 
-    # vertex display can be different
-    if (vertex_display_id_col is None):
-        vertex_display_id_col = vertex_id_col
-        
-    # node_props default to all columns in vertex tsv
-    if (node_props is None):
-        node_props = vtsv.drop([vertex_id_col]).columns()
-        
-    # edge_props default to all columns in edges tsv
-    if (edge_props is None):
-        edge_props = etsv.drop([src_edge_col, dest_edge_col]).columns()
-        
     # create map holding vertex_id and its properties
     vertex_map = {}
     for mp in vtsv.to_maps():
@@ -179,5 +170,5 @@ def plot_graph(vtsv, etsv, vertex_id_col, src_edge_col, dest_edge_col, vertex_di
         edges_maps[(mp[src_edge_col], mp[dest_edge_col])] = mp
 
     # get the graphviz output
-    return __plot_graph__(vertex_map, edges_maps, node_props, edge_props, vertex_id_col, src_edge_col, dest_edge_col, vertex_display_id_col, custom_display_func, max_len)
+    return __plot_graph__(vertex_map, edges_maps, node_props, edge_props, vertex_id_col, src_edge_col, dest_edge_col, vertex_display_id, style_func, max_len)
 
