@@ -3067,3 +3067,7 @@ def set_report_progress_perc(perc):
 
 def set_report_progress_min_thresh(thresh):
     utils.set_report_progress_min_thresh(thresh)
+
+# factory method
+def newWithCols(cols):
+    return TSV("\t".join(cols), [])
