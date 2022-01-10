@@ -2400,6 +2400,8 @@ class TSV:
     def __explode_json_transform_func__(self, col, accepted_cols, excluded_cols, single_value_list_cols, transpose_col_groups, merge_list_method, url_encoded_cols,
         nested_cols, collapse_primitive_list, join_col = ","):
 
+        json_explode_index = "__explode_json_index__"
+
         def __explode_json_transform_func_inner__(mp):
             # some validation.
             if (col not in mp.keys() or mp[col] == "" or mp[col] is None):
@@ -2508,6 +2510,8 @@ class TSV:
                                 else:
                                     single_results[k] = v1
                             else:
+                                # iterate through all the values
+                                i = 0
                                 for vt in v:
                                     # create map to store values
                                     mp2_new = {}
@@ -2519,6 +2523,10 @@ class TSV:
                                         mp2_new[k + ":url_encoded"] = v1
                                     else:
                                         mp2_new[k] = v1
+
+                                    # assign index
+                                    mp2_new[json_explode_index] = str(i)
+                                    i = i + 1
 
                                     # append the map to the list
                                     list_results_arr[-1].append(mp2_new)
@@ -2539,10 +2547,13 @@ class TSV:
                             # check if there is flag to use only the first column
                             if (single_value_list_cols is not None and k in single_value_list_cols):
                                  mp2_list = __explode_json_transform_func_expand_json__(v[0], parent_prefix = parent_with_child_key)
+                                 i = 0
                                  for mp2 in mp2_list:
                                      mp2_new = {}
                                      for k1 in mp2.keys():
                                          mp2_new[k + ":" + k1] = mp2[k1]
+                                     mp2_new[json_explode_index] = str(i)
+                                     i = i + 1
                                      list_results_arr[-1].append(mp2_new)
                             else:
                                 raise Exception("Inner lists are not supported. Use accepted_cols or excluded_cols: {}".format(str(k)))
@@ -2564,17 +2575,23 @@ class TSV:
                             list_results_arr.append([])
                             
                             # create a new map with correct key
+                            i = 0
                             for mp2 in mp2_list:
                                 mp2_new = {}
                                 for k1 in mp2.keys():
                                     mp2_new[k + ":" + k1] = mp2[k1]
+                                mp2_new[json_explode_index] = str(i)
+                                i = i + 1
                                 list_results_arr[-1].append(mp2_new)
                         else:
                            # create a new map with correct key
+                           i = 0
                            for mp2 in mp2_list:
                                mp2_new = {}
                                for k1 in mp2.keys():
                                    mp2_new[k + ":" + k1] = mp2[k1]
+                               mp2_new[json_explode_index] = str(i)
+                               i = i + 1
                                dict_results.append(mp2_new)
                     elif (len(v) == 0):
                         pass
@@ -2702,7 +2719,8 @@ class TSV:
 
     # TODO: Need better name
     # TODO: the json col is expected to be in url_encoded form otherwise does best effort guess
-    # TODO: url_encoded_cols, excluded_cols, accepted_cols are actually json hashmap keys and not xpath 
+    # TODO: url_encoded_cols, excluded_cols, accepted_cols are actually json hashmap keys and not xpath
+    # TODO: __explode_json_index__ needs to be tested and confirmed
     def explode_json(self, col, prefix = None, accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None,
         merge_list_method = "cogroup", collapse_primitive_list = True, url_encoded_cols = None, nested_cols = None, collapse = True):
 
