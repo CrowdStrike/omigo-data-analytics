@@ -40,7 +40,7 @@ def __plot_graph__(vertex_map, edges_maps, node_props, edge_props, vertex_id_col
         
         # use a fallback as sometimes the display column is not present
         mp_props.append("{}".format(vertex_display_id_val))
-        
+
         # iterate over all properties of the vertex
         if (node_props is not None and len(node_props) > 0):
             for k1 in node_props:
