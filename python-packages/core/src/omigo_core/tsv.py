@@ -1394,16 +1394,14 @@ class TSV:
     def url_encode_inline(self, col):
         return self.transform_inline([col], lambda x: utils.url_encode(x))
 
-    # TODO: within TSV, there can not be any newlines
     def url_decode_inline(self, col_or_cols): 
-        return self.transform_inline(col_or_cols, lambda x: utils.url_decode(x).replace("\n", " "))
+        return self.transform_inline(col_or_cols, lambda x: utils.url_decode(x))
 
     def url_encode(self, col, newcol):
         return self.transform([col], lambda x: utils.url_encode(x), newcol)
 
-    # TODO: within TSV, there can not be any newlines
     def url_decode(self, col, newcol):
-        return self.transform([col], lambda x: utils.url_decode(x).replace("\n", " "), newcol)
+        return self.transform([col], lambda x: utils.url_decode(x), newcol)
 
     def union(self, tsv_or_that_arr):
         # check if this is a single element TSV or an array
