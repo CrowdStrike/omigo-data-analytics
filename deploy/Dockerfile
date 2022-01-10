@@ -1,4 +1,4 @@
-FROM ubuntu:20.04 AS omigo-data-analytics
+FROM ubuntu:20.04
 ENV DEBIAN_FRONTEND=noninteractive
 
 # base package update

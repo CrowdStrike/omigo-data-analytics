@@ -975,7 +975,7 @@ class TSV:
 
         # print which columns are going to be transformed
         if (len(matching_cols) != len(cols) and len(matching_cols) != 1):
-            utils.info("transform_inline: list of columns that will be transformed: {}".format(str(matching_cols)))
+            utils.debug("transform_inline: list of columns that will be transformed: {}".format(str(matching_cols)))
 
         # create new data
         new_data = []
@@ -3067,3 +3067,7 @@ def set_report_progress_perc(perc):
 
 def set_report_progress_min_thresh(thresh):
     utils.set_report_progress_min_thresh(thresh)
+
+# factory method
+def newWithCols(cols):
+    return TSV("\t".join(cols), [])
