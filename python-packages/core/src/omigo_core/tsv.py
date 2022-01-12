@@ -1541,7 +1541,7 @@ class TSV:
             if (c.endswith(suffix)):
                 new_col =  c[0:-len(suffix)]
                 if (new_col in self.header_fields or len(new_col) == 0):
-                    utils.warn("remove_suffix: Duplicate names found. Ignoring removal of prefix for col:", c, new_col)
+                    utils.warn("remove_suffix: Duplicate names found. Ignoring removal of prefix for col: {} to new_col: {}".format(c, new_col))
                 else:
                     mp[c] = new_col
 
@@ -2014,7 +2014,7 @@ class TSV:
         # print message for rkeys that are ignored
         for rkey in rkeys:
             if (rkey not in new_header_fields):
-                utils.debug("rkey ignored from output:", rkey)
+                utils.debug("rkey ignored from output: {}".format(rkey))
 
         # add the left side columns
         for i in range(len(self.header_fields)):
