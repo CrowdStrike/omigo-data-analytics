@@ -25,14 +25,14 @@ def uniq_mkstr(vs):
         for k in str(t).split(","):
             if (len(k) > 0):
                 vs2.add(str(k))
-    return ",".join([str(x) for x in vs2])
+    return ",".join(sorted([str(x) for x in vs2]))
 
 def mean(vs):
     return statistics.mean(vs)
 
 def mkstr(vs):
     vs2 = list([str(x) for x in vs])
-    return ",".join(vs2)
+    return ",".join(sorted(vs2))
 
 def mkstr4f(vs):
     vs2 = list(["{:4f}".format(float(x)) for x in vs])

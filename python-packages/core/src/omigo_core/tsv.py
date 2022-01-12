@@ -386,9 +386,6 @@ class TSV:
                 end_index = int(min(num_win_col_values - 1, win_index * winsize + winsize - 1))
                 win_names_mapping[win_index] = (win_col_values[start_index], win_col_values[end_index])
 
-        # print("win_mapping:", win_mapping)
-        # print("win_names_mapping:", win_names_mapping)
-
         # transform and normalize the value of win_col
         suffix2 = suffix if (suffix != "") else "window_aggregate" 
         new_win_col = win_col + ":" + suffix2
@@ -641,8 +638,9 @@ class TSV:
 
         # remaining validation done by the group_by_key
         return self.group_by_key(grouping_cols, combined_cols, __arg_max_grouping_func__, suffix = suffix, collapse = collapse)
-             
-    def aggregate(self, grouping_col_or_cols, agg_cols, agg_funcs, collapse = True, precision = 6, use_rolling = False, inherit_message = ""):
+
+    # TODO: this use_string_datatype is temporary and needs to be replaced with better design. 
+    def aggregate(self, grouping_col_or_cols, agg_cols, agg_funcs, collapse = True, precision = 6, use_rolling = False, use_string_datatype = False, inherit_message = ""):
         # get matching columns
         grouping_cols = self.__get_matching_cols__(grouping_col_or_cols)
 
@@ -650,10 +648,11 @@ class TSV:
         rolling_agg_funcs_map = {"sum": get_rolling_func_update_sum, "min": get_rolling_func_update_min, "max": get_rolling_func_update_max, "mean": get_rolling_func_update_mean,
             "len": get_rolling_func_update_len}
 
-        # check for validity
+        # validation on number of grouping cols
         if (len(grouping_cols) == 0 or len(agg_cols) == 0):
             raise Exception("No input columns:", grouping_cols, agg_cols, suffix)
 
+        # validation on number of agg funcs
         if (len(agg_cols) != len(agg_funcs)):
             raise Exception("Aggregate functions are not of correct size")
       
@@ -718,10 +717,14 @@ class TSV:
                     #get_rolling_func_update(value_map_arr[j][cols_key], float(fields[agg_col_indexes[j]]), get_func_name(agg_funcs[j]))
                     rolling_agg_funcs[j](value_map_arr[j][cols_key], float(fields[agg_col_indexes[j]]))
                 else:
-                    try:
-                        value_map_arr[j][cols_key].append(float(fields[agg_col_indexes[j]]))
-                    except ValueError:
-                        value_map_arr[j][cols_key].append(fields[agg_col_indexes[j]])
+                    # TODO: this is a hack on datatype
+                    if (use_string_datatype == False):
+                        try:
+                            value_map_arr[j][cols_key].append(float(fields[agg_col_indexes[j]]))
+                        except ValueError:
+                            value_map_arr[j][cols_key].append(fields[agg_col_indexes[j]])
+                    else:
+                        value_map_arr[j][cols_key].append(str(fields[agg_col_indexes[j]]))
 
         # compute the aggregation
         value_func_map_arr = [{} for i in range(len(agg_col_indexes))]
@@ -1379,7 +1382,7 @@ class TSV:
         return TSV(new_header, new_data)
 
     def to_csv(self, comma_replacement = ";"):
-        print("[WARN] to_csv: This is not a standard csv conversion. The commas are just replaced with another character specified in comma_replacement parameter.")
+        utils.warn("to_csv: This is not a standard csv conversion. The commas are just replaced with another character specified in comma_replacement parameter.")
 
         # create new data
         new_header = self.header.replace(",", comma_replacement).replace("\t", ",")
@@ -1538,7 +1541,7 @@ class TSV:
             if (c.endswith(suffix)):
                 new_col =  c[0:-len(suffix)]
                 if (new_col in self.header_fields or len(new_col) == 0):
-                    print("[WARN] remove_suffix: Duplicate names found. Ignoring removal of prefix for col:", c, new_col)
+                    utils.warn("remove_suffix: Duplicate names found. Ignoring removal of prefix for col:", c, new_col)
                 else:
                     mp[c] = new_col
 
@@ -2011,7 +2014,7 @@ class TSV:
         # print message for rkeys that are ignored
         for rkey in rkeys:
             if (rkey not in new_header_fields):
-                print ("INFO: rkey ignored from output:", rkey)
+                utils.debug("rkey ignored from output:", rkey)
 
         # add the left side columns
         for i in range(len(self.header_fields)):
@@ -2439,7 +2442,7 @@ class TSV:
 
             # check if top level is a list
             if (isinstance(json_mp, list)):
-                print("top level is a list. converting to a map")
+                utils.debug("top level is a list. converting to a map")
                 return __explode_json_transform_func_inner_helper__({col: json_mp})
 
             # use inner functions to parse the json
@@ -2493,7 +2496,7 @@ class TSV:
                     if (isinstance(v, list) and len(v) > 0):
                         single_results[k + ":__explode_json_len__"] = str(len(v))
                         if (len(list_results_arr) > 0 and utils.is_debug()):
-                            print("[WARN] explode_json: multiple lists are not fully supported. Confirm data parsing or Use accepted_cols or excluded_cols: {}".format(str(k)))
+                            utils.warn("explode_json: multiple lists are not fully supported. Confirm data parsing or Use accepted_cols or excluded_cols: {}".format(str(k)))
 
                         # create a new entry for holding the list array
                         list_results_arr.append([])
@@ -2562,13 +2565,10 @@ class TSV:
                     elif (isinstance(v, dict) and len(v) > 0):
                         # warn for non trivial case 
                         if (len(dict_results) > 0 and utils.is_debug()):
-                            print("[WARN] explode_json: multiple maps are not fully supported. Confirm data parsing or Use accepted_cols or excluded_cols: {}".format(str(k)))
+                            utils.warn("explode_json: multiple maps are not fully supported. Confirm data parsing or Use accepted_cols or excluded_cols: {}".format(str(k)))
 
                         # recursive call
                         mp2_list = __explode_json_transform_func_expand_json__(v, parent_prefix = parent_with_child_key)
-
-                        #if (parent_prefix == "resources"):
-                        #    print("parent_prefix is resources:", mp2_list)
 
                         # check if it was a flat hashmap or a nested. if flat, use dict_list else use list_results_arr
                         if (len(mp2_list) > 1):
@@ -2608,8 +2608,7 @@ class TSV:
 
             # look for prefixes that needed to be transposed and moved from combined map to list_results_arr
             if (transpose_col_groups is not None):
-                if (utils.is_debug()):
-                    print("WARN: This API is not working as expected and is experimental")
+                utils.warn("This transpose_col_groups parameter is experimental at this point and may not work fully")
 
                 # iterate over all transpose groups
                 for transpose_col_group_prefix in transpose_col_groups:
@@ -2625,14 +2624,9 @@ class TSV:
                     # iterate and find all the matching ones
                     for k in combined_map.keys():
                         if (parent_prefix is not None and parent_prefix == transpose_col_group_prefix):
-                            #print("combined_map: key:", k, parent_prefix)
                             key_list_results.append({ "__key__": str(k) })
                             value_list_results.append({ "__value__": str(combined_map[k]) })
                             keys_found[k] = 1
-
-                    # debug
-                    # if (len(keys_found) > 0):
-                    #    print("keys_found:", keys_found)
 
                     # remove all the keys that were found
                     for k in keys_found.keys():
@@ -2646,9 +2640,6 @@ class TSV:
             combined_merge_list = []
 
             # check for full join or cogroup
-            # if (parent_prefix == "resources"):
-            #     print("combined_map:", combined_map)
-            #     print("list_results_arr:", list_results_arr)
             if (merge_list_method == "cogroup"):
                 # do join or cogroup for the list_results_arr
                 cogroup_max = 0
@@ -2659,7 +2650,6 @@ class TSV:
                     for i in range(cogroup_max - list_results_len):
                         list_results.append({})
                        
-                # print("cogroup_max:", cogroup_max) 
                 # do a cogroup
                 cogroup_list = []
                 for i in range(cogroup_max):
