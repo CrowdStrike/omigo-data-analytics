@@ -1923,7 +1923,7 @@ class TSV:
         return self.join(that, lkeys, rkeys, join_type = "outer", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, inherit_message = inherit_message2)
 
     # primary join method
-    def join(self, that, lkeys, rkeys = None, join_type = "inner", lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, inherit_message = ""):
+    def join(self, that, lkeys, rkeys = None, join_type = "inner", lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, split_threshold = None, inherit_message = ""):
         # matching
         lkeys = self.__get_matching_cols__(lkeys)
         rkeys = that.__get_matching_cols__(rkeys) if (rkeys is not None) else lkeys 
@@ -1931,6 +1931,34 @@ class TSV:
         # check the lengths
         if (len(lkeys) != len(rkeys)):
             raise Exception("Length mismatch in lkeys and rkeys:", lkeys, rkeys)
+
+        # Check for split_threshold. TODO: Experimental
+        if (split_threshold != None):
+            # check if either side is more than split threshold. If yes, then split and merge
+            if (self.num_rows() > split_threshold and that.num_rows() > split_threshold):
+                # create batches of smaller tsvs
+                num_batches = int(math.ceil(max(self.num_rows(), that.num_rows()) / split_threshold))
+
+                # debug
+                utils.debug("join: Number of batches: {}".format(num_batches))
+
+                # split left and right sides
+                left_batches = self.__split_batches__(lkeys, num_batches)
+                right_batches = that.__split_batches__(rkeys, num_batches)
+
+                # call join on individual batches and then return the merge
+                joined_batches = []
+                for i in range(num_batches):
+                    # debug
+                    utils.debug("Calling join on batch: {}, left: {}, right: {}".format(i, left_batches[i].num_rows(), right_batches[i].num_rows()))
+
+                    # call join on the batch
+                    joined_batch = left_batches[i].join(right_batches[i], lkeys, rkeys, join_type = join_type, lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map,
+                        inherit_message = inherit_message)
+                    joined_batches.append(joined_batch)
+
+                # merge
+                return tsv.merge(joined_batches)
 
         # create a hashmap of left key values
         lvkeys = {}
@@ -2218,6 +2246,79 @@ class TSV:
                 vs_list = rmap[lvalue_key_str]
                 for vs in vs_list:
                     new_data.append("\t".join(utils.merge_arrays([fields, vs])))
+
+        # return
+        return TSV(new_header, new_data)
+
+    # split method to split tsv into batches
+    def __split_batches__(self, cols, num_batches):
+        # create some temp column names
+        temp_col1 = "__split_batches__:hash:{}".format(num_batches)
+        temp_col2 = "__split_batches__:batch:{}".format(num_batches)
+
+        # generate hash
+        hashed_tsv = self.generate_key_hash(cols, temp_col1)
+
+        # take all uniq value of hashes
+        hashes = hashed_tsv.col_as_array_uniq(temp_col1)
+
+        # assign some batch number to each hash
+        hash_indexes = {}
+        for hash_value in hashes:
+            hash_indexes[str(hash_value)] = int(hash_value) % num_batches
+        hashed_tsv2 = hashed_tsv.transform(temp_col1, lambda t: hash_indexes[t], temp_col2)
+        
+        # create new tsvs data
+        new_data_list = []
+        new_tsvs = []
+        for i in range(num_batches):
+            new_data_list.append([])
+
+        # assign each record to its correct place
+        batch_index = hashed_tsv2.get_col_index(temp_col2)
+        for line in hashed_tsv2.get_data():
+            fields = line.split("\t")
+            batch_id = int(fields[batch_index])
+            new_data_list[batch_id].append(line)
+ 
+        # create each tsv
+        for i in range(len(new_data_list)):
+            new_tsv = TSV(hashed_tsv2.get_header(), new_data_list[i]) \
+                .drop([temp_col1, temp_col2])
+            new_tsvs.append(new_tsv)
+
+        # return
+        return new_tsvs
+
+    # method to generate a hash for a given set of columns
+    def generate_key_hash(self, cols, new_col):
+        # resolve cols
+        cols = self.__get_matching_cols__(cols)
+        indexes = self.__get_col_indexes__(cols)
+
+        # validation
+        if (new_col in self.columns()):
+            raise Exception("new column already exists: {}".format(new_col))
+
+        # generate deterministic hash
+        new_header = "\t".join([self.header, new_col])
+        new_data = []
+
+        # iterate
+        for line in self.data:
+            fields = line.split("\t")
+            values = []
+            for i in indexes:
+                values.append(str(fields[i]))
+
+            # generate a single value
+            value_str = "\t".join(values)
+
+            # apply hash
+            hash_value = str(utils.compute_hash(value_str))
+
+            # add to new data
+            new_data.append("\t".join([line, hash_value]))
 
         # return
         return TSV(new_header, new_data)
@@ -2711,6 +2812,7 @@ class TSV:
     # TODO: the json col is expected to be in url_encoded form otherwise does best effort guess
     # TODO: url_encoded_cols, excluded_cols, accepted_cols are actually json hashmap keys and not xpath
     # TODO: __explode_json_index__ needs to be tested and confirmed
+    # TODO: need proper xpath based exclusion to better handle noise
     def explode_json(self, col, prefix = None, accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None,
         merge_list_method = "cogroup", collapse_primitive_list = True, url_encoded_cols = None, nested_cols = None, collapse = True):
 
@@ -2904,6 +3006,14 @@ class TSV:
     # placeholder for new method to do xpath based filtering for json blobs
     def filter_json_by_xpath(self, col, xpath_filter, inherit_message = ""):
         raise Exception("Not implemented yet")
+
+    def get_col_index(self, col):
+        # validation
+        if (col not in self.columns()):
+            raise Exception("Column not found: {}".format(col))
+
+        # return
+        return self.header_map[col]
 
     # this is a utility function that takes list of column names that support regular expression.
     # col_or_cols is a special variable that can be either single column name or an array. python

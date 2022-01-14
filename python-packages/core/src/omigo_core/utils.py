@@ -259,4 +259,4 @@ def is_float_with_fraction(xtsv, col):
     return False 
 
 def compute_hash(x, seed = 0):
-    return mmh3.hash64(str(x) + str(seed))[1]
+    return abs(mmh3.hash64(str(x) + str(seed))[0])
