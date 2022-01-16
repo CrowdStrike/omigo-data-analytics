@@ -10,6 +10,7 @@ import json
 import time
 import zipfile
 import requests
+import random
 
 # local imports
 from omigo_core import tsv
@@ -163,7 +164,7 @@ def read(input_file_or_files, sep = None, s3_region = None, aws_profile = None):
     for input_file in input_files:
         # check if it is a file or url
         if (input_file.startswith("http")):
-            tsv_list.append(read_url(input_file))
+            tsv_list.append(read_url_as_tsv(input_file))
         else:
             # read file content
             lines = file_paths_util.read_file_content_as_lines(input_file, s3_region, aws_profile)
@@ -187,87 +188,97 @@ def read(input_file_or_files, sep = None, s3_region = None, aws_profile = None):
 
     return merge(tsv_list)
 
-def read_with_filter_transform(input_file_or_files, filter_transform_func = None, s3_region = None, aws_profile = None):
-    # check if filter_func is defined
+def read_with_filter_transform(input_file_or_files, filter_transform_func = None, transform_func = None, s3_region = None, aws_profile = None):
+    # check if filter_transform_func is defined
     if (filter_transform_func is None):
-        return read(input_file_or_files, s3_region = s3_region, aws_profile = aws_profile)
+        xtsv = read(input_file_or_files, s3_region = s3_region, aws_profile = aws_profile)
 
-    # resolve input
-    input_files = __get_argument_as_array__(input_file_or_files)
-
-    # initialize result
-    tsv_list = []
-
-    # common keys
-    common_keys = {}
-
-    # iterate over all input files
-    for input_file in input_files:
-        # read the file
-        x = read(input_file)
-
-        # update the common
-        for h in x.get_header_fields():
-            if (h not in common_keys.keys()):
-                common_keys[h] = 0
-            common_keys[h] = common_keys[h] + 1
-
-        # gather maps of maps
-        result_maps = []
-        keys = {}
-
-        # iterate over the records of each map and generate a new one
-        for mp in x.to_maps():
-            mp2 = filter_transform_func(mp)
-            if (mp2 is not None):
-                if (len(mp2) > 0):
-                    result_maps.append(mp2)
-                for k in mp2.keys():
-                    keys[k] = 1
-
-        # check for empty maps
-        if (len(keys) > 0):
-            # output keys
-            keys_sorted = []
-            first_file = read(input_files[0])
-            for h in first_file.get_header_fields():
-                if (h in keys.keys()):
-                    keys_sorted.append(h)
-
-            # new header and data
-            header2 = "\t".join(keys_sorted)
-            data2 = []
-
-            # iterate and generate header and data
-            for mp in result_maps:
-                fields = []
-                for k in keys_sorted:
-                    fields.append(mp[k])
-                data2.append("\t".join(fields))
-
-            # debugging
-            utils.debug("tsvutils: read_with_filter_transform: file read: {}, after filter num_rows: {}".format(input_file, len(data2)))
-
-            # result tsv
-            tsv_list.append(tsv.TSV(header2, data2))
-
-    # Do a final check to see if all tsvs are empty
-    if (len(tsv_list) > 0):
-        # call merge on tsv_list
-        return merge(tsv_list)
-    else:
-        # create an empty data tsv file with common header fields
-        header_fields = []
-        first_file = read(input_files[0])
-        for h in first_file.get_header_fields():
-            if (common_keys[h] == len(input_files)):
-                header_fields.append(h)
-
-        new_header = "\t".join(header_fields)
-        new_data = []
+        # apply transform_func if defined
+        xtsv_transform = transform_func(xtsv) if (transform_func is not None) else xtsv
 
         # return
-        return tsv.TSV(new_header, new_data)
+        return xtsv_transform
+    else:
+        # resolve input
+        input_files = __get_argument_as_array__(input_file_or_files)
+
+        # initialize result
+        tsv_list = []
+
+        # common keys
+        common_keys = {}
+
+        # iterate over all input files
+        for input_file in input_files:
+            # read the file
+            x = read(input_file)
+
+            # update the common
+            for h in x.get_header_fields():
+                if (h not in common_keys.keys()):
+                    common_keys[h] = 0
+                common_keys[h] = common_keys[h] + 1
+
+            # gather maps of maps
+            result_maps = []
+            keys = {}
+
+            # iterate over the records of each map and generate a new one
+            for mp in x.to_maps():
+                mp2 = filter_transform_func(mp)
+                if (mp2 is not None):
+                    if (len(mp2) > 0):
+                        result_maps.append(mp2)
+                    for k in mp2.keys():
+                        keys[k] = 1
+
+            # check for empty maps
+            if (len(keys) > 0):
+                # output keys
+                keys_sorted = []
+                first_file = read(input_files[0])
+                for h in first_file.get_header_fields():
+                    if (h in keys.keys()):
+                        keys_sorted.append(h)
+
+                # new header and data
+                header2 = "\t".join(keys_sorted)
+                data2 = []
+
+                # iterate and generate header and data
+                for mp in result_maps:
+                    fields = []
+                    for k in keys_sorted:
+                        fields.append(mp[k])
+                    data2.append("\t".join(fields))
+
+                # debugging
+                utils.trace("tsvutils: read_with_filter_transform: file read: {}, after filter num_rows: {}".format(input_file, len(data2)))
+
+                # result tsv
+                xtsv = tsv.TSV(header2, data2)
+
+                # apply transformation function if defined
+                xtsv_transform = transform_func(xtsv) if (transform_func is not None) else xtsv
+                tsv_list.append(xtsv_transform)
+
+        # Do a final check to see if all tsvs are empty
+        if (len(tsv_list) > 0):
+            # call merge on tsv_list
+            return merge(tsv_list)
+        else:
+            # create an empty data tsv file with common header fields
+            header_fields = []
+            first_file = read(input_files[0])
+            for h in first_file.get_header_fields():
+                if (common_keys[h] == len(input_files)):
+                    header_fields.append(h)
+
+            new_header = "\t".join(header_fields)
+            new_data = []
+
+            # return
+            return tsv.TSV(new_header, new_data)
 
 def read_by_date_range(path, start_date_str, end_date_str, prefix, s3_region = None, aws_profile = None, granularity = "daily"):
     # read filepaths
@@ -294,17 +305,39 @@ def read_by_date_range(path, start_date_str, end_date_str, prefix, s3_region = N
 
 # this method is needed so that users dont have to interact with file_paths_util
 # TODO: move this to scar etl tools as there are specific directory construction logic
-def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix, spillover_window = 1, s3_region = None, aws_profile = None):
+def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix, spillover_window = 1, sampling_rate = None, s3_region = None, aws_profile = None):
+    # some code refactoring is pending
     utils.print_code_todo_warning("get_file_paths_by_datetime_range: move this to scar etl tools as there are specific directory construction logic")
-    return file_paths_util.get_file_paths_by_datetime_range(path,  start_date_str, end_date_str, prefix, spillover_window, s3_region, aws_profile)
+
+    # get all the filepaths
+    filepaths = file_paths_util.get_file_paths_by_datetime_range(path,  start_date_str, end_date_str, prefix, spillover_window, s3_region, aws_profile)
+
+    # check for sampling rate
+    if (sampling_rate is not None):
+        # validation
+        if (sampling_rate < 0 or sampling_rate > 1):
+            raise Exception("sampling_rate is not valid: {}".format(sampling_rate))
+
+        # determine the number of samples to take
+        sample_n = int(len(filepaths) * sampling_rate)
+        random.shuffle(filepaths)
+        filepaths = sorted(filepaths[0:sample_n])
+
+    # return
+    return filepaths
     
 # TODO: move this to scar etl tools as there are specific directory construction logic
-def scan_by_datetime_range(path, start_date_str, end_date_str, prefix, filter_func = None, spillover_window = 1, num_par = 5, timeout_seconds = 600, def_val_map = None, s3_region = None, aws_profile = None):
+def scan_by_datetime_range(path, start_date_str, end_date_str, prefix, filter_transform_func = None, transform_func = None, spillover_window = 1, num_par = 5,
+    timeout_seconds = 600, def_val_map = None, sampling_rate = None, s3_region = None, aws_profile = None):
+
     utils.print_code_todo_warning("scan_by_datetime_range: move this to scar etl tools as there are specific directory construction logic")
     utils.warn("scan_by_datetime_range: this method runs in multithreaded mode which can not be stopped without killing process. Wait for timeout_seconds: {}".format(timeout_seconds))
 
     # read filepaths by scanning. this involves listing all the files, and then matching the condititions
-    filepaths = get_file_paths_by_datetime_range(path,  start_date_str, end_date_str, prefix, spillover_window, s3_region, aws_profile)
+    filepaths = get_file_paths_by_datetime_range(path,  start_date_str, end_date_str, prefix, spillover_window = spillover_window, sampling_rate = sampling_rate,
+        s3_region = s3_region, aws_profile = aws_profile)
+
+    # debug
     utils.info("scan_by_datetime_range: number of paths to read: {}, num_par: {}, timeout_seconds: {}".format(len(filepaths), num_par, timeout_seconds))
 
     # do some checks on the headers in the filepaths
@@ -324,7 +357,7 @@ def scan_by_datetime_range(path, start_date_str, end_date_str, prefix, filter_fu
         for filepath in filepaths:
             counter = counter + 1
             utils.debug("Submitted task to read: [{}]: {}".format(counter, filepath))
-            future = executor.submit(read_with_filter_transform, filepath, filter_func, s3_region, aws_profile)
+            future = executor.submit(read_with_filter_transform, filepath, filter_transform_func, transform_func, s3_region, aws_profile)
             future_list.append(future)
 
         # check for done status after sleeping for 2 seconds
@@ -343,6 +376,7 @@ def scan_by_datetime_range(path, start_date_str, end_date_str, prefix, filter_fu
             if (remaining == 0):
                 for future in future_list:
                     x = future.result()
+                    utils.debug("Finished reading: num_rows: {}".format(x.num_rows()))
                     tsv_list.append(x)
                 break
             else:
@@ -355,9 +389,9 @@ def scan_by_datetime_range(path, start_date_str, end_date_str, prefix, filter_fu
                 
                 # check if total wait time has exceeded the limit
                 if (timeout_seconds is not None and total_wait >= timeout_seconds):
-                    print("scan_by_datetime_range: timeout of {} seconds reached. Shutting down...".format(timeout_seconds))
+                    utils.info("scan_by_datetime_range: timeout of {} seconds reached. Shutting down...".format(timeout_seconds))
                     executor.shutdown()
-                    print("scan_by_datetime_range: shutdown complete. Raising exception")
+                    utils.info("scan_by_datetime_range: shutdown complete. Raising exception")
 
                     # break
                     raise Exception("scan_by_datetime_range: timeout of {} seconds reached. Cancelling. To avoid this either change timeout_seconds or filtering criteria.".format(timeout_seconds))
@@ -586,9 +620,14 @@ def read_url_response(url, query_params = {}, headers = {}, body = None, usernam
 
     # return
     return response_str, response.status_code, ""
-        
-# TODO: the compressed file handling should be done separately in a function
+
+# TODO: Deprecated
 def read_url(url, query_params = {}, headers = {}, sep = None, username = None, password = None, timeout_sec = 30, verify = True):
+    utils.warn("This method name is deprecated. Use read_url_as_tsv instead")
+    return read_url_as_tsv(url, query_params = query_params, headers = headers, sep = sep, username = username, password = password, timeout_sec = timeout_sec, verify = verify)
+
+# TODO: the compressed file handling should be done separately in a function
+def read_url_as_tsv(url, query_params = {}, headers = {}, sep = None, username = None, password = None, timeout_sec = 30, verify = True):
     # use the file extension as alternate way of detecting type of file
     # TODO: move the file type and extension detection to separate function
     file_type = None

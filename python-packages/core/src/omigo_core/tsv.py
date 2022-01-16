@@ -1906,21 +1906,21 @@ class TSV:
             return self 
 
     # create descriptive methods for join 
-    def left_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, inherit_message = ""):
+    def left_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, split_threshold = None, inherit_message = ""):
         inherit_message2 = inherit_message + ": left_join" if (inherit_message != "") else "left_join"
-        return self.join(that, lkeys, rkeys, join_type = "left", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, inherit_message = inherit_message2)
+        return self.join(that, lkeys, rkeys, join_type = "left", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, split_threshold = split_threshold, inherit_message = inherit_message2)
 
-    def right_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, inherit_message = ""):
+    def right_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, split_threshold = None, inherit_message = ""):
         inherit_message2 = inherit_message + ": left_join" if (inherit_message != "") else "right_join"
-        return self.join(that, lkeys, rkeys, join_type = "right", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, inherit_message = inherit_message2)
+        return self.join(that, lkeys, rkeys, join_type = "right", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, split_threshold = split_threshold, inherit_message = inherit_message2)
 
-    def inner_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, inherit_message = ""):
+    def inner_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, split_threshold = None, inherit_message = ""):
         inherit_message2 = inherit_message + ": left_join" if (inherit_message != "") else "inner_join"
-        return self.join(that, lkeys, rkeys, join_type = "inner", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, inherit_message = inherit_message2)
+        return self.join(that, lkeys, rkeys, join_type = "inner", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, split_threshold = split_threshold, inherit_message = inherit_message2)
 
-    def outer_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, inherit_message = ""):
+    def outer_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, split_threshold = None, inherit_message = ""):
         inherit_message2 = inherit_message + ": left_join" if (inherit_message != "") else "outer_join"
-        return self.join(that, lkeys, rkeys, join_type = "outer", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, inherit_message = inherit_message2)
+        return self.join(that, lkeys, rkeys, join_type = "outer", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, split_threshold = split_threshold, inherit_message = inherit_message2)
 
     # primary join method
     def join(self, that, lkeys, rkeys = None, join_type = "inner", lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, split_threshold = None, inherit_message = ""):
@@ -1933,9 +1933,9 @@ class TSV:
             raise Exception("Length mismatch in lkeys and rkeys:", lkeys, rkeys)
 
         # Check for split_threshold. TODO: Experimental
-        if (split_threshold != None):
+        if (split_threshold is not None):
             # check if either side is more than split threshold. If yes, then split and merge
-            if (self.num_rows() > split_threshold and that.num_rows() > split_threshold):
+            if (self.num_rows() > split_threshold or that.num_rows() > split_threshold):
                 # create batches of smaller tsvs
                 num_batches = int(math.ceil(max(self.num_rows(), that.num_rows()) / split_threshold))
 
