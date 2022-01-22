@@ -20,12 +20,12 @@
 ## Run through Docker
 #### Build image (first time only)
 ```
-$ docker build -t omigo-data-analytics -f deploy/Dockerfile .
+docker build -t omigo-data-analytics -f deploy/Dockerfile .
 ```
 
 #### Run docker image
 ```
-$ docker run --rm -p 8888:8888 -it -v $PWD:/code omigo-data-analytics
+docker run --rm -p 8888:8888 -it -v $PWD:/code omigo-data-analytics
 ```
 
 ## Install Instructions
@@ -35,7 +35,7 @@ The core package is built using core python with minimal external dependencies t
 The extensions package contains libraries for advanced functionalities like visualization, and can have lot of dependencies.
 
 ```
-$ pip3 install omigo-core omigo-ext --upgrade
+pip3 install omigo-core omigo-ext --upgrade
 ```
 
 There are APIs provided to create new extension packages for custom needs and plugin easily into the existing code (See [extend-class](example-notebooks/extend-class.ipynb)).
@@ -45,7 +45,7 @@ There are APIs provided to create new extension packages for custom needs and pl
 
 #### Read data from local filesystem. Can also use s3 or web url.
 ```
-$ python3
+python3
 >>> from omigo_core import tsv
 >>> x = tsv.read("data/iris.tsv.gz")
 #
