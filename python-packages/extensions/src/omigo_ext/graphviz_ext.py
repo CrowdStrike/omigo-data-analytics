@@ -36,7 +36,15 @@ def __plot_graph__(vertex_map, edges_maps, node_props, edge_props, vertex_id_col
         
         # set the display id
         vertex_id_val = str(mp[vertex_id_col])
-        vertex_display_id_val = str(mp[vertex_display_id_col]) if (str(mp[vertex_display_id_col]) != "") else vertex_id_val
+        vertex_display_id_val = str(mp[vertex_display_id_col])
+
+        # TODO: temporary workaround to handle multi line display
+        if (vertex_display_id_col.endswith(":url_encoded")):
+            vertex_display_id_val = utils.url_decode(vertex_display_id_val)
+
+        # sometimes the value is empty. fallback to id
+        if (vertex_display_id_val == ""):
+            vertex_display_id_val = vertex_id_val
         
         # use a fallback as sometimes the display column is not present
         mp_props.append("{}".format(vertex_display_id_val))
