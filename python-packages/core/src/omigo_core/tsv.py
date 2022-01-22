@@ -1042,6 +1042,12 @@ class TSV:
             total = total + len(line)
         return total
 
+    def size_in_mb(self):
+        return int(self.size_in_bytes() / 1e6)
+
+    def size_in_gb(self):
+        return int(self.size_in_bytes() / 1e9)
+
     def get_header_fields(self):
         return self.header_fields
 
@@ -2399,7 +2405,7 @@ class TSV:
         for line in self.data:
             # progress
             counter = counter + 1
-            utils.report_progress("explode: [1/2] calling explode functions", inherit_message, counter, len(self.data))
+            utils.report_progress("explode: [1/2] calling explode function", inherit_message, counter, len(self.data))
 
             # process data
             fields = line.split("\t")

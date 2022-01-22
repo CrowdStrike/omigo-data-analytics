@@ -12,22 +12,22 @@ import mmh3
 MSG_CACHE_MAX_LEN = 10000
 
 def is_debug():
-    return str(os.environ.get("TSV_DATA_ANALYTICS_DEBUG", "0")) == "1"
+    return str(os.environ.get("OMIGO_DEBUG", "0")) == "1"
 
 def is_trace():
-    return str(os.environ.get("TSV_DATA_ANALYTICS_TRACE", "0")) == "1"
+    return str(os.environ.get("OMIGO_TRACE", "0")) == "1"
 
 def get_report_progress():
-    return float(os.environ.get("TSV_DATA_ANALYTICS_DEBUG_REPORT_PROGRESS_PERC", "0"))
+    return float(os.environ.get("OMIGO_DEBUG_REPORT_PROGRESS_PERC", "0"))
 
 def get_report_progress_min_thresh():
-    return float(os.environ.get("TSV_DATA_ANALYTICS_DEBUG_REPORT_PROGRESS_MIN_THRESH", "100000"))
+    return float(os.environ.get("OMIGO_DEBUG_REPORT_PROGRESS_MIN_THRESH", "100000"))
 
 def set_report_progress_perc(perc):
-    os.environ["TSV_DATA_ANALYTICS_DEBUG_REPORT_PROGRESS_PERC"] = str(perc)
+    os.environ["OMIGO_DEBUG_REPORT_PROGRESS_PERC"] = str(perc)
 
 def set_report_progress_min_thresh(thresh):
-    os.environ["TSV_DATA_ANALYTICS_DEBUG_REPORT_PROGRESS_MIN_THRESH"] = str(thresh)
+    os.environ["OMIGO_DEBUG_REPORT_PROGRESS_MIN_THRESH"] = str(thresh)
 
 def trace(msg):
     if (is_trace()):
@@ -91,16 +91,16 @@ def error_once(msg, msg_cache):
         trace(msg)
  
 def enable_debug_mode():
-    os.environ["TSV_DATA_ANALYTICS_DEBUG"] = "1"
+    os.environ["OMIGO_DEBUG"] = "1"
 
 def enable_trace_mode():
-    os.environ["TSV_DATA_ANALYTICS_TRACE"] = "1"
+    os.environ["OMIGO_TRACE"] = "1"
 
 def disable_debug_mode():
-    os.environ["TSV_DATA_ANALYTICS_DEBUG"] = "0"
+    os.environ["OMIGO_DEBUG"] = "0"
 
 def disable_trace_mode():
-    os.environ["TSV_DATA_ANALYTICS_TRACE"] = "0"
+    os.environ["OMIGO_TRACE"] = "0"
 
 def warn(msg):
     print("[WARN]: " + msg)
@@ -119,7 +119,7 @@ def warn_once(msg, msg_cache):
         trace(msg)
   
 def is_code_todo_warning():
-    return str(os.environ.get("TSV_DATA_ANALYTICS_CODE_TODO_WARNING", "0")) == "1"
+    return str(os.environ.get("OMIGO_CODE_TODO_WARNING", "0")) == "1"
 
 def print_code_todo_warning(msg):
     if (is_code_todo_warning()):
