@@ -178,18 +178,18 @@ sepal_length	sepal_width	petal_length	petal_width	class
    - **lt_str**(col, value): Returns rows where string value of _col_ is less than _value_.
    - **startswith**(col, value): Returns rows where string value of _col_ starts with _value_.
    - **endswith**(col, value): Returns rows where string value of _col_ ends with  _value_.
-   - **match**(col, value): Returns rows where string value of _col_ matches the regular expression in _value_.
+   - **regex_match**(col, value): Returns rows where string value of _col_ matches the regular expression in _value_.
    - **not_eq_str**(col, value): Returns rows where string value of _col_ not equal to  _value_.
    - **not_startswith**(col, value): Returns rows where string value of _col_ does not start with  _value_.
    - **not_endswith**(col, value): Returns rows where string value of _col_ does not end with _value_.
-   - **not_match**(col, value): Returns rows where string value of _col_ does not match regular expression in _value_.
+   - **not_regex_match**(col, value): Returns rows where string value of _col_ does not match regular expression in _value_.
    - **replace_str_inline**(cols, old_str, new_str): Replaces the occurrences of substring _old_str_ with _new_str_ in column _col_.
 
 *Examples*
 
 ```
 >>> x.eq_str("class", "Iris-setosa")
->>> x.match("class", ".*setosa")
+>>> x.regex_match("class", ".*setosa")
 ```
  
 ### 7. Basic Filtering and Transformation
