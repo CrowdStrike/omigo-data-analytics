@@ -5,7 +5,7 @@
  * Python library to do end to end data analytics from reading to transformation, analysis and visualization.
  * Support for reading and writing multiple data formats from local machine or S3.
  * Functional programming style APIs.
- * Advanced APIs for doing join, aggregate, sampling, and processing time series data.
+ * Advanced APIs for doing join, aggregation, sampling, and processing time series data.
  * Schema evolution.
  * Visualization APIs to provide simple interface to matplotlib, seaborn, and other popular libraries.
 
