@@ -1,4 +1,4 @@
-# Omigo: Data Analytics Library for Python 
+# Data Analytics Library for Python 
 <div align="center"><img src="https://github.com/CrowdStrike/omigo-data-analytics/blob/ajaiswal_dev/images/omigo-logo.jpeg" width="500" /></div>
 
 ## Overview
