@@ -1,4 +1,5 @@
 # Data Analytics Library for Python 
+![Omigo Logo](https://github.com/CrowdStrike/omigo-data-analytics/blob/ajaiswal_dev/images/omigo-logo.jpeg)
 
 ## Overview
  * Python library to do end to end data analytics from reading to transformation, analysis and visualization.
