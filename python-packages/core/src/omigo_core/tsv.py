@@ -2988,6 +2988,10 @@ class TSV:
     def extend_class(self, newclass, *args, **kwargs):
         return newclass(self.header, self.data, *args, **kwargs) 
 
+    # calls class that inherits TSV
+    def extend_external_class(self, newclass, *args, **kwargs):
+        return newclass(self.header, self.data, *args, **kwargs) 
+
     # custom function to call user defined apis
     def custom_func(self, func, *args, **kwargs):
         return func(self, *args, **kwargs)
@@ -3020,6 +3024,21 @@ class TSV:
 
         # return
         return self.header_map[col]
+
+    # method to return a unique hash for the tsv objet
+    def get_hash(self):
+        # create array
+        hashes = []
+
+        # hash of header
+        hashes.append("{}".format(utils.compute_hash(self.header)))
+
+        # hash of data
+        for line in self.data:
+            hashes.append("{}".format(utils.compute_hash(line)))
+
+        # return
+        return utils.compute_hash(",".join(hashes))
 
     # this is a utility function that takes list of column names that support regular expression.
     # col_or_cols is a special variable that can be either single column name or an array. python
