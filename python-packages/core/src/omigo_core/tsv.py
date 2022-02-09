@@ -3037,8 +3037,8 @@ class TSV:
         for line in self.data:
             hashes.append("{}".format(utils.compute_hash(line)))
 
-        # return
-        return utils.compute_hash(",".join(hashes))
+        # return as string
+        return "{}".format(utils.compute_hash(",".join(hashes)))
 
     # this is a utility function that takes list of column names that support regular expression.
     # col_or_cols is a special variable that can be either single column name or an array. python
