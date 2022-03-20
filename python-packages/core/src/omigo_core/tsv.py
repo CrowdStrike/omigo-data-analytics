@@ -2861,7 +2861,7 @@ class TSV:
     # TODO: __explode_json_index__ needs to be tested and confirmed
     # TODO: need proper xpath based exclusion to better handle noise
     def explode_json(self, col, prefix = None, accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None,
-        merge_list_method = "cogroup", collapse_primitive_list = True, url_encoded_cols = None, nested_cols = None, collapse = True):
+        merge_list_method = "cogroup", collapse_primitive_list = True, url_encoded_cols = None, nested_cols = None, collapse = True, inherit_message = ""):
 
         # warn
         if (excluded_cols is not None):
@@ -2884,10 +2884,11 @@ class TSV:
         exp_func = self.__explode_json_transform_func__(col, accepted_cols = accepted_cols, excluded_cols = excluded_cols, single_value_list_cols = single_value_list_cols,
             transpose_col_groups = transpose_col_groups, merge_list_method = merge_list_method, url_encoded_cols = url_encoded_cols, nested_cols = nested_cols, collapse_primitive_list = collapse_primitive_list)
 
-        # use explode to do this parsing  
+        # use explode to do this parsing
+        inherit_message2 = inherit_message + ": explode_json" if (inherit_message != "") else "explode_json" 
         return self \
             .add_seq_num(prefix + ":__json_index__", inherit_message = "explode_json") \
-            .explode([col], exp_func, prefix = prefix, default_val = "", collapse = collapse, inherit_message = "explode_json") \
+            .explode([col], exp_func, prefix = prefix, default_val = "", collapse = collapse, inherit_message = inherit_message2) \
             .validate()
 
     def transpose(self, n = 1):

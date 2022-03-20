@@ -18,12 +18,12 @@ class WebServiceTSV(tsv.TSV):
 
     def call_web_service(self, *args, **kwargs):
         return self \
-            .extend_class(multithread_ext.MultiThreadTSV, num_par = self.num_par, num_batches = self.num_batches, status_check_interval_sec = self.status_check_interval_sec) \
+            .extend_class(multithread_ext.MultiThreadTSV, num_par = self.num_par, num_batches = self.num_batches, status_check_interval_sec = self.status_check_interval_sec, inherit_message = self.inherit_message) \
             .parallelize(__call_web_service__, self.timeout_sec, self.verify, self.enable_opt_exec, self.inherit_message, *args, **kwargs)
 
 # call web service function.
 def __call_web_service__(xtsv, xtsv_timeout_sec, xtsv_verify, xtsv_enable_opt_exec, xtsv_inherit_message, url, prefix, query_params = None, header_params = None,
-    body_params = None, username = None, password = None, include_resolved_values = False, selective_execution_func = None, inherit_message = ""):
+    body_params = None, username = None, password = None, include_resolved_values = False, selective_execution_func = None):
 
     # initialize variables
     if (query_params is None):
@@ -82,14 +82,14 @@ def __call_web_service__(xtsv, xtsv_timeout_sec, xtsv_verify, xtsv_enable_opt_ex
         str(header_params_cols), str(body_params_cols)))
 
     # use the same inherit_message
-    inherit_message2 = inherit_message + ": call_web_service" if (inherit_message != "") else "call_web_service"
+    xtsv_inherit_message2 = xtsv_inherit_message + ": call_web_service" if (xtsv_inherit_message != "") else "call_web_service"
 
     # take only distinct all_sel_cols 
-    hash_tsv = xtsv.select(all_sel_cols).distinct()
+    hash_tsv = xtsv.select(all_sel_cols, inherit_message = xtsv_inherit_message2).distinct()
 
     # if the number of rows are different, print some stats
     if (hash_tsv.num_rows() < xtsv.num_rows()):
-        utils.debug("{}: call_web_service: Number of rows: {}, Number of distinct rows for web service: {}, enable_opt_exec: {}".format(xtsv_inherit_message,
+        utils.debug("{}: call_web_service: Number of rows: {}, Number of distinct rows for web service: {}, enable_opt_exec: {}".format(xtsv_inherit_message2,
             xtsv.num_rows(), hash_tsv.num_rows(), xtsv_enable_opt_exec))
 
     # avoid making duplicate calls to the web service by hashing the all_sel_cols
@@ -98,16 +98,16 @@ def __call_web_service__(xtsv, xtsv_timeout_sec, xtsv_verify, xtsv_enable_opt_ex
         hash_explode_tsv = hash_tsv \
             .explode(all_sel_cols, __call_web_service_exp_func__(xtsv_timeout_sec, xtsv_verify, url, query_params, header_params, body_params, username, password, url_cols,
                 query_params_cols, header_params_cols, body_params_cols, include_resolved_values, selective_execution_func),
-                prefix = prefix, collapse = False, inherit_message = inherit_message2)
+                prefix = prefix, collapse = False, inherit_message = xtsv_inherit_message2)
   
         # merge the results back to the original using map_join
-        return xtsv.natural_join(hash_explode_tsv, inherit_message = inherit_message2)
+        return xtsv.natural_join(hash_explode_tsv, inherit_message = xtsv_inherit_message2)
     else:
         # run transforms multiple times to generate resolved state of each variable
         return xtsv \
             .explode(all_sel_cols, __call_web_service_exp_func__(xtsv_timeout_sec, xtsv_verify, url, query_params, header_params, body_params, username, password, url_cols,
                 query_params_cols, header_params_cols, body_params_cols, include_resolved_values, selective_execution_func),
-                prefix = prefix, collapse = False, inherit_message = inherit_message2)
+                prefix = prefix, collapse = False, inherit_message = xtsv_inherit_message2)
 
 # the explode func for web service
 def __call_web_service_exp_func__(xtsv_timeout_sec, xtsv_verify, url, query_params, header_params, body_params, username, password, url_cols, query_params_cols, header_params_cols, body_params_cols,
