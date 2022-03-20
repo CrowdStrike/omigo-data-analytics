@@ -222,7 +222,7 @@ class TSV:
         inherit_message2 = inherit_message + ": replace_str_inline" if (len(inherit_message) > 0) else "replace_str_inline"
         return self.transform_inline(cols, lambda x: x.replace(old_str, new_str), inherit_message = inherit_message2)
         
-    def group_count(self, cols, prefix, collapse = True, precision = 6, inherit_message = ""):
+    def group_count(self, cols, prefix = "group", collapse = True, precision = 6, inherit_message = ""):
         # find the matching cols and indexes
         cols = self.__get_matching_cols__(cols)
 
@@ -230,11 +230,16 @@ class TSV:
         new_count_col = prefix + ":count"
         new_ratio_col = prefix + ":ratio"
 
+        # validation and suggestion
+        if (new_count_col in cols or new_ratio_col in cols):
+            raise Exception("Use a different prefix than: {}".format(prefix))
+
         # call aggregate with collapse=False
         inherit_message2 = inherit_message + ":group_count" if (inherit_message != "") else "group_count"
         return self.aggregate(cols, [cols[0]], [len], collapse = collapse, inherit_message = inherit_message2) \
             .rename(cols[0] + ":len", new_count_col) \
             .transform([new_count_col], lambda x: str(int(x) / len(self.data)), new_ratio_col, inherit_message = inherit_message2) \
+            .reverse_sort(new_count_col) \
             .apply_precision(new_ratio_col, precision, inherit_message = inherit_message2)
 
     def ratio(self, col1, col2, new_col, default = 0.0, precision = 6, inherit_message = ""):
@@ -1949,8 +1954,8 @@ class TSV:
                 utils.debug("join: Number of batches: {}".format(num_batches))
 
                 # split left and right sides
-                left_batches = self.__split_batches__(lkeys, num_batches)
-                right_batches = that.__split_batches__(rkeys, num_batches)
+                left_batches = self.__split_batches_by_cols__(num_batches, lkeys)
+                right_batches = that.__split_batches_by_cols__(num_batches, rkeys)
 
                 # call join on individual batches and then return the merge
                 joined_batches = []
@@ -2256,11 +2261,47 @@ class TSV:
         # return
         return TSV(new_header, new_data)
 
+    # public method handling both random and cols based splitting
+    def split_batches(self, num_batches, cols = None):
+        # check if cols are defined or not
+        if (cols == None):
+            return self.__split_batches_randomly__(num_batches)
+        else:
+            return self.__split_batches_by_cols__(num_batches, cols)
+
+    # split method to split randomly
+    def __split_batches_randomly__(self, num_batches):
+        # create array to store result
+        xtsv_list = []
+        data_list = []
+
+        # compute effective number of batches
+        effective_batches = int(min(num_batches, self.num_rows()))
+
+        # initialize the arrays to store data
+        for i in range(effective_batches):
+            data_list.append([])
+
+        # iterate to split data
+        for i in range(len(self.data)):
+            batch_index = i % effective_batches
+            data_list[batch_index].append(self.data[i])
+
+        # create list of xtsvs
+        for i in range(effective_batches):
+            xtsv_list.append(TSV(self.header, data_list[i]))
+
+        # return
+        return xtsv_list  
+
     # split method to split tsv into batches
-    def __split_batches__(self, cols, num_batches):
+    def __split_batches_by_cols__(self, num_batches, cols):
+        # get matching cols
+        cols = self.__get_matching_cols__(cols)
+
         # create some temp column names
-        temp_col1 = "__split_batches__:hash:{}".format(num_batches)
-        temp_col2 = "__split_batches__:batch:{}".format(num_batches)
+        temp_col1 = "__split_batches_by_cols__:hash:{}".format(num_batches)
+        temp_col2 = "__split_batches_by_cols__:batch:{}".format(num_batches)
 
         # generate hash
         hashed_tsv = self.generate_key_hash(cols, temp_col1)
@@ -3213,4 +3254,9 @@ def set_report_progress_min_thresh(thresh):
 
 # factory method
 def newWithCols(cols):
+    utils.warn("newWithCols is deprecated. Use new_with_cols instead")
+    return new_with_cols(cols)
+
+def new_with_cols(cols):
     return TSV("\t".join(cols), [])
+
