@@ -313,12 +313,15 @@ class TSV:
         if (isinstance(col_or_cols, str)):
             col_or_cols = [col_or_cols]
 
+        # debug
+        inherit_message2 = inherit_message + ": drop_if_exists" if (inherit_message != "") else "drop_if_exists"
+
         # iterate through each element and call drop
         result = self
         for c in col_or_cols:
             try:
                 cols = result.__get_matching_cols__(c)
-                result = result.drop(cols)
+                result = result.drop(cols, inherit_message = inherit_message2)
             except:
                 # ignore
                 utils.debug("Column (pattern) not found or already deleted during batch deletion: {}".format(c))

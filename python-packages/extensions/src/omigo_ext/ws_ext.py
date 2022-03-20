@@ -6,7 +6,7 @@ from omigo_ext import multithread_ext
 
 # TODO: selective_execution doesnt feel like a good design pattern.
 class WebServiceTSV(tsv.TSV):
-    def __init__(self, header, data, num_par = 0, timeout_sec = 5, num_batches = 10, status_check_interval_sec = 30, verify = True, enable_opt_exec = True, inherit_message = ""):
+    def __init__(self, header, data, num_par = 0, timeout_sec = 5, num_batches = 10, status_check_interval_sec = 10, verify = True, enable_opt_exec = True, inherit_message = ""):
         super().__init__(header, data)
         self.num_par = num_par
         self.timeout_sec = timeout_sec
