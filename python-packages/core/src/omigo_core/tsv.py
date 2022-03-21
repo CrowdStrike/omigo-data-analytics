@@ -2267,7 +2267,7 @@ class TSV:
     # public method handling both random and cols based splitting
     def split_batches(self, num_batches, cols = None):
         # check if cols are defined or not
-        if (cols == None):
+        if (cols is None):
             return self.__split_batches_randomly__(num_batches)
         else:
             return self.__split_batches_by_cols__(num_batches, cols)

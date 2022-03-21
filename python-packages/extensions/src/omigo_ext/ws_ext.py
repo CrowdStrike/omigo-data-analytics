@@ -60,7 +60,7 @@ def __call_web_service__(xtsv, xtsv_timeout_sec, xtsv_verify, xtsv_enable_opt_ex
                 all_sel_cols.append(c)
 
         # check body
-        if (body_params != None):
+        if (body_params is not None):
             if (isinstance(body_params, dict)):
                 for k in body_params.keys():
                     if (body_params[k].find(cstr) != -1 and c not in body_params_cols):
@@ -137,7 +137,7 @@ def __call_web_service_exp_func__(xtsv_timeout_sec, xtsv_verify, url, query_para
                 header_params_resolved[h] = header_params_resolved[h].replace(cstr, mp[c])
 
         # resolve body_params
-        if (body_params != None):
+        if (body_params is not None):
             if (isinstance(body_params, dict)):
                 body_params_resolved = {}
                 for k in body_params.keys():
@@ -156,7 +156,7 @@ def __call_web_service_exp_func__(xtsv_timeout_sec, xtsv_verify, url, query_para
             body_params_resolved = None
 
         # shorter version of body_params_resolved
-        body_params_resolved_strip = body_params_resolved[0:40] + "..." if (body_params_resolved != None and len(body_params_resolved) >= 40) else body_params_resolved
+        body_params_resolved_strip = body_params_resolved[0:40] + "..." if (body_params_resolved is not None and len(body_params_resolved) >= 40) else body_params_resolved
 
         # debug
         utils.trace("__call_web_service_exp_func_inner__: mp: {}".format(mp))
@@ -169,7 +169,7 @@ def __call_web_service_exp_func__(xtsv_timeout_sec, xtsv_verify, url, query_para
 
         # check if there is special execution logic
         do_execute = True
-        if (selective_execution_func != None and selective_execution_func(mp) == False):
+        if (selective_execution_func is not None and selective_execution_func(mp) == False):
             do_execute = False
 
         # check whether to execute or not
