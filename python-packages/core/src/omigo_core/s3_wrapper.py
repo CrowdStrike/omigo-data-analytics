@@ -197,38 +197,66 @@ def get_directory_listing(path, filter_func = None, fail_if_missing = True, regi
     count = 0
     for dir_content in response:
         count = count + 1
-        # utils.debug("Response: {}".format(response))
+        # utils.debug("Response: {}".format(dir_content))
         filename = dir_content['Key']
 
         # check if the directory listing was done on leaf node in which case ignore
-        if (object_key != filename):
-            extracted_key = filename[len(object_key) + 1:]
-            # this had directory as child
-            parts = extracted_key.split("/")
-            base_filename = None
-            if (len(parts) == 1):
-                # immediate child is a leaf node
-                base_filename = parts[0]
-            elif (len(parts) == 2):
-                # immediate child is a directory
-                base_filename = parts[0]
+        if (object_key == filename):
+            continue
 
-            # debug
-            utils.trace("object_key: {}, filename: {}, extracted_key: {}, base_filename: {}".format(object_key, filename, extracted_key, base_filename))
+        # extract the key for remaining
+        extracted_key = filename[len(object_key) + 1:]
+        # utils.debug("extracted_key: {}".format(extracted_key))
 
-            # collect all the paths found
-            if (base_filename is not None):
-                # extract the last part and then prepend the bucket and object key to construct full path
-                filenames.append(path + "/" + base_filename)
+        # this had directory as child
+        parts = extracted_key.split("/")
+        base_filename = None
+        if (len(parts) == 1):
+            # immediate child is a leaf node
+            base_filename = parts[0]
+        else:
+            # immediate child is a directory
+            base_filename = parts[0]
+
+        # debug
+        # utils.debug("object_key: {}, filename: {}, extracted_key: {}, base_filename: {}".format(object_key, filename, extracted_key, base_filename))
+
+        # collect all the paths found
+        if (base_filename is not None):
+            # extract the last part and then prepend the bucket and object key to construct full path
+            filenames.append(path + "/" + base_filename)
 
     # print the number of object_keys found
     utils.trace("Number of entries found in directory listing: {}: {}".format(path, count))
 
     # dedup
     filenames = sorted(list(set(filenames)))
+
+    # valid files as boto does a prefix search
+    filenames = list(filter(lambda t: check_path_exists(t), filenames))
+
+    # apply filter func if any
     if (filter_func is not None):
         filenames = list(filter(lambda t: filter_func(t), filenames))
 
     # return
     return filenames
 
+def delete_file(path, fail_if_missing = False, region = None, profile = None):
+    region, profile = resolve_region_profile(region, profile)
+    s3 = get_s3_client_cache(region, profile)
+
+    # split the path
+    bucket_name, object_key = utils.split_s3_path(path)
+
+    # check if the file exists
+    if (check_path_exists(path) == False):
+        if (fail_if_missing):
+            raise Exception("delete_file: path doesnt exist: {}".format(path))
+        else:
+            utils.debug("delete_file: path doesnt exist: {}".format(path))
+
+        return
+
+    # delete
+    s3.delete_object(Bucket = bucket_name, Key = object_key)

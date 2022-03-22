@@ -222,7 +222,7 @@ class TSV:
         inherit_message2 = inherit_message + ": replace_str_inline" if (len(inherit_message) > 0) else "replace_str_inline"
         return self.transform_inline(cols, lambda x: x.replace(old_str, new_str), inherit_message = inherit_message2)
         
-    def group_count(self, cols, prefix, collapse = True, precision = 6, inherit_message = ""):
+    def group_count(self, cols, prefix = "group", collapse = True, precision = 6, inherit_message = ""):
         # find the matching cols and indexes
         cols = self.__get_matching_cols__(cols)
 
@@ -230,11 +230,16 @@ class TSV:
         new_count_col = prefix + ":count"
         new_ratio_col = prefix + ":ratio"
 
+        # validation and suggestion
+        if (new_count_col in cols or new_ratio_col in cols):
+            raise Exception("Use a different prefix than: {}".format(prefix))
+
         # call aggregate with collapse=False
         inherit_message2 = inherit_message + ":group_count" if (inherit_message != "") else "group_count"
         return self.aggregate(cols, [cols[0]], [len], collapse = collapse, inherit_message = inherit_message2) \
             .rename(cols[0] + ":len", new_count_col) \
             .transform([new_count_col], lambda x: str(int(x) / len(self.data)), new_ratio_col, inherit_message = inherit_message2) \
+            .reverse_sort(new_count_col) \
             .apply_precision(new_ratio_col, precision, inherit_message = inherit_message2)
 
     def ratio(self, col1, col2, new_col, default = 0.0, precision = 6, inherit_message = ""):
@@ -308,12 +313,15 @@ class TSV:
         if (isinstance(col_or_cols, str)):
             col_or_cols = [col_or_cols]
 
+        # debug
+        inherit_message2 = inherit_message + ": drop_if_exists" if (inherit_message != "") else "drop_if_exists"
+
         # iterate through each element and call drop
         result = self
         for c in col_or_cols:
             try:
                 cols = result.__get_matching_cols__(c)
-                result = result.drop(cols)
+                result = result.drop(cols, inherit_message = inherit_message2)
             except:
                 # ignore
                 utils.debug("Column (pattern) not found or already deleted during batch deletion: {}".format(c))
@@ -1949,8 +1957,8 @@ class TSV:
                 utils.debug("join: Number of batches: {}".format(num_batches))
 
                 # split left and right sides
-                left_batches = self.__split_batches__(lkeys, num_batches)
-                right_batches = that.__split_batches__(rkeys, num_batches)
+                left_batches = self.__split_batches_by_cols__(num_batches, lkeys)
+                right_batches = that.__split_batches_by_cols__(num_batches, rkeys)
 
                 # call join on individual batches and then return the merge
                 joined_batches = []
@@ -2256,11 +2264,47 @@ class TSV:
         # return
         return TSV(new_header, new_data)
 
+    # public method handling both random and cols based splitting
+    def split_batches(self, num_batches, cols = None):
+        # check if cols are defined or not
+        if (cols is None):
+            return self.__split_batches_randomly__(num_batches)
+        else:
+            return self.__split_batches_by_cols__(num_batches, cols)
+
+    # split method to split randomly
+    def __split_batches_randomly__(self, num_batches):
+        # create array to store result
+        xtsv_list = []
+        data_list = []
+
+        # compute effective number of batches
+        effective_batches = int(min(num_batches, self.num_rows()))
+
+        # initialize the arrays to store data
+        for i in range(effective_batches):
+            data_list.append([])
+
+        # iterate to split data
+        for i in range(len(self.data)):
+            batch_index = i % effective_batches
+            data_list[batch_index].append(self.data[i])
+
+        # create list of xtsvs
+        for i in range(effective_batches):
+            xtsv_list.append(TSV(self.header, data_list[i]))
+
+        # return
+        return xtsv_list  
+
     # split method to split tsv into batches
-    def __split_batches__(self, cols, num_batches):
+    def __split_batches_by_cols__(self, num_batches, cols):
+        # get matching cols
+        cols = self.__get_matching_cols__(cols)
+
         # create some temp column names
-        temp_col1 = "__split_batches__:hash:{}".format(num_batches)
-        temp_col2 = "__split_batches__:batch:{}".format(num_batches)
+        temp_col1 = "__split_batches_by_cols__:hash:{}".format(num_batches)
+        temp_col2 = "__split_batches_by_cols__:batch:{}".format(num_batches)
 
         # generate hash
         hashed_tsv = self.generate_key_hash(cols, temp_col1)
@@ -2820,7 +2864,7 @@ class TSV:
     # TODO: __explode_json_index__ needs to be tested and confirmed
     # TODO: need proper xpath based exclusion to better handle noise
     def explode_json(self, col, prefix = None, accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None,
-        merge_list_method = "cogroup", collapse_primitive_list = True, url_encoded_cols = None, nested_cols = None, collapse = True):
+        merge_list_method = "cogroup", collapse_primitive_list = True, url_encoded_cols = None, nested_cols = None, collapse = True, inherit_message = ""):
 
         # warn
         if (excluded_cols is not None):
@@ -2843,10 +2887,11 @@ class TSV:
         exp_func = self.__explode_json_transform_func__(col, accepted_cols = accepted_cols, excluded_cols = excluded_cols, single_value_list_cols = single_value_list_cols,
             transpose_col_groups = transpose_col_groups, merge_list_method = merge_list_method, url_encoded_cols = url_encoded_cols, nested_cols = nested_cols, collapse_primitive_list = collapse_primitive_list)
 
-        # use explode to do this parsing  
+        # use explode to do this parsing
+        inherit_message2 = inherit_message + ": explode_json" if (inherit_message != "") else "explode_json" 
         return self \
             .add_seq_num(prefix + ":__json_index__", inherit_message = "explode_json") \
-            .explode([col], exp_func, prefix = prefix, default_val = "", collapse = collapse, inherit_message = "explode_json") \
+            .explode([col], exp_func, prefix = prefix, default_val = "", collapse = collapse, inherit_message = inherit_message2) \
             .validate()
 
     def transpose(self, n = 1):
@@ -2988,6 +3033,10 @@ class TSV:
     def extend_class(self, newclass, *args, **kwargs):
         return newclass(self.header, self.data, *args, **kwargs) 
 
+    # calls class that inherits TSV
+    def extend_external_class(self, newclass, *args, **kwargs):
+        return newclass(self.header, self.data, *args, **kwargs) 
+
     # custom function to call user defined apis
     def custom_func(self, func, *args, **kwargs):
         return func(self, *args, **kwargs)
@@ -3020,6 +3069,21 @@ class TSV:
 
         # return
         return self.header_map[col]
+
+    # method to return a unique hash for the tsv objet
+    def get_hash(self):
+        # create array
+        hashes = []
+
+        # hash of header
+        hashes.append("{}".format(utils.compute_hash(self.header)))
+
+        # hash of data
+        for line in self.data:
+            hashes.append("{}".format(utils.compute_hash(line)))
+
+        # return as string
+        return "{}".format(utils.compute_hash(",".join(hashes)))
 
     # this is a utility function that takes list of column names that support regular expression.
     # col_or_cols is a special variable that can be either single column name or an array. python
@@ -3194,4 +3258,9 @@ def set_report_progress_min_thresh(thresh):
 
 # factory method
 def newWithCols(cols):
+    utils.warn("newWithCols is deprecated. Use new_with_cols instead")
+    return new_with_cols(cols)
+
+def new_with_cols(cols):
     return TSV("\t".join(cols), [])
+
