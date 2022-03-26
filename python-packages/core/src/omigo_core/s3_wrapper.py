@@ -260,3 +260,33 @@ def delete_file(path, fail_if_missing = False, region = None, profile = None):
 
     # delete
     s3.delete_object(Bucket = bucket_name, Key = object_key)
+
+def get_last_modified_time(path, fail_if_missing = False, region = None, profile = None):
+    # check if exists
+    if (check_path_exists(path) == False):
+        if (fail_if_missing):
+            raise Exception("get_last_modified_time: path doesnt exist: {}".format(path))
+        else:
+            utils.debug("get_last_modified_time: path doesnt exist: {}".format(path))
+
+        return None 
+
+    # parse
+    region, profile = resolve_region_profile(region, profile)
+    s3 = get_s3_client_cache(region, profile)
+
+    # split the path
+    bucket_name, object_key = utils.split_s3_path(path)
+    
+    # call head_object to get metadata
+    response = s3.head_object(Bucket = bucket_name, Key = object_key)
+
+    # validation
+    if (response is not None):
+        # get datetime
+        datetime_value = response["LastModified"]
+
+        # return
+        return datetime_value
+    else:
+        return None
