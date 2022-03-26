@@ -108,12 +108,30 @@ def get_s3_file_content_as_text(bucket_name, object_key, region = None, profile 
     barr = bytearray(barr)
     return barr.decode().rstrip("\n")
 
+# TODO: this is expensive and works in specific scenarios only especially for files
 def check_path_exists(path, region = None, profile = None):
     region, profile = resolve_region_profile(region, profile)
     s3 = get_s3_client_cache(region, profile)
     bucket_name, object_key = utils.split_s3_path(path)
+
     results = s3.list_objects(Bucket = bucket_name, Prefix = object_key)
-    return "Contents" in results 
+    return "Contents" in results
+
+def check_file_exists(path, region = None, profile = None):
+    region, profile = resolve_region_profile(region, profile)
+    s3 = get_s3_client_cache(region, profile)
+    bucket_name, object_key = utils.split_s3_path(path)
+    try:
+        # call head_object which is supposed to be efficient. This works only for files and not directories?
+        response = s3.head_object(Bucket = bucket_name, Key = object_key)
+
+        # check response
+        if (response is not None):
+            return True
+        else:
+            return False
+    except:
+        return False
 
 def put_s3_file_content(bucket_name, object_key, barr, region = None, profile = None):
     region, profile = resolve_region_profile(region, profile)
