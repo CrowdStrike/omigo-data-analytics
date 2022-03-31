@@ -7,13 +7,16 @@ from io import BytesIO
 
 # local import
 from omigo_core import utils
+import threading
 
 # define some global variables for caching s3 bucket and session
 S3_RESOURCE = {}
 S3_SESSIONS = {}
 S3_BUCKETS = {}
 S3_CLIENTS = {}
-
+S3_RESOURCE_LOCK = threading.Lock()
+S3_SESSION_LOCK = threading.Lock()
+S3_CLIENT_LOCK = threading.Lock()
 S3_DEFAULT_REGION = "us-west-1"
 S3_DEFAULT_PROFILE = "default"
 #S3_WARNING_GIVEN = "0" 
@@ -35,8 +38,10 @@ def get_s3_session_cache(region = None, profile = None):
     region, profile = resolve_region_profile(region, profile)
     key = create_session_key(region, profile)
     
-    if ((key in S3_SESSIONS.keys()) == False):
-        S3_SESSIONS[key] = get_s3_session(region, profile)
+    # make it thread safe
+    with S3_SESSION_LOCK:
+        if ((key in S3_SESSIONS.keys()) == False):
+            S3_SESSIONS[key] = get_s3_session(region, profile)
 
     return S3_SESSIONS[key]
 
@@ -50,8 +55,11 @@ def get_s3_resource(region = None, profile = None):
 def get_s3_resource_cache(region = None, profile = None):
     region, profile = resolve_region_profile(region, profile)
     key = create_session_key(region, profile)
-    if ((key in S3_RESOURCE.keys()) == False):
-        S3_RESOURCE[key] = get_s3_resource(region, profile)
+
+    # make it thread safe
+    with S3_RESOURCE_LOCK:
+        if ((key in S3_RESOURCE.keys()) == False):
+            S3_RESOURCE[key] = get_s3_resource(region, profile)
 
     return S3_RESOURCE[key]
 
@@ -65,8 +73,10 @@ def get_s3_client_cache(region = None, profile = None):
     region, profile = resolve_region_profile(region, profile)
     key = create_session_key(region, profile)
 
-    if ((key in S3_CLIENTS.keys()) == False):
-        S3_CLIENTS[key] = get_s3_client(region, profile)
+    # make it thread safe
+    with S3_CLIENT_LOCK:
+        if ((key in S3_CLIENTS.keys()) == False):
+            S3_CLIENTS[key] = get_s3_client(region, profile)
 
     return S3_CLIENTS[key]
 

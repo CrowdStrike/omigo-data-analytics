@@ -1059,8 +1059,12 @@ class TSV:
     def get_header_fields(self):
         return self.header_fields
 
-    def columns(self):
+    def get_columns(self):
         return self.get_header_fields()
+
+    def columns(self):
+        utils.warn("Deprecated. Use get_columns() instead")
+        return self.get_columns()
 
     def export_to_maps(self):
         utils.warn("Please use to_maps()")
@@ -2265,21 +2269,22 @@ class TSV:
         return TSV(new_header, new_data)
 
     # public method handling both random and cols based splitting
-    def split_batches(self, num_batches, cols = None):
+    def split_batches(self, num_batches, cols = None, preserve_order = False):
         # check if cols are defined or not
         if (cols is None):
-            return self.__split_batches_randomly__(num_batches)
+            return self.__split_batches_randomly__(num_batches, preserve_order = preserve_order)
         else:
             return self.__split_batches_by_cols__(num_batches, cols)
 
     # split method to split randomly
-    def __split_batches_randomly__(self, num_batches):
+    def __split_batches_randomly__(self, num_batches, preserve_order = False):
         # create array to store result
         xtsv_list = []
         data_list = []
 
         # compute effective number of batches
         effective_batches = int(min(num_batches, self.num_rows()))
+        batch_size = int(math.ceil(self.num_rows() / effective_batches))
 
         # initialize the arrays to store data
         for i in range(effective_batches):
@@ -2287,7 +2292,13 @@ class TSV:
 
         # iterate to split data
         for i in range(len(self.data)):
-            batch_index = i % effective_batches
+            # check if original order of data needs to be preserved
+            if (preserve_order == True):
+                batch_index = int(i / batch_size)
+            else:
+                batch_index = i % effective_batches
+
+            # append to the splits data
             data_list[batch_index].append(self.data[i])
 
         # create list of xtsvs
