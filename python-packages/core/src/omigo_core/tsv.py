@@ -1066,6 +1066,15 @@ class TSV:
         utils.warn("Deprecated. Use get_columns() instead")
         return self.get_columns()
 
+    def get_column_index(self, col):
+        # validation
+        if (col not in self.get_columns()):
+            raise Exception("Column not found: {}, {}".format(col, self.get_columns()))
+
+        # get index
+        header_map = self.get_header_map()
+        return header_map[col]
+
     def export_to_maps(self):
         utils.warn("Please use to_maps()")
         return self.to_maps()
@@ -3268,10 +3277,10 @@ def set_report_progress_min_thresh(thresh):
     utils.set_report_progress_min_thresh(thresh)
 
 # factory method
-def newWithCols(cols):
+def newWithCols(cols, data = []):
     utils.warn("newWithCols is deprecated. Use new_with_cols instead")
-    return new_with_cols(cols)
+    return new_with_cols(cols, data = data)
 
-def new_with_cols(cols):
-    return TSV("\t".join(cols), [])
+def new_with_cols(cols, data = []):
+    return TSV("\t".join(cols), data)
 

@@ -25,12 +25,16 @@ from requests import exceptions
 
 # TODO: need to document that a simple union can be achieved by setting def_val_map = {}
 def merge(tsv_list, def_val_map = None):
-    # remove zero length tsvs
-    tsv_list = list(filter(lambda x: len(x.get_header()) > 0, tsv_list))
+    # validation
+    if (len(tsv_list) == 0):
+        raise Exception("Error in input. List of tsv is empty")
+
+    # remove tsvs without any columns 
+    tsv_list = list(filter(lambda x: x.num_cols() > 0, tsv_list))
 
     # base condition
     if (len(tsv_list) == 0):
-        raise Exception("List of tsv is empty")
+        utils.warn("List of tsv is empty. Will merge all columns")
 
     # check for valid headers
     header = tsv_list[0].get_header()
@@ -83,7 +87,7 @@ def get_diffs_in_headers(tsv_list):
 
 def merge_intersect(tsv_list, def_val_map = None):
     # remove zero length tsvs
-    tsv_list = list(filter(lambda x: x.num_rows() > 0, tsv_list))
+    tsv_list = list(filter(lambda x: x.num_cols() > 0, tsv_list))
 
     # base condition
     if (len(tsv_list) == 0):
@@ -323,6 +327,8 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
         sample_n = int(len(filepaths) * sampling_rate)
         random.shuffle(filepaths)
         filepaths = sorted(filepaths[0:sample_n])
+    else:
+        filepaths = sorted(filepaths)
 
     # return
     return filepaths
