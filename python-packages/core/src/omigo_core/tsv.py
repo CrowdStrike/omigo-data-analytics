@@ -2557,10 +2557,10 @@ class TSV:
                 for k in exploded_keys_sorted:
                     # add to the output cols
                     if (k in evm.keys()):
-                        new_vals.append(evm[k])
+                        new_vals.append(str(evm[k]))
                     else:
                         if (default_val is not None):
-                            new_vals.append(default_val)
+                            new_vals.append(str(default_val))
                         else:
                             raise Exception("Not all output values are returned from function:", str(evm), str(exploded_keys_sorted))
 
@@ -3053,9 +3053,10 @@ class TSV:
     def extend_class(self, newclass, *args, **kwargs):
         return newclass(self.header, self.data, *args, **kwargs) 
 
-    # calls class that inherits TSV
+    # calls class that inherits TSV. TODO: forgot the purpose
     def extend_external_class(self, newclass, *args, **kwargs):
-        return newclass(self.header, self.data, *args, **kwargs) 
+        utils.warn("extend_external_class: not sure the purpose of this method now. use extend_class instead")
+        return newclass(self.header, self.data, *args, **kwargs)
 
     # custom function to call user defined apis
     def custom_func(self, func, *args, **kwargs):
