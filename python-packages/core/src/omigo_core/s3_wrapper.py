@@ -23,15 +23,20 @@ S3_DEFAULT_PROFILE = "default"
 
 def create_session_key(region = None, profile = None):
     region, profile = resolve_region_profile(region, profile)
-    return region + ":" + profile
+    if (region is None and profile is None):
+        return "DEFAULT_KEY"
+    else:
+        return region + ":" + profile
 
 def get_s3_session(region = None, profile = None):
     region, profile = resolve_region_profile(region, profile)
 
     # generate s3_session
-    if (profile is not None and region is not None):
+    if (region is not None and profile is not None):
+        utils.info("get_s3_session: region: {}, profile: {}".format(region, profile))
         session = boto3.session.Session(region_name = region, profile_name = profile)
     else:
+        utils.info("get_s3_session: no region or profile")
         session = boto3.session.Session()
 
     # return
@@ -168,26 +173,15 @@ def put_s3_file_with_text_content(bucket_name, object_key, text, region = None, 
     put_s3_file_content(bucket_name, object_key, barr, region, profile)
 
 def resolve_region_profile(region = None, profile = None):
-    if (region == "" or region is None):
-        region = os.getenv("S3_REGION")
+    # resolve region
+    if ((region == "" or region is None) and "S3_REGION" in os.environ.keys()):
+        region = os.environ["S3_REGION"]
 
-    if (profile == "" or profile is None):
-        profile = os.getenv("AWS_PROFILE")
+    # resolve profile
+    if ((profile == "" or profile is None) and "AWS_PROFILE" in os.environ.keys()):
+        profile = os.environ["AWS_PROFILE"]
 
-    if (region == "" or region is None):
-        # warn only once
-        #if (S3_WARNING_GIVEN == "0"):
-        #    print ("[WARN] S3 region not defined. Please set environment variable S3_REGION and AWS_PROFILE. Using 'us-west-1'")
-        #    S3_WARNING_GIVEN = "1" 
-        region = S3_DEFAULT_REGION
-
-    if (profile == "" or profile is None):
-        # warn only once
-        #if (S3_WARNING_GIVEN == "0"):
-        #    print ("[WARN] AWS Profile not defined. Please set environment variable S3_REGION and AWS_PROFILE. Using 'default'")
-        #    S3_WARNING_GIVEN = "1" 
-        profile = S3_DEFAULT_PROFILE
-
+    # return
     return region, profile
 
 # https://stackoverflow.com/questions/54314563/how-to-get-more-than-1000-objects-from-s3-by-using-list-objects-v2
