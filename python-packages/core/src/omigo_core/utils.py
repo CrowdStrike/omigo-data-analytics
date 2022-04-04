@@ -7,6 +7,8 @@ from json.decoder import JSONDecodeError
 import os
 import math
 import mmh3
+import time 
+from concurrent.futures import ThreadPoolExecutor
 
 # TODO: these caches dont work in multithreaded env. 
 MSG_CACHE_MAX_LEN = 10000
@@ -260,3 +262,70 @@ def is_float_with_fraction(xtsv, col):
 
 def compute_hash(x, seed = 0):
     return abs(mmh3.hash64(str(x) + str(seed))[0])
+
+class ThreadPoolTask:
+    def __init__(self, func, *args, **kwargs):
+        self.func = func
+        self.args = args
+        self.kwargs = kwargs
+
+def run_with_thread_pool(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0):
+    # debug
+    info("run_with_thread_pool: num tasks: {}, num_par: {}".format(len(tasks), num_par))
+
+    # define results
+    results = []
+
+    # check if this is to be run in multi threaded mode or not
+    if (num_par == 0):
+        info("run_with_thread_pool: running in single threaded mode")
+
+        # iterate
+        for task in tasks:
+            func = task.func
+            args = task.args
+            kwargs = task.kwargs
+            results.append(func(*args, **kwargs))               
+
+        # return
+        return results
+    else: 
+        # start thread pool
+        future_results = []
+        with ThreadPoolExecutor(max_workers = num_par) as executor:
+            # iterate over tasks and call submit
+            for i in range(len(tasks)):
+                # call submit
+                func = tasks[i].func
+                args = tasks[i].args
+                kwargs = tasks[i].kwargs
+                future_results.append(executor.submit(func, *args, **kwargs))
+
+            # wait for completion
+            while True:
+                done_count = 0
+                for f in future_results:
+                    if (f.done() == True):
+                        done_count = done_count + 1
+
+                # check if all are done
+                if (done_count < len(future_results)):
+                    # sleep for some additional time to allow notebook stop method to work
+                    info("run_with_thread_pool: futures not completed yet. Status: {} / {}. Sleeping for {} sec".format(done_count, len(future_results), wait_sec))
+                    time.sleep(wait_sec)
+                else:
+                    info("run_with_thread_pool: finished")
+                    break
+
+            # combine the results
+            for f in future_results:
+                results.append(f.result())
+
+            # wait for post_wait_sec for mitigating eventual consistency
+            if (post_wait_sec > 0):
+                info("run_with_thread_pool: sleeping for post_wait_sec: {}".format(post_wait_sec))
+                time.sleep(post_wait_sec)
+
+            # return
+            return results
+

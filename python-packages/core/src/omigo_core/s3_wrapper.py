@@ -7,26 +7,37 @@ from io import BytesIO
 
 # local import
 from omigo_core import utils
+import threading
 
 # define some global variables for caching s3 bucket and session
 S3_RESOURCE = {}
 S3_SESSIONS = {}
 S3_BUCKETS = {}
 S3_CLIENTS = {}
-
+S3_RESOURCE_LOCK = threading.Lock()
+S3_SESSION_LOCK = threading.Lock()
+S3_CLIENT_LOCK = threading.Lock()
 S3_DEFAULT_REGION = "us-west-1"
 S3_DEFAULT_PROFILE = "default"
 #S3_WARNING_GIVEN = "0" 
 
 def create_session_key(region = None, profile = None):
     region, profile = resolve_region_profile(region, profile)
-    return region + ":" + profile
+    if (region is None and profile is None):
+        return "DEFAULT_KEY"
+    else:
+        return region + ":" + profile
 
 def get_s3_session(region = None, profile = None):
     region, profile = resolve_region_profile(region, profile)
 
     # generate s3_session
-    session = boto3.session.Session(region_name = region, profile_name = profile)
+    if (region is not None and profile is not None):
+        utils.info("get_s3_session: region: {}, profile: {}".format(region, profile))
+        session = boto3.session.Session(region_name = region, profile_name = profile)
+    else:
+        utils.info("get_s3_session: no region or profile")
+        session = boto3.session.Session()
 
     # return
     return session
@@ -35,8 +46,10 @@ def get_s3_session_cache(region = None, profile = None):
     region, profile = resolve_region_profile(region, profile)
     key = create_session_key(region, profile)
     
-    if ((key in S3_SESSIONS.keys()) == False):
-        S3_SESSIONS[key] = get_s3_session(region, profile)
+    # make it thread safe
+    with S3_SESSION_LOCK:
+        if ((key in S3_SESSIONS.keys()) == False):
+            S3_SESSIONS[key] = get_s3_session(region, profile)
 
     return S3_SESSIONS[key]
 
@@ -50,8 +63,11 @@ def get_s3_resource(region = None, profile = None):
 def get_s3_resource_cache(region = None, profile = None):
     region, profile = resolve_region_profile(region, profile)
     key = create_session_key(region, profile)
-    if ((key in S3_RESOURCE.keys()) == False):
-        S3_RESOURCE[key] = get_s3_resource(region, profile)
+
+    # make it thread safe
+    with S3_RESOURCE_LOCK:
+        if ((key in S3_RESOURCE.keys()) == False):
+            S3_RESOURCE[key] = get_s3_resource(region, profile)
 
     return S3_RESOURCE[key]
 
@@ -65,8 +81,10 @@ def get_s3_client_cache(region = None, profile = None):
     region, profile = resolve_region_profile(region, profile)
     key = create_session_key(region, profile)
 
-    if ((key in S3_CLIENTS.keys()) == False):
-        S3_CLIENTS[key] = get_s3_client(region, profile)
+    # make it thread safe
+    with S3_CLIENT_LOCK:
+        if ((key in S3_CLIENTS.keys()) == False):
+            S3_CLIENTS[key] = get_s3_client(region, profile)
 
     return S3_CLIENTS[key]
 
@@ -108,12 +126,30 @@ def get_s3_file_content_as_text(bucket_name, object_key, region = None, profile 
     barr = bytearray(barr)
     return barr.decode().rstrip("\n")
 
+# TODO: this is expensive and works in specific scenarios only especially for files
 def check_path_exists(path, region = None, profile = None):
     region, profile = resolve_region_profile(region, profile)
     s3 = get_s3_client_cache(region, profile)
     bucket_name, object_key = utils.split_s3_path(path)
+
     results = s3.list_objects(Bucket = bucket_name, Prefix = object_key)
-    return "Contents" in results 
+    return "Contents" in results
+
+def check_file_exists(path, region = None, profile = None):
+    region, profile = resolve_region_profile(region, profile)
+    s3 = get_s3_client_cache(region, profile)
+    bucket_name, object_key = utils.split_s3_path(path)
+    try:
+        # call head_object which is supposed to be efficient. This works only for files and not directories?
+        response = s3.head_object(Bucket = bucket_name, Key = object_key)
+
+        # check response
+        if (response is not None):
+            return True
+        else:
+            return False
+    except:
+        return False
 
 def put_s3_file_content(bucket_name, object_key, barr, region = None, profile = None):
     region, profile = resolve_region_profile(region, profile)
@@ -137,26 +173,15 @@ def put_s3_file_with_text_content(bucket_name, object_key, text, region = None, 
     put_s3_file_content(bucket_name, object_key, barr, region, profile)
 
 def resolve_region_profile(region = None, profile = None):
-    if (region == "" or region is None):
-        region = os.getenv("S3_REGION")
+    # resolve region
+    if ((region == "" or region is None) and "S3_REGION" in os.environ.keys()):
+        region = os.environ["S3_REGION"]
 
-    if (profile == "" or profile is None):
-        profile = os.getenv("AWS_PROFILE")
+    # resolve profile
+    if ((profile == "" or profile is None) and "AWS_PROFILE" in os.environ.keys()):
+        profile = os.environ["AWS_PROFILE"]
 
-    if (region == "" or region is None):
-        # warn only once
-        #if (S3_WARNING_GIVEN == "0"):
-        #    print ("[WARN] S3 region not defined. Please set environment variable S3_REGION and AWS_PROFILE. Using 'us-west-1'")
-        #    S3_WARNING_GIVEN = "1" 
-        region = S3_DEFAULT_REGION
-
-    if (profile == "" or profile is None):
-        # warn only once
-        #if (S3_WARNING_GIVEN == "0"):
-        #    print ("[WARN] AWS Profile not defined. Please set environment variable S3_REGION and AWS_PROFILE. Using 'default'")
-        #    S3_WARNING_GIVEN = "1" 
-        profile = S3_DEFAULT_PROFILE
-
+    # return
     return region, profile
 
 # https://stackoverflow.com/questions/54314563/how-to-get-more-than-1000-objects-from-s3-by-using-list-objects-v2
@@ -260,3 +285,33 @@ def delete_file(path, fail_if_missing = False, region = None, profile = None):
 
     # delete
     s3.delete_object(Bucket = bucket_name, Key = object_key)
+
+def get_last_modified_time(path, fail_if_missing = False, region = None, profile = None):
+    # check if exists
+    if (check_path_exists(path) == False):
+        if (fail_if_missing):
+            raise Exception("get_last_modified_time: path doesnt exist: {}".format(path))
+        else:
+            utils.debug("get_last_modified_time: path doesnt exist: {}".format(path))
+
+        return None 
+
+    # parse
+    region, profile = resolve_region_profile(region, profile)
+    s3 = get_s3_client_cache(region, profile)
+
+    # split the path
+    bucket_name, object_key = utils.split_s3_path(path)
+    
+    # call head_object to get metadata
+    response = s3.head_object(Bucket = bucket_name, Key = object_key)
+
+    # validation
+    if (response is not None):
+        # get datetime
+        datetime_value = response["LastModified"]
+
+        # return
+        return datetime_value
+    else:
+        return None

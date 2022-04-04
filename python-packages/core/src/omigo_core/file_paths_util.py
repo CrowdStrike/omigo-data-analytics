@@ -246,7 +246,7 @@ def create_date_numeric_representation(date_str, default_suffix):
         raise Exception("Unknownd datetime format:" + date_str)
 
 # this is not a lookup function. This reads directory listing, and then picks the filepaths that match the criteria
-def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix, spillover_window = 1, s3_region = None, aws_profile = None):
+def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix, spillover_window = 1, num_par = 10, wait_sec = 1, s3_region = None, aws_profile = None):
     # parse dates
     start_date = parse_date_multiple_formats(start_date_str)
     end_date = parse_date_multiple_formats(end_date_str)
@@ -260,7 +260,9 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
     end_date_numstr = create_date_numeric_representation(end_date_str, "999999")     
 
     # create variable to store results
-    paths_found = []
+    tasks = []
+
+    # iterate and create tasks
     for d in range(num_days):
         # generate the current path based on date
         cur_date = start_date_minus_window + datetime.timedelta(days = d)
@@ -268,10 +270,18 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
 
         # get the list of files. This needs to be failsafe as not all directories may exist
         if (path.startswith("s3://")):
-            files_list = s3_wrapper.get_directory_listing(cur_path, filter_func = None, fail_if_missing = False, region = s3_region, profile = aws_profile)
+            tasks.append(utils.ThreadPoolTask(s3_wrapper.get_directory_listing, cur_path, filter_func = None, fail_if_missing = False, region = s3_region, profile = aws_profile))
         else:
-            files_list = get_local_directory_listing(cur_path, fail_if_missing = False)
+            tasks.append(utils.ThreadPoolTask(get_local_directory_listing, cur_path, fail_if_missing = False))
 
+    # execute the tasks
+    results = utils.run_with_thread_pool(tasks, num_par = num_par, wait_sec = wait_sec)
+
+    # final result
+    paths_found = []
+
+    # iterate over results
+    for files_list in results:
         # debug
         utils.trace("file_paths_util: get_file_paths_by_datetime_range: number of candidate files to read: cur_date: {}, count: {}".format(cur_date, len(files_list)))
  

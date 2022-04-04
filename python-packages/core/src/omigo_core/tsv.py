@@ -1059,8 +1059,21 @@ class TSV:
     def get_header_fields(self):
         return self.header_fields
 
-    def columns(self):
+    def get_columns(self):
         return self.get_header_fields()
+
+    def columns(self):
+        utils.warn("Deprecated. Use get_columns() instead")
+        return self.get_columns()
+
+    def get_column_index(self, col):
+        # validation
+        if (col not in self.get_columns()):
+            raise Exception("Column not found: {}, {}".format(col, self.get_columns()))
+
+        # get index
+        header_map = self.get_header_map()
+        return header_map[col]
 
     def export_to_maps(self):
         utils.warn("Please use to_maps()")
@@ -2265,21 +2278,22 @@ class TSV:
         return TSV(new_header, new_data)
 
     # public method handling both random and cols based splitting
-    def split_batches(self, num_batches, cols = None):
+    def split_batches(self, num_batches, cols = None, preserve_order = False):
         # check if cols are defined or not
         if (cols is None):
-            return self.__split_batches_randomly__(num_batches)
+            return self.__split_batches_randomly__(num_batches, preserve_order = preserve_order)
         else:
             return self.__split_batches_by_cols__(num_batches, cols)
 
     # split method to split randomly
-    def __split_batches_randomly__(self, num_batches):
+    def __split_batches_randomly__(self, num_batches, preserve_order = False):
         # create array to store result
         xtsv_list = []
         data_list = []
 
         # compute effective number of batches
         effective_batches = int(min(num_batches, self.num_rows()))
+        batch_size = int(math.ceil(self.num_rows() / effective_batches))
 
         # initialize the arrays to store data
         for i in range(effective_batches):
@@ -2287,7 +2301,13 @@ class TSV:
 
         # iterate to split data
         for i in range(len(self.data)):
-            batch_index = i % effective_batches
+            # check if original order of data needs to be preserved
+            if (preserve_order == True):
+                batch_index = int(i / batch_size)
+            else:
+                batch_index = i % effective_batches
+
+            # append to the splits data
             data_list[batch_index].append(self.data[i])
 
         # create list of xtsvs
@@ -2537,10 +2557,10 @@ class TSV:
                 for k in exploded_keys_sorted:
                     # add to the output cols
                     if (k in evm.keys()):
-                        new_vals.append(evm[k])
+                        new_vals.append(str(evm[k]))
                     else:
                         if (default_val is not None):
-                            new_vals.append(default_val)
+                            new_vals.append(str(default_val))
                         else:
                             raise Exception("Not all output values are returned from function:", str(evm), str(exploded_keys_sorted))
 
@@ -3033,9 +3053,10 @@ class TSV:
     def extend_class(self, newclass, *args, **kwargs):
         return newclass(self.header, self.data, *args, **kwargs) 
 
-    # calls class that inherits TSV
+    # calls class that inherits TSV. TODO: forgot the purpose
     def extend_external_class(self, newclass, *args, **kwargs):
-        return newclass(self.header, self.data, *args, **kwargs) 
+        utils.warn("extend_external_class: not sure the purpose of this method now. use extend_class instead")
+        return newclass(self.header, self.data, *args, **kwargs)
 
     # custom function to call user defined apis
     def custom_func(self, func, *args, **kwargs):
@@ -3257,10 +3278,10 @@ def set_report_progress_min_thresh(thresh):
     utils.set_report_progress_min_thresh(thresh)
 
 # factory method
-def newWithCols(cols):
+def newWithCols(cols, data = []):
     utils.warn("newWithCols is deprecated. Use new_with_cols instead")
-    return new_with_cols(cols)
+    return new_with_cols(cols, data = data)
 
-def new_with_cols(cols):
-    return TSV("\t".join(cols), [])
+def new_with_cols(cols, data = []):
+    return TSV("\t".join(cols), data)
 

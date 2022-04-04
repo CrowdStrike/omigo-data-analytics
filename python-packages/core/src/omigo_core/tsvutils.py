@@ -25,12 +25,16 @@ from requests import exceptions
 
 # TODO: need to document that a simple union can be achieved by setting def_val_map = {}
 def merge(tsv_list, def_val_map = None):
-    # remove zero length tsvs
-    tsv_list = list(filter(lambda x: len(x.get_header()) > 0, tsv_list))
+    # validation
+    if (len(tsv_list) == 0):
+        raise Exception("Error in input. List of tsv is empty")
+
+    # remove tsvs without any columns 
+    tsv_list = list(filter(lambda x: x.num_cols() > 0, tsv_list))
 
     # base condition
     if (len(tsv_list) == 0):
-        raise Exception("List of tsv is empty")
+        utils.warn("List of tsv is empty. Will merge all columns")
 
     # check for valid headers
     header = tsv_list[0].get_header()
@@ -83,7 +87,7 @@ def get_diffs_in_headers(tsv_list):
 
 def merge_intersect(tsv_list, def_val_map = None):
     # remove zero length tsvs
-    tsv_list = list(filter(lambda x: x.num_rows() > 0, tsv_list))
+    tsv_list = list(filter(lambda x: x.num_cols() > 0, tsv_list))
 
     # base condition
     if (len(tsv_list) == 0):
@@ -305,12 +309,13 @@ def read_by_date_range(path, start_date_str, end_date_str, prefix, s3_region = N
 
 # this method is needed so that users dont have to interact with file_paths_util
 # TODO: move this to scar etl tools as there are specific directory construction logic
-def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix, spillover_window = 1, sampling_rate = None, s3_region = None, aws_profile = None):
+def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix, spillover_window = 1, sampling_rate = None, num_par = 10, wait_sec = 1, s3_region = None, aws_profile = None):
     # some code refactoring is pending
     utils.print_code_todo_warning("get_file_paths_by_datetime_range: move this to scar etl tools as there are specific directory construction logic")
 
     # get all the filepaths
-    filepaths = file_paths_util.get_file_paths_by_datetime_range(path,  start_date_str, end_date_str, prefix, spillover_window, s3_region, aws_profile)
+    filepaths = file_paths_util.get_file_paths_by_datetime_range(path,  start_date_str, end_date_str, prefix, spillover_window = spillover_window, num_par = num_par, wait_sec = wait_sec,
+        s3_region = s3_region, aws_profile = aws_profile)
 
     # check for sampling rate
     if (sampling_rate is not None):
@@ -322,6 +327,8 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
         sample_n = int(len(filepaths) * sampling_rate)
         random.shuffle(filepaths)
         filepaths = sorted(filepaths[0:sample_n])
+    else:
+        filepaths = sorted(filepaths)
 
     # return
     return filepaths
@@ -715,6 +722,14 @@ def from_df(df):
 # useful for calling method arguments that can take single value or an array of values.
 # TBD: Relies on fact that paths are never single letter strings
 def __get_argument_as_array__(arg_or_args):
+    # check if it is of type list
+    if (isinstance(arg_or_args, list)):
+        if (len(arg_or_args) == 0):
+            raise Exception("__get_argument_as_array__: empty list")
+        elif (len(arg_or_args) == 1):
+            return __get_argument_as_array__(arg_or_args[0])
+
+    # check for single letter string
     is_single_letter = True
     for i in range(len(arg_or_args)):
         if (len(arg_or_args[i]) > 1):
