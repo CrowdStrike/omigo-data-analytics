@@ -18,7 +18,7 @@ from omigo_ajaiswal_ext.hydra import cluster_class_reflection
 if ("HYDRA_PATH" in os.environ.keys()):
     HYDRA_PATH = os.environ["HYDRA_PATH"]
 else:
-    HYDRA_PATH = "s3://cs-scar-autoq/users/ajaiswal/cdemo/v3"
+    HYDRA_PATH = "TBD"
 
 # global clients
 HYDRA_CLIENT_ID = None 
