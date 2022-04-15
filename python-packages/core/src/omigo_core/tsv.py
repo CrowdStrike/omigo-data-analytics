@@ -1738,7 +1738,7 @@ class TSV:
         inherit_message2 = inherit_message + ": sample_rows" if (inherit_message != "") else "sample_rows"
         return self.sample_n(n, seed, inherit_message = inherit_message2)
 
-    def sample_n(self, n, seed = 0):
+    def sample_n(self, n, seed = 0, inherit_message = ""):
         # validation
         if (n < 1):
             raise Exception("n cant be negative or less than 1:", n) 
@@ -1747,7 +1747,8 @@ class TSV:
         random.seed(seed)
         n = min(int(n), self.num_rows())
 
-        # sample and return
+        # sample and return. the debug message is not in standard form, but its fine.
+        utils.report_progress("sample_n: [1/1] calling function", inherit_message, len(self.data), len(self.data))
         return TSV(self.header, random.sample(self.data, n))
 
     def cap_min_inline(self, col, value):
