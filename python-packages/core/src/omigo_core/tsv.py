@@ -85,7 +85,7 @@ class TSV:
         counter = 0
         new_data = []
         for line in self.data:
-            # display progress
+            # report progress
             counter = counter + 1
             utils.report_progress("select: [1/1] selecting columns", inherit_message, counter, len(self.data))
 
@@ -125,82 +125,111 @@ class TSV:
         inherit_message2 = inherit_message + ": regex_match" if (inherit_message != "") else "regex_match"
         return self.filter([col], lambda x: (re.match(pattern, x) is not None) == condition, inherit_message = inherit_message2)
 
-    def not_eq(self, col, value):
+    def not_eq(self, col, value, inherit_message = ""):
         utils.warn("This api can have side effects because of implicit data types conversion in python. Use not_eq_int, not_eq_str or not_eq_float") 
-        return self.filter([col], lambda x: x != value)
+        inherit_message2 = inherit_message + ": not_eq" if (inherit_message != "") else "not_eq"
+        return self.filter([col], lambda x: x != value, inherit_message = inherit_message2)
 
-    def eq(self, col, value):
+    def eq(self, col, value, inherit_message = ""):
         utils.warn("This api can have side effects because of implicit data types conversion in python. Use eq_int, eq_str or eq_float") 
-        return self.filter([col], lambda x: x == value)
+        return self.filter([col], lambda x: x == value, inherit_message = inherit_message2)
 
-    def eq_int(self, col, value):
-        return self.filter([col], lambda x: int(float(x)) == value)
+    def eq_int(self, col, value, inherit_message = ""):
+        inherit_message2 = inherit_message + ": eq_int" if (inherit_message != "") else "eq_int"
+        return self.filter([col], lambda x: int(float(x)) == value, inherit_message = inherit_message2)
 
-    def eq_float(self, col, value):
-        return self.filter([col], lambda x: float(x) == value)
+    def eq_float(self, col, value, inherit_message = ""):
+        inherit_message2 = inherit_message + ": eq_float" if (inherit_message != "") else "eq_float"
+        return self.filter([col], lambda x: float(x) == value, inherit_message = inherit_message2)
 
-    def eq_str(self, col, value):
-        return self.filter([col], lambda x: str(x) == str(value))
+    def eq_str(self, col, value, inherit_message = ""):
+        inherit_message2 = inherit_message + ": eq_str" if (inherit_message != "") else "eq_str"
+        return self.filter([col], lambda x: str(x) == str(value), inherit_message = inherit_message2)
 
-    def not_eq_str(self, col, value):
-        return self.filter([col], lambda x: str(x) != str(value))
+    def not_eq_str(self, col, value, inherit_message = ""):
+        inherit_message2 = inherit_message + ": not_eq_str" if (inherit_message != "") else "not_eq_str"
+        return self.filter([col], lambda x: str(x) != str(value), inherit_message = inherit_message2)
 
-    def is_nonzero(self, col):
-        return self.is_nonzero_float(col)
+    def is_nonzero(self, col, inherit_message = ""):
+        utils.warn("Deprecated. Use is_nonzero_float() instead")
+        inherit_message2 = inherit_message + ": is_nonzero" if (len(inherit_message) > 0) else "is_nonzero"
+        return self.is_nonzero_float(col, inherit_message = inherit_message2)
 
-    def is_nonzero_int(self, col):
-        return self.filter([col], lambda x: int(x) != 0)
+    def is_nonzero_int(self, col, inherit_message = ""):
+        inherit_message2 = inherit_message + ": is_nonzero_int" if (len(inherit_message) > 0) else "is_nonzero_int"
+        return self.filter([col], lambda x: int(x) != 0, inherit_message = inherit_message2)
 
-    def is_nonzero_float(self, col):
-        return self.filter([col], lambda x: float(x) != 0)
+    def is_nonzero_float(self, col, inherit_message = ""):
+        inherit_message2 = inherit_message + ": is_nonzero_float" if (len(inherit_message) > 0) else "is_nonzero_float"
+        return self.filter([col], lambda x: float(x) != 0, inherit_message = inherit_message2)
 
-    def lt_str(self, col, value):
-        return self.filter([col], lambda x: x < value)
+    def lt_str(self, col, value, inherit_message = ""):
+        inherit_message2 = inherit_message + ": lt_str" if (len(inherit_message) > 0) else "lt_str"
+        return self.filter([col], lambda x: x < value, inherit_message = inherit_message2)
 
-    def le_str(self, col, value):
-        return self.filter([col], lambda x: x <= value)
+    def le_str(self, col, value, inherit_message = ""):
+        inherit_message2 = inherit_message + ": le_str" if (len(inherit_message) > 0) else "le_str"
+        return self.filter([col], lambda x: x <= value, inherit_message = inherit_message2)
 
-    def gt_str(self, col, value):
-        return self.filter([col], lambda x: x > value)
+    def gt_str(self, col, value, inherit_message = ""):
+        inherit_message2 = inherit_message + ": gt_str" if (len(inherit_message) > 0) else "gt_str"
+        return self.filter([col], lambda x: x > value, inherit_message = inherit_message2)
 
-    def ge_str(self, col, value):
-        return self.filter([col], lambda x: x >= value)
+    def ge_str(self, col, value, inherit_message = ""):
+        inherit_message2 = inherit_message + ": ge_str" if (len(inherit_message) > 0) else "ge_str"
+        return self.filter([col], lambda x: x >= value, inherit_message = inherit_message2)
 
-    def gt(self, col, value):
-        return self.gt_float(col, value)
+    def gt(self, col, value, inherit_message = ""):
+        utils.warn("Deprecated. Use gt_float() instead")
+        inherit_message2 = inherit_message + ": gt" if (len(inherit_message) > 0) else "gt"
+        return self.gt_float(col, value, inherit_message = inherit_message2)
 
-    def gt_int(self, col, value):
-        return self.filter([col], lambda x: float(x) > float(value))
+    def gt_int(self, col, value, inherit_message = ""):
+        inherit_message2 = inherit_message + ": gt_int" if (len(inherit_message) > 0) else "gt_int"
+        return self.filter([col], lambda x: int(float(x)) > int(float(value)), inherit_message = inherit_message2)
 
-    def gt_float(self, col, value):
-        return self.filter([col], lambda x: float(x) > float(value))
+    def gt_float(self, col, value, inherit_message = ""):
+        inherit_message2 = inherit_message + ": gt_float" if (len(inherit_message) > 0) else "gt_float"
+        return self.filter([col], lambda x: float(x) > float(value), inherit_message = inherit_message2)
 
-    def ge(self, col, value):
-        return self.ge_float(col, value)
+    def ge(self, col, value, inherit_message = ""):
+        utils.warn("Deprecated. Use ge_float() instead")
+        inherit_message2 = inherit_message + ": ge" if (len(inherit_message) > 0) else "ge"
+        return self.ge_float(col, value, inherit_message = inherit_message2)
 
-    def ge_int(self, col, value):
-        return self.filter([col], lambda x: int(x) >= int(value))
+    def ge_int(self, col, value, inherit_message = ""):
+        inherit_message2 = inherit_message + ": ge_int" if (len(inherit_message) > 0) else "ge_int"
+        return self.filter([col], lambda x: int(float(x)) >= int(float(value)), inherit_message = inherit_message2)
 
-    def ge_float(self, col, value):
-        return self.filter([col], lambda x: float(x) >= float(value))
+    def ge_float(self, col, value, inherit_message = ""):
+        inherit_message2 = inherit_message + ": ge_float" if (len(inherit_message) > 0) else "ge_float"
+        return self.filter([col], lambda x: float(x) >= float(value), inherit_message = inherit_message2)
 
-    def lt(self, col, value):
-        return self.lt_float(col, value)
+    def lt(self, col, value, inherit_message = ""):
+        utils.warn("Deprecated. Use lt_float() instead")
+        inherit_message2 = inherit_message + ": lt" if (len(inherit_message) > 0) else "lt"
+        return self.lt_float(col, value, inherit_message = inherit_message2)
 
-    def lt_int(self, col, value):
-        return self.filter([col], lambda x: int(x) < int(value))
+    def lt_int(self, col, value, inherit_message = ""):
+        inherit_message2 = inherit_message + ": lt_int" if (len(inherit_message) > 0) else "lt_int"
+        return self.filter([col], lambda x: int(float(x)) < int(float(value)), inherit_message = inherit_message2)
 
-    def lt_float(self, col, value):
-        return self.filter([col], lambda x: float(x) < float(value))
+    def lt_float(self, col, value, inherit_message = ""):
+        inherit_message2 = inherit_message + ": lt_float" if (len(inherit_message) > 0) else "lt_float"
+        return self.filter([col], lambda x: float(x) < float(value), inherit_message = inherit_message2)
 
-    def le(self, col, value):
-        return self.filter([col], lambda x: float(x) <= float(value))
+    def le(self, col, value, inherit_message = ""):
+        utils.warn("Deprecated. Use le_float() instead")
+        inherit_message2 = inherit_message + ": le" if (len(inherit_message) > 0) else "le"
+        return self.filter([col], lambda x: float(x) <= float(value), inherit_message = inherit_message2)
 
-    def le_int(self, col, value):
-        return self.filter([col], lambda x: int(x) <= int(value))
+    def le_int(self, col, value, inherit_message = ""):
+        inherit_message2 = inherit_message + ": le_int" if (len(inherit_message) > 0) else "le_int"
+        return self.filter([col], lambda x: int(float(x)) <= int(float(value)), inherit_message = inherit_message2)
 
-    def le_float(self, col, value):
-        return self.filter([col], lambda x: float(x) <= float(value))
+    def le_float(self, col, value, inherit_message = ""):
+        inherit_message2 = inherit_message + ": le_float" if (len(inherit_message) > 0) else "le_float"
+        return self.filter([col], lambda x: float(x) <= float(value), inherit_message = inherit_message2)
 
     def startswith(self, col, prefix, inherit_message = ""):
         inherit_message2 = inherit_message + ": startswith" if (len(inherit_message) > 0) else "startswith"
@@ -369,22 +398,6 @@ class TSV:
             # assign the mapping indexes
             win_mapping[win_col_val] = win_indexes
  
-            # # initialize name
-            # for win_index in win_indexes:
-            #     # add a new entry
-            #     if (win_index not in win_names_mapping.keys()):
-            #         win_names_mapping[win_index] = (str(win_col_val), str(win_col_val))
-
-            #     # do the min max naming
-            #     (namex, namey) = win_names_mapping[win_index]
-            #     if (namex > win_col_val):
-            #         namex = win_col_val
-            #     if (namey < win_col_val):
-            #         namey = win_col_val
-            #     
-            #     # reassign the name          
-            #     win_names_mapping[win_index] = (namex, namey)
-
         # assign window column range 
         for win_index in range(num_windows):
             if (sliding == True):
@@ -404,7 +417,7 @@ class TSV:
         # iterate over data
         counter = 0
         for line in self.data:
-            # display progress
+            # report progress
             counter = counter + 1
             utils.report_progress("window_aggregate: [1/1] calling function", inherit_message, counter, len(self.data))
 
@@ -457,11 +470,12 @@ class TSV:
         grouped = {}
         counter = 0
         for line in self.data:
-            fields = line.split("\t")
-
             # report progress
             counter = counter + 1
             utils.report_progress("group_by_key: [1/3] grouping: progress", inherit_message, counter, len(self.data))
+
+            # parse data
+            fields = line.split("\t")
 
             # create grouping key
             keys = []
@@ -482,12 +496,13 @@ class TSV:
         grouped_agg = {}
         counter = 0
         for k, vs in grouped.items():
-            vs_map = agg_func(vs)
-            grouped_agg[k] = vs_map
-
             # report progress
             counter = counter + 1
             utils.report_progress("group_by_key: [2/3] grouping func: progress", inherit_message, counter, len(grouped))
+
+            # get fields
+            vs_map = agg_func(vs)
+            grouped_agg[k] = vs_map
 
         # determine the set of keys in the aggregation function output
         agg_out_keys = {}
@@ -1688,7 +1703,7 @@ class TSV:
         new_header = "\t".join(list([h if (h not in mp.keys()) else mp[h] for h in self.header_fields]))
         return TSV(new_header, self.data)
 
-    def sample(self, sampling_ratio, seed = 0, with_replacement = False):
+    def sample(self, sampling_ratio, seed = 0, with_replacement = False, inherit_message = ""):
         # TODO
         if (with_replacement == True):
             raise Exception("sampling with replacement not implemented yet.")
@@ -1697,30 +1712,42 @@ class TSV:
         # this random number is only for basic sampling and not for doing anything sensitive.
         random.seed(seed)  # nosec
 
+        # create variables for data
         new_data = []
+        counter = 0
         for line in self.data:
+            counter = counter + 1
+            utils.report_progress("sample: [1/1] calling function", inherit_message, counter, len(self.data))
+
             # this random number is only for basic sampling and not for doing anything sensitive.
             if (random.random() <= sampling_ratio):  # nosec
                 new_data.append(line)
 
         return TSV(self.header, new_data)
 
-    def sample_without_replacement(self, sampling_ratio, seed = 0):
-        return self.sample(sampling_ratio, seed, with_replacement = False)
+    def sample_without_replacement(self, sampling_ratio, seed = 0, inherit_message = ""):
+        inherit_message2 = inherit_message + ": sample_without_replacement" if (inherit_message != "") else "sample_without_replacement"
+        return self.sample(sampling_ratio, seed, with_replacement = False, inherit_message = inherit_message2)
 
-    def sample_with_replacement(self, sampling_ratio, seed = 0):
-        return self.sample(sampling_ratio, seed, with_replacement = True)
+    def sample_with_replacement(self, sampling_ratio, seed = 0, inherit_message = ""):
+        inherit_message2 = inherit_message + ": sample_with_replacement" if (inherit_message != "") else "sample_with_replacement"
+        return self.sample(sampling_ratio, seed, with_replacement = True, inherit_message = inherit_message2)
 
-    def sample_rows(self, n, seed = 0):
+    def sample_rows(self, n, seed = 0, inherit_message = ""):
         utils.warn("Please use sample_n")
-        return self.sample_n(n, seed)
+        inherit_message2 = inherit_message + ": sample_rows" if (inherit_message != "") else "sample_rows"
+        return self.sample_n(n, seed, inherit_message = inherit_message2)
 
     def sample_n(self, n, seed = 0):
+        # validation
         if (n < 1):
             raise Exception("n cant be negative or less than 1:", n) 
 
+        # set seed
         random.seed(seed)
-        n = min(int(n), self.num_rows()) 
+        n = min(int(n), self.num_rows())
+
+        # sample and return
         return TSV(self.header, random.sample(self.data, n))
 
     def cap_min_inline(self, col, value):
@@ -1741,7 +1768,7 @@ class TSV:
 
     # sampling method to do class rebalancing where the class is defined by a specific col-value. As best practice, 
     # the sampling ratios should be determined externally.
-    def sample_class(self, col, col_value, sampling_ratio, seed = 0):
+    def sample_class(self, col, col_value, sampling_ratio, seed = 0, inherit_message = ""):
         # Validation 
         if (col not in self.header_map.keys()):
             raise Exception("Column not found:", str(col), str(self.header_fields))
@@ -1755,7 +1782,13 @@ class TSV:
 
         # resample
         new_data = []
+        counter = 0
         for line in self.data:
+            # report progress
+            counter = counter + 1
+            utils.report_progress("sample_class: [1/1] calling function", inherit_message, counter, len(self.data))
+
+            # get fields
             fields = line.split("\t")
             cv = fields[self.header_map[col]]
 
@@ -1777,7 +1810,7 @@ class TSV:
         def __sample_group_by_col_value_agg_func_inner__(vs):
             # validation. all vs values should be same
             if (len(vs) == 0 or len(set(vs)) > 1):
-                raise Exception("samplg_group api requires all rows for the same group to have the same value")
+                raise Exception("sample_group api requires all rows for the same group to have the same value")
 
             # do this ugly numerical conversion
             vs0 = vs[0]
@@ -1798,7 +1831,7 @@ class TSV:
         return __sample_group_by_col_value_agg_func_inner__
 
     # sampling method where each sample group is restricted by the max values for a specific col-value. Useful for reducing skewness in dataset
-    def sample_group_by_col_value(self, grouping_cols, col, col_value, sampling_ratio, seed = 0, use_numeric = False):
+    def sample_group_by_col_value(self, grouping_cols, col, col_value, sampling_ratio, seed = 0, use_numeric = False, inherit_message = ""):
         # resolve grouping_cols
         grouping_cols = self.__get_matching_cols__(grouping_cols)
 
@@ -1811,9 +1844,10 @@ class TSV:
             raise Exception("Sampling ratio has to be between 0 and 1:", sampling_ratio)
 
         # group by and apply the sampling on the value. The assumption is that all rows in the same group should have the same col_value
-        agg_result = self.aggregate(grouping_cols, [col], [self.__sample_group_by_col_value_agg_func__(col_value, sampling_ratio, seed, use_numeric)], collapse = False, inherit_message = "sample_group_by_col_value") \
-            .values_in("{}:__sample_group_by_col_value_agg_func_inner__".format(col), ["1"]) \
-            .drop("{}:__sample_group_by_col_value_agg_func_inner__".format(col))
+        inherit_message2 = inherit_message + ": sample_group_by_col_value" if (len(inherit_message) > 0) else "sample_group_by_col_value"
+        agg_result = self.aggregate(grouping_cols, [col], [self.__sample_group_by_col_value_agg_func__(col_value, sampling_ratio, seed, use_numeric)], collapse = False, inherit_message = inherit_message2 + ": [1/3]") \
+            .values_in("{}:__sample_group_by_col_value_agg_func_inner__".format(col), ["1"], inherit_message = inherit_message2 + ": [2/3]") \
+            .drop("{}:__sample_group_by_col_value_agg_func_inner__".format(col), inherit_message = inherit_message2 + ": [3/3]")
 
         # return 
         return agg_result
@@ -1822,7 +1856,7 @@ class TSV:
         return len(set(vs))
 
     # sampling method to take a grouping key, and a column where the number of unique values for column are capped.
-    def sample_group_by_max_uniq_values(self, grouping_cols, col, max_uniq_values, seed = 0):
+    def sample_group_by_max_uniq_values(self, grouping_cols, col, max_uniq_values, seed = 0, inherit_message = ""):
         # resolve grouping_cols
         grouping_cols = self.__get_matching_cols__(grouping_cols)
 
@@ -1842,12 +1876,14 @@ class TSV:
         # the hashing function is applied on the entire grouping_cols + col
         sample_grouping_cols = [g for g in grouping_cols]
         sample_grouping_cols.append(col)
- 
-        agg_result = self.aggregate(grouping_cols, [col], [self.__sample_group_by_max_uniq_values_uniq_count__], collapse = False, inherit_message = "sample_group_by_max_uniq_values [1/5]") \
-            .transform(["{}:__sample_group_by_max_uniq_values_uniq_count__".format(col)], lambda c: max_uniq_values / float(c) if (float(c) > max_uniq_values) else 1, "{}:__sample_group_by_max_uniq_values_sampling_ratio__".format(col), inherit_message = "sample_group_by_max_uniq_values [2/5]") \
-            .transform(sample_grouping_cols, lambda x: abs(utils.compute_hash("\t".join(x), seed)) / sys.maxsize, "{}:__sample_group_by_max_uniq_values_sampling_key__".format(col), use_array_notation = True, inherit_message = "sample_group_by_max_uniq_values [3/5]") \
-            .filter(["{}:__sample_group_by_max_uniq_values_sampling_key__".format(col), "{}:__sample_group_by_max_uniq_values_sampling_ratio__".format(col)], lambda x, y: float(x) <= float(y), inherit_message = "sample_group_by_max_uniq_values [4/5]") \
-            .drop("{}:__sample_group_by_max_uniq_values_.*".format(col), inherit_message = "sample_group_by_max_uniq_values [5/5]")
+
+        # agg result
+        inherit_message2 = inherit_message + ": sample_group_by_max_uniq_values" if (len(inherit_message) > 0) else "sample_group_by_max_uniq_values"
+        agg_result = self.aggregate(grouping_cols, [col], [self.__sample_group_by_max_uniq_values_uniq_count__], collapse = False, inherit_message = inherit_message2 + ": [1/5]") \
+            .transform(["{}:__sample_group_by_max_uniq_values_uniq_count__".format(col)], lambda c: max_uniq_values / float(c) if (float(c) > max_uniq_values) else 1, "{}:__sample_group_by_max_uniq_values_sampling_ratio__".format(col), inherit_message = inherit_message2 + ": [2/5]") \
+            .transform(sample_grouping_cols, lambda x: abs(utils.compute_hash("\t".join(x), seed)) / sys.maxsize, "{}:__sample_group_by_max_uniq_values_sampling_key__".format(col), use_array_notation = True, inherit_message = inherit_message2 + ": [3/5]") \
+            .filter(["{}:__sample_group_by_max_uniq_values_sampling_key__".format(col), "{}:__sample_group_by_max_uniq_values_sampling_ratio__".format(col)], lambda x, y: float(x) <= float(y), inherit_message = inherit_message2 + ": [4/5]") \
+            .drop("{}:__sample_group_by_max_uniq_values_.*".format(col), inherit_message = inherit_message2 + ": [5/5]")
 
         # return 
         return agg_result
@@ -1856,7 +1892,7 @@ class TSV:
         return len(set(vs))
 
     # sampling method to take a grouping key, and a column where the number of unique values for column are capped.
-    def sample_group_by_max_uniq_values_per_class(self, grouping_cols, class_col, col, max_uniq_values_map, def_max_uniq_values = None , seed = 0):
+    def sample_group_by_max_uniq_values_per_class(self, grouping_cols, class_col, col, max_uniq_values_map, def_max_uniq_values = None , seed = 0, inherit_message = ""):
         # resolve grouping_cols
         grouping_cols = self.__get_matching_cols__(grouping_cols)
  
@@ -1882,19 +1918,21 @@ class TSV:
         else:
             utils.warn("sample_group_by_max_uniq_values_per_class: class_col need not be specified in the grouping cols: {}".format(str(grouping_cols)))
         sample_grouping_cols.append(col)
- 
-        agg_result = self.aggregate(grouping_cols, [col], "", [self.__sample_group_by_max_uniq_values_per_class_uniq_count__], collapse = False, inherit_message = "sample_group_by_max_uniq_values_per_class [1/6]") \
-            .transform([class_col], lambda c: str(max_uniq_values_map[c]) if (c in max_uniq_values_map.keys()) else str(def_max_uniq_values), "{}:__sample_group_by_max_uniq_values_per_class_max_uniq_values__".format(col), inherit_message = "sample_group_by_max_uniq_values_per_class [2/6]") \
-            .transform(["{}:__sample_group_by_max_uniq_values_per_class_uniq_count__".format(col), "{}:__sample_group_by_max_uniq_values_per_class_max_uniq_values__".format(col)], lambda c, m: float(m) / float(c) if (float(c) > float(m)) else 1, "{}:__sample_group_by_max_uniq_values_per_class_sampling_ratio__".format(col), inherit_message = "sample_group_by_max_uniq_values_per_class [3/6]") \
-            .transform(sample_grouping_cols, lambda x: abs(utils.compute_hash("\t".join(x), seed)) / sys.maxsize, "{}:__sample_group_by_max_uniq_values_per_class_sampling_key__".format(col), use_array_notation = True, inherit_message = "sample_group_by_max_uniq_values_per_class [4/6]") \
-            .filter(["{}:__sample_group_by_max_uniq_values_per_class_sampling_key__".format(col), "{}:__sample_group_by_max_uniq_values_per_class_sampling_ratio__".format(col)], lambda x, y: float(x) <= float(y), inherit_message = "sample_group_by_max_uniq_values_per_class [5/6]") \
-            .drop("{}:__sample_group_by_max_uniq_values_per_class.*".format(col), inherit_message = "sample_group_by_max_uniq_values_per_class [6/6]")
+
+        # aggregate result
+        inherit_message2 = inherit_message + ": sample_group_by_max_uniq_values_per_class" if (len(inherit_message) > 0) else "sample_group_by_max_uniq_values_per_class"
+        agg_result = self.aggregate(grouping_cols, [col], "", [self.__sample_group_by_max_uniq_values_per_class_uniq_count__], collapse = False, inherit_message = inherit_message2 + ": [1/6]") \
+            .transform([class_col], lambda c: str(max_uniq_values_map[c]) if (c in max_uniq_values_map.keys()) else str(def_max_uniq_values), "{}:__sample_group_by_max_uniq_values_per_class_max_uniq_values__".format(col), inherit_message = inherit_message2 + ": [2/6]") \
+            .transform(["{}:__sample_group_by_max_uniq_values_per_class_uniq_count__".format(col), "{}:__sample_group_by_max_uniq_values_per_class_max_uniq_values__".format(col)], lambda c, m: float(m) / float(c) if (float(c) > float(m)) else 1, "{}:__sample_group_by_max_uniq_values_per_class_sampling_ratio__".format(col), inherit_message = inherit_message2 + ": [3/6]") \
+            .transform(sample_grouping_cols, lambda x: abs(utils.compute_hash("\t".join(x), seed)) / sys.maxsize, "{}:__sample_group_by_max_uniq_values_per_class_sampling_key__".format(col), use_array_notation = True, inherit_message = inherit_message2 + ": [4/6]") \
+            .filter(["{}:__sample_group_by_max_uniq_values_per_class_sampling_key__".format(col), "{}:__sample_group_by_max_uniq_values_per_class_sampling_ratio__".format(col)], lambda x, y: float(x) <= float(y), inherit_message = inherit_message2 + ": [5/6]") \
+            .drop("{}:__sample_group_by_max_uniq_values_per_class.*".format(col), inherit_message = inherit_message2 + ": [6/6]")
 
         # return 
         return agg_result
 
     # random sampling within a group
-    def sample_group_by_key(self, grouping_cols, sampling_ratio, seed = 0):
+    def sample_group_by_key(self, grouping_cols, sampling_ratio, seed = 0, inherit_message = ""):
         # resolve grouping_cols
         grouping_cols = self.__get_matching_cols__(grouping_cols)
 
@@ -1904,7 +1942,12 @@ class TSV:
 
         # create new data
         new_data = []
+        counter = 0
         for line in self.data:
+            # report progress
+            counter = counter + 1
+            utils.report_progress("sample_group_by_key: [1/1] calling function", inherit_message, counter, len(self.data))
+
             keys = []
             fields = line.split("\t")
             for g in grouping_cols:
@@ -2467,7 +2510,7 @@ class TSV:
         exploded_values = []
         counter = 0
         for line in self.data:
-            # progress
+            # report progress
             counter = counter + 1
             utils.report_progress("explode: [1/2] calling explode function", inherit_message, counter, len(self.data))
 
@@ -2527,7 +2570,7 @@ class TSV:
 
         counter = 0
         for i in range(len(self.data)):
-            # progress
+            # report progress
             counter = counter + 1
             utils.report_progress("explode: [2/2] generating data", inherit_message, counter, len(self.data))
 
@@ -2999,7 +3042,7 @@ class TSV:
         counter = 0
         inherit_message2 = inherit_message + ": to_tuples" if (inherit_message != "") else inherit_message
         for line in self.select(cols, inherit_message = inherit_message2).get_data():
-            # progress
+            # report progress
             counter = counter + 1
             utils.report_progress("to_tuples: [1/1] converting to tuples", inherit_message, counter, len(self.data))
 

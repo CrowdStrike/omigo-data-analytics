@@ -335,7 +335,7 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
     
 # TODO: move this to scar etl tools as there are specific directory construction logic
 def scan_by_datetime_range(path, start_date_str, end_date_str, prefix, filter_transform_func = None, transform_func = None, spillover_window = 1, num_par = 5,
-    timeout_seconds = 600, def_val_map = None, sampling_rate = None, s3_region = None, aws_profile = None):
+    wait_sec = 5, timeout_seconds = 600, def_val_map = None, sampling_rate = None, s3_region = None, aws_profile = None):
 
     utils.print_code_todo_warning("scan_by_datetime_range: move this to scar etl tools as there are specific directory construction logic")
     utils.warn("scan_by_datetime_range: this method runs in multithreaded mode which can not be stopped without killing process. Wait for timeout_seconds: {}".format(timeout_seconds))
@@ -353,63 +353,20 @@ def scan_by_datetime_range(path, start_date_str, end_date_str, prefix, filter_tr
     utils.debug("tsvutils: scan_by_datetime_range: number of files to read: {}".format(len(filepaths)))
 
     # read all the files in the filepath applying the filter function
-    tsv_list = []
-    future_list = []
-    wait_time = 5
+    tasks = []
 
-    # submit the tasks
-    with ThreadPoolExecutor(max_workers = num_par) as executor:
-        counter = 0
-        # run loop to submit tasks
-        for filepath in filepaths:
-            counter = counter + 1
-            utils.debug("Submitted task to read: [{}]: {}".format(counter, filepath))
-            future = executor.submit(read_with_filter_transform, filepath, filter_transform_func, transform_func, s3_region, aws_profile)
-            future_list.append(future)
+    # iterate over filepaths and submit
+    for filepath in filepaths:
+        tasks.append(utils.ThreadPoolTask(read_with_filter_transform, filepath, filter_transform_func, transform_func, s3_region, aws_profile))
 
-        # check for done status after sleeping for 2 seconds
-        total_wait = 0
-        while True:
-            remaining = 0
-            running = 0
-            for future in future_list:
-                # check how many are done
-                if (future.done() == False):
-                    remaining = remaining + 1
-                if (future.running() == True):
-                    running = running + 1
+    # execute and get results
+    tsv_list = utils.run_with_thread_pool(tasks, num_par = num_par, wait_sec = wait_sec)
 
-            # if all completed then take the result
-            if (remaining == 0):
-                for future in future_list:
-                    x = future.result()
-                    utils.debug("Finished reading: num_rows: {}".format(x.num_rows()))
-                    tsv_list.append(x)
-                break
-            else:
-                # do some wait
-                utils.debug("Total files to read: {}, remaining: {}, running: {}, waiting for: {} seconds".format(len(future_list), remaining, running, wait_time))
-
-                # sleep and increment total wait time
-                time.sleep(wait_time)
-                total_wait = total_wait + wait_time
-                
-                # check if total wait time has exceeded the limit
-                if (timeout_seconds is not None and total_wait >= timeout_seconds):
-                    utils.info("scan_by_datetime_range: timeout of {} seconds reached. Shutting down...".format(timeout_seconds))
-                    executor.shutdown()
-                    utils.info("scan_by_datetime_range: shutdown complete. Raising exception")
-
-                    # break
-                    raise Exception("scan_by_datetime_range: timeout of {} seconds reached. Cancelling. To avoid this either change timeout_seconds or filtering criteria.".format(timeout_seconds))
-
-    # completed the threadpool task
-    utils.debug("scan_by_datetime_range: Finished reading the files. Calling merge.")
-       
     # combine all together
     tsv_combined = merge(tsv_list, def_val_map)
     utils.debug("scan_by_datetime_range: Number of records: {}".format(tsv_combined.num_rows()))
-       
+
+    # return
     return tsv_combined
 
 def load_from_dir(path, start_date_str, end_date_str, prefix, s3_region = None, aws_profile = None, granularity = "daily"):
