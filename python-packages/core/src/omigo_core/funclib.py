@@ -150,10 +150,14 @@ def datetime_to_utctimestamp(x):
 
 # TODO: Converts seconds format only
 def utctimestamp_to_datetime_str(x):
+    return utctimestamp_to_datetime(x).isoformat()
+
+# TODO: Converts seconds format only
+def utctimestamp_to_datetime(x):
     if (len(str(x)) == 10):
-        return datetime.datetime.utcfromtimestamp(x).replace(tzinfo = datetime.timezone.utc).isoformat()
+        return datetime.datetime.utcfromtimestamp(x).replace(tzinfo = datetime.timezone.utc)
     elif (len(str(x)) == 13):
-        return datetime.datetime.utcfromtimestamp(int(x/1000)).replace(tzinfo = datetime.timezone.utc).isoformat()
+        return datetime.datetime.utcfromtimestamp(int(x/1000)).replace(tzinfo = datetime.timezone.utc)
     else:
         raise Exception("Unknown timestamp format:", x)
 

@@ -1,6 +1,7 @@
 """EtlDateTimePathFormat class"""
 
 from omigo_core import utils
+from omigo_core import funclib 
 from dateutil import parser
 import datetime
 
@@ -100,3 +101,21 @@ def get_matching_etl_date_time_path(path, new_base_path, new_prefix, new_extensi
      new_path = "{}/dt={}/{}-{}-{}-{}-{}.{}".format(new_base_path, er.date_part, new_prefix, er.start_date, er.start_time, er.end_date, er.end_time, effective_extension)
      return new_path
 
+def get_etl_date_str_from_ts(ts):
+    dtime = funclib.utctimestamp_to_datetime(ts)
+    return dtime.strftime("%Y%m%d")
+
+# this method generates the basename minus the extension
+# prefix-startyyyymmdd-HHMMSS-endyyyymmdd-HHMMSS
+def get_etl_file_base_name_by_ts(prefix, start_ts, end_ts):
+    # convert to datetime
+    start_datetime = funclib.utctimestamp_to_datetime(start_ts)
+    end_datetime = funclib.utctimestamp_to_datetime(end_ts)
+
+    # format
+    start_datetime_str = start_datetime.strftime("%Y%m%d-%H%M%S")
+    end_datetime_str = end_datetime.strftime("%Y%m%d-%H%M%S")
+
+    # return
+    return "{}-{}-{}".format(prefix, start_datetime_str, end_datetime_str)
+    
