@@ -284,6 +284,7 @@ def read_with_filter_transform(input_file_or_files, filter_transform_func = None
             # return
             return tsv.TSV(new_header, new_data)
 
+# TODO: replace this by etl_ext
 def read_by_date_range(path, start_date_str, end_date_str, prefix, s3_region = None, aws_profile = None, granularity = "daily"):
     # read filepaths
     filepaths = file_paths_util.read_filepaths(path, start_date_str, end_date_str, prefix, s3_region, aws_profile, granularity)
@@ -306,68 +307,6 @@ def read_by_date_range(path, start_date_str, end_date_str, prefix, s3_region = N
         return tsv_list[0]
     else:
         return tsv_list[0].union(tsv_list[1:])
-
-# this method is needed so that users dont have to interact with file_paths_util
-# TODO: move this to scar etl tools as there are specific directory construction logic
-def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix, spillover_window = 1, sampling_rate = None, num_par = 10, wait_sec = 1, s3_region = None, aws_profile = None):
-    # some code refactoring is pending
-    utils.print_code_todo_warning("get_file_paths_by_datetime_range: move this to scar etl tools as there are specific directory construction logic")
-
-    # get all the filepaths
-    filepaths = file_paths_util.get_file_paths_by_datetime_range(path,  start_date_str, end_date_str, prefix, spillover_window = spillover_window, num_par = num_par, wait_sec = wait_sec,
-        s3_region = s3_region, aws_profile = aws_profile)
-
-    # check for sampling rate
-    if (sampling_rate is not None):
-        # validation
-        if (sampling_rate < 0 or sampling_rate > 1):
-            raise Exception("sampling_rate is not valid: {}".format(sampling_rate))
-
-        # determine the number of samples to take
-        sample_n = int(len(filepaths) * sampling_rate)
-        random.shuffle(filepaths)
-        filepaths = sorted(filepaths[0:sample_n])
-    else:
-        filepaths = sorted(filepaths)
-
-    # return
-    return filepaths
-    
-# TODO: move this to scar etl tools as there are specific directory construction logic
-def scan_by_datetime_range(path, start_date_str, end_date_str, prefix, filter_transform_func = None, transform_func = None, spillover_window = 1, num_par = 5,
-    wait_sec = 5, timeout_seconds = 600, def_val_map = None, sampling_rate = None, s3_region = None, aws_profile = None):
-
-    utils.print_code_todo_warning("scan_by_datetime_range: move this to scar etl tools as there are specific directory construction logic")
-    utils.warn("scan_by_datetime_range: this method runs in multithreaded mode which can not be stopped without killing process. Wait for timeout_seconds: {}".format(timeout_seconds))
-
-    # read filepaths by scanning. this involves listing all the files, and then matching the condititions
-    filepaths = get_file_paths_by_datetime_range(path,  start_date_str, end_date_str, prefix, spillover_window = spillover_window, sampling_rate = sampling_rate,
-        s3_region = s3_region, aws_profile = aws_profile)
-
-    # debug
-    utils.info("scan_by_datetime_range: number of paths to read: {}, num_par: {}, timeout_seconds: {}".format(len(filepaths), num_par, timeout_seconds))
-
-    # do some checks on the headers in the filepaths
-
-    # debug
-    utils.debug("tsvutils: scan_by_datetime_range: number of files to read: {}".format(len(filepaths)))
-
-    # read all the files in the filepath applying the filter function
-    tasks = []
-
-    # iterate over filepaths and submit
-    for filepath in filepaths:
-        tasks.append(utils.ThreadPoolTask(read_with_filter_transform, filepath, filter_transform_func, transform_func, s3_region, aws_profile))
-
-    # execute and get results
-    tsv_list = utils.run_with_thread_pool(tasks, num_par = num_par, wait_sec = wait_sec)
-
-    # combine all together
-    tsv_combined = merge(tsv_list, def_val_map)
-    utils.debug("scan_by_datetime_range: Number of records: {}".format(tsv_combined.num_rows()))
-
-    # return
-    return tsv_combined
 
 def load_from_dir(path, start_date_str, end_date_str, prefix, s3_region = None, aws_profile = None, granularity = "daily"):
     # read filepaths
@@ -697,4 +636,12 @@ def __get_argument_as_array__(arg_or_args):
         return [arg_or_args]
     else:
         return arg_or_args
+
+# refactored methods
+def scan_by_datetime_range(*args, **kwargs):
+    raise Exception("use etl.scan_by_datetime_range instead")
+
+# refactored methods
+def get_file_paths_by_datetime_range(*args, **kwargs):
+    raise Exception("use etl.get_file_paths_by_datetime_range instead")
 
