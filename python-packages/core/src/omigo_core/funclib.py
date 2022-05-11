@@ -165,5 +165,5 @@ def datetime_to_timestamp(x):
     raise Exception("Please use datetime_to_utctimestamp")
 
 def get_utctimestamp_sec():
-    return int(datetime.datetime.now(timezone.utc).timestamp())
+    return int(datetime.datetime.now(datetime.timezone.utc).timestamp())
 

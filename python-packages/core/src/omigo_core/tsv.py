@@ -296,6 +296,7 @@ class TSV:
         if (count > len(self.data)):
             count = len(self.data)
 
+        # return
         return TSV(self.header, self.data[-count:])
  
     def take(self, count):

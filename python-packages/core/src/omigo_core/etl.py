@@ -1,5 +1,5 @@
 """EtlDateTimePathFormat class"""
-from omigo_core import tsv, utils, funclib, file_paths_util 
+from omigo_core import tsv, utils, tsvutils, funclib, file_paths_util 
 from dateutil import parser
 import datetime
 
@@ -141,7 +141,7 @@ def scan_by_datetime_range(path, start_date_str, end_date_str, prefix, filter_tr
         s3_region = s3_region, aws_profile = aws_profile)
 
     # debug
-    utils.info("scan_by_datetime_range: number of paths to read: {}, num_par: {}, timeout_seconds: {}".format(len(filepaths), num_par, timeout_seconds))
+    utils.debug("scan_by_datetime_range: number of paths to read: {}, num_par: {}, timeout_seconds: {}".format(len(filepaths), num_par, timeout_seconds))
 
     # do some checks on the headers in the filepaths
 
@@ -153,13 +153,13 @@ def scan_by_datetime_range(path, start_date_str, end_date_str, prefix, filter_tr
 
     # iterate over filepaths and submit
     for filepath in filepaths:
-        tasks.append(utils.ThreadPoolTask(read_with_filter_transform, filepath, filter_transform_func, transform_func, s3_region, aws_profile))
+        tasks.append(utils.ThreadPoolTask(tsvutils.read_with_filter_transform, filepath, filter_transform_func, transform_func, s3_region, aws_profile))
 
     # execute and get results
     tsv_list = utils.run_with_thread_pool(tasks, num_par = num_par, wait_sec = wait_sec)
 
     # combine all together
-    tsv_combined = merge(tsv_list, def_val_map)
+    tsv_combined = tsv.merge(tsv_list, def_val_map)
     utils.debug("scan_by_datetime_range: Number of records: {}".format(tsv_combined.num_rows()))
 
     # return
