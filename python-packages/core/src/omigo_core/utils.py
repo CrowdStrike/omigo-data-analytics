@@ -32,7 +32,7 @@ def set_report_progress_min_thresh(thresh):
     os.environ["OMIGO_DEBUG_REPORT_PROGRESS_MIN_THRESH"] = str(thresh)
 
 def trace(msg):
-    if (is_trace() or is_debug() or is_info()):
+    if (is_trace() or is_debug()):
         print("[TRACE]: {}".format(msg))
 
 def trace_once(msg, msg_cache):
@@ -46,7 +46,7 @@ def trace_once(msg, msg_cache):
         msg_cache[msg] = 1
 
 def debug(msg):
-    if (is_debug() or is_info()):
+    if (is_debug()):
         print("[DEBUG]: {}".format(msg))
 
 def debug_once(msg, msg_cache):
