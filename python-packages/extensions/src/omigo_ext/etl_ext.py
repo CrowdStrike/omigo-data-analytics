@@ -1,10 +1,8 @@
 """EtlDateTimePathFormat class"""
 
-from omigo_core import utils, etl, funclib
-from dateutil import parser
-import datetime
+from omigo_core import utils, etl
 
-# @deprecated. Use etl module instead
+# Deprecated. Use etl module instead
 class EtlDateTimePathFormat:
     def __init__(self, *args, **kwargs):
         utils.warn("use etl.EtlDateTimePathFormat module instead")
