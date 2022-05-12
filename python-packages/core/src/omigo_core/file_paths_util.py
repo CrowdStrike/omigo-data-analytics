@@ -288,17 +288,24 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
         # apply filter on the name and the timestamp
         for filename in files_list:
             #format: full_prefix/fileprefix-startdate-enddate-starttime-endtime.tsv
-
             # get the last part after /
             #sep_index = filename.rindex("/")
             #filename1 = filename[sep_index + 1:]
             base_filename = filename[len(cur_path) + 1:]
+            ext_index = None
+
+            # ignore any hidden files that start with dot(.)
+            if (base_filename.startswith(".")):
+                utils.trace("file_paths_util: get_file_paths_by_datetime_range: found hidden file. ignoring: {}".format(filename))
+                continue
 
             # get extension
             if (base_filename.endswith(".tsv.gz")):
                 ext_index = base_filename.rindex(".tsv.gz")
             elif (base_filename.endswith(".tsv")):
                 ext_index = base_filename.rindex(".tsv")
+            else:
+                raise Exception("file_paths_util: get_file_paths_by_datetime_range: extension parsing failed: {}".format(filename))
 
             # proceed only if valid filename             
             if (ext_index != -1):
@@ -317,6 +324,7 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
                     if (not (str(end_date_numstr) < cur_start_ts or str(start_date_numstr) > cur_end_ts)):
                         # note filename1
                         paths_found.append(filename)
+                        utils.trace("file_paths_util: get_file_paths_by_datetime_range: found file: {}".format(filename))
     
     # return
     return paths_found

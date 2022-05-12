@@ -13,6 +13,18 @@ from concurrent.futures import ThreadPoolExecutor
 # TODO: these caches dont work in multithreaded env. 
 MSG_CACHE_MAX_LEN = 10000
 
+def is_critical():
+    return str(os.environ.get("OMIGO_CRITICAL", "0")) == "1"
+
+def is_error():
+    return str(os.environ.get("OMIGO_ERROR", "0")) == "1"
+
+def is_warn():
+    return str(os.environ.get("OMIGO_WARN", "0")) == "1"
+
+def is_info():
+    return str(os.environ.get("OMIGO_INFO", "1")) == "1"
+
 def is_debug():
     return str(os.environ.get("OMIGO_DEBUG", "0")) == "1"
 
@@ -63,7 +75,8 @@ def debug_once(msg, msg_cache):
         trace(msg)
  
 def info(msg):
-    print("[INFO]: {}".format(msg))
+    if (is_info()):
+        print("[INFO]: {}".format(msg))
 
 def info_once(msg, msg_cache):
     # check if msg is already displayed
@@ -78,7 +91,8 @@ def info_once(msg, msg_cache):
         trace(msg)
  
 def error(msg):
-    print("[ERROR]: {}".format(msg))
+    if (is_error()):
+        print("[ERROR]: {}".format(msg))
 
 def error_once(msg, msg_cache):
     # check if msg is already displayed
@@ -92,11 +106,35 @@ def error_once(msg, msg_cache):
     else:
         trace(msg)
  
+def enable_critical_mode():
+    os.environ["OMIGO_CRITICAL"] = "1"
+ 
+def enable_error_mode():
+    os.environ["OMIGO_ERROR"] = "1"
+ 
+def enable_warn_mode():
+    os.environ["OMIGO_WARN"] = "1"
+ 
+def enable_info_mode():
+    os.environ["OMIGO_INFO"] = "1"
+ 
 def enable_debug_mode():
     os.environ["OMIGO_DEBUG"] = "1"
 
 def enable_trace_mode():
     os.environ["OMIGO_TRACE"] = "1"
+
+def disable_critical_mode():
+    os.environ["OMIGO_CRITICAL"] = "0"
+
+def disable_error_mode():
+    os.environ["OMIGO_ERROR"] = "0"
+
+def disable_warn_mode():
+    os.environ["OMIGO_WARN"] = "0"
+
+def disable_info_mode():
+    os.environ["OMIGO_INFO"] = "0"
 
 def disable_debug_mode():
     os.environ["OMIGO_DEBUG"] = "0"
@@ -105,7 +143,8 @@ def disable_trace_mode():
     os.environ["OMIGO_TRACE"] = "0"
 
 def warn(msg):
-    print("[WARN]: " + msg)
+    if (is_warn() or is_error() or is_critical()):
+        print("[WARN]: " + msg)
 
 def warn_once(msg, msg_cache):
     # check if msg is already displayed
@@ -139,6 +178,9 @@ def url_decode(s):
         return "" 
 
     return urllib.parse.unquote_plus(s).replace("\t", " ")
+
+def url_decode_clean(s):
+    return url_decode(s).replace("\n", " ").replace("\v", " ")
 
 # move this to utils
 def parse_encoded_json(s):

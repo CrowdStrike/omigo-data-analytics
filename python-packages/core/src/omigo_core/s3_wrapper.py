@@ -33,10 +33,10 @@ def get_s3_session(region = None, profile = None):
 
     # generate s3_session
     if (region is not None and profile is not None):
-        utils.info("get_s3_session: region: {}, profile: {}".format(region, profile))
+        utils.debug("get_s3_session: region: {}, profile: {}".format(region, profile))
         session = boto3.session.Session(region_name = region, profile_name = profile)
     else:
-        utils.info("get_s3_session: no region or profile")
+        utils.debug("get_s3_session: no region or profile")
         session = boto3.session.Session()
 
     # return
