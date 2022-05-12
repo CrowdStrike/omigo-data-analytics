@@ -27,7 +27,8 @@ from requests import exceptions
 def merge(tsv_list, def_val_map = None):
     # validation
     if (len(tsv_list) == 0):
-        raise Exception("Error in input. List of tsv is empty")
+        utils.warn("Error in input. List of tsv is empty")
+        return tsv.create_empty()
 
     # remove tsvs without any columns 
     tsv_list = list(filter(lambda x: x.num_cols() > 0, tsv_list))

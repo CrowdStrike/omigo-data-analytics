@@ -288,8 +288,6 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
         # apply filter on the name and the timestamp
         for filename in files_list:
             #format: full_prefix/fileprefix-startdate-enddate-starttime-endtime.tsv
-
-
             # get the last part after /
             #sep_index = filename.rindex("/")
             #filename1 = filename[sep_index + 1:]
@@ -326,6 +324,7 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
                     if (not (str(end_date_numstr) < cur_start_ts or str(start_date_numstr) > cur_end_ts)):
                         # note filename1
                         paths_found.append(filename)
+                        utils.trace("file_paths_util: get_file_paths_by_datetime_range: found file: {}".format(filename))
     
     # return
     return paths_found

@@ -137,11 +137,11 @@ def scan_by_datetime_range(path, start_date_str, end_date_str, prefix, filter_tr
     wait_sec = 5, timeout_seconds = 600, def_val_map = None, sampling_rate = None, s3_region = None, aws_profile = None):
 
     # read filepaths by scanning. this involves listing all the files, and then matching the condititions
-    filepaths = get_file_paths_by_datetime_range(path,  start_date_str, end_date_str, prefix, spillover_window = spillover_window, sampling_rate = sampling_rate,
+    filepaths = get_file_paths_by_datetime_range(path,  start_date_str, end_date_str, prefix, spillover_window = spillover_window, num_par = num_par, sampling_rate = sampling_rate,
         s3_region = s3_region, aws_profile = aws_profile)
 
     # debug
-    utils.debug("scan_by_datetime_range: number of paths to read: {}, num_par: {}, timeout_seconds: {}".format(len(filepaths), num_par, timeout_seconds))
+    utils.info("scan_by_datetime_range: number of paths to read: {}, num_par: {}, timeout_seconds: {}".format(len(filepaths), num_par, timeout_seconds))
 
     # do some checks on the headers in the filepaths
 
