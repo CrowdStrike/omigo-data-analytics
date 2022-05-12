@@ -10,7 +10,6 @@ import json
 import time
 import zipfile
 import requests
-import random
 
 # local imports
 from omigo_core import tsv
