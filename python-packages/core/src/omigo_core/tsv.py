@@ -325,13 +325,16 @@ class TSV:
         return TSV(self.header, new_data)
 
     # TODO: use drop_cols instead coz of better name
-    def drop(self, col_or_cols, inherit_message = ""):
+    def drop(self, col_or_cols, ignore_if_missing = False, inherit_message = ""):
+        utils.warn("use drop_cols instead coz of better name")
+
         # check empty
         if (self.is_empty()):
-            raise Exception("drop: empty tsv")
+            utils.raise_exception_or_warn("drop: empty tsv", ignore_if_missing)
+            return self
 
         # get matching column and indexes
-        matching_cols = self.__get_matching_cols__(col_or_cols)
+        matching_cols = self.__get_matching_cols__(col_or_cols, ignore_if_missing = ignore_if_missing)
 
         # find the columns that dont match
         non_matching_cols = []
@@ -347,34 +350,7 @@ class TSV:
         return self.drop(col_or_cols, inherit_message)
 
     def drop_if_exists(self, col_or_cols, inherit_message = ""):
-        # check empty
-        if (self.is_empty()):
-            utils.warn("drop_if_exists: empty tsv")
-            return self
-
-        # validation
-        if (col_or_cols is None or len(col_or_cols) == 0):
-            return self
-
-        # convert to array form
-        if (isinstance(col_or_cols, str)):
-            col_or_cols = [col_or_cols]
-
-        # debug
-        inherit_message2 = inherit_message + ": drop_if_exists" if (inherit_message != "") else "drop_if_exists"
-
-        # iterate through each element and call drop
-        result = self
-        for c in col_or_cols:
-            try:
-                cols = result.__get_matching_cols__(c)
-                result = result.drop(cols, inherit_message = inherit_message2)
-            except:
-                # ignore
-                utils.debug("Column (pattern) not found or already deleted during batch deletion: {}".format(c))
-        
-        # return
-        return result
+        return self.drop(col_or_cols, ignore_if_missing = True, inherit_message = inherit_message)
 
     # TODO: the select_cols is not implemented properly
     def window_aggregate(self, win_col, agg_cols, agg_funcs, winsize, select_cols = None, sliding = False, collapse = True, suffix = "", precision = 2, inherit_message = ""):
@@ -833,22 +809,29 @@ class TSV:
         else:
             return TSV(new_header, new_data).to_numeric(new_cols, precision, inherit_message = inherit_message)
 
-    def filter(self, cols, func, include_cond = True, inherit_message = ""):
+    def filter(self, cols, func, include_cond = True, ignore_if_missing = False, inherit_message = ""):
         # check empty
         if (self.is_empty()):
-            raise Exception("filter: empty tsv")
+            utils.raise_exception_or_warn("filter: empty tsv", ignore_if_missing)
+            return self
 
         # TODO: Filter should not use regex. Need to add warning as the order of fields matter
-        cols = self.__get_matching_cols__(cols)
+        cols = self.__get_matching_cols__(cols, ignore_if_missing = ignore_if_missing)
         indexes = self.__get_col_indexes__(cols)
 
         # count the number of columns
         num_cols = len(cols)
 
+        # check if there were any matching columns
+        if (num_cols == 0):
+            utils.raise_exception_or_warn("filter: no matching cols", ignore_if_missing)
+            return self
+
         # new data
         new_data = []
         counter = 0
         for line in self.data:
+            # report progress
             counter = counter + 1
             utils.report_progress("filter: [1/1] calling function", inherit_message, counter, len(self.data))
            
@@ -856,6 +839,8 @@ class TSV:
             col_values = []
             for index in indexes:
                 col_values.append(fields[index])
+
+            # switch case for different number of inputs
             if (num_cols == 1):
                 result = func(col_values[0])
             elif (num_cols == 2):
@@ -882,11 +867,12 @@ class TSV:
             if (result == include_cond): 
                 new_data.append(line)
 
+        # return
         return TSV(self.header, new_data)
 
-    def exclude_filter(self, cols, func, inherit_message = ""):
+    def exclude_filter(self, cols, func, ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": exclude_filter" if (inherit_message != "") else "exclude_filter"
-        return self.filter(cols, func, include_cond = False, inherit_message = inherit_message2)
+        return self.filter(cols, func, include_cond = False, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
     def transform(self, cols, func, new_col_or_cols, use_array_notation = False, inherit_message = ""):
         # check empty
@@ -1032,14 +1018,20 @@ class TSV:
         # return
         return TSV(new_header, new_data)
 
-    def transform_inline(self, cols, func, inherit_message = ""):
+    def transform_inline(self, cols, func, ignore_if_missing = False, inherit_message = ""):
         # check empty
         if (self.is_empty()):
-            raise Exception("transform_inline: empty tsv")
+            utils.raise_exception_or_warn("transform_inline: empty tsv", ignore_if_missing)
+            return self
 
         # find the matching cols and indexes
-        matching_cols = self.__get_matching_cols__(cols)
+        matching_cols = self.__get_matching_cols__(cols, ignore_if_missing = ignore_if_missing)
         indexes = self.__get_col_indexes__(matching_cols)
+
+        # check if there were any matching columns
+        if (len(matching_cols) == 0):
+            utils.raise_exception_or_warn("transform_inline: no matching columns", ignore_if_missing)
+            return self     
 
         # print which columns are going to be transformed
         if (len(matching_cols) != len(cols) and len(matching_cols) != 1):
@@ -1197,6 +1189,10 @@ class TSV:
         return TSV(new_header, new_data)
 
     def show_transpose(self, n = 1, title = None):
+        # check empty
+        if (self.is_empty()):
+            return self
+
         # validation and doing min
         if (self.num_rows() < n):
             n = self.num_rows()
@@ -1207,6 +1203,10 @@ class TSV:
         return self.transpose(n).show(n = self.num_cols(), max_col_width = max_col_width, title = title)
 
     def show(self, n = 100, max_col_width = 40, title = None):
+        # check empty
+        if (self.is_empty()):
+            return self
+
         self.take(n).__show_topn__(max_col_width, title)
         # return the original tsv
         return self
@@ -1533,14 +1533,17 @@ class TSV:
         # still return as tsv with single column that is special
         return TSV(new_header, new_data)
 
-    def url_encode_inline(self, col):
-        return self.transform_inline([col], lambda x: utils.url_encode(x))
+    def url_encode_inline(self, col_or_cols, ignore_if_missing = False, inherit_message = ""):
+        inherit_message2 = inherit_message + ": url_encode_inline" if (len(inherit_message) > 0) else "url_encode_inline"
+        return self.transform_inline(col_or_cols, lambda x: utils.url_encode(x), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def url_decode_inline(self, col_or_cols): 
-        return self.transform_inline(col_or_cols, lambda x: utils.url_decode(x))
+    def url_decode_inline(self, col_or_cols, ignore_if_missing = False, inherit_message = ""): 
+        inherit_message2 = inherit_message + ": url_decode_inline" if (len(inherit_message) > 0) else "url_decode_inline"
+        return self.transform_inline(col_or_cols, lambda x: utils.url_decode(x), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def url_decode_clean_inline(self, col_or_cols): 
-        return self.transform_inline(col_or_cols, lambda x: utils.url_decode_clean(x))
+    def url_decode_clean_inline(self, col_or_cols, ignore_if_missing = False, inherit_message = ""): 
+        inherit_message2 = inherit_message + ": url_decode_clean_inline" if (len(inherit_message) > 0) else "url_decode_clean_inline"
+        return self.transform_inline(col_or_cols, lambda x: utils.url_decode_clean(x), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
     def url_encode(self, col, newcol):
         return self.transform([col], lambda x: utils.url_encode(x), newcol)
@@ -1592,18 +1595,52 @@ class TSV:
     def add_const(self, col, value, inherit_message = ""):
         # check empty
         if (self.is_empty()):
-            return new_with_cols([col], [value])
+            # checking empty value
+            if (value == ""):
+                utils.warn("add_const: empty tsv and empty value. extending just the header")
+                return new_with_cols([col])
+            else:
+                raise Exception("add_const: empty tsv but non empty value")
 
+        # return
         inherit_message2 = inherit_message + ": add_const" if (len(inherit_message) > 0) else "add_const"
         return self.transform([self.header_fields[0]], lambda x: str(value), col, inherit_message = inherit_message2)   
 
     def add_const_if_missing(self, col, value, inherit_message = ""):
+        # check empty
+        if (self.is_empty()):
+            # checking empty value
+            if (value == ""):
+                utils.warn("add_const_if_missing: empty tsv and empty value. extending just the header")
+                return new_with_cols([col])
+            else:
+                raise Exception("add_const_if_missing: empty tsv but non empty value")
+
         # check for presence
         if (col in self.header_fields):
             return self
         else:
             inherit_message2 = inherit_message + ": add_const_if_missing" if (len(inherit_message) > 0) else "add_const_if_missing"
             return self.add_const(col, value, inherit_message = inherit_message2)
+
+    def add_empty_col_if_missing(self, col, inherit_message = ""):
+        # check empty
+        if (self.is_empty()):
+            return new_win_col([col])
+
+        # add only if missing
+        if (col in self.get_header_fields()):
+            return self
+
+        # check no data
+        if (self.num_rows() == 0):
+            header_fields2 = list([h for h in self.get_header_fields()])
+            header_fields2.append(col)
+            return new_win_col(header_fields2)
+
+        # add a new column with empty value
+        inherit_message2 = inherit_message + ": add_empty_col" if (len(inherit_message) > 0) else "add_empty_col"
+        return self.add_const(col, "", inherit_message = inherit_message2)
 
     def add_row(self, row_fields):
         # check empty
@@ -1696,10 +1733,10 @@ class TSV:
         utils.warn("Deprecated: Use add_prefix instead")
         return self.add_prefix(self, prefix, cols)
 
-    def remove_suffix(self, suffix):
+    def remove_suffix(self, suffix, ignore_if_missing = False):
         # check empty
         if (self.is_empty()):
-            utils.warn("remove_suffix: empty tsv")
+            utils.raise_exception_or_warn("remove_suffix: empty tsv", ignore_if_missing)
             return self
 
         # create a map
@@ -1720,27 +1757,23 @@ class TSV:
 
         # validation
         if (len(mp) == 0):
-            raise Exception("suffix didnt match any of the columns:", suffix, str(self.get_header_fields()))
+            utils.raise_exception_or_warn("suffix didnt match any of the columns: {}, {}".format(suffix, str(self.get_header_fields())), ignore_if_missing)
 
         new_header = "\t".join(list([h if (h not in mp.keys()) else mp[h] for h in self.header_fields]))
         return TSV(new_header, self.data)
 
-    def add_prefix(self, prefix, cols = None):
+    def add_prefix(self, prefix, cols = None, ignore_if_missing = False):
         # check empty
         if (self.is_empty()):
-            # check for cols
-            if (cols is None):
-                utils.warn("add_prefix: empty tsv")
-                return self
-            else:
-                raise Exception("add_prefix: empty tsv")
+            utils.raise_exception_or_warn("add_prefix: empty tsv", ignore_if_missing)
+            return self
 
         # by default all columns are renamed
         if (cols is None):
             cols = self.header_fields
  
         # resolve columns
-        cols = self.__get_matching_cols__(cols)
+        cols = self.__get_matching_cols__(cols, ignore_if_missing = ignore_if_missing)
 
         # create new header_fields
         new_header_fields = []
@@ -1755,22 +1788,18 @@ class TSV:
         # return
         return TSV("\t".join(new_header_fields), self.data)
 
-    def add_suffix(self, suffix, cols = None):
+    def add_suffix(self, suffix, cols = None, ignore_if_missing = False):
         # check empty
         if (self.is_empty()):
-            # check for cols
-            if (cols is None):
-                utils.warn("add_suffix: empty tsv")
-                return self
-            else:
-                raise Exception("add_suffix: empty tsv")
+            utils.raise_exception_or_warn("add_suffix: empty tsv", ignore_if_missing)
+            return self
 
         # by default all columns are renamed
         if (cols is None):
             cols = self.header_fields
  
         # resolve columns
-        cols = self.__get_matching_cols__(cols)
+        cols = self.__get_matching_cols__(cols, ignore_if_missing = ignore_if_missing)
 
         # create new header_fields
         new_header_fields = []
@@ -1785,15 +1814,11 @@ class TSV:
         # return
         return TSV("\t".join(new_header_fields), self.data)
 
-    def rename_prefix(self, old_prefix, new_prefix, cols = None):
+    def rename_prefix(self, old_prefix, new_prefix, cols = None, ignore_if_missing = False):
         # check empty
         if (self.is_empty()):
-            # check for cols
-            if (cols is None):
-                utils.warn("rename_prefix: empty tsv")
-                return self
-            else:
-                raise Exception("rename_prefix: empty tsv")
+            utils.raise_exception_or_warn("rename_prefix: empty tsv", ignore_if_missing)
+            return self
 
         # either selective columns can be renamed or all matching ones
         if (cols is None):
@@ -1801,7 +1826,7 @@ class TSV:
             cols = "{}:.*".format(old_prefix)
 
         # resolve
-        cols = self.__get_matching_cols__(cols)
+        cols = self.__get_matching_cols__(cols, ignore_if_missing = ignore_if_missing)
 
         # create new header_fields
         new_header_fields = []
@@ -1816,15 +1841,11 @@ class TSV:
         # return
         return TSV("\t".join(new_header_fields), self.data)
 
-    def rename_suffix(self, old_suffix, new_suffix, cols = None):
+    def rename_suffix(self, old_suffix, new_suffix, cols = None, ignore_if_missing = False):
         # check empty
         if (self.is_empty()):
-            # check for cols
-            if (cols is None):
-                utils.warn("rename_suffix: empty tsv")
-                return self
-            else:
-                raise Exception("rename_suffix: empty tsv")
+            utils.raise_exception_or_warn("rename_suffix: empty tsv", ignore_if_missing)
+            return self
 
         # either selective columns can be renamed or all matching ones
         if (cols is None):
@@ -1832,7 +1853,7 @@ class TSV:
             cols = ".*:{}".format(old_suffix)
 
         # resolve
-        cols = self.__get_matching_cols__(cols)
+        cols = self.__get_matching_cols__(cols, ignore_if_missing = ignore_if_missing)
 
         # create new header_fields
         new_header_fields = []
@@ -1847,10 +1868,10 @@ class TSV:
         # return
         return TSV("\t".join(new_header_fields), self.data)
 
-    def remove_prefix(self, prefix):
+    def remove_prefix(self, prefix, ignore_if_missing = False):
         # check empty
         if (self.is_empty()):
-            utils.warn("remove_prefix: empty tsv")
+            utils.raise_exception_or_warn("remove_prefix: empty tsv", ignore_if_missing)
             return self
 
         # create a map
@@ -1870,7 +1891,7 @@ class TSV:
 
         # validation
         if (len(mp) == 0):
-            raise Exception("prefix didnt match any of the columns:", prefix, str(self.get_header_fields()))
+            utils.raise_exception_or_warn("prefix didnt match any of the columns: {}, {}".format(prefix, str(self.get_header_fields())), ignore_if_missing)
 
         new_header = "\t".join(list([h if (h not in mp.keys()) else mp[h] for h in self.header_fields]))
         return TSV(new_header, self.data)
@@ -2166,6 +2187,7 @@ class TSV:
             if (sample_key <= sampling_ratio):
                 new_data.append(line)
 
+        # return
         return TSV(self.header, new_data)
 
     # sample by taking only n number of unique values for a specific column
@@ -2196,8 +2218,9 @@ class TSV:
             utils.warn("left_join: empty this tsv")
             return self
 
+        # return
         inherit_message2 = inherit_message + ": left_join" if (inherit_message != "") else "left_join"
-        return self.join(that, lkeys, rkeys, join_type = "left", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, split_threshold = split_threshold, inherit_message = inherit_message2)
+        return self.__join__(that, lkeys, rkeys, join_type = "left", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, split_threshold = split_threshold, inherit_message = inherit_message2)
 
     def right_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, split_threshold = None, inherit_message = ""):
         # check for empty
@@ -2205,16 +2228,18 @@ class TSV:
             utils.warn("right_join: empty this tsv")
             return that
 
+        # return
         inherit_message2 = inherit_message + ": left_join" if (inherit_message != "") else "right_join"
-        return self.join(that, lkeys, rkeys, join_type = "right", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, split_threshold = split_threshold, inherit_message = inherit_message2)
+        return self.__join__(that, lkeys, rkeys, join_type = "right", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, split_threshold = split_threshold, inherit_message = inherit_message2)
 
     def inner_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, split_threshold = None, inherit_message = ""):
         # check for empty
         if (self.is_empty()):
             raise Exception("inner_join: empty this tsv")
 
+        # return
         inherit_message2 = inherit_message + ": left_join" if (inherit_message != "") else "inner_join"
-        return self.join(that, lkeys, rkeys, join_type = "inner", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, split_threshold = split_threshold, inherit_message = inherit_message2)
+        return self.__join__(that, lkeys, rkeys, join_type = "inner", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, split_threshold = split_threshold, inherit_message = inherit_message2)
 
     def outer_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, split_threshold = None, inherit_message = ""):
         # check for empty
@@ -2222,11 +2247,16 @@ class TSV:
             utils.warn("outer_join: empty this tsv")
             return that
 
+        # return
         inherit_message2 = inherit_message + ": left_join" if (inherit_message != "") else "outer_join"
-        return self.join(that, lkeys, rkeys, join_type = "outer", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, split_threshold = split_threshold, inherit_message = inherit_message2)
+        return self.__join__(that, lkeys, rkeys, join_type = "outer", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, split_threshold = split_threshold, inherit_message = inherit_message2)
 
-    # primary join method
-    def join(self, that, lkeys, rkeys = None, join_type = "inner", lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, split_threshold = None, inherit_message = ""):
+    def join(self, *args, **kwargs):
+        utils.warn("Use the other methods: inner_join, left_join, right_join, outer_join versions of this api and not this one directly")
+        return self.__join__(*args, **kwargs)
+
+    # primary join method. Use the other inner, left, right versions and not this directly
+    def __join__(self, that, lkeys, rkeys = None, join_type = "inner", lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, split_threshold = None, inherit_message = ""):
         # matching
         lkeys = self.__get_matching_cols__(lkeys)
         rkeys = that.__get_matching_cols__(rkeys) if (rkeys is not None) else lkeys 
@@ -2760,14 +2790,20 @@ class TSV:
         return TSV(new_header, new_data)
 
     # TODO: Need better naming. The suffix semantics have been changed.
-    def explode(self, cols, exp_func, prefix, default_val = None, collapse = True, inherit_message = ""):
+    def explode(self, cols, exp_func, prefix, default_val = None, collapse = True, ignore_if_missing = False, inherit_message = ""):
         # check empty
         if (self.is_empty()):
-            raise Exception("explode: empty tsv")
+            utils.raise_exception_or_warn("explode: empty tsv", ignore_if_missing)
+            return self
 
         # get matching column and indexes
-        matching_cols = self.__get_matching_cols__(cols)
+        matching_cols = self.__get_matching_cols__(cols, ignore_if_missing = ignore_if_missing)
         indexes = self.__get_col_indexes__(matching_cols)
+
+        # check for no matching cols
+        if (len(matching_cols) == 0):
+            utils.raise_exception_or_warn("explode: no matching cols: {}".format(cols), ignore_if_missing)
+            return self
 
         # iterate
         exploded_values = []
@@ -3190,11 +3226,12 @@ class TSV:
     # TODO: __explode_json_index__ needs to be tested and confirmed
     # TODO: need proper xpath based exclusion to better handle noise
     def explode_json(self, col, prefix = None, accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None,
-        merge_list_method = "cogroup", collapse_primitive_list = True, url_encoded_cols = None, nested_cols = None, collapse = True, inherit_message = ""):
+        merge_list_method = "cogroup", collapse_primitive_list = True, url_encoded_cols = None, nested_cols = None, collapse = True, ignore_if_missing = False, inherit_message = ""):
 
         # check empty
         if (self.is_empty()):
-            raise Exception("explode_json: empty tsv")
+            utils.raise_exception_or_warn("explode_json: empty tsv", ignore_if_missing)
+            return self
 
         # warn
         if (excluded_cols is not None):
@@ -3202,7 +3239,8 @@ class TSV:
 
         # validation
         if (col not in self.header_map.keys()):
-            raise Exception("Column not found:", str(col), str(self.header_fields))
+            utils.raise_exception_or_warn("Column not found: {}, {}".format(str(col), str(self.header_fields)), ignore_if_missing)
+            return self
 
         # warn on risky combinations
         if (merge_list_method == "cogroup"):
@@ -3367,9 +3405,9 @@ class TSV:
             raise Exception("Length of values is more than 10. Not supported." + str(vs))
 
     # this method sets the missing values for columns
-    def set_missing_values(self, cols, default_val, inherit_message = ""):
+    def set_missing_values(self, cols, default_val, ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": set_missing_values" if (len(inherit_message) > 0) else "set_missing_values"
-        return self.transform_inline(cols, lambda x: x if (x != "") else default_val, inherit_message = inherit_message2)
+        return self.transform_inline(cols, lambda x: x if (x != "") else default_val, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
     # calls class that inherits TSV
     def extend_class(self, newclass, *args, **kwargs):
@@ -3442,7 +3480,7 @@ class TSV:
     # this is a utility function that takes list of column names that support regular expression.
     # col_or_cols is a special variable that can be either single column name or an array. python
     # treats a string as an array of characters, so little hacky but a more intuitive api wise
-    def __get_matching_cols__(self, col_or_cols):
+    def __get_matching_cols__(self, col_or_cols, ignore_if_missing = False):
         # handle boundary conditions
         if (col_or_cols is None or len(col_or_cols) == 0):
             return []
@@ -3479,14 +3517,15 @@ class TSV:
 
             # raise exception if some col or pattern is not found
             if (col_pattern_found == False):
-                raise Exception("Col name or pattern not found:", col_pattern, str(self.header_fields))
+                utils.raise_exception_or_warn("Col name or pattern not found: {}, {}".format(col_pattern, str(self.header_fields)), ignore_if_missing)
+                return []
 
         # return
         return matching_cols
 
-    def __has_matching_cols__(self, col_or_cols):
+    def __has_matching_cols__(self, col_or_cols, ignore_if_missing = False):
         try:
-            if (len(self.__get_matching_cols__(col_or_cols)) > 0):
+            if (len(self.__get_matching_cols__(col_or_cols, ignore_if_missing = ignore_if_missing)) > 0):
                 return True
             else:
                 return False
@@ -3498,6 +3537,7 @@ class TSV:
         for c in cols:
             indexes.append(self.header_map[c])
 
+        # return
         return indexes
 
     # this method prints message so that the transformation have some way of notifying what is going on
