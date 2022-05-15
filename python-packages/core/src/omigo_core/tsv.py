@@ -1623,24 +1623,46 @@ class TSV:
             inherit_message2 = inherit_message + ": add_const_if_missing" if (len(inherit_message) > 0) else "add_const_if_missing"
             return self.add_const(col, value, inherit_message = inherit_message2)
 
-    def add_empty_col_if_missing(self, col, inherit_message = ""):
+    def add_empty_cols_if_missing(self, cols, inherit_message = ""):
         # check empty
         if (self.is_empty()):
-            return new_win_col([col])
+            return new_with_cols(cols)
 
         # add only if missing
-        if (col in self.get_header_fields()):
+        missing_cols = []
+        for col in cols:
+            if (col not in self.get_header_fields()):
+                missing_cols.append(col)
+
+        # check for no missing cols
+        if (len(missing_cols) == 0):
             return self
+
+        # create new header fields
+        new_header_fields = utils.merge_arrays([self.get_header_fields(), missing_cols])
 
         # check no data
         if (self.num_rows() == 0):
-            header_fields2 = list([h for h in self.get_header_fields()])
-            header_fields2.append(col)
-            return new_win_col(header_fields2)
+            return new_with_cols(new_header_fields)
 
-        # add a new column with empty value
-        inherit_message2 = inherit_message + ": add_empty_col" if (len(inherit_message) > 0) else "add_empty_col"
-        return self.add_const(col, "", inherit_message = inherit_message2)
+        # create new header and empty row for missing fields
+        new_header = "\t".join(new_header_fields)
+        empty_row = "\t".join(list(["" for c in missing_cols]))
+        new_data = []
+
+        # iterate and add
+        counter = 0
+        for line in self.data:
+            # report progress
+            counter = counter + 1
+            utils.report_progress("add_empty_cols_if_missing: [1/1] calling function", inherit_message, counter, len(self.data))
+
+            # create new line
+            new_line = "\t".join([line, empty_row])
+            new_data.append(new_line)
+
+        # return
+        return TSV(new_header, new_data)
 
     def add_row(self, row_fields):
         # check empty
@@ -1914,6 +1936,7 @@ class TSV:
         new_data = []
         counter = 0
         for line in self.data:
+            # report progress
             counter = counter + 1
             utils.report_progress("sample: [1/1] calling function", inherit_message, counter, len(self.data))
 
