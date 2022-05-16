@@ -3689,7 +3689,23 @@ def write(xtsv, path):
     return tsvutils.save_to_file(xtsv, path)
 
 def merge(xtsvs, def_val_map = None):
+    # warn if def_val_map is not defined
+    if (def_val_map is None):
+        utils.warn("merge: use merge_union or merge_intersect")
+
+    # return
     return tsvutils.merge(xtsvs, def_val_map = def_val_map)
+
+def merge_union(xtsvs, def_val_map = {}):
+    # check def_val_map
+    if (def_val_map is None):
+        raise Exception("merge_union: def_val_map can not be none for union. Use merge_intersect instead")
+
+    # return
+    return tsvutils.merge(xtsvs, def_val_map = def_val_map)
+
+def merge_intersect(xtsvs):
+    return tsvutils.merge(xtsvs, def_val_map = None)
 
 def exists(path):
     return tsvutils.check_exists(path)
