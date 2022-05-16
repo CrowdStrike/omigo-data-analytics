@@ -1592,6 +1592,38 @@ class TSV:
 
         return TSV(self.header, new_data)
 
+    # this method finds the set difference between this and that. if cols is None, then all columns are taken
+    def difference(self, that, cols = None):
+        # check this empty. return empty
+        if (self.is_empty() or self.num_rows() == 0):
+            return self
+
+        # check that empty.  return self
+        if (that.is_empty() or that.num_rows() == 0):
+            return self
+
+        # define columns
+        cols1 = None
+        cols2 = None
+
+        # resolve columns
+        if (cols is None):
+            cols1 = self.get_columns()
+            cols2 = that.get_columns()
+        else:
+            cols1 = self.__get_matching_cols__(cols)
+            cols2 = that.__get_matching_cols__(cols)
+
+        # generate key hash
+        temp_col = "__difference_col__"
+        hash_tsv1= self.generate_key_hash(cols1, temp_col)
+        hash_tsv2 = that.generate_key_hash(cols2, temp_col)
+
+        # remove entries from this where the hashes exist in that
+        return hash_tsv1 \
+            .values_not_in(temp_col, hash_tsv2.col_as_array_uniq(temp_col)) \
+            .drop(temp_col)
+    
     def add_const(self, col, value, inherit_message = ""):
         # check empty
         if (self.is_empty()):
