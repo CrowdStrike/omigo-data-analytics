@@ -129,11 +129,11 @@ def get_str_map_without_keys(mp, excluded_keys):
 
     return mp2
 
-# TODO
+# TODO. better naming
 def datetime_to_utctimestamp(x):
     if (x.endswith("UTC") or x.endswith("GMT") or x.endswith("Z") or x.endswith("+00:00")):
         return int(parser.parse(x).timestamp())
-    elif (len(x) == 10):
+    elif (len(x) == 10 and x.find("-") != -1):
         # 2021-11-01
         x = x + "T00:00:00Z"
         return int(parser.parse(x).timestamp())
@@ -145,6 +145,12 @@ def datetime_to_utctimestamp(x):
         # 2021-11-01T00:00:00.000000
         x = x + "Z"
         return int(parser.parse(x).timestamp())
+    elif (len(str(x)) == 10 and str(x).isnumeric() == True):
+        # this looks like a numeric timestamp
+        return int(x)
+    elif (len(str(x)) == 13 and str(x).isnumeric() == True):
+        # this looks like numeric timestamp in millis
+        return int(int(x) / 1000)
     else:
         raise Exception("Unknown date format. Problem with UTC: {}".format(x))
 

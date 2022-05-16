@@ -134,7 +134,7 @@ def get_etl_file_base_name_by_ts(prefix, start_ts, end_ts):
     return "{}-{}-{}".format(prefix, start_datetime_str, end_datetime_str)
     
 def scan_by_datetime_range(path, start_date_str, end_date_str, prefix, filter_transform_func = None, transform_func = None, spillover_window = 1, num_par = 5,
-    wait_sec = 5, timeout_seconds = 600, def_val_map = None, sampling_rate = None, s3_region = None, aws_profile = None):
+    wait_sec = 5, timeout_seconds = 600, def_val_map = {}, sampling_rate = None, s3_region = None, aws_profile = None):
 
     # read filepaths by scanning. this involves listing all the files, and then matching the condititions
     filepaths = get_file_paths_by_datetime_range(path,  start_date_str, end_date_str, prefix, spillover_window = spillover_window, num_par = num_par, sampling_rate = sampling_rate,
