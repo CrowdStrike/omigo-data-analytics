@@ -68,7 +68,7 @@ class TSV:
         # return
         return self
             
-    def __has_col__(self, col):
+    def has_col(self, col):
         # validate xcol
         return col in self.header_map.keys()
 
@@ -3372,7 +3372,7 @@ class TSV:
 
         # validate cols
         for col in cols:
-            if (self.__has_col__(col) == False):
+            if (self.has_col(col) == False):
                 raise Exception("col doesnt exist:", col, str(self.header_fields))
      
         # select the cols 
