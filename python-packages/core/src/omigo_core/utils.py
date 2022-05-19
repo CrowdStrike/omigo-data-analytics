@@ -260,25 +260,26 @@ def is_array_of_string_values(col_or_cols):
             break
     return is_array
 
-def is_int_col(xtsv, col):
+def is_numeric(v):
+    return str(v).isnumeric()
+
+def is_float(v):
     try:
-        for v in xtsv.col_as_array(col):
-            if (str(int(v)) != v):
-                return False
+        float(str(v))
+        return True
     except:
         return False
 
-    return True
+def is_int_col(xtsv, col):
+    utils.warn("Deprecated. use tsv.has_all_int_values")
+    return xtsv.has_all_int_values(col)
 
 def is_float_col(xtsv, col):
-    try:
-        xtsv.col_as_float_array(col)
-    except:
-        return False
-
-    return True
+    utils.warn("Deprecated. use tsv.has_all_float_values")
+    return xtsv.has_all_float_values(col)
 
 def is_pure_float_col(xtsv, col):
+    raise Exception("Deprecated. is_pure_float_col Dont use this method")
     try:
         found = False
         for v in xtsv.col_as_float_array(col):
@@ -292,6 +293,7 @@ def is_pure_float_col(xtsv, col):
         return False
 
 def is_float_with_fraction(xtsv, col):
+    raise Exception("Deprecated. is_float_with_fraction Dont use this method")
     if (is_float_col(xtsv, col) == False):
         return False
 
