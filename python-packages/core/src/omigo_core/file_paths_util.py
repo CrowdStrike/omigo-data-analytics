@@ -12,7 +12,7 @@ from omigo_core import utils
 # constant
 NUM_HOURS = 24
 
-# method to read the data 
+# method to read the data
 def read_filepaths(path, start_date_str, end_date_str, fileprefix, s3_region, aws_profile, granularity, ignore_missing = False):
     if (granularity == "hourly"):
         return read_filepaths_hourly(path, start_date_str, end_date_str, fileprefix, s3_region, aws_profile, "", ignore_missing)
@@ -37,7 +37,7 @@ def get_etl_level_prefix(curdate, etl_level):
             f = "%d"
         else:
             raise Exception("Invalid value for etl_level :", etl_level, part)
- 
+
         prefix = prefix + part + "-" + str(curdate.strftime(f)) + "/"
 
     return prefix
@@ -100,7 +100,7 @@ def check_exists(path, s3_region = None, aws_profile = None):
     if (os.path.exists(path)):
         return True
 
-    return False 
+    return False
 
 def read_filepaths_daily(path, start_date_str, end_date_str, fileprefix, s3_region, aws_profile, etl_level, ignore_missing):
     # parse input dates
@@ -252,12 +252,12 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
     end_date = parse_date_multiple_formats(end_date_str)
 
     # get number of days inclusive start and end and include +/- 1 day buffer for overlap
-    num_days = (end_date - start_date).days + 1 + (spillover_window * 2) 
+    num_days = (end_date - start_date).days + 1 + (spillover_window * 2)
     start_date_minus_window = start_date - datetime.timedelta(days = spillover_window)
 
     # create a numeric representation of date
-    start_date_numstr = create_date_numeric_representation(start_date_str, "000000")     
-    end_date_numstr = create_date_numeric_representation(end_date_str, "999999")     
+    start_date_numstr = create_date_numeric_representation(start_date_str, "000000")
+    end_date_numstr = create_date_numeric_representation(end_date_str, "999999")
 
     # create variable to store results
     tasks = []
@@ -284,7 +284,7 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
     for files_list in results:
         # debug
         utils.trace("file_paths_util: get_file_paths_by_datetime_range: number of candidate files to read: cur_date: {}, count: {}".format(cur_date, len(files_list)))
- 
+
         # apply filter on the name and the timestamp
         for filename in files_list:
             #format: full_prefix/fileprefix-startdate-enddate-starttime-endtime.tsv
@@ -307,7 +307,7 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
             else:
                 raise Exception("file_paths_util: get_file_paths_by_datetime_range: extension parsing failed: {}".format(filename))
 
-            # proceed only if valid filename             
+            # proceed only if valid filename
             if (ext_index != -1):
                 # strip the extension
                 filename2 = base_filename[0:ext_index]
@@ -325,7 +325,7 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
                         # note filename1
                         paths_found.append(filename)
                         utils.trace("file_paths_util: get_file_paths_by_datetime_range: found file: {}".format(filename))
-    
+
     # return
     return paths_found
 

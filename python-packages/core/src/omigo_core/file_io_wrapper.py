@@ -31,7 +31,7 @@ class FileWriter:
                 output_file = gzip.open(self.output_file_name, "wt")
                 # write all the content
                 for line in self.data:
-                    output_file.write(line) 
+                    output_file.write(line)
             elif (self.output_file_name.endswith(".zip")):
                 output_zipf = zipfile.ZipFile(self.output_file_name, "w")
                 output_file = output_zipf.open(self.output_file_name.split("/")[-1][0:-4], "w")
@@ -42,7 +42,7 @@ class FileWriter:
                 output_file = open(self.output_file_name, "w")
                 # write all the content
                 for line in self.data:
-                    output_file.write(line) 
+                    output_file.write(line)
 
             # close
             if (output_file is not None):
@@ -74,7 +74,7 @@ class TSVFileWriter:
                 output_file.write(xtsv.get_header() + "\n")
                 # write all the content
                 for line in xtsv.get_data():
-                    output_file.write(line + "\n") 
+                    output_file.write(line + "\n")
             elif (output_file_name.endswith(".zip")):
                 output_zipf = zipfile.ZipFile(output_file_name, "w")
                 output_file = output_zipf.open(output_file_name.split("/")[-1][0:-4], "w")
@@ -89,7 +89,7 @@ class TSVFileWriter:
                 output_file.write(xtsv.get_header() + "\n")
                 # write all the content
                 for line in xtsv.get_data():
-                    output_file.write(line + "\n") 
+                    output_file.write(line + "\n")
 
             # close
             if (output_file is not None):
@@ -107,5 +107,5 @@ class FileReader:
 
     def close(self):
         pass
-        
+
 

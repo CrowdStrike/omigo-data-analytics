@@ -29,7 +29,7 @@ def merge(tsv_list, def_val_map = None):
         utils.warn("Error in input. List of tsv is empty")
         return tsv.create_empty()
 
-    # remove tsvs without any columns 
+    # remove tsvs without any columns
     tsv_list = list(filter(lambda x: x.num_cols() > 0, tsv_list))
 
     # base condition
@@ -54,7 +54,7 @@ def merge(tsv_list, def_val_map = None):
             else:
                 utils.warn("Mismatch in order of header fields: {}, {}. Using merge intersect".format(header.split("\t"), t.get_header().split("\t")))
             return merge_intersect(tsv_list, def_val_map)
-                
+
         index = index + 1
 
     # simple condition
@@ -115,7 +115,7 @@ def merge_intersect(tsv_list, def_val_map = None):
 
             # some validation. the default value columns should exist somewhere
             for h in def_val_map.keys():
-                # check if all default columns exist 
+                # check if all default columns exist
                 if (h not in diff_cols and h not in same_cols):
                     raise Exception("Default value for a column given which does not exist:", h)
 
@@ -127,7 +127,7 @@ def merge_intersect(tsv_list, def_val_map = None):
                 else:
                     utils.debug("merge_intersect: assigning empty string as default value to column: {}".format(h))
                     effective_def_val_map[h] = ""
-        
+
             # get the list of keys in order
             keys_order = []
             for h in header_fields:
@@ -160,7 +160,7 @@ def merge_intersect(tsv_list, def_val_map = None):
         tsv_list2 = []
         for t in tsv_list:
             tsv_list2.append(t.select(same_cols))
-        return merge(tsv_list2) 
+        return merge(tsv_list2)
 
 def read(input_file_or_files, sep = None, s3_region = None, aws_profile = None):
     input_files = __get_argument_as_array__(input_file_or_files)
@@ -365,7 +365,7 @@ def load_from_array_of_map(map_arr):
             v = ""
             if (k in mp.keys()):
                 v = str(mp[k])
-     
+
             fields.append(v)
 
         line = "\t".join(fields)
@@ -410,7 +410,7 @@ def __read_base_url__(url, query_params = {}, headers = {}, body = None, usernam
 
     # exception handling
     try:
-        # call the web service    
+        # call the web service
         if (body is None):
             if (username is not None and password is not None):
                 response = requests.get(url, auth = (username, password), headers = headers, timeout = timeout_sec, verify = verify)
@@ -421,13 +421,13 @@ def __read_base_url__(url, query_params = {}, headers = {}, body = None, usernam
                 response = requests.post(url, auth = (username, password), json = json.loads(body), headers = headers, timeout = timeout_sec, verify = verify)
             else:
                 response = requests.post(url, json = json.loads(body), headers = headers, timeout = timeout_sec, verify = verify)
-    
+
         # return response
         return response, None
     except exceptions.RequestException as e:
         utils.warn("__read_base_url__: Found exception while making request: {}".format(e))
         return None, e
-        
+
 # TODO: the semantics of this api are not clear
 def read_url_json(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 5, verify = True):
     utils.warn("read_url_json will flatten json that comes out as list. This api is still under development")
@@ -449,17 +449,17 @@ def read_url_json(url, query_params = {}, headers = {}, body = None, username = 
             # iterate and add as row
             for v in json_obj:
                 fields = [utils.url_encode(json.dumps(v)).replace("\n", " "), str(status_code), str(error_msg)]
-                data.append("\t".join(fields)) 
+                data.append("\t".join(fields))
         elif (isinstance(json_obj, dict)):
             fields = [utils.url_encode(json.dumps(response_str)).replace("\n", " "), str(status_code), str(error_msg)]
-            data.append("\t".join(fields)) 
+            data.append("\t".join(fields))
         else:
             fields = ["", "0", "Unable to parse the json response: {}".format(response_str)]
-            data.append("\t".join(fields)) 
+            data.append("\t".join(fields))
     else:
         fields = ["", "0", "Unable to parse the json response: {}".format(utils.url_encode(response_str).replace("\n", " "))]
         data.append("\t".join(fields))
- 
+
     return tsv.TSV(header, data).validate()
 
 def read_url_response(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 30, verify = True, num_retries = 1, retry_sleep_sec = 1):
@@ -541,12 +541,12 @@ def read_url_as_tsv(url, query_params = {}, headers = {}, sep = None, username =
     elif (url.endswith(".zip")):
         file_type = "zip"
 
-    # detect extension  
+    # detect extension
     ext_type = None
     if (url.endswith(".csv") or url.endswith(".csv.gz") or url.endswith(".csv.zip")):
         ext_type = "csv"
         utils.warn("CSV file detected. Only simple csv files are supported where comma and tabs are not part of any data.")
-    elif (url.endswith(".tsv") or url.endswith(".tsv.gz") or url.endswith(".tsv.zip")): 
+    elif (url.endswith(".tsv") or url.endswith(".tsv.gz") or url.endswith(".tsv.zip")):
         ext_type = "tsv"
     else:
         utils.warn("Unknown file extension. Doing best effort in content type detection")
@@ -575,7 +575,7 @@ def read_url_as_tsv(url, query_params = {}, headers = {}, sep = None, username =
             utils.warn("Non TSV input file has tabs. Converting tabs to spaces")
             header = header.replace("\t", " ")
             data = [x.replace("\t", " ") for x in data]
- 
+
         # replace separator with tabs
         header = header.replace(sep, "\t")
         data = [x.replace(sep, "\t") for x in data]
@@ -612,8 +612,8 @@ def from_df(df):
 
     # return
     return tsv.TSV("\t".join(header_fields), data).validate()
-    
-    
+
+
 # this method returns the arg_or_args as an array of single string if the input is just a string, or return as original array
 # useful for calling method arguments that can take single value or an array of values.
 # TBD: Relies on fact that paths are never single letter strings

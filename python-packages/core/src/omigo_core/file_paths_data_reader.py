@@ -10,21 +10,21 @@ class FilePathsDataReader:
     """A simple class to read filepaths data"""
 
     s3_region = ""
-    aws_profile = ""  
- 
-    # file paths reader is an iterator based reader 
-    file_paths_readers = None 
+    aws_profile = ""
+
+    # file paths reader is an iterator based reader
+    file_paths_readers = None
 
     # cur_data holds the current data block
     cur_data = None
 
     # cur_index is the pointer to the line in cur_data
     cur_index = 0
- 
+
     # header is the header line for entire dataset
     header = None
-   
-    # constructor 
+
+    # constructor
     def __init__(self, filepaths, s3_region, aws_profile):
         # s3 config
         self.s3_region = s3_region
@@ -91,7 +91,7 @@ class FilePathsDataReader:
         if (self.has_next() == False):
             print("FilePathsDataReader: next() has next is false and next is called")
             return None
-        
+
         # check for current pointer
         if (self.cur_index < len(self.cur_data)):
             result = self.cur_data[self.cur_index].rstrip("\n")
@@ -116,7 +116,7 @@ class FilePathsDataReader:
 
                         # check if found a valid file
                         if (self.cur_index < len(self.cur_data)):
-                            found = True 
+                            found = True
                     else:
                         # invalidate the buffers
                         self.cur_data = None
