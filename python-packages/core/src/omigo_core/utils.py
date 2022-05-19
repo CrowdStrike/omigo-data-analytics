@@ -280,29 +280,9 @@ def is_float_col(xtsv, col):
 
 def is_pure_float_col(xtsv, col):
     raise Exception("Deprecated. is_pure_float_col Dont use this method")
-    try:
-        found = False
-        for v in xtsv.col_as_float_array(col):
-            if (float(int(v)) != v):
-                found = True
-        if (found == True):
-            return True
-        else:
-            return False
-    except:
-        return False
 
 def is_float_with_fraction(xtsv, col):
     raise Exception("Deprecated. is_float_with_fraction Dont use this method")
-    if (is_float_col(xtsv, col) == False):
-        return False
-
-    found = False
-    for v in xtsv.col_as_array(col):
-        if ("." in v):
-            return True
-
-    return False
 
 def compute_hash(x, seed = 0):
     return abs(mmh3.hash64(str(x) + str(seed))[0])

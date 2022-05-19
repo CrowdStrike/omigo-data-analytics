@@ -1499,7 +1499,7 @@ class TSV:
         if (infer_data_types == True):
             for col in self.get_columns():
                 # check for columns that are not supposed to be converted
-                if (no_infer_cols is not None and col in no_infer_cols.keys()):
+                if (no_infer_cols is not None and col in no_infer_cols):
                     continue
 
                 # determine the inferred data type
