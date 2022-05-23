@@ -1781,8 +1781,7 @@ class TSV:
         for h in self.header_fields:
             if (h in mp.keys()):
                 # read value and replace any newline or tab characters
-                v = str(mp[h])
-                v = v.replace("\t", " ").replace("\n", " ").replace("\v", " ")
+                v = str(mp[h]).replace("\t", " ").replace("\n", " ").replace("\v", " ")
 
                 # append the value
                 new_fields.append(str(mp[h]))

@@ -365,8 +365,7 @@ def load_from_array_of_map(map_arr):
             v = ""
             if (k in mp.keys()):
                 # read as string and replace any newline or tab characters
-                v = str(mp[k])
-                v = v.replace("\t", " ").replace("\n", " ").replace("\v", " ")
+                v = str(mp[k]).replace("\t", " ").replace("\n", " ").replace("\v", " ")
 
             # append
             fields.append(v)
