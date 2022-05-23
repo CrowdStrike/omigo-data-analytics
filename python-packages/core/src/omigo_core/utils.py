@@ -7,10 +7,10 @@ from json.decoder import JSONDecodeError
 import os
 import math
 import mmh3
-import time 
+import time
 from concurrent.futures import ThreadPoolExecutor
 
-# TODO: these caches dont work in multithreaded env. 
+# TODO: these caches dont work in multithreaded env.
 MSG_CACHE_MAX_LEN = 10000
 
 def is_critical():
@@ -70,10 +70,10 @@ def debug_once(msg, msg_cache):
 
          # clear the cache if it has become too big
          if (len(msg_cache) >= MSG_CACHE_MAX_LEN):
-             msg_cache = {} 
+             msg_cache = {}
     else:
         trace(msg)
- 
+
 def info(msg):
     if (is_info()):
         print("[INFO]: {}".format(msg))
@@ -86,10 +86,10 @@ def info_once(msg, msg_cache):
 
          # clear the cache if it has become too big
          if (len(msg_cache) >= MSG_CACHE_MAX_LEN):
-             msg_cache = {} 
+             msg_cache = {}
     else:
         trace(msg)
- 
+
 def error(msg):
     if (is_error()):
         print("[ERROR]: {}".format(msg))
@@ -102,22 +102,22 @@ def error_once(msg, msg_cache):
 
          # clear the cache if it has become too big
          if (len(msg_cache) >= MSG_CACHE_MAX_LEN):
-             msg_cache = {} 
+             msg_cache = {}
     else:
         trace(msg)
- 
+
 def enable_critical_mode():
     os.environ["OMIGO_CRITICAL"] = "1"
- 
+
 def enable_error_mode():
     os.environ["OMIGO_ERROR"] = "1"
- 
+
 def enable_warn_mode():
     os.environ["OMIGO_WARN"] = "1"
- 
+
 def enable_info_mode():
     os.environ["OMIGO_INFO"] = "1"
- 
+
 def enable_debug_mode():
     os.environ["OMIGO_DEBUG"] = "1"
 
@@ -158,7 +158,7 @@ def warn_once(msg, msg_cache):
 
     else:
         trace(msg)
-  
+
 def is_code_todo_warning():
     return str(os.environ.get("OMIGO_CODE_TODO_WARNING", "0")) == "1"
 
@@ -168,14 +168,14 @@ def print_code_todo_warning(msg):
 
 def url_encode(s):
     if (s is None):
-        return "" 
+        return ""
 
     return urllib.parse.quote_plus(s)
 
 # TODO: this replaces TAB character
 def url_decode(s):
     if (s is None):
-        return "" 
+        return ""
 
     return urllib.parse.unquote_plus(s).replace("\t", " ")
 
@@ -228,7 +228,7 @@ def get_counts_map(xs):
             mp[x] = 0
         mp[x] = mp[x] + 1
 
-    return mp 
+    return mp
 
 def report_progress(msg, inherit_message, counter, total):
     report_progress = get_report_progress()
@@ -260,47 +260,29 @@ def is_array_of_string_values(col_or_cols):
             break
     return is_array
 
-def is_int_col(xtsv, col):
+def is_numeric(v):
+    return str(v).isnumeric()
+
+def is_float(v):
     try:
-        for v in xtsv.col_as_array(col):
-            if (str(int(v)) != v):
-                return False
+        float(str(v))
+        return True
     except:
         return False
 
-    return True
+def is_int_col(xtsv, col):
+    utils.warn("Deprecated. use tsv.has_all_int_values")
+    return xtsv.has_all_int_values(col)
 
 def is_float_col(xtsv, col):
-    try:
-        xtsv.col_as_float_array(col)
-    except:
-        return False
-
-    return True
+    utils.warn("Deprecated. use tsv.has_all_float_values")
+    return xtsv.has_all_float_values(col)
 
 def is_pure_float_col(xtsv, col):
-    try:
-        found = False
-        for v in xtsv.col_as_float_array(col):
-            if (float(int(v)) != v):
-                found = True
-        if (found == True):
-            return True
-        else:
-            return False
-    except:
-        return False
+    raise Exception("Deprecated. is_pure_float_col Dont use this method")
 
 def is_float_with_fraction(xtsv, col):
-    if (is_float_col(xtsv, col) == False):
-        return False
-
-    found = False
-    for v in xtsv.col_as_array(col):
-        if ("." in v):
-            return True
-
-    return False 
+    raise Exception("Deprecated. is_float_with_fraction Dont use this method")
 
 def compute_hash(x, seed = 0):
     return abs(mmh3.hash64(str(x) + str(seed))[0])
@@ -327,11 +309,11 @@ def run_with_thread_pool(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0):
             func = task.func
             args = task.args
             kwargs = task.kwargs
-            results.append(func(*args, **kwargs))               
+            results.append(func(*args, **kwargs))
 
         # return
         return results
-    else: 
+    else:
         # start thread pool
         future_results = []
         with ThreadPoolExecutor(max_workers = num_par) as executor:

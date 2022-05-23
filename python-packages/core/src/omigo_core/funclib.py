@@ -8,14 +8,14 @@ import datetime
 def parse_image_file_base_name(x):
     if (len(x) <= 1):
         return x
-    
+
     index = -1
     if ("\\" in x):
         index = x.rindex("\\")
     elif ("/" in x):
         index = x.rindex("/")
     return str(x[index+1:])
-    
+
 def uniq_len(vs):
     return str(len(set(vs)))
 
@@ -52,7 +52,8 @@ def merge_uniq(vs):
     for v in vs:
         for v2 in v.split(","):
             result.append(v2)
-            
+
+    # return
     return ",".join(sorted(list(set(result))))
 
 def select_first(x, y):
@@ -67,13 +68,13 @@ def str_arr_to_float(xs):
 def quantile(xs, start = 0, end = 1, by = 0.25, precision = 4):
     if (start > end):
         raise Exception("Start > End", start, end)
-        
+
     qarr = []
     cur = start
     while (cur < end):
         qarr.append(cur)
         cur = cur + by
-        
+
     format_str = "{:." + str(precision) + "f}"
     quan = np.quantile(str_arr_to_float(xs), qarr)
     return ",".join(format_str.format(x) for x in quan)

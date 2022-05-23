@@ -1,5 +1,5 @@
 """EtlDateTimePathFormat class"""
-from omigo_core import tsv, utils, tsvutils, funclib, file_paths_util 
+from omigo_core import tsv, utils, tsvutils, funclib, file_paths_util
 from dateutil import parser
 import datetime
 
@@ -17,17 +17,17 @@ import datetime
 # extension: tsv.gz
 # self.start_date_time: yyyy-MM-ddTHH:MM:SS
 # self.end_date_time: yyyy-MM-ddTHH:MM:SS
- 
+
 class EtlDateTimePathFormat:
-    # fields 
+    # fields
     dir_prefix = None
     date_part = None
-    
+
     base_prefix = None
     start_date = None
     start_time = None
     end_date = None
-    end_time = None 
+    end_time = None
     extension = None
 
     # synthetic forms
@@ -132,7 +132,7 @@ def get_etl_file_base_name_by_ts(prefix, start_ts, end_ts):
 
     # return
     return "{}-{}-{}".format(prefix, start_datetime_str, end_datetime_str)
-    
+
 def scan_by_datetime_range(path, start_date_str, end_date_str, prefix, filter_transform_func = None, transform_func = None, spillover_window = 1, num_par = 5,
     wait_sec = 5, timeout_seconds = 600, def_val_map = {}, sampling_rate = None, s3_region = None, aws_profile = None):
 
@@ -186,4 +186,5 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
 
     # return
     return filepaths
-    
+
+

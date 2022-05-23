@@ -3,12 +3,12 @@
 class FilePathsReader:
     """A simple class to read filepaths data"""
 
-    # filepaths is the array of paths 
-    filepaths = None 
+    # filepaths is the array of paths
+    filepaths = None
 
     # cur_index is the pointer to the current index in filepaths
     cur_index = -1
-    
+
     # constructor
     def __init__(self, filepaths):
         self.cur_index = 0
@@ -20,7 +20,7 @@ class FilePathsReader:
 
     # close the file reader
     def close(self):
-        self.cur_data = len(self.filepaths) + 1 
+        self.cur_data = len(self.filepaths) + 1
 
     # next returns the next data. None otherwise
     def next(self):
@@ -30,7 +30,7 @@ class FilePathsReader:
        # advance the pointer for next time
        result = self.filepaths[self.cur_index]
        self.cur_index = self.cur_index + 1
-       
+
        # check for end
        if (self.cur_index >= len(self.filepaths)):
            self.filepaths = None

@@ -1,5 +1,5 @@
 from omigo_core import tsv
-from omigo_core import utils 
+from omigo_core import utils
 import random
 import time
 from kafka import KafkaConsumer
@@ -40,13 +40,13 @@ class KafkaClient:
         # validtion. either n or max_duration_sec must be non zero
         if (n <= 0 and max_duration_sec <= 0):
             raise Exception("Either n or max_duration_sec must be non zero")
- 
+
         # initialize random number generator
         random.seed(seed) #nosec
 
         # initialize start time. this will need better implementation to prevent infinite waiting. TODO
         ts_start = time.time()
-        
+
         # iterate
         internal_prefix = "__KafkaClient_read__"
         new_header = internal_prefix
@@ -55,7 +55,7 @@ class KafkaClient:
             # apply sampling
             if (sampling_rate > 1 or random.random() <= sampling_rate):  # nosec
                 new_data.append(utils.url_encode(message.value))
-            
+
             # check if all messages have been received, or time interval has been reached
             if (n > 0 and len(new_data) >= n):
                 break
