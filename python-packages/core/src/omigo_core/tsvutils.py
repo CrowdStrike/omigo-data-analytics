@@ -365,7 +365,7 @@ def load_from_array_of_map(map_arr):
             v = ""
             if (k in mp.keys()):
                 # read as string and replace any newline or tab characters
-                v = str(mp[k]).replace("\t", " ").replace("\n", " ").replace("\v", " ")
+                v = utils.strip_spl_white_spaces(str(mp[k]))
 
             # append
             fields.append(v)

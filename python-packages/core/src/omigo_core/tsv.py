@@ -1780,11 +1780,8 @@ class TSV:
         new_fields = []
         for h in self.header_fields:
             if (h in mp.keys()):
-                # read value and replace any newline or tab characters
-                v = str(mp[h]).replace("\t", " ").replace("\n", " ").replace("\v", " ")
-
                 # append the value
-                new_fields.append(str(mp[h]))
+                new_fields.append(utils.strip_spl_white_spaces(v))
             else:
                 # append default value
                 new_fields.append(default_val)
