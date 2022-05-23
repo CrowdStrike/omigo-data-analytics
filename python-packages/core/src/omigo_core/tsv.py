@@ -1388,9 +1388,12 @@ class TSV:
         if (all_numeric is None):
             has_alpha = False
             for col in matching_cols:
-                if (utils.is_float_col(self, col) == False):
+                # check for data type for doing automatic numeric or string sorting
+                if (self.__has_all_float_values__(col) == False):
                     has_alpha = True
                     break
+
+            # if any string column was found, then use string sorting else numeric
             if (has_alpha == True):
                 all_numeric = False
             else:

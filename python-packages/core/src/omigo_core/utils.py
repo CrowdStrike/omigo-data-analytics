@@ -271,18 +271,16 @@ def is_float(v):
         return False
 
 def is_int_col(xtsv, col):
-    utils.warn("Deprecated. use tsv.has_all_int_values")
-    return xtsv.has_all_int_values(col)
+    raise Exception("Deprecated. The to_df() method supports inferring data types")
 
 def is_float_col(xtsv, col):
-    utils.warn("Deprecated. use tsv.has_all_float_values")
-    return xtsv.has_all_float_values(col)
+    raise Exception("Deprecated. The to_df() method supports inferring data types")
 
 def is_pure_float_col(xtsv, col):
-    raise Exception("Deprecated. is_pure_float_col Dont use this method")
+    raise Exception("Deprecated. The to_df() method supports inferring data types")
 
 def is_float_with_fraction(xtsv, col):
-    raise Exception("Deprecated. is_float_with_fraction Dont use this method")
+    raise Exception("Deprecated. The to_df() method supports inferring data types")
 
 def compute_hash(x, seed = 0):
     return abs(mmh3.hash64(str(x) + str(seed))[0])
