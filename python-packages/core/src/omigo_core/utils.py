@@ -364,4 +364,4 @@ def strip_vertical_white_spaces(v):
         return None
 
     # return
-    return v.replace("\t", " ").replace("\n", " ").replace("\v", " ")
+    return str(v).replace("\t", " ").replace("\n", " ").replace("\v", " ")
