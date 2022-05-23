@@ -364,10 +364,14 @@ def load_from_array_of_map(map_arr):
         for k in header_fields:
             v = ""
             if (k in mp.keys()):
+                # read as string and replace any newline or tab characters
                 v = str(mp[k])
+                v = v.replace("\t", " ").replace("\n", " ").replace("\v", " ")
 
+            # append
             fields.append(v)
 
+        # create line
         line = "\t".join(fields)
         data.append(line)
 

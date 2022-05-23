@@ -1164,7 +1164,7 @@ class TSV:
         inherit_message2 = inherit_message + ": to_numeric" if (len(inherit_message) > 0) else "to_numeric"
         return self.transform_inline(cols, lambda x: self.__convert_to_numeric__(x, precision), inherit_message = inherit_message2)
 
-    def add_seq_num(self, new_col, inherit_message = ""):
+    def add_seq_num(self, new_col, start = 1, inherit_message = ""):
         # check empty
         if (self.has_empty_header()):
             utils.warn("add_seq_num: empty tsv")
@@ -1179,7 +1179,7 @@ class TSV:
 
         # create new data
         new_data = []
-        counter = 0
+        counter = start - 1 
         for line in self.data:
             counter = counter + 1
             utils.report_progress("add_seq_num: [1/1] adding new column", inherit_message, counter, len(self.data))
@@ -1188,7 +1188,7 @@ class TSV:
         # return
         return TSV(new_header, new_data)
 
-    def show_transpose(self, n = 1, title = None):
+    def show_transpose(self, n = 1, max_col_width = None, title = None):
         # check empty
         if (self.has_empty_header()):
             return self
@@ -1198,8 +1198,11 @@ class TSV:
             n = self.num_rows()
 
         # max width of screen to determine per column width
-        max_width = 180
-        max_col_width = int(max_width / (n + 1))
+        if (max_col_width is None):
+            max_width = 180
+            max_col_width = int(max_width / (n + 1))
+
+        # return
         return self.transpose(n).show(n = self.num_cols(), max_col_width = max_col_width, title = title)
 
     def show(self, n = 100, max_col_width = 40, title = None):
@@ -1494,17 +1497,19 @@ class TSV:
             df_map[h] = []
 
         # check if infer data type is true
-        float_cols = {}
-        int_cols = {}
+        float_cols = [] 
+        int_cols = []
         if (infer_data_types == True):
             for col in self.get_columns():
                 # check for columns that are not supposed to be converted
                 if (no_infer_cols is not None and col in no_infer_cols):
                     continue
 
-                # determine the inferred data type
-                int_cols[col] = self.__has_all_int_values__(col)
-                float_cols[col] = self.__has_all_float_values__(col)
+                # determine the inferred data type. Check for int first as that is more constrained
+                if (self.__has_all_int_values__(col)):
+                    int_cols.append(col)
+                if (self.__has_all_float_values__(col)):
+                    float_cols.append(col)
 
         # iterate over data
         for line in self.data[0:nrows]:
@@ -1515,9 +1520,9 @@ class TSV:
 
                 # check if a different data type is needed
                 if (infer_data_types == True):
-                    if (float_cols[col] == True):
+                    if (col in float_cols):
                         value = float(value)
-                    elif (int_cols[col] == True):
+                    elif (col in int_cols):
                         value = int(value)
                     else:
                         value = str(value)
@@ -1772,8 +1777,14 @@ class TSV:
         new_fields = []
         for h in self.header_fields:
             if (h in mp.keys()):
+                # read value and replace any newline or tab characters
+                v = str(mp[h])
+                v = v.replace("\t", " ").replace("\n", " ").replace("\v", " ")
+
+                # append the value
                 new_fields.append(str(mp[h]))
             else:
+                # append default value
                 new_fields.append(default_val)
 
         # create new row
