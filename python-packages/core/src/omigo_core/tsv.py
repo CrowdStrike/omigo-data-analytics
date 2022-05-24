@@ -105,155 +105,155 @@ class TSV:
         # return
         return TSV(new_header, new_data)
 
-    def values_not_in(self, col, values, inherit_message = ""):
+    def values_not_in(self, col, values, ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": values_not_in" if (inherit_message != "") else "values_not_in"
-        return self.filter([col], lambda x: x not in values, inherit_message = inherit_message2)
+        return self.filter([col], lambda x: x not in values, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def values_in(self, col, values, inherit_message = ""):
+    def values_in(self, col, values, ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": values_in" if (inherit_message != "") else "values_in"
-        return self.filter([col], lambda x: x in values, inherit_message = inherit_message2)
+        return self.filter([col], lambda x: x in values, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def not_match(self, col, pattern, inherit_message = ""):
+    def not_match(self, col, pattern, ignore_if_missing = False, inherit_message = ""):
         utils.warn("Please use not_regex_match instead")
-        return self.not_regex_match(col, pattern, inherit_message)
+        return self.not_regex_match(col, pattern, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message)
 
-    def not_regex_match(self, col, pattern, inherit_message = ""):
+    def not_regex_match(self, col, pattern, ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": not_regex_match" if (inherit_message != "") else "not_regex_match"
-        return self.regex_match(col, pattern, condition = False, inherit_message = inherit_message2)
+        return self.regex_match(col, pattern, condition = False, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def match(self, col, pattern, inherit_message = ""):
+    def match(self, col, pattern, ignore_if_missing = False, inherit_message = ""):
         utils.warn("Please use regex_match instead")
-        return self.regex_match(col, pattern, inherit_message = inherit_message)
+        return self.regex_match(col, pattern, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message)
 
-    def regex_match(self, col, pattern, condition = True, inherit_message = ""):
+    def regex_match(self, col, pattern, condition = True, ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": regex_match" if (inherit_message != "") else "regex_match"
-        return self.filter([col], lambda x: (re.match(pattern, x) is not None) == condition, inherit_message = inherit_message2)
+        return self.filter([col], lambda x: (re.match(pattern, x) is not None) == condition, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def not_eq(self, col, value, inherit_message = ""):
+    def not_eq(self, col, value, ignore_if_missing = False, inherit_message = ""):
         utils.warn("This api can have side effects because of implicit data types conversion in python. Use not_eq_int, not_eq_str or not_eq_float")
         inherit_message2 = inherit_message + ": not_eq" if (inherit_message != "") else "not_eq"
-        return self.filter([col], lambda x: x != value, inherit_message = inherit_message2)
+        return self.filter([col], lambda x: x != value, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def eq(self, col, value, inherit_message = ""):
+    def eq(self, col, value, ignore_if_missing = False, inherit_message = ""):
         utils.warn("This api can have side effects because of implicit data types conversion in python. Use eq_int, eq_str or eq_float")
-        return self.filter([col], lambda x: x == value, inherit_message = inherit_message2)
+        return self.filter([col], lambda x: x == value, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def eq_int(self, col, value, inherit_message = ""):
+    def eq_int(self, col, value, ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": eq_int" if (inherit_message != "") else "eq_int"
-        return self.filter([col], lambda x: int(float(x)) == value, inherit_message = inherit_message2)
+        return self.filter([col], lambda x: int(float(x)) == value, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def eq_float(self, col, value, inherit_message = ""):
+    def eq_float(self, col, value, ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": eq_float" if (inherit_message != "") else "eq_float"
-        return self.filter([col], lambda x: float(x) == value, inherit_message = inherit_message2)
+        return self.filter([col], lambda x: float(x) == value, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def eq_str(self, col, value, inherit_message = ""):
+    def eq_str(self, col, value, ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": eq_str" if (inherit_message != "") else "eq_str"
-        return self.filter([col], lambda x: str(x) == str(value), inherit_message = inherit_message2)
+        return self.filter([col], lambda x: str(x) == str(value), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def not_eq_str(self, col, value, inherit_message = ""):
+    def not_eq_str(self, col, value, ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": not_eq_str" if (inherit_message != "") else "not_eq_str"
-        return self.filter([col], lambda x: str(x) != str(value), inherit_message = inherit_message2)
+        return self.filter([col], lambda x: str(x) != str(value), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def is_nonzero(self, col, inherit_message = ""):
+    def is_nonzero(self, col, ignore_if_missing = False, inherit_message = ""):
         utils.warn("Deprecated. Use is_nonzero_float() instead")
         inherit_message2 = inherit_message + ": is_nonzero" if (len(inherit_message) > 0) else "is_nonzero"
-        return self.is_nonzero_float(col, inherit_message = inherit_message2)
+        return self.is_nonzero_float(col, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def is_nonzero_int(self, col, inherit_message = ""):
+    def is_nonzero_int(self, col, ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": is_nonzero_int" if (len(inherit_message) > 0) else "is_nonzero_int"
-        return self.filter([col], lambda x: int(x) != 0, inherit_message = inherit_message2)
+        return self.filter([col], lambda x: int(x) != 0, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def is_nonzero_float(self, col, inherit_message = ""):
+    def is_nonzero_float(self, col, ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": is_nonzero_float" if (len(inherit_message) > 0) else "is_nonzero_float"
-        return self.filter([col], lambda x: float(x) != 0, inherit_message = inherit_message2)
+        return self.filter([col], lambda x: float(x) != 0, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def lt_str(self, col, value, inherit_message = ""):
+    def lt_str(self, col, value, ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": lt_str" if (len(inherit_message) > 0) else "lt_str"
-        return self.filter([col], lambda x: x < value, inherit_message = inherit_message2)
+        return self.filter([col], lambda x: x < value, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def le_str(self, col, value, inherit_message = ""):
+    def le_str(self, col, value, ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": le_str" if (len(inherit_message) > 0) else "le_str"
-        return self.filter([col], lambda x: x <= value, inherit_message = inherit_message2)
+        return self.filter([col], lambda x: x <= value, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def gt_str(self, col, value, inherit_message = ""):
+    def gt_str(self, col, value, ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": gt_str" if (len(inherit_message) > 0) else "gt_str"
-        return self.filter([col], lambda x: x > value, inherit_message = inherit_message2)
+        return self.filter([col], lambda x: x > value, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def ge_str(self, col, value, inherit_message = ""):
+    def ge_str(self, col, value, ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": ge_str" if (len(inherit_message) > 0) else "ge_str"
-        return self.filter([col], lambda x: x >= value, inherit_message = inherit_message2)
+        return self.filter([col], lambda x: x >= value, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def gt(self, col, value, inherit_message = ""):
+    def gt(self, col, value, ignore_if_missing = False, inherit_message = ""):
         utils.warn("Deprecated. Use gt_float() instead")
         inherit_message2 = inherit_message + ": gt" if (len(inherit_message) > 0) else "gt"
-        return self.gt_float(col, value, inherit_message = inherit_message2)
+        return self.gt_float(col, value, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def gt_int(self, col, value, inherit_message = ""):
+    def gt_int(self, col, value, ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": gt_int" if (len(inherit_message) > 0) else "gt_int"
-        return self.filter([col], lambda x: int(float(x)) > int(float(value)), inherit_message = inherit_message2)
+        return self.filter([col], lambda x: int(float(x)) > int(float(value)), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def gt_float(self, col, value, inherit_message = ""):
+    def gt_float(self, col, value, ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": gt_float" if (len(inherit_message) > 0) else "gt_float"
-        return self.filter([col], lambda x: float(x) > float(value), inherit_message = inherit_message2)
+        return self.filter([col], lambda x: float(x) > float(value), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def ge(self, col, value, inherit_message = ""):
+    def ge(self, col, value, ignore_if_missing = False, inherit_message = ""):
         utils.warn("Deprecated. Use ge_float() instead")
         inherit_message2 = inherit_message + ": ge" if (len(inherit_message) > 0) else "ge"
-        return self.ge_float(col, value, inherit_message = inherit_message2)
+        return self.ge_float(col, value, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def ge_int(self, col, value, inherit_message = ""):
+    def ge_int(self, col, value, ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": ge_int" if (len(inherit_message) > 0) else "ge_int"
-        return self.filter([col], lambda x: int(float(x)) >= int(float(value)), inherit_message = inherit_message2)
+        return self.filter([col], lambda x: int(float(x)) >= int(float(value)), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def ge_float(self, col, value, inherit_message = ""):
+    def ge_float(self, col, value, ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": ge_float" if (len(inherit_message) > 0) else "ge_float"
-        return self.filter([col], lambda x: float(x) >= float(value), inherit_message = inherit_message2)
+        return self.filter([col], lambda x: float(x) >= float(value), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def lt(self, col, value, inherit_message = ""):
+    def lt(self, col, value, ignore_if_missing = False, inherit_message = ""):
         utils.warn("Deprecated. Use lt_float() instead")
         inherit_message2 = inherit_message + ": lt" if (len(inherit_message) > 0) else "lt"
-        return self.lt_float(col, value, inherit_message = inherit_message2)
+        return self.lt_float(col, value, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def lt_int(self, col, value, inherit_message = ""):
+    def lt_int(self, col, value, ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": lt_int" if (len(inherit_message) > 0) else "lt_int"
-        return self.filter([col], lambda x: int(float(x)) < int(float(value)), inherit_message = inherit_message2)
+        return self.filter([col], lambda x: int(float(x)) < int(float(value)), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def lt_float(self, col, value, inherit_message = ""):
+    def lt_float(self, col, value, ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": lt_float" if (len(inherit_message) > 0) else "lt_float"
-        return self.filter([col], lambda x: float(x) < float(value), inherit_message = inherit_message2)
+        return self.filter([col], lambda x: float(x) < float(value), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def le(self, col, value, inherit_message = ""):
+    def le(self, col, value, ignore_if_missing = False, inherit_message = ""):
         utils.warn("Deprecated. Use le_float() instead")
         inherit_message2 = inherit_message + ": le" if (len(inherit_message) > 0) else "le"
-        return self.filter([col], lambda x: float(x) <= float(value), inherit_message = inherit_message2)
+        return self.filter([col], lambda x: float(x) <= float(value), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def le_int(self, col, value, inherit_message = ""):
+    def le_int(self, col, value, ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": le_int" if (len(inherit_message) > 0) else "le_int"
-        return self.filter([col], lambda x: int(float(x)) <= int(float(value)), inherit_message = inherit_message2)
+        return self.filter([col], lambda x: int(float(x)) <= int(float(value)), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def le_float(self, col, value, inherit_message = ""):
+    def le_float(self, col, value, ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": le_float" if (len(inherit_message) > 0) else "le_float"
-        return self.filter([col], lambda x: float(x) <= float(value), inherit_message = inherit_message2)
+        return self.filter([col], lambda x: float(x) <= float(value), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def startswith(self, col, prefix, inherit_message = ""):
+    def startswith(self, col, prefix, ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": startswith" if (len(inherit_message) > 0) else "startswith"
-        return self.filter([col], lambda x: x.startswith(prefix), inherit_message = inherit_message2)
+        return self.filter([col], lambda x: x.startswith(prefix), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def not_startswith(self, col, prefix, inherit_message = ""):
+    def not_startswith(self, col, prefix, ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": not_startswith" if (len(inherit_message) > 0) else "not_startswith"
-        return self.exclude_filter([col], lambda x: x.startswith(prefix), inherit_message = inherit_message2)
+        return self.exclude_filter([col], lambda x: x.startswith(prefix), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def endswith(self, col, suffix, inherit_message = ""):
+    def endswith(self, col, suffix, ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": endswith" if (len(inherit_message) > 0) else "endswith"
-        return self.filter([col], lambda x: x.endswith(suffix), inherit_message = inherit_message2)
+        return self.filter([col], lambda x: x.endswith(suffix), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def not_endswith(self, col, suffix, inherit_message = ""):
+    def not_endswith(self, col, suffix, ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": not_endswith" if (len(inherit_message) > 0) else "not_endswith"
-        return self.exclude_filter([col], lambda x: x.endswith(suffix), inherit_message = inherit_message2)
+        return self.exclude_filter([col], lambda x: x.endswith(suffix), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def replace_str_inline(self, cols, old_str, new_str, inherit_message = ""):
+    def replace_str_inline(self, cols, old_str, new_str, ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": replace_str_inline" if (len(inherit_message) > 0) else "replace_str_inline"
-        return self.transform_inline(cols, lambda x: x.replace(old_str, new_str), inherit_message = inherit_message2)
+        return self.transform_inline(cols, lambda x: x.replace(old_str, new_str), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
     def group_count(self, cols, prefix = "group", collapse = True, precision = 6, inherit_message = ""):
         # check empty
@@ -301,6 +301,7 @@ class TSV:
         return self.skip(count)
 
     def last(self, count):
+        # check boundary conditions
         if (count > len(self.data)):
             count = len(self.data)
 
@@ -315,13 +316,17 @@ class TSV:
         return TSV(self.header, self.data[0:count])
 
     def distinct(self):
+        # create variables
         new_data = []
         key_map = {}
+
+        # iterate
         for line in self.data:
             if (line not in key_map.keys()):
                 key_map[line] = 1
                 new_data.append(line)
 
+        # return
         return TSV(self.header, new_data)
 
     # TODO: use drop_cols instead coz of better name
