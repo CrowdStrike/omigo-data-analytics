@@ -1202,8 +1202,11 @@ class TSV:
             max_width = 180
             max_col_width = int(max_width / (n + 1))
 
-        # return
-        return self.transpose(n).show(n = self.num_cols(), max_col_width = max_col_width, title = title)
+        # print
+        self.transpose(n).show(n = self.num_cols(), max_col_width = max_col_width, title = title)
+
+        # return self
+        return self
 
     def show(self, n = 100, max_col_width = 40, title = None):
         # check empty
@@ -1672,10 +1675,10 @@ class TSV:
         if (self.has_empty_header()):
             # checking empty value
             if (value == ""):
-                utils.warn("add_const: empty tsv and empty value. extending just the header")
+                utils.warn("add_const: empty header and empty data. extending just the header")
                 return new_with_cols([col])
             else:
-                raise Exception("add_const: empty tsv but non empty value")
+                raise Exception("add_const: empty header but non empty data: {}".format(value))
 
         # return
         inherit_message2 = inherit_message + ": add_const" if (len(inherit_message) > 0) else "add_const"

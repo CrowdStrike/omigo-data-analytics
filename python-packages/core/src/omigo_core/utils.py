@@ -358,7 +358,7 @@ def raise_exception_or_warn(msg, ignore_if_missing):
     else:
         raise Exception(msg)
 
-def strip_vertical_white_spaces(v):
+def strip_spl_white_spaces(v):
     # check None
     if (v is None):
         return None
