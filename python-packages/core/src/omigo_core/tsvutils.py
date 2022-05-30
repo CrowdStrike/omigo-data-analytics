@@ -415,15 +415,25 @@ def __read_base_url__(url, query_params = {}, headers = {}, body = None, usernam
     try:
         # call the web service
         if (body is None):
+            # make web service call
             if (username is not None and password is not None):
                 response = requests.get(url, auth = (username, password), headers = headers, timeout = timeout_sec, verify = verify)
             else:
                 response = requests.get(url, headers = headers, timeout = timeout_sec, verify = verify)
         else:
+            # do some validation on body
+            body_json = None
+            try:
+                body_json = json.loads(body)
+            except Exception as e:
+                utils.error("__read_base_url__: body is not well formed json: {}".format(body))
+                raise e
+
+            # make web service call
             if (username is not None and password is not None):
-                response = requests.post(url, auth = (username, password), json = json.loads(body), headers = headers, timeout = timeout_sec, verify = verify)
+                response = requests.post(url, auth = (username, password), json = body_json, headers = headers, timeout = timeout_sec, verify = verify)
             else:
-                response = requests.post(url, json = json.loads(body), headers = headers, timeout = timeout_sec, verify = verify)
+                response = requests.post(url, json = body_json, headers = headers, timeout = timeout_sec, verify = verify)
 
         # return response
         return response, None

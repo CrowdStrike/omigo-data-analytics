@@ -190,14 +190,14 @@ def __call_web_service_exp_func__(xtsv_timeout_sec, xtsv_verify, url, query_para
         result_mp["response:status_code"] = str(resp_status_code)
         result_mp["response:error"] = str(resp_err)
 
-        # additioanl debugging information.
+        # additional debugging information.
         if (include_resolved_values == True):
             result_mp["request:url"] = url_resolved
             result_mp["request:query_params"] = str(query_params_resolved)
 
             # include the selection cols
             for k in mp.keys():
-                result_mp[k] = str(mp[k])
+                result_mp["request:__input__:{}".format(k)] = str(mp[k])
 
         # create result
         combined_result = [result_mp]
