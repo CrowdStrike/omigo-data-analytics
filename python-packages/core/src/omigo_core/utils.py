@@ -248,7 +248,6 @@ def merge_arrays(arr_list):
 
     return result
 
-
 def is_array_of_string_values(col_or_cols):
     if (isinstance(col_or_cols, str)):
         return False
@@ -365,3 +364,16 @@ def strip_spl_white_spaces(v):
 
     # return
     return str(v).replace("\t", " ").replace("\n", " ").replace("\v", " ")
+
+def resolve_meta_params(xstr, props):
+    # check for None
+    if (xstr is None):
+        return None
+
+    # iterate through properties
+    for k in props.keys():
+        kstr = "{" + k + "}"
+        xstr = xstr.replace(kstr, str(props[k]))
+
+    # return
+    return xstr

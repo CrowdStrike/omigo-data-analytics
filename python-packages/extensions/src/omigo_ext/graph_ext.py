@@ -55,7 +55,8 @@ def __create_data_frame_with_types__(xtsv, xcol = None, ycols = None, zcol = Non
     # create map for data frame
     mp = {}
     for col in combined_cols:
-        if (utils.is_float_col(xtsv, col)):
+        # TODO: change this logic. Using non public method
+        if (xtsv.__has_all_float_values__(col)):
             mp[col] = xtsv.col_as_float_array(col)
         else:
             mp[col] = xtsv.col_as_array(col)
@@ -174,7 +175,11 @@ def __sns_barplot__(xtsv, xcol, ycol, class_col, resort, xfigsize, yfigsize, max
 
     # sort the xcol
     if (resort == True):
-        xtsv = xtsv.sort(xcol)
+        # take class col if defined
+        if (class_col is not None):
+            xtsv = xtsv.sort([class_col, xcol])
+        else:
+            xtsv = xtsv.sort(xcol)
 
     # create df
     df = __create_data_frame_with_types__(xtsv, xcol, ycol, class_col)

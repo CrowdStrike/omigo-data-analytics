@@ -1365,6 +1365,7 @@ class TSV:
             # store value in hashmap
             mp[keys_tuple] = values_tuple
 
+        # return
         return mp
 
     def __sort_helper__(self, line, indexes, all_numeric):
@@ -1378,10 +1379,10 @@ class TSV:
 
         return tuple(values)
 
-    def sort(self, cols = None, reverse = False, reorder = False, all_numeric = None):
+    def sort(self, cols = None, reverse = False, reorder = False, all_numeric = None, ignore_if_missing = False):
         # check empty
         if (self.has_empty_header() and cols is None):
-            utils.empty("sort: empty tsv")
+            utils.raise_exception_or_warn("sort: empty tsv", ignore_if_missing)
             return self
 
         # if nothing is specified sort on all columns
@@ -1391,6 +1392,11 @@ class TSV:
         # find the matching cols and indexes
         matching_cols = self.__get_matching_cols__(cols)
         indexes = self.__get_col_indexes__(matching_cols)
+
+        # check if there were any matching cols
+        if (len(matching_cols) == 0):
+            utils.raise_exception_or_warn("sort: no matching cols found.", ignore_if_missing)
+            return self
 
         # check if all are numeric or not
         if (all_numeric is None):
@@ -1416,8 +1422,8 @@ class TSV:
         else:
             return TSV(self.header, new_data)
 
-    def reverse_sort(self, cols = None, reorder = False, all_numeric = None):
-        return self.sort(cols = cols, reverse = True, reorder = reorder, all_numeric = all_numeric)
+    def reverse_sort(self, cols = None, reorder = False, all_numeric = None, ignore_if_missing = False):
+        return self.sort(cols = cols, reverse = True, reorder = reorder, all_numeric = all_numeric, ignore_if_missing = ignore_if_missing)
 
     # reorder the specific columns
     def reorder(self, cols, use_existing_order = True, inherit_message = ""):
@@ -2062,16 +2068,20 @@ class TSV:
         return TSV(self.header, random.sample(self.data, n))
 
     def cap_min_inline(self, col, value):
-        return self.transform_inline([col], lambda x: str(x) if (float(value) < float(x)) else str(value))
+        inherit_message2 = inherit_message + ": cap_min_inline" if (len(inherit_message) > 0) else "cap_min_inline"
+        return self.transform_inline([col], lambda x: str(x) if (float(value) < float(x)) else str(value), inherit_message = inherit_message2)
 
     def cap_max_inline(self, col, value):
-        return self.transform_inline(col, lambda x: str(value) if (float(value) < float(x)) else str(x))
+        inherit_message2 = inherit_message + ": cap_max_inline" if (len(inherit_message) > 0) else "cap_max_inline"
+        return self.transform_inline(col, lambda x: str(value) if (float(value) < float(x)) else str(x), inherit_message = inherit_message2)
 
     def cap_min(self, col, value, newcol):
-        return self.transform_inline(col, lambda x: str(x) if (float(value) < float(x)) else str(value), newcol)
+        inherit_message2 = inherit_message + ": cap_min" if (len(inherit_message) > 0) else "cap_min"
+        return self.transform_inline(col, lambda x: str(x) if (float(value) < float(x)) else str(value), newcol, inherit_message = inherit_message2)
 
     def cap_max(self, col, value, newcol):
-        return self.transform([col], lambda x: str(value) if (float(value) < float(x)) else str(x), newcol)
+        inherit_message2 = inherit_message + ": cap_max" if (len(inherit_message) > 0) else "cap_max"
+        return self.transform([col], lambda x: str(value) if (float(value) < float(x)) else str(x), newcol, inherit_message = inherit_message2)
 
     def copy(self, col, newcol, inherit_message = ""):
         inherit_message2 = inherit_message + ": copy" if (len(inherit_message) > 0) else "copy"
