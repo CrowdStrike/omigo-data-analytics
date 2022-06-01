@@ -1365,6 +1365,7 @@ class TSV:
             # store value in hashmap
             mp[keys_tuple] = values_tuple
 
+        # return
         return mp
 
     def __sort_helper__(self, line, indexes, all_numeric):

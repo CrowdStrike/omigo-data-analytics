@@ -156,7 +156,7 @@ def __call_web_service_exp_func__(xtsv_timeout_sec, xtsv_verify, url, query_para
             body_params_resolved = None
 
         # shorter version of body_params_resolved
-        body_params_resolved_strip = body_params_resolved[0:40] + "..." if (body_params_resolved is not None and len(body_params_resolved) >= 40) else body_params_resolved
+        body_params_resolved_strip = body_params_resolved[0:1000] + "..." if (body_params_resolved is not None and len(body_params_resolved) >= 1000) else body_params_resolved
 
         # debug
         utils.trace("__call_web_service_exp_func_inner__: mp: {}".format(mp))

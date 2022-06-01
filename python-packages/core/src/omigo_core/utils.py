@@ -248,7 +248,6 @@ def merge_arrays(arr_list):
 
     return result
 
-
 def is_array_of_string_values(col_or_cols):
     if (isinstance(col_or_cols, str)):
         return False
