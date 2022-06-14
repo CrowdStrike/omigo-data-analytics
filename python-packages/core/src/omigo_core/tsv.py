@@ -1620,7 +1620,7 @@ class TSV:
         if (self.has_empty_header()):
             # if there are multiple tsvs
             if (len(that_arr) > 1):
-                return self.union(that_arr[0], that_arr[1:])
+                return that_arr[0].union(that_arr[1:])
             else:
                 return that_arr[0]
 
