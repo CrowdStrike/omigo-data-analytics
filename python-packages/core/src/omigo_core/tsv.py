@@ -7,6 +7,7 @@ import json
 from omigo_core import tsvutils
 from omigo_core import utils
 import sys
+import time
 
 class TSV:
     """This is the main data processing class to apply different filter and transformation functions
@@ -1500,7 +1501,7 @@ class TSV:
     def noop(self, *args, **kwargs):
         return self
 
-    def to_df(self, n = None, infer_data_types = False, no_infer_cols = None):
+    def to_df(self, n = None, infer_data_types = True, no_infer_cols = None):
         # find how many rows to select
         nrows = len(self.data) if (n is None) else n
 
@@ -3701,6 +3702,11 @@ class TSV:
     def print_stats(self, msg):
         msg2 = "{}: num_rows: {}, num_cols: {}".format(msg, self.num_rows(), self.num_cols())
         print(msg2)
+        return self
+
+    # some methods for effects
+    def sleep(self, secs):
+        time.sleep(secs)
         return self
 
 def get_version():
