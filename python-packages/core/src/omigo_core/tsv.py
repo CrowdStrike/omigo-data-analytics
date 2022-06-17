@@ -27,7 +27,7 @@ class TSV:
         self.data = data
 
         # create map of name->index and index->name
-        self.header_fields = self.header.split("\t")
+        self.header_fields = list(filter(lambda t: t != "", self.header.split("\t")))
         self.header_map = {}
         self.header_index_map = {}
 
@@ -42,7 +42,7 @@ class TSV:
 
             # validation
             if (h in self.header_map.keys()):
-                raise Exception("Duplicate header key:" + str(self.header_fields))
+                raise Exception("Duplicate header key:{}: {}".format(h, str(self.header_fields)))
 
             self.header_map[h] = i
             self.header_index_map[i] = h
@@ -1099,7 +1099,7 @@ class TSV:
         return len(self.data)
 
     def num_cols(self):
-        return len(self.header_map)
+        return len(self.header_fields)
 
     def get_size_in_bytes(self):
         utils.warn("Please use size_in_bytes() instead")

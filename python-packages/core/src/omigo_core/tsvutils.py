@@ -34,11 +34,12 @@ def merge(tsv_list, def_val_map = None):
 
     # base condition
     if (len(tsv_list) == 0):
-        utils.warn("List of tsv is empty. Will merge all columns")
+        utils.warn("List of tsv is empty. Returning")
+        return tsv.create_empty()
 
     # check for valid headers
     header = tsv_list[0].get_header()
-    header_fields = header.split("\t")
+    header_fields = tsv_list[0].get_header_fields()
 
     # iterate to check mismatch in header
     index = 0
@@ -92,6 +93,10 @@ def merge_intersect(tsv_list, def_val_map = None):
     # base condition
     if (len(tsv_list) == 0):
         raise Exception("List of tsv is empty")
+
+    # boundary condition
+    if (len(tsv_list) == 1):
+        return tsv_list[0]
 
     # get the first header
     header_fields = tsv_list[0].get_header_fields()
