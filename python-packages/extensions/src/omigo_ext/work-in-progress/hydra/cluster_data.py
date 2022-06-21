@@ -1,6 +1,6 @@
 from omigo_core import tsv
 from omigo_core import utils
-from omigo_ajaiswal_ext.hydra import cluster_funcs
+# from .hydra import cluster_funcs
 import base64
 import dill
 import json
@@ -44,7 +44,7 @@ class ClusterBaseOperand(JsonSer):
     def validate(self):
         raise Exception("This is not implemented for base class") 
         
-# Cluster Operand class
+def to_json(self, transient_keys = []):# Cluster Operand class
 class ClusterOperand(ClusterBaseOperand):
     def __init__(self, data_type, value):
         super().__init__("ClusterOperand")
@@ -112,7 +112,7 @@ class ClusterArrayBaseType(ClusterOperand):
         # return 
         return True
         
-# Cluster Array of Bool class 
+# Cluster Array for empty 
 class ClusterArrayEmpty(ClusterArrayBaseType):
     def __init__(self, value):
         super().__init__("array_empty", value)
