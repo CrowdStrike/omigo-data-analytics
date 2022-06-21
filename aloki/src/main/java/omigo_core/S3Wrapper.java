@@ -31,6 +31,10 @@ public class S3Wrapper {
     private static S3Client s3;
     public static void putS3FileContent(String bucketName, String objectKey, byte barr[], String regionStr, String profileStr) {
         Region region = Region.US_WEST_2;
+        if (regionStr != null) {
+            region = Region.of(regionStr);
+        }
+
         s3 = S3Client.builder()
             .region(region)
             .build();
@@ -41,5 +45,11 @@ public class S3Wrapper {
             .build();
 
         s3.putObject(objectRequest, RequestBody.fromByteBuffer(ByteBuffer.wrap(barr)));
+    }
+
+    public static void main(String args[]) {
+        String bucketName = "tsv-data-analytics-sample";
+        String objectKey = "test-folder1/temp.txt";
+        S3Wrapper.putS3FileContent(bucketName, objectKey, "This is a test file".getBytes(), "us-west-1", "default");
     }
 }
