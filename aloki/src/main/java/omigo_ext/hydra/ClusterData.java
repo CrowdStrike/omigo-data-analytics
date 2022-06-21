@@ -1,4 +1,4 @@
-// package omigo_ext.hydra;
+package omigo_ext.hydra;
 import org.json.simple.JSONObject;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONValue;
