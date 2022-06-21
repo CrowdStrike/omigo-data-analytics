@@ -463,33 +463,33 @@ public class ClusterData {
                 for (Object x: listValues) {
                     arrValues.add(ClusterData.clusterOperandSerializer(x));
                 }
-
-                List<String> dataTypes = ClusterData.__get_data_types__(arrValues);
-                if (dataTypes.size() == 1) {
-                    if (dataTypes.get(0) == "bool")
-                        return new ClusterArrayBool(value);
-                    else if (dataTypes.get(0).equals("str"))
-                        return new ClusterArrayStr(value);
-                    else if (dataTypes.get(0).equals("int"))
-                        return new ClusterArrayInt(value);
-                    else if (dataTypes.get(0).equals("float"))
-                        return new ClusterArrayFloat(value);
-                    else if (dataTypes.get(0).equals("object"))
-                        return new ClusterArrayObject(value);
-                    else if (dataTypes.get(0).equals("pyobject"))
-                        return new ClusterArrayPyObject(value);
-                    else if (dataTypes.get(0).equals("function"))
-                        return new ClusterArrayFunction(value);
-                    else
-                        throw new RuntimeException("Unable to parse: " + dataTypes);
-                } else if (dataTypes.size() == 2) {
-                    if (dataTypes.contains("int") && dataTypes.contains("float"))
-                        return new ClusterArrayFloat(value);
-                    else
-                        throw new RuntimeException("Unable to parse: " + dataTypes);
-                } else {
-                    throw new RuntimeException("Unable to parse: " + dataTypes);
-                }
+                return new ClusterArrayObject(arrValues);
+                // List<String> dataTypes = ClusterData.__get_data_types__(arrValues);
+                // if (dataTypes.size() == 1) {
+                //     if (dataTypes.get(0) == "bool")
+                //         return new ClusterArrayBool(value);
+                //     else if (dataTypes.get(0).equals("str"))
+                //         return new ClusterArrayStr(value);
+                //     else if (dataTypes.get(0).equals("int"))
+                //         return new ClusterArrayInt(value);
+                //     else if (dataTypes.get(0).equals("float"))
+                //         return new ClusterArrayFloat(value);
+                //     else if (dataTypes.get(0).equals("object"))
+                //         return new ClusterArrayObject(value);
+                //     else if (dataTypes.get(0).equals("pyobject"))
+                //         return new ClusterArrayPyObject(value);
+                //     else if (dataTypes.get(0).equals("function"))
+                //         return new ClusterArrayFunction(value);
+                //     else
+                //         throw new RuntimeException("Unable to parse: " + dataTypes);
+                // } else if (dataTypes.size() == 2) {
+                //     if (dataTypes.contains("int") && dataTypes.contains("float"))
+                //         return new ClusterArrayFloat(value);
+                //     else
+                //         throw new RuntimeException("Unable to parse: " + dataTypes);
+                // } else {
+                //     throw new RuntimeException("Unable to parse: " + dataTypes);
+                // }
             } else {
                 return new ClusterArrayEmpty(value);
             }
@@ -573,32 +573,33 @@ public class ClusterData {
             return new ClusterInt((Integer) value);
         } else if (dataType.equals("float")) {
             return new ClusterFloat((Double) value);
-        } else if (dataType.equals("array_empty")) {
-            return new ClusterArrayEmpty((List) value);
-        } else if (dataType.equals("array_bool")) {
-            List<Object> result = new ArrayList<Object>();
-            for (Object x: (List) value) {
-                result.add((Boolean) x);
-            }
-            return new ClusterArrayBool(result);
-        } else if (dataType.equals("array_str")) {
-            List<Object> result = new ArrayList<Object>();
-            for (Object x: (List) value) {
-                result.add((String) x);
-            }
-            return new ClusterArrayStr(result);
-        } else if (dataType.equals("array_int")) {
-            List<Object> result = new ArrayList<Object>();
-            for (Object x: (List) value) {
-                result.add((Integer) x);
-            }
-            return new ClusterArrayInt(result);
-        } else if (dataType.equals("array_float")) {
-            List<Object> result = new ArrayList<Object>();
-            for (Object x: (List) value) {
-                result.add((Double) x);
-            }
-            return new ClusterArrayFloat(result);
+        // array_empty not in Python
+        // } else if (dataType.equals("array_empty")) {
+        //     return new ClusterArrayEmpty((List) value);
+        // } else if (dataType.equals("array_bool")) {
+        //     List<Object> result = new ArrayList<Object>();
+        //     for (Object x: (List) value) {
+        //         result.add((Boolean) x);
+        //     }
+        //     return new ClusterArrayBool(result);
+        // } else if (dataType.equals("array_str")) {
+        //     List<Object> result = new ArrayList<Object>();
+        //     for (Object x: (List) value) {
+        //         result.add((String) x);
+        //     }
+        //     return new ClusterArrayStr(result);
+        // } else if (dataType.equals("array_int")) {
+        //     List<Object> result = new ArrayList<Object>();
+        //     for (Object x: (List) value) {
+        //         result.add((Integer) x);
+        //     }
+        //     return new ClusterArrayInt(result);
+        // } else if (dataType.equals("array_float")) {
+        //     List<Object> result = new ArrayList<Object>();
+        //     for (Object x: (List) value) {
+        //         result.add((Double) x);
+        //     }
+        //     return new ClusterArrayFloat(result);
         } else if (dataType.equals("array_object")) {
             List<Object> result = new ArrayList<Object>();
             for (Object x: (List) value) {
