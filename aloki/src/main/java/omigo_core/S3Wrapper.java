@@ -50,6 +50,7 @@ public class S3Wrapper {
     public static void main(String args[]) {
         String bucketName = "tsv-data-analytics-sample";
         String objectKey = "test-folder1/temp.txt";
-        S3Wrapper.putS3FileContent(bucketName, objectKey, "This is a test file".getBytes(), "us-west-1", "default");
+        String content = args[0];
+        S3Wrapper.putS3FileContent(bucketName, objectKey, content.getBytes(), "us-west-1", "default");
     }
 }
