@@ -1,8 +1,14 @@
 package omigo_core
 import collection.JavaConverters._
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.util.Random
+import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 import software.amazon.awssdk.core.waiters.WaiterResponse
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.s3.S3Client
@@ -55,7 +61,21 @@ object S3Wrapper {
   }
 
   def putS3FileWithTextContent(bucketName: String, objectKey: String, text: String, regionStr: String, profileStr: String) {
-    putS3FileContent(bucketName, objectKey, text.getBytes(), regionStr, profileStr)
+    var barr = text.getBytes()
+    if (objectKey.endsWith(".gz")) {
+        val byteStream = new ByteArrayOutputStream(barr.length)
+        val zipStream = new GZIPOutputStream(byteStream)
+        zipStream.write(barr)
+        zipStream.close()
+        barr = byteStream.toByteArray()
+    } else if (objectKey.endsWith(".zip")) {
+        val byteStream = new ByteArrayOutputStream(barr.length)
+        val zipStream = new ZipOutputStream(byteStream)
+        zipStream.write(barr)
+        zipStream.close()
+        barr = byteStream.toByteArray()
+    }
+    putS3FileContent(bucketName, objectKey, barr, regionStr, profileStr)
   } 
 
   def checkPathExists(path: String, regionStr: String, profileStr: String): Boolean = {
@@ -96,7 +116,24 @@ object S3Wrapper {
   }
 
   def getS3FileContentAsText(bucketName: String, objectKey: String, regionStr: String, profileStr: String): String = {
-    new String(getS3FileContent(bucketName, objectKey, regionStr, profileStr)) 
+    var barr = getS3FileContent(bucketName, objectKey, regionStr, profileStr)
+    if (objectKey.endsWith(".gz")) {
+      val byteStream = new ByteArrayInputStream(barr)
+      val inputStream = new GZIPInputStream(byteStream)
+      val baos = new ByteArrayOutputStream()
+      var len = 0
+      var buffer = Array.fill[Byte](1024)(0) 
+      len = inputStream.read(buffer)
+      while (len > 0) {
+          baos.write(buffer, 0, len)
+          len = inputStream.read(buffer)
+      }
+      barr = baos.toByteArray()
+    } else if (objectKey.endsWith(".zip")) {
+      throw new Exception("zip file extraction is not supported")
+    }
+
+    new String(barr)
   }
 
   def getDirectoryListing(bucketName: String, objectKey: String, regionStr: String, profileStr: String): List[String] = {
@@ -137,11 +174,11 @@ object S3Wrapper {
 
   def main(args: Array[String]): Unit = {
     val bucketName = "tsv-data-analytics-sample"
-    val objectKey = "test-folder1/temp.txt"
+    val objectKey = "test-folder1/temp.txt.zip"
     val content = args(0)
-    S3Wrapper.putS3FileContent(bucketName, objectKey, content.getBytes(), null, null)
+    S3Wrapper.putS3FileWithTextContent(bucketName, objectKey, content, null, null)
     println(S3Wrapper.getS3FileContentAsText(bucketName, objectKey, null, null)) 
-    println(S3Wrapper.getDirectoryListing(bucketName, objectKey, null, null))
+    println(S3Wrapper.getDirectoryListing(bucketName, "test-folder1", null, null))
   }
 }
 
