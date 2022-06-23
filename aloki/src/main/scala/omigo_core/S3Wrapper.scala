@@ -171,7 +171,13 @@ object S3Wrapper {
       }
 
       // return
-      buffer.map({ t => path + t }).toList
+      buffer
+        .map({ t => t.substring(objectKey.length + 1) })
+        .map({ t => t.split("/")(0) })
+        .filter({ t => t != "" })
+        .map({ t => path + "/" + t })
+        .distinct
+        .toList
     } catch {
       case e: Exception => throw e
     }
@@ -189,9 +195,9 @@ object S3Wrapper {
     val bucketName = "tsv-data-analytics-sample"
     val objectKey = "test-folder1/temp.txt.zip"
     val content = args(0)
-    S3Wrapper.putS3FileWithTextContent(bucketName, objectKey, content, null, null)
-    println(S3Wrapper.getS3FileContentAsText(bucketName, objectKey, null, null)) 
-    println(S3Wrapper.getDirectoryListing("s3://" + bucketName + "/test-folder1", null, false, null, null))
+    // S3Wrapper.putS3FileWithTextContent(bucketName, objectKey, content, null, null)
+    // println(S3Wrapper.getS3FileContentAsText(bucketName, objectKey, null, null)) 
+    println(S3Wrapper.getDirectoryListing(args(0), null, false, null, null))
   }
 }
 

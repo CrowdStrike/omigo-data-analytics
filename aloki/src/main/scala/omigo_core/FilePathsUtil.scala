@@ -95,18 +95,18 @@ object FilePathsUtil {
     val startDateMinusWindow = startDate.minus(Duration.ofDays(spilloverWindow))
 
     // create a numeric representation of date
-    startDateNumstr = createDateNumericRepresentation(startDateStr, "000000")
-    endDateNumstr = createDateNumericRepresentation(endDateStr, "999999")
+    val startDateNumStr = createDateNumericRepresentation(startDateStr, "000000")
+    val endDateNumStr = createDateNumericRepresentation(endDateStr, "999999")
 
     // create variable to store results
     val tasks = new scala.collection.mutable.ListBuffer[List[String]]() 
 
     // iterate and create tasks
     val formatter = DateTimeFormatter.ofPattern("yyyyMMdd")
-    Range(0, numDays).foreach({ d =>
+    Range(0, numDays.toInt).foreach({ d =>
       // generate the current path based on date
-      curDate = startDateMinusWindow.minus(Duration.ofDays(d))
-      curPath = path + "/dt=" + LocalDateTime.ofInstant(curDate, ZoneOffset.UTC).format(formatter)
+      val curDate = startDateMinusWindow.plus(Duration.ofDays(d))
+      val curPath = path + "/dt=" + LocalDateTime.ofInstant(curDate, ZoneOffset.UTC).format(formatter)
 
       // get the list of files. This needs to be failsafe as not all directories may exist
       // TODO: add multi threading. TODO: potential bug in python
@@ -129,27 +129,31 @@ object FilePathsUtil {
     val pathsFound = new scala.collection.mutable.ListBuffer[String]() 
 
     // iterate over results
-    results.foreach({ files =>
-      // debug
-      println("file_paths_util: get_file_paths_by_datetime_range: number of candidate files to read: curDate: %s, count: %d".format(curDate, files_list.length))
+    results.foreach({ filesList =>
+      // debug. TODO: python code is broken. There is no curDate here
+      // println("file_paths_util: get_file_paths_by_datetime_range: number of candidate files to read: curDate: %s, count: %d".format(curDate, filesList.length))
+      println("file_paths_util: get_file_paths_by_datetime_range: number of candidate files to read: count: %d".format(filesList.length))
 
       // apply filter on the name and the timestamp
-      files_list.foreach({ filename =>
+      filesList.foreach({ filename =>
         //format: full_prefix/fileprefix-startdate-enddate-starttime-endtime.tsv
         // get the last part after /
         //sep_index = filename.rindex("/")
         //filename1 = filename[sep_index + 1:]
+        // TODO: python code is broken here
+        val curPath = filename.substring(0, filename.lastIndexOf("/")) 
         val baseFilename = filename.substring(curPath.length + 1)
-        var extIndex: Int = null 
+        var extIndex: Int = -1
+        // println("filename: " + filename) 
 
         // ignore any hidden files that start with dot(.)
         if (baseFilename.startsWith(".")) {
-          println("file_paths_util: get_file_paths_by_datetime_range: found hidden file. ignoring: {}".format(filename))
+          println("file_paths_util: get_file_paths_by_datetime_range: found hidden file. ignoring: %s".format(filename))
         } else {
           // get extension
-          if (baseFilename.endswith(".tsv.gz"))
+          if (baseFilename.endsWith(".tsv.gz"))
             extIndex = baseFilename.lastIndexOf(".tsv.gz")
-          else if (baseFilename.endswith(".tsv"))
+          else if (baseFilename.endsWith(".tsv"))
             extIndex = baseFilename.lastIndexOf(".tsv")
           else
             throw new Exception("file_paths_util: get_file_paths_by_datetime_range: extension parsing failed: %s".format(filename))
@@ -168,10 +172,10 @@ object FilePathsUtil {
               val curEndTs = "%s%s".format(parts(2), parts(3))
 
               // apply the filter condition
-              if (!(endDateNumstr < curStartTs || startDateNumstr > curEndTs)) {
+              if (!(endDateNumStr < curStartTs || startDateNumStr > curEndTs)) {
                 // note filename1
                 pathsFound.append(filename)
-                println("file_paths_util: get_file_paths_by_datetime_range: found file: %s".format(filename))
+                // println("file_paths_util: get_file_paths_by_datetime_range: found file: %s".format(filename))
               }
             }
           }
@@ -188,11 +192,16 @@ object FilePathsUtil {
     if (path.startsWith("/") == false) {
       throw new Exception("absolute path needed")
     }
-    Files.list(new File(path).toPath()).iterator().asScala.toList
+    Files.list(new File(path).toPath()).iterator().asScala.toList.map(_.toString())
   }
 
   def create_local_parent_dir(filepath: String) {
     throw new Exception("Not implemented in Java")
+  }
+
+  def main(args: Array[String]): Unit = {
+    val path = "s3://tsv-data-analytics-sample/test-folder1/etl"
+    println("getFilePathsByDateTimeRange: " + getFilePathsByDateTimeRange(path, "2022-06-02", "2022-06-03", "data", 0, 0, 0, null, null))
   }
 }
 

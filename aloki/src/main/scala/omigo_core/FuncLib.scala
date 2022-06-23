@@ -105,43 +105,44 @@ object FuncLib {
     throw new Exception("Not Implemented for Java")
   }
 
-  def dateTimeToUTCTimestamp(x: String) = {
+  // TODO: Not sure of these APIs
+  def dateTimeToUTCTimestamp(x: String): Long = {
     // 2022-05-20T05:00:00+00:00
     if (x.endsWith("UTC") || x.endsWith("GMT")) {
       val formatter = DateTimeFormatter.ofPattern("yyyy-MMM-dd'T'HH:mm:ss z")
       val localDate = LocalDateTime.parse(x, formatter)
-      localDate.toEpochSeconds(ZoneOffset.UTC) 
+      localDate.toEpochSecond(ZoneOffset.UTC) 
     } else if (x.endsWith("Z")) {
       val formatter = DateTimeFormatter.ofPattern("yyyy-MMM-dd'T'HH:mm:ss'Z'")
       val localDate = LocalDateTime.parse(x, formatter)
-      localDate.toEpochSeconds(ZoneOffset.UTC) 
+      localDate.toEpochSecond(ZoneOffset.UTC) 
     } else if (x.endsWith("+00:00")) {
       val formatter = DateTimeFormatter.ISO_OFFSET_DATE_TIME 
       val localDate = LocalDateTime.parse(x, formatter)
-      localDate.toEpochSeconds(ZoneOffset.UTC) 
-    } else if (len(x) == 10 && x.find("-") != -1) {
+      localDate.toEpochSecond(ZoneOffset.UTC) 
+    } else if (x.length == 10 && x.indexOf("-") != -1) {
       // 2021-11-01
-      x = x + "T00:00:00Z"
+      val x1 = x + "T00:00:00Z"
       val formatter = DateTimeFormatter.ISO_OFFSET_DATE_TIME 
-      val localDate = LocalDateTime.parse(x, formatter)
-      localDate.toEpochSeconds(ZoneOffset.UTC) 
-    } else if (len(x) == 19) {
+      val localDate = LocalDateTime.parse(x1, formatter)
+      localDate.toEpochSecond(ZoneOffset.UTC) 
+    } else if (x.length == 19) {
       // 2021-11-01T00:00:00
-      x = x + "Z"
+      val x1 = x + "Z"
       val formatter = DateTimeFormatter.ofPattern("yyyy-MMM-dd'T'HH:mm:ss'Z'")
-      val localDate = LocalDateTime.parse(x, formatter)
-      localDate.toEpochSeconds(ZoneOffset.UTC) 
-    } else if (len(x) == 26) {
+      val localDate = LocalDateTime.parse(x1, formatter)
+      localDate.toEpochSecond(ZoneOffset.UTC) 
+    } else if (x.length == 26) {
       // 2021-11-01T00:00:00.000000
-      x = x + "Z"
+      val x1 = x + "Z"
       val formatter = DateTimeFormatter.ofPattern("yyyy-MMM-dd'T'HH:mm:ss.S'Z'")
-      val localDate = LocalDateTime.parse(x, formatter)
-      localDate.toEpochSeconds(ZoneOffset.UTC) 
+      val localDate = LocalDateTime.parse(x1, formatter)
+      localDate.toEpochSecond(ZoneOffset.UTC) 
     } else if (x.length == 10 && x.forall(Character.isDigit) == true) {
       x.toLong
     } else if (x.length == 13 && x.forall(Character.isDigit) == true) {
       // this looks like numeric timestamp in millis
-      return (x.toLong / 1000.0).toLong
+      (x.toLong / 1000.0).toLong
     } else {
       throw new Exception("Unknown date format. Problem with UTC: " + x)
     }
