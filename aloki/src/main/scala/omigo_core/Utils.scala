@@ -1,4 +1,4 @@
-package omigo_core;
+package omigo_core
 
 object Utils {
   // len(s3://) = 5

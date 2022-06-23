@@ -1,4 +1,5 @@
 package omigo_core
+// import scala.jdk.CollectionConverters
 import collection.JavaConverters._
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream

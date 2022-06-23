@@ -1,5 +1,6 @@
 package omigo_core
 import collection.JavaConverters._
+// import scala.jdk.CollectionConverters
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
@@ -136,8 +137,12 @@ object S3Wrapper {
     new String(barr)
   }
 
-  def getDirectoryListing(bucketName: String, objectKey: String, regionStr: String, profileStr: String): List[String] = {
+  // TODO: The actual implementation is complex and inefficient. python needs fixing too
+  def getDirectoryListing(path: String, filterFunc: String, failIfMissing: Boolean, regionStr: String, profileStr: String): List[String] = {
     val (regionStr2, profileStr2) = resolveRegionProfile(regionStr, profileStr)
+    val (bucketName, objectKey) = Utils.splitS3Path(path)
+
+    // TODO: filterFunc is a function
 
     try {
       var listObjectsReqManual = ListObjectsV2Request.builder()
@@ -166,10 +171,18 @@ object S3Wrapper {
       }
 
       // return
-      buffer.toList
+      buffer.map({ t => path + t }).toList
     } catch {
       case e: Exception => throw e
     }
+  }
+
+  def delete_file(path: String, fail_if_missing: Boolean, region: String, profile: String): Unit = {
+    throw new Exception("Not implemented in Java")
+  }
+
+  def get_last_modified_time(path: String, fail_if_missing: Boolean, region: String, profile: String): Unit = {
+    throw new Exception("Not implemented in Java")
   }
 
   def main(args: Array[String]): Unit = {
@@ -178,7 +191,7 @@ object S3Wrapper {
     val content = args(0)
     S3Wrapper.putS3FileWithTextContent(bucketName, objectKey, content, null, null)
     println(S3Wrapper.getS3FileContentAsText(bucketName, objectKey, null, null)) 
-    println(S3Wrapper.getDirectoryListing(bucketName, "test-folder1", null, null))
+    println(S3Wrapper.getDirectoryListing("s3://" + bucketName + "/test-folder1", null, false, null, null))
   }
 }
 
