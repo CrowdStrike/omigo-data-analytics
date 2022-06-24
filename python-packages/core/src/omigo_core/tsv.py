@@ -3596,7 +3596,7 @@ class TSV:
         return self.get_header() == ""
 
     def has_empty_header(self):
-        return self.get_header() == ""
+        return num_cols() == 0 
 
     def __has_all_int_values__(self, col):
         # check for empty
