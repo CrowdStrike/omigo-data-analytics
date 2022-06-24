@@ -154,12 +154,16 @@ def merge_intersect(tsv_list, def_val_map = None):
             # return after merging
             return merge(new_tsvs)
         else:
-            # create a list of new tsvs
-            new_tsvs = []
-            for t in tsv_list:
-                new_tsvs.append(t.select(same_cols))
+            # handle boundary condition of no matching cols
+            if (len(same_cols) == 0):
+                return tsv.create_empty()
+            else:
+                # create a list of new tsvs
+                new_tsvs = []
+                for t in tsv_list:
+                    new_tsvs.append(t.select(same_cols))
 
-            return merge(new_tsvs)
+                return merge(new_tsvs)
     else:
         # probably landed here because of mismatch in headers position
         tsv_list2 = []
