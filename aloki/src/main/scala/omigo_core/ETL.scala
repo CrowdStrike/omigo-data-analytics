@@ -92,7 +92,6 @@ object ETL {
       filePaths = filePaths.sorted
     }
 
-
     // return
     filePaths
   }

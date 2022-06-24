@@ -24,8 +24,14 @@ object FilePathsUtil {
     throw new Exception("Not implemented in Java")
   }
 
-  def check_exists(path: String, s3_region: String, aws_profile: String) {
-    throw new Exception("Not implemented in Java")
+  def check_exists(path: String, s3_region: String, aws_profile: String): Boolean = {
+    if (path.startsWith("s3://") && S3Wrapper.checkPathExists(path, s3_region, aws_profile))
+      return true
+
+    if ((new File(path)).exists())
+      return true
+
+    return false
   }
 
   def read_filepaths_daily(path: String, startDateStr: String, endDateStr: String, fileprefix: String, s3_region: String, aws_profile: String, etl_level: String, ignore_missing: Boolean) {

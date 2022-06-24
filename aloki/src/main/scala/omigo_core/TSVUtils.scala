@@ -1,20 +1,175 @@
 package omigo_core
 
 object TSVUtils {
-  def merge(tsv_list: List[TSV], def_val_map: Map[String, String]) {
-    throw new Exception("Not Implemented")
+  def merge(tsv_list_org: List[TSV], def_val_map: Map[String, String]): TSV = {
+    var tsv_list = tsv_list_org
+
+    // validation
+    if (tsv_list.length == 0) {
+      Utils.warn("Error in input. List of tsv is empty")
+      return TSV.create_empty()
+    }
+
+    // remove tsvs without any columns
+    tsv_list = tsv_list.filter({ xtsv => xtsv.num_cols() > 0 })
+
+    // base condition
+    if (tsv_list.length == 0) {
+      Utils.warn("List of tsv is empty. Returning")
+      return TSV.create_empty()
+    }
+
+    // check for valid headers
+    val header = tsv_list(0).get_header()
+    val header_fields = tsv_list(0).get_header_fields()
+
+    // iterate to check mismatch in header
+    var index = 0
+    tsv_list.foreach({ t => 
+      // Use a different method for merging if the header is different
+      if (header != t.get_header()) {
+        val header_diffs = get_diffs_in_headers(tsv_list)
+        if (header_diffs.length > 0) {
+          // TODO
+          if (def_val_map == null)
+            Utils.warn("Mismatch in header at index: %s. Cant merge. Using merge_intersect for common intersection. Some of the differences in header: %s".format(index, header_diffs))
+        } else {
+          Utils.warn("Mismatch in order of header fields: %s, %s. Using merge intersect".format(header.split("\t"), t.get_header().split("\t")))
+        }
+        return merge_intersect(tsv_list, def_val_map)
+      }
+
+      index = index + 1
+    })
+
+    // simple condition
+    if (tsv_list.length == 1)
+      return tsv_list(0)
+    else
+      return tsv_list(0).union(tsv_list.drop(1))
   }
 
-  def split_headers_in_common_and_diff(tsv_list: List[TSV]) {
-    throw new Exception("Not Implemented")
+  def split_headers_in_common_and_diff(tsv_list: List[TSV]): (List[String], List[String]) = {
+    val common = new scala.collection.mutable.HashMap[String, Int]() 
+    // get the counts for each header field
+    tsv_list.foreach({ t =>
+      t.get_header_fields().foreach({ h =>
+        if (common.contains(h) == false)
+          common(h) = 0
+        common(h) = common(h) + 1
+      })
+    })
+
+    // find the columns which are not present everywhere
+    val non_common = new scala.collection.mutable.ListBuffer[String]() 
+    common.foreach({ case (k, v) =>
+      if (v != tsv_list.length)
+        non_common.append(k)
+    })
+
+    // return
+    (common.keys.toList.sorted, non_common.toList.sorted)
   }
 
-  def get_diffs_in_headers(tsv_list: List[TSV]) {
-    throw new Exception("Not Implemented")
+  def get_diffs_in_headers(tsv_list: List[TSV]): List[String] = {
+    val (common, non_common) = split_headers_in_common_and_diff(tsv_list)
+    non_common
   }
 
-  def merge_intersect(tsv_list: List[TSV], def_val_map: Map[String, String]) {
-    throw new Exception("Not Implemented")
+  def merge_intersect(tsv_list_org: List[TSV], def_val_map: Map[String, String]): TSV = {
+    var tsv_list = tsv_list_org
+
+    // remove zero length tsvs
+    tsv_list = tsv_list_org.filter({ xtsv => xtsv.num_cols() > 0 })
+
+    // base condition
+    if (tsv_list.length == 0)
+      throw new Exception("List of tsv is empty")
+
+    // boundary condition
+    if (tsv_list.length == 1)
+      return tsv_list(0)
+
+    // get the first header
+    val header_fields = tsv_list(0).get_header_fields()
+
+    // some debugging
+    val diff_cols = get_diffs_in_headers(tsv_list)
+    val same_cols = new scala.collection.mutable.ListBuffer[String]() 
+    header_fields.foreach({ h =>
+      if (diff_cols.contains(h) == false)
+        same_cols.append(h)
+    })
+
+    // print if number of unique headers are more than 1
+    if (diff_cols.length > 0) {
+      // debug
+      Utils.debug("merge_intersect: missing columns: %s".format(diff_cols))
+
+      // check which of the columns among the diff have default values
+      if (def_val_map != null) {
+        // create effective map with empty string as default value
+        val effective_def_val_map = new scala.collection.mutable.HashMap[String, String]() 
+
+        // some validation. the default value columns should exist somewhere
+        def_val_map.keys.foreach({ h =>
+          // check if all default columns exist
+          if (diff_cols.contains(h) == false && same_cols.contains(h) == false)
+            throw new Exception("Default value for a column given which does not exist: %s".format(h))
+        })
+
+        // assign empty string to the columns for which default value was not defined
+        diff_cols.foreach({ h =>
+          if (def_val_map.contains(h)) {
+            Utils.debug("merge_intersect: assigning default value for %s: %s".format(h, def_val_map(h)))
+            effective_def_val_map(h) = def_val_map(h)
+          } else {
+            Utils.debug("merge_intersect: assigning empty string as default value to column: %s".format(h))
+            effective_def_val_map(h) = ""
+          }
+        })
+
+        // get the list of keys in order
+        val keys_order = new scala.collection.mutable.ListBuffer[String]()
+        header_fields.foreach({ h =>
+          keys_order.append(h)
+        })
+
+        // append the missing columns
+        diff_cols.foreach({ h =>
+          if (header_fields.contains(h) == false)
+            keys_order.append(h)
+        })
+
+        // create a list of new tsvs
+        val new_tsvs = new scala.collection.mutable.ListBuffer[TSV]() 
+        tsv_list.foreach({ t =>
+          var t1 = t
+          diff_cols.foreach({ d =>
+            t1 = t1.add_const_if_missing(d, effective_def_val_map(d), "")
+          })
+          new_tsvs.append(t1.select(keys_order.toList, ""))
+        })
+
+        // return after merging
+        return merge(new_tsvs.toList, Map.empty)
+      } else {
+        // create a list of new tsvs
+        val new_tsvs = new scala.collection.mutable.ListBuffer[TSV]() 
+        tsv_list.foreach({ t =>
+          new_tsvs.append(t.select(same_cols.toList, ""))
+        })
+
+        return merge(new_tsvs.toList, Map.empty)
+      }
+    } else {
+      // probably landed here because of mismatch in headers position
+      val tsv_list2 = new scala.collection.mutable.ListBuffer[TSV]() 
+      tsv_list.foreach({ t =>
+        tsv_list2.append(t.select(same_cols.toList, ""))
+      })
+      return merge(tsv_list2.toList, Map.empty)
+    }
   }
 
   def read(input_file_or_files: List[String], sep: String, s3_region: String, aws_profile: String) {
@@ -45,8 +200,9 @@ object TSVUtils {
     throw new Exception("Not Implemented")
   }
 
-  def check_exists(xtsv: TSV, s3_region: String, aws_profile: String) {
-    throw new Exception("Not Implemented")
+  // TODO: python needs fixing
+  def check_exists(path: String, s3_region: String, aws_profile: String): Boolean = {
+    FilePathsUtil.check_exists(path, s3_region, aws_profile)
   }
 
   def sort_func(vs: Int) {

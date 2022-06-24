@@ -177,8 +177,9 @@ object Utils {
     throw new Exception("Not Implemented")
   }
 
+  // TODO: python code needs fixing
   def report_progress(msg: String, inherit_message: String, counter: Int, total: Int) {
-    throw new Exception("Not Implemented")
+    println(inherit_message + ": " + msg)
   }
 
   def merge_arrays(arr_list: List[Array[String]]) {
@@ -228,7 +229,11 @@ object Utils {
   }
 
   def raise_exception_or_warn(msg: String, ignore_if_missing: Boolean) {
-    throw new Exception("Not Implemented")
+    // print message if ignore_if_missing flag is true
+    if (ignore_if_missing == true)
+      warn(msg)
+    else
+      throw new Exception(msg)
   }
 
   def strip_spl_white_spaces(v: String) {
