@@ -4,7 +4,7 @@ import matplotlib.pyplot as pyplot
 import pandas as pd
 
 from omigo_core import tsv
-from omigo_core import utils 
+from omigo_core import utils
 
 class VisualTSV(tsv.TSV):
     def __init__(self, header, data):
@@ -12,7 +12,7 @@ class VisualTSV(tsv.TSV):
 
     def linechart(self, xcol, ycols, ylabel = None, title = None, subplots = False, xfigsize = 25, yfigsize = 5):
         return __pd_linechart__(self, xcol, ycols, ylabel, title, subplots, xfigsize, yfigsize)
- 
+
     def scatterplot(self, xcol, ycol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10):
         return __sns_scatterplot__(self, xcol, ycol, class_col, title, xfigsize, yfigsize, max_rows, max_class_col)
 
@@ -27,49 +27,50 @@ class VisualTSV(tsv.TSV):
 
     def boxplot(self, xcol, ycol, class_col = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10):
         return __sns_boxplot__(self, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, max_class_col)
-      
+
     def corr_heatmap(self, cols, xfigsize = 25, yfigsize = 5, max_rows = 6):
         return __sns_corr_heatmp__(self, cols, xfigsize, yfigsize, max_rows)
 
     def pairplot(self, cols, class_col = None, kind = None, diag_kind = None, xfigsize = 5, yfigsize = 5, max_rows = 6, max_class_col = 6):
         return __sns_pairplot__(self, cols, class_col, kind, diag_kind, xfigsize, yfigsize, max_rows, max_class_col)
-    
+
 def __create_data_frame_with_types__(xtsv, xcol = None, ycols = None, zcol = None):
     # convert to array
     if (ycols is not None):
         if (utils.is_array_of_string_values(ycols) == False):
             ycols = [ycols]
-            
+
     # merge the two columns
     combined_cols = []
 
     # xcol
     if (xcol is not None):
         combined_cols.append(xcol)
-        
+
     # ycols
     if (ycols is not None):
         for col in ycols:
             combined_cols.append(col)
-           
+
     # create map for data frame
     mp = {}
     for col in combined_cols:
-        if (utils.is_float_col(xtsv, col)):
+        # TODO: change this logic. Using non public method
+        if (xtsv.__has_all_float_values__(col)):
             mp[col] = xtsv.col_as_float_array(col)
         else:
             mp[col] = xtsv.col_as_array(col)
-            
+
     # zcols are returned without any extra transformation
     if (zcol is not None):
         mp[zcol] = xtsv.col_as_array(zcol)
-    
+
     return pd.DataFrame(mp)
-        
+
 def __pd_linechart__(xtsv, xcol, ycols, ylabel, title, subplots, xfigsize, yfigsize):
     # validate ycols
     ycols = xtsv.__get_matching_cols__(ycols)
-    
+
     # ylabel
     if (len(ycols) == 1 and ylabel is None):
         ylabel = ycols[0]
@@ -89,49 +90,49 @@ def __pd_linechart__(xtsv, xcol, ycols, ylabel, title, subplots, xfigsize, yfigs
 
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
- 
+
 def __sns_scatterplot__(xtsv, xcol, ycol, class_col, title, xfigsize, yfigsize, max_rows, max_class_col):
-    # check number of unique class values    
+    # check number of unique class values
     if (class_col is not None and len(xtsv.col_as_array_uniq(class_col)) >= max_class_col):
         raise Exception("Number of class column values is more than {}: {}. Probably not a class column. Try max_class_col".format(max_class_col, len(xtsv.col_as_array_uniq(class_col))))
-        
+
     # if xcol or ycol are non numeric then need to down sample the data
     if (max_rows < xtsv.num_rows()):
         if (utils.is_float_col(xtsv, xcol) == False or utils.is_float_col(xtsv, ycol) == False):
             utils.warn("Scatter plot on non numeric column(s). Doing downsampling for clean display to max_rows: {}".format(max_rows))
             xtsv = xtsv.sample_column_by_max_uniq_values(xcol, max_rows)
-            
+
     # sort the columns based on their data types
     xtsv = xtsv.sort(xcol)
 
     # get dataframe
     df = __create_data_frame_with_types__(xtsv, xcol, [ycol], class_col)
-    
+
     # plot
     figsize = (xfigsize, yfigsize)
     fig, ax = pyplot.subplots(figsize = figsize)
-    
+
     # title
     if (title is None):
         title = "{} vs {}".format(xcol, ycol)
-        
-    #df.plot.scatter(x = xcol, y = ycol, figsize = figsize, title = title)    
+
+    #df.plot.scatter(x = xcol, y = ycol, figsize = figsize, title = title)
     ax.set_title(title)
     sns.scatterplot(ax = ax, x = xcol, y = ycol, hue = class_col, data = df)
 
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
-    
+
 def __sns_histogram__(xtsv, xcol, class_col, bins, title, binwidth, kde, multiple, xfigsize, yfigsize, max_class_col):
     # check number of unique class values
     if (class_col is not None and len(xtsv.col_as_array_uniq(class_col)) >= max_class_col):
         raise Exception("Number of class column values is more than {}: {}. Probably not a class column. Try max_class_col".format(max_class_col, len(xtsv.col_as_array_uniq(class_col))))
-    
+
     df = __create_data_frame_with_types__(xtsv, xcol, None, class_col)
 
     figsize = (xfigsize, yfigsize)
     fig, ax = pyplot.subplots(figsize = figsize)
-    
+
     # binwidth overrides bins
     if (binwidth is not None):
         sns.histplot(data = df, x = xcol, hue = class_col, binwidth = binwidth, kde = kde, multiple = multiple, shrink = 0.8)
@@ -140,8 +141,8 @@ def __sns_histogram__(xtsv, xcol, class_col, bins, title, binwidth, kde, multipl
 
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
-    
-# the syntax is non intuitive. need to follow row major or column major. splitting by class_col is not possible 
+
+# the syntax is non intuitive. need to follow row major or column major. splitting by class_col is not possible
 def __sns_density__(xtsv, ycols, class_col, xfigsize, yfigsize):
     # create df
     ycols = xtsv.__get_matching_cols__(ycols)
@@ -161,7 +162,7 @@ def __sns_density__(xtsv, ycols, class_col, xfigsize, yfigsize):
 
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
-        
+
 def __sns_barplot__(xtsv, xcol, ycol, class_col, resort, xfigsize, yfigsize, max_rows, max_class_col):
     # check number of unique class values
     if (class_col is not None and len(xtsv.col_as_array_uniq(class_col)) >= max_class_col):
@@ -174,8 +175,12 @@ def __sns_barplot__(xtsv, xcol, ycol, class_col, resort, xfigsize, yfigsize, max
 
     # sort the xcol
     if (resort == True):
-        xtsv = xtsv.sort(xcol)
-    
+        # take class col if defined
+        if (class_col is not None):
+            xtsv = xtsv.sort([class_col, xcol])
+        else:
+            xtsv = xtsv.sort(xcol)
+
     # create df
     df = __create_data_frame_with_types__(xtsv, xcol, ycol, class_col)
 
@@ -199,7 +204,7 @@ def __sns_boxplot__(xtsv, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, m
 
     # sort the xcol
     xtsv = xtsv.sort(xcol)
-    
+
     # create df
     df = __create_data_frame_with_types__(xtsv, xcol, ycol, class_col)
 
@@ -210,14 +215,14 @@ def __sns_boxplot__(xtsv, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, m
 
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
-    
+
 def __sns_corr_heatmp__(xtsv, cols, xfigsize, yfigsize, max_rows):
     cols = xtsv.__get_matching_cols__(cols)
 
     # validation for number of columns. if the number of unique values is too high, then raise exception
     if (len(cols) > max_rows):
         raise Exception("Number of columns is too high: {}. Max allowed: {}. Try max_rows".format(len(cols), max_rows))
-        
+
     # check on the data type. Correlation is defined only on numerical columns
     for col in cols:
         if (utils.is_float_col(xtsv, col) == False):
@@ -233,17 +238,17 @@ def __sns_corr_heatmp__(xtsv, cols, xfigsize, yfigsize, max_rows):
 
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
-    
+
 def __sns_pairplot__(xtsv, cols, class_col, kind, diag_kind, xfigsize, yfigsize, max_rows, max_class_col):
     cols = xtsv.__get_matching_cols__(cols)
     # check number of unique class values
     if (class_col is not None and len(xtsv.col_as_array_uniq(class_col)) >= max_class_col):
         raise Exception("Number of class column values is more than {}. Max allowed: {}. Probably not a class column. Try max_class_col".format(max_class_col, len(xtsv.col_as_array_uniq(class_col))))
-    
+
     # validation for number of columns. if the number of unique values is too high, then raise exception
     if (len(cols) > max_rows):
         raise Exception("Number of columns is too high: {}. Max allowed: {}. Try max_rows".format(len(cols), max_rows))
-        
+
     # check on the data type. Correlation is defined only on numerical columns
     for col in cols:
         if (utils.is_float_col(xtsv, col) == False):

@@ -41,12 +41,12 @@ class MultiThreadTSV(tsv.TSV):
             combined_result = __parallelize__(self, func, *args, **kwargs)
         else:
             # print batch size
-            utils.info("{}: num_rows: {}, num_par: {}, num_batches: {}, batch_size: {}, status_check_interval_sec: {}".format(self.inherit_message, 
+            utils.info("{}: num_rows: {}, num_par: {}, num_batches: {}, batch_size: {}, status_check_interval_sec: {}".format(self.inherit_message,
                 self.num_rows(), self.num_par, self.num_batches, batch_size, self.status_check_interval_sec))
 
             # run thread pool
             with ThreadPoolExecutor(max_workers = self.num_par) as executor:
-                # execute batches concurrently based on num_par and batch_size 
+                # execute batches concurrently based on num_par and batch_size
                 for i in range(self.num_batches):
                     batch_i = self.skip(batch_size * i).take(batch_size)
                     # TODO: rewrite this logic. Right now dont submit empty batches
@@ -72,17 +72,18 @@ class MultiThreadTSV(tsv.TSV):
                         time.sleep(self.status_check_interval_sec)
                         time_elapsed = time_elapsed + self.status_check_interval_sec
                     else:
-                        break 
- 
+                        break
+
             # combine the results
             results = []
             for f in future_results:
+                utils.trace("MultiThreadTSV: parallelize: xtsv num_rows: {}".format(f.result().num_rows()))
                 results.append(f.result())
 
             # merge the tsvs using a common union.
             combined_result = tsvutils.merge(results, def_val_map = {})
 
-        # take end_time 
+        # take end_time
         ts_end = time.time()
 
         utils.debug("{}: parallelize: time taken: {} sec, num_rows: {}".format(self.inherit_message, int(ts_end - ts_start), combined_result.num_rows()))

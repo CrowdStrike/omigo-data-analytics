@@ -8,14 +8,14 @@ import datetime
 def parse_image_file_base_name(x):
     if (len(x) <= 1):
         return x
-    
+
     index = -1
     if ("\\" in x):
         index = x.rindex("\\")
     elif ("/" in x):
         index = x.rindex("/")
     return str(x[index+1:])
-    
+
 def uniq_len(vs):
     return str(len(set(vs)))
 
@@ -52,7 +52,8 @@ def merge_uniq(vs):
     for v in vs:
         for v2 in v.split(","):
             result.append(v2)
-            
+
+    # return
     return ",".join(sorted(list(set(result))))
 
 def select_first(x, y):
@@ -67,13 +68,13 @@ def str_arr_to_float(xs):
 def quantile(xs, start = 0, end = 1, by = 0.25, precision = 4):
     if (start > end):
         raise Exception("Start > End", start, end)
-        
+
     qarr = []
     cur = start
     while (cur < end):
         qarr.append(cur)
         cur = cur + by
-        
+
     format_str = "{:." + str(precision) + "f}"
     quan = np.quantile(str_arr_to_float(xs), qarr)
     return ",".join(format_str.format(x) for x in quan)
@@ -129,11 +130,12 @@ def get_str_map_without_keys(mp, excluded_keys):
 
     return mp2
 
-# TODO
+# TODO. better naming
 def datetime_to_utctimestamp(x):
+    # 2022-05-20T05:00:00+00:00
     if (x.endswith("UTC") or x.endswith("GMT") or x.endswith("Z") or x.endswith("+00:00")):
         return int(parser.parse(x).timestamp())
-    elif (len(x) == 10):
+    elif (len(x) == 10 and x.find("-") != -1):
         # 2021-11-01
         x = x + "T00:00:00Z"
         return int(parser.parse(x).timestamp())
@@ -145,18 +147,33 @@ def datetime_to_utctimestamp(x):
         # 2021-11-01T00:00:00.000000
         x = x + "Z"
         return int(parser.parse(x).timestamp())
+    elif (len(str(x)) == 10 and str(x).isnumeric() == True):
+        # this looks like a numeric timestamp
+        return int(x)
+    elif (len(str(x)) == 13 and str(x).isnumeric() == True):
+        # this looks like numeric timestamp in millis
+        return int(int(x) / 1000)
     else:
         raise Exception("Unknown date format. Problem with UTC: {}".format(x))
 
 # TODO: Converts seconds format only
 def utctimestamp_to_datetime_str(x):
+    return utctimestamp_to_datetime(x).isoformat()
+
+# TODO: Converts seconds format only
+def utctimestamp_to_datetime(x):
     if (len(str(x)) == 10):
-        return datetime.datetime.utcfromtimestamp(x).replace(tzinfo = datetime.timezone.utc).isoformat()
+        return datetime.datetime.utcfromtimestamp(x).replace(tzinfo = datetime.timezone.utc)
     elif (len(str(x)) == 13):
-        return datetime.datetime.utcfromtimestamp(int(x/1000)).replace(tzinfo = datetime.timezone.utc).isoformat()
+        return datetime.datetime.utcfromtimestamp(int(x/1000)).replace(tzinfo = datetime.timezone.utc)
     else:
         raise Exception("Unknown timestamp format:", x)
 
 def datetime_to_timestamp(x):
     raise Exception("Please use datetime_to_utctimestamp")
 
+def get_utctimestamp_sec():
+    return int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+
+def datestr_to_datetime(x):
+    return utctimestamp_to_datetime(datetime_to_utctimestamp(x))

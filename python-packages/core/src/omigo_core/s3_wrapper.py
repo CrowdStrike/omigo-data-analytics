@@ -19,7 +19,7 @@ S3_SESSION_LOCK = threading.Lock()
 S3_CLIENT_LOCK = threading.Lock()
 S3_DEFAULT_REGION = "us-west-1"
 S3_DEFAULT_PROFILE = "default"
-#S3_WARNING_GIVEN = "0" 
+#S3_WARNING_GIVEN = "0"
 
 def create_session_key(region = None, profile = None):
     region, profile = resolve_region_profile(region, profile)
@@ -33,10 +33,10 @@ def get_s3_session(region = None, profile = None):
 
     # generate s3_session
     if (region is not None and profile is not None):
-        utils.info("get_s3_session: region: {}, profile: {}".format(region, profile))
+        utils.debug("get_s3_session: region: {}, profile: {}".format(region, profile))
         session = boto3.session.Session(region_name = region, profile_name = profile)
     else:
-        utils.info("get_s3_session: no region or profile")
+        utils.debug("get_s3_session: no region or profile")
         session = boto3.session.Session()
 
     # return
@@ -45,7 +45,7 @@ def get_s3_session(region = None, profile = None):
 def get_s3_session_cache(region = None, profile = None):
     region, profile = resolve_region_profile(region, profile)
     key = create_session_key(region, profile)
-    
+
     # make it thread safe
     with S3_SESSION_LOCK:
         if ((key in S3_SESSIONS.keys()) == False):
@@ -156,7 +156,7 @@ def put_s3_file_content(bucket_name, object_key, barr, region = None, profile = 
     s3_bucket = get_s3_resource_cache(region, profile)
     obj = s3_bucket.Object(bucket_name, object_key)
     obj.put(Body = barr)
-   
+
 def put_s3_file_with_text_content(bucket_name, object_key, text, region = None, profile = None):
     region, profile = resolve_region_profile(region, profile)
     barr = str.encode(text)
@@ -294,7 +294,7 @@ def get_last_modified_time(path, fail_if_missing = False, region = None, profile
         else:
             utils.debug("get_last_modified_time: path doesnt exist: {}".format(path))
 
-        return None 
+        return None
 
     # parse
     region, profile = resolve_region_profile(region, profile)
@@ -302,7 +302,7 @@ def get_last_modified_time(path, fail_if_missing = False, region = None, profile
 
     # split the path
     bucket_name, object_key = utils.split_s3_path(path)
-    
+
     # call head_object to get metadata
     response = s3.head_object(Bucket = bucket_name, Key = object_key)
 

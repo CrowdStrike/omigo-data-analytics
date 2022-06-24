@@ -8,11 +8,12 @@ import zipfile
 # local imports
 from omigo_core import s3_wrapper
 from omigo_core import utils
+from omigo_core import funclib 
 
 # constant
 NUM_HOURS = 24
 
-# method to read the data 
+# method to read the data
 def read_filepaths(path, start_date_str, end_date_str, fileprefix, s3_region, aws_profile, granularity, ignore_missing = False):
     if (granularity == "hourly"):
         return read_filepaths_hourly(path, start_date_str, end_date_str, fileprefix, s3_region, aws_profile, "", ignore_missing)
@@ -37,7 +38,7 @@ def get_etl_level_prefix(curdate, etl_level):
             f = "%d"
         else:
             raise Exception("Invalid value for etl_level :", etl_level, part)
- 
+
         prefix = prefix + part + "-" + str(curdate.strftime(f)) + "/"
 
     return prefix
@@ -100,7 +101,7 @@ def check_exists(path, s3_region = None, aws_profile = None):
     if (os.path.exists(path)):
         return True
 
-    return False 
+    return False
 
 def read_filepaths_daily(path, start_date_str, end_date_str, fileprefix, s3_region, aws_profile, etl_level, ignore_missing):
     # parse input dates
@@ -226,38 +227,26 @@ def read_file_content_as_lines(path, s3_region = None, aws_profile = None):
     # return
     return data
 
-def parse_date_multiple_formats(date_str):
-    # check for yyyy-MM-dd
-    if (len(date_str) == 10):
-        return datetime.datetime.strptime(date_str, "%Y-%m-%d")
-    elif (len(date_str) == 19):
-        date_str = date_str.replace("T", " ")
-        return datetime.datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
-    else:
-        raise Exception("Unknownd datetime format:" + date_str)
-
 def create_date_numeric_representation(date_str, default_suffix):
     # check for yyyy-MM-dd
     if (len(date_str) == 10):
         return str(date_str.replace("-", "") + default_suffix)
-    elif (len(date_str) == 19):
-        return str(date_str.replace("-", "").replace("T", "").replace(":", ""))
     else:
-        raise Exception("Unknownd datetime format:" + date_str)
+        return funclib.datestr_to_datetime(date_str).strftime("%Y%m%d%H%M%S")
 
 # this is not a lookup function. This reads directory listing, and then picks the filepaths that match the criteria
 def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix, spillover_window = 1, num_par = 10, wait_sec = 1, s3_region = None, aws_profile = None):
     # parse dates
-    start_date = parse_date_multiple_formats(start_date_str)
-    end_date = parse_date_multiple_formats(end_date_str)
+    start_date = funclib.datestr_to_datetime(start_date_str)
+    end_date = funclib.datestr_to_datetime(end_date_str)
 
     # get number of days inclusive start and end and include +/- 1 day buffer for overlap
-    num_days = (end_date - start_date).days + 1 + (spillover_window * 2) 
+    num_days = (end_date - start_date).days + 1 + (spillover_window * 2)
     start_date_minus_window = start_date - datetime.timedelta(days = spillover_window)
 
     # create a numeric representation of date
-    start_date_numstr = create_date_numeric_representation(start_date_str, "000000")     
-    end_date_numstr = create_date_numeric_representation(end_date_str, "999999")     
+    start_date_numstr = create_date_numeric_representation(start_date_str, "000000")
+    end_date_numstr = create_date_numeric_representation(end_date_str, "999999")
 
     # create variable to store results
     tasks = []
@@ -284,23 +273,30 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
     for files_list in results:
         # debug
         utils.trace("file_paths_util: get_file_paths_by_datetime_range: number of candidate files to read: cur_date: {}, count: {}".format(cur_date, len(files_list)))
- 
+
         # apply filter on the name and the timestamp
         for filename in files_list:
             #format: full_prefix/fileprefix-startdate-enddate-starttime-endtime.tsv
-
             # get the last part after /
             #sep_index = filename.rindex("/")
             #filename1 = filename[sep_index + 1:]
             base_filename = filename[len(cur_path) + 1:]
+            ext_index = None
+
+            # ignore any hidden files that start with dot(.)
+            if (base_filename.startswith(".")):
+                utils.trace("file_paths_util: get_file_paths_by_datetime_range: found hidden file. ignoring: {}".format(filename))
+                continue
 
             # get extension
             if (base_filename.endswith(".tsv.gz")):
                 ext_index = base_filename.rindex(".tsv.gz")
             elif (base_filename.endswith(".tsv")):
                 ext_index = base_filename.rindex(".tsv")
+            else:
+                raise Exception("file_paths_util: get_file_paths_by_datetime_range: extension parsing failed: {}".format(filename))
 
-            # proceed only if valid filename             
+            # proceed only if valid filename
             if (ext_index != -1):
                 # strip the extension
                 filename2 = base_filename[0:ext_index]
@@ -317,7 +313,8 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
                     if (not (str(end_date_numstr) < cur_start_ts or str(start_date_numstr) > cur_end_ts)):
                         # note filename1
                         paths_found.append(filename)
-    
+                        utils.trace("file_paths_util: get_file_paths_by_datetime_range: found file: {}".format(filename))
+
     # return
     return paths_found
 

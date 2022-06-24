@@ -10,7 +10,6 @@ import json
 import time
 import zipfile
 import requests
-import random
 
 # local imports
 from omigo_core import tsv
@@ -27,18 +26,20 @@ from requests import exceptions
 def merge(tsv_list, def_val_map = None):
     # validation
     if (len(tsv_list) == 0):
-        raise Exception("Error in input. List of tsv is empty")
+        utils.warn("Error in input. List of tsv is empty")
+        return tsv.create_empty()
 
-    # remove tsvs without any columns 
+    # remove tsvs without any columns
     tsv_list = list(filter(lambda x: x.num_cols() > 0, tsv_list))
 
     # base condition
     if (len(tsv_list) == 0):
-        utils.warn("List of tsv is empty. Will merge all columns")
+        utils.warn("List of tsv is empty. Returning")
+        return tsv.create_empty()
 
     # check for valid headers
     header = tsv_list[0].get_header()
-    header_fields = header.split("\t")
+    header_fields = tsv_list[0].get_header_fields()
 
     # iterate to check mismatch in header
     index = 0
@@ -54,7 +55,7 @@ def merge(tsv_list, def_val_map = None):
             else:
                 utils.warn("Mismatch in order of header fields: {}, {}. Using merge intersect".format(header.split("\t"), t.get_header().split("\t")))
             return merge_intersect(tsv_list, def_val_map)
-                
+
         index = index + 1
 
     # simple condition
@@ -93,6 +94,10 @@ def merge_intersect(tsv_list, def_val_map = None):
     if (len(tsv_list) == 0):
         raise Exception("List of tsv is empty")
 
+    # boundary condition
+    if (len(tsv_list) == 1):
+        return tsv_list[0]
+
     # get the first header
     header_fields = tsv_list[0].get_header_fields()
 
@@ -115,7 +120,7 @@ def merge_intersect(tsv_list, def_val_map = None):
 
             # some validation. the default value columns should exist somewhere
             for h in def_val_map.keys():
-                # check if all default columns exist 
+                # check if all default columns exist
                 if (h not in diff_cols and h not in same_cols):
                     raise Exception("Default value for a column given which does not exist:", h)
 
@@ -127,7 +132,7 @@ def merge_intersect(tsv_list, def_val_map = None):
                 else:
                     utils.debug("merge_intersect: assigning empty string as default value to column: {}".format(h))
                     effective_def_val_map[h] = ""
-        
+
             # get the list of keys in order
             keys_order = []
             for h in header_fields:
@@ -149,18 +154,22 @@ def merge_intersect(tsv_list, def_val_map = None):
             # return after merging
             return merge(new_tsvs)
         else:
-            # create a list of new tsvs
-            new_tsvs = []
-            for t in tsv_list:
-                new_tsvs.append(t.select(same_cols))
+            # handle boundary condition of no matching cols
+            if (len(same_cols) == 0):
+                return tsv.create_empty()
+            else:
+                # create a list of new tsvs
+                new_tsvs = []
+                for t in tsv_list:
+                    new_tsvs.append(t.select(same_cols))
 
-            return merge(new_tsvs)
+                return merge(new_tsvs)
     else:
         # probably landed here because of mismatch in headers position
         tsv_list2 = []
         for t in tsv_list:
             tsv_list2.append(t.select(same_cols))
-        return merge(tsv_list2) 
+        return merge(tsv_list2)
 
 def read(input_file_or_files, sep = None, s3_region = None, aws_profile = None):
     input_files = __get_argument_as_array__(input_file_or_files)
@@ -284,6 +293,7 @@ def read_with_filter_transform(input_file_or_files, filter_transform_func = None
             # return
             return tsv.TSV(new_header, new_data)
 
+# TODO: replace this by etl_ext
 def read_by_date_range(path, start_date_str, end_date_str, prefix, s3_region = None, aws_profile = None, granularity = "daily"):
     # read filepaths
     filepaths = file_paths_util.read_filepaths(path, start_date_str, end_date_str, prefix, s3_region, aws_profile, granularity)
@@ -306,111 +316,6 @@ def read_by_date_range(path, start_date_str, end_date_str, prefix, s3_region = N
         return tsv_list[0]
     else:
         return tsv_list[0].union(tsv_list[1:])
-
-# this method is needed so that users dont have to interact with file_paths_util
-# TODO: move this to scar etl tools as there are specific directory construction logic
-def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix, spillover_window = 1, sampling_rate = None, num_par = 10, wait_sec = 1, s3_region = None, aws_profile = None):
-    # some code refactoring is pending
-    utils.print_code_todo_warning("get_file_paths_by_datetime_range: move this to scar etl tools as there are specific directory construction logic")
-
-    # get all the filepaths
-    filepaths = file_paths_util.get_file_paths_by_datetime_range(path,  start_date_str, end_date_str, prefix, spillover_window = spillover_window, num_par = num_par, wait_sec = wait_sec,
-        s3_region = s3_region, aws_profile = aws_profile)
-
-    # check for sampling rate
-    if (sampling_rate is not None):
-        # validation
-        if (sampling_rate < 0 or sampling_rate > 1):
-            raise Exception("sampling_rate is not valid: {}".format(sampling_rate))
-
-        # determine the number of samples to take
-        sample_n = int(len(filepaths) * sampling_rate)
-        random.shuffle(filepaths)
-        filepaths = sorted(filepaths[0:sample_n])
-    else:
-        filepaths = sorted(filepaths)
-
-    # return
-    return filepaths
-    
-# TODO: move this to scar etl tools as there are specific directory construction logic
-def scan_by_datetime_range(path, start_date_str, end_date_str, prefix, filter_transform_func = None, transform_func = None, spillover_window = 1, num_par = 5,
-    timeout_seconds = 600, def_val_map = None, sampling_rate = None, s3_region = None, aws_profile = None):
-
-    utils.print_code_todo_warning("scan_by_datetime_range: move this to scar etl tools as there are specific directory construction logic")
-    utils.warn("scan_by_datetime_range: this method runs in multithreaded mode which can not be stopped without killing process. Wait for timeout_seconds: {}".format(timeout_seconds))
-
-    # read filepaths by scanning. this involves listing all the files, and then matching the condititions
-    filepaths = get_file_paths_by_datetime_range(path,  start_date_str, end_date_str, prefix, spillover_window = spillover_window, sampling_rate = sampling_rate,
-        s3_region = s3_region, aws_profile = aws_profile)
-
-    # debug
-    utils.info("scan_by_datetime_range: number of paths to read: {}, num_par: {}, timeout_seconds: {}".format(len(filepaths), num_par, timeout_seconds))
-
-    # do some checks on the headers in the filepaths
-
-    # debug
-    utils.debug("tsvutils: scan_by_datetime_range: number of files to read: {}".format(len(filepaths)))
-
-    # read all the files in the filepath applying the filter function
-    tsv_list = []
-    future_list = []
-    wait_time = 5
-
-    # submit the tasks
-    with ThreadPoolExecutor(max_workers = num_par) as executor:
-        counter = 0
-        # run loop to submit tasks
-        for filepath in filepaths:
-            counter = counter + 1
-            utils.debug("Submitted task to read: [{}]: {}".format(counter, filepath))
-            future = executor.submit(read_with_filter_transform, filepath, filter_transform_func, transform_func, s3_region, aws_profile)
-            future_list.append(future)
-
-        # check for done status after sleeping for 2 seconds
-        total_wait = 0
-        while True:
-            remaining = 0
-            running = 0
-            for future in future_list:
-                # check how many are done
-                if (future.done() == False):
-                    remaining = remaining + 1
-                if (future.running() == True):
-                    running = running + 1
-
-            # if all completed then take the result
-            if (remaining == 0):
-                for future in future_list:
-                    x = future.result()
-                    utils.debug("Finished reading: num_rows: {}".format(x.num_rows()))
-                    tsv_list.append(x)
-                break
-            else:
-                # do some wait
-                utils.debug("Total files to read: {}, remaining: {}, running: {}, waiting for: {} seconds".format(len(future_list), remaining, running, wait_time))
-
-                # sleep and increment total wait time
-                time.sleep(wait_time)
-                total_wait = total_wait + wait_time
-                
-                # check if total wait time has exceeded the limit
-                if (timeout_seconds is not None and total_wait >= timeout_seconds):
-                    utils.info("scan_by_datetime_range: timeout of {} seconds reached. Shutting down...".format(timeout_seconds))
-                    executor.shutdown()
-                    utils.info("scan_by_datetime_range: shutdown complete. Raising exception")
-
-                    # break
-                    raise Exception("scan_by_datetime_range: timeout of {} seconds reached. Cancelling. To avoid this either change timeout_seconds or filtering criteria.".format(timeout_seconds))
-
-    # completed the threadpool task
-    utils.debug("scan_by_datetime_range: Finished reading the files. Calling merge.")
-       
-    # combine all together
-    tsv_combined = merge(tsv_list, def_val_map)
-    utils.debug("scan_by_datetime_range: Number of records: {}".format(tsv_combined.num_rows()))
-       
-    return tsv_combined
 
 def load_from_dir(path, start_date_str, end_date_str, prefix, s3_region = None, aws_profile = None, granularity = "daily"):
     # read filepaths
@@ -468,10 +373,13 @@ def load_from_array_of_map(map_arr):
         for k in header_fields:
             v = ""
             if (k in mp.keys()):
-                v = str(mp[k])
-     
+                # read as string and replace any newline or tab characters
+                v = utils.strip_spl_white_spaces(mp[k])
+
+            # append
             fields.append(v)
 
+        # create line
         line = "\t".join(fields)
         data.append(line)
 
@@ -514,24 +422,34 @@ def __read_base_url__(url, query_params = {}, headers = {}, body = None, usernam
 
     # exception handling
     try:
-        # call the web service    
+        # call the web service
         if (body is None):
+            # make web service call
             if (username is not None and password is not None):
                 response = requests.get(url, auth = (username, password), headers = headers, timeout = timeout_sec, verify = verify)
             else:
                 response = requests.get(url, headers = headers, timeout = timeout_sec, verify = verify)
         else:
+            # do some validation on body
+            body_json = None
+            try:
+                body_json = json.loads(body)
+            except Exception as e:
+                utils.error("__read_base_url__: body is not well formed json: {}".format(body))
+                raise e
+
+            # make web service call
             if (username is not None and password is not None):
-                response = requests.post(url, auth = (username, password), json = json.loads(body), headers = headers, timeout = timeout_sec, verify = verify)
+                response = requests.post(url, auth = (username, password), json = body_json, headers = headers, timeout = timeout_sec, verify = verify)
             else:
-                response = requests.post(url, json = json.loads(body), headers = headers, timeout = timeout_sec, verify = verify)
-    
+                response = requests.post(url, json = body_json, headers = headers, timeout = timeout_sec, verify = verify)
+
         # return response
         return response, None
     except exceptions.RequestException as e:
         utils.warn("__read_base_url__: Found exception while making request: {}".format(e))
         return None, e
-        
+
 # TODO: the semantics of this api are not clear
 def read_url_json(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 5, verify = True):
     utils.warn("read_url_json will flatten json that comes out as list. This api is still under development")
@@ -553,17 +471,17 @@ def read_url_json(url, query_params = {}, headers = {}, body = None, username = 
             # iterate and add as row
             for v in json_obj:
                 fields = [utils.url_encode(json.dumps(v)).replace("\n", " "), str(status_code), str(error_msg)]
-                data.append("\t".join(fields)) 
+                data.append("\t".join(fields))
         elif (isinstance(json_obj, dict)):
             fields = [utils.url_encode(json.dumps(response_str)).replace("\n", " "), str(status_code), str(error_msg)]
-            data.append("\t".join(fields)) 
+            data.append("\t".join(fields))
         else:
             fields = ["", "0", "Unable to parse the json response: {}".format(response_str)]
-            data.append("\t".join(fields)) 
+            data.append("\t".join(fields))
     else:
         fields = ["", "0", "Unable to parse the json response: {}".format(utils.url_encode(response_str).replace("\n", " "))]
         data.append("\t".join(fields))
- 
+
     return tsv.TSV(header, data).validate()
 
 def read_url_response(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 30, verify = True, num_retries = 1, retry_sleep_sec = 1):
@@ -645,12 +563,12 @@ def read_url_as_tsv(url, query_params = {}, headers = {}, sep = None, username =
     elif (url.endswith(".zip")):
         file_type = "zip"
 
-    # detect extension  
+    # detect extension
     ext_type = None
     if (url.endswith(".csv") or url.endswith(".csv.gz") or url.endswith(".csv.zip")):
         ext_type = "csv"
         utils.warn("CSV file detected. Only simple csv files are supported where comma and tabs are not part of any data.")
-    elif (url.endswith(".tsv") or url.endswith(".tsv.gz") or url.endswith(".tsv.zip")): 
+    elif (url.endswith(".tsv") or url.endswith(".tsv.gz") or url.endswith(".tsv.zip")):
         ext_type = "tsv"
     else:
         utils.warn("Unknown file extension. Doing best effort in content type detection")
@@ -679,7 +597,7 @@ def read_url_as_tsv(url, query_params = {}, headers = {}, sep = None, username =
             utils.warn("Non TSV input file has tabs. Converting tabs to spaces")
             header = header.replace("\t", " ")
             data = [x.replace("\t", " ") for x in data]
- 
+
         # replace separator with tabs
         header = header.replace(sep, "\t")
         data = [x.replace(sep, "\t") for x in data]
@@ -716,8 +634,8 @@ def from_df(df):
 
     # return
     return tsv.TSV("\t".join(header_fields), data).validate()
-    
-    
+
+
 # this method returns the arg_or_args as an array of single string if the input is just a string, or return as original array
 # useful for calling method arguments that can take single value or an array of values.
 # TBD: Relies on fact that paths are never single letter strings
@@ -740,4 +658,12 @@ def __get_argument_as_array__(arg_or_args):
         return [arg_or_args]
     else:
         return arg_or_args
+
+# refactored methods
+def scan_by_datetime_range(*args, **kwargs):
+    raise Exception("use etl.scan_by_datetime_range instead")
+
+# refactored methods
+def get_file_paths_by_datetime_range(*args, **kwargs):
+    raise Exception("use etl.get_file_paths_by_datetime_range instead")
 

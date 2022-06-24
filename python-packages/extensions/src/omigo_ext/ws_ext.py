@@ -1,7 +1,7 @@
 # package to do web service REST calls in an efficient way
 from omigo_core import tsv
 from omigo_core import tsvutils
-from omigo_core import utils 
+from omigo_core import utils
 from omigo_ext import multithread_ext
 
 # TODO: selective_execution doesnt feel like a good design pattern.
@@ -84,7 +84,7 @@ def __call_web_service__(xtsv, xtsv_timeout_sec, xtsv_verify, xtsv_enable_opt_ex
     # use the same inherit_message
     xtsv_inherit_message2 = xtsv_inherit_message + ": call_web_service" if (xtsv_inherit_message != "") else "call_web_service"
 
-    # take only distinct all_sel_cols 
+    # take only distinct all_sel_cols
     hash_tsv = xtsv.select(all_sel_cols, inherit_message = xtsv_inherit_message2).distinct()
 
     # if the number of rows are different, print some stats
@@ -94,12 +94,12 @@ def __call_web_service__(xtsv, xtsv_timeout_sec, xtsv_verify, xtsv_enable_opt_ex
 
     # avoid making duplicate calls to the web service by hashing the all_sel_cols
     if (xtsv_enable_opt_exec == True):
-        # optimize the calls 
+        # optimize the calls
         hash_explode_tsv = hash_tsv \
             .explode(all_sel_cols, __call_web_service_exp_func__(xtsv_timeout_sec, xtsv_verify, url, query_params, header_params, body_params, username, password, url_cols,
                 query_params_cols, header_params_cols, body_params_cols, include_resolved_values, selective_execution_func),
                 prefix = prefix, collapse = False, inherit_message = xtsv_inherit_message2)
-  
+
         # merge the results back to the original using map_join
         return xtsv.natural_join(hash_explode_tsv, inherit_message = xtsv_inherit_message2)
     else:
@@ -156,13 +156,13 @@ def __call_web_service_exp_func__(xtsv_timeout_sec, xtsv_verify, url, query_para
             body_params_resolved = None
 
         # shorter version of body_params_resolved
-        body_params_resolved_strip = body_params_resolved[0:40] + "..." if (body_params_resolved is not None and len(body_params_resolved) >= 40) else body_params_resolved
+        body_params_resolved_strip = body_params_resolved[0:1000] + "..." if (body_params_resolved is not None and len(body_params_resolved) >= 1000) else body_params_resolved
 
         # debug
         utils.trace("__call_web_service_exp_func_inner__: mp: {}".format(mp))
-        utils.trace("__call_web_service_exp_func_inner__: url: {}, query_params: {}, body_params: {}".format(url, query_params, body_params)) 
+        utils.trace("__call_web_service_exp_func_inner__: url: {}, query_params: {}, body_params: {}".format(url, query_params, body_params))
         utils.trace("__call_web_service_exp_func_inner__: url_resolved: {}, query_params_resolved: {}, body_params_resolved: {}".format(url_resolved,
-            query_params_resolved, body_params_resolved_strip)) 
+            query_params_resolved, body_params_resolved_strip))
 
         # create response map
         result_mp = {}
@@ -184,20 +184,20 @@ def __call_web_service_exp_func__(xtsv_timeout_sec, xtsv_verify, url, query_para
             resp_str, resp_status_code, resp_err = "", 0, ""
             result_mp["response:success"] = "0"
             result_mp["response:selective_execution"] = "0"
-        
+
         # fill rest of the result map.
         result_mp["response:url_encoded"] = str(utils.url_encode(resp_str))
         result_mp["response:status_code"] = str(resp_status_code)
         result_mp["response:error"] = str(resp_err)
 
-        # additioanl debugging information. 
+        # additional debugging information.
         if (include_resolved_values == True):
             result_mp["request:url"] = url_resolved
             result_mp["request:query_params"] = str(query_params_resolved)
 
             # include the selection cols
             for k in mp.keys():
-                result_mp[k] = str(mp[k]) 
+                result_mp["request:__input__:{}".format(k)] = str(mp[k])
 
         # create result
         combined_result = [result_mp]
