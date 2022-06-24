@@ -17,7 +17,7 @@ class FileWriter(val outputFileName: String, val s3Region: String, val awsProfil
 
 class TSVFileWriter(val s3Region: String, val awsProfile: String) {
   def save(xtsv: TSV, outputFileName: String): Unit = {
-    val content = List(xtsv.getHeader(), xtsv.getData().mkString("\n")).mkString("\n")
+    val content = List(xtsv.get_header(), xtsv.get_data().mkString("\n")).mkString("\n")
 
     // check s3 or local
     if (outputFileName.startsWith("s3://")) {

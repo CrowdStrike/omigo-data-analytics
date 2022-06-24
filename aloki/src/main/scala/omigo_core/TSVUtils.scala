@@ -21,8 +21,8 @@ object TSVUtils {
     throw new Exception("Not Implemented")
   }
 
-  def read_with_filter_transform(input_file_or_files: List[String], filter_transform_func: Any, transform_func: Any, s3_region: String, aws_profile: String) {
-    throw new Exception("Not Implemented")
+  def readWithFilterTransform(inputFileOrFiles: List[String], filterTransformFunc: Any, transformFunc: Any, s3Region: String, awsProfile: String): TSV = {
+    throw new Exception("TBD")
   }
 
   def read_by_date_range(path: String, start_date_str: String, end_date_str: String, prefix: String, s3_region: String, aws_profile: String, granularity: String) {

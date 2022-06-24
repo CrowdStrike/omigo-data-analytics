@@ -42,7 +42,7 @@ object Utils {
   }
 
   def trace(msg: String) {
-    throw new Exception("Not Implemented")
+    println("[TRACE]: " + msg)
   }
 
   def trace_once(msg: String, msg_cache: Map[String, String]) {
@@ -50,7 +50,7 @@ object Utils {
   }
 
   def debug(msg: String) {
-    throw new Exception("Not Implemented")
+    println("[DEBUG]: " + msg)
   }
 
   def debug_once(msg: String, msg_cache: Map[String, String]) {
@@ -58,7 +58,7 @@ object Utils {
   }
 
   def info(msg: String) {
-    throw new Exception("Not Implemented")
+    println("[INFO]: " + msg)
   }
 
   def info_once(msg: String, msg_cache: Map[String, String]) {
@@ -66,7 +66,7 @@ object Utils {
   }
 
   def error(msg: String) {
-    throw new Exception("Not Implemented")
+    println("[ERROR]: " + msg)
   }
 
   def error_once(msg: String, msg_cache: Map[String, String]) {
