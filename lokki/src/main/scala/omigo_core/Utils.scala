@@ -122,7 +122,7 @@ object Utils {
   }
 
   def warn(msg: String) {
-    throw new Exception("Not Implemented")
+    println("[WARN]: " + msg)
   }
 
   def warn_once(msg: String, msg_cache: Map[String, String]) {
@@ -179,7 +179,7 @@ object Utils {
 
   // TODO: python code needs fixing
   def report_progress(msg: String, inherit_message: String, counter: Int, total: Int) {
-    println(inherit_message + ": " + msg)
+    // println(inherit_message + ": " + msg)
   }
 
   def merge_arrays(arr_list: List[Array[String]]) {

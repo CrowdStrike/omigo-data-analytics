@@ -1,7 +1,7 @@
 package omigo_core
 
 class TSV(val header: String, val data: List[String]) {
-  val header_fields = header.split("\t").toList
+  val header_fields = header.split("\t").filter({ h => h != "" }).toList
   val header_map = header_fields.zipWithIndex.toMap
 
   def get_header(): String = {
@@ -143,7 +143,7 @@ class TSV(val header: String, val data: List[String]) {
       Utils.report_progress("select: [1/1] selecting columns", inherit_message, counter, data.length)
 
       val fields = line.split("\t")
-      val new_fields = new scala.collection.mutable.ListBuffer[String]() 
+      val new_fields = new scala.collection.mutable.ListBuffer[String]()
       indexes.foreach({ i =>
         if (i >= fields.length)
           throw new Exception("Invalid index")
@@ -234,6 +234,14 @@ class TSV(val header: String, val data: List[String]) {
     // return
     return indexes.toList
   }
+
+  // TODO: this is temp implementation
+  def show(): TSV = {
+    println("Stats: num_cols: %s, num_rows: %s, header: %s".format(num_cols(), num_rows(), header_fields))
+    println(get_header())
+    get_data().foreach({ line => println(line) })
+    return this
+  }
 }
 
 object TSV {
@@ -277,8 +285,9 @@ object TSV {
     throw new Exception("Not Implemented")
   }
 
-  def read(paths: List[String], sep: String) {
-    throw new Exception("Not Implemented")
+  // TODO: python code needs fixes for profile
+  def read(path_or_paths: Any, sep: String): TSV = {
+    TSVUtils.read(path_or_paths, sep, null, null)
   }
 
   def write(xtsv: TSV, path: String) {
@@ -347,4 +356,7 @@ object TSV {
     new_with_cols(List.empty, List.empty) 
   }
 
+  def main(args: Array[String]): Unit = {
+    TSV.read(args.toList, null).show()      
+  }
 }

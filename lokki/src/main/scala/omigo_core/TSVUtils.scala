@@ -141,6 +141,8 @@ object TSVUtils {
             keys_order.append(h)
         })
 
+        println("diff_cols: %s, keys_order: %s".format(diff_cols, keys_order)) 
+
         // create a list of new tsvs
         val new_tsvs = new scala.collection.mutable.ListBuffer[TSV]() 
         tsv_list.foreach({ t =>
@@ -154,13 +156,18 @@ object TSVUtils {
         // return after merging
         return merge(new_tsvs.toList, Map.empty)
       } else {
-        // create a list of new tsvs
-        val new_tsvs = new scala.collection.mutable.ListBuffer[TSV]() 
-        tsv_list.foreach({ t =>
-          new_tsvs.append(t.select(same_cols.toList, ""))
-        })
+        // handle boundary condition of no matching cols
+        if (same_cols.length == 0) {
+          return TSV.create_empty()
+        } else {
+          // create a list of new tsvs
+          val new_tsvs = new scala.collection.mutable.ListBuffer[TSV]() 
+          tsv_list.foreach({ t =>
+            new_tsvs.append(t.select(same_cols.toList, ""))
+          })
 
-        return merge(new_tsvs.toList, Map.empty)
+          return merge(new_tsvs.toList, null)
+        }
       }
     } else {
       // probably landed here because of mismatch in headers position
@@ -168,12 +175,38 @@ object TSVUtils {
       tsv_list.foreach({ t =>
         tsv_list2.append(t.select(same_cols.toList, ""))
       })
-      return merge(tsv_list2.toList, Map.empty)
+      return merge(tsv_list2.toList, null)
     }
   }
 
-  def read(input_file_or_files: List[String], sep: String, s3_region: String, aws_profile: String) {
-    throw new Exception("Not Implemented")
+  // TODO : this is minimal implementation. python code needs to fix aws settings
+  def read(input_file_or_files: Any, sep: String, s3_region: String, aws_profile: String): TSV = {
+    val input_files = if (input_file_or_files.isInstanceOf[String]) List(input_file_or_files.asInstanceOf[String]) else input_file_or_files.asInstanceOf[List[String]]
+
+    // input_files = __get_argument_as_array__(input_file_or_files)
+    val tsv_list = new scala.collection.mutable.ListBuffer[TSV]() 
+    input_files.foreach({ input_file =>
+      // check if it is a file or url
+      if (input_file.startsWith("http")) {
+        // tsv_list.append(read_url_as_tsv(input_file))
+        throw new Exception("http format not supported")
+      } else {
+        // read file content
+        val lines = FilePathsUtil.readFileContentAsLines(input_file, s3_region, aws_profile)
+
+        // take header and dat
+        val header = lines(0)
+        val data = lines.drop(1) 
+
+        // check if a custom separator is defined
+        if (sep != null)
+          throw new Exception("custom sep is not supported")
+
+        tsv_list.append(new TSV(header, data))
+      }
+    })
+
+    return merge(tsv_list.toList, null)
   }
 
   def readWithFilterTransform(inputFileOrFiles: List[String], filterTransformFunc: Any, transformFunc: Any, s3Region: String, awsProfile: String): TSV = {
@@ -245,4 +278,7 @@ object TSVUtils {
     throw new Exception("Not Implemented")
   }
 
+  def main(args: Array[String]): Unit = {
+
+  }
 }
