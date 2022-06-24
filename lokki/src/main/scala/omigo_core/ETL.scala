@@ -96,5 +96,9 @@ object ETL {
     filePaths
   }
 
+  def main(args: Array[String]): Unit = {
+    val xtsv = scanByDateTimeRange(args(0), args(1), args(2), args(3), null, null, args(4).toInt, 0, 0, 0, Map.empty, 1.0f, null, null)
+    xtsv.show()
+  }
 }
 

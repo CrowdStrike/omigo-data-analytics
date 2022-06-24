@@ -29,7 +29,7 @@ class TSV(val header: String, val data: List[String]) {
   }
 
   def has_empty_header(): Boolean = {
-    get_header() == "" 
+    num_cols() == 0
   }
 
   def union(that_arr: List[TSV]): TSV = {

@@ -209,8 +209,13 @@ object TSVUtils {
     return merge(tsv_list.toList, null)
   }
 
-  def readWithFilterTransform(inputFileOrFiles: List[String], filterTransformFunc: Any, transformFunc: Any, s3Region: String, awsProfile: String): TSV = {
-    throw new Exception("TBD")
+  // TODO: this is minimal implementation
+  def readWithFilterTransform(inputFileOrFiles: Any, filterTransformFunc: Any, transformFunc: Any, s3Region: String, awsProfile: String): TSV = {
+    // TODO: no support for transform func
+    if (filterTransformFunc != null || transformFunc != null)
+      throw new Exception("transform func not supported")
+
+    read(inputFileOrFiles, null, s3Region, awsProfile)
   }
 
   def read_by_date_range(path: String, start_date_str: String, end_date_str: String, prefix: String, s3_region: String, aws_profile: String, granularity: String) {
