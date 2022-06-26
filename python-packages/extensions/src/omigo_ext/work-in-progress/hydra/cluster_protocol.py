@@ -2,12 +2,10 @@ import time
 import os
 import random
 import math
-from omigo_core import tsv 
-from omigo_core import utils
+from omigo_core import tsv, utils, funclib
 from omigo_ajaiswal_ext.hydra import cluster_data
 from omigo_ajaiswal_ext.hydra import cluster_common
 import threading
-from concurrent.futures import ThreadPoolExecutor
 
 # time interval to sleep before running cleanup
 CLEANUP_SLEEP_SECS = 0
@@ -15,7 +13,7 @@ HEARTBEAT_SEC = 15
 MAX_HEARTBEAT_WAIT = 60
 MAX_HEARTBEAT_CLEANUP_DEAD_WAIT = 5 * MAX_HEARTBEAT_WAIT
 MAX_HEARTBEAT_CACHE = 5
-POST_THREAD_POOL_WAIT_SEC = 1
+POST_THREAD_POOL_WAIT_SEC = 5
 
 class ClusterEntityProtocol:
     def __init__(self, entity):
@@ -49,7 +47,7 @@ class ClusterEntityProtocol:
 
     def is_operation_allowed(self):
         # check the heartbeat
-        cur_time = cluster_common.get_utctimestamp_sec()
+        cur_time = funclib.get_utctimestamp_sec()
 
         # update cache if needed
         if (self.last_heartbeat_cache == 0 or cur_time - self.last_heartbeat_cache > MAX_HEARTBEAT_CACHE):
@@ -96,7 +94,7 @@ class ClusterEntityProtocol:
             utils.info("ClusterEntityProtocol: __update_heartbeat__: {}, entity in cleanup. Exiting.".format(self.get_entity_id()))
  
         # update the entity in place. TODO: this should be transactional
-        self.update_entity_ts(cluster_common.get_utctimestamp_sec())
+        self.update_entity_ts(funclib.get_utctimestamp_sec())
 
         # update on cluster
         self.cluster_handler.update_dynamic_value(cluster_common.ClusterPaths.get_primary_entity_details(self.get_entity_type(), self.get_entity_id()), self.get_entity(), ignore_logging = True)
@@ -137,7 +135,7 @@ class ClusterEntityProtocol:
             raise Exception("ClusterEntityProtocol: __is_alive__: {}, clock skew detected. entity ts: {}, server ts: {}, skew: {}. Raising exception for debugging".format(xentity_id, xentity.ts, xentity_server_timestamp, clock_skew))
 
         # check if the timestamp has already expired
-        cur_time = cluster_common.get_utctimestamp_sec()
+        cur_time = funclib.get_utctimestamp_sec()
         time_diff = cur_time - xentity_server_timestamp
 
         # check against max time
@@ -475,7 +473,7 @@ class ClusterEntityProtocol:
         xentity_ids = set(self.cluster_handler.list_dirs(cluster_common.ClusterPaths.get_primary_entities(xentity_type)))
        
         # variables to store ids 
-        cur_time = cluster_common.get_utctimestamp_sec()
+        cur_time = funclib.get_utctimestamp_sec()
 
         # iterate
         for xentity_id in xentity_ids:
@@ -533,7 +531,6 @@ class ClusterEntityProtocol:
 class ClusterMasterProtocol(ClusterEntityProtocol):
     def __init__(self, entity):
         super().__init__(entity)
-        self.cluster_props = cluster_common.ClusterProps.new({"ThreatGraph": 3, "EYRIE": 4, "S3": 10})
         self.is_master_current = False
         # self.__start__()
 
@@ -595,7 +592,7 @@ class ClusterMasterProtocol(ClusterEntityProtocol):
                cluster_common.ClusterPaths.get_primary_entity_details(master_current.entity_type, master_current.entity_id)))
 
             # compare the heartbeat time
-            time_diff = cluster_common.get_utctimestamp_sec() - master_current_entity.ts 
+            time_diff = funclib.get_utctimestamp_sec() - master_current_entity.ts 
             if (time_diff >= MAX_HEARTBEAT_WAIT):
                 utils.warn("__has_master_current__: current master has expired: {}, time_diff: {} seconds".format(master_current.entity_id, time_diff))
                 return False
@@ -698,7 +695,7 @@ class ClusterMasterProtocol(ClusterEntityProtocol):
         candidate_ids.remove(self.get_entity_id())
 
         # for each candidate id, check if it is alive. If not then delete the entry
-        cur_time = cluster_common.get_utctimestamp_sec()
+        cur_time = funclib.get_utctimestamp_sec()
         if (len(candidate_ids) > 0):
             for candidate_id in candidate_ids:
                 # check if alive
@@ -1062,7 +1059,7 @@ class ClusterManagerProtocol(ClusterEntityProtocol):
             # create the status as the manager needs to be owner throughout. otherwise timestamp skews across machine can affect latest value
             if (self.cluster_handler.dir_exists(cluster_common.ClusterPaths.get_manager_job_status(manager_id, job_id)) == False):
                 # create new manager job status
-                manager_job_status = cluster_common.ClusterManagerJobStatus.new(job_id, cluster_common.ClusterManagerJobStatus.INITIAL, cluster_common.get_utctimestamp_sec())
+                manager_job_status = cluster_common.ClusterManagerJobStatus.new(job_id, cluster_common.ClusterManagerJobStatus.INITIAL, funclib.get_utctimestamp_sec())
 
                 # update
                 self.cluster_handler.create(cluster_common.ClusterPaths.get_manager_job_status(manager_id, job_id))
@@ -1093,7 +1090,7 @@ class ClusterManagerProtocol(ClusterEntityProtocol):
                 
                 # update status
                 manager_job_status.status = cluster_common.ClusterManagerJobStatus.BATCHES_CREATED
-                manager_job_status.ts = cluster_common.get_utctimestamp_sec()
+                manager_job_status.ts = funclib.get_utctimestamp_sec()
                 self.cluster_handler.update_dynamic_value(cluster_common.ClusterPaths.get_manager_job_status(manager_id, job_id), manager_job_status)
 
             # status = BATCHES_CREATED
@@ -1103,7 +1100,7 @@ class ClusterManagerProtocol(ClusterEntityProtocol):
                 if (assign_batches_status == True):
                     # update status
                     manager_job_status.status = cluster_common.ClusterManagerJobStatus.BATCHES_ASSIGNED
-                    manager_job_status.ts = cluster_common.get_utctimestamp_sec()
+                    manager_job_status.ts = funclib.get_utctimestamp_sec()
                     self.cluster_handler.update_dynamic_value(cluster_common.ClusterPaths.get_manager_job_status(manager_id, job_id), manager_job_status)
                 else:
                     # raise exception
@@ -1257,7 +1254,7 @@ class ClusterManagerProtocol(ClusterEntityProtocol):
 
                 # update manager job status
                 self.cluster_handler.update_dynamic_value(cluster_common.ClusterPaths.get_manager_job_status(manager_id, job_id),
-                    cluster_common.ClusterManagerJobStatus.new(job_id, cluster_common.ClusterManagerJobStatus.COMPLETED, cluster_common.get_utctimestamp_sec()))
+                    cluster_common.ClusterManagerJobStatus.new(job_id, cluster_common.ClusterManagerJobStatus.COMPLETED, funclib.get_utctimestamp_sec()))
 
                 # need to create the output reference file in job output location
                 job = cluster_common.ClusterJob.from_json(self.cluster_handler.read_most_recent_json(cluster_common.ClusterPaths.get_job_details(job_id)))

@@ -6,6 +6,7 @@ import time
 import datetime
 from datetime import timezone
 
+# TODO: look for aws boto3 response code to make sure the api ran
 # TODO: This should be moved to omigo-core
 RESERVED_HIDDEN_FILE = ".omigo.ignore"
 WAIT_SEC = 1
@@ -13,6 +14,22 @@ WAIT_SEC = 1
 DEFAULT_WAIT_SEC = 3
 DEFAULT_ATTEMPTS = 3
 
+# class MultiFSWrapper:
+#     IN_MEMORY = 1
+#     S3_FS = 2
+# 
+#     def __init__(self, fs_type):
+#         if (fs_type == MultiFSWrapper.IN_MEMORY):
+#             self.fs_handler = FSInMemoryWrapper()
+#         elif (fs_type == MultiFSWrapper.S3_FS):
+#             fs_handler = s3_wrapper
+#         else:
+#             raise Exception("Unknown fs_type: {}".format(fs_type))
+
+# class FSWrapperInterface:
+#     def check_file_exists(self):
+# 
+#     def  
 class S3FSWrapper:
     def __init__(self):
         pass
@@ -70,7 +87,7 @@ class S3FSWrapper:
         if (self.file_exists(path) == False and attempts > 0):
             utils.info("read: path: {} doesnt exist. waiting for {} seconds. attempts: {}".format(path, wait_sec, attempts))
             time.sleep(wait_sec)
-            return self.read(path, wait_sec = wait_sec, attempts = attempts - 1)
+            return self.read_file_contents_as_text(path, wait_sec = wait_sec, attempts = attempts - 1)
 
         bucket_name, object_key = utils.split_s3_path(path)
         return s3_wrapper.get_s3_file_content_as_text(bucket_name, object_key)

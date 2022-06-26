@@ -1,6 +1,4 @@
-from omigo_core import tsv
-from omigo_core import utils
-from omigo_core import tsvutils
+from omigo_core import tsv, utils, tsvutils, funclib
 import json
 import time
 import math
@@ -127,7 +125,7 @@ def set_ids(suffix):
     ID_SUFFIX = suffix
 
     # add the timestamp to the entity id
-    ts = cluster_common.get_utctimestamp_sec()
+    ts = funclib.get_utctimestamp_sec()
 
     cluster_common.ClusterPaths.set_master_id(construct_id("master_id", suffix, ts))
     cluster_common.ClusterPaths.set_manager_id(construct_id("manager_id", suffix, ts))

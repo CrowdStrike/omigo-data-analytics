@@ -3,9 +3,7 @@ from datetime import timezone
 import json
 import os
 import time
-from omigo_core import tsv 
-from omigo_core import utils
-from omigo_core import tsvutils
+from omigo_core import tsv, utils, tsvutils, funclib
 from omigo_ajaiswal_ext.hydra import s3io_wrapper
 from omigo_ajaiswal_ext.hydra import cluster_data
 from omigo_ajaiswal_ext.hydra import cluster_class_reflection
@@ -14,11 +12,6 @@ from omigo_ajaiswal_ext.hydra import cluster_class_reflection
 # takes care of protocol level things for future
 
 # global constants. TODO        
-# HYDRA_PATH = "s3://cs-scar-autoq/users/ajaiswal/cdemo/v3"
-if ("HYDRA_PATH" in os.environ.keys()):
-    HYDRA_PATH = os.environ["HYDRA_PATH"]
-else:
-    HYDRA_PATH = "TBD"
 
 # global clients
 HYDRA_CLIENT_ID = None 
@@ -32,21 +25,14 @@ HYDRA_CLUSTER_HANDLER = None
 DEFAULT_WAIT_SEC = 3
 DEFAULT_ATTEMPTS = 3
 
-# get utc timestamp in integer seconds
-# https://docs.python.org/3/library/datetime.html datetime utcnow() is deprecated
-def get_utctimestamp_sec():
-    return int(datetime.datetime.now(timezone.utc).timestamp())   
-
 def create_token(entity_id, ts):
     return "{}".format(utils.compute_hash("{}-{}".format(entity_id, ts)) % 100000) 
                 
 def construct_dynamic_value_json():
-    return "{}.{}.json".format(ClusterPaths.DYNAMIC_VALUE, get_utctimestamp_sec()) 
+    return "{}.{}.json".format(ClusterPaths.DYNAMIC_VALUE, funclib.get_utctimestamp_sec()) 
 
 # class that defines all the paths
 class ClusterPaths:
-    SPEC_FILE = "spec.json"
-    ENTITY_FILE = "entity.json"
     DYNAMIC_VALUE = "value"
 
     # Entity Constants
@@ -558,10 +544,10 @@ class ClusterFileHandler(cluster_data.JsonSer):
         # check for ignore_missing
         if (self.dir_exists(path) == False):
             if (ignore_missing == True):
-                utils.warn("remove_dir_recursive: path missing: {}, ignore_missing: {}".format(path, ignore_missing))
+                utils.warn("remove_dir_r: path missing: {}, ignore_missing: {}".format(path, ignore_missing))
             else:
                if (self.dir_exists_with_wait(path) == False):
-                   raise Exception("remove_dir_recursive: path doesnt exist: {}, ignore_missing: {}".format(path, ignore_missing))
+                   raise Exception("remove_dir_r: path doesnt exist: {}, ignore_missing: {}".format(path, ignore_missing))
         else:
             # get all the files and directories
             listings = self.list_all_recursive(path)
@@ -579,13 +565,13 @@ class ClusterFileHandler(cluster_data.JsonSer):
                 elif (self.is_file(listing_path)):
                     files.append(listing_path)
                 else:
-                    raise Exception("remove_dir_recursive: path: {}, not file or directory: {}".format(path, listing_path))
+                    raise Exception("remove_dir_r: path: {}, not file or directory: {}".format(path, listing_path))
 
             # debug
             # utils.info("remove_dir_recursive: path: {}, files: {}, dirs: {}".format(path, files, dirs))
 
             # delete all the files first
-            utils.info("remove_dir_recursive: files: {}".format(files))
+            utils.info("remove_dir_r: files: {}".format(files))
             for f in files:
                 self.remove_file(f, ignore_missing = ignore_missing)
 
@@ -593,7 +579,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
             dirs = sorted(dirs, reverse = True)
 
             # now delete directories
-            utils.info("remove_dir_recursive: dirs: {}".format(dirs))
+            utils.info("remove_dir_r: dirs: {}".format(dirs))
             for d in dirs:
                 self.remove_dir(d, ignore_missing = ignore_missing)
             
@@ -602,7 +588,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
 
         # check for commit
         if (verify == True and self.file_not_exists_with_wait(path) == False):
-            raise Exception("remove_dir_recursive: path: {}, verify commit failed".format(path))
+            raise Exception("remove_dir_r: path: {}, verify commit failed".format(path))
 
     def write_text(self, path, text):
         # validation
@@ -612,12 +598,13 @@ class ClusterFileHandler(cluster_data.JsonSer):
         utils.info("write_text  : {}".format(path))
         self.s3.write_text_file(self.__makepath__(path), text)
 
+    # TODO: Change the order of input parameters
     def write_tsv(self, path, xtsv):
         # validation
         if (xtsv is None):
             raise Exception("update: Null xtsv: {}".format(path))
  
-        utils.info("write_tsv   : {}".format(path))
+        utils.info("write_tsv   : {}, num_rows: {}".format(path, xtsv.num_rows()))
         tsv.write(xtsv, self.__makepath__(path))
 
     def update(self, path, msg, verify = True, ignore_logging = False):
@@ -670,6 +657,12 @@ class ClusterFileHandler(cluster_data.JsonSer):
     
     def update_dynamic_value(self, path, msg, verify = True, ignore_logging = False, max_keep = 2):
         self.update_dynamic_value_json(path, msg.to_json(), verify = verify, ignore_logging = ignore_logging, max_keep = max_keep)
+
+    # this special api doesnt use timestamp but sequence number to guarantee update and avoid race conditions 
+    # because of eventual consistency
+    def update_dynamic_seq_update(self, path, msg, verify = True, ignore_logging = False, max_keep = 2):
+        utils.warn("update_dynamic_seq_update: not implemented yet. Using update_dynamic_value")
+        self.update_dynamic_value(path, msg, verify = verify, ignore_logging = ignore_logging, max_keep = max_keep)
 
     # TODO: this api needs rethinking coz of eventual consistency    
     def file_not_exists(self, path):
@@ -1043,7 +1036,7 @@ class ClusterEntity(cluster_data.JsonSer):
         )
 
     def new_create_token(entity_type, entity_id):
-        ts = get_utctimestamp_sec()
+        ts = funclib.get_utctimestamp_sec()
         token = create_token(entity_id, ts)
         return ClusterEntity.new(entity_type, entity_id, ts, token)
 
@@ -1088,7 +1081,7 @@ class ClusterJob(ClusterEntity):
         )
 
     def new_create_token(entity_id, job_spec):
-        ts = get_utctimestamp_sec()
+        ts = funclib.get_utctimestamp_sec()
         token = create_token(entity_id, ts)
         return ClusterJob(entity_id, ts, token, job_spec)
 
@@ -1183,31 +1176,9 @@ class ClusterManagerJobStatus(cluster_data.JsonSer):
         return ClusterManagerJobStatus(job_id, status, ts)
 
 class TSVReference:
-    OMIGO_REFERENCE_PATH = ".omigo.reference.path"
     def __init__(self, xtsv):
-        self.xtsv = xtsv
+        raise Exception("This class has been moved to cluster_common_v2")
 
-    def read(self, num_par = 0):
-        # check if this is a reference file
-        if (TSVReference.OMIGO_REFERENCE_PATH in self.xtsv.get_columns()):
-            # get the index of path
-            index = self.xtsv.get_column_index(TSVReference.OMIGO_REFERENCE_PATH)
-
-            # create paths
-            tasks = []
-
-            # iterate through each reference path
-            for line in self.xtsv.get_data():
-                fields = line.split("\t", -1)
-                tasks.append(utils.ThreadPoolTask(tsv.read, fields[index]))
-
-            # read the paths. merge with union
-            results = utils.run_with_thread_pool(tasks, num_par = num_par)
-            return tsvutils.merge(results, def_val_map = {})
-        else:
-            return self.xtsv
-
-# ClusterTSV Spec
 class ClusterTSV:
     def __init__(self, input_path, output_path, operations):
         self.input_path = input_path

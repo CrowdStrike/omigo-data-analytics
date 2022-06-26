@@ -1,5 +1,4 @@
-from omigo_core import tsv
-from omigo_core import utils 
+from omigo_core import tsv, utils, funclib
 from omigo_ajaiswal_ext.hydra import cluster_common
 from omigo_ajaiswal_ext.hydra import cluster_data
 from omigo_ajaiswal_ext.hydra import cluster_protocol
@@ -10,7 +9,7 @@ import time
 import math
 
 # global constants
-CLUSTER_TS = cluster_common.get_utctimestamp_sec()
+CLUSTER_TS = funclib.get_utctimestamp_sec()
 JOB_COUNTER = 0
 JOB_WAIT_SEC = 10
 
@@ -53,9 +52,6 @@ class ClusterExecutor(cluster_data.JsonSer):
         global CLUSTER_TS
         global JOB_COUNTER
         JOB_COUNTER = JOB_COUNTER + 1
-
-        # check the hash of input and all the jobs. if there is already a job existing for that, then reuse.
-        input_hash = utils.compute_hash(self.client_id + self.session_id + self.xtsv.get_hash() + ",".join(["{}".format(utils.compute_hash(x.to_json())) for x in self.ctx.operations]))
 
         # generate the jobid
         job_id = "job-{}-{}-{:04d}".format(cluster_services.ID_SUFFIX, CLUSTER_TS, JOB_COUNTER)

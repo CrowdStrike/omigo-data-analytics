@@ -1,6 +1,6 @@
 from omigo_core import tsv
 from omigo_core import utils
-# from .hydra import cluster_funcs
+from omigo_ajaiswal_ext.hydra import cluster_funcs, cluster_class_reflection
 import base64
 import dill
 import json
@@ -36,6 +36,10 @@ class JsonSer:
         # call the generic json converter
         return json.loads(json.dumps(mp, default = lambda o: o.__dict__))
 
+    # pretty print json
+    def pretty_print(self):
+        print(json.dumps(self.to_json(), indent = 4, sort_keys = True))
+
 # This extension is to call apis in cluster mode
 class ClusterBaseOperand(JsonSer):
     def __init__(self, class_name):
@@ -44,7 +48,7 @@ class ClusterBaseOperand(JsonSer):
     def validate(self):
         raise Exception("This is not implemented for base class") 
         
-def to_json(self, transient_keys = []):# Cluster Operand class
+# Cluster Operand class
 class ClusterOperand(ClusterBaseOperand):
     def __init__(self, data_type, value):
         super().__init__("ClusterOperand")
@@ -101,18 +105,18 @@ class ClusterArrayBaseType(ClusterOperand):
             return True
         
         # this must be array
-        if (isinstance(self.value, list) == False):
+        if (isinstance(self.value, (list, tuple)) == False):
             return False
         
         # all values within array should be of expected type
         for x in self.value:
-            if (x is not None and isinstance(x, allowed_data_types) == False):
+            if (x is not None and type(x) not in allowed_data_types):
                 return False
            
         # return 
         return True
         
-# Cluster Array for empty 
+# Cluster Array of Bool class 
 class ClusterArrayEmpty(ClusterArrayBaseType):
     def __init__(self, value):
         super().__init__("array_empty", value)
@@ -124,33 +128,37 @@ class ClusterArrayEmpty(ClusterArrayBaseType):
 class ClusterArrayBool(ClusterArrayBaseType):
     def __init__(self, value):
         super().__init__("array_bool", value)
+        raise Exception("Deprecated")
 
     def validate(self):
-        self.validate_array(bool)
+        self.validate_array([bool])
         
 # Cluster Array of Stringclass 
 class ClusterArrayStr(ClusterArrayBaseType):
     def __init__(self, value):
         super().__init__("array_str", value)
+        raise Exception("Deprecated")
 
     def validate(self):
-        self.validate_array(str)
+        self.validate_array([str])
         
 # Cluster Array of Int class 
 class ClusterArrayInt(ClusterArrayBaseType):
     def __init__(self, value):
         super().__init__("array_int", value)
+        raise Exception("Deprecated")
 
     def validate(self):
-        self.validate_array(int)
+        self.validate_array([int])
 
 # Cluster Array of Float class. TODO: int is also float which is little hacky here 
 class ClusterArrayFloat(ClusterArrayBaseType):
     def __init__(self, value):
         super().__init__("array_float", value)
+        raise Exception("Deprecated")
 
     def validate(self):
-        self.validate_array((float, int))
+        self.validate_array([float, int])
         
 # Cluster Dict class 
 class ClusterDict(ClusterOperand):
@@ -224,6 +232,7 @@ class ClusterFunc(ClusterBaseOperand):
             json_obj["value"],
             json_obj["data_type"])
 
+# TODO: remove array_* and keep only array_object
 def load_native_objects(cluster_operand):
     # read data type and value
     data_type = cluster_operand.data_type
@@ -242,14 +251,14 @@ def load_native_objects(cluster_operand):
         return load_native_objects(value)
     elif (data_type == "pyobject"):
         return dill.loads(base64.b64decode(value.encode("ascii")))
-    elif (data_type == "array_bool"):
-        return list([bool(x) for x in value])
-    elif (data_type == "array_str"):
-        return list([str(x) for x in value])
-    elif (data_type == "array_int"):
-        return list([int(x) for x in value])
-    elif (data_type == "arrary_float"):
-        return list([float(x) for x in value])
+    # elif (data_type == "array_bool"):
+    #     return list([bool(x) for x in value])
+    # elif (data_type == "array_str"):
+    #     return list([str(x) for x in value])
+    # elif (data_type == "array_int"):
+    #     return list([int(x) for x in value])
+    # elif (data_type == "arrary_float"):
+    #     return list([float(x) for x in value])
     elif (data_type == "array_object"):
         return list([load_native_objects(x) for x in value])
     elif (data_type == "array_pyobject"):
@@ -273,6 +282,7 @@ def load_native_cluster_func(cluster_func):
     elif (func_type == "library"):
         # read function name. TODO: this is supposed to be string
         func_name = value["name"]
+        func = cluster_class_reflection.load_fully_qualified_func(func_name)
 
         # read the serialized argument strings
         args = value["args"]
@@ -283,14 +293,15 @@ def load_native_cluster_func(cluster_func):
         func_kwargs = load_native_objects(kwargs)
 
         # lookup function by name
-        func = getattr(cluster_funcs, func_name)
+        # func = getattr(cluster_funcs, func_name)
+        cluster_class_reflection.load_fully_qualified_func(func_name)
 
         # based on what set of attributes are defined, call the function
-        if (func_args is not None and func_kwargs is not None):
+        if ((func_args is not None and len(func_args) > 0) and (func_kwargs is not None and len(func_kwargs) > 0)):
             return func(*func_args, **func_kwargs)
-        elif (func_args is not None and func_kwargs is None):
+        elif ((func_args is not None and len(func_args) > 0) and (func_kwargs is None or len(func_kwargs) == 0)):
             return func(*func_args)
-        elif (func_args is None and func_kwargs is not None):
+        elif ((func_args is None or len(func_args) == 0) and (func_kwargs is not None and len(func_kwargs) > 0)):
             return func(**func_kwargs)
         else:
             return func
@@ -308,15 +319,18 @@ class ClusterFuncLambda(ClusterFunc):
         raise Exception("TBD")
 
     def from_json(json_obj):
-       # check for None
-       if (json_obj is None):
-           return None
+        # check for None
+        if (json_obj is None):
+            return None
 
-       value = json_obj["value"]
-       func = dill.loads(base64.b64decode(value.encode("ascii"))) 
-       return ClusterFuncLambda(func)
+        value = json_obj["value"]
+        func = dill.loads(base64.b64decode(value.encode("ascii"))) 
+        return ClusterFuncLambda(func)
        
 # TODO: This dill serializer for args and kwargs need to be changed. 
+# TODO: the base class parameters are not serialized
+# TODO: the args and kwargs need to be empty. Use new() methods
+# TODO: the args and kwargs are serialized cluster object
 # Cluster Function for library functions class
 class ClusterFuncLibrary(ClusterFunc):
     def __init__(self, name, *args, **kwargs):
@@ -325,34 +339,37 @@ class ClusterFuncLibrary(ClusterFunc):
         # convert the arbitary args and kwargs into ClusterOperands
         jargs = []
         for x in args:
-            jargs.append(ClusterPyObject(x))
+            jargs.append(cluster_operand_serializer(x))
 
         # convert the arbitary args and kwargs into ClusterOperands
         jkwargs = {}
         for k in kwargs.keys():
-            jkwargs[k] = ClusterPyObject(kwargs[k])
+            jkwargs[k] = cluster_operand_serializer(kwargs[k])
 
         # store in the class
         self.value = {
             "name": self.name, 
-            "args": ClusterArrayPyObject(jargs),
+            "args": ClusterArrayObject(jargs),
             "kwargs": ClusterDict(jkwargs)
         }
 
     def validate(self):
-        raise Exception("TBD") 
+        raise Exception("TBD")
 
     def from_json(json_obj):
         # check for None
         if (json_obj is None):
             return None
 
-        # read function name.
-        name = json_obj["name"]
+        # fetch the value part
+        value = json_obj["value"]
+
+        # take function parameters
+        name = value["name"]
 
         # read the serialized argument strings
-        args = cluster_operand_deserializer(json_obj["args"])
-        kwargs = cluster_operand_deserializer(json_obj["kwargs"])
+        args = cluster_operand_deserializer(value["args"])
+        kwargs = cluster_operand_deserializer(value["kwargs"])
 
         # parse the strings if they were not empty
         func_args = load_native_objects(args)
@@ -397,6 +414,7 @@ def __get_data_types__(arr):
 class ClusterArrayFunction(ClusterFunc):
     def __init__(self, value):
         super().__init__("", "array_function", value)
+        raise Exception("Deprecated")
 
     # check if array
     def validate(self):
@@ -405,7 +423,7 @@ class ClusterArrayFunction(ClusterFunc):
             return True
 
         # should be array
-        if (isinstance(self.value, list) == False):
+        if (isinstance(self.value, (list, tuple)) == False):
             return False
 
         # each value should be ClusterFunc type
@@ -421,9 +439,20 @@ def map_to_cluster_func(func):
     # print(type(func))
     cluster_func = None
     if (isinstance(func, (type(tsv.__init__), type(tsv.enable_debug_mode)))):
-        cluster_func = ClusterFuncLambda(func)
-    elif (isinstance(func, ClusterFunc)):
-        cluster_func = func            
+        # check the fully qualified name
+        fqn = cluster_class_reflection.get_fully_qualified_name(func)
+
+        # check if it is lambda
+        if (cluster_class_reflection.is_lambda_func(func)):
+            cluster_func = ClusterFuncLambda(func)
+        else:
+            cluster_func = ClusterFuncLibrary(cluster_class_reflection.get_fully_qualified_name(func))
+    elif (cluster_class_reflection.is_builtin_func(func)):
+        # check if the function has valid name
+        if (cluster_class_reflection.has_valid_reflective_name(func)):
+            cluster_func = ClusterFuncLibrary(cluster_class_reflection.get_fully_qualified_name(func))
+        else:
+            raise Exception("Please use functions using fully qualified names under omigo: {}".format(cluster_class_reflection.get_fully_qualified_name(func)))
     else:
         raise Exception("Unknown function type: {}".format(func))
         
@@ -463,43 +492,54 @@ def cluster_operand_serializer(value):
             for x in value:
                 arr_values.append(cluster_operand_serializer(x))
     
-            # get data_types from the array        
+            # get data_types from the array. Use arr_values for consistency
+            # TODO: this is confusing. till what level the serialization should be done 
             data_types = __get_data_types__(arr_values)
-            if (len(data_types) == 1):
-                if (data_types[0] == "bool"):
-                    return ClusterArrayBool(value)
-                elif (data_types[0] == "str"):
-                    return ClusterArrayStr(value)
-                elif (data_types[0] == "int"):
-                    return ClusterArrayInt(value)
-                elif (data_types[0] == "float"):
-                    return ClusterArrayFloat(value)
-                elif (data_types[0] == "object"):
-                    return ClusterArrayObject(value)
-                elif (data_types[0] == "pyobject"):
-                    return ClusterArrayPyObject(value)
-                elif (data_types[0] == "function"):
-                    return ClusterArrayFunction(value)
-                else:
-                    raise Exception("Invalid data types: {}".format(data_types))
-            elif (len(data_types) == 2):
-                if ("int" in data_types and "float" in data_types):
-                    return ClusterArrayFloat(value)
-                else:
-                    raise Exception("Invalid data types: {}".format(data_types))
-            else:
-                return ClusterArrayObject(arr_values)
+            # if (len(data_types) == 1):
+            #     if (data_types[0] == "bool"):
+            #         return ClusterArrayBool(value)
+            #     elif (data_types[0] == "str"):
+            #         return ClusterArrayStr(value)
+            #     elif (data_types[0] == "int"):
+            #         return ClusterArrayInt(value)
+            #     elif (data_types[0] == "float"):
+            #         return ClusterArrayFloat(value)
+            #     elif (data_types[0] == "object"):
+            #         return ClusterArrayObject(arr_values)
+            #     elif (data_types[0] == "pyobject"):
+            #         return ClusterArrayPyObject(arr_values)
+            #     elif (data_types[0] == "function"):
+            #         return ClusterArrayFunction(arr_values)
+            #     else:
+            #         raise Exception("Invalid data types: {}".format(data_types))
+            # arrays can be of completely heteregenous types
+            # elif (len(data_types) == 2):
+            #     if ("int" in data_types and "float" in data_types):
+            #         return ClusterArrayFloat(arr_values)
+            #     else:
+            #         raise Exception("Invalid data types: {}".format(data_types))
+            # else:
+            #    return ClusterArrayObject(arr_values)
+            return ClusterArrayObject(arr_values)
         else:
             return ClusterArrayEmpty(value)
-            
+
     # check for dictionary 
     if (isinstance(value, dict)):
         return ClusterDict(dict([(k, cluster_operand_serializer(value[k])) for k in value.keys()]))
-    
-    # check for functions
-    if (isinstance(value, (type(tsv.enable_debug_mode), type(tsv.__init__), type(cluster_operand_serializer), ClusterFunc, ClusterFuncLambda, ClusterFuncLibrary, ClusterFuncJS))):
+ 
+    # builtin methods dont have __dict__. Use them through cluster_funcs package
+    if (cluster_class_reflection.is_builtin_func(value)):
         return map_to_cluster_func(value)
     
+    # check for functions
+    if (isinstance(value, (type(tsv.enable_debug_mode), type(tsv.__init__), type(cluster_operand_serializer)))):
+        return map_to_cluster_func(value)
+
+    # functions already serialized are return as such. TODO
+    if (isinstance(value, (ClusterFunc, ClusterFuncLambda, ClusterFuncLibrary, ClusterFuncJS))):
+        return value
+            
     raise Exception("Unknown data type: {}".format(type(value)))
 
 def cluster_operand_deserializer(obj):
@@ -542,26 +582,26 @@ def cluster_operand_deserializer(obj):
         return ClusterInt(int(value))
     elif (data_type == "float"):
         return ClusterFloat(float(value))
-    elif (data_type == "array_bool"):
-        result = []
-        for x in value:
-            result.append(bool(x))
-        return ClusterArrayBool(result)
-    elif (data_type == "array_str"):
-        result = []
-        for x in value:
-            result.append(str(x))
-        return ClusterArrayStr(result)
-    elif (data_type == "array_int"):
-        result = []
-        for x in value:
-            result.append(int(x))
-        return ClusterArrayInt(result)
-    elif (data_type == "array_float"):
-        result = []
-        for x in value:
-            result.append(float(x))
-        return ClusterArrayFloat(result)
+    # elif (data_type == "array_bool"):
+    #     result = []
+    #     for x in value:
+    #         result.append(bool(x))
+    #     return ClusterArrayBool(result)
+    # elif (data_type == "array_str"):
+    #     result = []
+    #     for x in value:
+    #         result.append(str(x))
+    #     return ClusterArrayStr(result)
+    # elif (data_type == "array_int"):
+    #     result = []
+    #     for x in value:
+    #         result.append(int(x))
+    #     return ClusterArrayInt(result)
+    # elif (data_type == "array_float"):
+    #     result = []
+    #     for x in value:
+    #         result.append(float(x))
+    #     return ClusterArrayFloat(result)
     elif (data_type == "array_object"):
         result = []
         for x in value:
