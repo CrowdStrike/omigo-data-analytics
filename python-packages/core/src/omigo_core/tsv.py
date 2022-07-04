@@ -1526,12 +1526,14 @@ class TSV:
                 # determine the inferred data type. Check for int first as that is more constrained
                 if (self.__has_all_int_values__(col)):
                     int_cols.append(col)
-                if (self.__has_all_float_values__(col)):
+                elif (self.__has_all_float_values__(col)):
                     float_cols.append(col)
 
         # iterate over data
         for line in self.data[0:nrows]:
             fields = line.split("\t")
+
+            # iterate over fields
             for i in range(len(fields)):
                 col = self.get_columns()[i]
                 value = fields[i]

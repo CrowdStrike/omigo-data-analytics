@@ -466,10 +466,10 @@ def read_url_json(url, query_params = {}, headers = {}, body = None, username = 
         if (isinstance(json_obj, list)):
             # iterate and add as row
             for v in json_obj:
-                fields = [utils.url_encode(json.dumps(v)).replace("\n", " "), str(status_code), str(error_msg)]
+                fields = [utils.url_encode(json.dumps(v).replace("\n", " ")), str(status_code), str(error_msg)]
                 data.append("\t".join(fields))
         elif (isinstance(json_obj, dict)):
-            fields = [utils.url_encode(json.dumps(response_str)).replace("\n", " "), str(status_code), str(error_msg)]
+            fields = [utils.url_encode(json.dumps(json_obj).replace("\n", " ")), str(status_code), str(error_msg)]
             data.append("\t".join(fields))
         else:
             fields = ["", "0", "Unable to parse the json response: {}".format(response_str)]
