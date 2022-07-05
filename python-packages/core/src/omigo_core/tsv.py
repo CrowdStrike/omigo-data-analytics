@@ -49,7 +49,7 @@ class TSV:
 
         # basic validation
         if (len(data) > 0 and len(data[0].split("\t")) != len(self.header_fields)):
-            raise Exception("Header length is not matching with data length:", len(self.header_fields), len(data[0].split("\t")), str(self.header_fields), str(data[0].split("\t")))
+            raise Exception("Header length is not matching with data length: {}, {}, {}, {}".format(len(self.header_fields), len(data[0].split("\t")), str(self.header_fields), str(data[0].split("\t"))))
 
     # debugging
     def to_string(self):
@@ -462,17 +462,17 @@ class TSV:
 
         # check for validity
         if (len(grouping_cols) == 0):
-            raise Exception("No input columns:", grouping_cols)
+            raise Exception("No input columns: {}".format(grouping_cols))
 
         # validate grouping cols
         for c in grouping_cols:
             if (c not in self.header_map.keys()):
-                raise Exception("grouping col not found:", c, ", columns:", self.header_fields)
+                raise Exception("grouping col not found: {}, columns: {}".format(c, self.header_fields))
 
         # validate agg cols
         for c in agg_cols:
             if (c not in self.header_map.keys()):
-                raise Exception("agg col not found:", c, ", columns:", self.header_fields)
+                raise Exception("agg col not found: {}, columns: {}".format(c, self.header_fields))
 
         # group all the values in the key
         grouped = {}
@@ -568,7 +568,7 @@ class TSV:
 
             # check output data
             if (len(grouped_agg[keys_str]) != len(new_cols)):
-                raise Exception("Error in data and number of output cols:", grouped_agg[keys_str], new_cols)
+                raise Exception("Error in data and number of output cols: {}, {}".format(grouped_agg[keys_str], new_cols))
 
             # get the new values in the correct order
             new_col_values = []
@@ -685,7 +685,7 @@ class TSV:
 
         # validation on number of grouping cols
         if (len(grouping_cols) == 0 or len(agg_cols) == 0):
-            raise Exception("No input columns:", grouping_cols, agg_cols, suffix)
+            raise Exception("No input columns: {}, {}, {}".format(grouping_cols, agg_cols, suffix))
 
         # validation on number of agg funcs
         if (len(agg_cols) != len(agg_funcs)):
@@ -699,7 +699,7 @@ class TSV:
         for i in range(len(agg_cols)):
             agg_col = agg_cols[i]
             if (agg_col not in self.header_map.keys()):
-                raise Exception("Column not found: ", str(agg_col) + ", header:", str(self.header_fields))
+                raise Exception("Column not found: {}, header: {}".format(agg_col, self.header_fields))
 
             new_cols.append(agg_col + ":" + get_func_name(agg_funcs[i]))
 
@@ -868,7 +868,7 @@ class TSV:
             elif (num_cols == 10):
                 result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4], col_values[5], col_values[6], col_values[7], col_values[8], col_values[9])
             else:
-                raise Exception("Number of columns is not supported beyond 10" + str(cols))
+                raise Exception("Number of columns is not supported beyond 10: {}".format(str(cols)))
 
             if (result == include_cond):
                 new_data.append(line)
@@ -899,17 +899,17 @@ class TSV:
 
         # validation
         if ((utils.is_array_of_string_values(cols) == False and len(matching_cols) != 1) or (utils.is_array_of_string_values(cols) == True and len(matching_cols) != len(cols))):
-            raise Exception("transform api doesnt support regex style cols array as the order of columns matter:", cols, matching_cols)
+            raise Exception("transform api doesnt support regex style cols array as the order of columns matter: {}, {}".format(cols, matching_cols))
 
         # validation
         for col in matching_cols:
             if (col not in self.header_map.keys()):
-                raise Exception("Column not found:", str(col), str(self.header_fields))
+                raise Exception("Column: {} not found in {}".format(str(col), str(self.header_fields)))
 
         # new col validation
         for new_col in new_cols:
             if (new_col in self.header_fields):
-                raise Exception("New column already exists:", new_col, str(self.header_fields))
+                raise Exception("New column: {} already exists in {}".format(new_col, str(self.header_fields)))
 
         # get the indexes
         num_cols = len(matching_cols)
@@ -969,7 +969,7 @@ class TSV:
                 elif (num_cols == 15):
                     result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4], col_values[5], col_values[6], col_values[7], col_values[8], col_values[9], col_values[10], col_values[11], col_values[12], col_values[13], col_values[15])
                 else:
-                    raise Exception("Number of columns is not supported beyond 15. Probably try to use use_array_notation approach:" + str(cols))
+                    raise Exception("Number of columns is not supported beyond 15. Probably try to use use_array_notation approach: {}".format(str(cols)))
             else:
                 result = func(col_values)
 
@@ -1001,7 +1001,7 @@ class TSV:
                 if (num_new_cols >= 10):
                     result_arr.append(str(result[9]))
                 if (num_new_cols >= 11):
-                    raise Exception("Number of new columns is not supported beyond 10. Probably try to use use_array_notation approach:" + str(new_cols))
+                    raise Exception("Number of new columns is not supported beyond 10. Probably try to use use_array_notation approach: {}".format(str(new_cols)))
             else:
                 # check how many columns to expect.
                 if (num_new_cols == 1):
@@ -1069,11 +1069,11 @@ class TSV:
 
         # validation
         if (col not in self.header_map.keys()):
-            raise Exception("Column not found:", str(col), str(self.header_fields))
+            raise Exception("Column: {} not found in {}".format(str(col), str(self.header_fields)))
 
         # validation
         if (new_col in self.header_map.keys()):
-            raise Exception("New Column already exists:", str(new_col), str(self.header_fields))
+            raise Exception("New Column: {} already exists in {}".format(str(new_col), str(self.header_fields)))
 
         index = self.header_map[col]
         header_fields2 = []
@@ -1178,7 +1178,7 @@ class TSV:
 
         # validation
         if (new_col in self.header_map.keys()):
-            raise Exception("Output column name already exists:", new_col, self.header_fields)
+            raise Exception("Output column name: {} already exists in {}".format(new_col, self.header_fields))
 
         # create new header
         new_header = new_col + "\t" + self.header
@@ -1290,7 +1290,7 @@ class TSV:
 
         # validation
         if (col not in self.header_map.keys()):
-            raise Exception("Column not found:", str(col), str(self.header_fields))
+            raise Exception("Column not found: {}, {}".format(str(col), str(self.header_fields)))
 
         index = self.header_map[col]
         ret_values = []
@@ -1355,7 +1355,7 @@ class TSV:
 
             # check for non duplicate keys
             if (keys_tuple in mp.keys()):
-                raise Exception("keys is not unique:", keys)
+                raise Exception("keys is not unique: {}".format(keys))
 
             values = []
             for value_col in value_cols:
@@ -1565,7 +1565,7 @@ class TSV:
 
         # new col validation
         if (new_col in self.header_map.keys()):
-            raise Exception("New column already exists:", new_col, str(self.header_fields))
+            raise Exception("New column: {} already exists in {}".format(new_col, str(self.header_fields)))
 
         # iterate
         for line in self.data:
@@ -1630,7 +1630,7 @@ class TSV:
         # validation
         for that in that_arr:
             if (self.get_header() != that.get_header()):
-                raise Exception("Headers are not matching for union", self.header_fields, that.header_fields)
+                raise Exception("Headers are not matching for union: {}, {}".format(self.header_fields, that.header_fields))
 
         # create new data
         new_data = []
@@ -1818,12 +1818,12 @@ class TSV:
 
         # validation
         if (self.num_rows() != that.num_rows()):
-            raise Exception("Mismatch in number of rows:", self.num_rows(), that.num_rows())
+            raise Exception("Mismatch in number of rows: {}, {}".format(self.num_rows(), that.num_rows()))
 
         # check for complete disjoint set of columns
         for h in self.header_map.keys():
             if (h in that.header_map.keys()):
-                raise Exception("The columns for doing concat need to be completely separate:", h, self.header_fields)
+                raise Exception("The columns for doing concat need to be completely separate: {}, {}".format(h, self.header_fields))
 
         # create new header
         new_header_fields = []
@@ -2001,7 +2001,7 @@ class TSV:
             if (c.startswith(prefix)):
                 new_col =  c[len(prefix):]
                 if (new_col in self.header_fields or len(new_col) == 0):
-                    raise Exception("Duplicate names. Cant do the prefix:", c, new_col, str(self.header_fields))
+                    raise Exception("Duplicate names. Cant do the prefix: {}, {}, {}".format(c, new_col, str(self.header_fields)))
                 mp[c] = new_col
 
         # validation
@@ -2060,7 +2060,7 @@ class TSV:
 
         # validation
         if (n < 1):
-            raise Exception("n cant be negative or less than 1:", n)
+            raise Exception("n cant be negative or less than 1: {}".format(n))
 
         # set seed
         random.seed(seed)
@@ -2100,7 +2100,7 @@ class TSV:
 
         # Validation
         if (col not in self.header_map.keys()):
-            raise Exception("Column not found:", str(col), str(self.header_fields))
+            raise Exception("Column not found: {}, {}".format(str(col), str(self.header_fields)))
 
         # cap the sampling ratio to 1
         if (sampling_ratio > 1):
@@ -2172,11 +2172,11 @@ class TSV:
 
         # validation
         if (col not in self.header_map.keys()):
-            raise Exception("Column not found:", str(col), str(self.header_fields))
+            raise Exception("Column not found: {}, {}".format(str(col), str(self.header_fields)))
 
         # check sampling ratio
         if (sampling_ratio < 0 or sampling_ratio > 1):
-            raise Exception("Sampling ratio has to be between 0 and 1:", sampling_ratio)
+            raise Exception("Sampling ratio has to be between 0 and 1: {}".format(sampling_ratio))
 
         # group by and apply the sampling on the value. The assumption is that all rows in the same group should have the same col_value
         inherit_message2 = inherit_message + ": sample_group_by_col_value" if (len(inherit_message) > 0) else "sample_group_by_col_value"
@@ -2202,16 +2202,16 @@ class TSV:
 
         # validation
         if (col not in self.header_map.keys()):
-            raise Exception("Column not found:", str(col), str(self.header_fields))
+            raise Exception("Column not found: {}, {}".format(str(col), str(self.header_fields)))
 
         # check grouping cols
         for k in grouping_cols:
             if (k not in self.header_map.keys()):
-                raise Exception("Grouping Column not found:", str(k), str(self.header_fields))
+                raise Exception("Grouping Column not found: {}, {}".format(str(k), str(self.header_fields)))
 
         # check max_uniq_values
         if (max_uniq_values <= 0):
-            raise Exception("max_uniq_values has to be more than 0:", max_uniq_values)
+            raise Exception("max_uniq_values has to be more than 0: {}".format(max_uniq_values))
 
         # the hashing function is applied on the entire grouping_cols + col
         sample_grouping_cols = [g for g in grouping_cols]
@@ -2243,9 +2243,9 @@ class TSV:
 
         # validation
         if (col not in self.header_map.keys()):
-            raise Exception("Column not found:", str(col), str(self.header_fields))
+            raise Exception("Column not found: {}, {}".format(str(col), str(self.header_fields)))
         if (class_col not in self.header_map.keys()):
-            raise Exception("Column not found:", str(class_col), str(self.header_fields))
+            raise Exception("Column not found: {}, {}".format(str(class_col), str(self.header_fields)))
 
         # correctly define def_max_uniq_values
         if (def_max_uniq_values is None):
@@ -2253,7 +2253,7 @@ class TSV:
 
         # validation on def_max_uniq_values
         if (def_max_uniq_values <= 0):
-            raise Exception("max_uniq_values has to be more than 0:", def_max_uniq_values)
+            raise Exception("max_uniq_values has to be more than 0: {}".format(def_max_uniq_values))
 
         # the hashing function is applied on the entire grouping_cols + col
         sample_grouping_cols = [g for g in grouping_cols]
@@ -2288,7 +2288,7 @@ class TSV:
 
         # check sampling ratio
         if (sampling_ratio < 0 or sampling_ratio > 1):
-            raise Exception("Sampling ratio has to be between 0 and 1:", sampling_ratio)
+            raise Exception("Sampling ratio has to be between 0 and 1: {}".format(sampling_ratio))
 
         # create new data
         new_data = []
@@ -2384,7 +2384,7 @@ class TSV:
 
         # check the lengths
         if (len(lkeys) != len(rkeys)):
-            raise Exception("Length mismatch in lkeys and rkeys:", lkeys, rkeys)
+            raise Exception("Length mismatch in lkeys and rkeys: {}, {}".format(lkeys, rkeys))
 
         # Check for split_threshold. TODO: Experimental
         if (split_threshold is not None):
@@ -2515,7 +2515,7 @@ class TSV:
                     if (that.header_fields[i] not in new_header_fields):
                         new_header_fields.append(that.header_fields[i])
                     else:
-                        raise Exception("Duplicate key names found. Use lsuffix or rsuffix:", that.header_fields[i])
+                        raise Exception("Duplicate key names found. Use lsuffix or rsuffix: {}".format(that.header_fields[i]))
 
         # construct new_header
         new_header = "\t".join(new_header_fields)
@@ -2579,7 +2579,7 @@ class TSV:
                     elif (join_type == "full_outer" or join_type == "outer"):
                         new_data.append(new_line)
                     else:
-                        raise Exception("Unknown join type:", join_type)
+                        raise Exception("Unknown join type: {} ".format(join_type))
 
         # iterate over right side
         for line in that.data:
@@ -2613,7 +2613,7 @@ class TSV:
                         if (rvals1_str not in common_keys.keys()):
                             new_data.append(new_line)
                     else:
-                        raise Exception("Unknown join type:", join_type)
+                        raise Exception("Unknown join type: {}".format(join_type))
 
         return TSV(new_header, new_data)
 
@@ -2843,11 +2843,11 @@ class TSV:
 
         # check for presence of col
         if (col not in self.header_map.keys()):
-            raise Exception("Column not found:", str(col), str(self.header_fields))
+            raise Exception("Column not found: {}, {}".format(str(col), str(self.header_fields)))
 
         # check for validity of new col
         if (new_col in self.header_map.keys()):
-            raise Exception("New column already exists:", str(new_col), str(self.header_fields))
+            raise Exception("New column already exists: {}, {}".format(str(new_col), str(self.header_fields)))
 
         # create new header
         new_header = self.header + "\t" + new_col
@@ -2882,7 +2882,7 @@ class TSV:
 
         # check for presence of col
         if (col not in self.header_map.keys()):
-            raise Exception("Column not found:", str(col), str(self.header_fields))
+            raise Exception("Column not found: {}, {}".format(str(col), str(self.header_fields)))
 
         # create new column if it is not existing
         if (new_col is None):
@@ -2890,7 +2890,7 @@ class TSV:
 
         # check new col
         if (new_col in self.header_map.keys()):
-            raise Exception("New Column already exists:", str(new_col), str(self.header_fields))
+            raise Exception("New Column already exists: {}, {}".format(str(new_col), str(self.header_fields)))
 
         # create data
         new_data = []
@@ -2900,7 +2900,7 @@ class TSV:
             col_value = int(fields[self.header_map[col]])
             # check for guard conditions
             if (max_repl > 0 and col_value > max_repl):
-                raise Exception("repl_value more than max_repl:", col_value, max_repl)
+                raise Exception("repl_value more than max_repl: {}, {}".format(col_value, max_repl))
 
             # replicate
             for i in range(col_value):
@@ -2976,7 +2976,7 @@ class TSV:
         # check if any of new keys clash with old columns
         for k in exploded_keys_new_names:
             if (k in self.get_header_fields()):
-                raise Exception("Column already exist:", k, str(self.header_fields))
+                raise Exception("Column already exist: {}, {}".format(k, str(self.header_fields)))
 
         # append to the new_header_fields
         for h in exploded_keys_new_names:
@@ -3023,7 +3023,7 @@ class TSV:
                         if (default_val is not None):
                             new_vals.append(str(default_val))
                         else:
-                            raise Exception("Not all output values are returned from function:", str(evm), str(exploded_keys_sorted))
+                            raise Exception("Not all output values are returned from function: {}, {}".format(str(evm), str(exploded_keys_sorted)))
 
                 # TODO: move this to a proper function
                 new_data.append("\t".join(utils.merge_arrays([new_fields, new_vals])))
@@ -3193,7 +3193,7 @@ class TSV:
                             else:
                                 raise Exception("Inner lists are not supported. Use accepted_cols or excluded_cols: {}".format(str(k)))
                         else:
-                            raise Exception("Unknown data type:", type(v[0]))
+                            raise Exception("Unknown data type: {}".format(type(v[0])))
                     elif (isinstance(v, dict) and len(v) > 0):
                         # warn for non trivial case
                         if (len(dict_results) > 0 and utils.is_debug()):
@@ -3246,7 +3246,7 @@ class TSV:
                 for transpose_col_group_prefix in transpose_col_groups:
                     # TODO: the prefix should not end with ":"
                     if (transpose_col_group_prefix.endswith(":")):
-                        raise Exception("WIP API. Dont use prefix name with ':' though the colon will be used as separator.", transpose_col_group_prefix)
+                        raise Exception("WIP API. Dont use prefix name with ':' though the colon will be used as separator: {}".format(transpose_col_group_prefix))
 
                     # variables to store results
                     key_list_results = []
@@ -3297,7 +3297,7 @@ class TSV:
                 # call a function to do the combinatorial join
                 combined_merge_list = __explode_json_transform_func_join_lists__(list_results_arr)
             else:
-                raise Exception("Unknown merge_list_method:", merge_list_method)
+                raise Exception("Unknown merge_list_method: {}".format(merge_list_method))
 
             # merge combined map with cogroup
             if (len(combined_merge_list) > 0):
@@ -3441,11 +3441,11 @@ class TSV:
 
         # validation
         if (col not in self.header_map.keys()):
-            raise Exception("Column not found:", str(col), str(self.header_fields))
+            raise Exception("Column not found: {}, {}".format(str(col), str(self.header_fields)))
 
         # check for new column
         if (new_col in self.header_map.keys()):
-            raise Exception("New Column already exists:", str(new_col), str(self.header_fields))
+            raise Exception("New Column already exists: {}, {}".format(str(new_col), str(self.header_fields)))
 
         # create new data
         new_data = []
@@ -3469,7 +3469,7 @@ class TSV:
         # validate cols
         for col in cols:
             if (self.has_col(col) == False):
-                raise Exception("col doesnt exist:", col, str(self.header_fields))
+                raise Exception("col doesnt exist: {}, {}".format(col, str(self.header_fields)))
 
         # select the cols
         result = []
@@ -3521,7 +3521,7 @@ class TSV:
         elif (len(vs) == 15):
             return (vs[0], vs[1], vs[2], vs[3], vs[4], vs[5], vs[6], vs[7], vs[8], vs[9], vs[10], vs[11], vs[12], vs[13], vs[14])
         else:
-            raise Exception("Length of values is more than 10. Not supported." + str(vs))
+            raise Exception("Length of values is more than 10. Not supported: {}".format(str(vs)))
 
     # this method sets the missing values for columns
     def set_missing_values(self, cols, default_val, ignore_if_missing = False, inherit_message = ""):
@@ -3729,7 +3729,7 @@ def get_rolling_func_init(func_name):
     elif (func_name == "len"):
         return [0]
     else:
-        raise Exception("rolling agg func not supported:", func_name)
+        raise Exception("rolling agg func not supported: {}".format(func_name))
 
 def get_rolling_func_update(arr, v, func_name):
     if (func_name == "sum"):
@@ -3744,7 +3744,7 @@ def get_rolling_func_update(arr, v, func_name):
     elif (func_name == "len"):
         arr[0] = arr[0] + 1
     else:
-        raise Exception("rolling agg func not supported:", func_name)
+        raise Exception("rolling agg func not supported: {}".format(func_name))
 
 def get_rolling_func_update_sum(arr, v):
     arr[0] = arr[0] + v
@@ -3778,7 +3778,7 @@ def get_rolling_func_closing(arr, func_name):
     elif (func_name == "len"):
         return arr[0]
     else:
-        raise Exception("rolling agg func not supported:", func_name)
+        raise Exception("rolling agg func not supported: {}".format(func_name))
 
 def read(paths, sep = None):
     return tsvutils.read(paths, sep)
