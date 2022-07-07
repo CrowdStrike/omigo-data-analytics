@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 # TODO: these caches dont work in multithreaded env.
 MSG_CACHE_MAX_LEN = 10000
+WARN_MSG_CACHE = {}
 
 def is_critical():
     return str(os.environ.get("OMIGO_CRITICAL", "0")) == "1"
@@ -146,16 +147,18 @@ def warn(msg):
     if (is_warn() or is_error() or is_critical()):
         print("[WARN]: " + msg)
 
-def warn_once(msg, msg_cache):
+# TODO: remove the msg_cache parameter and update in the code
+def warn_once(msg, msg_cache = None):
+    # refer to global variable
+    global WARN_MSG_CACHE
     # check if msg is already displayed
-    if (msg not in msg_cache.keys()):
+    if (msg not in WARN_MSG_CACHE.keys()):
         print("[WARN ONCE ONLY]: " + msg)
-        msg_cache[msg] = 1
+        WARN_MSG_CACHE[msg] = 1
 
         # check if the cache has become too big
-        if (len(msg_cache) >= MSG_CACHE_MAX_LEN):
-            msg_cache = {}
-
+        if (len(WARN_MSG_CACHE) >= MSG_CACHE_MAX_LEN):
+            WARN_MSG_CACHE = {}
     else:
         trace(msg)
 

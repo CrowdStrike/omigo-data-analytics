@@ -703,6 +703,15 @@ class TSV:
 
             new_cols.append(agg_col + ":" + get_func_name(agg_funcs[i]))
 
+        # check for empty data
+        if (self.num_rows() == 0):
+            utils.warn("aggregate: no data. Returning new header only")
+            # TODO: Check if this is needed
+            # if (collapse == True):
+            #     return tsv.new_with_cols(utils.merge_arrays(grouping_cols, new_cols))
+            # else:
+            #     return tsv.new_with_cols(self.get_header_fields(), new_cols)
+
         # take the indexes
         agg_col_indexes = []
         rolling_agg_col_indexes_map = {}
@@ -1715,10 +1724,16 @@ class TSV:
             inherit_message2 = inherit_message + ": add_const_if_missing" if (len(inherit_message) > 0) else "add_const_if_missing"
             return self.add_const(col, value, inherit_message = inherit_message2)
 
-    def add_empty_cols_if_missing(self, cols, inherit_message = ""):
+    def add_empty_cols_if_missing(self, col_or_cols, inherit_message = ""):
         # check empty
         if (self.has_empty_header()):
             return new_with_cols(cols)
+
+        # check if this is a single col name or an array
+        is_array = utils.is_array_of_string_values(col_or_cols)
+
+        # convert to array format
+        cols = col_or_cols if (is_array == True) else list(col_or_cols)
 
         # add only if missing
         missing_cols = []
@@ -2070,19 +2085,19 @@ class TSV:
         utils.report_progress("sample_n: [1/1] calling function", inherit_message, len(self.data), len(self.data))
         return TSV(self.header, random.sample(self.data, n))
 
-    def cap_min_inline(self, col, value):
+    def cap_min_inline(self, col, value, inherit_message = ""):
         inherit_message2 = inherit_message + ": cap_min_inline" if (len(inherit_message) > 0) else "cap_min_inline"
         return self.transform_inline([col], lambda x: str(x) if (float(value) < float(x)) else str(value), inherit_message = inherit_message2)
 
-    def cap_max_inline(self, col, value):
+    def cap_max_inline(self, col, value, inherit_message = ""):
         inherit_message2 = inherit_message + ": cap_max_inline" if (len(inherit_message) > 0) else "cap_max_inline"
         return self.transform_inline(col, lambda x: str(value) if (float(value) < float(x)) else str(x), inherit_message = inherit_message2)
 
-    def cap_min(self, col, value, newcol):
+    def cap_min(self, col, value, newcol, inherit_message = ""):
         inherit_message2 = inherit_message + ": cap_min" if (len(inherit_message) > 0) else "cap_min"
         return self.transform_inline(col, lambda x: str(x) if (float(value) < float(x)) else str(value), newcol, inherit_message = inherit_message2)
 
-    def cap_max(self, col, value, newcol):
+    def cap_max(self, col, value, newcol, inherit_message = ""):
         inherit_message2 = inherit_message + ": cap_max" if (len(inherit_message) > 0) else "cap_max"
         return self.transform([col], lambda x: str(value) if (float(value) < float(x)) else str(x), newcol, inherit_message = inherit_message2)
 
@@ -3598,7 +3613,7 @@ class TSV:
         return self.get_header() == ""
 
     def has_empty_header(self):
-        return num_cols() == 0 
+        return self.num_cols() == 0 
 
     def __has_all_int_values__(self, col):
         # check for empty
