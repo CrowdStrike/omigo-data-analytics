@@ -101,7 +101,7 @@ def get_s3_bucket_cache(bucket_name, region = None, profile = None):
 
     return S3_BUCKETS[bucket_name]
 
-def get_s3_file_content(bucket_name, object_key, region = None, profile = None):
+def get_file_content(bucket_name, object_key, region = None, profile = None):
     region, profile = resolve_region_profile(region, profile)
     s3_bucket = get_s3_bucket_cache(bucket_name, region, profile)
     obj = s3_bucket.Object(object_key)
@@ -112,6 +112,16 @@ def get_s3_file_content(bucket_name, object_key, region = None, profile = None):
 
     return data
 
+# TODO: Deprecated
+def get_s3_file_content(bucket_name, object_key, region = None, profile = None):
+    utils.warn_once("use get_file_content instead")
+    return get_file_content(bucket_name, object_key, region = region, profile = profile)
+
+def get_file_content_as_text(bucket_name, object_key, region = None, profile = None):
+    utils.warn_once("use get_file_content_as_text instead")
+    return get_file_content_as_text(bucket_name, object_key, region = region, profile = profile)
+
+# TODO: Deprecated
 def get_s3_file_content_as_text(bucket_name, object_key, region = None, profile = None):
     region, profile = resolve_region_profile(region, profile)
     barr = get_s3_file_content(bucket_name, object_key, region, profile)
@@ -151,13 +161,18 @@ def check_file_exists(path, region = None, profile = None):
     except:
         return False
 
-def put_s3_file_content(bucket_name, object_key, barr, region = None, profile = None):
+def put_file_content(bucket_name, object_key, barr, region = None, profile = None):
     region, profile = resolve_region_profile(region, profile)
     s3_bucket = get_s3_resource_cache(region, profile)
     obj = s3_bucket.Object(bucket_name, object_key)
     obj.put(Body = barr)
 
-def put_s3_file_with_text_content(bucket_name, object_key, text, region = None, profile = None):
+# TODO: Deprecated
+def put_s3_file_content(bucket_name, object_key, barr, region = None, profile = None):
+    utils.warn_once("use put_file_content instead")
+    return put_file_content(bucket_name, object_key, barr, region = None, profile = None)
+
+def put_file_with_text_content(bucket_name, object_key, text, region = None, profile = None):
     region, profile = resolve_region_profile(region, profile)
     barr = str.encode(text)
     if (object_key.endswith(".gz")):
@@ -170,8 +185,13 @@ def put_s3_file_with_text_content(bucket_name, object_key, text, region = None, 
             zfile.writestr(object_file_name[0:-4], barr)
         barr = mzip.getvalue()
 
-    put_s3_file_content(bucket_name, object_key, barr, region, profile)
+    put_file_content(bucket_name, object_key, barr, region = region, profile = profile)
 
+# TODO: Deprecated
+def put_s3_file_with_text_content(bucket_name, object_key, text, region = None, profile = None):
+    utils.warn_once("use put_file_with_text_content instead")
+    put_file_with_text_content(bucket_name, object_key, text, region = region, profile = profile)
+ 
 def resolve_region_profile(region = None, profile = None):
     # resolve region
     if ((region == "" or region is None) and "S3_REGION" in os.environ.keys()):

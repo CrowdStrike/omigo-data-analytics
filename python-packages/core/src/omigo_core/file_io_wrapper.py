@@ -80,7 +80,8 @@ class TSVFileWriter:
                 output_file = output_zipf.open(output_file_name.split("/")[-1][0:-4], "w")
                 # write header
                 output_file.write(xtsv.get_header() + "\n")
-                # write all the content
+                # write all the content. TODO: what is str.encode doing here?
+                utils.warn_once("str.encode used. Not sure why") 
                 for line in xtsv.get_data():
                     output_file.write(str.encode(line + "\n"))
             else:

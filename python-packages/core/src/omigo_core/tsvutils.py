@@ -21,6 +21,7 @@ from requests import exceptions
 
 # TODO: find the difference between ascii and utf-8 encoding
 # requests.post doesnt take data properly. Use json parameter.
+# TODO: use the local_fs_wrapper to use shared code for reading and writing
 
 # TODO: need to document that a simple union can be achieved by setting def_val_map = {}
 def merge(tsv_list, def_val_map = None):
