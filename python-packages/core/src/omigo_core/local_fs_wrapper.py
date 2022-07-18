@@ -1,12 +1,16 @@
 import os
 import datetime
 from omigo_core import funclib
+from omigo_core import utils
 
 def check_path_exists(path):
     return os.path.exists(path)
 
+def check_file_exists(path):
+    return os.path.exists(path)
+
 def get_directory_listing(path, filter_func = None, fail_if_missing = True):
-    if (check_exists(path) == False):
+    if (check_path_exists(path) == False):
         if (fail_if_missing):
             raise Exception("Directory does not exist: {}".format(path))
         else:
@@ -21,11 +25,11 @@ def get_directory_listing(path, filter_func = None, fail_if_missing = True):
             full_paths = list(filter(lambda t: filter_func(t), full_paths))
 
         # return
-            return full_paths
+        return full_paths
 
 # TODO: not in s3
 def makedirs(path, exist_ok = True):
-    return os.makedirs(dir_path, exist_ok = exist_ok)
+    return os.makedirs(path, exist_ok = exist_ok)
 
 def get_file_content_as_text(path):
     # initialize
@@ -85,6 +89,7 @@ def put_file_with_text_content(path, text):
 
 # TODO: return success status
 def delete_file(path, fail_if_missing = False):
+    utils.debug("delete_file: path: {}, fail_if_missing: {}".format(path, fail_if_missing))
     # check if the file exists
     if (check_path_exists(path) == False):
         if (fail_if_missing):
@@ -96,4 +101,19 @@ def delete_file(path, fail_if_missing = False):
 
     # delete
     os.remove(path)
-    
+  
+# TODO: This api doesnt have s3 counterpart 
+def delete_dir(path, fail_if_missing = False):
+    utils.warn_once("delete_dir: this api doesnt have s3 counterpart")
+    utils.debug("delete_dir: path: {}, fail_if_missing: {}".format(path, fail_if_missing))
+    # check if the file exists
+    if (check_path_exists(path) == False):
+        if (fail_if_missing):
+            raise Exception("delete_dir: path doesnt exist: {}".format(path))
+        else:
+            utils.debug("delete_dir: path doesnt exist: {}".format(path))
+
+        return
+
+    # delete
+    os.rmdir(path)

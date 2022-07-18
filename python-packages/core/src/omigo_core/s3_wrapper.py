@@ -117,14 +117,14 @@ def get_s3_file_content(bucket_name, object_key, region = None, profile = None):
     utils.warn_once("use get_file_content instead")
     return get_file_content(bucket_name, object_key, region = region, profile = profile)
 
-def get_file_content_as_text(bucket_name, object_key, region = None, profile = None):
+# TODO: Deprecated
+def get_s3_file_content_as_text(bucket_name, object_key, region = None, profile = None):
     utils.warn_once("use get_file_content_as_text instead")
     return get_file_content_as_text(bucket_name, object_key, region = region, profile = profile)
 
-# TODO: Deprecated
-def get_s3_file_content_as_text(bucket_name, object_key, region = None, profile = None):
+def get_file_content_as_text(bucket_name, object_key, region = None, profile = None):
     region, profile = resolve_region_profile(region, profile)
-    barr = get_s3_file_content(bucket_name, object_key, region, profile)
+    barr = get_file_content(bucket_name, object_key, region, profile)
     if (object_key.endswith(".gz")):
         barr = gzip.decompress(barr)
     elif(object_key.endswith(".zip")):
