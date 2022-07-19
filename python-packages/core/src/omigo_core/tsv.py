@@ -3028,6 +3028,7 @@ class TSV:
             # get the exploded list of maps
             exploded_value_list_map = exploded_values[i]
 
+            # check for each map in evm
             for evm in exploded_value_list_map:
                 new_vals = []
                 for k in exploded_keys_sorted:
@@ -3035,10 +3036,11 @@ class TSV:
                     if (k in evm.keys()):
                         new_vals.append(str(evm[k]))
                     else:
+                        # put default value if defined
                         if (default_val is not None):
                             new_vals.append(str(default_val))
                         else:
-                            raise Exception("Not all output values are returned from function: {}, {}".format(str(evm), str(exploded_keys_sorted)))
+                            raise Exception("Not all output values are returned from function: evm: {}, exploded_keys_sorted: {}, key: {}".format(str(evm), str(exploded_keys_sorted, k)))
 
                 # TODO: move this to a proper function
                 new_data.append("\t".join(utils.merge_arrays([new_fields, new_vals])))

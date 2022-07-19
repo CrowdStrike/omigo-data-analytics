@@ -389,7 +389,7 @@ sepal_length	sepal_width	petal_length	petal_width	class_label
    - **rename_prefix**: This api renames the columns having prefix _prefix_ by removing the prefix from their names.
    - **add_prefix**(prefix, _cols_): This api adds prefix to all the given _cols_. If _cols = None_ then prefix is added to all columns. 
 renames the columns having suffix _suffix_ by removing the suffix from their names.
-   - **add_prefix**(suffix, _cols_): This api adds suffix to all the given _cols_. If _cols = None_ then prefix is added to all columns. 
+   - **add_suffix**(suffix, _cols_): This api adds suffix to all the given _cols_. If _cols = None_ then prefix is added to all columns. 
 
 *Examples*
 
