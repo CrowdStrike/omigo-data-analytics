@@ -607,8 +607,10 @@ def read_url_as_tsv(url, query_params = {}, headers = {}, sep = None, username =
     return tsv.TSV(header, data).validate()
 
 # convert from data frame. TODO: df can have multiple header lines coz of indexes
+# TODO: take care of map data type
 def from_df(df):
-    utils.warn("from_df() api doesnt support reading indexed columns in pandas dataframes yet.")
+    utils.warn_once("from_df() api doesnt support reading indexed columns in pandas dataframes yet.")
+    utils.warn_once("from_df() api doesnt handle map data type properly")
 
     # get the csv str
     tsv_lines = df.to_csv(sep = "\t").rstrip("\n").split("\n")

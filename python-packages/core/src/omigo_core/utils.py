@@ -380,3 +380,19 @@ def resolve_meta_params(xstr, props):
 
     # return
     return xstr
+
+def replace_template_props(props, xstr):
+    # validation
+    if (xstr is None or xstr == ""):
+        return xstr
+
+    # iterate
+    for k in props.keys():
+        # generate template key
+        template_key = "{" + k + "}"
+        if (xstr.find(template_key) != -1):
+            xstr = xstr.replace(template_key, str(props[k]))
+
+    # return
+    return xstr
+

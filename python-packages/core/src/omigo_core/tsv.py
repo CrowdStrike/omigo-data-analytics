@@ -1725,15 +1725,15 @@ class TSV:
             return self.add_const(col, value, inherit_message = inherit_message2)
 
     def add_empty_cols_if_missing(self, col_or_cols, inherit_message = ""):
-        # check empty
-        if (self.has_empty_header()):
-            return new_with_cols(cols)
-
         # check if this is a single col name or an array
         is_array = utils.is_array_of_string_values(col_or_cols)
 
         # convert to array format
         cols = col_or_cols if (is_array == True) else list(col_or_cols)
+
+        # check empty
+        if (self.has_empty_header()):
+            return new_with_cols(cols)
 
         # add only if missing
         missing_cols = []
@@ -3615,7 +3615,12 @@ class TSV:
         return self.get_header() == ""
 
     def has_empty_header(self):
-        return self.num_cols() == 0 
+        return self.num_cols() == 0
+
+    def write(self, path):
+        tsvutils.save_to_file(self, path)
+        utils.debug("write: {}".format(path))
+        return self 
 
     def __has_all_int_values__(self, col):
         # check for empty
@@ -3801,7 +3806,7 @@ def read(paths, sep = None):
     return tsvutils.read(paths, sep)
 
 def write(xtsv, path):
-    return tsvutils.save_to_file(xtsv, path)
+    return xtsv.write(path)
 
 def merge(xtsvs, def_val_map = None):
     # warn if def_val_map is not defined
