@@ -1729,7 +1729,7 @@ class TSV:
         is_array = utils.is_array_of_string_values(col_or_cols)
 
         # convert to array format
-        cols = col_or_cols if (is_array == True) else list(col_or_cols)
+        cols = col_or_cols if (is_array == True) else [col_or_cols]
 
         # check empty
         if (self.has_empty_header()):
@@ -2202,14 +2202,63 @@ class TSV:
         # return
         return agg_result
 
-    def __sample_group_by_max_uniq_values_uniq_count__(self, vs):
-        return len(set(vs))
+    # TODO: this is using comma as join. can get buggy
+    def __sample_group_by_max_uniq_values_exact_group_by__(self, k, n):
+        def __sample_group_by_max_uniq_values_exact_group_by_inner__(mps):
+            vs = []
+            for mp in mps:
+                vs.append(mp[k])
+                
+            vs_uniq = list(set(vs))
+            random.shuffle(vs_uniq)
+            vs_selected = vs_uniq[0:n]
+            
+            result_mp = {}
+            result_mp["found"] = ",".join(vs_selected)
+                    
+            return result_mp
+        
+        return __sample_group_by_max_uniq_values_exact_group_by_inner__
 
-    # sampling method to take a grouping key, and a column where the number of unique values for column are capped.
-    def sample_group_by_max_uniq_values(self, grouping_cols, col, max_uniq_values, seed = 0, inherit_message = ""):
+    def sample_group_by_max_uniq_values_exact(self, grouping_cols, col, max_uniq_values, inherit_message = ""):
         # check empty
         if (self.has_empty_header()):
-            utils.warn("sample_group_by_max_uniq_values: empty tsv")
+            utils.warn("sample_group_by_max_uniq_values_exact: empty tsv")
+            return self
+
+        # resolve grouping_cols
+        grouping_cols = self.__get_matching_cols__(grouping_cols)
+
+        # validation
+        if (col not in self.header_map.keys()):
+            raise Exception("Column not found: {}, {}".format(str(col), str(self.header_fields)))
+
+        # check max_uniq_values
+        if (max_uniq_values <= 0):
+            raise Exception("max_uniq_values has to be more than 0: {}".format(max_uniq_values))
+
+        # agg result
+        inherit_message2 = inherit_message + ": sample_group_by_max_uniq_values_exact" if (len(inherit_message) > 0) else "sample_group_by_max_uniq_values_exact"
+
+        # compute
+        agg_result = self \
+            .group_by_key(grouping_cols, col, self.__sample_group_by_max_uniq_values_exact_group_by__(col, max_uniq_values), suffix = "__sample_group_by_max_uniq_values_exact_group_by__",
+                collapse = False, inherit_message = inherit_message2 + ": [1/3]")  \
+            .filter([col, "found:__sample_group_by_max_uniq_values_exact_group_by__"], lambda x,y: x in y.split(","), inherit_message = inherit_message2 + ": [2/3]") \
+            .drop("found:__sample_group_by_max_uniq_values_exact_group_by__", inherit_message = inherit_message2 + ": [3/3]") 
+
+        # return
+        return agg_result
+
+
+    def __sample_group_by_max_uniq_values_approx_uniq_count__(self, vs):
+        return len(set(vs))
+
+    # sampling method to take a grouping key, and a column where the number of unique values for column are capped. this uses approximate sampling technique
+    def sample_group_by_max_uniq_values_approx(self, grouping_cols, col, max_uniq_values, seed = 0, inherit_message = ""):
+        # check empty
+        if (self.has_empty_header()):
+            utils.warn("sample_group_by_max_uniq_values_approx: empty tsv")
             return self
 
         # resolve grouping_cols
@@ -2233,15 +2282,25 @@ class TSV:
         sample_grouping_cols.append(col)
 
         # agg result
-        inherit_message2 = inherit_message + ": sample_group_by_max_uniq_values" if (len(inherit_message) > 0) else "sample_group_by_max_uniq_values"
-        agg_result = self.aggregate(grouping_cols, [col], [self.__sample_group_by_max_uniq_values_uniq_count__], collapse = False, inherit_message = inherit_message2 + ": [1/5]") \
-            .transform(["{}:__sample_group_by_max_uniq_values_uniq_count__".format(col)], lambda c: max_uniq_values / float(c) if (float(c) > max_uniq_values) else 1, "{}:__sample_group_by_max_uniq_values_sampling_ratio__".format(col), inherit_message = inherit_message2 + ": [2/5]") \
-            .transform(sample_grouping_cols, lambda x: abs(utils.compute_hash("\t".join(x), seed)) / sys.maxsize, "{}:__sample_group_by_max_uniq_values_sampling_key__".format(col), use_array_notation = True, inherit_message = inherit_message2 + ": [3/5]") \
-            .filter(["{}:__sample_group_by_max_uniq_values_sampling_key__".format(col), "{}:__sample_group_by_max_uniq_values_sampling_ratio__".format(col)], lambda x, y: float(x) <= float(y), inherit_message = inherit_message2 + ": [4/5]") \
-            .drop("{}:__sample_group_by_max_uniq_values_.*".format(col), inherit_message = inherit_message2 + ": [5/5]")
+        inherit_message2 = inherit_message + ": sample_group_by_max_uniq_values_approx" if (len(inherit_message) > 0) else "sample_group_by_max_uniq_values_approx"
+        agg_result = self.aggregate(grouping_cols, [col], [self.__sample_group_by_max_uniq_values_approx_uniq_count__], collapse = False, inherit_message = inherit_message2 + ": [1/5]") \
+            .transform(["{}:__sample_group_by_max_uniq_values_approx_uniq_count__".format(col)], lambda c: max_uniq_values / float(c) if (float(c) > max_uniq_values) else 1, "{}:__sample_group_by_max_uniq_values_approx_sampling_ratio__".format(col), inherit_message = inherit_message2 + ": [2/5]") \
+            .transform(sample_grouping_cols, lambda x: abs(utils.compute_hash("\t".join(x), seed)) / sys.maxsize, "{}:__sample_group_by_max_uniq_values_approx_sampling_key__".format(col), use_array_notation = True, inherit_message = inherit_message2 + ": [3/5]") \
+            .filter(["{}:__sample_group_by_max_uniq_values_approx_sampling_key__".format(col), "{}:__sample_group_by_max_uniq_values_approx_sampling_ratio__".format(col)], lambda x, y: float(x) <= float(y), inherit_message = inherit_message2 + ": [4/5]") \
+            .drop("{}:__sample_group_by_max_uniq_values_approx.*".format(col), inherit_message = inherit_message2 + ": [5/5]")
 
         # return
         return agg_result
+
+    def sample_group_by_max_uniq_values(self, grouping_cols, col, max_uniq_values, seed = 0, use_approx = True, inherit_message = ""):
+        # debug message
+        inherit_message2 = inherit_message + ": sample_group_by_max_uniq_values_approx" if (inherit_message != "") else "sample_group_by_max_uniq_values_approx"
+
+        # select the function with approximation if needed
+        if (use_approx == True):
+            return self.sample_group_by_max_uniq_values_approx(grouping_cols, col, max_uniq_values, seed = seed, inherit_message = inherit_message2)
+        else:
+            return self.sample_group_by_max_uniq_values_exact(grouping_cols, col, max_uniq_values, inherit_message = inherit_message2)
 
     def __sample_group_by_max_uniq_values_per_class_uniq_count__(self, vs):
         return len(set(vs))
@@ -3620,7 +3679,25 @@ class TSV:
     def write(self, path):
         tsvutils.save_to_file(self, path)
         utils.debug("write: {}".format(path))
-        return self 
+        return self
+
+    def show_custom_func(self, n, title, func, *args, **kwargs):
+        # call show transpose after custom func
+        self \
+            .custom_func(func, *args, **kwargs) \
+            .show(n = n, title = title)
+
+        # return self
+        return self
+
+    def show_transpose_custom_func(self, n, title, func, *args, **kwargs):
+        # call show transpose after custom func
+        self \
+            .custom_func(func, *args, **kwargs) \
+            .show_transpose(n = n, title = title)
+
+        # return self
+        return self
 
     def __has_all_int_values__(self, col):
         # check for empty
