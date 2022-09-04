@@ -38,6 +38,12 @@ def merge(tsv_list, def_val_map = None):
         utils.warn("List of tsv is empty. Returning")
         return tsv.create_empty()
 
+    # warn if a huge tsv is found 
+    for i in range(len(tsv_list)):
+        if (tsv_list[i].size_in_gb() >= 1):
+            utils.warn("merge: Found a very big tsv: {} / {}, num_rows: {}, size (GB): {}. Displaying the first row".format(i + 1, len(tsv_list), tsv_list[i].num_rows(), tsv_list[i].size_in_gb()))
+            tsv_list[i].show_transpose(1, title = "merge{}: big tsv")
+
     # check for valid headers
     header = tsv_list[0].get_header()
     header_fields = tsv_list[0].get_header_fields()
@@ -55,8 +61,11 @@ def merge(tsv_list, def_val_map = None):
                         index, str(header_diffs)))
             else:
                 utils.warn("Mismatch in order of header fields: {}, {}. Using merge intersect".format(header.split("\t"), t.get_header().split("\t")))
+
+            # return
             return merge_intersect(tsv_list, def_val_map)
 
+        # increment
         index = index + 1
 
     # simple condition
@@ -128,10 +137,10 @@ def merge_intersect(tsv_list, def_val_map = None):
             # assign empty string to the columns for which default value was not defined
             for h in diff_cols:
                 if (h in def_val_map.keys()):
-                    utils.debug("merge_intersect: assigning default value for {}: {}".format(h, def_val_map[h]))
+                    utils.trace_once("merge_intersect: assigning default value for {}: {}".format(h, def_val_map[h]))
                     effective_def_val_map[h] = def_val_map[h]
                 else:
-                    utils.debug("merge_intersect: assigning empty string as default value to column: {}".format(h))
+                    utils.trace_once("merge_intersect: assigning empty string as default value to column: {}".format(h))
                     effective_def_val_map[h] = ""
 
             # get the list of keys in order

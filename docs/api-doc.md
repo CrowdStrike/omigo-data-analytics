@@ -180,6 +180,8 @@ sepal_length	sepal_width	petal_length	petal_width	class
    - **endswith**(col, value): Returns rows where string value of _col_ ends with  _value_.
    - **regex_match**(col, value): Returns rows where string value of _col_ matches the regular expression in _value_.
    - **not_eq_str**(col, value): Returns rows where string value of _col_ not equal to  _value_.
+   - **not_eq_int**(col, value): Returns rows where int value of _col_ not equal to  _value_.
+   - **not_eq_float**(col, value): Returns rows where float value of _col_ not equal to  _value_.
    - **not_startswith**(col, value): Returns rows where string value of _col_ does not start with  _value_.
    - **not_endswith**(col, value): Returns rows where string value of _col_ does not end with _value_.
    - **not_regex_match**(col, value): Returns rows where string value of _col_ does not match regular expression in _value_.

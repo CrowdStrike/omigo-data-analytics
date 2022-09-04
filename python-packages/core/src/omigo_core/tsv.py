@@ -155,6 +155,14 @@ class TSV:
         inherit_message2 = inherit_message + ": not_eq_str" if (inherit_message != "") else "not_eq_str"
         return self.filter([col], lambda x: str(x) != str(value), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
+    def not_eq_int(self, col, value, ignore_if_missing = False, inherit_message = ""):
+        inherit_message2 = inherit_message + ": not_eq_int" if (inherit_message != "") else "not_eq_int"
+        return self.filter([col], lambda x: int(x) != value, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+
+    def not_eq_float(self, col, value, ignore_if_missing = False, inherit_message = ""):
+        inherit_message2 = inherit_message + ": not_eq_float" if (inherit_message != "") else "not_eq_float"
+        return self.filter([col], lambda x: float(x) != value, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+
     def is_nonzero(self, col, ignore_if_missing = False, inherit_message = ""):
         utils.warn("Deprecated. Use is_nonzero_float() instead")
         inherit_message2 = inherit_message + ": is_nonzero" if (len(inherit_message) > 0) else "is_nonzero"
@@ -3109,14 +3117,16 @@ class TSV:
             .validate()
 
     def __explode_json_transform_func__(self, col, accepted_cols, excluded_cols, single_value_list_cols, transpose_col_groups, merge_list_method, url_encoded_cols,
-        nested_cols, collapse_primitive_list, join_col = ","):
+        nested_cols, collapse_primitive_list, max_results = None, join_col = ","):
 
+        # constant
         json_explode_index = "__explode_json_index__"
 
+        # inner function that is returned
         def __explode_json_transform_func_inner__(mp):
             # some validation.
             if (col not in mp.keys() or mp[col] == "" or mp[col] is None):
-                utils.trace("__explode_json_transform_func_inner__: potentially invalid json response found. Usually it is okay. But better to check: {}, {}".format(col, mp))
+                utils.warn_once("__explode_json_transform_func_inner__: potentially invalid json response found. Usually it is okay. But better to check: {}, {}".format(col, mp))
                 mp = {"__explode_json_len__": "0"}
                 return [mp]
 
@@ -3139,6 +3149,11 @@ class TSV:
 
             # call internal methods
             results = __explode_json_transform_func_inner_helper__(json_mp)
+
+            # Check if the number of results need to be capped
+            if (max_results is not None and len(results) > max_results):
+                utils.warn("__explode_json_transform_func__: capping the number of results from {} to {}".format(len(results), max_results))
+                results = results[0:max_results]
 
             # return
             return results
@@ -3167,6 +3182,8 @@ class TSV:
             list_results_arr = []
             dict_results = []
 
+            utils.debug("__explode_json_transform_func_expand_json__: debug: {}".format(str(json_mp)[0:1000]))
+
             # iterate over all key values
             for k in json_mp.keys():
                 # check for inclusion and exclusion
@@ -3184,7 +3201,7 @@ class TSV:
                 # handle null scenario. json string can have a special value called null to represent empty or null value, which is converted to None in json parser.
                 # such null value should be okay to read as empty string
                 if (v is None):
-                    utils.trace("__explode_json_transform_func_expand_json__: None type value found. Taking it as empty string. Key: {}".format(k))
+                    utils.warn_once("__explode_json_transform_func_expand_json__: None type value found. Taking it as empty string. Key: {}".format(k))
                     v = ""
 
                 # handle nested_cols scenario where the entire value is to be set as url encoded json blob
@@ -3387,6 +3404,10 @@ class TSV:
             else:
                 results.append(combined_map)
 
+            # trace
+            if (len(results) >= 10):
+                utils.trace("__explode_json_transform_func_expand_json__: count: {}, parent_prefix: {}, results[0]: {}".format(len(results), parent_prefix, results[0]))
+
             # return
             return results
 
@@ -3421,7 +3442,7 @@ class TSV:
     # TODO: __explode_json_index__ needs to be tested and confirmed
     # TODO: need proper xpath based exclusion to better handle noise
     def explode_json(self, col, prefix = None, accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None,
-        merge_list_method = "cogroup", collapse_primitive_list = True, url_encoded_cols = None, nested_cols = None, collapse = True, ignore_if_missing = False, inherit_message = ""):
+        merge_list_method = "cogroup", collapse_primitive_list = True, url_encoded_cols = None, nested_cols = None, collapse = True, max_results = None, ignore_if_missing = False, inherit_message = ""):
 
         # check empty
         if (self.has_empty_header()):
@@ -3448,7 +3469,8 @@ class TSV:
 
         # check for explode function
         exp_func = self.__explode_json_transform_func__(col, accepted_cols = accepted_cols, excluded_cols = excluded_cols, single_value_list_cols = single_value_list_cols,
-            transpose_col_groups = transpose_col_groups, merge_list_method = merge_list_method, url_encoded_cols = url_encoded_cols, nested_cols = nested_cols, collapse_primitive_list = collapse_primitive_list)
+            transpose_col_groups = transpose_col_groups, merge_list_method = merge_list_method, url_encoded_cols = url_encoded_cols, nested_cols = nested_cols,
+            collapse_primitive_list = collapse_primitive_list, max_results = max_results)
 
         # use explode to do this parsing
         inherit_message2 = inherit_message + ": explode_json" if (inherit_message != "") else "explode_json"

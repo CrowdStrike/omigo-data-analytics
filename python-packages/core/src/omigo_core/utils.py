@@ -12,7 +12,10 @@ from concurrent.futures import ThreadPoolExecutor
 
 # TODO: these caches dont work in multithreaded env.
 MSG_CACHE_MAX_LEN = 10000
+INFO_MSG_CACHE = {}
 WARN_MSG_CACHE = {}
+DEBUG_MSG_CACHE = {}
+TRACE_MSG_CACHE = {}
 
 def is_critical():
     return str(os.environ.get("OMIGO_CRITICAL", "0")) == "1"
@@ -48,54 +51,71 @@ def trace(msg):
     if (is_trace()):
         print("[TRACE]: {}".format(msg))
 
-def trace_once(msg, msg_cache):
-    # check if the cache has become too big
-    if (len(msg_cache) >= MSG_CACHE_MAX_LEN):
-        msg_cache = {}
+def trace_once(msg, msg_cache = None):
+    # check if enabled
+    if (is_trace() == False):
+        return
 
+    # refer to global variable
+    global TRACE_MSG_CACHE
     # check if msg is already displayed
-    if (msg not in msg_cache.keys()):
+    if (msg not in TRACE_MSG_CACHE.keys()):
         print("[TRACE ONCE ONLY]: " + msg)
-        msg_cache[msg] = 1
+        TRACE_MSG_CACHE[msg] = 1
+
+        # check if the cache has become too big
+        if (len(TRACE_MSG_CACHE) >= MSG_CACHE_MAX_LEN):
+            TRACE_MSG_CACHE = {}
 
 def debug(msg):
     if (is_debug()):
         print("[DEBUG]: {}".format(msg))
 
-def debug_once(msg, msg_cache):
-    # check if msg is already displayed
-    if (msg not in msg_cache.keys()):
-         if (is_debug()):
-             print("[DEBUG ONCE ONLY]: {}".format(msg))
-         msg_cache[msg] = 1
+def debug_once(msg, msg_cache = None):
+    # check if enabled
+    if (is_warn() == False):
+        return
 
-         # clear the cache if it has become too big
-         if (len(msg_cache) >= MSG_CACHE_MAX_LEN):
-             msg_cache = {}
-    else:
-        trace(msg)
+    # refer to global variable
+    global DEBUG_MSG_CACHE
+    # check if msg is already displayed
+    if (msg not in DEBUG_MSG_CACHE.keys()):
+        print("[DEBUG ONCE ONLY]: " + msg)
+        DEBUG_MSG_CACHE[msg] = 1
+
+        # check if the cache has become too big
+        if (len(DEBUG_MSG_CACHE) >= MSG_CACHE_MAX_LEN):
+            DEBUG_MSG_CACHE = {}
 
 def info(msg):
     if (is_info()):
         print("[INFO]: {}".format(msg))
 
-def info_once(msg, msg_cache):
-    # check if msg is already displayed
-    if (msg not in msg_cache.keys()):
-         print("[INFO ONCE ONLY]: {}".format(msg))
-         msg_cache[msg] = 1
+def info_once(msg, msg_cache = None):
+    # check if enabled
+    if (is_info() == False):
+        return
 
-         # clear the cache if it has become too big
-         if (len(msg_cache) >= MSG_CACHE_MAX_LEN):
-             msg_cache = {}
-    else:
-        trace(msg)
+    # refer to global variable
+    global INFO_MSG_CACHE
+    # check if msg is already displayed
+    if (msg not in INFO_MSG_CACHE.keys()):
+        print("[INFO ONCE ONLY]: " + msg)
+        INFO_MSG_CACHE[msg] = 1
+
+        # check if the cache has become too big
+        if (len(INFO_MSG_CACHE) >= MSG_CACHE_MAX_LEN):
+            INFO_MSG_CACHE = {}
 
 def error(msg):
     if (is_error()):
         print("[ERROR]: {}".format(msg))
 
 def error_once(msg, msg_cache):
+    # check if enabled
+    if (is_error() == False):
+        return
+
     # check if msg is already displayed
     if (msg not in msg_cache.keys()):
          print("[ERROR ONCE ONLY]: {}".format(msg))
@@ -149,6 +169,10 @@ def warn(msg):
 
 # TODO: remove the msg_cache parameter and update in the code
 def warn_once(msg, msg_cache = None):
+    # check if enabled
+    if (is_warn() == False):
+        return
+
     # refer to global variable
     global WARN_MSG_CACHE
     # check if msg is already displayed
@@ -159,8 +183,6 @@ def warn_once(msg, msg_cache = None):
         # check if the cache has become too big
         if (len(WARN_MSG_CACHE) >= MSG_CACHE_MAX_LEN):
             WARN_MSG_CACHE = {}
-    else:
-        trace(msg)
 
 def is_code_todo_warning():
     return str(os.environ.get("OMIGO_CODE_TODO_WARNING", "0")) == "1"
