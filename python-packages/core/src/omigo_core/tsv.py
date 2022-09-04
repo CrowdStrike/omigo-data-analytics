@@ -897,6 +897,86 @@ class TSV:
         inherit_message2 = inherit_message + ": exclude_filter" if (inherit_message != "") else "exclude_filter"
         return self.filter(cols, func, include_cond = False, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
+    def any_col_with_cond_exists_filter(self, cols, func, ignore_if_missing = False, inherit_message2 = ""):
+        # check empty
+        if (self.has_empty_header()):
+            utils.raise_exception_or_warn("any_col_with_cond_exists_filter: empty tsv", ignore_if_missing)
+            return self
+
+        # find the matching cols and indexes
+        matching_cols = self.__get_matching_cols__(cols, ignore_if_missing = ignore_if_missing)
+        indexes = self.__get_col_indexes__(matching_cols)
+
+        # check if there were any matching columns
+        if (len(matching_cols) == 0):
+            utils.raise_exception_or_warn("any_col_with_cond_exists_filter: no matching columns", ignore_if_missing)
+            return self
+
+        # print which columns are going to be transformed
+        if (len(matching_cols) != len(cols) and len(matching_cols) != 1):
+            utils.debug("any_col_with_cond_exists_filter: list of columns that will be checked: {}".format(str(matching_cols)))
+
+        # iterate
+        new_data = []
+        for line in self.get_data():
+            # get fields
+            fields = line.split("\t", -1)
+
+            # iterate over matching cols
+            flag = False 
+            for i in indexes:
+                # append to new data if any column matched
+                if (func(fields[i]) == True):
+                    flag = True
+                    break
+
+            # check if all conditions met
+            if (flag == True):
+                new_data.append(line)
+
+        # return
+        return TSV(self.get_header(), new_data)
+ 
+    def all_cols_with_cond_exists_filter(self, cols, func, ignore_if_missing = False, inherit_message2 = ""):
+        # check empty
+        if (self.has_empty_header()):
+            utils.raise_exception_or_warn("all_cols_with_cond_exists_filter: empty tsv", ignore_if_missing)
+            return self
+
+        # find the matching cols and indexes
+        matching_cols = self.__get_matching_cols__(cols, ignore_if_missing = ignore_if_missing)
+        indexes = self.__get_col_indexes__(matching_cols)
+
+        # check if there were any matching columns
+        if (len(matching_cols) == 0):
+            utils.raise_exception_or_warn("any_col_with_cond_exists_filter: no matching columns", ignore_if_missing)
+            return self
+
+        # print which columns are going to be transformed
+        if (len(matching_cols) != len(cols) and len(matching_cols) != 1):
+            utils.debug("any_col_with_cond_exists_filter: list of columns that will be checked: {}".format(str(matching_cols)))
+
+        # iterate
+        new_data = []
+        for line in self.get_data():
+            # get fields
+            fields = line.split("\t", -1)
+
+            # iterate over matching cols
+            flag = True
+            for i in indexes:
+                # append to new data if any column matched
+                if (func(fields[i]) == False):
+                    flag = False
+                    break
+
+            # check if all conditions met
+            if (flag == True):
+                new_data.append(line)
+
+        # return
+        return TSV(self.get_header(), new_data) 
+        
     def transform(self, cols, func, new_col_or_cols, use_array_notation = False, inherit_message = ""):
         # check empty
         if (self.has_empty_header()):
@@ -1077,6 +1157,7 @@ class TSV:
 
             new_data.append("\t".join(new_fields))
 
+        # return
         return TSV(self.header, new_data)
 
     def rename(self, col, new_col):
