@@ -304,6 +304,8 @@ class TSV:
 
     # TODO: use skip_rows for better name
     def skip(self, count):
+        utils.warn_once("use skip_rowsinstead coz of better name")
+
         return TSV(self.header, self.data[count:])
 
     def skip_rows(self, count):
@@ -340,7 +342,7 @@ class TSV:
 
     # TODO: use drop_cols instead coz of better name
     def drop(self, col_or_cols, ignore_if_missing = False, inherit_message = ""):
-        utils.warn("use drop_cols instead coz of better name")
+        utils.warn_once("use drop_cols instead coz of better name")
 
         # check empty
         if (self.has_empty_header()):
@@ -360,11 +362,17 @@ class TSV:
         inherit_message2 = inherit_message + ": drop" if (len(inherit_message) > 0) else "drop"
         return self.select(non_matching_cols, inherit_message = inherit_message2)
 
-    def drop_cols(self, col_or_cols, inherit_message = ""):
-        return self.drop(col_or_cols, inherit_message)
+    def drop_cols(self, col_or_cols, ignore_if_missing = False, inherit_message = ""):
+        inherit_message2 = inherit_message + ": drop_cols" if (inherit_message != "") else "drop_cols"
+        return self.drop(col_or_cols, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
     def drop_if_exists(self, col_or_cols, inherit_message = ""):
-        return self.drop(col_or_cols, ignore_if_missing = True, inherit_message = inherit_message)
+        inherit_message2 = inherit_message + ": drop_if_exists" if (inherit_message != "") else "drop_if_exists"
+        return self.drop(col_or_cols, ignore_if_missing = True, inherit_message = inherit_message2)
+
+    def drop_cols_if_exists(self, col_or_cols, inherit_message = ""):
+        inherit_message2 = inherit_message + ": drop_cols_if_exists" if (inherit_message != "") else "drop_cols_if_exists"
+        return self.drop_if_exists(col_or_cols, inherit_message = inherit_message2)
 
     # TODO: the select_cols is not implemented properly
     def window_aggregate(self, win_col, agg_cols, agg_funcs, winsize, select_cols = None, sliding = False, collapse = True, suffix = "", precision = 2, inherit_message = ""):
@@ -3523,7 +3531,8 @@ class TSV:
     # TODO: __explode_json_index__ needs to be tested and confirmed
     # TODO: need proper xpath based exclusion to better handle noise
     def explode_json(self, col, prefix = None, accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None,
-        merge_list_method = "cogroup", collapse_primitive_list = True, url_encoded_cols = None, nested_cols = None, collapse = True, max_results = None, ignore_if_missing = False, inherit_message = ""):
+        merge_list_method = "cogroup", collapse_primitive_list = True, url_encoded_cols = None, nested_cols = None, collapse = True, max_results = None, ignore_if_missing = False,
+        default_val = "", inherit_message = ""):
 
         # check empty
         if (self.has_empty_header()):
@@ -3557,7 +3566,7 @@ class TSV:
         inherit_message2 = inherit_message + ": explode_json" if (inherit_message != "") else "explode_json"
         return self \
             .add_seq_num(prefix + ":__json_index__", inherit_message = "explode_json") \
-            .explode([col], exp_func, prefix = prefix, default_val = "", collapse = collapse, inherit_message = inherit_message2) \
+            .explode([col], exp_func, prefix = prefix, default_val = default_val, collapse = collapse, inherit_message = inherit_message2) \
             .validate()
 
     def transpose(self, n = 1):
@@ -3875,7 +3884,7 @@ class TSV:
             # raise exception if some col or pattern is not found
             if (col_pattern_found == False):
                 utils.raise_exception_or_warn("Col name or pattern not found: {}, {}".format(col_pattern, str(self.header_fields)), ignore_if_missing)
-                return []
+                # dont return from here 
 
         # return
         return matching_cols

@@ -16,11 +16,11 @@ class VisualTSV(tsv.TSV):
     def scatterplot(self, xcol, ycol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10):
         return __sns_scatterplot__(self, xcol, ycol, class_col, title, xfigsize, yfigsize, max_rows, max_class_col)
 
-    def histogram(self, xcol, class_col = None, bins = 10, title = None, binwidth = None, kde = False, multiple = "dodge", xfigsize = 25, yfigsize = 5, max_class_col = 10):
-        return __sns_histogram__(self, xcol, class_col, bins, title, binwidth, kde, multiple, xfigsize, yfigsize, max_class_col)
+    def histogram(self, xcol, class_col = None, bins = 10, title = None, binwidth = None, xfigsize = 25, yfigsize = 5, max_class_col = 10, props = None):
+        return __sns_histogram__(self, xcol, class_col, bins, title, binwidth, xfigsize, yfigsize, max_class_col, props)
 
-    def density(self, ycols, class_col = None, xfigsize = 25, yfigsize = 5):
-        return __sns_density__(self, ycols, class_col, xfigsize, yfigsize)
+    def density(self, ycols, class_col = None, xfigsize = 25, yfigsize = 5, props = None):
+        return __sns_density__(self, ycols, class_col, xfigsize, yfigsize, props)
 
     def barchart(self, xcol, ycol, class_col = None, resort = True, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10):
         return __sns_barplot__(self, xcol, ycol, class_col, resort, xfigsize, yfigsize, max_rows, max_class_col)
@@ -66,6 +66,24 @@ def __create_data_frame_with_types__(xtsv, xcol = None, ycols = None, zcol = Non
         mp[zcol] = xtsv.col_as_array(zcol)
 
     return pd.DataFrame(mp)
+
+def __merge_props__(props, default_props):
+    # create new dict 
+    props2 = dict()
+
+    # take new props
+    if (props is not None):
+        for k in props.keys():
+            props2[k] = props[k]
+
+    # take default if not defined
+    if (default_props is not None):
+        for k in default_props.keys():
+            if (k not in props2.keys()):
+                props2[k] = default_props[k]
+
+    # return
+    return props2
 
 def __pd_linechart__(xtsv, xcol, ycols, ylabel, title, subplots, xfigsize, yfigsize):
     # validate ycols
@@ -116,49 +134,63 @@ def __sns_scatterplot__(xtsv, xcol, ycol, class_col, title, xfigsize, yfigsize, 
     if (title is None):
         title = "{} vs {}".format(xcol, ycol)
 
-    #df.plot.scatter(x = xcol, y = ycol, figsize = figsize, title = title)
+    # plot
     ax.set_title(title)
     sns.scatterplot(ax = ax, x = xcol, y = ycol, hue = class_col, data = df)
 
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
 
-def __sns_histogram__(xtsv, xcol, class_col, bins, title, binwidth, kde, multiple, xfigsize, yfigsize, max_class_col):
+def __sns_histogram__(xtsv, xcol, class_col, bins, title, binwidth, xfigsize, yfigsize, max_class_col, props):
+    # default props
+    default_props = dict(multiple = "dodge", shrink = 0.8, kde = False)
+    props2 = __merge_props__(props, default_props)
+
     # check number of unique class values
     if (class_col is not None and len(xtsv.col_as_array_uniq(class_col)) >= max_class_col):
         raise Exception("Number of class column values is more than {}: {}. Probably not a class column. Try max_class_col".format(max_class_col, len(xtsv.col_as_array_uniq(class_col))))
 
+    # create dataframe
     df = __create_data_frame_with_types__(xtsv, xcol, None, class_col)
 
+    # create figure
     figsize = (xfigsize, yfigsize)
     fig, ax = pyplot.subplots(figsize = figsize)
 
-    # binwidth overrides bins
+    # binwidth overrides bins. TODO: This hue parameter is not giving class color consistently
     if (binwidth is not None):
-        sns.histplot(data = df, x = xcol, hue = class_col, binwidth = binwidth, kde = kde, multiple = multiple, shrink = 0.8)
+        sns.histplot(data = df, x = xcol, hue = class_col, binwidth = binwidth, **props2)
     else:
-        sns.histplot(data = df, x = xcol, hue = class_col, bins = bins, kde = kde, multiple = multiple, shrink = 0.8)
+        sns.histplot(data = df, x = xcol, hue = class_col, bins = bins, **props2)
 
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
 
 # the syntax is non intuitive. need to follow row major or column major. splitting by class_col is not possible
-def __sns_density__(xtsv, ycols, class_col, xfigsize, yfigsize):
+def __sns_density__(xtsv, ycols, class_col, xfigsize, yfigsize, props):
+    # default props
+    default_props = dict(multiple = "layer")
+    props2 = __merge_props__(props, default_props)
+
     # create df
     ycols = xtsv.__get_matching_cols__(ycols)
     df = __create_data_frame_with_types__(xtsv, None, ycols, class_col)
 
+    # create figure
     figsize = (xfigsize, yfigsize)
     fig, ax = pyplot.subplots(figsize = figsize)
 
     # TODO: This is not clean
+    # multiple = props["multiple"] if (props is not None and "multiple" in props.keys()) else "layer"
+
+    # check for class col
     if (class_col is not None):
         if (len(ycols) == 1):
-            sns.kdeplot(data = df, x = ycols[0], hue = class_col, multiple = "stack")
+            sns.kdeplot(data = df, x = ycols[0], hue = class_col, **props2)
         else:
-            raise Exception("__sns_density__: class_col with multiple ycols is not supported")
+            raise Exception("__sns_density__: class_col with multiple ycols is not supported: {}".format(ycols))
     else:
-       sns.kdeplot(data = df, multiple = "stack")
+       sns.kdeplot(data = df, **props2)
 
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
@@ -184,9 +216,11 @@ def __sns_barplot__(xtsv, xcol, ycol, class_col, resort, xfigsize, yfigsize, max
     # create df
     df = __create_data_frame_with_types__(xtsv, xcol, ycol, class_col)
 
+    # create figure
     figsize = (xfigsize, yfigsize)
     fig, ax = pyplot.subplots(figsize = figsize)
 
+    # plot
     sns.barplot(data = df, x = xcol, y = ycol, hue = class_col)
 
     # return
@@ -208,9 +242,11 @@ def __sns_boxplot__(xtsv, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, m
     # create df
     df = __create_data_frame_with_types__(xtsv, xcol, ycol, class_col)
 
+    # create figure
     figsize = (xfigsize, yfigsize)
     fig, ax = pyplot.subplots(figsize = figsize)
 
+    # plot 
     sns.boxplot(data = df, x = xcol, y = ycol, hue = class_col)
 
     # return
@@ -231,9 +267,11 @@ def __sns_corr_heatmp__(xtsv, cols, xfigsize, yfigsize, max_rows):
     # create df
     df = __create_data_frame_with_types__(xtsv, None, cols, None)
 
+    # create figure
     figsize = (xfigsize, yfigsize)
     fig, ax = pyplot.subplots(figsize = figsize)
 
+    # plot
     sns.heatmap(df.corr(), annot = True)
 
     # return
@@ -257,6 +295,7 @@ def __sns_pairplot__(xtsv, cols, class_col, kind, diag_kind, xfigsize, yfigsize,
     # create df
     df = __create_data_frame_with_types__(xtsv, None, cols, class_col)
 
+    # define aspect and plot
     aspect = xfigsize / yfigsize
     sns.pairplot(df, hue = class_col, kind = kind, diag_kind = diag_kind, aspect = aspect, height = yfigsize)
 

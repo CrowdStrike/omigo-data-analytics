@@ -42,7 +42,7 @@ def merge(tsv_list, def_val_map = None):
     for i in range(len(tsv_list)):
         if (tsv_list[i].size_in_gb() >= 1):
             utils.warn("merge: Found a very big tsv: {} / {}, num_rows: {}, size (GB): {}. Displaying the first row".format(i + 1, len(tsv_list), tsv_list[i].num_rows(), tsv_list[i].size_in_gb()))
-            tsv_list[i].show_transpose(1, title = "merge{}: big tsv")
+            tsv_list[i].show_transpose(1, title = "merge: big tsv")
 
     # check for valid headers
     header = tsv_list[0].get_header()
