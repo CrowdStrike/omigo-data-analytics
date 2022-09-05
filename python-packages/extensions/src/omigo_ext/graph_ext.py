@@ -10,11 +10,11 @@ class VisualTSV(tsv.TSV):
     def __init__(self, header, data):
         super().__init__(header, data)
 
-    def linechart(self, xcol, ycols, ylabel = None, title = None, subplots = False, xfigsize = 25, yfigsize = 5):
-        return __pd_linechart__(self, xcol, ycols, ylabel, title, subplots, xfigsize, yfigsize)
+    def linechart(self, xcol, ycols, ylabel = None, title = None, subplots = False, xfigsize = 25, yfigsize = 5, props = None):
+        return __pd_linechart__(self, xcol, ycols, ylabel, title, subplots, xfigsize, yfigsize, props)
 
-    def scatterplot(self, xcol, ycol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10):
-        return __sns_scatterplot__(self, xcol, ycol, class_col, title, xfigsize, yfigsize, max_rows, max_class_col)
+    def scatterplot(self, xcol, ycol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10, props = None):
+        return __sns_scatterplot__(self, xcol, ycol, class_col, title, xfigsize, yfigsize, max_rows, max_class_col, props)
 
     def histogram(self, xcol, class_col = None, bins = 10, title = None, binwidth = None, xfigsize = 25, yfigsize = 5, max_class_col = 10, props = None):
         return __sns_histogram__(self, xcol, class_col, bins, title, binwidth, xfigsize, yfigsize, max_class_col, props)
@@ -22,17 +22,17 @@ class VisualTSV(tsv.TSV):
     def density(self, ycols, class_col = None, xfigsize = 25, yfigsize = 5, props = None):
         return __sns_density__(self, ycols, class_col, xfigsize, yfigsize, props)
 
-    def barchart(self, xcol, ycol, class_col = None, resort = True, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10):
-        return __sns_barplot__(self, xcol, ycol, class_col, resort, xfigsize, yfigsize, max_rows, max_class_col)
+    def barchart(self, xcol, ycol, class_col = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10, props = None):
+        return __sns_barplot__(self, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, max_class_col)
 
-    def boxplot(self, xcol, ycol, class_col = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10):
-        return __sns_boxplot__(self, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, max_class_col)
+    def boxplot(self, xcol, ycol, class_col = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10, props = None):
+        return __sns_boxplot__(self, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, max_class_col, props)
 
-    def corr_heatmap(self, cols, xfigsize = 25, yfigsize = 5, max_rows = 6):
-        return __sns_corr_heatmp__(self, cols, xfigsize, yfigsize, max_rows)
+    def corr_heatmap(self, cols, xfigsize = 25, yfigsize = 5, max_rows = 6, props = None):
+        return __sns_corr_heatmp__(self, cols, xfigsize, yfigsize, max_rows, props)
 
-    def pairplot(self, cols, class_col = None, kind = None, diag_kind = None, xfigsize = 5, yfigsize = 5, max_rows = 6, max_class_col = 6):
-        return __sns_pairplot__(self, cols, class_col, kind, diag_kind, xfigsize, yfigsize, max_rows, max_class_col)
+    def pairplot(self, cols, class_col = None, xfigsize = 5, yfigsize = 5, max_rows = 6, max_class_col = 6, props = None):
+        return __sns_pairplot__(self, cols, class_col, xfigsize, yfigsize, max_rows, max_class_col, props)
 
 def __create_data_frame_with_types__(xtsv, xcol = None, ycols = None, zcol = None):
     # convert to array
@@ -85,7 +85,11 @@ def __merge_props__(props, default_props):
     # return
     return props2
 
-def __pd_linechart__(xtsv, xcol, ycols, ylabel, title, subplots, xfigsize, yfigsize):
+def __pd_linechart__(xtsv, xcol, ycols, ylabel, title, subplots, xfigsize, yfigsize, props):
+    # default props
+    default_props = dict()
+    props2 = __merge_props__(props, default_props)
+
     # validate ycols
     ycols = xtsv.__get_matching_cols__(ycols)
 
@@ -104,12 +108,16 @@ def __pd_linechart__(xtsv, xcol, ycols, ylabel, title, subplots, xfigsize, yfigs
     df = __create_data_frame_with_types__(xtsv, xcol, ycols, None)
 
     # plot
-    df.plot.line(subplots = subplots, x = xcol, ylabel = ylabel, figsize = (xfigsize, yfigsize), title = title)
+    df.plot.line(subplots = subplots, x = xcol, ylabel = ylabel, figsize = (xfigsize, yfigsize), title = title, **props2)
 
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
 
-def __sns_scatterplot__(xtsv, xcol, ycol, class_col, title, xfigsize, yfigsize, max_rows, max_class_col):
+def __sns_scatterplot__(xtsv, xcol, ycol, class_col, title, xfigsize, yfigsize, max_rows, max_class_col, props):
+    # default props
+    default_props = dict()
+    props2 = __merge_props__(props, default_props)
+
     # check number of unique class values
     if (class_col is not None and len(xtsv.col_as_array_uniq(class_col)) >= max_class_col):
         raise Exception("Number of class column values is more than {}: {}. Probably not a class column. Try max_class_col".format(max_class_col, len(xtsv.col_as_array_uniq(class_col))))
@@ -136,7 +144,7 @@ def __sns_scatterplot__(xtsv, xcol, ycol, class_col, title, xfigsize, yfigsize, 
 
     # plot
     ax.set_title(title)
-    sns.scatterplot(ax = ax, x = xcol, y = ycol, hue = class_col, data = df)
+    sns.scatterplot(ax = ax, x = xcol, y = ycol, hue = class_col, data = df, **props)
 
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
@@ -195,7 +203,11 @@ def __sns_density__(xtsv, ycols, class_col, xfigsize, yfigsize, props):
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
 
-def __sns_barplot__(xtsv, xcol, ycol, class_col, resort, xfigsize, yfigsize, max_rows, max_class_col):
+def __sns_barplot__(xtsv, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, max_class_col, props):
+    # default props
+    default_props = dict(resort = True)
+    props2 = __merge_props__(props, default_props)
+
     # check number of unique class values
     if (class_col is not None and len(xtsv.col_as_array_uniq(class_col)) >= max_class_col):
         raise Exception("Number of class column values is more than {}: {}. Probably not a class column. Try max_class_col".format(max_class_col, len(xtsv.col_as_array_uniq(class_col))))
@@ -221,12 +233,16 @@ def __sns_barplot__(xtsv, xcol, ycol, class_col, resort, xfigsize, yfigsize, max
     fig, ax = pyplot.subplots(figsize = figsize)
 
     # plot
-    sns.barplot(data = df, x = xcol, y = ycol, hue = class_col)
+    sns.barplot(data = df, x = xcol, y = ycol, hue = class_col, **props2)
 
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
 
-def __sns_boxplot__(xtsv, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, max_class_col):
+def __sns_boxplot__(xtsv, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, max_class_col, props):
+    # default props
+    default_props = dict()
+    props2 = __merge_props__(props, default_props)
+
     # check number of unique class values
     if (class_col is not None and len(xtsv.col_as_array_uniq(class_col)) >= max_class_col):
         raise Exception("Number of class column values is more than {}: {}. Probably not a class column. Try max_class_col".format(max_class_col, len(xtsv.col_as_array_uniq(class_col))))
@@ -247,12 +263,17 @@ def __sns_boxplot__(xtsv, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, m
     fig, ax = pyplot.subplots(figsize = figsize)
 
     # plot 
-    sns.boxplot(data = df, x = xcol, y = ycol, hue = class_col)
+    sns.boxplot(data = df, x = xcol, y = ycol, hue = class_col, **props2)
 
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
 
-def __sns_corr_heatmp__(xtsv, cols, xfigsize, yfigsize, max_rows):
+def __sns_corr_heatmp__(xtsv, cols, xfigsize, yfigsize, max_rows, props):
+    # default props
+    default_props = dict(annot = True)
+    props2 = __merge_props__(props, default_props)
+
+    # get matching cols
     cols = xtsv.__get_matching_cols__(cols)
 
     # validation for number of columns. if the number of unique values is too high, then raise exception
@@ -272,13 +293,19 @@ def __sns_corr_heatmp__(xtsv, cols, xfigsize, yfigsize, max_rows):
     fig, ax = pyplot.subplots(figsize = figsize)
 
     # plot
-    sns.heatmap(df.corr(), annot = True)
+    sns.heatmap(df.corr(), **props2)
 
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
 
-def __sns_pairplot__(xtsv, cols, class_col, kind, diag_kind, xfigsize, yfigsize, max_rows, max_class_col):
+def __sns_pairplot__(xtsv, cols, class_col, xfigsize, yfigsize, max_rows, max_class_col, props):
+    # default props
+    default_props = dict(kind = None, diag_kind = None)
+    props2 = __merge_props__(props, default_props)
+
+    # find matching cols
     cols = xtsv.__get_matching_cols__(cols)
+
     # check number of unique class values
     if (class_col is not None and len(xtsv.col_as_array_uniq(class_col)) >= max_class_col):
         raise Exception("Number of class column values is more than {}. Max allowed: {}. Probably not a class column. Try max_class_col".format(max_class_col, len(xtsv.col_as_array_uniq(class_col))))
@@ -297,7 +324,7 @@ def __sns_pairplot__(xtsv, cols, class_col, kind, diag_kind, xfigsize, yfigsize,
 
     # define aspect and plot
     aspect = xfigsize / yfigsize
-    sns.pairplot(df, hue = class_col, kind = kind, diag_kind = diag_kind, aspect = aspect, height = yfigsize)
+    sns.pairplot(df, hue = class_col, kind = kind, diag_kind = diag_kind, aspect = aspect, height = yfigsize, **props2)
 
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
