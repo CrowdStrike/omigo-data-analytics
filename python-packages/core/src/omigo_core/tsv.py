@@ -151,10 +151,6 @@ class TSV:
         inherit_message2 = inherit_message + ": eq_str" if (inherit_message != "") else "eq_str"
         return self.filter([col], lambda x: str(x) == str(value), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def not_eq_str(self, col, value, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": not_eq_str" if (inherit_message != "") else "not_eq_str"
-        return self.filter([col], lambda x: str(x) != str(value), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
-
     def not_eq_int(self, col, value, ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": not_eq_int" if (inherit_message != "") else "not_eq_int"
         return self.filter([col], lambda x: int(x) != value, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
@@ -162,6 +158,10 @@ class TSV:
     def not_eq_float(self, col, value, ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": not_eq_float" if (inherit_message != "") else "not_eq_float"
         return self.filter([col], lambda x: float(x) != value, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+
+    def not_eq_str(self, col, value, ignore_if_missing = False, inherit_message = ""):
+        inherit_message2 = inherit_message + ": not_eq_str" if (inherit_message != "") else "not_eq_str"
+        return self.filter([col], lambda x: str(x) != str(value), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
     def is_nonzero(self, col, ignore_if_missing = False, inherit_message = ""):
         utils.warn("Deprecated. Use is_nonzero_float() instead")
@@ -3271,7 +3271,8 @@ class TSV:
             list_results_arr = []
             dict_results = []
 
-            utils.debug("__explode_json_transform_func_expand_json__: debug: {}".format(str(json_mp)[0:1000]))
+            # trace
+            # utils.trace("__explode_json_transform_func_expand_json__: debug: {}".format(str(json_mp)[0:1000]))
 
             # iterate over all key values
             for k in json_mp.keys():

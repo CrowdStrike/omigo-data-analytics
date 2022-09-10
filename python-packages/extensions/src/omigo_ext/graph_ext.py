@@ -142,9 +142,12 @@ def __sns_scatterplot__(xtsv, xcol, ycol, class_col, title, xfigsize, yfigsize, 
     if (title is None):
         title = "{} vs {}".format(xcol, ycol)
 
+    # take hue order
+    hue_order = sorted(xtsv.col_as_array_uniq(class_col)) if (class_col is not None) else None
+
     # plot
     ax.set_title(title)
-    sns.scatterplot(ax = ax, x = xcol, y = ycol, hue = class_col, data = df, **props)
+    sns.scatterplot(ax = ax, x = xcol, y = ycol, hue = class_col, hue_order = hue_order, data = df, **props)
 
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
@@ -165,11 +168,14 @@ def __sns_histogram__(xtsv, xcol, class_col, bins, title, binwidth, xfigsize, yf
     figsize = (xfigsize, yfigsize)
     fig, ax = pyplot.subplots(figsize = figsize)
 
+    # take hue order
+    hue_order = sorted(xtsv.col_as_array_uniq(class_col)) if (class_col is not None) else None
+
     # binwidth overrides bins. TODO: This hue parameter is not giving class color consistently
     if (binwidth is not None):
-        sns.histplot(data = df, x = xcol, hue = class_col, binwidth = binwidth, **props2)
+        sns.histplot(data = df, x = xcol, hue = class_col, hue_order = hue_order, binwidth = binwidth, **props2)
     else:
-        sns.histplot(data = df, x = xcol, hue = class_col, bins = bins, **props2)
+        sns.histplot(data = df, x = xcol, hue = class_col, hue_order = hue_order, bins = bins, **props2)
 
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
@@ -188,13 +194,16 @@ def __sns_density__(xtsv, ycols, class_col, xfigsize, yfigsize, props):
     figsize = (xfigsize, yfigsize)
     fig, ax = pyplot.subplots(figsize = figsize)
 
+    # take hue order
+    hue_order = sorted(xtsv.col_as_array_uniq(class_col)) if (class_col is not None) else None
+
     # TODO: This is not clean
     # multiple = props["multiple"] if (props is not None and "multiple" in props.keys()) else "layer"
 
     # check for class col
     if (class_col is not None):
         if (len(ycols) == 1):
-            sns.kdeplot(data = df, x = ycols[0], hue = class_col, **props2)
+            sns.kdeplot(data = df, x = ycols[0], hue = class_col, hue_order = hue_order, **props2)
         else:
             raise Exception("__sns_density__: class_col with multiple ycols is not supported: {}".format(ycols))
     else:
@@ -232,8 +241,11 @@ def __sns_barplot__(xtsv, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, m
     figsize = (xfigsize, yfigsize)
     fig, ax = pyplot.subplots(figsize = figsize)
 
+    # take hue order
+    hue_order = sorted(xtsv.col_as_array_uniq(class_col)) if (class_col is not None) else None
+
     # plot
-    sns.barplot(data = df, x = xcol, y = ycol, hue = class_col, **props2)
+    sns.barplot(data = df, x = xcol, y = ycol, hue = class_col, hue_order = hue_order, **props2)
 
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
@@ -262,8 +274,11 @@ def __sns_boxplot__(xtsv, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, m
     figsize = (xfigsize, yfigsize)
     fig, ax = pyplot.subplots(figsize = figsize)
 
+    # take hue order
+    hue_order = sorted(xtsv.col_as_array_uniq(class_col)) if (class_col is not None) else None
+
     # plot 
-    sns.boxplot(data = df, x = xcol, y = ycol, hue = class_col, **props2)
+    sns.boxplot(data = df, x = xcol, y = ycol, hue = class_col, hue_order = hue_order, **props2)
 
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
@@ -322,9 +337,12 @@ def __sns_pairplot__(xtsv, cols, class_col, xfigsize, yfigsize, max_rows, max_cl
     # create df
     df = __create_data_frame_with_types__(xtsv, None, cols, class_col)
 
+    # take hue order
+    hue_order = sorted(xtsv.col_as_array_uniq(class_col)) if (class_col is not None) else None
+
     # define aspect and plot
     aspect = xfigsize / yfigsize
-    sns.pairplot(df, hue = class_col, kind = kind, diag_kind = diag_kind, aspect = aspect, height = yfigsize, **props2)
+    sns.pairplot(df, hue = class_col, hue_order = hue_order, kind = kind, diag_kind = diag_kind, aspect = aspect, height = yfigsize, **props2)
 
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
