@@ -23,7 +23,7 @@ class VisualTSV(tsv.TSV):
         return __sns_density__(self, ycols, class_col, xfigsize, yfigsize, props)
 
     def barchart(self, xcol, ycol, class_col = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10, props = None):
-        return __sns_barplot__(self, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, max_class_col)
+        return __sns_barplot__(self, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, max_class_col, props)
 
     def boxplot(self, xcol, ycol, class_col = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10, props = None):
         return __sns_boxplot__(self, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, max_class_col, props)

@@ -1918,9 +1918,9 @@ class TSV:
         # create new row
         return self.add_row(new_fields)
 
-    def assign_value(self, col, value, inherit_message = ""):
+    def assign_value(self, col_or_cols, value, inherit_message = ""):
         inherit_message2 = inherit_message + ": assign_value" if (len(inherit_message) > 0) else "assign_value"
-        return self.transform_inline(col, lambda x: value, inherit_message = inherit_message2)
+        return self.transform_inline(col_or_cols, lambda x: value, inherit_message = inherit_message2)
 
     def concat_as_cols(self, that):
         # check empty
