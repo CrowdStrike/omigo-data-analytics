@@ -1168,6 +1168,14 @@ class TSV:
         # return
         return TSV(self.header, new_data)
 
+    def transform_inline_log1p(self, col_or_cols, inherit_message = ""):
+        inherit_message2 = inherit_message + ": transform_inline_log1p" if (len(inherit_message) > 0) else "transform_inline_log1p"
+        return self.transform_inline(col_or_cols, lambda t: math.log1p(float(t)), inherit_message = inherit_message2)
+
+    def transform_inline_log1p_base10(self, col_or_cols, inherit_message = ""):
+        inherit_message2 = inherit_message + ": transform_inline_log1p_base10" if (len(inherit_message) > 0) else "transform_inline_log1p_base10"
+        return self.transform_inline(col_or_cols, lambda t: math.log10(float(t) + 1), inherit_message = inherit_message2)
+ 
     def rename(self, col, new_col):
         # check empty
         if (self.has_empty_header()):
@@ -3913,8 +3921,8 @@ class TSV:
         return self
 
     # print some status
-    def print_stats(self, msg):
-        msg2 = "{}: num_rows: {}, num_cols: {}".format(msg, self.num_rows(), self.num_cols())
+    def print_stats(self, msg = "Stats"):
+        msg2 = "{}: num_rows: {}, num_cols: {}, size: {} MB".format(msg, self.num_rows(), self.num_cols(), self.size_in_mb())
         print(msg2)
         return self
 
