@@ -1168,14 +1168,36 @@ class TSV:
         # return
         return TSV(self.header, new_data)
 
-    def transform_inline_log1p(self, col_or_cols, inherit_message = ""):
+    def transform_inline_log(self, col_or_cols, base = None, inherit_message = ""):
+        inherit_message2 = inherit_message + ": transform_inline_log" if (len(inherit_message) > 0) else "transform_inline_log"
+        if (base is None):
+            return self.transform_inline(col_or_cols, lambda t: math.log(float(t)), inherit_message = inherit_message2)
+        elif (base == 2):
+            return self.transform_inline(col_or_cols, lambda t: math.log2(float(t)), inherit_message = inherit_message2)
+        elif (base == 10):
+            return self.transform_inline(col_or_cols, lambda t: math.log10(float(t)), inherit_message = inherit_message2)
+        else:
+            raise Exception("transform_inline_log: base value is not supported: {}".format(base))
+
+    def transform_inline_log_base10(self, col_or_cols, inherit_message = ""):
+        inherit_message2 = inherit_message + ": transform_inline_log_base10" if (len(inherit_message) > 0) else "transform_inline_log_base10"
+        return self.transform_inline_log(col_or_cols, base = 10, inherit_message = inherit_message2)
+
+    def transform_inline_log1p(self, col_or_cols, base = None, inherit_message = ""):
         inherit_message2 = inherit_message + ": transform_inline_log1p" if (len(inherit_message) > 0) else "transform_inline_log1p"
-        return self.transform_inline(col_or_cols, lambda t: math.log1p(float(t)), inherit_message = inherit_message2)
+        if (base is None):
+            return self.transform_inline(col_or_cols, lambda t: math.log(1 + float(t)), inherit_message = inherit_message2)
+        elif (base == 2):
+            return self.transform_inline(col_or_cols, lambda t: math.log2(1 + float(t)), inherit_message = inherit_message2)
+        elif (base == 10):
+            return self.transform_inline(col_or_cols, lambda t: math.log10(1 + float(t)), inherit_message = inherit_message2)
+        else:
+            raise Exception("transform_inline_log1p: base value is not supported: {}".format(base))
 
     def transform_inline_log1p_base10(self, col_or_cols, inherit_message = ""):
         inherit_message2 = inherit_message + ": transform_inline_log1p_base10" if (len(inherit_message) > 0) else "transform_inline_log1p_base10"
-        return self.transform_inline(col_or_cols, lambda t: math.log10(float(t) + 1), inherit_message = inherit_message2)
- 
+        return self.transform_inline_log1p(col_or_cols, base = 10, inherit_message = inherit_message2)
+        
     def rename(self, col, new_col):
         # check empty
         if (self.has_empty_header()):
