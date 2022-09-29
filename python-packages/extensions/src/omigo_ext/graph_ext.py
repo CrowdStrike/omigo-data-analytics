@@ -161,6 +161,12 @@ def __sns_histogram__(xtsv, xcol, class_col, bins, title, binwidth, xfigsize, yf
     if (class_col is not None and len(xtsv.col_as_array_uniq(class_col)) >= max_class_col):
         raise Exception("Number of class column values is more than {}: {}. Probably not a class column. Try max_class_col".format(max_class_col, len(xtsv.col_as_array_uniq(class_col))))
 
+    # take class col if defined
+    if (class_col is not None):
+        xtsv = xtsv.sort([class_col, xcol])
+    else:
+        xtsv = xtsv.sort(xcol)
+
     # create dataframe
     df = __create_data_frame_with_types__(xtsv, xcol, None, class_col)
 
@@ -214,7 +220,7 @@ def __sns_density__(xtsv, ycols, class_col, xfigsize, yfigsize, props):
 
 def __sns_barplot__(xtsv, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, max_class_col, props):
     # default props
-    default_props = dict(resort = True)
+    default_props = dict()
     props2 = __merge_props__(props, default_props)
 
     # check number of unique class values
@@ -226,13 +232,11 @@ def __sns_barplot__(xtsv, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, m
         utils.warn("Number of categorical values on x axis is too high: {}. Doing downsampling for clean display to max_rows: {}".format(len(xtsv.col_as_array_uniq(xcol)), max_rows))
         xtsv = xtsv.sample_column_by_max_uniq_values(xcol, max_rows)
 
-    # sort the xcol
-    if (resort == True):
-        # take class col if defined
-        if (class_col is not None):
-            xtsv = xtsv.sort([class_col, xcol])
-        else:
-            xtsv = xtsv.sort(xcol)
+    # take class col if defined
+    if (class_col is not None):
+        xtsv = xtsv.sort([class_col, xcol])
+    else:
+        xtsv = xtsv.sort(xcol)
 
     # create df
     df = __create_data_frame_with_types__(xtsv, xcol, ycol, class_col)

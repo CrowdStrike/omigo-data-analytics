@@ -3833,6 +3833,15 @@ class TSV:
         # return self
         return self
 
+    def show_group_count(self, col_or_cols, n = 100, max_col_width = 40, title = "Group Count"):
+        # call show transpose after custom func
+        self \
+            .group_count(col_or_cols) \
+            .show(n = n, title = title, max_col_width = max_col_width)
+
+        # return self
+        return self
+
     def show_transpose_custom_func(self, n, title, func, *args, **kwargs):
         # call show transpose after custom func
         self \
