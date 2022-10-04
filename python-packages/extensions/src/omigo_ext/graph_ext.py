@@ -19,6 +19,9 @@ class VisualTSV(tsv.TSV):
     def histogram(self, xcol, class_col = None, bins = 10, title = None, binwidth = None, xfigsize = 25, yfigsize = 5, max_class_col = 10, props = None):
         return __sns_histogram__(self, xcol, class_col, bins, title, binwidth, xfigsize, yfigsize, max_class_col, props)
 
+    def ecdf(self, xcol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_class_col = 10, props = None):
+        return __sns_ecdf__(self, xcol, class_col, title, xfigsize, yfigsize, max_class_col, props)
+
     def density(self, ycols, class_col = None, xfigsize = 25, yfigsize = 5, props = None):
         return __sns_density__(self, ycols, class_col, xfigsize, yfigsize, props)
 
@@ -182,6 +185,37 @@ def __sns_histogram__(xtsv, xcol, class_col, bins, title, binwidth, xfigsize, yf
         sns.histplot(data = df, x = xcol, hue = class_col, hue_order = hue_order, binwidth = binwidth, **props2)
     else:
         sns.histplot(data = df, x = xcol, hue = class_col, hue_order = hue_order, bins = bins, **props2)
+
+    # return
+    return VisualTSV(xtsv.get_header(), xtsv.get_data())
+
+def __sns_ecdf__(xtsv, xcol, class_col, title, xfigsize, yfigsize, max_class_col, props):
+    # default props
+    default_props = dict()
+    props2 = __merge_props__(props, default_props)
+
+    # check number of unique class values
+    if (class_col is not None and len(xtsv.col_as_array_uniq(class_col)) >= max_class_col):
+        raise Exception("Number of class column values is more than {}: {}. Probably not a class column. Try max_class_col".format(max_class_col, len(xtsv.col_as_array_uniq(class_col))))
+
+    # take class col if defined
+    if (class_col is not None):
+        xtsv = xtsv.sort([class_col, xcol])
+    else:
+        xtsv = xtsv.sort(xcol)
+
+    # create dataframe
+    df = __create_data_frame_with_types__(xtsv, xcol, None, class_col)
+
+    # create figure
+    figsize = (xfigsize, yfigsize)
+    fig, ax = pyplot.subplots(figsize = figsize)
+
+    # take hue order
+    hue_order = sorted(xtsv.col_as_array_uniq(class_col)) if (class_col is not None) else None
+
+    # binwidth overrides bins. TODO: This hue parameter is not giving class color consistently
+    sns.ecdfplot(data = df, x = xcol, hue = class_col, hue_order = hue_order, **props2)
 
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())

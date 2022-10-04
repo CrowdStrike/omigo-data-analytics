@@ -1179,8 +1179,12 @@ class TSV:
         else:
             raise Exception("transform_inline_log: base value is not supported: {}".format(base))
 
-    def transform_inline_log_base10(self, col_or_cols, inherit_message = ""):
-        inherit_message2 = inherit_message + ": transform_inline_log_base10" if (len(inherit_message) > 0) else "transform_inline_log_base10"
+    def transform_inline_log2(self, col_or_cols, inherit_message = ""):
+        inherit_message2 = inherit_message + ": transform_inline_log2" if (len(inherit_message) > 0) else "transform_inline_log2"
+        return self.transform_inline_log(col_or_cols, base = 2, inherit_message = inherit_message2)
+
+    def transform_inline_log10(self, col_or_cols, inherit_message = ""):
+        inherit_message2 = inherit_message + ": transform_inline_log10" if (len(inherit_message) > 0) else "transform_inline_log10"
         return self.transform_inline_log(col_or_cols, base = 10, inherit_message = inherit_message2)
 
     def transform_inline_log1p(self, col_or_cols, base = None, inherit_message = ""):
