@@ -81,7 +81,7 @@ class MultiThreadTSV(tsv.TSV):
                 results.append(f.result())
 
             # merge the tsvs using a common union.
-            combined_result = tsvutils.merge(results, def_val_map = {})
+            combined_result = tsv.merge(results, def_val_map = {})
 
         # take end_time
         ts_end = time.time()

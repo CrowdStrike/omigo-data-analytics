@@ -202,10 +202,10 @@ def url_decode(s):
     if (s is None):
         return ""
 
-    return urllib.parse.unquote_plus(s).replace("\t", " ")
+    return urllib.parse.unquote_plus(s).replace("\t", " ").replace("\v", " ").replace("\r", " ")
 
 def url_decode_clean(s):
-    return url_decode(s).replace("\n", " ").replace("\v", " ")
+    return url_decode(s).replace("\n", " ").replace("\v", " ").replace("\v", " ")
 
 # move this to utils
 def parse_encoded_json(s):
@@ -388,7 +388,7 @@ def strip_spl_white_spaces(v):
         return None
 
     # return
-    return str(v).replace("\t", " ").replace("\n", " ").replace("\v", " ")
+    return str(v).replace("\t", " ").replace("\n", " ").replace("\v", " ").replace("\r", " ")
 
 def resolve_meta_params(xstr, props):
     # check for None

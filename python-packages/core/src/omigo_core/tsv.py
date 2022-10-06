@@ -1755,6 +1755,9 @@ class TSV:
         else:
             that_arr = tsv_or_that_arr
 
+        # pick the ones with non zero rows
+        that_arr = list(filter(lambda t: t.num_rows() > 0, that_arr))
+
         # boundary condition
         if (len(that_arr) == 0):
             return self
