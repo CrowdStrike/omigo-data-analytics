@@ -94,13 +94,17 @@ class TSV:
             counter = counter + 1
             utils.report_progress("select: [1/1] selecting columns", inherit_message, counter, len(self.data))
 
+            # get fields
             fields = line.split("\t")
             new_fields = []
+
+            # validation
             for i in indexes:
                 if (i >= len(fields)):
-                    raise Exception("Invalid index: ", col_or_cols, matching_cols, indexes, line, fields, len(fields), len(self.header_fields), self.header_map)
-                new_fields.append(fields[i])
+                    raise Exception("Invalid index: col_or_cols: {}, matching_cols: {}, indexes: {}, line: {}, fields: {}, len(fields): {}, len(self.header_fields): {}, self.header_map: {}".format(
+                        col_or_cols, matching_cols, indexes, line, fields, len(fields), len(self.header_fields), self.header_map) new_fields.append(fields[i]))
 
+            # append to new data
             new_data.append("\t".join(new_fields))
 
         # return

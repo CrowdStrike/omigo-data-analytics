@@ -394,7 +394,7 @@ def load_from_array_of_map(map_arr):
         data.append(line)
 
     # create tsv
-    return tsv.TSV(header, data)
+    return tsv.TSV(header, data).validate()
 
 def save_to_file(xtsv, output_file_name, s3_region = None, aws_profile = None):
     # do some validation
