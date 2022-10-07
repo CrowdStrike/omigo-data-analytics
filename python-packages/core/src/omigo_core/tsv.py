@@ -49,7 +49,8 @@ class TSV:
 
         # basic validation
         if (len(data) > 0 and len(data[0].split("\t")) != len(self.header_fields)):
-            raise Exception("Header length is not matching with data length: {}, {}, {}, {}".format(len(self.header_fields), len(data[0].split("\t")), str(self.header_fields), str(data[0].split("\t"))))
+            raise Exception("Header length is not matching with data length: len(self.header_fields): {}, len(data[0].fields): {}, header_fields: {}, data[0].fields: {}".format(
+                len(self.header_fields), len(data[0].split("\t")), str(self.header_fields), str(data[0].split("\t"))))
 
     # debugging
     def to_string(self):
@@ -102,7 +103,10 @@ class TSV:
             for i in indexes:
                 if (i >= len(fields)):
                     raise Exception("Invalid index: col_or_cols: {}, matching_cols: {}, indexes: {}, line: {}, fields: {}, len(fields): {}, len(self.header_fields): {}, self.header_map: {}".format(
-                        col_or_cols, matching_cols, indexes, line, fields, len(fields), len(self.header_fields), self.header_map) new_fields.append(fields[i]))
+                        col_or_cols, matching_cols, indexes, line, fields, len(fields), len(self.header_fields), self.header_map))
+
+                # append to new_fields
+                new_fields.append(fields[i])
 
             # append to new data
             new_data.append("\t".join(new_fields))
@@ -4042,8 +4046,16 @@ def get_rolling_func_closing(arr, func_name):
     else:
         raise Exception("rolling agg func not supported: {}".format(func_name))
 
-def read(paths, sep = None):
-    return tsvutils.read(paths, sep)
+def read(paths, sep = None, do_union = False, def_val_map = None):
+    # check if union needs to be done. default is intersect
+    if (do_union == False):
+        return tsvutils.read(paths, sep = sep)
+    else:
+        # check if default values are checked explicitly
+        if (def_val_map is None):
+            def_val_map = {}
+
+        return tsvutils.read(paths, sep = sep, def_val_map = {})
 
 def write(xtsv, path):
     return xtsv.write(path)

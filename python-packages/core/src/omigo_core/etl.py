@@ -163,7 +163,7 @@ def scan_by_datetime_range(path, start_date_str, end_date_str, prefix, filter_tr
     tsv_list = utils.run_with_thread_pool(tasks, num_par = num_par, wait_sec = wait_sec)
 
     # combine all together
-    tsv_combined = tsv.merge(tsv_list, def_val_map)
+    tsv_combined = tsv.merge(tsv_list, def_val_map = def_val_map)
     utils.info("scan_by_datetime_range: Number of records: {}".format(tsv_combined.num_rows()))
 
     # return
