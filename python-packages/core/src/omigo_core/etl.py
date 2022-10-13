@@ -2,6 +2,7 @@
 from omigo_core import tsv, utils, tsvutils, funclib, file_paths_util
 from dateutil import parser
 import datetime
+import random
 
 # extension functions for ETL related stuff
 
