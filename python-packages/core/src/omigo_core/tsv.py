@@ -2767,10 +2767,6 @@ class TSV:
         # generate output by doing join
         new_data = []
 
-        print(lvkeys)
-        print(rvkeys)
-        print(common_keys)
-
         # iterate over left side
         counter = 0
         for lvkey in lvkeys.keys():
