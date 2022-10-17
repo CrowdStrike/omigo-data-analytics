@@ -2604,18 +2604,26 @@ class TSV:
         # find the indexes
         lkey_indexes = []
         lvalue_indexes = []
-        for h in self.get_header_fields():
-            if (h in lkeys):
+
+        # relative ordering matters
+        for h in lkeys:
+            if (h in self.get_header_fields()):
                 lkey_indexes.append(self.get_header_map()[h])
-            else:
+
+        for h in self.get_header_fields():
+            if (h not in lkeys):
                 lvalue_indexes.append(self.get_header_map()[h])
 
         rkey_indexes = []
         rvalue_indexes = []
-        for h in that.get_header_fields():
-            if (h in rkeys):
+
+        # relative ordering matters
+        for h in rkeys:
+            if (h in that.get_header_fields()):
                 rkey_indexes.append(that.get_header_map()[h])
-            else:
+
+        for h in that.get_header_fields():
+            if (h not in rkeys):
                 rvalue_indexes.append(that.get_header_map()[h])
 
         # check the lengths
@@ -2759,6 +2767,10 @@ class TSV:
         # generate output by doing join
         new_data = []
 
+        print(lvkeys)
+        print(rvkeys)
+        print(common_keys)
+
         # iterate over left side
         counter = 0
         for lvkey in lvkeys.keys():
@@ -2768,6 +2780,7 @@ class TSV:
 
             # get the values
             lvals2_arr = lvkeys[lvkey]
+            rvals2_arr = [default_rvals]
             if (lvkey in rvkeys.keys()):
                   rvals2_arr = rvkeys[lvkey]
 
@@ -2932,18 +2945,26 @@ class TSV:
         # find the indexes
         lkey_indexes = []
         lvalue_indexes = []
-        for h in self.get_header_fields():
-            if (h in lkeys):
+
+        # relative ordering matters
+        for h in lkeys:
+            if (h in self.get_header_fields()):
                 lkey_indexes.append(self.get_header_map()[h])
-            else:
+
+        for h in self.get_header_fields():
+            if (h not in lkeys):
                 lvalue_indexes.append(self.get_header_map()[h])
 
         rkey_indexes = []
         rvalue_indexes = []
-        for h in that.get_header_fields():
-            if (h in rkeys):
+
+        # relative ordering matters
+        for h in rkeys:
+            if (h in that.get_header_fields()):
                 rkey_indexes.append(that.get_header_map()[h])
-            else:
+
+        for h in that.get_header_fields():
+            if (h not in rkeys):
                 rvalue_indexes.append(that.get_header_map()[h])
 
         # check the lengths
