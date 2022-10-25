@@ -312,12 +312,11 @@ class TSV:
 
     # TODO: use skip_rows for better name
     def skip(self, count):
-        utils.warn_once("use skip_rowsinstead coz of better name")
-
-        return TSV(self.header, self.data[count:])
+        utils.warn_once("use skip_rows instead coz of better name")
+        return self.skip(count)
 
     def skip_rows(self, count):
-        return self.skip(count)
+        return TSV(self.header, self.data[count:])
 
     def last(self, count):
         # check boundary conditions
