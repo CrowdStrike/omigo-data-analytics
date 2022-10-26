@@ -350,6 +350,10 @@ class TSV:
     # TODO: use drop_cols instead coz of better name
     def drop(self, col_or_cols, ignore_if_missing = False, inherit_message = ""):
         utils.warn_once("use drop_cols instead coz of better name")
+        return self.drop_cols(col_or_cols, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+
+    def drop_cols(self, col_or_cols, ignore_if_missing = False, inherit_message = ""):
+        inherit_message2 = inherit_message + ": drop_cols" if (inherit_message != "") else "drop_cols"
 
         # check empty
         if (self.has_empty_header()):
@@ -368,10 +372,6 @@ class TSV:
         # return
         inherit_message2 = inherit_message + ": drop" if (len(inherit_message) > 0) else "drop"
         return self.select(non_matching_cols, inherit_message = inherit_message2)
-
-    def drop_cols(self, col_or_cols, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": drop_cols" if (inherit_message != "") else "drop_cols"
-        return self.drop(col_or_cols, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
     def drop_if_exists(self, col_or_cols, inherit_message = ""):
         inherit_message2 = inherit_message + ": drop_if_exists" if (inherit_message != "") else "drop_if_exists"
@@ -3439,7 +3439,7 @@ class TSV:
         def __explode_json_transform_func_inner__(mp):
             # some validation.
             if (col not in mp.keys() or mp[col] == "" or mp[col] is None):
-                utils.warn_once("__explode_json_transform_func_inner__: potentially invalid json response found. Usually it is okay. But better to check: {}, {}".format(col, mp))
+                utils.trace_once("__explode_json_transform_func_inner__: potentially invalid json response found. Usually it is okay. But better to check: {}, {}".format(col, mp))
                 mp = {"__explode_json_len__": "0"}
                 return [mp]
 

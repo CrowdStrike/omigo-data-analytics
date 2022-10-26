@@ -48,7 +48,7 @@ class MultiThreadTSV(tsv.TSV):
             with ThreadPoolExecutor(max_workers = self.num_par) as executor:
                 # execute batches concurrently based on num_par and batch_size
                 for i in range(self.num_batches):
-                    batch_i = self.skip(batch_size * i).take(batch_size)
+                    batch_i = self.skip_rows(batch_size * i).take(batch_size)
                     # TODO: rewrite this logic. Right now dont submit empty batches
                     if (batch_i.num_rows() > 0):
                         future_results.append(executor.submit(__parallelize__, batch_i, func, *args, **kwargs))

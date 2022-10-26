@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 # TODO: these caches dont work in multithreaded env.
 MSG_CACHE_MAX_LEN = 10000
 INFO_MSG_CACHE = {}
+ERROR_MSG_CACHE = {}
 WARN_MSG_CACHE = {}
 DEBUG_MSG_CACHE = {}
 TRACE_MSG_CACHE = {}
@@ -51,7 +52,7 @@ def trace(msg):
     if (is_trace()):
         print("[TRACE]: {}".format(msg))
 
-def trace_once(msg, msg_cache = None):
+def trace_once(msg):
     # check if enabled
     if (is_trace() == False):
         return
@@ -71,7 +72,7 @@ def debug(msg):
     if (is_debug()):
         print("[DEBUG]: {}".format(msg))
 
-def debug_once(msg, msg_cache = None):
+def debug_once(msg):
     # check if enabled
     if (is_warn() == False):
         return
@@ -91,7 +92,7 @@ def info(msg):
     if (is_info()):
         print("[INFO]: {}".format(msg))
 
-def info_once(msg, msg_cache = None):
+def info_once(msg):
     # check if enabled
     if (is_info() == False):
         return
@@ -111,19 +112,19 @@ def error(msg):
     if (is_error()):
         print("[ERROR]: {}".format(msg))
 
-def error_once(msg, msg_cache):
+def error_once(msg):
     # check if enabled
     if (is_error() == False):
         return
 
     # check if msg is already displayed
-    if (msg not in msg_cache.keys()):
+    if (msg not in ERROR_MSG_CACHE.keys()):
          print("[ERROR ONCE ONLY]: {}".format(msg))
-         msg_cache[msg] = 1
+         ERROR_MSG_CACHE[msg] = 1
 
          # clear the cache if it has become too big
-         if (len(msg_cache) >= MSG_CACHE_MAX_LEN):
-             msg_cache = {}
+         if (len(ERROR_MSG_CACHE) >= MSG_CACHE_MAX_LEN):
+             ERROR_MSG_CACHE = {}
     else:
         trace(msg)
 
@@ -167,8 +168,7 @@ def warn(msg):
     if (is_warn() or is_error() or is_critical()):
         print("[WARN]: " + msg)
 
-# TODO: remove the msg_cache parameter and update in the code
-def warn_once(msg, msg_cache = None):
+def warn_once(msg):
     # check if enabled
     if (is_warn() == False):
         return
