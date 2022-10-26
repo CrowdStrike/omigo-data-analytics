@@ -4147,9 +4147,21 @@ class TSV:
         return self
 
     # print some status
-    def print_stats(self, msg = "Stats"):
-        msg2 = "{}: num_rows: {}, num_cols: {}, size: {} MB".format(msg, self.num_rows(), self.num_cols(), self.size_in_mb())
-        print(msg2)
+    def print_stats(self, msg = None):
+        prefix = msg + ": " if (msg is not None) else ""
+
+        # get display size
+        bsize = self.size_in_bytes()
+        size_str = ""
+        if (bsize > 1e9):
+            size_str = "{} GB".format(self.size_in_gb())
+        elif (bsize > 1e6):
+            size_str = "{} MB".format(self.size_in_mb())
+        else:
+            size_str = "{} bytes".format(bsize)
+
+        msg2 = "{}num_rows: {}, num_cols: {}, size: {}".format(prefix, self.num_rows(), self.num_cols(), size_str)
+        utils.info(msg2)
         return self
 
     # some methods for effects
