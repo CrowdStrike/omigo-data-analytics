@@ -4179,6 +4179,43 @@ class TSV:
         time.sleep(secs)
         return self
 
+    def __split_exp_func__(self, cols, sep):
+        def __split_exp_func_inner__(mp):
+            result_mps = []
+            values_arr = []
+            for c in cols:
+                values_arr.append(mp[c].split(sep))
+
+            # do validation
+            num_values = len(values_arr[0])
+            for i in range(len(values_arr) - 1):
+                if (len(values_arr[i+1]) != num_values):
+                    raise Exception("__split_exp_func__: number of unique values are not same: {}".format(mp))
+
+            # iterate and generate result maps
+            for i in range(num_values):
+                result_mp = {}
+                for j in range(len(cols)):
+                    result_mp[str(cols[j])] = str(values_arr[j][i])
+
+                # append
+                result_mps.append(result_mp)
+
+            # return
+            return result_mps
+
+        # return
+        return __split_exp_func_inner__
+
+    def split(self, col_or_cols, prefix, sep = ",", collapse = True, inherit_message = ""):
+        # resolve columns
+        cols = self.__get_matching_cols__(col_or_cols)
+
+        # call explode
+        inherit_message2 = "{}: split".format(inherit_message) if (inherit_message != "") else "split"
+        return self \
+            .explode(col_or_cols, self.__split_exp_func__(cols, sep), prefix, collapse = collapse, inherit_message = inherit_message2)
+
 def get_version():
     return "v0.3.9:empty_tsv"
 
