@@ -350,7 +350,7 @@ class TSV:
     # TODO: use drop_cols instead coz of better name
     def drop(self, col_or_cols, ignore_if_missing = False, inherit_message = ""):
         utils.warn_once("use drop_cols instead coz of better name")
-        return self.drop_cols(col_or_cols, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+        return self.drop_cols(col_or_cols, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message)
 
     def drop_cols(self, col_or_cols, ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": drop_cols" if (inherit_message != "") else "drop_cols"
@@ -616,18 +616,22 @@ class TSV:
         return TSV(new_header, new_data)
 
     # FIXME
-    def arg_min(self, grouping_cols, argcols, valcols, suffix = "arg_min", topk = 1, sep = "|", collapse = True):
+    def arg_min(self, grouping_cols, argcols, valcols, suffix = "arg_min", use_string_datatype = False, topk = 1, sep = "|", collapse = True):
         utils.warn("arg_min is not implemented correctly. Too complicated")
+        # some unsupported case
+        if (use_string_datatype == True):
+            raise Exception("arg_min: use_string_datatype = True is not supported")
+
         return self.__arg_min_or_max_common__(grouping_cols, argcols, valcols, suffix, topk, sep, -1, collapse = collapse)
 
-    def arg_max(self, grouping_cols, argcols, valcols, suffix = "arg_max", topk = 1, sep = "|", collapse = True):
+    def arg_max(self, grouping_cols, argcols, valcols, suffix = "arg_max", use_string_datatype = False, topk = 1, sep = "|", collapse = True):
         utils.warn("arg_max is not implemented correctly. Too complicated")
-        return self.__arg_min_or_max_common__(grouping_cols, argcols, valcols, suffix, topk, sep, 1, collapse = collapse)
+        return self.__arg_min_or_max_common__(grouping_cols, argcols, valcols, suffix, use_string_datatype, topk, sep, 1, collapse = collapse)
 
     # grouping_cols are for grouping
     # argcols which are returned where valcols values are max or min
     # suffix is added to both arg and val. arg are suffixed as :arg, values are suffixed as val1, val2 upto topk
-    def __arg_min_or_max_common__(self, grouping_cols, argcols, valcols, suffix, topk, sep, sign, collapse = False):
+    def __arg_min_or_max_common__(self, grouping_cols, argcols, valcols, suffix, use_string_datatype, topk, sep, sign, collapse = False):
         grouping_cols = self.__get_matching_cols__(grouping_cols)
         argcols = self.__get_matching_cols__(argcols)
         valcols = self.__get_matching_cols__(valcols)
@@ -639,7 +643,10 @@ class TSV:
                 max_keys.append([])
             max_values = []
             for i in range(len(valcols)):
-                max_values.append(sign * float('-inf'))
+                if (use_string_datatype == False):
+                    max_values.append(sign * float('-inf'))
+                else:
+                    max_values.append("")
 
             # iterate over all values
             for mp in vs:
@@ -651,7 +658,10 @@ class TSV:
                 # read values
                 values = []
                 for i in range(len(valcols)):
-                    values.append(sign * float(mp[valcols[i]]))
+                    if (use_string_datatype == False):
+                        values.append(sign * float(mp[valcols[i]]))
+                    else:
+                        values.append(str(mp[valcols[i]]))
 
                 # check if a new max has been found
                 found = False
