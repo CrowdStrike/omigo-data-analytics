@@ -9,7 +9,7 @@ import zipfile
 from omigo_core import s3_wrapper
 from omigo_core import utils
 from omigo_core import funclib 
-
+from omigo_core import local_fs_wrapper
 # constant
 NUM_HOURS = 24
 
@@ -79,11 +79,11 @@ def read_filepaths_hourly(path, start_date_str, end_date_str, fileprefix, s3_reg
                         continue
             else:
                 # check if file exists
-                if (os.path.exists(filepath_tsv)):
+                if (local_fs_wrapper.check_path_exists(filepath_tsv)):
                     filepaths.append(filepath_tsv)
-                elif (os.path.exists(filepath_tsvgz)):
+                elif (local_fs_wrapper.check_path_exists(filepath_tsvgz)):
                     filepaths.append(filepath_tsvgz)
-                elif (os.path.exists(filepath_tsvzip)):
+                elif (local_fs_wrapper.check_path_exists(filepath_tsvzip)):
                     filepaths.append(filepath_tsvzip)
                 else:
                     if (ignore_missing == False):
@@ -98,7 +98,7 @@ def check_exists(path, s3_region = None, aws_profile = None):
     if (path.startswith("s3://") and s3_wrapper.check_path_exists(path, s3_region, aws_profile)):
         return True
 
-    if (os.path.exists(path)):
+    if (local_fs_wrapper.check_path_exists(path)):
         return True
 
     return False
@@ -135,9 +135,9 @@ def read_filepaths_daily(path, start_date_str, end_date_str, fileprefix, s3_regi
                     continue
         else:
             # check if file exists
-            if (os.path.exists(filepath_tsv)):
+            if (local_fs_wrapper.check_path_exists(filepath_tsv)):
                 filepaths.append(filepath_tsv)
-            elif (os.path.exists(filepath_tsvgz)):
+            elif (local_fs_wrapper.check_path_exists(filepath_tsvgz)):
                 filepaths.append(filepath_tsvgz)
             else:
                 if (ignore_missing == False):
@@ -261,7 +261,7 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
         if (path.startswith("s3://")):
             tasks.append(utils.ThreadPoolTask(s3_wrapper.get_directory_listing, cur_path, filter_func = None, fail_if_missing = False, region = s3_region, profile = aws_profile))
         else:
-            tasks.append(utils.ThreadPoolTask(get_local_directory_listing, cur_path, fail_if_missing = False))
+            tasks.append(utils.ThreadPoolTask(get_local_directory_listing, cur_path, filter_func = None, fail_if_missing = False))
 
     # execute the tasks
     results = utils.run_with_thread_pool(tasks, num_par = num_par, wait_sec = wait_sec)
@@ -318,20 +318,13 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
     # return
     return paths_found
 
-def get_local_directory_listing(path, fail_if_missing = True):
-    if (check_exists(path) == False):
-        if (fail_if_missing):
-            raise Exception("Directory does not exist:", path)
-        else:
-            return []
-    else:
-        full_paths = []
-        for p in os.listdir(path):
-            full_paths.append(path + "/" + p)
-        return full_paths
+def get_local_directory_listing(path, filter_func = None, fail_if_missing = True):
+    return local_fs_wrapper.get_directory_listing(path, filter_func = filter_func, fail_if_missing = fail_if_missing)
 
-# this method is not robust against complex path creations with dot(.). FIXME
+# this method is not robust against complex path creations with dot(.). FIXME. TODO
 def create_local_parent_dir(filepath):
+    utils.warn_once("create_local_parent_dir: os.makedirs can create the full path. Why do we need this method")
+
     # if it is a local file, create the parent directory
     if (filepath.startswith("s3://") == True):
         raise Exception("filepath is in S3:" + filepath)

@@ -17,9 +17,16 @@ class WebServiceTSV(tsv.TSV):
         self.inherit_message = inherit_message + ": WebServiceTSV" if (inherit_message != "") else "WebServiceTSV"
 
     def call_web_service(self, *args, **kwargs):
-        return self \
+        # get response
+        xtsv = self \
             .extend_class(multithread_ext.MultiThreadTSV, num_par = self.num_par, num_batches = self.num_batches, status_check_interval_sec = self.status_check_interval_sec, inherit_message = self.inherit_message) \
             .parallelize(__call_web_service__, self.timeout_sec, self.verify, self.enable_opt_exec, self.inherit_message, *args, **kwargs)
+
+        # trace
+        utils.trace("call_web_service: num_rows: {}, size in bytes (MB): {}".format(xtsv.num_rows(), xtsv.size_in_gb()))
+
+        # return
+        return xtsv
 
 # call web service function.
 def __call_web_service__(xtsv, xtsv_timeout_sec, xtsv_verify, xtsv_enable_opt_exec, xtsv_inherit_message, url, prefix, query_params = None, header_params = None,
@@ -201,6 +208,9 @@ def __call_web_service_exp_func__(xtsv_timeout_sec, xtsv_verify, url, query_para
 
         # create result
         combined_result = [result_mp]
+
+        # trace log
+        utils.trace("__call_web_service_exp_func_inner__: count: {}, max_value_len: {}".format(len(result_mp), max([len(t) for t in result_mp.values()])))
 
         # return
         return combined_result
