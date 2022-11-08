@@ -181,7 +181,7 @@ def get_hydra_class(class_ref, fallback_modules = None):
         # the member is a tuple (name, reference)
         if (member[0] == hydra_class_name):
             # found the hydra class
-            utils.info("get_hydra_class: found hydra version for class: {}: {}.{}".format(class_ref.__name__, module_name, member[0]))
+            utils.info_once("get_hydra_class: found hydra version for class: {}: {}.{}".format(class_ref.__name__, module_name, member[0]))
             return member[1]
 
     # look into fallback_module if that is defined
@@ -193,7 +193,7 @@ def get_hydra_class(class_ref, fallback_modules = None):
                 # the member is a tuple (name, reference)
                 if (member[0] == hydra_class_name):
                     # found the hydra class
-                    utils.info("get_hydra_class: found hydra version for class: {}: {}.{}".format(class_ref.__name__, fallback_module.__name__, member[0]))
+                    utils.info_once("get_hydra_class: found hydra version for class: {}: {}.{}".format(class_ref.__name__, fallback_module.__name__, member[0]))
                     return member[1]
 
     # raise exception that no hydra version found

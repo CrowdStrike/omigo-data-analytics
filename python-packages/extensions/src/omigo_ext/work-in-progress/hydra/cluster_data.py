@@ -1,6 +1,5 @@
 from omigo_core import tsv
 from omigo_core import utils
-from omigo_ajaiswal_ext.hydra import cluster_funcs, cluster_class_reflection
 import base64
 import dill
 import json
@@ -324,8 +323,12 @@ class ClusterFuncLambda(ClusterFunc):
             return None
 
         value = json_obj["value"]
-        func = dill.loads(base64.b64decode(value.encode("ascii"))) 
-        return ClusterFuncLambda(func)
+        try:
+            func = dill.loads(base64.b64decode(value.encode("ascii"))) 
+            return ClusterFuncLambda(func)
+        except Exception as e:
+            utils.info("ClusterFuncLambda: from_json: exception in deserializing json: {}".format(json.dumps(json_obj)))
+            raise e 
        
 # TODO: This dill serializer for args and kwargs need to be changed. 
 # TODO: the base class parameters are not serialized

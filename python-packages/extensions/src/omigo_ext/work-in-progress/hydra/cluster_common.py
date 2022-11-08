@@ -4,14 +4,15 @@ import json
 import os
 import time
 from omigo_core import tsv, utils, tsvutils, funclib
-from omigo_ajaiswal_ext.hydra import s3io_wrapper
-from omigo_ajaiswal_ext.hydra import cluster_data
-from omigo_ajaiswal_ext.hydra import cluster_class_reflection
 
 # class that takes the base path in S3, and implement all distributed communication under that.
 # takes care of protocol level things for future
 
 # global constants. TODO        
+if ("HYDRA_PATH" in os.environ.keys()):
+    HYDRA_PATH = os.environ["HYDRA_PATH"]
+else:
+    raise Exception("Use HYDRA_PATH env variable")
 
 # global clients
 HYDRA_CLIENT_ID = None 
@@ -437,7 +438,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
 
         # assign variables
         self.base_path = base_path
-        self.s3 = s3io_wrapper.S3FSWrapper()
+        self.fs = s3io_wrapper.S3FSWrapper()
         
     def __makepath__(self, path):
         # remove any trailing '/'
@@ -462,10 +463,13 @@ class ClusterFileHandler(cluster_data.JsonSer):
         return path
 
     def create(self, path, verify = True):
+        utils.warn_once("create: api is using levels which points to some issue in protocol")
         # create only if absent
         if (self.dir_exists(path) == False):
             utils.info("create      : {}".format(path))
-            self.s3.makedirs(self.__makepath__(path))
+            # TODO: this levels can lead to silent bugs
+            levels = min(len(path.split("/")), 1)
+            self.fs.makedirs(self.__makepath__(path), levels = levels)
 
         # after creation wait for confirmation
         if (verify == True and self.dir_exists_with_wait(path) == False):
@@ -473,11 +477,11 @@ class ClusterFileHandler(cluster_data.JsonSer):
 
     def list_files(self, path):
         utils.debug("list_files : {}".format(path))
-        return self.s3.list_files(self.__makepath__(path))
+        return self.fs.list_files(self.__makepath__(path))
 
     def list_dirs(self, path):
         utils.debug("list_dirs  : {}".format(path))
-        return self.s3.list_dirs(self.__makepath__(path))
+        return self.fs.list_dirs(self.__makepath__(path))
 
     def list_all_recursive(self, path):
         # create result
@@ -487,7 +491,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
         path = self.__strip_leading_trailing_slashes__(path)
 
         # iterate over all files and directories
-        for f in self.s3.ls(self.__makepath__(path)):
+        for f in self.fs.ls(self.__makepath__(path)):
             # append to results
             results.append(f)
 
@@ -496,7 +500,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
             utils.debug("pathf: {}".format(pathf))
 
             # recursive call for directory
-            if (self.s3.is_directory(self.__makepath__(pathf))):
+            if (self.fs.is_directory(self.__makepath__(pathf))):
                 for f2 in self.list_all_recursive(pathf):
                     results.append("{}/{}".format(f, f2))
 
@@ -509,7 +513,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
         else:
             utils.debug("remove_file : {}".format(path))
 
-        self.s3.delete_file(self.__makepath__(path), ignore_missing = ignore_missing)
+        self.fs.delete_file_with_wait(self.__makepath__(path), ignore_missing = ignore_missing)
 
         # check for commit
         if (verify == True and self.file_not_exists_with_wait(path) == False):
@@ -531,7 +535,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
                 if (self.dir_exists_with_wait(path) == False):
                     raise Exception("remove_dir: path not found: {}".format(path))
         else:
-            self.s3.delete_dir(self.__makepath__(path), ignore_missing = ignore_missing)
+            self.fs.delete_dir_with_wait(self.__makepath__(path), ignore_missing = ignore_missing)
 
         # check for commit
         if (verify == True and self.file_not_exists_with_wait(path) == False):
@@ -596,7 +600,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
             raise Exception("update: Null text: {}".format(path))
  
         utils.info("write_text  : {}".format(path))
-        self.s3.write_text_file(self.__makepath__(path), text)
+        self.fs.write_text_file(self.__makepath__(path), text)
 
     # TODO: Change the order of input parameters
     def write_tsv(self, path, xtsv):
@@ -625,7 +629,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
         if (json_obj is None):
             raise Exception("update_json: Null json_obj: {}".format(path))
  
-        self.s3.write_text_file(self.__makepath__(path), json.dumps(json_obj))
+        self.fs.write_text_file(self.__makepath__(path), json.dumps(json_obj))
         if (ignore_logging == False):
             utils.info("update_json : {}".format(path))
         else:
@@ -661,29 +665,29 @@ class ClusterFileHandler(cluster_data.JsonSer):
     # this special api doesnt use timestamp but sequence number to guarantee update and avoid race conditions 
     # because of eventual consistency
     def update_dynamic_seq_update(self, path, msg, verify = True, ignore_logging = False, max_keep = 2):
-        utils.warn("update_dynamic_seq_update: not implemented yet. Using update_dynamic_value")
+        utils.warn_once("update_dynamic_seq_update: not implemented yet. Using update_dynamic_value")
         self.update_dynamic_value(path, msg, verify = verify, ignore_logging = ignore_logging, max_keep = max_keep)
 
     # TODO: this api needs rethinking coz of eventual consistency    
     def file_not_exists(self, path):
         utils.debug("file_not_exists : {}".format(path))
-        return self.s3.file_not_exists(self.__makepath__(path))
+        return self.fs.file_not_exists(self.__makepath__(path))
 
     def file_not_exists_with_wait(self, path):
-        return self.s3.file_not_exists_with_wait(self.__makepath__(path))
+        return self.fs.file_not_exists_with_wait(self.__makepath__(path))
 
     def dir_not_exists_with_wait(self, path):
-        return self.s3.dir_not_exists_with_wait(self.__makepath__(path))
+        return self.fs.dir_not_exists_with_wait(self.__makepath__(path))
 
     # TODO: this api needs rethinking coz of eventual consistency    
     def file_exists(self, path):
         utils.debug("file_exists    : {}".format(path))
-        return self.s3.file_exists(self.__makepath__(path))
+        return self.fs.file_exists(self.__makepath__(path))
 
     def file_exists_with_wait(self, path, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS, fail_if_missing = True):
         # add fail_if_missing logic
         try:
-            return self.s3.file_exists_with_wait(self.__makepath__(path), wait_sec = wait_sec, attempts = attempts)
+            return self.fs.file_exists_with_wait(self.__makepath__(path), wait_sec = wait_sec, attempts = attempts)
         except Exception as e:
             # raise exception if fail_if_missing is True
             if (fail_if_missing == True):
@@ -692,12 +696,12 @@ class ClusterFileHandler(cluster_data.JsonSer):
                 return False
 
     def dir_exists(self, path):
-        return self.s3.dir_exists(self.__makepath__(path))
+        return self.fs.dir_exists(self.__makepath__(path))
 
     def dir_exists_with_wait(self, path, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS, fail_if_missing = True):
         # add fail_if_missing logic
         try:
-            return self.s3.dir_exists_with_wait(self.__makepath__(path), wait_sec = wait_sec, attempts = attempts)
+            return self.fs.dir_exists_with_wait(self.__makepath__(path), wait_sec = wait_sec, attempts = attempts)
         except Exception as e:
             # raise exception if fail_if_missing is True
             if (fail_if_missing == True):
@@ -707,11 +711,11 @@ class ClusterFileHandler(cluster_data.JsonSer):
 
     def is_file(self, path):
         utils.debug("is_file   : {}".format(path))
-        return self.s3.is_file(self.__makepath__(path))
+        return self.fs.is_file(self.__makepath__(path))
 
     def is_directory(self, path):
-        utils.debug("is_directory: {}".format(path))
-        return self.s3.is_directory(self.__makepath__(path))
+        utils.trace("is_directory: {}".format(path))
+        return self.fs.is_directory(self.__makepath__(path))
 
     def is_non_empty_dir(self, path):
         # check for directory
@@ -719,7 +723,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
             return False
 
         # get all entries
-        entries = self.s3.ls(self.__makepath__(path))
+        entries = self.fs.ls(self.__makepath__(path))
         if (entries is not None and len(entries) > 0):
             return True
         else:
@@ -746,9 +750,9 @@ class ClusterFileHandler(cluster_data.JsonSer):
     def read(self, path):
         path = self.__normalize_path__(path)
         utils.debug("read: {}".format(path))
-        return self.s3.read_file_contents_as_text(self.__makepath__(path))
+        return self.fs.read_file_contents_as_text_with_wait(self.__makepath__(path))
    
-    # TODO: Race condition 
+    # TODO: Race condition . Create method with wait suffix
     def read_json(self, path, retries = 5, wait_sec = 1):
         path = self.__normalize_path__(path)
 
@@ -830,12 +834,22 @@ class ClusterFileHandler(cluster_data.JsonSer):
         new_path = "{}/{}".format(path, filename)
 
         # get the timestamp
-        return self.s3.get_last_modified_timestamp(self.__makepath__(new_path))
+        return self.fs.get_last_modified_timestamp(self.__makepath__(new_path))
 
-    def read_most_recent_json(self, path):
+    # TODO: For json parsing error, just do a simple retry first.
+    # JSONDecodeError
+    def read_most_recent_json(self, path, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS):
         content = self.read_most_recent(path)
         if (content is not None):
-            return json.loads(content)
+            try:
+                return json.loads(content)
+            except Exception as e:
+                utils.error("read_most_recent_json: caught exception in parsing json: {}, error: {}, attempts: {}, wait_sec: {}".format(e, attempts, wait_sec))
+                if (attempts > 0):
+                    time.sleep(wait_sec)
+                    return read_most_recent_json(path, wait_sec = wait_sec, attempts = attempts - 1)
+                else:
+                    raise e
         else:
             return None
 
@@ -850,6 +864,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
         # check if attempts are left
         if (attempts > 0):
             utils.info("read_most_recent_with_wait: path: {}, data not found. attempts: {}, waiting: {} seconds".format(path, attempts, wait_sec))
+            time.sleep(wait_sec)
             return self.read_most_recent_with_wait(path, wait_sec = wait_sec, attempts = attempts - 1)
         else:
             if (fail_if_missing == True):

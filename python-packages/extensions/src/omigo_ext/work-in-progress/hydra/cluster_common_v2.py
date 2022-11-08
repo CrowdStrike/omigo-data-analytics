@@ -7,15 +7,28 @@ import math
 import json 
 import threading
 from omigo_core import tsv, utils, tsvutils, etl, funclib
-from omigo_ajaiswal_ext.hydra import s3io_wrapper, cluster_data, cluster_class_reflection
-from omigo_ajaiswal_ext.hydra import cluster_common as old_cluster_common 
 
 # class that takes the base path in S3, and implement all distributed communication under that.
 # takes care of protocol level things for future
 
+# global constants. TODO        
+# if ("HYDRA_PATH" in os.environ.keys()):
+#     HYDRA_PATH = os.environ["HYDRA_PATH"]
+# else:
+if ("HYDRA_PATH" in os.environ.keys()):
+    HYDRA_PATH = os.environ["HYDRA_PATH"]
+else:
+    # HYDRA_PATH = ""
+    raise Exception("Use HYDRA_PATH env variable")
+
+HYDRA_LOCAL_PATH = ""
+
 # global variables
 HYDRA_CLUSTER_HANDLER = None
+HYDRA_LOCAL_CLUSTER_HANDLER = None
+
 HYDRA_CLUSTER_HANDLER_LOCK = threading.Lock()
+HYDRA_LOCAL_CLUSTER_HANDLER_LOCK = threading.Lock()
 
 # some constants
 MIN1_SECONDS = 60
@@ -23,7 +36,8 @@ MIN1_SECONDS = 60
 def construct_dynamic_value_json():
     return "value.{}.json".format(funclib.get_utctimestamp_sec()) 
 
-# Note: SHUTDOWN is implemented using 
+# Note: SHUTDOWN is implemented using?
+# TODO: Why there is no Running state 
 class EntityState:
     CREATED            = "created"
     ALIVE              = "alive"
@@ -116,7 +130,7 @@ EntityIsActiveMap[EntityType.WF] = False
 EntityIsActiveMap[EntityType.JOB] = False
 EntityIsActiveMap[EntityType.TASK] = False
 EntityIsActiveMap[EntityType.BATCH] = False
-EntityIsActiveMap[EntityType.CLIENT] = True 
+EntityIsActiveMap[EntityType.CLIENT] = True
 EntityIsActiveMap[EntityType.SESSION] = True
 
 # Create the map for supervisor 
@@ -141,7 +155,7 @@ EntitySupervisorMap[EntityType.SESSION] = EntityType.MASTER
 
 # Create the map for active children
 EntityActiveChildrenMap = {}
-EntityActiveChildrenMap[EntityType.MASTER] = [EntityType.MASTER, EntityType.RESOURCE_MANAGER, EntityType.SESSION] # TODO: Master belongs here because of active children entry
+EntityActiveChildrenMap[EntityType.MASTER] = [EntityType.MASTER, EntityType.RESOURCE_MANAGER, EntityType.SESSION, EntityType.CLIENT] # TODO: Master belongs here because of active children entry
 EntityActiveChildrenMap[EntityType.RESOURCE_MANAGER] = [EntityType.SWF_MANAGER, EntityType.WF_MANAGER, EntityType.JOB_MANAGER, EntityType.TASK_MANAGER, EntityType.WORKER, EntityType.AGENT, EntityType.DOUBLE_AGENT, EntityType.INTELI_AGENT]
 EntityActiveChildrenMap[EntityType.SWF_MANAGER] = []
 EntityActiveChildrenMap[EntityType.WF_MANAGER] = []
@@ -161,7 +175,7 @@ EntityActiveChildrenMap[EntityType.SESSION] = []
 
 # Create the map for passive children
 EntityPassiveChildrenMap = {}
-EntityPassiveChildrenMap[EntityType.MASTER] = [EntityType.CLIENT]
+EntityPassiveChildrenMap[EntityType.MASTER] = []
 EntityPassiveChildrenMap[EntityType.RESOURCE_MANAGER] = []
 EntityPassiveChildrenMap[EntityType.SWF_MANAGER] = [EntityType.SWF]
 EntityPassiveChildrenMap[EntityType.WF_MANAGER] = [EntityType.WF]
@@ -181,30 +195,30 @@ EntityPassiveChildrenMap[EntityType.SESSION] = []
 
 # Create the map for dependents.
 # SESSION has dependency on all as either SWF, WF and JOB can be directly submitted for execution
-EntityDepdendentsMap = {}
-EntityDepdendentsMap[EntityType.MASTER] = []
-EntityDepdendentsMap[EntityType.RESOURCE_MANAGER] = []
-EntityDepdendentsMap[EntityType.SWF_MANAGER] = []
-EntityDepdendentsMap[EntityType.WF_MANAGER] = []
-EntityDepdendentsMap[EntityType.JOB_MANAGER] = []
-EntityDepdendentsMap[EntityType.TASK_MANAGER] = []
-EntityDepdendentsMap[EntityType.WORKER] = []
-EntityDepdendentsMap[EntityType.AGENT] = []
-EntityDepdendentsMap[EntityType.DOUBLE_AGENT] = []
-EntityDepdendentsMap[EntityType.INTELI_AGENT] = []
-EntityDepdendentsMap[EntityType.SWF] = [EntityType.WF]
-EntityDepdendentsMap[EntityType.WF] = [EntityType.JOB]
-EntityDepdendentsMap[EntityType.JOB] = [EntityType.TASK]
-EntityDepdendentsMap[EntityType.TASK] = [EntityType.BATCH]
-EntityDepdendentsMap[EntityType.BATCH] = []
-EntityDepdendentsMap[EntityType.CLIENT] = [EntityType.SESSION]
-EntityDepdendentsMap[EntityType.SESSION] = [EntityType.SWF, EntityType.WF, EntityType.JOB]
+EntityDependentsMap = {}
+EntityDependentsMap[EntityType.MASTER] = []
+EntityDependentsMap[EntityType.RESOURCE_MANAGER] = []
+EntityDependentsMap[EntityType.SWF_MANAGER] = []
+EntityDependentsMap[EntityType.WF_MANAGER] = []
+EntityDependentsMap[EntityType.JOB_MANAGER] = []
+EntityDependentsMap[EntityType.TASK_MANAGER] = []
+EntityDependentsMap[EntityType.WORKER] = []
+EntityDependentsMap[EntityType.AGENT] = []
+EntityDependentsMap[EntityType.DOUBLE_AGENT] = []
+EntityDependentsMap[EntityType.INTELI_AGENT] = []
+EntityDependentsMap[EntityType.SWF] = [EntityType.WF]
+EntityDependentsMap[EntityType.WF] = [EntityType.JOB]
+EntityDependentsMap[EntityType.JOB] = [EntityType.TASK]
+EntityDependentsMap[EntityType.TASK] = [EntityType.BATCH]
+EntityDependentsMap[EntityType.BATCH] = []
+EntityDependentsMap[EntityType.CLIENT] = [EntityType.SESSION]
+EntityDependentsMap[EntityType.SESSION] = [EntityType.SWF, EntityType.WF, EntityType.JOB]
 
 # Reverse Dependents
 EntityReverseDependentsMap = {}
-for k in EntityDepdendentsMap.keys():
+for k in EntityDependentsMap.keys():
     # get values
-    vs = EntityDepdendentsMap[k]
+    vs = EntityDependentsMap[k]
 
     # iterate over each child
     for v in vs:
@@ -234,6 +248,12 @@ EntityCapacityMap[EntityType.WORKER] = ENTITY_CAPACITY_DEFAULT
 EntityCapacityMap[EntityType.AGENT] = 1
 EntityCapacityMap[EntityType.DOUBLE_AGENT] = 1
 EntityCapacityMap[EntityType.INTELI_AGENT] = 1
+
+# Constants for cluster capabilities
+class ClusterCapabilities:
+    SPARK       = "spark"
+    PRESTO      = "presto"
+    SHELL       = "shell"
 
 # primary entity class
 class ClusterEntity(cluster_data.JsonSer):
@@ -340,14 +360,6 @@ class ClusterEntityWFManager(ClusterEntity):
     def new(entity_id, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
         return ClusterEntityWFManager(entity_id, ts, lease)
 
-    def do_execute_passive_child(self, xchild_entity):
-        # check the type of the child
-        xchild_entity_type = xchild_entity.entity_type
-
-        # switch case for different kinds of passive children
-        if (xchild_entity_type == EntityType.WF):
-            __do_execute_passive_wf__
-
 # Job Manager
 class ClusterEntityJobManager(ClusterEntity):
     def __init__(self, entity_id, ts, lease):
@@ -429,6 +441,28 @@ class ClusterEntityWF(ClusterEntity):
         self.client_id = client_id
         self.session_id = session_id
         self.entity_spec = entity_spec
+
+    def collect_requirements(self):
+        requirements = []
+        for job_spec in self.entity_spec.jobs_specs:
+            if (job_spec.map_task is not None):
+                for map_op in job_spec.map_task.map_ops:
+                    for r in map_op.requirements:
+                        if (r not in requirements):
+                            requirements.append(r)  
+
+            if (job_spec.reduce_task is not None):
+                for r in job_spec.reduce_task.reduce_op.requirements:
+                    if (r not in requirements):
+                        requirements.append(r)  
+
+            if (job_spec.extend_class_def is not None):
+                for r in job_spec.extend_class_def.extend_class_op.requirements:
+                    if (r not in requirements):
+                        requirements.append(r)  
+
+        # return
+        return requirements
 
     def from_json(json_obj):
         # check for None
@@ -564,6 +598,7 @@ def deserialize_cluster_spec(json_obj):
         raise Exception("deserialize_cluster_spec: unknown entity_type: {}".format(entity_type))
     
 # SWF Spec
+# TODO: this needs redesigning
 class ClusterSpecSWF(ClusterSpecBase):
     def __init__(self, num_inputs, num_outputs, wfs_specs):
         super().__init__(EntityType.SWF, num_inputs, num_outputs)
@@ -594,10 +629,13 @@ class ClusterSpecSWF(ClusterSpecBase):
 
 # WF Spec
 class ClusterSpecWF(ClusterSpecBase):
-    def __init__(self, jobs_specs, num_inputs, num_outputs, is_live, interval, start_ts, use_full_data, duration, input_ids, output_ids):
-        super().__init__(EntityType.WF, num_inputs, num_outputs)
+    def __init__(self, jobs_specs, is_live, is_remote, is_external, max_job_execution_time, interval, start_ts, use_full_data, duration, input_ids, output_ids):
+        super().__init__(EntityType.WF, len(input_ids), len(output_ids))
         self.jobs_specs = jobs_specs
         self.is_live = is_live
+        self.is_remote = is_remote
+        self.is_external = is_external
+        self.max_job_execution_time = max_job_execution_time
         self.interval = interval
         self.start_ts = start_ts
         self.use_full_data = use_full_data
@@ -621,9 +659,10 @@ class ClusterSpecWF(ClusterSpecBase):
         # return
         return ClusterSpecWF.new(
             jobs_specs,
-            json_obj["num_inputs"],
-            json_obj["num_outputs"],
             json_obj["is_live"],
+            json_obj["is_remote"],
+            json_obj["is_external"],
+            json_obj["max_job_execution_time"],
             json_obj["interval"],
             json_obj["start_ts"],
             json_obj["use_full_data"],
@@ -632,20 +671,16 @@ class ClusterSpecWF(ClusterSpecBase):
             json_obj["output_ids"]
         )
 
-    def new(jobs_specs, num_inputs = 1, num_outputs = 1, is_live = False, interval = -1, start_ts = 0, use_full_data = False, duration = 0, input_ids = None, output_ids = None):
+    def new(jobs_specs, is_live = False, is_remote = False, is_external = False, max_job_execution_time = 600, interval = -1, start_ts = 0, use_full_data = False, duration = 0, input_ids = None, output_ids = None):
         # create defaults
         if (input_ids is None):
-            input_ids = list(["input{}".format(i) for i in range(num_inputs)])
+            raise Exception("ClusterSpecWF: input ids can not be None")
 
         if (output_ids is None):
-            output_ids = list(["output{}".format(i) for i in range(num_outputs)])
-
-        # some validation for single input and output
-        if (num_inputs != len(input_ids) or num_outputs != len(output_ids)):
-            raise Exception("ClusterSpecWF: num_inputs: {} - {},  and num_outputs: {} - {} must be equal to the ids lengths".format(num_inputs, input_ids, num_outputs, output_ids))
+            raise Exception("ClusterSpecWF: output ids can not be None")
 
         # return
-        return ClusterSpecWF(jobs_specs, num_inputs, num_outputs, is_live, interval, start_ts, use_full_data, duration, input_ids, output_ids)
+        return ClusterSpecWF(jobs_specs, is_live, is_remote, is_external, max_job_execution_time, interval, start_ts, use_full_data, duration, input_ids, output_ids)
         
 # Job Spec
 class ClusterSpecJob(ClusterSpecBase):
@@ -872,13 +907,16 @@ class ClusterSpecBatch(ClusterSpecBase):
 # This is meant to take arbitrary arguments including lambda function or list which dont have standard serialization
 # thats why need to convert to cluster operand directly
 class ClusterOperation(cluster_data.JsonSer):
-    def __init__(self, name, *args, **kwargs):
+    def __init__(self, name, requirements, *args, **kwargs):
         # check if the name is a string name or actual function call
         if (isinstance(name, str)):
             # name of the operation
             self.name = name
         else:
             self.name = cluster_class_reflection.get_fully_qualified_name(name)
+
+        # set the requirements
+        self.requirements = requirements
 
         # this is an array of orthogonal types. dont assume homogenous types here
         jargs = []
@@ -896,11 +934,12 @@ class ClusterOperation(cluster_data.JsonSer):
 
         # initialize variables. TODO: why calling load_native_objects
         name = json_obj["name"]
+        requirements = json_obj["requirements"]
         args = cluster_data.load_native_objects(cluster_data.cluster_operand_deserializer(json_obj["args"]))
         kwargs = cluster_data.load_native_objects(cluster_data.cluster_operand_deserializer(json_obj["kwargs"]))
 
         # return
-        return ClusterOperation(name, *args, **kwargs)
+        return ClusterOperation(name, requirements, *args, **kwargs)
 
 # TODO: this is partially shared between ClusterTaskOperation and ClusterSpecBase
 class ClusterTaskType:
@@ -911,8 +950,8 @@ class ClusterTaskType:
     HASH_PARTITION = "hash_partition"
 
 class ClusterTaskOperation(ClusterOperation):
-    def __init__(self, task_type, name, *args, **kwargs):
-        super().__init__(name, *args, **kwargs)
+    def __init__(self, task_type, name, requirements, *args, **kwargs):
+        super().__init__(name, requirements, *args, **kwargs)
         self.task_type = task_type
 
     def from_json(json_obj):
@@ -922,13 +961,14 @@ class ClusterTaskOperation(ClusterOperation):
 
         # this parsing is tricky and has to be done inline 
         name = json_obj["name"]
+        requirements = json_obj["requirements"]
         args = cluster_data.load_native_objects(cluster_data.cluster_operand_deserializer(json_obj["args"]))
         kwargs = cluster_data.load_native_objects(cluster_data.cluster_operand_deserializer(json_obj["kwargs"]))
-        return ClusterTaskOperation(json_obj["task_type"], name, *args, **kwargs)
+        return ClusterTaskOperation(json_obj["task_type"], name, requirements, *args, **kwargs)
 
 class ClusterExtendClassOperation(ClusterTaskOperation):
-    def __init__(self, name, *args, **kwargs):
-        super().__init__(ClusterTaskType.EXTEND_CLASS, name, *args, **kwargs)
+    def __init__(self, name, requirements, *args, **kwargs):
+        super().__init__(ClusterTaskType.EXTEND_CLASS, name, requirements, *args, **kwargs)
 
     def from_json(json_obj):
         # check for None 
@@ -937,14 +977,15 @@ class ClusterExtendClassOperation(ClusterTaskOperation):
 
         # this parsing is tricky and has to be done inline 
         name = json_obj["name"]
+        requirements = json_obj["requirements"]
         args = cluster_data.load_native_objects(cluster_data.cluster_operand_deserializer(json_obj["args"]))
         kwargs = cluster_data.load_native_objects(cluster_data.cluster_operand_deserializer(json_obj["kwargs"]))
-        return ClusterExtendClassOperation(name, *args, **kwargs)
+        return ClusterExtendClassOperation(name, requirements, *args, **kwargs)
 
 # TODO: follow the same design as ClusterOperand with mulitple derived classes
 class ClusterMapOperation(ClusterTaskOperation):
-    def __init__(self, name, *args, **kwargs):
-        super().__init__(ClusterTaskType.MAP, name, *args, **kwargs)
+    def __init__(self, name, requirements, *args, **kwargs):
+        super().__init__(ClusterTaskType.MAP, name, requirements, *args, **kwargs)
 
     def from_json(json_obj):
         # check for None 
@@ -953,14 +994,15 @@ class ClusterMapOperation(ClusterTaskOperation):
 
         # this parsing is tricky and has to be done inline 
         name = json_obj["name"]
+        requirements = json_obj["requirements"]
         args = cluster_data.load_native_objects(cluster_data.cluster_operand_deserializer(json_obj["args"]))
         kwargs = cluster_data.load_native_objects(cluster_data.cluster_operand_deserializer(json_obj["kwargs"]))
-        return ClusterMapOperation(name, *args, **kwargs)
+        return ClusterMapOperation(name, requirements, *args, **kwargs)
 
 # TODO: follow the same design as ClusterOperand with mulitple derived classes
 class ClusterReduceOperation(ClusterTaskOperation):
-    def __init__(self, grouping_cols, num_splits, name, *args, **kwargs):
-        super().__init__(ClusterTaskType.REDUCE, name, *args, **kwargs)
+    def __init__(self, grouping_cols, num_splits, name, requirements, *args, **kwargs):
+        super().__init__(ClusterTaskType.REDUCE, name, requirements, *args, **kwargs)
         self.grouping_cols = grouping_cols 
         self.num_splits = num_splits
 
@@ -971,11 +1013,12 @@ class ClusterReduceOperation(ClusterTaskOperation):
 
         # this parsing is tricky and has to be done inline 
         name = json_obj["name"]
+        requirements = json_obj["requirements"]
         args = cluster_data.load_native_objects(cluster_data.cluster_operand_deserializer(json_obj["args"]))
         kwargs = cluster_data.load_native_objects(cluster_data.cluster_operand_deserializer(json_obj["kwargs"]))
 
         # return
-        return ClusterReduceOperation(json_obj["grouping_cols"], json_obj["num_splits"], name, *args, **kwargs)
+        return ClusterReduceOperation(json_obj["grouping_cols"], json_obj["num_splits"], name, requirements, *args, **kwargs)
 
 def deserialize_cluster_task_operation(json_obj):
     # check for None
@@ -1087,6 +1130,31 @@ class ClusterPaths:
 
         # return
         return HYDRA_CLUSTER_HANDLER
+
+    # global constants
+    def get_local_base_path():
+        global HYDRA_LOCAL_PATH
+        if (HYDRA_LOCAL_PATH is None):
+            raise Exception("HYDRA_LOCAL_PATH is None")
+
+        return HYDRA_LOCAL_PATH
+
+    def set_local_base_path(path):
+        global HYDRA_LOCAL_PATH
+        HYDRA_LOCAL_PATH = path
+
+    def get_local_cluster_handler():
+        # refer global variables
+        global HYDRA_LOCAL_CLUSTER_HANDLER
+        global HYDRA_LOCAL_CLUSTER_HANDLER_LOCK
+
+        # use lock for thread safety
+        with HYDRA_LOCAL_CLUSTER_HANDLER_LOCK:
+            if (HYDRA_LOCAL_CLUSTER_HANDLER is None):
+                HYDRA_LOCAL_CLUSTER_HANDLER = old_cluster_common.ClusterFileHandler.new(ClusterPaths.get_local_base_path())
+
+        # return
+        return HYDRA_LOCAL_CLUSTER_HANDLER
 
     #########################################################################################
     # all entities that need life cycle management
