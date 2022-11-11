@@ -27,30 +27,30 @@ class TSV:
         self.data = data
 
         # create map of name->index and index->name
-        self.header_fields = list(filter(lambda t: t != "", self.header.split("\t")))
+        self.header_fields = list(filter(lambda t: t != "", self.header.split("\t"))) if (self.header != "") else []
         self.header_map = {}
         self.header_index_map = {}
 
         # validation
-        for h in self.get_header_fields():
+        for h in self.header_fields:
             if (len(h) == 0):
-                utils.warn("Zero length header fields:" + str(self.get_header_fields()))
+                utils.warn("Zero length header fields:" + str(self.header_fields))
 
         # create hashmap
-        for i in range(len(self.get_header_fields())):
+        for i in range(len(self.header_fields)):
             h = self.header_fields[i]
 
             # validation
             if (h in self.header_map.keys()):
-                raise Exception("Duplicate header key:{}: {}".format(h, str(self.get_header_fields())))
+                raise Exception("Duplicate header key:{}: {}".format(h, str(self.header_fields)))
 
             self.header_map[h] = i
             self.header_index_map[i] = h
 
         # basic validation
-        if (len(data) > 0 and len(data[0].split("\t")) != len(self.get_header_fields())):
+        if (len(data) > 0 and len(data[0].split("\t")) != len(self.header_fields)):
             raise Exception("Header length is not matching with data length: len(self.get_header_fields()): {}, len(data[0].fields): {}, header_fields: {}, data[0].fields: {}".format(
-                len(self.get_header_fields()), len(data[0].split("\t")), str(self.get_header_fields()), str(data[0].split("\t"))))
+                len(self.header_fields), len(data[0].split("\t")), str(self.header_fields), str(data[0].split("\t"))))
 
     # debugging
     def to_string(self):
@@ -544,6 +544,7 @@ class TSV:
                 for k2 in vs.keys():
                     agg_out_keys[k2] = 1
         else:
+            # handling empty data
             dummy_response = agg_func([])
             for k in dummy_response.keys():
                 agg_out_keys[k] = 1
@@ -1533,7 +1534,7 @@ class TSV:
             if (all_numeric == True):
                 values.append(float(fields[i]))
             else:
-                values.append(fields[i])
+                values.append(str(fields[i]))
 
         return tuple(values)
 
@@ -2165,16 +2166,16 @@ class TSV:
         # check for matching cols
         for c in self.get_header_fields():
             if (c.startswith(prefix)):
-                new_col =  c[len(prefix):]
-                if (new_col in self.header_fields or len(new_col) == 0):
+                new_col = c[len(prefix):]
+                if (new_col in self.get_header_fields() or len(new_col) == 0):
                     raise Exception("Duplicate names. Cant do the prefix: {}, {}, {}".format(c, new_col, str(self.get_header_fields())))
                 mp[c] = new_col
 
         # validation
         if (len(mp) == 0):
-            utils.raise_exception_or_warn("prefix didnt match any of the columns: {}, {}".format(prefix, str(self.get_header_fields())), ignore_if_missing)
+            utils.raise_exception_or_warn("prefix didnt match any of the columns: {}, {}, ignore_if_missing: {}".format(prefix, str(self.get_header_fields())), ignore_if_missing)
 
-        new_header = "\t".join(list([h if (h not in mp.keys()) else mp[h] for h in self.header_fields]))
+        new_header = "\t".join(list([h if (h not in mp.keys()) else mp[h] for h in self.get_header_fields()]))
         return TSV(new_header, self.data)
 
     def sample(self, sampling_ratio, seed = 0, with_replacement = False, inherit_message = ""):
@@ -2354,27 +2355,33 @@ class TSV:
         return agg_result
 
     # TODO: this is using comma as join. can get buggy
-    def __sample_group_by_max_uniq_values_exact_group_by__(self, k, n):
+    def __sample_group_by_max_uniq_values_exact_group_by__(self, k, n, seed):
         def __sample_group_by_max_uniq_values_exact_group_by_inner__(mps):
             vs = []
             for mp in mps:
                 vs.append(mp[k])
-                
-            vs_uniq = list(set(vs))
-            random.shuffle(vs_uniq)
-            vs_selected = vs_uniq[0:n]
             
+            # do a unique and shuffle
+            vs_uniq = utils.random_shuffle(list(set(vs)), seed = seed)
+            vs_selected = vs_uniq[0:int(min(n, len(vs_uniq)))]
+
+            # create result
             result_mp = {}
             result_mp["found"] = ",".join(vs_selected)
                     
+            # return
             return result_mp
         
         return __sample_group_by_max_uniq_values_exact_group_by_inner__
 
-    def sample_group_by_max_uniq_values_exact(self, grouping_cols, col, max_uniq_values, inherit_message = ""):
+    def sample_group_by_max_uniq_values_exact(self, grouping_cols, col, max_uniq_values, seed = 0, inherit_message = ""):
         # check empty
         if (self.has_empty_header()):
             utils.warn("sample_group_by_max_uniq_values_exact: empty tsv")
+            return self
+
+        # check for no data
+        if (self.num_rows() == 0):
             return self
 
         # resolve grouping_cols
@@ -2393,14 +2400,13 @@ class TSV:
 
         # compute
         agg_result = self \
-            .group_by_key(grouping_cols, col, self.__sample_group_by_max_uniq_values_exact_group_by__(col, max_uniq_values), suffix = "__sample_group_by_max_uniq_values_exact_group_by__",
+            .group_by_key(grouping_cols, col, self.__sample_group_by_max_uniq_values_exact_group_by__(col, max_uniq_values, seed), suffix = "__sample_group_by_max_uniq_values_exact_group_by__",
                 collapse = False, inherit_message = inherit_message2 + ": [1/3]")  \
             .filter([col, "found:__sample_group_by_max_uniq_values_exact_group_by__"], lambda x,y: x in y.split(","), inherit_message = inherit_message2 + ": [2/3]") \
             .drop_cols("found:__sample_group_by_max_uniq_values_exact_group_by__", inherit_message = inherit_message2 + ": [3/3]") 
 
         # return
         return agg_result
-
 
     def __sample_group_by_max_uniq_values_approx_uniq_count__(self, vs):
         return len(set(vs))
@@ -2411,6 +2417,10 @@ class TSV:
         if (self.has_empty_header()):
             utils.warn("sample_group_by_max_uniq_values_approx: empty tsv")
             return self
+
+        # check seed
+        if (seed is None or seed < 0):
+            raise Exception("Invalid seed: {}".format(seed))
 
         # resolve grouping_cols
         grouping_cols = self.__get_matching_cols__(grouping_cols)
@@ -3963,6 +3973,15 @@ class TSV:
 
     # custom function to call user defined apis
     def custom_func(self, func, *args, **kwargs):
+        # boundary condition
+        if (self.is_empty()):
+            utils.warn_once("custom_func: header is empty. Make sure the custom_func handles empty data scenario and change this")
+
+        # there can be scenarios of adding new columns
+        if (self.num_rows() == 0):
+            utils.warn_once("custom_func: input is empty. Make sure the custom_func handles empty data scenario and change this")
+
+        # call function and return
         return func(self, *args, **kwargs)
 
     # taking the clipboard functionality from pandas

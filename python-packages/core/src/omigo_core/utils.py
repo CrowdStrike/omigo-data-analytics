@@ -418,3 +418,21 @@ def replace_template_props(props, xstr):
     # return
     return xstr
 
+def random_shuffle(xs, seed = 0):
+    # boundary conditions
+    if (xs is None or len(xs) <= 1):
+        return xs
+
+    # apply seed
+    index = seed % len(xs)
+
+    # create a copy
+    xs2 = list([t for t in xs])
+
+    # swap item 0 with item[seed]
+    temp = xs2[0]
+    xs2[0] = xs2[index]
+    xs2[index] = temp
+ 
+    # return
+    return xs2

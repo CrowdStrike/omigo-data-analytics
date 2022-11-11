@@ -180,3 +180,23 @@ def get_utctimestamp_sec():
 
 def datestr_to_datetime(x):
     return utctimestamp_to_datetime(datetime_to_utctimestamp(x))
+
+def select_first_non_empty(*args, **kwargs):
+    # variable name
+    xs = args
+
+    # boundary condition
+    if (xs is None or len(xs) == 0):
+        return ""
+
+    # check if it is list or tuple
+    if (isinstance(xs[0], list)):
+        xs = xs[0]
+
+    # boundary conditions
+    for x in xs:
+        if (x is not None and x != ""):
+            return str(x)
+
+    # return default
+    return ""
