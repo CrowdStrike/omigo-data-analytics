@@ -17,13 +17,18 @@ def parse_image_file_base_name(x):
     return str(x[index+1:])
 
 def uniq_len(vs):
-    return str(len(set(vs)))
+    vs2 = set()
+    for t in vs:
+        for k in str(t).split(","):
+            if (len(k.strip()) > 0):
+                vs2.add(str(k))
+    return str(len(vs2))
 
 def uniq_mkstr(vs):
     vs2 = set()
     for t in vs:
         for k in str(t).split(","):
-            if (len(k) > 0):
+            if (len(k.strip()) > 0):
                 vs2.add(str(k))
     return ",".join(sorted([str(x) for x in vs2]))
 
@@ -157,7 +162,7 @@ def datetime_to_utctimestamp(x):
         # this looks like numeric timestamp in millis
         return int(int(x) / 1000)
     else:
-        raise Exception("Unknown date format. Problem with UTC: {}".format(x))
+        raise Exception("Unknown date format. Problem with UTC: '{}'".format(x))
 
 # TODO: Converts seconds format only
 def utctimestamp_to_datetime_str(x):
@@ -165,6 +170,8 @@ def utctimestamp_to_datetime_str(x):
 
 # TODO: Converts seconds format only
 def utctimestamp_to_datetime(x):
+    # take it as int
+    x = int(x)
     if (len(str(x)) == 10):
         return datetime.datetime.utcfromtimestamp(x).replace(tzinfo = datetime.timezone.utc)
     elif (len(str(x)) == 13):

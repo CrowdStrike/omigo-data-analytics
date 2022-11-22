@@ -436,3 +436,21 @@ def random_shuffle(xs, seed = 0):
  
     # return
     return xs2
+
+def is_text_content_col(col, text_columns):
+    warn_once("is_text_content_col: this api needs more consistency across the board")
+
+    # validation
+    if (col is None):
+        return False
+
+    # check for text_columns
+    if (text_columns is None or len(text_columns) == 0):
+        return False
+
+    # use case insensitive matching
+    for tcol in text_columns:
+        if (col.lower() == tcol.lower()):
+            return True
+
+    return False

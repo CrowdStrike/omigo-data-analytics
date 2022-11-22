@@ -618,7 +618,7 @@ class TSV:
 
     # FIXME
     def arg_min(self, grouping_cols, argcols, valcols, suffix = "arg_min", use_string_datatype = False, topk = 1, sep = "|", collapse = True):
-        utils.warn("arg_min is not implemented correctly. Too complicated")
+        utils.warn_once("arg_min is not implemented correctly. Too complicated")
         # some unsupported case
         if (use_string_datatype == True):
             raise Exception("arg_min: use_string_datatype = True is not supported")
@@ -626,7 +626,7 @@ class TSV:
         return self.__arg_min_or_max_common__(grouping_cols, argcols, valcols, suffix, topk, sep, -1, collapse = collapse)
 
     def arg_max(self, grouping_cols, argcols, valcols, suffix = "arg_max", use_string_datatype = False, topk = 1, sep = "|", collapse = True):
-        utils.warn("arg_max is not implemented correctly. Too complicated")
+        utils.warn_once("arg_max is not implemented correctly. Too complicated")
         return self.__arg_min_or_max_common__(grouping_cols, argcols, valcols, suffix, use_string_datatype, topk, sep, 1, collapse = collapse)
 
     # grouping_cols are for grouping
@@ -1012,6 +1012,7 @@ class TSV:
         matching_cols = self.__get_matching_cols__(cols)
 
         # find if the new cols is a single value or array
+        new_cols = None
         if (isinstance(new_col_or_cols, str)):
             new_cols = [new_col_or_cols]
         else:
@@ -1033,6 +1034,11 @@ class TSV:
         for new_col in new_cols:
             if (new_col in self.header_fields):
                 raise Exception("New column: {} already exists in {}".format(new_col, str(self.get_header_fields())))
+
+        # check for no data
+        if (self.num_rows() == 0):
+            # just add new columns and return
+            return self.add_empty_cols_if_missing(new_cols)
 
         # get the indexes
         num_cols = len(matching_cols)
