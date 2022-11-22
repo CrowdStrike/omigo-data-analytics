@@ -12,6 +12,11 @@ from concurrent.futures import ThreadPoolExecutor
 
 # TODO: these caches dont work in multithreaded env.
 MSG_CACHE_MAX_LEN = 10000
+INFO_MSG_CACHE = {}
+ERROR_MSG_CACHE = {}
+WARN_MSG_CACHE = {}
+DEBUG_MSG_CACHE = {}
+TRACE_MSG_CACHE = {}
 
 def is_critical():
     return str(os.environ.get("OMIGO_CRITICAL", "0")) == "1"
@@ -47,62 +52,79 @@ def trace(msg):
     if (is_trace()):
         print("[TRACE]: {}".format(msg))
 
-def trace_once(msg, msg_cache):
-    # check if the cache has become too big
-    if (len(msg_cache) >= MSG_CACHE_MAX_LEN):
-        msg_cache = {}
+def trace_once(msg):
+    # check if enabled
+    if (is_trace() == False):
+        return
 
+    # refer to global variable
+    global TRACE_MSG_CACHE
     # check if msg is already displayed
-    if (msg not in msg_cache.keys()):
+    if (msg not in TRACE_MSG_CACHE.keys()):
         print("[TRACE ONCE ONLY]: " + msg)
-        msg_cache[msg] = 1
+        TRACE_MSG_CACHE[msg] = 1
+
+        # check if the cache has become too big
+        if (len(TRACE_MSG_CACHE) >= MSG_CACHE_MAX_LEN):
+            TRACE_MSG_CACHE = {}
 
 def debug(msg):
     if (is_debug()):
         print("[DEBUG]: {}".format(msg))
 
-def debug_once(msg, msg_cache):
-    # check if msg is already displayed
-    if (msg not in msg_cache.keys()):
-         if (is_debug()):
-             print("[DEBUG ONCE ONLY]: {}".format(msg))
-         msg_cache[msg] = 1
+def debug_once(msg):
+    # check if enabled
+    if (is_warn() == False):
+        return
 
-         # clear the cache if it has become too big
-         if (len(msg_cache) >= MSG_CACHE_MAX_LEN):
-             msg_cache = {}
-    else:
-        trace(msg)
+    # refer to global variable
+    global DEBUG_MSG_CACHE
+    # check if msg is already displayed
+    if (msg not in DEBUG_MSG_CACHE.keys()):
+        print("[DEBUG ONCE ONLY]: " + msg)
+        DEBUG_MSG_CACHE[msg] = 1
+
+        # check if the cache has become too big
+        if (len(DEBUG_MSG_CACHE) >= MSG_CACHE_MAX_LEN):
+            DEBUG_MSG_CACHE = {}
 
 def info(msg):
     if (is_info()):
         print("[INFO]: {}".format(msg))
 
-def info_once(msg, msg_cache):
-    # check if msg is already displayed
-    if (msg not in msg_cache.keys()):
-         print("[INFO ONCE ONLY]: {}".format(msg))
-         msg_cache[msg] = 1
+def info_once(msg):
+    # check if enabled
+    if (is_info() == False):
+        return
 
-         # clear the cache if it has become too big
-         if (len(msg_cache) >= MSG_CACHE_MAX_LEN):
-             msg_cache = {}
-    else:
-        trace(msg)
+    # refer to global variable
+    global INFO_MSG_CACHE
+    # check if msg is already displayed
+    if (msg not in INFO_MSG_CACHE.keys()):
+        print("[INFO ONCE ONLY]: " + msg)
+        INFO_MSG_CACHE[msg] = 1
+
+        # check if the cache has become too big
+        if (len(INFO_MSG_CACHE) >= MSG_CACHE_MAX_LEN):
+            INFO_MSG_CACHE = {}
 
 def error(msg):
     if (is_error()):
         print("[ERROR]: {}".format(msg))
 
-def error_once(msg, msg_cache):
+def error_once(msg):
+    # check if enabled
+    if (is_error() == False):
+        return
+
     # check if msg is already displayed
-    if (msg not in msg_cache.keys()):
+    if (msg not in ERROR_MSG_CACHE.keys()):
          print("[ERROR ONCE ONLY]: {}".format(msg))
-         msg_cache[msg] = 1
+         ERROR_MSG_CACHE[msg] = 1
 
          # clear the cache if it has become too big
-         if (len(msg_cache) >= MSG_CACHE_MAX_LEN):
-             msg_cache = {}
+         if (len(ERROR_MSG_CACHE) >= MSG_CACHE_MAX_LEN):
+             ERROR_MSG_CACHE = {}
     else:
         trace(msg)
 
@@ -146,18 +168,21 @@ def warn(msg):
     if (is_warn() or is_error() or is_critical()):
         print("[WARN]: " + msg)
 
-def warn_once(msg, msg_cache):
+def warn_once(msg):
+    # check if enabled
+    if (is_warn() == False):
+        return
+
+    # refer to global variable
+    global WARN_MSG_CACHE
     # check if msg is already displayed
-    if (msg not in msg_cache.keys()):
+    if (msg not in WARN_MSG_CACHE.keys()):
         print("[WARN ONCE ONLY]: " + msg)
-        msg_cache[msg] = 1
+        WARN_MSG_CACHE[msg] = 1
 
         # check if the cache has become too big
-        if (len(msg_cache) >= MSG_CACHE_MAX_LEN):
-            msg_cache = {}
-
-    else:
-        trace(msg)
+        if (len(WARN_MSG_CACHE) >= MSG_CACHE_MAX_LEN):
+            WARN_MSG_CACHE = {}
 
 def is_code_todo_warning():
     return str(os.environ.get("OMIGO_CODE_TODO_WARNING", "0")) == "1"
@@ -177,10 +202,10 @@ def url_decode(s):
     if (s is None):
         return ""
 
-    return urllib.parse.unquote_plus(s).replace("\t", " ")
+    return urllib.parse.unquote_plus(s).replace("\t", " ").replace("\v", " ").replace("\r", " ")
 
 def url_decode_clean(s):
-    return url_decode(s).replace("\n", " ").replace("\v", " ")
+    return url_decode(s).replace("\n", " ").replace("\v", " ").replace("\v", " ")
 
 # move this to utils
 def parse_encoded_json(s):
@@ -353,7 +378,7 @@ def run_with_thread_pool(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0):
 def raise_exception_or_warn(msg, ignore_if_missing):
     # print message if ignore_if_missing flag is true
     if (ignore_if_missing == True):
-        warn(msg)
+        warn_once(msg)
     else:
         raise Exception(msg)
 
@@ -363,7 +388,7 @@ def strip_spl_white_spaces(v):
         return None
 
     # return
-    return str(v).replace("\t", " ").replace("\n", " ").replace("\v", " ")
+    return str(v).replace("\t", " ").replace("\n", " ").replace("\v", " ").replace("\r", " ")
 
 def resolve_meta_params(xstr, props):
     # check for None
@@ -377,3 +402,55 @@ def resolve_meta_params(xstr, props):
 
     # return
     return xstr
+
+def replace_template_props(props, xstr):
+    # validation
+    if (xstr is None or xstr == ""):
+        return xstr
+
+    # iterate
+    for k in props.keys():
+        # generate template key
+        template_key = "{" + k + "}"
+        if (xstr.find(template_key) != -1):
+            xstr = xstr.replace(template_key, str(props[k]))
+
+    # return
+    return xstr
+
+def random_shuffle(xs, seed = 0):
+    # boundary conditions
+    if (xs is None or len(xs) <= 1):
+        return xs
+
+    # apply seed
+    index = seed % len(xs)
+
+    # create a copy
+    xs2 = list([t for t in xs])
+
+    # swap item 0 with item[seed]
+    temp = xs2[0]
+    xs2[0] = xs2[index]
+    xs2[index] = temp
+ 
+    # return
+    return xs2
+
+def is_text_content_col(col, text_columns):
+    warn_once("is_text_content_col: this api needs more consistency across the board")
+
+    # validation
+    if (col is None):
+        return False
+
+    # check for text_columns
+    if (text_columns is None or len(text_columns) == 0):
+        return False
+
+    # use case insensitive matching
+    for tcol in text_columns:
+        if (col.lower() == tcol.lower()):
+            return True
+
+    return False

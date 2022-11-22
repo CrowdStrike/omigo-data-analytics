@@ -17,13 +17,18 @@ def parse_image_file_base_name(x):
     return str(x[index+1:])
 
 def uniq_len(vs):
-    return str(len(set(vs)))
+    vs2 = set()
+    for t in vs:
+        for k in str(t).split(","):
+            if (len(k.strip()) > 0):
+                vs2.add(str(k))
+    return str(len(vs2))
 
 def uniq_mkstr(vs):
     vs2 = set()
     for t in vs:
         for k in str(t).split(","):
-            if (len(k) > 0):
+            if (len(k.strip()) > 0):
                 vs2.add(str(k))
     return ",".join(sorted([str(x) for x in vs2]))
 
@@ -132,6 +137,9 @@ def get_str_map_without_keys(mp, excluded_keys):
 
 # TODO. better naming
 def datetime_to_utctimestamp(x):
+    # convert this to string first for failsafe
+    x = str(x)
+
     # 2022-05-20T05:00:00+00:00
     if (x.endswith("UTC") or x.endswith("GMT") or x.endswith("Z") or x.endswith("+00:00")):
         return int(parser.parse(x).timestamp())
@@ -154,7 +162,7 @@ def datetime_to_utctimestamp(x):
         # this looks like numeric timestamp in millis
         return int(int(x) / 1000)
     else:
-        raise Exception("Unknown date format. Problem with UTC: {}".format(x))
+        raise Exception("Unknown date format. Problem with UTC: '{}'".format(x))
 
 # TODO: Converts seconds format only
 def utctimestamp_to_datetime_str(x):
@@ -162,6 +170,8 @@ def utctimestamp_to_datetime_str(x):
 
 # TODO: Converts seconds format only
 def utctimestamp_to_datetime(x):
+    # take it as int
+    x = int(x)
     if (len(str(x)) == 10):
         return datetime.datetime.utcfromtimestamp(x).replace(tzinfo = datetime.timezone.utc)
     elif (len(str(x)) == 13):
@@ -177,3 +187,23 @@ def get_utctimestamp_sec():
 
 def datestr_to_datetime(x):
     return utctimestamp_to_datetime(datetime_to_utctimestamp(x))
+
+def select_first_non_empty(*args, **kwargs):
+    # variable name
+    xs = args
+
+    # boundary condition
+    if (xs is None or len(xs) == 0):
+        return ""
+
+    # check if it is list or tuple
+    if (isinstance(xs[0], list)):
+        xs = xs[0]
+
+    # boundary conditions
+    for x in xs:
+        if (x is not None and x != ""):
+            return str(x)
+
+    # return default
+    return ""
