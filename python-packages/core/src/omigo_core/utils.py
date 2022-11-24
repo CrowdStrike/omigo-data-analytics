@@ -454,3 +454,14 @@ def is_text_content_col(col, text_columns):
             return True
 
     return False
+
+
+def resolve_default_parameter(name, value, default_value, msg):
+    # check if prefix parameter is None
+    if (value is None):
+        warn_once("{}: {} value is None. Using default value: {}".format(msg, name, default_value))
+        value = default_value
+
+    # return
+    return value
+        
