@@ -202,10 +202,10 @@ def url_decode(s):
     if (s is None):
         return ""
 
-    return urllib.parse.unquote_plus(s).replace("\t", " ").replace("\v", " ").replace("\r", " ")
+    return urllib.parse.unquote_plus(s).replace("\n", " ").replace("\t", " ").replace("\v", " ").replace("\r", " ")
 
 def url_decode_clean(s):
-    return url_decode(s).replace("\n", " ").replace("\v", " ").replace("\v", " ")
+    return url_decode(s).replace("\n", " ").replace("\v", " ").replace("\r", " ").replace("\t", " ")
 
 # move this to utils
 def parse_encoded_json(s):

@@ -2021,7 +2021,7 @@ class TSV:
         utils.warn("Deprecated: Use add_prefix instead")
         return self.add_prefix(self, prefix, cols)
 
-    def remove_suffix(self, suffix, ignore_if_missing = False):
+    def remove_suffix(self, suffix, prefix = None, ignore_if_missing = False):
         # check empty
         if (self.has_empty_header()):
             utils.raise_exception_or_warn("remove_suffix: empty tsv", ignore_if_missing)
@@ -2037,11 +2037,13 @@ class TSV:
         # check for matching cols
         for c in self.get_header_fields():
             if (c.endswith(suffix)):
-                new_col =  c[0:-len(suffix)]
-                if (new_col in self.header_fields or len(new_col) == 0):
-                    utils.warn("remove_suffix: Duplicate names found. Ignoring removal of prefix for col: {} to new_col: {}".format(c, new_col))
-                else:
-                    mp[c] = new_col
+                # check if the prefix is defined and matcing
+                if (prefix is None or c.startswith(prefix + ":") == True):
+                    new_col =  c[0:-len(suffix)]
+                    if (new_col in self.header_fields or len(new_col) == 0):
+                        utils.warn("remove_suffix: Duplicate names found. Ignoring removal of prefix for col: {} to new_col: {}".format(c, new_col))
+                    else:
+                        mp[c] = new_col
 
         # validation
         if (len(mp) == 0):
@@ -3138,6 +3140,11 @@ class TSV:
                 return self
             else:
                 raise Exception("split_batches: empty tsv")
+
+        # check for empty rows
+        if (self.num_rows() == 0):
+            utils.warn("split_batches: empty tsv")
+            return self
 
         # check if cols are defined or not
         if (cols is None):
