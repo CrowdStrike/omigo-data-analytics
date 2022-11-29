@@ -3569,7 +3569,7 @@ class TSV:
                     if (isinstance(v, list) and len(v) > 0):
                         single_results[k + ":__explode_json_len__"] = str(len(v))
                         if (len(list_results_arr) > 0 and utils.is_debug()):
-                            utils.warn("explode_json: multiple lists are not fully supported. Confirm data parsing or Use accepted_cols or excluded_cols: {}".format(str(k)))
+                            utils.warn_once("explode_json: multiple lists are not fully supported. Confirm data parsing or Use accepted_cols or excluded_cols: {}".format(str(k)))
 
                         # create a new entry for holding the list array
                         list_results_arr.append([])
