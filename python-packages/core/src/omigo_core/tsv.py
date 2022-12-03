@@ -705,10 +705,19 @@ class TSV:
         return self.group_by_key(grouping_cols, combined_cols, __arg_max_grouping_func__, suffix = suffix, collapse = collapse)
 
     # TODO: this use_string_datatype is temporary and needs to be replaced with better design.
-    def aggregate(self, grouping_col_or_cols, agg_cols, agg_funcs, collapse = True, precision = 6, use_rolling = False, use_string_datatype = False, inherit_message = ""):
+    def aggregate(self, grouping_col_or_cols, agg_cols, agg_funcs, collapse = True, precision = 6, use_rolling = False, use_string_datatype = None,
+	string_datatype_cols = None, inherit_message = ""):
         # check empty
         if (self.has_empty_header()):
             raise Exception("aggregate: empty tsv")
+
+        # look for deprecated parameters
+        if (use_string_datatype is not None):
+            utils.warn_once("use_string_datatype is deprecated. Use string_datatype_cols instead")
+            if (string_datatype_cols is not None):
+                use_string_datatype = True
+        else:
+            use_string_datatype = False
 
         # get matching columns
         grouping_cols = self.__get_matching_cols__(grouping_col_or_cols)
@@ -724,6 +733,12 @@ class TSV:
         # validation on number of agg funcs
         if (len(agg_cols) != len(agg_funcs)):
             raise Exception("Aggregate functions are not of correct size")
+
+        # find which columns are to be used as strings
+        if (use_string_datatype == False):
+            if (string_datatype_cols is not None):
+                utils.warn_once("string_datatype_cols is defined but use_string_datatype is set to False")
+                use_string_datatype = True
 
         # validation
         indexes = self.__get_col_indexes__(grouping_cols)
@@ -750,12 +765,17 @@ class TSV:
         agg_col_indexes = []
         rolling_agg_col_indexes_map = {}
         rolling_agg_funcs = []
+        str_agg_col_indexes = []
 
         # for each agg col, add the index
         for i in range(len(agg_cols)):
             agg_col = agg_cols[i]
             agg_index = self.header_map[agg_col]
             agg_col_indexes.append(agg_index)
+
+            # check if string is to be used
+            if (use_string_datatype == True and string_datatype_cols is not None and agg_col in string_datatype_cols):
+                str_agg_col_indexes.append(agg_index)
 
             # prepare map of indexes of rolling_agg functions
             if (get_func_name(agg_funcs[i]) in rolling_agg_funcs_map.keys()):
@@ -802,7 +822,8 @@ class TSV:
                         except ValueError:
                             value_map_arr[j][cols_key].append(fields[agg_col_indexes[j]])
                     else:
-                        value_map_arr[j][cols_key].append(str(fields[agg_col_indexes[j]]))
+                        if (string_datatype_cols is None or agg_col_indexes[j] in str_agg_col_indexes):
+                            value_map_arr[j][cols_key].append(str(fields[agg_col_indexes[j]]))
 
         # compute the aggregation
         value_func_map_arr = [{} for i in range(len(agg_col_indexes))]
@@ -1378,7 +1399,7 @@ class TSV:
         # return self
         return self
 
-    def show(self, n = 100, max_col_width = 40, title = None):
+    def show(self, n = 100, title = None, max_col_width = 40):
         # check empty
         if (self.has_empty_header()):
             return self
@@ -2181,7 +2202,7 @@ class TSV:
 
         # validation
         if (len(mp) == 0):
-            utils.raise_exception_or_warn("prefix didnt match any of the columns: {}, {}, ignore_if_missing: {}".format(prefix, str(self.get_header_fields())), ignore_if_missing)
+            utils.raise_exception_or_warn("prefix didnt match any of the columns: {}, {}".format(prefix, str(self.get_header_fields())), ignore_if_missing)
 
         new_header = "\t".join(list([h if (h not in mp.keys()) else mp[h] for h in self.get_header_fields()]))
         return TSV(new_header, self.data)
