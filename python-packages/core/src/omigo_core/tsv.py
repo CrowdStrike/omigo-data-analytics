@@ -705,7 +705,7 @@ class TSV:
         return self.group_by_key(grouping_cols, combined_cols, __arg_max_grouping_func__, suffix = suffix, collapse = collapse)
 
     # TODO: this use_string_datatype is temporary and needs to be replaced with better design.
-    def aggregate(self, grouping_col_or_cols, agg_cols, agg_funcs, collapse = True, precision = 6, use_rolling = False, use_string_datatype = None,
+    def aggregate(self, grouping_col_or_cols, agg_cols, agg_funcs, collapse = True, precision = None, use_rolling = None, use_string_datatype = None,
 	string_datatype_cols = None, inherit_message = ""):
         # check empty
         if (self.has_empty_header()):
@@ -717,14 +717,25 @@ class TSV:
             if (string_datatype_cols is not None):
                 use_string_datatype = True
         else:
-            use_string_datatype = False
+            if (string_datatype_cols is not None):
+                use_string_datatype = True
+            else:
+                use_string_datatype = False
+
+        # validation on precision
+        if (precision is not None):
+            raise Exception("aggregate: precision parameter is deprecated")
+
+        # validation on use_rolling 
+        if (use_rolling is not None or use_rolling == True):
+            raise Exception("aggregate: use_rolling parameter is deprecated")
 
         # get matching columns
         grouping_cols = self.__get_matching_cols__(grouping_col_or_cols)
 
         # define rolling functions
-        rolling_agg_funcs_map = {"sum": get_rolling_func_update_sum, "min": get_rolling_func_update_min, "max": get_rolling_func_update_max, "mean": get_rolling_func_update_mean,
-            "len": get_rolling_func_update_len}
+        # rolling_agg_funcs_map = {"sum": get_rolling_func_update_sum, "min": get_rolling_func_update_min, "max": get_rolling_func_update_max, "mean": get_rolling_func_update_mean,
+        #     "len": get_rolling_func_update_len}
 
         # validation on number of grouping cols
         if (len(grouping_cols) == 0 or len(agg_cols) == 0):
@@ -755,16 +766,9 @@ class TSV:
         # check for empty data
         if (self.num_rows() == 0):
             utils.warn("aggregate: no data. Returning new header only")
-            # TODO: Check if this is needed
-            # if (collapse == True):
-            #     return tsv.new_with_cols(utils.merge_arrays(grouping_cols, new_cols))
-            # else:
-            #     return tsv.new_with_cols(self.get_header_fields(), new_cols)
 
         # take the indexes
         agg_col_indexes = []
-        rolling_agg_col_indexes_map = {}
-        rolling_agg_funcs = []
         str_agg_col_indexes = []
 
         # for each agg col, add the index
@@ -776,11 +780,6 @@ class TSV:
             # check if string is to be used
             if (use_string_datatype == True and string_datatype_cols is not None and agg_col in string_datatype_cols):
                 str_agg_col_indexes.append(agg_index)
-
-            # prepare map of indexes of rolling_agg functions
-            if (get_func_name(agg_funcs[i]) in rolling_agg_funcs_map.keys()):
-                rolling_agg_col_indexes_map[i] = 1
-                rolling_agg_funcs.append(rolling_agg_funcs_map[get_func_name(agg_funcs[i])])
 
         # create a map to store array of values
         value_map_arr = [{} for i in range(len(agg_col_indexes))]
@@ -808,22 +807,20 @@ class TSV:
                 if (cols_key not in value_map_arr[j].keys()):
                     value_map_arr[j][cols_key] = []
 
-                # check for rolling functions
-                if (use_rolling and j in rolling_agg_col_indexes_map.keys()):
-                    if (len(value_map_arr[j][cols_key]) == 0):
-                        value_map_arr[j][cols_key] = get_rolling_func_init(get_func_name(agg_funcs[j]))
-                    #get_rolling_func_update(value_map_arr[j][cols_key], float(fields[agg_col_indexes[j]]), get_func_name(agg_funcs[j]))
-                    rolling_agg_funcs[j](value_map_arr[j][cols_key], float(fields[agg_col_indexes[j]]))
+                # TODO: this is a hack on datatype
+                if (use_string_datatype == False):
+                    try:
+                        value_map_arr[j][cols_key].append(float(fields[agg_col_indexes[j]]))
+                    except ValueError:
+                        value_map_arr[j][cols_key].append(fields[agg_col_indexes[j]])
                 else:
-                    # TODO: this is a hack on datatype
-                    if (use_string_datatype == False):
+                    if (string_datatype_cols is None or agg_col_indexes[j] in str_agg_col_indexes):
+                        value_map_arr[j][cols_key].append(str(fields[agg_col_indexes[j]]))
+                    else:
                         try:
                             value_map_arr[j][cols_key].append(float(fields[agg_col_indexes[j]]))
                         except ValueError:
                             value_map_arr[j][cols_key].append(fields[agg_col_indexes[j]])
-                    else:
-                        if (string_datatype_cols is None or agg_col_indexes[j] in str_agg_col_indexes):
-                            value_map_arr[j][cols_key].append(str(fields[agg_col_indexes[j]]))
 
         # compute the aggregation
         value_func_map_arr = [{} for i in range(len(agg_col_indexes))]
@@ -831,11 +828,7 @@ class TSV:
         # for each possible index, do aggregation
         for j in range(len(agg_col_indexes)):
             for k, vs in value_map_arr[j].items():
-                # check for rolling functions
-                if (use_rolling and j in rolling_agg_col_indexes_map.keys()):
-                    value_func_map_arr[j][k] = get_rolling_func_closing(vs, get_func_name(agg_funcs[j]))
-                else:
-                    value_func_map_arr[j][k] = agg_funcs[j](vs)
+                value_func_map_arr[j][k] = agg_funcs[j](vs)
 
         # create new header and data
         new_header = "\t".join(utils.merge_arrays([self.header_fields, new_cols]))
@@ -867,7 +860,8 @@ class TSV:
                 new_data.append(new_line)
                 cols_key_map[cols_key] = 1
 
-        # return
+        # create result
+        result_xtsv = TSV(new_header, new_data)
         if (collapse == True):
             # uniq cols
             uniq_cols = []
@@ -875,9 +869,10 @@ class TSV:
                 uniq_cols.append(col)
             for new_col in new_cols:
                 uniq_cols.append(new_col)
-            return TSV(new_header, new_data).to_numeric(new_cols, precision, inherit_message = inherit_message).select(uniq_cols)
-        else:
-            return TSV(new_header, new_data).to_numeric(new_cols, precision, inherit_message = inherit_message)
+            result_xtsv = result_xtsv.select(uniq_cols)
+
+        # return
+        return result_xtsv
 
     def filter(self, cols, func, include_cond = True, ignore_if_missing = False, inherit_message = ""):
         # check empty

@@ -43,11 +43,73 @@ def mkstr4f(vs):
     vs2 = list(["{:4f}".format(float(x)) for x in vs])
     return ",".join(vs2)
 
+def minint(vs):
+    if (vs is None or len(vs) == 0):
+        raise Exception("minint: empty vs")
+
+    min_value = str(vs[0])
+    for v in vs[1:]:
+        if (int(float(v)) < int(float(min_value))):
+            min_value = str(v)
+
+    return str(min_value)
+
+def maxfloat(vs):
+    if (vs is None or len(vs) == 0):
+        raise Exception("maxint: empty vs")
+
+    max_value = str(vs[0])
+    for v in vs[1:]:
+        if (int(float(v)) > int(float(max_value))):
+            max_value = str(v)
+
+    return str(max_value)
+
+def minfloat(vs):
+    if (vs is None or len(vs) == 0):
+        raise Exception("minfloat: empty vs")
+
+    min_value = str(vs[0])
+    for v in vs[1:]:
+        if (float(v) < float(min_value)):
+            min_value = str(v)
+
+    return str(min_value)
+
+def maxfloat(vs):
+    if (vs is None or len(vs) == 0):
+        raise Exception("maxfloat: empty vs")
+
+    max_value = str(vs[0])
+    for v in vs[1:]:
+        if (float(v) > float(max_value)):
+            max_value = str(v)
+
+    return str(max_value)
+
 def minstr(vs):
-    return sorted(vs)[0]
+    # return str(sorted(vs)[0])
+    if (vs is None or len(vs) == 0):
+        raise Exception("minstr: empty vs")
+
+    min_value = str(vs[0])
+    for v in vs[1:]:
+        if (str(v) < min_value):
+            min_value = str(v)
+
+    return str(min_value)
 
 def maxstr(vs):
-    return sorted(vs)[-1]
+    # return str(sorted(vs)[0])
+    if (vs is None or len(vs) == 0):
+        raise Exception("maxstr: empty vs")
+
+    max_value = str(vs[0])
+    for v in vs[1:]:
+        if (str(v) > max_value):
+            max_value = str(v)
+
+    return str(max_value)
 
 def uniq_count(vs):
     return len(set(vs))
