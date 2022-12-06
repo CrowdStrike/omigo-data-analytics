@@ -333,7 +333,7 @@ class TSV:
 
         return TSV(self.header, self.data[0:count])
 
-    def distinct(self, inherit_message = None):
+    def distinct(self, inherit_message = ""):
         # create variables
         new_data = []
         key_map = {}
@@ -353,7 +353,7 @@ class TSV:
         # return
         return TSV(self.header, new_data)
 
-    def distinct_cols(self, col_or_cols):
+    def distinct_cols(self, col_or_cols, inherit_message = ""):
         inherit_message2 = inherit_message + ": distinct_cols" if (inherit_message != "") else "distinct_cols"
         return self \
             .select(col_or_cols, inherit_message = inherit_message2) \
@@ -1845,9 +1845,11 @@ class TSV:
         return TSV(self.header, new_data)
 
     # this method finds the set difference between this and that. if cols is None, then all columns are taken
-    def difference(self, that, cols = None):
+    # TODO: hash collision
+    def difference(self, that, cols = None, seed = 0):
         # print some warning for api that is still under development
         utils.warn("difference: to be used where duplicate rows will be removed")
+        utils.warn("difference method uses hash that is not handling hash collisions")
 
         # check this empty. return empty
         if (self.has_empty_header() or self.num_rows() == 0):
@@ -1871,8 +1873,8 @@ class TSV:
 
         # generate key hash
         temp_col = "__difference_col__"
-        hash_tsv1= self.generate_key_hash(cols1, temp_col)
-        hash_tsv2 = that.generate_key_hash(cols2, temp_col)
+        hash_tsv1 = self.generate_key_hash(cols1, temp_col, seed = seed)
+        hash_tsv2 = that.generate_key_hash(cols2, temp_col, seed = seed)
 
         # remove entries from this where the hashes exist in that
         return hash_tsv1 \
@@ -2777,7 +2779,8 @@ class TSV:
         # print message for rkeys that are ignored
         for rkey in rkeys:
             if (rkey not in new_header_fields):
-                utils.debug("rkey ignored from output: {}".format(rkey))
+                utils.debug("rkey included in output as it has different name: {}".format(rkey))
+                new_header_fields.append(rkey)
 
         # add the left side columns
         for i in range(len(self.get_header_fields())):
@@ -3028,8 +3031,8 @@ class TSV:
         # Check for num_par. TODO: Experimental
         if (num_par > 0):
             # split left and right sides
-            left_batches = self.__split_batches_by_cols__(num_par, lkeys)
-            right_batches = that.__split_batches_by_cols__(num_par, rkeys)
+            left_batches = self.__split_batches_by_cols__(num_par, lkeys, seed = seed)
+            right_batches = that.__split_batches_by_cols__(num_par, rkeys, seed = seed)
 
             # call join on individual batches and then return the merge
             tasks = []
@@ -3159,7 +3162,7 @@ class TSV:
         return TSV(new_header, new_data)
 
     # public method handling both random and cols based splitting
-    def split_batches(self, num_batches, cols = None, preserve_order = False):
+    def split_batches(self, num_batches, cols = None, preserve_order = False, seed = 0):
         # check for empty
         if (self.has_empty_header()):
             # check for cols
@@ -3176,12 +3179,20 @@ class TSV:
 
         # check if cols are defined or not
         if (cols is None):
-            return self.__split_batches_randomly__(num_batches, preserve_order = preserve_order)
+            return self.__split_batches_randomly__(num_batches, preserve_order = preserve_order, seed = seed)
         else:
-            return self.__split_batches_by_cols__(num_batches, cols)
+            return self.__split_batches_by_cols__(num_batches, cols, seed = seed)
 
     # split method to split randomly
-    def __split_batches_randomly__(self, num_batches, preserve_order = False):
+    def __split_batches_randomly__(self, num_batches, preserve_order = False, seed = None):
+        # validation
+        if (preserve_order == True ):
+            if (seed is not None):
+                raise Exception("__split_batches_randomly__: seed is only valid when preserve_order is False")
+        else:
+            if (seed is None):
+                seed = 0
+
         # create array to store result
         xtsv_list = []
         data_list = []
@@ -3200,7 +3211,7 @@ class TSV:
             if (preserve_order == True):
                 batch_index = int(i / batch_size)
             else:
-                batch_index = i % effective_batches
+                batch_index = (i + seed) % effective_batches
 
             # append to the splits data
             data_list[batch_index].append(self.data[i])
@@ -3213,7 +3224,8 @@ class TSV:
         return xtsv_list
 
     # split method to split tsv into batches
-    def __split_batches_by_cols__(self, num_batches, cols):
+    # TODO: add inherit_message
+    def __split_batches_by_cols__(self, num_batches, cols, seed = 0):
         # get matching cols
         cols = self.__get_matching_cols__(cols)
 
@@ -3222,7 +3234,7 @@ class TSV:
         temp_col2 = "__split_batches_by_cols__:batch:{}".format(num_batches)
 
         # generate hash
-        hashed_tsv = self.generate_key_hash(cols, temp_col1)
+        hashed_tsv = self.generate_key_hash(cols, temp_col1, seed = seed)
 
         # take all uniq value of hashes
         hashes = hashed_tsv.col_as_array_uniq(temp_col1)
@@ -3256,7 +3268,7 @@ class TSV:
         return new_tsvs
 
     # method to generate a hash for a given set of columns
-    def generate_key_hash(self, cols, new_col):
+    def generate_key_hash(self, cols, new_col, seed = 0):
         # check empty
         if (self.has_empty_header()):
             raise Exception("generate_key_hash: empty tsv")
@@ -3284,7 +3296,7 @@ class TSV:
             value_str = "\t".join(values)
 
             # apply hash
-            hash_value = str(utils.compute_hash(value_str))
+            hash_value = str(utils.compute_hash(value_str, seed = seed))
 
             # add to new data
             new_data.append("\t".join([line, hash_value]))

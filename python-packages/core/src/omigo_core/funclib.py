@@ -269,3 +269,10 @@ def select_first_non_empty(*args, **kwargs):
 
     # return default
     return ""
+
+def utctimestamp_millis_as_sec_to_datetime_str(x):
+    if (x is None or x == ""):
+        raise Exception("utctimestamp_millis_as_sec_to_datetime_str: Invalid input: {}".format(x))
+
+    # call function after converting to string
+    return utctimestamp_to_datetime_str(int(x) // 1000)

@@ -258,7 +258,7 @@ def get_counts_map(xs):
 def report_progress(msg, inherit_message, counter, total):
     report_progress = get_report_progress()
     report_progress_min_threshold = get_report_progress_min_thresh()
-    msg2 = inherit_message + ": " + msg if (len(inherit_message) > 0) else msg
+    msg2 = inherit_message + ": " + msg if (inherit_message is not None and len(inherit_message) > 0) else msg
     if (is_debug() and report_progress > 0 and total >= report_progress_min_threshold):
         progress_size = int(report_progress * total)
         if (progress_size > 0 and counter % progress_size == 0):
