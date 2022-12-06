@@ -333,13 +333,19 @@ class TSV:
 
         return TSV(self.header, self.data[0:count])
 
-    def distinct(self):
+    def distinct(self, inherit_message = None):
         # create variables
         new_data = []
         key_map = {}
 
         # iterate
+        counter = 0
         for line in self.get_data():
+            # report progress
+            counter = counter + 1
+            utils.report_progress("distinct: [1/1] calling function", inherit_message, counter, len(self.get_data()))
+
+            # check if the line doesnt exist already
             if (line not in key_map.keys()):
                 key_map[line] = 1
                 new_data.append(line)
@@ -347,6 +353,12 @@ class TSV:
         # return
         return TSV(self.header, new_data)
 
+    def distinct_cols(self, col_or_cols):
+        inherit_message2 = inherit_message + ": distinct_cols" if (inherit_message != "") else "distinct_cols"
+        return self \
+            .select(col_or_cols, inherit_message = inherit_message2) \
+            .distinct(inherit_message = inherit_message2)
+       
     # TODO: use drop_cols instead coz of better name
     def drop(self, col_or_cols, ignore_if_missing = False, inherit_message = ""):
         utils.warn_once("use drop_cols instead coz of better name")

@@ -54,7 +54,7 @@ def minint(vs):
 
     return str(min_value)
 
-def maxfloat(vs):
+def maxint(vs):
     if (vs is None or len(vs) == 0):
         raise Exception("maxint: empty vs")
 
