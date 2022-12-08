@@ -134,7 +134,7 @@ def str_arr_to_float(xs):
 
 def quantile(xs, start = 0, end = 1, by = 0.25, precision = 4):
     if (start > end):
-        raise Exception("Start > End", start, end)
+        raise Exception("Start: {} > End: {}".format(start, end))
 
     qarr = []
     cur = start
@@ -237,9 +237,9 @@ def utctimestamp_to_datetime(x):
     if (len(str(x)) == 10):
         return datetime.datetime.utcfromtimestamp(x).replace(tzinfo = datetime.timezone.utc)
     elif (len(str(x)) == 13):
-        return datetime.datetime.utcfromtimestamp(int(x/1000)).replace(tzinfo = datetime.timezone.utc)
+        return datetime.datetime.utcfromtimestamp(int(x)//1000).replace(tzinfo = datetime.timezone.utc)
     else:
-        raise Exception("Unknown timestamp format:", x)
+        raise Exception("Unknown timestamp format: {}".format(x))
 
 def datetime_to_timestamp(x):
     raise Exception("Please use datetime_to_utctimestamp")
@@ -270,9 +270,116 @@ def select_first_non_empty(*args, **kwargs):
     # return default
     return ""
 
-def utctimestamp_millis_as_sec_to_datetime_str(x):
-    if (x is None or x == ""):
-        raise Exception("utctimestamp_millis_as_sec_to_datetime_str: Invalid input: {}".format(x))
+# def if_else_non_empty_str(x, v1, v2):
+def if_else_non_empty_str(*args):
+    # variable name
+    xs = args
 
-    # call function after converting to string
-    return utctimestamp_to_datetime_str(int(x) // 1000)
+    # boundary condition
+    if (xs is None or len(xs) == 0):
+        raise Exception("if_else_non_empty_str: invalid input") 
+
+    # check if it is list or tuple
+    if (isinstance(xs[0], list)):
+        xs = xs[0]
+
+    # validation
+    if (len(xs) != 3):
+        raise Exception("if_else_non_empty_str: invalid input: {}".format(xs))
+
+    # assign variables
+    x = xs[0]
+    v1 = xs[1]
+    v2 = xs[2]
+
+    if (x is not None and str(x) != ""):
+        return str(v1)
+    else:
+        return str(v2)
+
+# def if_else_str(xinput, xval, v1, v2):
+def if_else_str(*args):
+    # variable name
+    xs = args
+
+    # boundary condition
+    if (xs is None or len(xs) == 0):
+        raise Exception("if_else_non_empty_str: invalid input") 
+
+    # check if it is list or tuple
+    if (isinstance(xs[0], list)):
+        xs = xs[0]
+
+    # validation
+    if (len(xs) != 4):
+        raise Exception("if_else_str: invalid input: {}".format(xs))
+
+    # assign variables
+    xinput = xs[0]
+    xval = xs[1]
+    v1 = xs[2]
+    v2 = xs[3]
+
+    # apply function
+    if (xinput is not None and str(xinput) == str(xval)):
+        return str(v1)
+    else:
+        return str(v2)
+
+# def if_else_int(xinput, xval, v1, v2):
+def if_else_int(*args):
+    # variable name
+    xs = args
+
+    # boundary condition
+    if (xs is None or len(xs) == 0):
+        raise Exception("if_else_int: invalid input") 
+
+    # check if it is list or tuple
+    if (isinstance(xs[0], list)):
+        xs = xs[0]
+
+    # validation
+    if (len(xs) != 4):
+        raise Exception("if_else_int: invalid input: {}".format(xs))
+
+    # assign variables
+    xinput = xs[0]
+    xval = xs[1]
+    v1 = xs[2]
+    v2 = xs[3]
+
+    # apply function
+    if (xinput is not None and int(xinput) == int(xval)):
+        return v1
+    else:
+        return v2
+
+# def if_else_non_zero_int(x, v1, v2):
+def if_else_non_zero_int(*args):
+    # variable name
+    xs = args
+
+    # boundary condition
+    if (xs is None or len(xs) == 0):
+        raise Exception("if_else_non_zero_int: invalid input") 
+
+    # check if it is list or tuple
+    if (isinstance(xs[0], list)):
+        xs = xs[0]
+
+    # validation
+    if (len(xs) != 3):
+        raise Exception("if_else_int: invalid input: {}".format(xs))
+
+    # assign variables
+    x = xs[0]
+    v1 = xs[1]
+    v2 = xs[2]
+
+    # apply function
+    if (x is None or int(x) != 0):
+        return v1
+    else:
+        return v2
+
