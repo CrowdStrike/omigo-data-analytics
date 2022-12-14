@@ -668,7 +668,7 @@ class TSV:
                 for i in range(len(argcols)):
                     keys.append(mp[argcols[i]])
 
-                # read values
+                # read values. TODO: dont do float conversion here as it distorts original data
                 values = []
                 for i in range(len(valcols)):
                     if (use_string_datatype == False):
@@ -2775,16 +2775,18 @@ class TSV:
 
         # for each type of join, merge the values
         new_header_fields = []
+        new_header_copy_fields_map = {} 
 
         # create the keys
         for lkey in lkeys:
             new_header_fields.append(lkey)
 
         # print message for rkeys that are ignored
-        for rkey in rkeys:
+        for rkey_index in range(len(rkeys)):
+            rkey = rkeys[rkey_index]
             if (rkey not in new_header_fields):
-                utils.debug("rkey included in output as it has different name: {}".format(rkey))
-                new_header_fields.append(rkey)
+                utils.warn_once("rkey has a different name: {}".format(rkey))
+                new_header_copy_fields_map[lkeys[rkey_index]] = rkey
 
         # add the left side columns
         for i in range(len(self.get_header_fields())):
@@ -2891,7 +2893,11 @@ class TSV:
                         raise Exception("Unknown join type: {}".format(join_type))
 
         # return
-        return TSV(new_header, new_data)
+        result = TSV(new_header, new_data)
+        for lkey in new_header_copy_fields_map.keys():
+            result = result.copy(lkey, new_header_copy_fields_map[lkey])
+            
+        return result 
 
     # method to do map join. The right side is stored in a hashmap. only applicable to inner joins
     def natural_join(self, that, inherit_message = ""):
@@ -3084,15 +3090,18 @@ class TSV:
 
         # for each type of join, merge the values
         new_header_fields = []
+        new_header_copy_fields_map = {}
 
         # create the keys
         for lkey in lkeys:
             new_header_fields.append(lkey)
 
         # print message for rkeys that are ignored
-        for rkey in rkeys:
+        for rkey_index in range(len(rkeys)):
+            rkey = rkeys[rkey_index]
             if (rkey not in new_header_fields):
-                utils.debug("rkey ignored from output: {}".format(rkey))
+                utils.warn_once("rkey has a different name: {}".format(rkey))
+                new_header_copy_fields_map[lkeys[rkey_index]] = rkey
 
         # add the left side columns
         for i in range(len(self.get_header_fields())):
@@ -3163,7 +3172,11 @@ class TSV:
                     raise Exception("Unknown join type: {} ".format(join_type))
 
         # return
-        return TSV(new_header, new_data)
+        result = TSV(new_header, new_data)
+        for lkey in new_header_copy_fields_map.keys():
+            result = result.copy(lkey, new_header_copy_fields_map[lkey])
+                                      
+        return result
 
     # public method handling both random and cols based splitting
     def split_batches(self, num_batches, cols = None, preserve_order = False, seed = 0):

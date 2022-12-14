@@ -375,7 +375,11 @@ def run_with_thread_pool(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0):
             # return
             return results
 
-def raise_exception_or_warn(msg, ignore_if_missing):
+def raise_exception_or_warn(msg, ignore_if_missing, max_len = 100):
+    # strip the message to max_len
+    if (max_len is not None and max_len > 0 and len(msg) > max_len):
+        msg = msg[0:max_len] + " ..."
+
     # print message if ignore_if_missing flag is true
     if (ignore_if_missing == True):
         warn_once(msg)
