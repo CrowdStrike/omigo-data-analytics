@@ -16,6 +16,9 @@ def parse_image_file_base_name(x):
         index = x.rindex("/")
     return str(x[index+1:])
 
+def get_len(vs):
+    return str(len(vs))
+
 def uniq_len(vs):
     vs2 = set()
     for t in vs:

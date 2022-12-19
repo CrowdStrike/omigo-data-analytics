@@ -4,8 +4,7 @@ import math
 import pandas as pd
 import random
 import json
-from omigo_core import tsvutils
-from omigo_core import utils
+from omigo_core import utils, tsvutils, funclib
 import sys
 import time
 
@@ -290,8 +289,8 @@ class TSV:
 
         # call aggregate with collapse=False
         inherit_message2 = inherit_message + ": group_count" if (len(inherit_message) > 0) else "group_count"
-        return self.aggregate(cols, [cols[0]], [len], collapse = collapse, inherit_message = inherit_message2) \
-            .rename(cols[0] + ":len", new_count_col) \
+        return self.aggregate(cols, [cols[0]], [funclib.get_len], collapse = collapse, inherit_message = inherit_message2) \
+            .rename(cols[0] + ":get_len", new_count_col) \
             .transform([new_count_col], lambda x: str(int(x) / len(self.get_data())), new_ratio_col, inherit_message = inherit_message2) \
             .reverse_sort(new_count_col) \
             .apply_precision(new_ratio_col, precision, inherit_message = inherit_message2)
@@ -723,16 +722,26 @@ class TSV:
         if (self.has_empty_header()):
             raise Exception("aggregate: empty tsv")
 
+        # check for usage of builtin functions
+        for agg_func in agg_funcs:
+            # raise warning if builtin functions are used
+            if (__is_builtin_func__(agg_func)):
+                utils.warn("aggregate: builtin function used that has side effect. Please use funclib.* functions")
+
+        # both use_string_datatype and string_datatype_cols are deprecated
+        if (use_string_datatype is not None or string_datatype_cols is not None):
+            utils.warn("aggregate: use_string_datatype and string_datatype_cols are deprecated")
+
         # look for deprecated parameters
-        if (use_string_datatype is not None):
-            utils.warn_once("use_string_datatype is deprecated. Use string_datatype_cols instead")
-            if (string_datatype_cols is not None):
-                use_string_datatype = True
-        else:
-            if (string_datatype_cols is not None):
-                use_string_datatype = True
-            else:
-                use_string_datatype = False
+        # if (use_string_datatype is not None):
+        #     utils.warn_once("use_string_datatype is deprecated. Use string_datatype_cols instead")
+        #     if (string_datatype_cols is not None):
+        #         use_string_datatype = True
+        # else:
+        #     if (string_datatype_cols is not None):
+        #         use_string_datatype = True
+        #     else:
+        #         use_string_datatype = False
 
         # validation on precision
         if (precision is not None):
@@ -745,10 +754,6 @@ class TSV:
         # get matching columns
         grouping_cols = self.__get_matching_cols__(grouping_col_or_cols)
 
-        # define rolling functions
-        # rolling_agg_funcs_map = {"sum": get_rolling_func_update_sum, "min": get_rolling_func_update_min, "max": get_rolling_func_update_max, "mean": get_rolling_func_update_mean,
-        #     "len": get_rolling_func_update_len}
-
         # validation on number of grouping cols
         if (len(grouping_cols) == 0 or len(agg_cols) == 0):
             raise Exception("No input columns: {}, {}, {}".format(grouping_cols, agg_cols, suffix))
@@ -758,10 +763,10 @@ class TSV:
             raise Exception("Aggregate functions are not of correct size")
 
         # find which columns are to be used as strings
-        if (use_string_datatype == False):
-            if (string_datatype_cols is not None):
-                utils.warn_once("string_datatype_cols is defined but use_string_datatype is set to False")
-                use_string_datatype = True
+        # if (use_string_datatype == False):
+        #     if (string_datatype_cols is not None):
+        #         utils.warn_once("string_datatype_cols is defined but use_string_datatype is set to False")
+        #         use_string_datatype = True
 
         # validation
         indexes = self.__get_col_indexes__(grouping_cols)
@@ -795,8 +800,6 @@ class TSV:
 
         # create a map to store array of values
         value_map_arr = [{} for i in range(len(agg_col_indexes))]
-        # TODO: This rolling aggregation needs to be removed
-        # rolling_value_map_arr = [{} for i in range(len(agg_col_indexes))]
 
         # iterate over the data
         counter = 0
@@ -820,19 +823,20 @@ class TSV:
                     value_map_arr[j][cols_key] = []
 
                 # TODO: this is a hack on datatype
-                if (use_string_datatype == False):
-                    try:
-                        value_map_arr[j][cols_key].append(float(fields[agg_col_indexes[j]]))
-                    except ValueError:
-                        value_map_arr[j][cols_key].append(fields[agg_col_indexes[j]])
-                else:
-                    if (string_datatype_cols is None or agg_col_indexes[j] in str_agg_col_indexes):
-                        value_map_arr[j][cols_key].append(str(fields[agg_col_indexes[j]]))
-                    else:
-                        try:
-                            value_map_arr[j][cols_key].append(float(fields[agg_col_indexes[j]]))
-                        except ValueError:
-                            value_map_arr[j][cols_key].append(fields[agg_col_indexes[j]])
+                # if (use_string_datatype == False):
+                #     try:
+                #         value_map_arr[j][cols_key].append(float(fields[agg_col_indexes[j]]))
+                #     except ValueError:
+                #         value_map_arr[j][cols_key].append(fields[agg_col_indexes[j]])
+                # else:
+                #     if (string_datatype_cols is None or agg_col_indexes[j] in str_agg_col_indexes):
+                #         value_map_arr[j][cols_key].append(str(fields[agg_col_indexes[j]]))
+                #     else:
+                #         try:
+                #             value_map_arr[j][cols_key].append(float(fields[agg_col_indexes[j]]))
+                #         except ValueError:
+                #             value_map_arr[j][cols_key].append(fields[agg_col_indexes[j]])
+                value_map_arr[j][cols_key].append(str(fields[agg_col_indexes[j]]))
 
         # compute the aggregation
         value_func_map_arr = [{} for i in range(len(agg_col_indexes))]
@@ -1198,7 +1202,7 @@ class TSV:
 
         # print which columns are going to be transformed
         if (len(matching_cols) != len(cols) and len(matching_cols) != 1):
-            utils.debug("transform_inline: list of columns that will be transformed: {}".format(str(matching_cols)))
+            utils.trace("transform_inline: list of columns that will be transformed: {}".format(str(matching_cols)))
 
         # create new data
         new_data = []
@@ -1798,11 +1802,19 @@ class TSV:
         inherit_message2 = inherit_message + ": url_decode_clean_inline" if (len(inherit_message) > 0) else "url_decode_clean_inline"
         return self.transform_inline(col_or_cols, lambda x: utils.url_decode_clean(x), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
-    def url_encode(self, col, newcol):
-        return self.transform([col], lambda x: utils.url_encode(x), newcol)
+    def url_encode(self, col, newcol, inherit_message = ""):
+        inherit_message2 = inherit_message + ": url_encode" if (len(inherit_message) > 0) else "url_encode"
+        return self.transform([col], lambda x: utils.url_encode(x), newcol, inherit_message = inherit_message2)
 
-    def url_decode(self, col, newcol):
-        return self.transform([col], lambda x: utils.url_decode(x), newcol)
+    def url_decode(self, col, newcol, inherit_message = ""):
+        inherit_message2 = inherit_message + ": url_decode" if (len(inherit_message) > 0) else "url_decode"
+        return self.transform([col], lambda x: utils.url_decode(x), newcol, inherit_message = inherit_message2)
+
+    def resolve_url_encoded_cols(self, suffix = "url_encoded", ignore_if_missing = False, inherit_message = ""):
+        inherit_message2 = inherit_message + ": resolve_url_encoded_cols" if (len(inherit_message) > 0) else "resolve_url_encoded_cols"
+        return self \
+            .url_decode_inline(".*:{}".format(suffix), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2) \
+            .remove_suffix(suffix, ignore_if_missing = ignore_if_missing)
 
     def union(self, tsv_or_that_arr):
         # check if this is a single element TSV or an array
@@ -3394,6 +3406,7 @@ class TSV:
         return TSV(new_header, new_data)
 
     # TODO: Need better naming. The suffix semantics have been changed.
+    # This doesnt handle empty data correctly. the output cols need add_empty_cols_if_missing
     def explode(self, cols, exp_func, prefix, default_val = None, collapse = True, ignore_if_missing = False, inherit_message = ""):
         # check empty
         if (self.has_empty_header()):
@@ -4296,14 +4309,37 @@ class TSV:
         # return
         return __split_exp_func_inner__
 
-    def split(self, col_or_cols, prefix, sep = ",", collapse = True, inherit_message = ""):
+ 
+    def split(self, *args, **kwargs):
+        utils.warn_once("split: use split_str method instead")
+        return self.split_str(*args, **kwargs)
+ 
+    def split_str(self, col_or_cols, prefix, sep = ",", collapse = True, inherit_message = ""):
         # resolve columns
         cols = self.__get_matching_cols__(col_or_cols)
+        new_cols = list(["{}:{}".format(prefix, t) for t in cols])
 
         # call explode
         inherit_message2 = "{}: split".format(inherit_message) if (len(inherit_message) > 0) else "split"
         return self \
-            .explode(col_or_cols, self.__split_exp_func__(cols, sep), prefix, collapse = collapse, inherit_message = inherit_message2)
+            .explode(col_or_cols, self.__split_exp_func__(cols, sep), prefix, collapse = collapse, inherit_message = inherit_message2) \
+            .add_empty_cols_if_missing(new_cols)
+
+    def enable_debug_mode(self):
+        utils.enable_debug_mode()
+        return self
+
+    def disable_debug_mode(self):
+        utils.disable_debug_mode()
+        return self
+
+    def enable_info_mode(self):
+        utils.enable_info_mode()
+        return self
+
+    def disable_info_mode(self):
+        utils.disable_info_mode()
+        return self
 
 def get_version():
     return "v0.3.9:empty_tsv"
@@ -4442,4 +4478,11 @@ def new_with_cols(cols, data = []):
 
 def create_empty():
     return new_with_cols([])
+
+def __is_builtin_func__(func):
+    # check type
+    if (type(func) in (type(sum), type(math.ceil))):
+        return True
+    else:
+        return False
 

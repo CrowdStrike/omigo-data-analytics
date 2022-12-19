@@ -18,7 +18,7 @@ class MultiThreadTSV(tsv.TSV):
 
         # check if num_par is more than number of rows
         if (self.num_rows() < self.num_par):
-            utils.warn("{}: num_rows: {} < num_par: {}. Adjusting the value".format(self.inherit_message, self.num_rows(), self.num_par))
+            utils.debug("{}: num_rows: {} < num_par: {}. Adjusting the value".format(self.inherit_message, self.num_rows(), self.num_par))
             self.num_par = self.num_rows()
 
         # set the num_batches for better splitting
