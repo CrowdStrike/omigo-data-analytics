@@ -628,22 +628,25 @@ class TSV:
         return TSV(new_header, new_data)
 
     # FIXME
-    def arg_min(self, grouping_cols, argcols, valcols, suffix = "arg_min", use_string_datatype = False, topk = 1, sep = "|", collapse = True):
+    def arg_min(self, grouping_cols, argcols, valcols, suffix = "arg_min", use_string_datatype = False, topk = 1, sep = "|", collapse = True, inherit_message = ""):
         utils.warn_once("arg_min is not implemented correctly. Too complicated")
+        inherit_message2 = inherit_message + ": arg_min" if (len(inherit_message) > 0) else "arg_min"
+
         # some unsupported case
         if (use_string_datatype == True):
             raise Exception("arg_min: use_string_datatype = True is not supported")
 
-        return self.__arg_min_or_max_common__(grouping_cols, argcols, valcols, suffix, topk, sep, -1, collapse = collapse)
+        return self.__arg_min_or_max_common__(grouping_cols, argcols, valcols, suffix, topk, sep, -1, collapse = collapse, inherit_message = inherit_message2)
 
-    def arg_max(self, grouping_cols, argcols, valcols, suffix = "arg_max", use_string_datatype = False, topk = 1, sep = "|", collapse = True):
+    def arg_max(self, grouping_cols, argcols, valcols, suffix = "arg_max", use_string_datatype = False, topk = 1, sep = "|", collapse = True, inherit_message = ""):
         utils.warn_once("arg_max is not implemented correctly. Too complicated")
-        return self.__arg_min_or_max_common__(grouping_cols, argcols, valcols, suffix, use_string_datatype, topk, sep, 1, collapse = collapse)
+        inherit_message2 = inherit_message + ": arg_max" if (len(inherit_message) > 0) else "arg_max"
+        return self.__arg_min_or_max_common__(grouping_cols, argcols, valcols, suffix, use_string_datatype, topk, sep, 1, collapse = collapse, inherit_message = inherit_message2)
 
     # grouping_cols are for grouping
     # argcols which are returned where valcols values are max or min
     # suffix is added to both arg and val. arg are suffixed as :arg, values are suffixed as val1, val2 upto topk
-    def __arg_min_or_max_common__(self, grouping_cols, argcols, valcols, suffix, use_string_datatype, topk, sep, sign, collapse = False):
+    def __arg_min_or_max_common__(self, grouping_cols, argcols, valcols, suffix, use_string_datatype, topk, sep, sign, collapse = False, inherit_message = ""):
         grouping_cols = self.__get_matching_cols__(grouping_cols)
         argcols = self.__get_matching_cols__(argcols)
         valcols = self.__get_matching_cols__(valcols)
@@ -654,7 +657,9 @@ class TSV:
             for i in range(len(argcols)):
                 max_keys.append([])
             max_values = []
+            max_str_values = []
             for i in range(len(valcols)):
+                max_str_values.append("")
                 if (use_string_datatype == False):
                     max_values.append(sign * float('-inf'))
                 else:
@@ -669,7 +674,9 @@ class TSV:
 
                 # read values. TODO: dont do float conversion here as it distorts original data
                 values = []
+                str_values = []
                 for i in range(len(valcols)):
+                    str_values.append(str(mp[valcols[i]]))
                     if (use_string_datatype == False):
                         values.append(sign * float(mp[valcols[i]]))
                     else:
@@ -684,6 +691,7 @@ class TSV:
                             max_keys[j] = [str(keys[j])]
                         for j in range(len(values)):
                             max_values[j] = values[j]
+                            max_str_values[j] = str_values[j]
                         found = True
                         break
                     elif (max_values[i] > values[i]):
@@ -700,7 +708,7 @@ class TSV:
             for i in range(len(argcols)):
                 result[argcols[i] + ":arg"] = sep.join(max_keys[i][0:topk])
             for i in range(len(valcols)):
-                result[valcols[i] + ":val" + str(i+1)] = str(max_values[i])
+                result[valcols[i] + ":val" + str(i+1)] = str(max_str_values[i])
 
             # return
             return result
@@ -713,7 +721,7 @@ class TSV:
             combined_cols.append(k)
 
         # remaining validation done by the group_by_key
-        return self.group_by_key(grouping_cols, combined_cols, __arg_max_grouping_func__, suffix = suffix, collapse = collapse)
+        return self.group_by_key(grouping_cols, combined_cols, __arg_max_grouping_func__, suffix = suffix, collapse = collapse, inherit_message = inherit_message)
 
     # TODO: this use_string_datatype is temporary and needs to be replaced with better design.
     def aggregate(self, grouping_col_or_cols, agg_cols, agg_funcs, collapse = True, precision = None, use_rolling = None, use_string_datatype = None,
@@ -3862,6 +3870,11 @@ class TSV:
     def explode_json(self, col, prefix = None, accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None,
         merge_list_method = "cogroup", collapse_primitive_list = True, url_encoded_cols = None, nested_cols = None, collapse = True, max_results = None, ignore_if_missing = False,
         default_val = "", inherit_message = ""):
+
+        # validation
+        if (prefix is None):
+            utils.warn("explode_json: prefix = None is deprecated. Using the original column name as prefix: {}".format(col))
+            prefix = col
 
         # check empty
         if (self.has_empty_header()):
