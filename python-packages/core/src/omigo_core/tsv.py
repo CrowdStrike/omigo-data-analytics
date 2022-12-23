@@ -740,17 +740,6 @@ class TSV:
         if (use_string_datatype is not None or string_datatype_cols is not None):
             utils.warn("aggregate: use_string_datatype and string_datatype_cols are deprecated")
 
-        # look for deprecated parameters
-        # if (use_string_datatype is not None):
-        #     utils.warn_once("use_string_datatype is deprecated. Use string_datatype_cols instead")
-        #     if (string_datatype_cols is not None):
-        #         use_string_datatype = True
-        # else:
-        #     if (string_datatype_cols is not None):
-        #         use_string_datatype = True
-        #     else:
-        #         use_string_datatype = False
-
         # validation on precision
         if (precision is not None):
             raise Exception("aggregate: precision parameter is deprecated")
@@ -769,12 +758,6 @@ class TSV:
         # validation on number of agg funcs
         if (len(agg_cols) != len(agg_funcs)):
             raise Exception("Aggregate functions are not of correct size")
-
-        # find which columns are to be used as strings
-        # if (use_string_datatype == False):
-        #     if (string_datatype_cols is not None):
-        #         utils.warn_once("string_datatype_cols is defined but use_string_datatype is set to False")
-        #         use_string_datatype = True
 
         # validation
         indexes = self.__get_col_indexes__(grouping_cols)
@@ -830,20 +813,6 @@ class TSV:
                 if (cols_key not in value_map_arr[j].keys()):
                     value_map_arr[j][cols_key] = []
 
-                # TODO: this is a hack on datatype
-                # if (use_string_datatype == False):
-                #     try:
-                #         value_map_arr[j][cols_key].append(float(fields[agg_col_indexes[j]]))
-                #     except ValueError:
-                #         value_map_arr[j][cols_key].append(fields[agg_col_indexes[j]])
-                # else:
-                #     if (string_datatype_cols is None or agg_col_indexes[j] in str_agg_col_indexes):
-                #         value_map_arr[j][cols_key].append(str(fields[agg_col_indexes[j]]))
-                #     else:
-                #         try:
-                #             value_map_arr[j][cols_key].append(float(fields[agg_col_indexes[j]]))
-                #         except ValueError:
-                #             value_map_arr[j][cols_key].append(fields[agg_col_indexes[j]])
                 value_map_arr[j][cols_key].append(str(fields[agg_col_indexes[j]]))
 
         # compute the aggregation
@@ -1402,7 +1371,7 @@ class TSV:
         # return
         return TSV(new_header, new_data)
 
-    def show_transpose(self, n = 1, max_col_width = None, title = None):
+    def show_transpose(self, n = 1, title = None, max_col_width = None):
         # check empty
         if (self.has_empty_header()):
             return self
@@ -1588,7 +1557,7 @@ class TSV:
 
         return tuple(values)
 
-    def sort(self, cols = None, reverse = False, reorder = False, all_numeric = None, ignore_if_missing = False):
+    def sort(self, cols = None, reverse = False, reorder = False, all_numeric = None, ignore_if_missing = False, inherit_message = ""):
         # check empty
         if (self.has_empty_header() and cols is None):
             utils.raise_exception_or_warn("sort: empty tsv", ignore_if_missing)
@@ -1626,13 +1595,15 @@ class TSV:
         new_data = sorted(self.data, key = lambda line: self.__sort_helper__(line, indexes, all_numeric = all_numeric), reverse = reverse)
 
         # check if need to reorder the fields
+        inherit_message2 = inherit_message + ": sort" if (len(inherit_message) > 0) else "sort"
         if (reorder == True):
-            return TSV(self.header, new_data).reorder(matching_cols, inherit_message = "sort")
+            return TSV(self.header, new_data).reorder(matching_cols, inherit_message = inherit_message2)
         else:
             return TSV(self.header, new_data)
 
-    def reverse_sort(self, cols = None, reorder = False, all_numeric = None, ignore_if_missing = False):
-        return self.sort(cols = cols, reverse = True, reorder = reorder, all_numeric = all_numeric, ignore_if_missing = ignore_if_missing)
+    def reverse_sort(self, cols = None, reorder = False, all_numeric = None, ignore_if_missing = False, inherit_message = ""):
+        inherit_message2 = inherit_message + ": reverse_sort" if (len(inherit_message) > 0) else "reverse_sort"
+        return self.sort(cols = cols, reverse = True, reorder = reorder, all_numeric = all_numeric, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
 
     # reorder the specific columns
     def reorder(self, cols, use_existing_order = True, inherit_message = ""):
@@ -2037,7 +2008,7 @@ class TSV:
         inherit_message2 = inherit_message + ": assign_value" if (len(inherit_message) > 0) else "assign_value"
         return self.transform_inline(col_or_cols, lambda x: value, inherit_message = inherit_message2)
 
-    def concat_as_cols(self, that):
+    def concat_as_cols(self, that, inherit_message = ""):
         # check empty
         if (self.has_empty_header()):
             utils.warn("concat_as_cols: empty tsv")
@@ -2071,11 +2042,11 @@ class TSV:
 
         return TSV(new_header, new_data)
 
-    def add_col_prefix(self, cols, prefix):
+    def add_col_prefix(self, cols, prefix, inherit_message = ""):
         utils.warn("Deprecated: Use add_prefix instead")
         return self.add_prefix(self, prefix, cols)
 
-    def remove_suffix(self, suffix, prefix = None, ignore_if_missing = False):
+    def remove_suffix(self, suffix, prefix = None, ignore_if_missing = False, inherit_message = ""):
         # check empty
         if (self.has_empty_header()):
             utils.raise_exception_or_warn("remove_suffix: empty tsv", ignore_if_missing)
@@ -2106,7 +2077,7 @@ class TSV:
         new_header = "\t".join(list([h if (h not in mp.keys()) else mp[h] for h in self.header_fields]))
         return TSV(new_header, self.data)
 
-    def add_prefix(self, prefix, cols = None, ignore_if_missing = False):
+    def add_prefix(self, prefix, cols = None, ignore_if_missing = False, inherit_message = ""):
         # check empty
         if (self.has_empty_header()):
             utils.raise_exception_or_warn("add_prefix: empty tsv", ignore_if_missing)
@@ -2132,7 +2103,7 @@ class TSV:
         # return
         return TSV("\t".join(new_header_fields), self.data)
 
-    def add_suffix(self, suffix, cols = None, ignore_if_missing = False):
+    def add_suffix(self, suffix, cols = None, ignore_if_missing = False, inherit_message = ""):
         # check empty
         if (self.has_empty_header()):
             utils.raise_exception_or_warn("add_suffix: empty tsv", ignore_if_missing)
@@ -2158,7 +2129,7 @@ class TSV:
         # return
         return TSV("\t".join(new_header_fields), self.data)
 
-    def rename_prefix(self, old_prefix, new_prefix, cols = None, ignore_if_missing = False):
+    def rename_prefix(self, old_prefix, new_prefix, cols = None, ignore_if_missing = False, inherit_message = ""):
         # check empty
         if (self.has_empty_header()):
             utils.raise_exception_or_warn("rename_prefix: empty tsv", ignore_if_missing)
@@ -2185,7 +2156,7 @@ class TSV:
         # return
         return TSV("\t".join(new_header_fields), self.data)
 
-    def rename_suffix(self, old_suffix, new_suffix, cols = None, ignore_if_missing = False):
+    def rename_suffix(self, old_suffix, new_suffix, cols = None, ignore_if_missing = False, inherit_message = ""):
         # check empty
         if (self.has_empty_header()):
             utils.raise_exception_or_warn("rename_suffix: empty tsv", ignore_if_missing)
@@ -2212,7 +2183,7 @@ class TSV:
         # return
         return TSV("\t".join(new_header_fields), self.data)
 
-    def remove_prefix(self, prefix, ignore_if_missing = False):
+    def remove_prefix(self, prefix, ignore_if_missing = False, inherit_message = ""):
         # check empty
         if (self.has_empty_header()):
             utils.raise_exception_or_warn("remove_prefix: empty tsv", ignore_if_missing)

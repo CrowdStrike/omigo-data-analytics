@@ -40,7 +40,7 @@ def mean(vs):
 
 def mkstr(vs):
     vs2 = list([str(x) for x in vs])
-    return ",".join(sorted(vs2))
+    return ",".join(vs2)
 
 def mkstr4f(vs):
     vs2 = list(["{:4f}".format(float(x)) for x in vs])
@@ -91,7 +91,6 @@ def maxfloat(vs):
     return str(max_value)
 
 def minstr(vs):
-    # return str(sorted(vs)[0])
     if (vs is None or len(vs) == 0):
         raise Exception("minstr: empty vs")
 
@@ -103,7 +102,6 @@ def minstr(vs):
     return str(min_value)
 
 def maxstr(vs):
-    # return str(sorted(vs)[0])
     if (vs is None or len(vs) == 0):
         raise Exception("maxstr: empty vs")
 
@@ -159,10 +157,12 @@ def quantile40(xs):
     return quantile(xs, by=1/40)
 
 def max_str(xs):
+    utils.warn_once("max_str is deprecated. Use maxstr")
     xs = sorted(xs)
     return xs[-1]
 
 def min_str(xs):
+    utils.warn_once("min_str is deprecated. Use maxstr")
     xs = sorted(xs)
     return xs[0]
 
@@ -386,3 +386,5 @@ def if_else_non_zero_int(*args):
     else:
         return v2
 
+def win32_timestamp_to_utctimestamp(x):
+    return int(str(x)[0:-8]) + 339576461 
