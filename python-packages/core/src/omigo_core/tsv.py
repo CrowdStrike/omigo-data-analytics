@@ -1792,7 +1792,7 @@ class TSV:
     def resolve_url_encoded_cols(self, suffix = "url_encoded", ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": resolve_url_encoded_cols" if (len(inherit_message) > 0) else "resolve_url_encoded_cols"
         return self \
-            .url_decode_inline(".*:{}".format(suffix), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2) \
+            .url_decode_inline(".*:{}$".format(suffix), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2) \
             .remove_suffix(suffix, ignore_if_missing = ignore_if_missing)
 
     def union(self, tsv_or_that_arr):
@@ -2138,7 +2138,7 @@ class TSV:
         # either selective columns can be renamed or all matching ones
         if (cols is None):
             # use the prefix patterns for determing cols
-            cols = "{}:.*".format(old_prefix)
+            cols = "^{}:.*".format(old_prefix)
 
         # resolve
         cols = self.__get_matching_cols__(cols, ignore_if_missing = ignore_if_missing)
@@ -2165,7 +2165,7 @@ class TSV:
         # either selective columns can be renamed or all matching ones
         if (cols is None):
             # use the prefix patterns for determing cols
-            cols = ".*:{}".format(old_suffix)
+            cols = ".*:{}$".format(old_suffix)
 
         # resolve
         cols = self.__get_matching_cols__(cols, ignore_if_missing = ignore_if_missing)
@@ -2481,7 +2481,7 @@ class TSV:
             .transform(["{}:__sample_group_by_max_uniq_values_approx_uniq_count__".format(col)], lambda c: max_uniq_values / float(c) if (float(c) > max_uniq_values) else 1, "{}:__sample_group_by_max_uniq_values_approx_sampling_ratio__".format(col), inherit_message = inherit_message2 + ": [2/5]") \
             .transform(sample_grouping_cols, lambda x: abs(utils.compute_hash("\t".join(x), seed)) / sys.maxsize, "{}:__sample_group_by_max_uniq_values_approx_sampling_key__".format(col), use_array_notation = True, inherit_message = inherit_message2 + ": [3/5]") \
             .filter(["{}:__sample_group_by_max_uniq_values_approx_sampling_key__".format(col), "{}:__sample_group_by_max_uniq_values_approx_sampling_ratio__".format(col)], lambda x, y: float(x) <= float(y), inherit_message = inherit_message2 + ": [4/5]") \
-            .drop_cols("{}:__sample_group_by_max_uniq_values_approx.*".format(col), inherit_message = inherit_message2 + ": [5/5]")
+            .drop_cols("^{}:__sample_group_by_max_uniq_values_approx.*".format(col), inherit_message = inherit_message2 + ": [5/5]")
 
         # return
         return agg_result
@@ -2539,7 +2539,7 @@ class TSV:
             .transform(["{}:__sample_group_by_max_uniq_values_per_class_uniq_count__".format(col), "{}:__sample_group_by_max_uniq_values_per_class_max_uniq_values__".format(col)], lambda c, m: float(m) / float(c) if (float(c) > float(m)) else 1, "{}:__sample_group_by_max_uniq_values_per_class_sampling_ratio__".format(col), inherit_message = inherit_message2 + ": [3/6]") \
             .transform(sample_grouping_cols, lambda x: abs(utils.compute_hash("\t".join(x), seed)) / sys.maxsize, "{}:__sample_group_by_max_uniq_values_per_class_sampling_key__".format(col), use_array_notation = True, inherit_message = inherit_message2 + ": [4/6]") \
             .filter(["{}:__sample_group_by_max_uniq_values_per_class_sampling_key__".format(col), "{}:__sample_group_by_max_uniq_values_per_class_sampling_ratio__".format(col)], lambda x, y: float(x) <= float(y), inherit_message = inherit_message2 + ": [5/6]") \
-            .drop_cols("{}:__sample_group_by_max_uniq_values_per_class.*".format(col), inherit_message = inherit_message2 + ": [6/6]")
+            .drop_cols("^{}:__sample_group_by_max_uniq_values_per_class.*".format(col), inherit_message = inherit_message2 + ": [6/6]")
 
         # return
         return agg_result
@@ -3170,7 +3170,7 @@ class TSV:
         return result
 
     # public method handling both random and cols based splitting
-    def split_batches(self, num_batches, cols = None, preserve_order = False, seed = 0):
+    def split_batches(self, num_batches, cols = None, preserve_order = False, seed = 0, inherit_message = ""):
         # check for empty
         if (self.has_empty_header()):
             # check for cols
@@ -3186,13 +3186,16 @@ class TSV:
             return self
 
         # check if cols are defined or not
+        inherit_message2 = inherit_message + ": split_batches" if (len(inherit_message) > 0) else "split_batches"
         if (cols is None):
-            return self.__split_batches_randomly__(num_batches, preserve_order = preserve_order, seed = seed)
+            return self.__split_batches_randomly__(num_batches, preserve_order = preserve_order, seed = seed, inherit_message = inherit_message2)
         else:
-            return self.__split_batches_by_cols__(num_batches, cols, seed = seed)
+            return self.__split_batches_by_cols__(num_batches, cols, seed = seed, inherit_message = inherit_message2)
 
     # split method to split randomly
-    def __split_batches_randomly__(self, num_batches, preserve_order = False, seed = None):
+    def __split_batches_randomly__(self, num_batches, preserve_order = False, seed = None, inherit_message = ""):
+        inherit_message2 = inherit_message + ": __split_batches_randomly__" if (len(inherit_message) > 0) else "__split_batches_randomly__"
+
         # validation
         if (preserve_order == True ):
             if (seed is not None):
@@ -3214,7 +3217,12 @@ class TSV:
             data_list.append([])
 
         # iterate to split data
+        counter = 0
         for i in range(len(self.get_data())):
+            # report progress
+            counter = counter + 1
+            utils.report_progress("__split_batches_randomly__: [1/1] assigning batch index", inherit_message, counter, len(self.get_data()))
+
             # check if original order of data needs to be preserved
             if (preserve_order == True):
                 batch_index = int(i / batch_size)
@@ -3233,7 +3241,9 @@ class TSV:
 
     # split method to split tsv into batches
     # TODO: add inherit_message
-    def __split_batches_by_cols__(self, num_batches, cols, seed = 0):
+    def __split_batches_by_cols__(self, num_batches, cols, seed = 0, inherit_message = ""):
+        inherit_message2 = inherit_message + ": __split_batches_by_cols__" if (len(inherit_message) > 0) else "__split_batches_by_cols__"
+
         # get matching cols
         cols = self.__get_matching_cols__(cols)
 
@@ -3261,7 +3271,12 @@ class TSV:
 
         # assign each record to its correct place
         batch_index = hashed_tsv2.get_col_index(temp_col2)
+        counter = 0
         for line in hashed_tsv2.get_data():
+            # report progress
+            counter = counter + 1
+            utils.report_progress("__split_batches_by_cols__: [1/1] assigning batch index", inherit_message, counter, len(hashed_tsv2.get_data()))
+
             fields = line.split("\t")
             batch_id = int(fields[batch_index])
             new_data_list[batch_id].append(line)
@@ -3276,7 +3291,7 @@ class TSV:
         return new_tsvs
 
     # method to generate a hash for a given set of columns
-    def generate_key_hash(self, cols, new_col, seed = 0):
+    def generate_key_hash(self, cols, new_col, seed = 0, inherit_message = ""):
         # check empty
         if (self.has_empty_header()):
             raise Exception("generate_key_hash: empty tsv")

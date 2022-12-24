@@ -386,5 +386,6 @@ def if_else_non_zero_int(*args):
     else:
         return v2
 
+# TODO: this is bad implementation. The Win32 timestamp format needs proper handling
 def win32_timestamp_to_utctimestamp(x):
     return int(str(x)[0:-8]) + 339576461 

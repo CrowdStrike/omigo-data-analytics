@@ -25,7 +25,7 @@ def is_error():
     return str(os.environ.get("OMIGO_ERROR", "0")) == "1"
 
 def is_warn():
-    return str(os.environ.get("OMIGO_WARN", "0")) == "1"
+    return str(os.environ.get("OMIGO_WARN", "1")) == "1"
 
 def is_info():
     return str(os.environ.get("OMIGO_INFO", "1")) == "1"
