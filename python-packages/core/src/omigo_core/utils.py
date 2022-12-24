@@ -74,7 +74,7 @@ def debug(msg):
 
 def debug_once(msg):
     # check if enabled
-    if (is_warn() == False):
+    if (is_debug() == False):
         return
 
     # refer to global variable

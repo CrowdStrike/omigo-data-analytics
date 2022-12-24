@@ -4211,10 +4211,40 @@ class TSV:
         else:
             col_patterns.append(col_or_cols)
 
+        # transform col_patterns into a stronger prefix or suffix match wherever applicable
+        col_patterns_transformed = []
+        for col_pattern in col_patterns:
+            num_wild_cards = len(col_pattern.split("*")) - 1 if (col_pattern.find(".*") != -1) else 0
+
+            # check how many wild cards are present
+            if (num_wild_cards > 0):
+                # check for prefix and suffix
+                if (num_wild_cards == 1):
+                    # check for prefix
+                    if (col_pattern.startswith(".*") == True):
+                        if (col_pattern != ".*" and col_pattern.endswith("$") == False):
+                            utils.debug_once("__get_matching_cols__: rewriting pattern: {}".format(col_pattern))
+                            col_pattern = str(col_pattern) + "$"
+
+                    # check for suffix
+                    if (col_pattern.endswith(".*") == True):
+                        if (col_pattern != ".*" and col_pattern.startswith("^") == False):
+                            utils.debug_once("__get_matching_cols__: rewriting pattern: {}".format(col_pattern))
+                            col_pattern = "^" + str(col_pattern)
+                elif (num_wild_cards == 2):
+                    # check if wild cards are anywhere except as prefix or suffix
+                    if (col_pattern.startswith(".*") == False or col_pattern.endswith(".*") == False):
+                        utils.warn_once("__get_matching_cols__: multiple wildcards in col patterns can be confusing: {}".format(col_pattern))
+                else:
+                    utils.warn_once("__get_matching_cols__: multiple wildcards in col patterns can be confusing: {}".format(col_pattern))
+
+            # append
+            col_patterns_transformed.append(col_pattern)
+
         # now iterate through all the column names, check if it is a regular expression and find
         # all matching ones
         matching_cols = []
-        for col_pattern in col_patterns:
+        for col_pattern in col_patterns_transformed:
             # check for matching columns for the pattern
             col_pattern_found = False
 
