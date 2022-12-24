@@ -1792,7 +1792,7 @@ class TSV:
     def resolve_url_encoded_cols(self, suffix = "url_encoded", ignore_if_missing = False, inherit_message = ""):
         inherit_message2 = inherit_message + ": resolve_url_encoded_cols" if (len(inherit_message) > 0) else "resolve_url_encoded_cols"
         return self \
-            .url_decode_inline(".*:{}$".format(suffix), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2) \
+            .url_decode_inline(".*:{}".format(suffix), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2) \
             .remove_suffix(suffix, ignore_if_missing = ignore_if_missing)
 
     def union(self, tsv_or_that_arr):
@@ -2138,7 +2138,7 @@ class TSV:
         # either selective columns can be renamed or all matching ones
         if (cols is None):
             # use the prefix patterns for determing cols
-            cols = "^{}:.*".format(old_prefix)
+            cols = "{}:.*".format(old_prefix)
 
         # resolve
         cols = self.__get_matching_cols__(cols, ignore_if_missing = ignore_if_missing)
@@ -2165,7 +2165,7 @@ class TSV:
         # either selective columns can be renamed or all matching ones
         if (cols is None):
             # use the prefix patterns for determing cols
-            cols = ".*:{}$".format(old_suffix)
+            cols = ".*:{}".format(old_suffix)
 
         # resolve
         cols = self.__get_matching_cols__(cols, ignore_if_missing = ignore_if_missing)
