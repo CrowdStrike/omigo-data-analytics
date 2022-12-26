@@ -289,7 +289,8 @@ class TSV:
 
         # call aggregate with collapse=False
         dmsg = utils.extend_inherit_message(dmsg, "group_count")
-        return self.aggregate(cols, [cols[0]], [funclib.get_len], collapse = collapse, dmsg = dmsg) \
+        return self \
+            .aggregate(cols, [cols[0]], [funclib.get_len], collapse = collapse, dmsg = dmsg) \
             .rename(cols[0] + ":get_len", new_count_col) \
             .transform([new_count_col], lambda x: str(int(x) / len(self.get_data())), new_ratio_col, dmsg = dmsg) \
             .reverse_sort(new_count_col) \
@@ -2380,9 +2381,10 @@ class TSV:
 
         # group by and apply the sampling on the value. The assumption is that all rows in the same group should have the same col_value
         dmsg = utils.extend_inherit_message(dmsg, "sample_group_by_col_value")
-        agg_result = self.aggregate(grouping_cols, [col], [self.__sample_group_by_col_value_agg_func__(col_value, sampling_ratio, seed, use_numeric)], collapse = False, dmsg = utils.extend_inherit_message(dmsg, "[1/3]") \
-            .values_in("{}:__sample_group_by_col_value_agg_func_inner__".format(col), ["1"], dmsg = utils.extend_inherit_message(dmsg, "[2/3]") \
-            .drop_cols("{}:__sample_group_by_col_value_agg_func_inner__".format(col), dmsg = utils.extend_inherit_message(dmsg, "[3/3]")
+        agg_result = self \
+            .aggregate(grouping_cols, [col], [self.__sample_group_by_col_value_agg_func__(col_value, sampling_ratio, seed, use_numeric)], collapse = False, dmsg = utils.extend_inherit_message(dmsg, "[1/3]")) \
+            .values_in("{}:__sample_group_by_col_value_agg_func_inner__".format(col), ["1"], dmsg = utils.extend_inherit_message(dmsg, "[2/3]")) \
+            .drop_cols("{}:__sample_group_by_col_value_agg_func_inner__".format(col), dmsg = utils.extend_inherit_message(dmsg, "[3/3]"))
 
         # return
         return agg_result
@@ -2434,9 +2436,9 @@ class TSV:
         # compute
         agg_result = self \
             .group_by_key(grouping_cols, col, self.__sample_group_by_max_uniq_values_exact_group_by__(col, max_uniq_values, seed), suffix = "__sample_group_by_max_uniq_values_exact_group_by__",
-                collapse = False, dmsg = utils.extend_inherit_message(dmsg, "[1/3]")  \
-            .filter([col, "found:__sample_group_by_max_uniq_values_exact_group_by__"], lambda x,y: x in y.split(","), dmsg = utils.extend_inherit_message(dmsg, "[2/3]") \
-            .drop_cols("found:__sample_group_by_max_uniq_values_exact_group_by__", dmsg = utils.extend_inherit_message(dmsg, "[3/3]")
+                collapse = False, dmsg = utils.extend_inherit_message(dmsg, "[1/3]"))  \
+            .filter([col, "found:__sample_group_by_max_uniq_values_exact_group_by__"], lambda x,y: x in y.split(","), dmsg = utils.extend_inherit_message(dmsg, "[2/3]")) \
+            .drop_cols("found:__sample_group_by_max_uniq_values_exact_group_by__", dmsg = utils.extend_inherit_message(dmsg, "[3/3]"))
 
         # return
         return agg_result
@@ -2477,11 +2479,12 @@ class TSV:
 
         # agg result
         dmsg = utils.extend_inherit_message(dmsg, "sample_group_by_max_uniq_values_approx")
-        agg_result = self.aggregate(grouping_cols, [col], [self.__sample_group_by_max_uniq_values_approx_uniq_count__], collapse = False, dmsg = utils.extend_inherit_message(dmsg, "[1/5]") \
-            .transform(["{}:__sample_group_by_max_uniq_values_approx_uniq_count__".format(col)], lambda c: max_uniq_values / float(c) if (float(c) > max_uniq_values) else 1, "{}:__sample_group_by_max_uniq_values_approx_sampling_ratio__".format(col), dmsg = utils.extend_inherit_message(dmsg, "[2/5]") \
-            .transform(sample_grouping_cols, lambda x: abs(utils.compute_hash("\t".join(x), seed)) / sys.maxsize, "{}:__sample_group_by_max_uniq_values_approx_sampling_key__".format(col), use_array_notation = True, dmsg = utils.extend_inherit_message(dmsg, "[3/5]") \
-            .filter(["{}:__sample_group_by_max_uniq_values_approx_sampling_key__".format(col), "{}:__sample_group_by_max_uniq_values_approx_sampling_ratio__".format(col)], lambda x, y: float(x) <= float(y), dmsg = utils.extend_inherit_message(dmsg, "[4/5]") \
-            .drop_cols("^{}:__sample_group_by_max_uniq_values_approx.*".format(col), dmsg = utils.extend_inherit_message(dmsg, "[5/5]")
+        agg_result = self \
+            .aggregate(grouping_cols, [col], [self.__sample_group_by_max_uniq_values_approx_uniq_count__], collapse = False, dmsg = utils.extend_inherit_message(dmsg, "[1/5]")) \
+            .transform(["{}:__sample_group_by_max_uniq_values_approx_uniq_count__".format(col)], lambda c: max_uniq_values / float(c) if (float(c) > max_uniq_values) else 1, "{}:__sample_group_by_max_uniq_values_approx_sampling_ratio__".format(col), dmsg = utils.extend_inherit_message(dmsg, "[2/5]")) \
+            .transform(sample_grouping_cols, lambda x: abs(utils.compute_hash("\t".join(x), seed)) / sys.maxsize, "{}:__sample_group_by_max_uniq_values_approx_sampling_key__".format(col), use_array_notation = True, dmsg = utils.extend_inherit_message(dmsg, "[3/5]")) \
+            .filter(["{}:__sample_group_by_max_uniq_values_approx_sampling_key__".format(col), "{}:__sample_group_by_max_uniq_values_approx_sampling_ratio__".format(col)], lambda x, y: float(x) <= float(y), dmsg = utils.extend_inherit_message(dmsg, "[4/5]")) \
+            .drop_cols("^{}:__sample_group_by_max_uniq_values_approx.*".format(col), dmsg = utils.extend_inherit_message(dmsg, "[5/5]"))
 
         # return
         return agg_result
@@ -3043,7 +3046,7 @@ class TSV:
                 utils.debug("Calling join on batch: {}, left: {}, right: {}".format(i, left_batches[i].num_rows(), right_batches[i].num_rows()))
 
                 # call join on the batch
-                dmsg = utils.extend_inherit_message(dmsg, "__map_join__ batch: {}".format(i) if (len(dmsg) > 0) else "__map_join__ batch: {}".format(i)
+                dmsg = utils.extend_inherit_message(dmsg, "__map_join__ batch: {}".format(i))
                 tasks.append(utils.ThreadPoolTask(left_batches[i].__map_join__, right_batches[i], lkeys, rkeys, join_type = join_type, lsuffix = lsuffix, rsuffix = rsuffix,
                     default_val = default_val, def_val_map = def_val_map, num_par = 0, dmsg = dmsg))
 
