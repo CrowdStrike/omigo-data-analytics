@@ -255,10 +255,10 @@ def get_counts_map(xs):
 
     return mp
 
-def report_progress(msg, inherit_message, counter, total):
+def report_progress(msg, dmsg, counter, total):
     report_progress = get_report_progress()
     report_progress_min_threshold = get_report_progress_min_thresh()
-    msg2 = inherit_message + ": " + msg if (inherit_message is not None and len(inherit_message) > 0) else msg
+    msg2 = dmsg + ": " + msg if (dmsg is not None and len(dmsg) > 0) else msg
     if (is_debug() and report_progress > 0 and total >= report_progress_min_threshold):
         progress_size = int(report_progress * total)
         if (progress_size > 0 and counter % progress_size == 0):
@@ -468,4 +468,6 @@ def resolve_default_parameter(name, value, default_value, msg):
 
     # return
     return value
-        
+
+def extend_dmsg(old_msg, new_msg):
+     return "{}: {}".format(old_msg, new_msg) if (old_msg is not None and len(old_msg) > 0) else "{}".format(new_msg)
