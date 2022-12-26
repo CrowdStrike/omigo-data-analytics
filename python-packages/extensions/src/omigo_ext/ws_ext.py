@@ -14,7 +14,7 @@ class WebServiceTSV(tsv.TSV):
         self.status_check_interval_sec = status_check_interval_sec
         self.verify = verify
         self.enable_opt_exec = enable_opt_exec
-        self.dmsg = dmsg + ": WebServiceTSV" if (dmsg != "") else "WebServiceTSV"
+        self.dmsg = utils.extend_inherit_message(dmsg, "WebServiceTSV")
 
     def call_web_service(self, *args, **kwargs):
         # get response
