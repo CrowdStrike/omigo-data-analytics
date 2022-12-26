@@ -469,5 +469,5 @@ def resolve_default_parameter(name, value, default_value, msg):
     # return
     return value
 
-def extend_dmsg(old_msg, new_msg):
+def extend_inherit_message(old_msg, new_msg):
      return "{}: {}".format(old_msg, new_msg) if (old_msg is not None and len(old_msg) > 0) else "{}".format(new_msg)
