@@ -382,8 +382,16 @@ class TSV:
                 non_matching_cols.append(h)
 
         # return
-        dmsg = utils.extend_inherit_message(dmsg, "drop")
+        dmsg = utils.extend_inherit_message(dmsg, "drop_cols")
         return self.select(non_matching_cols, dmsg = dmsg)
+
+    def drop_cols_with_prefix(self, prefix, ignore_if_missing = False, dmsg = ""):
+        return self \
+            .drop_cols("{}:.*".format(prefix), ignore_if_missing = ignore_if_missing, dmsg = "drop_cols_with_prefix")
+
+    def drop_cols_with_suffix(self, suffix, ignore_if_missing = False, dmsg = ""):
+        return self \
+            .drop_cols(".*:{}".format(suffix), ignore_if_missing = ignore_if_missing, dmsg = "drop_cols_with_suffix")
 
     def drop_if_exists(self, col_or_cols, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "drop_if_exists")
@@ -1236,7 +1244,7 @@ class TSV:
         dmsg = utils.extend_inherit_message(dmsg, "transform_inline_log1p_base10")
         return self.transform_inline_log1p(col_or_cols, base = 10, dmsg = dmsg)
         
-    def rename(self, col, new_col):
+    def rename(self, col, new_col, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             raise Exception("rename: empty tsv")
