@@ -2816,6 +2816,7 @@ class TSV:
                     else:
                         raise Exception("Duplicate key names found. Use lsuffix or rsuffix: {}".format(that.get_header_fields()[i]))
 
+        new_header_fields.append("__join_keys_matched__")
         # construct new_header
         new_header = "\t".join(new_header_fields)
 
@@ -2850,14 +2851,16 @@ class TSV:
             # get the values
             lvals2_arr = lvkeys[lvkey]
             rvals2_arr = [default_rvals]
+            keys_matched = 0
             if (lvkey in rvkeys.keys()):
                   rvals2_arr = rvkeys[lvkey]
+                  keys_matched = 1
 
             # do a MxN merge of left side values and right side values
             for lvals2 in lvals2_arr:
                 for rvals2 in rvals2_arr:
                     # construct the new line
-                    new_line = "\t".join(utils.merge_arrays([[lvkey], lvals2, rvals2]))
+                    new_line = "\t".join(utils.merge_arrays([[lvkey], lvals2, rvals2, [str(keys_matched)]]))
 
                     # take care of different join types
                     if (join_type == "inner"):
@@ -2885,7 +2888,7 @@ class TSV:
             for lvals2 in lvals2_arr:
                 for rvals2 in rvals2_arr:
                     # construct the new line
-                    new_line = "\t".join(utils.merge_arrays([[rvkey], lvals2, rvals2]))
+                    new_line = "\t".join(utils.merge_arrays([[rvkey], lvals2, rvals2, [str(keys_matched)]]))
 
                     # take care of different join types
                     if (join_type == "inner"):
@@ -2904,8 +2907,13 @@ class TSV:
         # return
         result = TSV(new_header, new_data)
         for lkey in new_header_copy_fields_map.keys():
-            result = result.copy(lkey, new_header_copy_fields_map[lkey])
+            result = result.transform([lkey, "__join_keys_matched__"], lambda t1, t2: t1 if (t2 == "1") else "", new_header_copy_fields_map[lkey])
             
+        # remove the temporary column
+        result = result \
+            .drop_cols("__join_keys_matched__", dmsg = dmsg)
+
+        # returbn
         return result 
 
     # method to do map join. The right side is stored in a hashmap. only applicable to inner joins
@@ -3190,7 +3198,6 @@ class TSV:
 
         # create the rkeys columns that had different names
         for lkey in new_header_copy_fields_map.keys():
-            # result = result.copy(lkey, new_header_copy_fields_map[lkey])
             result = result.transform([lkey, "__map_join_keys_matched__"], lambda t1, t2: t1 if (t2 == "1") else "", new_header_copy_fields_map[lkey])
 
         # remove the temporary column
