@@ -382,7 +382,7 @@ def raise_exception_or_warn(msg, ignore_if_missing, max_len = 2000):
 
     # print message if ignore_if_missing flag is true
     if (ignore_if_missing == True):
-        warn_once(msg)
+        debug_once(msg)
     else:
         raise Exception(msg)
 

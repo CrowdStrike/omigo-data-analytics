@@ -383,7 +383,8 @@ class TSV:
 
         # return
         dmsg = utils.extend_inherit_message(dmsg, "drop_cols")
-        return self.select(non_matching_cols, dmsg = dmsg)
+        return self \
+            .select(non_matching_cols, dmsg = dmsg)
 
     def drop_cols_with_prefix(self, prefix, ignore_if_missing = False, dmsg = ""):
         return self \
@@ -395,7 +396,8 @@ class TSV:
 
     def drop_if_exists(self, col_or_cols, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "drop_if_exists")
-        return self.drop(col_or_cols, ignore_if_missing = True, dmsg = dmsg)
+        return self \
+            .drop_cols(col_or_cols, ignore_if_missing = True, dmsg = dmsg)
 
     def drop_cols_if_exists(self, col_or_cols, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "drop_cols_if_exists")
@@ -1441,7 +1443,7 @@ class TSV:
         # print label
         if (title is not None):
             print("=============================================================================================================================================")
-            print(title)
+            print("Title: {}, Num Rows: {}, Num Cols: {}".format(title, self.num_rows(), self.num_cols()))
             print("=============================================================================================================================================")
 
         # iterate and print. +1 for header
@@ -1463,8 +1465,12 @@ class TSV:
                 row.append(str(value))
             print("\t".join(row))
 
+        # print footer
         if (title is not None):
             print("=============================================================================================================================================")
+
+        # print blank lines
+        print("")
 
         # return self
         return self
@@ -3125,6 +3131,9 @@ class TSV:
                     else:
                         raise Exception("Duplicate key names found. Use lsuffix or rsuffix: {}".format(that.get_header_fields()[i]))
 
+        # add a new column to depict if join leys matched
+        new_header_fields.append("__map_join_keys_matched__")
+
         # construct new_header
         new_header = "\t".join(new_header_fields)
 
@@ -3157,13 +3166,15 @@ class TSV:
 
             # get ride side values
             rvals2_arr = [default_rvals]
+            keys_matched = 0
             if (lvkey in rvkeys.keys()):
                   rvals2_arr = rvkeys[lvkey]
+                  keys_matched = 1
 
             # iterate on the right side
             for rvals2 in rvals2_arr:
                 # construct the new line
-                new_line = "\t".join(utils.merge_arrays([[lvkey], lvals2, rvals2]))
+                new_line = "\t".join(utils.merge_arrays([[lvkey], lvals2, rvals2, [str(keys_matched)]]))
 
                 # take care of different join types
                 if (join_type == "inner"):
@@ -3174,11 +3185,19 @@ class TSV:
                 else:
                     raise Exception("Unknown join type: {} ".format(join_type))
 
-        # return
+        # create tsv
         result = TSV(new_header, new_data)
+
+        # create the rkeys columns that had different names
         for lkey in new_header_copy_fields_map.keys():
-            result = result.copy(lkey, new_header_copy_fields_map[lkey])
-                                      
+            # result = result.copy(lkey, new_header_copy_fields_map[lkey])
+            result = result.transform([lkey, "__map_join_keys_matched__"], lambda t1, t2: t1 if (t2 == "1") else "", new_header_copy_fields_map[lkey])
+                        
+        # remove the temporary column
+        result = result \
+            .drop_cols("__map_join_keys_matched__", dmsg = dmsg)
+
+        # return            
         return result
 
     # public method handling both random and cols based splitting
