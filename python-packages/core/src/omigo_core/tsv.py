@@ -3192,12 +3192,12 @@ class TSV:
         for lkey in new_header_copy_fields_map.keys():
             # result = result.copy(lkey, new_header_copy_fields_map[lkey])
             result = result.transform([lkey, "__map_join_keys_matched__"], lambda t1, t2: t1 if (t2 == "1") else "", new_header_copy_fields_map[lkey])
-                        
+
         # remove the temporary column
         result = result \
             .drop_cols("__map_join_keys_matched__", dmsg = dmsg)
 
-        # return            
+        # return
         return result
 
     # public method handling both random and cols based splitting
