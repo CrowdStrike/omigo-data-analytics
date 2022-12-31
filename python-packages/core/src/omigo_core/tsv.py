@@ -4431,69 +4431,6 @@ def get_version():
 def get_func_name(f):
     return f.__name__
 
-def get_rolling_func_init(func_name):
-    if (func_name == "sum"):
-        return [0]
-    elif (func_name == "min"):
-        return [float('inf')]
-    elif (func_name == "max"):
-        return [float('-inf')]
-    elif (func_name == "mean"):
-        return [0, 0]
-    elif (func_name == "len"):
-        return [0]
-    else:
-        raise Exception("rolling agg func not supported: {}".format(func_name))
-
-def get_rolling_func_update(arr, v, func_name):
-    if (func_name == "sum"):
-        arr[0] = arr[0] + v
-    elif (func_name == "min"):
-        arr[0] = min(arr[0], v)
-    elif (func_name == "max"):
-        arr[0] = max(arr[0], v)
-    elif (func_name == "mean"):
-        arr[0] = arr[0] + v
-        arr[1] = arr[1] + 1
-    elif (func_name == "len"):
-        arr[0] = arr[0] + 1
-    else:
-        raise Exception("rolling agg func not supported: {}".format(func_name))
-
-def get_rolling_func_update_sum(arr, v):
-    arr[0] = arr[0] + v
-
-def get_rolling_func_update_mean(arr, v):
-    arr[0] = arr[0] + v
-    arr[1] = arr[1] + 1
-
-def get_rolling_func_update_min(arr, v):
-    arr[0] = min(arr[0], v)
-
-def get_rolling_func_update_max(arr, v):
-    arr[0] = max(arr[0], v)
-
-def get_rolling_func_update_len(arr, v):
-    arr[0] = arr[0] + 1
-
-def get_rolling_func_closing(arr, func_name):
-    if (func_name == "sum"):
-        return arr[0]
-    elif (func_name == "min"):
-        return arr[0]
-    elif (func_name == "max"):
-        return arr[0]
-    elif (func_name == "mean"):
-        if (arr[1] > 0):
-            return arr[0] / arr[1]
-        else:
-            print("Divide by zero. Returning 0")
-            return 0
-    elif (func_name == "len"):
-        return arr[0]
-    else:
-        raise Exception("rolling agg func not supported: {}".format(func_name))
-
 def read(paths, sep = None, do_union = False, def_val_map = None):
     # TODO: remove this after fixing design
     if (def_val_map is not None and do_union == False):
