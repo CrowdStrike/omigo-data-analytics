@@ -215,6 +215,8 @@ def datetime_to_utctimestamp(x):
     elif (len(x) == 19):
         # 2021-11-01T00:00:00
         x = x + "Z"
+        if (x[10] == " "):
+            x = x.replace(" ", "T")
         return int(parser.parse(x).timestamp())
     elif (len(x) == 26):
         # 2021-11-01T00:00:00.000000
