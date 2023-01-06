@@ -272,6 +272,8 @@ class TSV:
         return self.transform_inline(cols, lambda x: x.replace(old_str, new_str), ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
     def group_count(self, cols, prefix = "group", collapse = True, precision = 6, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "group_count")
+
         # check empty
         if (self.has_empty_header()):
             raise Exception("group_count: empty tsv")
@@ -288,22 +290,23 @@ class TSV:
             raise Exception("Use a different prefix than: {}".format(prefix))
 
         # call aggregate with collapse=False
-        dmsg = utils.extend_inherit_message(dmsg, "group_count")
         return self \
             .aggregate(cols, [cols[0]], [funclib.get_len], collapse = collapse, dmsg = dmsg) \
-            .rename(cols[0] + ":get_len", new_count_col) \
+            .rename(cols[0] + ":get_len", new_count_col, dmsg = dmsg) \
             .transform([new_count_col], lambda x: str(int(x) / len(self.get_data())), new_ratio_col, dmsg = dmsg) \
-            .reverse_sort(new_count_col) \
+            .reverse_sort(new_count_col, dmsg = dmsg) \
             .apply_precision(new_ratio_col, precision, dmsg = dmsg)
 
     def ratio(self, col1, col2, new_col, default = 0.0, precision = 6, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "ratio")
         return self \
-            .transform([col1, col2], lambda x, y: float(x) / float(y) if (float(y) != 0) else default, new_col) \
+            .transform([col1, col2], lambda x, y: float(x) / float(y) if (float(y) != 0) else default, new_col, dmsg = dmsg) \
             .apply_precision(new_col, precision, dmsg = dmsg)
 
     def ratio_const(self, col, denominator, new_col, precision = 6, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "ratio_const")
         return self \
-            .transform([col], lambda x: float(x) / float(denominator) if (float(denominator) != 0) else default, new_col) \
+            .transform([col], lambda x: float(x) / float(denominator) if (float(denominator) != 0) else default, new_col, dmsg = dmsg) \
             .apply_precision(new_col, precision, dmsg = dmsg)
 
     def apply_precision(self, cols, precision, dmsg = ""):
@@ -326,7 +329,7 @@ class TSV:
         # return
         return TSV(self.header, self.data[-count:])
 
-    def take(self, count):
+    def take(self, count, dmsg = ""):
         # return result
         if (count > len(self.get_data())):
             count = len(self.get_data())
@@ -334,6 +337,8 @@ class TSV:
         return TSV(self.header, self.data[0:count])
 
     def distinct(self, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "distinct")
+
         # create variables
         new_data = []
         key_map = {}
@@ -343,7 +348,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("distinct: [1/1] calling function", dmsg, counter, len(self.get_data()))
+            utils.report_progress("[1/1] calling function", dmsg, counter, len(self.get_data()))
 
             # check if the line doesnt exist already
             if (line not in key_map.keys()):
@@ -382,17 +387,18 @@ class TSV:
                 non_matching_cols.append(h)
 
         # return
-        dmsg = utils.extend_inherit_message(dmsg, "drop_cols")
         return self \
             .select(non_matching_cols, dmsg = dmsg)
 
     def drop_cols_with_prefix(self, prefix, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "drop_cols_with_prefix")
         return self \
-            .drop_cols("{}:.*".format(prefix), ignore_if_missing = ignore_if_missing, dmsg = "drop_cols_with_prefix")
+            .drop_cols("{}:.*".format(prefix), ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
     def drop_cols_with_suffix(self, suffix, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "drop_cols_with_suffix")
         return self \
-            .drop_cols(".*:{}".format(suffix), ignore_if_missing = ignore_if_missing, dmsg = "drop_cols_with_suffix")
+            .drop_cols(".*:{}".format(suffix), ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
     def drop_if_exists(self, col_or_cols, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "drop_if_exists")
@@ -737,6 +743,8 @@ class TSV:
     # TODO: this use_string_datatype is temporary and needs to be replaced with better design.
     def aggregate(self, grouping_col_or_cols, agg_cols, agg_funcs, collapse = True, precision = None, use_rolling = None, use_string_datatype = None,
 	string_datatype_cols = None, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "aggregate")
+
         # check empty
         if (self.has_empty_header()):
             raise Exception("aggregate: empty tsv")
@@ -808,7 +816,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("aggregate: [1/2] building groups", dmsg, counter, len(self.get_data()))
+            utils.report_progress("[1/2] building groups", dmsg, counter, len(self.get_data()))
 
             # process data
             fields = line.split("\t")
@@ -844,7 +852,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("aggregate: [2/2] calling function", dmsg, counter, len(self.get_data()))
+            utils.report_progress("[2/2] calling function", dmsg, counter, len(self.get_data()))
 
             # data processing
             fields = line.split("\t")
@@ -879,6 +887,8 @@ class TSV:
         return result_xtsv
 
     def filter(self, cols, func, include_cond = True, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "filter")
+
         # check empty
         if (self.has_empty_header()):
             utils.raise_exception_or_warn("filter: empty tsv", ignore_if_missing)
@@ -902,7 +912,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("filter: [1/1] calling function", dmsg, counter, len(self.get_data()))
+            utils.report_progress("[1/1] calling function", dmsg, counter, len(self.get_data()))
 
             fields = line.split("\t")
             col_values = []
@@ -1024,6 +1034,8 @@ class TSV:
         return TSV(self.get_header(), new_data) 
         
     def transform(self, cols, func, new_col_or_cols, use_array_notation = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "transform")
+
         # check empty
         if (self.has_empty_header()):
             raise Exception("transform: empty tsv")
@@ -1074,7 +1086,7 @@ class TSV:
         # iterate over data
         for line in self.get_data():
             counter = counter + 1
-            utils.report_progress("transform: [1/1] calling function", dmsg, counter, len(self.get_data()))
+            utils.report_progress("[1/1] calling function", dmsg, counter, len(self.get_data()))
 
             # get fields
             fields = line.split("\t")
@@ -1174,6 +1186,8 @@ class TSV:
         return TSV(new_header, new_data)
 
     def transform_inline(self, cols, func, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "transform_inline")
+
         # check empty
         if (self.has_empty_header()):
             utils.raise_exception_or_warn("transform_inline: empty tsv", ignore_if_missing)
@@ -1197,7 +1211,7 @@ class TSV:
         counter = 0
         for line in self.get_data():
             counter = counter + 1
-            utils.report_progress("transform_inline: [1/1] calling function", dmsg, counter, len(self.get_data()))
+            utils.report_progress("[1/1] calling function", dmsg, counter, len(self.get_data()))
 
             fields = line.split("\t")
             new_fields = []
@@ -1382,7 +1396,9 @@ class TSV:
         # return
         return TSV(new_header, new_data)
 
-    def show_transpose(self, n = 1, title = None, max_col_width = None):
+    def show_transpose(self, n = 1, title = None, max_col_width = None, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "show_transpose")
+
         # check empty
         if (self.has_empty_header()):
             return self
@@ -1397,17 +1413,21 @@ class TSV:
             max_col_width = int(max_width / (n + 1))
 
         # print
-        self.transpose(n).show(n = self.num_cols(), max_col_width = max_col_width, title = title)
+        self \
+            .transpose(n, dmsg = dmsg) \
+            .show(n = self.num_cols(), max_col_width = max_col_width, title = title, dmsg = dmsg)
 
         # return self
         return self
 
-    def show(self, n = 100, title = None, max_col_width = 40):
+    def show(self, n = 100, title = None, max_col_width = 40, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "show")
+
         # check empty
         if (self.has_empty_header()):
             return self
 
-        self.take(n).__show_topn__(max_col_width, title)
+        self.take(n, dmsg = dmsg).__show_topn__(max_col_width, title)
         # return the original tsv
         return self
 
@@ -1808,7 +1828,7 @@ class TSV:
         dmsg = utils.extend_inherit_message(dmsg, "resolve_url_encoded_cols")
         return self \
             .url_decode_inline(".*:{}".format(suffix), ignore_if_missing = ignore_if_missing, dmsg = dmsg) \
-            .remove_suffix(suffix, ignore_if_missing = ignore_if_missing)
+            .remove_suffix(suffix, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
     def union(self, tsv_or_that_arr):
         # check if this is a single element TSV or an array
@@ -2706,8 +2726,8 @@ class TSV:
         # Check for num_par. TODO: Experimental
         if (num_par > 0):
             # split left and right sides
-            left_batches = self.__split_batches_by_cols__(num_par, lkeys)
-            right_batches = that.__split_batches_by_cols__(num_par, rkeys)
+            left_batches = self.__split_batches_by_cols__(num_par, lkeys, dmsg = dmsg)
+            right_batches = that.__split_batches_by_cols__(num_par, rkeys, dmsg = dmsg)
 
             # call join on individual batches and then return the merge
             tasks = []
@@ -2716,9 +2736,9 @@ class TSV:
                 utils.debug("Calling join on batch: {}, left: {}, right: {}".format(i, left_batches[i].num_rows(), right_batches[i].num_rows()))
 
                 # call join on the batch
-                dmsg = utils.extend_inherit_message(dmsg, "__join__ batch: {}".format(i))
+                dmsg2 = utils.extend_inherit_message(dmsg, "__join__ batch: {}".format(i))
                 tasks.append(utils.ThreadPoolTask(left_batches[i].__join__, right_batches[i], lkeys, rkeys, join_type = join_type, lsuffix = lsuffix, rsuffix = rsuffix,
-                    default_val = default_val, def_val_map = def_val_map, num_par = 0, dmsg = dmsg))
+                    default_val = default_val, def_val_map = def_val_map, num_par = 0, dmsg = dmsg2))
 
             # call thread executor
             results = utils.run_with_thread_pool(tasks, num_par = num_par)
@@ -2907,13 +2927,13 @@ class TSV:
         # return
         result = TSV(new_header, new_data)
         for lkey in new_header_copy_fields_map.keys():
-            result = result.transform([lkey, "__join_keys_matched__"], lambda t1, t2: t1 if (t2 == "1") else "", new_header_copy_fields_map[lkey])
+            result = result.transform([lkey, "__join_keys_matched__"], lambda t1, t2: t1 if (t2 == "1") else "", new_header_copy_fields_map[lkey], dmsg = dmsg)
             
         # remove the temporary column
         result = result \
             .drop_cols("__join_keys_matched__", dmsg = dmsg)
 
-        # returbn
+        # return
         return result 
 
     # method to do map join. The right side is stored in a hashmap. only applicable to inner joins
@@ -3935,10 +3955,11 @@ class TSV:
             .explode([col], exp_func, prefix = prefix, default_val = default_val, collapse = collapse, dmsg = dmsg) \
             .validate()
 
-    def transpose(self, n = 1):
-        return self.take(n).__transpose_topn__()
+    def transpose(self, n = 1, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "transpose")
+        return self.take(n).__transpose_topn__(dmsg = dmsg)
 
-    def __transpose_topn__(self):
+    def __transpose_topn__(self, dmsg = ""):
         # construct new header
         new_header_fields = []
         new_header_fields.append("col_name")
@@ -4177,11 +4198,13 @@ class TSV:
         # return self
         return self
 
-    def show_group_count(self, col_or_cols, n = 100, max_col_width = 40, title = "Group Count"):
+    def show_group_count(self, col_or_cols, n = 100, max_col_width = 40, title = "Group Count", dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "show_group_count")
+
         # call show transpose after custom func
         self \
-            .group_count(col_or_cols) \
-            .show(n = n, title = title, max_col_width = max_col_width)
+            .group_count(col_or_cols, dmsg = dmsg) \
+            .show(n = n, title = title, max_col_width = max_col_width, dmsg = dmsg)
 
         # return self
         return self
@@ -4404,7 +4427,7 @@ class TSV:
 
         # return
         return self \
-            .add_seq_num("__topk_sno__") \
+            .add_seq_num("__topk_sno__", dmsg = dmsg) \
             .group_by_key(grouping_cols, [sort_col, "__topk_sno__"], __topk_inner_func__, suffix = "__topk_inner_func__", collapse = False, dmsg = dmsg) \
             .filter(["__topk_sno__", "__top_selected_indexes__:__topk_inner_func__"], lambda t1, t2: t1 in t2.split(","), dmsg = dmsg) \
             .drop_cols(["__topk_sno__", "__top_selected_indexes__:__topk_inner_func__"], dmsg = dmsg)
