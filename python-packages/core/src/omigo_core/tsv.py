@@ -3359,7 +3359,7 @@ class TSV:
         indexes = self.__get_col_indexes__(cols)
 
         # validation
-        if (new_col in self.columns()):
+        if (new_col in self.get_columns()):
             raise Exception("new column already exists: {}".format(new_col))
 
         # generate deterministic hash
@@ -4152,7 +4152,7 @@ class TSV:
             raise Exception("get_col_index: empty tsv")
 
         # validation
-        if (col not in self.columns()):
+        if (col not in self.get_columns()):
             raise Exception("Column not found: {}".format(col))
 
         # return
