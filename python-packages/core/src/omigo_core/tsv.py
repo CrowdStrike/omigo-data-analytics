@@ -792,7 +792,7 @@ class TSV:
 
         # check for empty data
         if (self.num_rows() == 0):
-            utils.warn("aggregate: no data. Returning new header only")
+            utils.debug("aggregate: no data. Returning new header only")
 
         # take the indexes
         agg_col_indexes = []
@@ -1266,23 +1266,19 @@ class TSV:
             raise Exception("rename: empty tsv")
 
         # validation
-        if (col not in self.header_map.keys()):
+        if (self.has_col(col) == False):
             raise Exception("Column: {} not found in {}".format(str(col), str(self.get_header_fields())))
 
         # validation
-        if (new_col in self.header_map.keys()):
+        if (self.has_col(new_col) == True):
             raise Exception("New Column: {} already exists in {}".format(str(new_col), str(self.get_header_fields())))
 
-        index = self.header_map[col]
-        header_fields2 = []
-        for h in self.get_header_fields():
-            if (h == col):
-                header_fields2.append(new_col)
-            else:
-                header_fields2.append(h)
+        # new header fields
+        new_header_fields = list([new_col if (h == col) else h for h in self.get_header_fields()])
+        new_header = "\t".join(new_header_fields)
 
-        new_header = "\t".join(header_fields2)
-        return TSV(new_header, self.data)
+        # return 
+        return TSV(new_header, self.get_data())
 
     def get_header(self):
         return self.header
@@ -1824,7 +1820,7 @@ class TSV:
         dmsg = utils.extend_inherit_message(dmsg, "url_decode")
         return self.transform([col], lambda x: utils.url_decode(x), newcol, dmsg = dmsg)
 
-    def resolve_url_encoded_cols(self, suffix = "url_encoded", ignore_if_missing = False, dmsg = ""):
+    def resolve_url_encoded_cols(self, suffix = "url_encoded", ignore_if_missing = True, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "resolve_url_encoded_cols")
         return self \
             .url_decode_inline(".*:{}".format(suffix), ignore_if_missing = ignore_if_missing, dmsg = dmsg) \
@@ -2689,7 +2685,7 @@ class TSV:
 
         # matching
         lkeys = self.__get_matching_cols__(lkeys)
-        rkeys = that.__get_matching_cols__(rkeys) if (rkeys is not None) else lkeys
+        rkeys = that.__get_matching_cols__(rkeys) if (rkeys is not None) else that.__get_matching_cols__(lkeys)
 
         # find the indexes
         lkey_indexes = []
@@ -3041,7 +3037,7 @@ class TSV:
 
         # matching
         lkeys = self.__get_matching_cols__(lkeys)
-        rkeys = that.__get_matching_cols__(rkeys) if (rkeys is not None) else lkeys
+        rkeys = that.__get_matching_cols__(rkeys) if (rkeys is not None) else that.__get_matching_cols__(lkeys)
 
         # find the indexes
         lkey_indexes = []
@@ -3234,14 +3230,14 @@ class TSV:
             # check for cols
             if (cols is None):
                 utils.warn("split_batches: empty tsv")
-                return self
+                return [self]
             else:
                 raise Exception("split_batches: empty tsv")
 
         # check for empty rows
         if (self.num_rows() == 0):
             utils.warn("split_batches: empty tsv")
-            return self
+            return [self]
 
         # check if cols are defined or not
         dmsg = utils.extend_inherit_message(dmsg, "split_batches")
@@ -4415,22 +4411,74 @@ class TSV:
             .explode(col_or_cols, self.__split_exp_func__(cols, sep), prefix, collapse = collapse, dmsg = dmsg) \
             .add_empty_cols_if_missing(new_cols)
 
-    def topk(self, grouping_cols, sort_col, k, use_string_datatype = False, reverse = False, dmsg = ""):
-        dmsg = utils.extend_inherit_message(dmsg, "topk")
+    def sample_by_topk(self, grouping_cols, sort_col, k, use_string_datatype = False, reverse = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "sample_by_topk")
 
-        def __topk_inner_func__(mps):
+        def __sample_by_topk_inner_func__(mps):
             sorted_mps = sorted(mps, key = lambda t: str(t[sort_col]) if (use_string_datatype == True) else float(t[sort_col]))
             sorted_mps = sorted_mps[0:k] if (reverse == False) else sorted_mps[-k:]
             result = {}
-            result["__top_selected_indexes__"] = ",".join([mp["__topk_sno__"] for mp in sorted_mps])
+            result["__top_selected_indexes__"] = ",".join([mp["__sample_by_topk_sno__"] for mp in sorted_mps])
             return result
 
         # return
         return self \
-            .add_seq_num("__topk_sno__", dmsg = dmsg) \
-            .group_by_key(grouping_cols, [sort_col, "__topk_sno__"], __topk_inner_func__, suffix = "__topk_inner_func__", collapse = False, dmsg = dmsg) \
-            .filter(["__topk_sno__", "__top_selected_indexes__:__topk_inner_func__"], lambda t1, t2: t1 in t2.split(","), dmsg = dmsg) \
-            .drop_cols(["__topk_sno__", "__top_selected_indexes__:__topk_inner_func__"], dmsg = dmsg)
+            .add_seq_num("__sample_by_topk_sno__", dmsg = dmsg) \
+            .group_by_key(grouping_cols, [sort_col, "__sample_by_topk_sno__"], __sample_by_topk_inner_func__, suffix = "__sample_by_topk_inner_func__", collapse = False, dmsg = dmsg) \
+            .filter(["__sample_by_topk_sno__", "__top_selected_indexes__:__sample_by_topk_inner_func__"], lambda t1, t2: t1 in t2.split(","), dmsg = dmsg) \
+            .drop_cols(["__sample_by_topk_sno__", "__top_selected_indexes__:__sample_by_topk_inner_func__"], dmsg = dmsg)
+
+    # this method fills values of this type {col} in the template col with the value of the col. If col_or_cols is None, then all remaining columns are used
+    # this is an expensive query as it has to lookup each possible input col
+    def resolve_template_col(self, template_col, output_col, col_or_cols = None, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "resolve_template_col")
+
+        # validation
+        if (template_col not in self.get_columns()):
+            raise Exception("template_col: {} is not present".format(template_col))
+
+        # validation
+        if (output_col in self.get_columns()):
+            raise Exception("output_col: {} already exists ".format(output_col))
+
+        # some guards
+        if (col_or_cols is None and self.num_rows() >= 100):
+            utils.warn("{}: col_or_cols is None and the data hqs more than 100 rows. This api is expensive and defining col_or_cols can speed up".format(dmsg))
+
+        # validation
+        input_cols = self.__get_matching_cols__(col_or_cols) if (col_or_cols is not None) else list(filter(lambda t: t != template_col, self.get_columns()))
+
+        # validation
+        if (template_col in input_cols):
+            raise Exception("template_col: {} is also in input columns: {}".format(template_col, input_cols))
+
+        # explode function
+        def __resolve_template_col_transform_func__(mp):
+            template_value = mp[template_col]
+
+            # iterate
+            for input_col in input_cols:
+                input_val = str(mp[input_col])
+                input_template = "{" + input_col + "}"
+
+                # check if the input col is present in template form
+                if (template_value.find(input_template) != -1):
+                    template_value = template_value.replace(input_template, input_val)
+
+           # generate output
+           result_mp = {output_col: template_value}
+
+           # return
+           return [result_mp]
+
+
+        # input for explode
+        explode_cols = input_cols + [template_col]
+
+        # return
+        return self \
+            .explode(explode_cols, __resolve_template_col_transform_func__, "__resolve_template_col__", collapse = False, dmsg = dsmg) \
+            .remove_prefix("__resolve_template_col__", dmsg = dmsg)
 
     def enable_debug_mode(self):
         utils.enable_debug_mode()
