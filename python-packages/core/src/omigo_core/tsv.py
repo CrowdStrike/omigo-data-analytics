@@ -267,6 +267,14 @@ class TSV:
         dmsg = utils.extend_inherit_message(dmsg, "not_endswith")
         return self.exclude_filter([col], lambda x: str(x).endswith(suffix), ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
+    def is_empty_str(self, col, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "is_empty_str")
+        return self.eq_str(col, "", dmsg = dmsg)
+
+    def is_nonempty_str(self, col, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "is_nonempty_str")
+        return self.not_eq_str(col, "", dmsg = dmsg)
+
     def replace_str_inline(self, cols, old_str, new_str, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "replace_str_inline")
         return self.transform_inline(cols, lambda x: x.replace(old_str, new_str), ignore_if_missing = ignore_if_missing, dmsg = dmsg)
@@ -4465,11 +4473,11 @@ class TSV:
                 if (template_value.find(input_template) != -1):
                     template_value = template_value.replace(input_template, input_val)
 
-           # generate output
-           result_mp = {output_col: template_value}
+            # generate output
+            result_mp = {output_col: template_value}
 
-           # return
-           return [result_mp]
+            # return
+            return [result_mp]
 
 
         # input for explode
@@ -4477,9 +4485,21 @@ class TSV:
 
         # return
         return self \
-            .explode(explode_cols, __resolve_template_col_transform_func__, "__resolve_template_col__", collapse = False, dmsg = dsmg) \
+            .explode(explode_cols, __resolve_template_col_transform_func__, "__resolve_template_col__", collapse = False, dmsg = dmsg) \
             .remove_prefix("__resolve_template_col__", dmsg = dmsg)
 
+    def resolve_template_col_inline(self, template_col, col_or_cols = None, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "resolve_template_col_inline")
+
+        # temp output col
+        output_col = "__resolve_template_col_inline_output__"
+
+        # return
+        return self \
+            .resolve_template_col(template_col, output_col, col_or_cols = col_or_cols, dmsg = dmsg) \
+            .drop_cols(template_col, dmsg = dmsg) \
+            .rename(output_col, template_col, dmsg = dmsg)
+ 
     def enable_debug_mode(self):
         utils.enable_debug_mode()
         return self
