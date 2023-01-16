@@ -42,6 +42,10 @@ def mkstr(vs):
     vs2 = list([str(x) for x in vs])
     return ",".join(vs2)
 
+def sorted_mkstr(vs):
+    vs2 = sorted(list([str(x) for x in vs]))
+    return ",".join(vs2)
+
 def mkstr4f(vs):
     vs2 = list(["{:4f}".format(float(x)) for x in vs])
     return ",".join(vs2)
@@ -390,4 +394,34 @@ def if_else_non_zero_int(*args):
 
 # TODO: this is bad implementation. The Win32 timestamp format needs proper handling
 def win32_timestamp_to_utctimestamp(x):
-    return int(str(x)[0:-8]) + 339576461 
+    return int(str(x)[0:-8]) + 339576461
+
+def get_time_diffs(vs):
+    # sort the input
+    vs = sorted(list([datetime_to_utctimestamp(t) for t in vs]))
+
+    # boundary condition
+    if (len(vs) <= 1):
+        return ""
+
+    # get parirs
+    pairs = list(zip(vs[0:len(vs)-1], vs[1:]))
+
+    # result
+    result = []
+    for pair in pairs:
+        v1, v2 = pair
+        diff = int(v2 - v1)
+        if (diff < 60):
+            result.append("{}s".format(diff))
+        elif (diff < 60 * 60):
+            result.append("{}m".format(int(diff / 60)))
+        elif (diff < 24 * 60 * 60):
+            result.append("{}h".format(int(diff / (60 * 60))))
+        elif (diff < 30 * 24 * 60 * 60):
+            result.append("{}d".format(int(diff / (24 * 60 * 60))))
+        else:
+            result.append("{}:s".format(diff))
+
+    # return
+    return ",".join(result)

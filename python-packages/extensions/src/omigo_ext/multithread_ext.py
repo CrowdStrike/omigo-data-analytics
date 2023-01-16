@@ -36,8 +36,8 @@ class MultiThreadTSV(tsv.TSV):
         ts_start = time.time()
 
         # check for single threaded
-        if (self.num_par == 0):
-            utils.debug("{}: running in single threaded mode.".format(self.dmsg))
+        if (self.num_par == 0 or self.num_rows() <= 1):
+            utils.debug("{}: running in single threaded mode as num_par = 0: num_rows: {}".format(self.dmsg, self.num_rows()))
             combined_result = __parallelize__(self, func, *args, **kwargs)
         else:
             # print batch size

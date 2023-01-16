@@ -1550,13 +1550,20 @@ class TSV:
             raise Exception("cols_as_map: empty tsv")
 
         # warn
-        utils.warn("This api has changed from prev implementation")
+        utils.warn_once("cols_as_map: This api has changed from prev implementation")
 
         # validation
         key_cols = self.__get_matching_cols__(key_cols)
 
         # check for all columns in the value part
         value_cols = self.__get_matching_cols__(value_cols)
+
+        # Change in criteria. This api is confusing and for now restrict to single key and value
+        if (len(key_cols) > 1):
+            raise Exception("cols_as_map: using key_cols as more than 1 column is deprecated: {}".format(key_cols)) 
+
+        if (len(value_cols) > 1):
+            raise Exception("cols_as_map: using value_cols as more than 1 column is deprecated: {}".format(value_cols)) 
 
         # create map
         mp = {}
@@ -2791,7 +2798,7 @@ class TSV:
 
             # right side values are not unique
             if (rvals1_str in rvkeys.keys()):
-                utils.trace("right side values are not unique: rvals1: {}, rvals2: {}, rvkeys[rvals1_str]: {}".format(rvals1, rvals2, rvkeys[rvals1_str]))
+                utils.trace("right side values are not unique")
 
             # check if the key already exists, else create an array
             if (rvals1_str not in rvkeys.keys()):
@@ -3609,7 +3616,7 @@ class TSV:
             # best effort in detecting the type and parsing for robustness
             if (json_str.startswith("%7B") == False and json_str.startswith("%5B") == False):
                 if (json_str.startswith("{") or json_str.startswith("[")):
-                    utils.warn("explode_json called with column that is not url encoded json. Assuming plain json string")
+                    utils.warn_once("explode_json called with column that is not url encoded json. Assuming plain json string")
                     json_mp = json.loads(json_str)
                 else:
                     json_str10 = json_str[0:10] + "..." if (len(json_str) > 10) else json_str
@@ -3653,10 +3660,6 @@ class TSV:
             single_results = {}
             list_results_arr = []
             dict_results = []
-
-            # trace
-            cid11 = str(json_mp["cid"]) if ("cid" in json_mp.keys()) else "NA"
-            utils.trace("__explode_json_transform_func_expand_json__: debug: {}".format(cid11))
 
             # iterate over all key values
             for k in json_mp.keys():
@@ -4419,22 +4422,22 @@ class TSV:
             .explode(col_or_cols, self.__split_exp_func__(cols, sep), prefix, collapse = collapse, dmsg = dmsg) \
             .add_empty_cols_if_missing(new_cols)
 
-    def sample_by_topk(self, grouping_cols, sort_col, k, use_string_datatype = False, reverse = False, dmsg = ""):
-        dmsg = utils.extend_inherit_message(dmsg, "sample_by_topk")
+    def sample_group_by_topk(self, grouping_cols, sort_col, k, use_string_datatype = False, reverse = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "sample_group_by_topk")
 
-        def __sample_by_topk_inner_func__(mps):
+        def __sample_group_by_topk_inner_func__(mps):
             sorted_mps = sorted(mps, key = lambda t: str(t[sort_col]) if (use_string_datatype == True) else float(t[sort_col]))
             sorted_mps = sorted_mps[0:k] if (reverse == False) else sorted_mps[-k:]
             result = {}
-            result["__top_selected_indexes__"] = ",".join([mp["__sample_by_topk_sno__"] for mp in sorted_mps])
+            result["__top_selected_indexes__"] = ",".join([mp["__sample_group_by_topk_sno__"] for mp in sorted_mps])
             return result
 
         # return
         return self \
-            .add_seq_num("__sample_by_topk_sno__", dmsg = dmsg) \
-            .group_by_key(grouping_cols, [sort_col, "__sample_by_topk_sno__"], __sample_by_topk_inner_func__, suffix = "__sample_by_topk_inner_func__", collapse = False, dmsg = dmsg) \
-            .filter(["__sample_by_topk_sno__", "__top_selected_indexes__:__sample_by_topk_inner_func__"], lambda t1, t2: t1 in t2.split(","), dmsg = dmsg) \
-            .drop_cols(["__sample_by_topk_sno__", "__top_selected_indexes__:__sample_by_topk_inner_func__"], dmsg = dmsg)
+            .add_seq_num("__sample_group_by_topk_sno__", dmsg = dmsg) \
+            .group_by_key(grouping_cols, [sort_col, "__sample_group_by_topk_sno__"], __sample_group_by_topk_inner_func__, suffix = "__sample_group_by_topk_inner_func__", collapse = False, dmsg = dmsg) \
+            .filter(["__sample_group_by_topk_sno__", "__top_selected_indexes__:__sample_group_by_topk_inner_func__"], lambda t1, t2: t1 in t2.split(","), dmsg = dmsg) \
+            .drop_cols(["__sample_group_by_topk_sno__", "__top_selected_indexes__:__sample_group_by_topk_inner_func__"], dmsg = dmsg)
 
     # this method fills values of this type {col} in the template col with the value of the col. If col_or_cols is None, then all remaining columns are used
     # this is an expensive query as it has to lookup each possible input col
