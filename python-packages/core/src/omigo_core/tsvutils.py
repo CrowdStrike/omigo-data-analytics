@@ -1,6 +1,5 @@
 """utlity methods to read and write tsv data."""
 
-from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlencode
 #from urllib.request import Request, urlopen
 #from urllib.error import HTTPError, URLError
@@ -219,7 +218,28 @@ def read(input_file_or_files, sep = None, def_val_map = None, s3_region = None, 
     # merge and return
     return merge(tsv_list, def_val_map = def_val_map)
 
-def read_with_filter_transform(input_file_or_files, sep = None, def_val_map = None, filter_transform_func = None, transform_func = None, s3_region = None, aws_profile = None):
+def __read_with_filter_transform_select_func__(cols):
+    # create a inner function
+    def __read_with_filter_transform_select_func_inner__(mp):
+        result_mp = {}
+        for c in cols:
+            if (c in mp.keys()):
+                result_mp[c] = str(mp[c])
+
+        # return
+        return result_mp
+
+    return __read_with_filter_transform_select_func_inner__
+
+def read_with_filter_transform(input_file_or_files, sep = None, def_val_map = None, filter_transform_func = None, cols = None, transform_func = None, s3_region = None, aws_profile = None):
+    # check if cols is defined
+    if (filter_transform_func is not None and cols is not None):
+        raise Exception("tsvutils: read_with_filter_transform: either of filter_transform_func or cols parameter can be used")
+
+    # use the map function for cols
+    if (cols is not None and len(cols) > 0):
+        filter_transform_func = __read_with_filter_transform_select_func__(cols)
+
     # check if filter_transform_func is defined
     if (filter_transform_func is None):
         xtsv = read(input_file_or_files, sep = sep, def_val_map = def_val_map, s3_region = s3_region, aws_profile = aws_profile)

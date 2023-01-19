@@ -4,8 +4,7 @@ import math
 import pandas as pd
 import random
 import json
-from omigo_core import tsvutils
-from omigo_core import utils
+from omigo_core import utils, tsvutils, funclib
 import sys
 import time
 
@@ -75,7 +74,7 @@ class TSV:
         return col in self.header_map.keys()
 
     # cols is array of string
-    def select(self, col_or_cols, inherit_message = ""):
+    def select(self, col_or_cols, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             raise Exception("select: empty tsv")
@@ -93,7 +92,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("select: [1/1] selecting columns", inherit_message, counter, len(self.get_data()))
+            utils.report_progress("select: [1/1] selecting columns", dmsg, counter, len(self.get_data()))
 
             # get fields
             fields = line.split("\t")
@@ -114,165 +113,175 @@ class TSV:
         # return
         return TSV(new_header, new_data)
 
-    def values_not_in(self, col, values, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": values_not_in" if (inherit_message != "") else "values_not_in"
-        return self.filter([col], lambda x: x not in values, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def values_not_in(self, col, values, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "values_not_in")
+        return self.filter([col], lambda x: x not in values, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def values_in(self, col, values, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": values_in" if (inherit_message != "") else "values_in"
-        return self.filter([col], lambda x: x in values, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def values_in(self, col, values, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "values_in")
+        return self.filter([col], lambda x: x in values, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def not_match(self, col, pattern, ignore_if_missing = False, inherit_message = ""):
+    def not_match(self, col, pattern, ignore_if_missing = False, dmsg = ""):
         utils.warn("Please use not_regex_match instead")
-        return self.not_regex_match(col, pattern, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message)
+        return self.not_regex_match(col, pattern, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def not_regex_match(self, col, pattern, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": not_regex_match" if (inherit_message != "") else "not_regex_match"
-        return self.regex_match(col, pattern, condition = False, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def not_regex_match(self, col, pattern, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "not_regex_match")
+        return self.regex_match(col, pattern, condition = False, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def match(self, col, pattern, ignore_if_missing = False, inherit_message = ""):
+    def match(self, col, pattern, ignore_if_missing = False, dmsg = ""):
         utils.warn("Please use regex_match instead")
-        return self.regex_match(col, pattern, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message)
+        return self.regex_match(col, pattern, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def regex_match(self, col, pattern, condition = True, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": regex_match" if (inherit_message != "") else "regex_match"
-        return self.filter([col], lambda x: (re.match(pattern, x) is not None) == condition, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def regex_match(self, col, pattern, condition = True, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "regex_match")
+        return self.filter([col], lambda x: (re.match(pattern, x) is not None) == condition, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def not_eq(self, col, value, ignore_if_missing = False, inherit_message = ""):
+    def not_eq(self, col, value, ignore_if_missing = False, dmsg = ""):
         utils.warn("This api can have side effects because of implicit data types conversion in python. Use not_eq_int, not_eq_str or not_eq_float")
-        inherit_message2 = inherit_message + ": not_eq" if (inherit_message != "") else "not_eq"
-        return self.filter([col], lambda x: x != value, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+        dmsg = utils.extend_inherit_message(dmsg, "not_eq")
+        return self.filter([col], lambda x: x != value, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def eq(self, col, value, ignore_if_missing = False, inherit_message = ""):
+    def eq(self, col, value, ignore_if_missing = False, dmsg = ""):
         utils.warn("This api can have side effects because of implicit data types conversion in python. Use eq_int, eq_str or eq_float")
-        return self.filter([col], lambda x: x == value, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+        return self.filter([col], lambda x: x == value, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def eq_int(self, col, value, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": eq_int" if (inherit_message != "") else "eq_int"
-        return self.filter([col], lambda x: int(float(x)) == value, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def eq_int(self, col, value, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "eq_int")
+        return self.filter([col], lambda x: int(float(x)) == value, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def eq_float(self, col, value, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": eq_float" if (inherit_message != "") else "eq_float"
-        return self.filter([col], lambda x: float(x) == value, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def eq_float(self, col, value, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "eq_float")
+        return self.filter([col], lambda x: float(x) == value, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def eq_str(self, col, value, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": eq_str" if (inherit_message != "") else "eq_str"
-        return self.filter([col], lambda x: str(x) == str(value), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def eq_str(self, col, value, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "eq_str")
+        return self.filter([col], lambda x: str(x) == str(value), ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def not_eq_int(self, col, value, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": not_eq_int" if (inherit_message != "") else "not_eq_int"
-        return self.filter([col], lambda x: int(x) != value, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def not_eq_int(self, col, value, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "not_eq_int")
+        return self.filter([col], lambda x: int(x) != value, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def not_eq_float(self, col, value, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": not_eq_float" if (inherit_message != "") else "not_eq_float"
-        return self.filter([col], lambda x: float(x) != value, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def not_eq_float(self, col, value, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "not_eq_float")
+        return self.filter([col], lambda x: float(x) != value, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def not_eq_str(self, col, value, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": not_eq_str" if (inherit_message != "") else "not_eq_str"
-        return self.filter([col], lambda x: str(x) != str(value), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def not_eq_str(self, col, value, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "not_eq_str")
+        return self.filter([col], lambda x: str(x) != str(value), ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def is_nonzero(self, col, ignore_if_missing = False, inherit_message = ""):
+    def is_nonzero(self, col, ignore_if_missing = False, dmsg = ""):
         utils.warn("Deprecated. Use is_nonzero_float() instead")
-        inherit_message2 = inherit_message + ": is_nonzero" if (len(inherit_message) > 0) else "is_nonzero"
-        return self.is_nonzero_float(col, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+        dmsg = utils.extend_inherit_message(dmsg, "is_nonzero")
+        return self.is_nonzero_float(col, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def is_nonzero_int(self, col, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": is_nonzero_int" if (len(inherit_message) > 0) else "is_nonzero_int"
-        return self.filter([col], lambda x: int(x) != 0, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def is_nonzero_int(self, col, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "is_nonzero_int")
+        return self.filter([col], lambda x: int(x) != 0, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def is_nonzero_float(self, col, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": is_nonzero_float" if (len(inherit_message) > 0) else "is_nonzero_float"
-        return self.filter([col], lambda x: float(x) != 0, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def is_nonzero_float(self, col, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "is_nonzero_float")
+        return self.filter([col], lambda x: float(x) != 0, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def lt_str(self, col, value, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": lt_str" if (len(inherit_message) > 0) else "lt_str"
-        return self.filter([col], lambda x: x < value, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def lt_str(self, col, value, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "lt_str")
+        return self.filter([col], lambda x: x < value, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def le_str(self, col, value, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": le_str" if (len(inherit_message) > 0) else "le_str"
-        return self.filter([col], lambda x: x <= value, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def le_str(self, col, value, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "le_str")
+        return self.filter([col], lambda x: x <= value, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def gt_str(self, col, value, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": gt_str" if (len(inherit_message) > 0) else "gt_str"
-        return self.filter([col], lambda x: x > value, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def gt_str(self, col, value, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "gt_str")
+        return self.filter([col], lambda x: x > value, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def ge_str(self, col, value, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": ge_str" if (len(inherit_message) > 0) else "ge_str"
-        return self.filter([col], lambda x: x >= value, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def ge_str(self, col, value, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "ge_str")
+        return self.filter([col], lambda x: x >= value, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def gt(self, col, value, ignore_if_missing = False, inherit_message = ""):
+    def gt(self, col, value, ignore_if_missing = False, dmsg = ""):
         utils.warn("Deprecated. Use gt_float() instead")
-        inherit_message2 = inherit_message + ": gt" if (len(inherit_message) > 0) else "gt"
-        return self.gt_float(col, value, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+        dmsg = utils.extend_inherit_message(dmsg, "gt")
+        return self.gt_float(col, value, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def gt_int(self, col, value, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": gt_int" if (len(inherit_message) > 0) else "gt_int"
-        return self.filter([col], lambda x: int(float(x)) > int(float(value)), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def gt_int(self, col, value, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "gt_int")
+        return self.filter([col], lambda x: int(float(x)) > int(float(value)), ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def gt_float(self, col, value, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": gt_float" if (len(inherit_message) > 0) else "gt_float"
-        return self.filter([col], lambda x: float(x) > float(value), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def gt_float(self, col, value, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "gt_float")
+        return self.filter([col], lambda x: float(x) > float(value), ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def ge(self, col, value, ignore_if_missing = False, inherit_message = ""):
+    def ge(self, col, value, ignore_if_missing = False, dmsg = ""):
         utils.warn("Deprecated. Use ge_float() instead")
-        inherit_message2 = inherit_message + ": ge" if (len(inherit_message) > 0) else "ge"
-        return self.ge_float(col, value, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+        dmsg = utils.extend_inherit_message(dmsg, "ge")
+        return self.ge_float(col, value, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def ge_int(self, col, value, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": ge_int" if (len(inherit_message) > 0) else "ge_int"
-        return self.filter([col], lambda x: int(float(x)) >= int(float(value)), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def ge_int(self, col, value, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "ge_int")
+        return self.filter([col], lambda x: int(float(x)) >= int(float(value)), ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def ge_float(self, col, value, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": ge_float" if (len(inherit_message) > 0) else "ge_float"
-        return self.filter([col], lambda x: float(x) >= float(value), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def ge_float(self, col, value, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "ge_float")
+        return self.filter([col], lambda x: float(x) >= float(value), ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def lt(self, col, value, ignore_if_missing = False, inherit_message = ""):
+    def lt(self, col, value, ignore_if_missing = False, dmsg = ""):
         utils.warn("Deprecated. Use lt_float() instead")
-        inherit_message2 = inherit_message + ": lt" if (len(inherit_message) > 0) else "lt"
-        return self.lt_float(col, value, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+        dmsg = utils.extend_inherit_message(dmsg, "lt")
+        return self.lt_float(col, value, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def lt_int(self, col, value, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": lt_int" if (len(inherit_message) > 0) else "lt_int"
-        return self.filter([col], lambda x: int(float(x)) < int(float(value)), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def lt_int(self, col, value, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "lt_int")
+        return self.filter([col], lambda x: int(float(x)) < int(float(value)), ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def lt_float(self, col, value, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": lt_float" if (len(inherit_message) > 0) else "lt_float"
-        return self.filter([col], lambda x: float(x) < float(value), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def lt_float(self, col, value, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "lt_float")
+        return self.filter([col], lambda x: float(x) < float(value), ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def le(self, col, value, ignore_if_missing = False, inherit_message = ""):
+    def le(self, col, value, ignore_if_missing = False, dmsg = ""):
         utils.warn("Deprecated. Use le_float() instead")
-        inherit_message2 = inherit_message + ": le" if (len(inherit_message) > 0) else "le"
-        return self.filter([col], lambda x: float(x) <= float(value), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+        dmsg = utils.extend_inherit_message(dmsg, "le")
+        return self.filter([col], lambda x: float(x) <= float(value), ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def le_int(self, col, value, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": le_int" if (len(inherit_message) > 0) else "le_int"
-        return self.filter([col], lambda x: int(float(x)) <= int(float(value)), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def le_int(self, col, value, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "le_int")
+        return self.filter([col], lambda x: int(float(x)) <= int(float(value)), ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def le_float(self, col, value, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": le_float" if (len(inherit_message) > 0) else "le_float"
-        return self.filter([col], lambda x: float(x) <= float(value), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def le_float(self, col, value, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "le_float")
+        return self.filter([col], lambda x: float(x) <= float(value), ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def startswith(self, col, prefix, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": startswith" if (len(inherit_message) > 0) else "startswith"
-        return self.filter([col], lambda x: x.startswith(prefix), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def startswith(self, col, prefix, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "startswith")
+        return self.filter([col], lambda x: str(x).startswith(prefix), ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def not_startswith(self, col, prefix, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": not_startswith" if (len(inherit_message) > 0) else "not_startswith"
-        return self.exclude_filter([col], lambda x: x.startswith(prefix), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def not_startswith(self, col, prefix, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "not_startswith")
+        return self.exclude_filter([col], lambda x: str(x).startswith(prefix), ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def endswith(self, col, suffix, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": endswith" if (len(inherit_message) > 0) else "endswith"
-        return self.filter([col], lambda x: x.endswith(suffix), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def endswith(self, col, suffix, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "endswith")
+        return self.filter([col], lambda x: str(x).endswith(suffix), ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def not_endswith(self, col, suffix, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": not_endswith" if (len(inherit_message) > 0) else "not_endswith"
-        return self.exclude_filter([col], lambda x: x.endswith(suffix), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def not_endswith(self, col, suffix, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "not_endswith")
+        return self.exclude_filter([col], lambda x: str(x).endswith(suffix), ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def replace_str_inline(self, cols, old_str, new_str, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": replace_str_inline" if (len(inherit_message) > 0) else "replace_str_inline"
-        return self.transform_inline(cols, lambda x: x.replace(old_str, new_str), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def is_empty_str(self, col, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "is_empty_str")
+        return self.eq_str(col, "", dmsg = dmsg)
 
-    def group_count(self, cols, prefix = "group", collapse = True, precision = 6, inherit_message = ""):
+    def is_nonempty_str(self, col, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "is_nonempty_str")
+        return self.not_eq_str(col, "", dmsg = dmsg)
+
+    def replace_str_inline(self, cols, old_str, new_str, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "replace_str_inline")
+        return self.transform_inline(cols, lambda x: x.replace(old_str, new_str), ignore_if_missing = ignore_if_missing, dmsg = dmsg)
+
+    def group_count(self, cols, prefix = "group", collapse = True, precision = 6, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "group_count")
+
         # check empty
         if (self.has_empty_header()):
             raise Exception("group_count: empty tsv")
@@ -289,26 +298,28 @@ class TSV:
             raise Exception("Use a different prefix than: {}".format(prefix))
 
         # call aggregate with collapse=False
-        inherit_message2 = inherit_message + ": group_count" if (inherit_message != "") else "group_count"
-        return self.aggregate(cols, [cols[0]], [len], collapse = collapse, inherit_message = inherit_message2) \
-            .rename(cols[0] + ":len", new_count_col) \
-            .transform([new_count_col], lambda x: str(int(x) / len(self.get_data())), new_ratio_col, inherit_message = inherit_message2) \
-            .reverse_sort(new_count_col) \
-            .apply_precision(new_ratio_col, precision, inherit_message = inherit_message2)
-
-    def ratio(self, col1, col2, new_col, default = 0.0, precision = 6, inherit_message = ""):
         return self \
-            .transform([col1, col2], lambda x, y: float(x) / float(y) if (float(y) != 0) else default, new_col) \
-            .apply_precision(new_col, precision, inherit_message = inherit_message)
+            .aggregate(cols, [cols[0]], [funclib.get_len], collapse = collapse, dmsg = dmsg) \
+            .rename(cols[0] + ":get_len", new_count_col, dmsg = dmsg) \
+            .transform([new_count_col], lambda x: str(int(x) / len(self.get_data())), new_ratio_col, dmsg = dmsg) \
+            .reverse_sort(new_count_col, dmsg = dmsg) \
+            .apply_precision(new_ratio_col, precision, dmsg = dmsg)
 
-    def ratio_const(self, col, denominator, new_col, precision = 6, inherit_message = ""):
+    def ratio(self, col1, col2, new_col, default = 0.0, precision = 6, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "ratio")
         return self \
-            .transform([col], lambda x: float(x) / float(denominator) if (float(denominator) != 0) else default, new_col) \
-            .apply_precision(new_col, precision, inherit_message = inherit_message)
+            .transform([col1, col2], lambda x, y: float(x) / float(y) if (float(y) != 0) else default, new_col, dmsg = dmsg) \
+            .apply_precision(new_col, precision, dmsg = dmsg)
 
-    def apply_precision(self, cols, precision, inherit_message = ""):
-        inherit_message2 = inherit_message + ": apply_precision" if (len(inherit_message) > 0) else "apply_precision"
-        return self.transform_inline(cols, lambda x: ("{:." + str(precision) + "f}").format(float(x)), inherit_message = inherit_message2)
+    def ratio_const(self, col, denominator, new_col, precision = 6, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "ratio_const")
+        return self \
+            .transform([col], lambda x: float(x) / float(denominator) if (float(denominator) != 0) else default, new_col, dmsg = dmsg) \
+            .apply_precision(new_col, precision, dmsg = dmsg)
+
+    def apply_precision(self, cols, precision, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "apply_precision")
+        return self.transform_inline(cols, lambda x: ("{:." + str(precision) + "f}").format(float(x)), dmsg = dmsg)
 
     # TODO: use skip_rows for better name
     def skip(self, count):
@@ -326,20 +337,28 @@ class TSV:
         # return
         return TSV(self.header, self.data[-count:])
 
-    def take(self, count):
+    def take(self, count, dmsg = ""):
         # return result
         if (count > len(self.get_data())):
             count = len(self.get_data())
 
         return TSV(self.header, self.data[0:count])
 
-    def distinct(self):
+    def distinct(self, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "distinct")
+
         # create variables
         new_data = []
         key_map = {}
 
         # iterate
+        counter = 0
         for line in self.get_data():
+            # report progress
+            counter = counter + 1
+            utils.report_progress("[1/1] calling function", dmsg, counter, len(self.get_data()))
+
+            # check if the line doesnt exist already
             if (line not in key_map.keys()):
                 key_map[line] = 1
                 new_data.append(line)
@@ -347,13 +366,19 @@ class TSV:
         # return
         return TSV(self.header, new_data)
 
+    def distinct_cols(self, col_or_cols, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "distinct_cols")
+        return self \
+            .select(col_or_cols, dmsg = dmsg) \
+            .distinct(dmsg = dmsg)
+       
     # TODO: use drop_cols instead coz of better name
-    def drop(self, col_or_cols, ignore_if_missing = False, inherit_message = ""):
+    def drop(self, col_or_cols, ignore_if_missing = False, dmsg = ""):
         utils.warn_once("use drop_cols instead coz of better name")
-        return self.drop_cols(col_or_cols, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message)
+        return self.drop_cols(col_or_cols, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def drop_cols(self, col_or_cols, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": drop_cols" if (inherit_message != "") else "drop_cols"
+    def drop_cols(self, col_or_cols, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "drop_cols")
 
         # check empty
         if (self.has_empty_header()):
@@ -370,19 +395,30 @@ class TSV:
                 non_matching_cols.append(h)
 
         # return
-        inherit_message2 = inherit_message + ": drop" if (len(inherit_message) > 0) else "drop"
-        return self.select(non_matching_cols, inherit_message = inherit_message2)
+        return self \
+            .select(non_matching_cols, dmsg = dmsg)
 
-    def drop_if_exists(self, col_or_cols, inherit_message = ""):
-        inherit_message2 = inherit_message + ": drop_if_exists" if (inherit_message != "") else "drop_if_exists"
-        return self.drop(col_or_cols, ignore_if_missing = True, inherit_message = inherit_message2)
+    def drop_cols_with_prefix(self, prefix, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "drop_cols_with_prefix")
+        return self \
+            .drop_cols("{}:.*".format(prefix), ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def drop_cols_if_exists(self, col_or_cols, inherit_message = ""):
-        inherit_message2 = inherit_message + ": drop_cols_if_exists" if (inherit_message != "") else "drop_cols_if_exists"
-        return self.drop_cols(col_or_cols, ignore_if_missing = True, inherit_message = inherit_message2)
+    def drop_cols_with_suffix(self, suffix, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "drop_cols_with_suffix")
+        return self \
+            .drop_cols(".*:{}".format(suffix), ignore_if_missing = ignore_if_missing, dmsg = dmsg)
+
+    def drop_if_exists(self, col_or_cols, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "drop_if_exists")
+        return self \
+            .drop_cols(col_or_cols, ignore_if_missing = True, dmsg = dmsg)
+
+    def drop_cols_if_exists(self, col_or_cols, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "drop_cols_if_exists")
+        return self.drop_cols(col_or_cols, ignore_if_missing = True, dmsg = dmsg)
 
     # TODO: the select_cols is not implemented properly
-    def window_aggregate(self, win_col, agg_cols, agg_funcs, winsize, select_cols = None, sliding = False, collapse = True, suffix = "", precision = 2, inherit_message = ""):
+    def window_aggregate(self, win_col, agg_cols, agg_funcs, winsize, select_cols = None, sliding = False, collapse = True, suffix = "", precision = 2, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             raise Exception("window_aggregate: empty tsv")
@@ -446,7 +482,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("window_aggregate: [1/1] calling function", inherit_message, counter, len(self.get_data()))
+            utils.report_progress("window_aggregate: [1/1] calling function", dmsg, counter, len(self.get_data()))
 
             # parse data
             fields = line.split("\t")
@@ -474,7 +510,7 @@ class TSV:
                 .aggregate(cols2, agg_cols, agg_funcs, collapse, precision)
 
     # The signature for agg_func is func(list_of_maps). Each map will get the agg_cols
-    def group_by_key(self, grouping_cols, agg_cols, agg_func, suffix = "", collapse = True, inherit_message = ""):
+    def group_by_key(self, grouping_cols, agg_cols, agg_func, suffix = "", collapse = True, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             raise Exception("group_by_key: empty tsv")
@@ -503,7 +539,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("group_by_key: [1/3] grouping: progress", inherit_message, counter, len(self.get_data()))
+            utils.report_progress("group_by_key: [1/3] grouping: progress", dmsg, counter, len(self.get_data()))
 
             # parse data
             fields = line.split("\t")
@@ -529,7 +565,7 @@ class TSV:
         for k, vs in grouped.items():
             # report progress
             counter = counter + 1
-            utils.report_progress("group_by_key: [2/3] grouping func: progress", inherit_message, counter, len(grouped))
+            utils.report_progress("group_by_key: [2/3] grouping func: progress", dmsg, counter, len(grouped))
 
             # get fields
             vs_map = agg_func(vs)
@@ -578,7 +614,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("group_by_key: [3/3] generating data", inherit_message, counter, len(self.get_data()))
+            utils.report_progress("group_by_key: [3/3] generating data", dmsg, counter, len(self.get_data()))
 
             # process data
             fields = line.split("\t")
@@ -617,48 +653,55 @@ class TSV:
         return TSV(new_header, new_data)
 
     # FIXME
-    def arg_min(self, grouping_cols, argcols, valcols, suffix = "arg_min", use_string_datatype = False, topk = 1, sep = "|", collapse = True):
+    def arg_min(self, grouping_cols, argcols, valcols, suffix = "arg_min", use_string_datatype = False, topk = 1, sep = "|", collapse = True, dmsg = ""):
         utils.warn_once("arg_min is not implemented correctly. Too complicated")
+        dmsg = utils.extend_inherit_message(dmsg, "arg_min")
+
         # some unsupported case
         if (use_string_datatype == True):
             raise Exception("arg_min: use_string_datatype = True is not supported")
 
-        return self.__arg_min_or_max_common__(grouping_cols, argcols, valcols, suffix, topk, sep, -1, collapse = collapse)
+        return self.__arg_min_or_max_common__(grouping_cols, argcols, valcols, suffix, topk, sep, -1, collapse = collapse, dmsg = dmsg)
 
-    def arg_max(self, grouping_cols, argcols, valcols, suffix = "arg_max", use_string_datatype = False, topk = 1, sep = "|", collapse = True):
+    def arg_max(self, grouping_cols, argcols, valcols, suffix = "arg_max", use_string_datatype = False, topk = 1, sep = "|", collapse = True, dmsg = ""):
         utils.warn_once("arg_max is not implemented correctly. Too complicated")
-        return self.__arg_min_or_max_common__(grouping_cols, argcols, valcols, suffix, use_string_datatype, topk, sep, 1, collapse = collapse)
+        dmsg = utils.extend_inherit_message(dmsg, "arg_max")
+        return self.__arg_min_or_max_common__(grouping_cols, argcols, valcols, suffix, use_string_datatype, topk, sep, 1, collapse = collapse, dmsg = dmsg)
 
     # grouping_cols are for grouping
     # argcols which are returned where valcols values are max or min
     # suffix is added to both arg and val. arg are suffixed as :arg, values are suffixed as val1, val2 upto topk
-    def __arg_min_or_max_common__(self, grouping_cols, argcols, valcols, suffix, use_string_datatype, topk, sep, sign, collapse = False):
+    def __arg_min_or_max_common__(self, grouping_cols, argcols, valcols, suffix, use_string_datatype, topk, sep, sign, collapse = False, dmsg = ""):
         grouping_cols = self.__get_matching_cols__(grouping_cols)
         argcols = self.__get_matching_cols__(argcols)
         valcols = self.__get_matching_cols__(valcols)
 
-        def __arg_max_grouping_func__(vs):
+        def __arg_max_grouping_func__(mps):
             # initialize
             max_keys = []
             for i in range(len(argcols)):
                 max_keys.append([])
             max_values = []
+            max_str_values = []
             for i in range(len(valcols)):
+                max_str_values.append("")
                 if (use_string_datatype == False):
                     max_values.append(sign * float('-inf'))
                 else:
                     max_values.append("")
 
             # iterate over all values
-            for mp in vs:
+            for mp in mps:
                 # read keys
                 keys = []
                 for i in range(len(argcols)):
                     keys.append(mp[argcols[i]])
 
-                # read values
+                # read values. TODO: dont do float conversion here as it distorts original data
                 values = []
+                str_values = []
                 for i in range(len(valcols)):
+                    str_values.append(str(mp[valcols[i]]))
                     if (use_string_datatype == False):
                         values.append(sign * float(mp[valcols[i]]))
                     else:
@@ -673,6 +716,7 @@ class TSV:
                             max_keys[j] = [str(keys[j])]
                         for j in range(len(values)):
                             max_values[j] = values[j]
+                            max_str_values[j] = str_values[j]
                         found = True
                         break
                     elif (max_values[i] > values[i]):
@@ -689,7 +733,7 @@ class TSV:
             for i in range(len(argcols)):
                 result[argcols[i] + ":arg"] = sep.join(max_keys[i][0:topk])
             for i in range(len(valcols)):
-                result[valcols[i] + ":val" + str(i+1)] = str(max_values[i])
+                result[valcols[i] + ":val" + str(i+1)] = str(max_str_values[i])
 
             # return
             return result
@@ -702,20 +746,37 @@ class TSV:
             combined_cols.append(k)
 
         # remaining validation done by the group_by_key
-        return self.group_by_key(grouping_cols, combined_cols, __arg_max_grouping_func__, suffix = suffix, collapse = collapse)
+        return self.group_by_key(grouping_cols, combined_cols, __arg_max_grouping_func__, suffix = suffix, collapse = collapse, dmsg = dmsg)
 
     # TODO: this use_string_datatype is temporary and needs to be replaced with better design.
-    def aggregate(self, grouping_col_or_cols, agg_cols, agg_funcs, collapse = True, precision = 6, use_rolling = False, use_string_datatype = False, inherit_message = ""):
+    def aggregate(self, grouping_col_or_cols, agg_cols, agg_funcs, collapse = True, precision = None, use_rolling = None, use_string_datatype = None,
+	string_datatype_cols = None, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "aggregate")
+
         # check empty
         if (self.has_empty_header()):
             raise Exception("aggregate: empty tsv")
 
+        # check for usage of builtin functions
+        for agg_func in agg_funcs:
+            # raise warning if builtin functions are used
+            if (__is_builtin_func__(agg_func)):
+                utils.warn("aggregate: builtin function used that has side effect. Please use funclib.* functions")
+
+        # both use_string_datatype and string_datatype_cols are deprecated
+        if (use_string_datatype is not None or string_datatype_cols is not None):
+            utils.warn("aggregate: use_string_datatype and string_datatype_cols are deprecated")
+
+        # validation on precision
+        if (precision is not None):
+            raise Exception("aggregate: precision parameter is deprecated")
+
+        # validation on use_rolling 
+        if (use_rolling is not None or use_rolling == True):
+            raise Exception("aggregate: use_rolling parameter is deprecated")
+
         # get matching columns
         grouping_cols = self.__get_matching_cols__(grouping_col_or_cols)
-
-        # define rolling functions
-        rolling_agg_funcs_map = {"sum": get_rolling_func_update_sum, "min": get_rolling_func_update_min, "max": get_rolling_func_update_max, "mean": get_rolling_func_update_mean,
-            "len": get_rolling_func_update_len}
 
         # validation on number of grouping cols
         if (len(grouping_cols) == 0 or len(agg_cols) == 0):
@@ -739,17 +800,11 @@ class TSV:
 
         # check for empty data
         if (self.num_rows() == 0):
-            utils.warn("aggregate: no data. Returning new header only")
-            # TODO: Check if this is needed
-            # if (collapse == True):
-            #     return tsv.new_with_cols(utils.merge_arrays(grouping_cols, new_cols))
-            # else:
-            #     return tsv.new_with_cols(self.get_header_fields(), new_cols)
+            utils.debug("aggregate: no data. Returning new header only")
 
         # take the indexes
         agg_col_indexes = []
-        rolling_agg_col_indexes_map = {}
-        rolling_agg_funcs = []
+        str_agg_col_indexes = []
 
         # for each agg col, add the index
         for i in range(len(agg_cols)):
@@ -757,22 +812,19 @@ class TSV:
             agg_index = self.header_map[agg_col]
             agg_col_indexes.append(agg_index)
 
-            # prepare map of indexes of rolling_agg functions
-            if (get_func_name(agg_funcs[i]) in rolling_agg_funcs_map.keys()):
-                rolling_agg_col_indexes_map[i] = 1
-                rolling_agg_funcs.append(rolling_agg_funcs_map[get_func_name(agg_funcs[i])])
+            # check if string is to be used
+            if (use_string_datatype == True and string_datatype_cols is not None and agg_col in string_datatype_cols):
+                str_agg_col_indexes.append(agg_index)
 
         # create a map to store array of values
         value_map_arr = [{} for i in range(len(agg_col_indexes))]
-        # TODO: This rolling aggregation needs to be removed
-        # rolling_value_map_arr = [{} for i in range(len(agg_col_indexes))]
 
         # iterate over the data
         counter = 0
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("aggregate: [1/2] building groups", inherit_message, counter, len(self.get_data()))
+            utils.report_progress("[1/2] building groups", dmsg, counter, len(self.get_data()))
 
             # process data
             fields = line.split("\t")
@@ -788,21 +840,7 @@ class TSV:
                 if (cols_key not in value_map_arr[j].keys()):
                     value_map_arr[j][cols_key] = []
 
-                # check for rolling functions
-                if (use_rolling and j in rolling_agg_col_indexes_map.keys()):
-                    if (len(value_map_arr[j][cols_key]) == 0):
-                        value_map_arr[j][cols_key] = get_rolling_func_init(get_func_name(agg_funcs[j]))
-                    #get_rolling_func_update(value_map_arr[j][cols_key], float(fields[agg_col_indexes[j]]), get_func_name(agg_funcs[j]))
-                    rolling_agg_funcs[j](value_map_arr[j][cols_key], float(fields[agg_col_indexes[j]]))
-                else:
-                    # TODO: this is a hack on datatype
-                    if (use_string_datatype == False):
-                        try:
-                            value_map_arr[j][cols_key].append(float(fields[agg_col_indexes[j]]))
-                        except ValueError:
-                            value_map_arr[j][cols_key].append(fields[agg_col_indexes[j]])
-                    else:
-                        value_map_arr[j][cols_key].append(str(fields[agg_col_indexes[j]]))
+                value_map_arr[j][cols_key].append(str(fields[agg_col_indexes[j]]))
 
         # compute the aggregation
         value_func_map_arr = [{} for i in range(len(agg_col_indexes))]
@@ -810,11 +848,7 @@ class TSV:
         # for each possible index, do aggregation
         for j in range(len(agg_col_indexes)):
             for k, vs in value_map_arr[j].items():
-                # check for rolling functions
-                if (use_rolling and j in rolling_agg_col_indexes_map.keys()):
-                    value_func_map_arr[j][k] = get_rolling_func_closing(vs, get_func_name(agg_funcs[j]))
-                else:
-                    value_func_map_arr[j][k] = agg_funcs[j](vs)
+                value_func_map_arr[j][k] = agg_funcs[j](vs)
 
         # create new header and data
         new_header = "\t".join(utils.merge_arrays([self.header_fields, new_cols]))
@@ -826,7 +860,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("aggregate: [2/2] calling function", inherit_message, counter, len(self.get_data()))
+            utils.report_progress("[2/2] calling function", dmsg, counter, len(self.get_data()))
 
             # data processing
             fields = line.split("\t")
@@ -846,7 +880,8 @@ class TSV:
                 new_data.append(new_line)
                 cols_key_map[cols_key] = 1
 
-        # return
+        # create result
+        result_xtsv = TSV(new_header, new_data)
         if (collapse == True):
             # uniq cols
             uniq_cols = []
@@ -854,11 +889,14 @@ class TSV:
                 uniq_cols.append(col)
             for new_col in new_cols:
                 uniq_cols.append(new_col)
-            return TSV(new_header, new_data).to_numeric(new_cols, precision, inherit_message = inherit_message).select(uniq_cols)
-        else:
-            return TSV(new_header, new_data).to_numeric(new_cols, precision, inherit_message = inherit_message)
+            result_xtsv = result_xtsv.select(uniq_cols)
 
-    def filter(self, cols, func, include_cond = True, ignore_if_missing = False, inherit_message = ""):
+        # return
+        return result_xtsv
+
+    def filter(self, cols, func, include_cond = True, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "filter")
+
         # check empty
         if (self.has_empty_header()):
             utils.raise_exception_or_warn("filter: empty tsv", ignore_if_missing)
@@ -882,7 +920,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("filter: [1/1] calling function", inherit_message, counter, len(self.get_data()))
+            utils.report_progress("[1/1] calling function", dmsg, counter, len(self.get_data()))
 
             fields = line.split("\t")
             col_values = []
@@ -919,11 +957,11 @@ class TSV:
         # return
         return TSV(self.header, new_data)
 
-    def exclude_filter(self, cols, func, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": exclude_filter" if (inherit_message != "") else "exclude_filter"
-        return self.filter(cols, func, include_cond = False, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def exclude_filter(self, cols, func, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "exclude_filter")
+        return self.filter(cols, func, include_cond = False, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def any_col_with_cond_exists_filter(self, cols, func, ignore_if_missing = False, inherit_message2 = ""):
+    def any_col_with_cond_exists_filter(self, cols, func, ignore_if_missing = False, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             utils.raise_exception_or_warn("any_col_with_cond_exists_filter: empty tsv", ignore_if_missing)
@@ -963,7 +1001,7 @@ class TSV:
         # return
         return TSV(self.get_header(), new_data)
  
-    def all_cols_with_cond_exists_filter(self, cols, func, ignore_if_missing = False, inherit_message2 = ""):
+    def all_cols_with_cond_exists_filter(self, cols, func, ignore_if_missing = False, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             utils.raise_exception_or_warn("all_cols_with_cond_exists_filter: empty tsv", ignore_if_missing)
@@ -1003,7 +1041,9 @@ class TSV:
         # return
         return TSV(self.get_header(), new_data) 
         
-    def transform(self, cols, func, new_col_or_cols, use_array_notation = False, inherit_message = ""):
+    def transform(self, cols, func, new_col_or_cols, use_array_notation = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "transform")
+
         # check empty
         if (self.has_empty_header()):
             raise Exception("transform: empty tsv")
@@ -1054,7 +1094,7 @@ class TSV:
         # iterate over data
         for line in self.get_data():
             counter = counter + 1
-            utils.report_progress("transform: [1/1] calling function", inherit_message, counter, len(self.get_data()))
+            utils.report_progress("[1/1] calling function", dmsg, counter, len(self.get_data()))
 
             # get fields
             fields = line.split("\t")
@@ -1153,7 +1193,9 @@ class TSV:
         # return
         return TSV(new_header, new_data)
 
-    def transform_inline(self, cols, func, ignore_if_missing = False, inherit_message = ""):
+    def transform_inline(self, cols, func, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "transform_inline")
+
         # check empty
         if (self.has_empty_header()):
             utils.raise_exception_or_warn("transform_inline: empty tsv", ignore_if_missing)
@@ -1170,14 +1212,14 @@ class TSV:
 
         # print which columns are going to be transformed
         if (len(matching_cols) != len(cols) and len(matching_cols) != 1):
-            utils.debug("transform_inline: list of columns that will be transformed: {}".format(str(matching_cols)))
+            utils.trace("transform_inline: list of columns that will be transformed: {}".format(str(matching_cols)))
 
         # create new data
         new_data = []
         counter = 0
         for line in self.get_data():
             counter = counter + 1
-            utils.report_progress("transform_inline: [1/1] calling function", inherit_message, counter, len(self.get_data()))
+            utils.report_progress("[1/1] calling function", dmsg, counter, len(self.get_data()))
 
             fields = line.split("\t")
             new_fields = []
@@ -1192,63 +1234,59 @@ class TSV:
         # return
         return TSV(self.header, new_data)
 
-    def transform_inline_log(self, col_or_cols, base = None, inherit_message = ""):
-        inherit_message2 = inherit_message + ": transform_inline_log" if (len(inherit_message) > 0) else "transform_inline_log"
+    def transform_inline_log(self, col_or_cols, base = None, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "transform_inline_log")
         if (base is None):
-            return self.transform_inline(col_or_cols, lambda t: math.log(float(t)), inherit_message = inherit_message2)
+            return self.transform_inline(col_or_cols, lambda t: math.log(float(t)), dmsg = dmsg)
         elif (base == 2):
-            return self.transform_inline(col_or_cols, lambda t: math.log2(float(t)), inherit_message = inherit_message2)
+            return self.transform_inline(col_or_cols, lambda t: math.log2(float(t)), dmsg = dmsg)
         elif (base == 10):
-            return self.transform_inline(col_or_cols, lambda t: math.log10(float(t)), inherit_message = inherit_message2)
+            return self.transform_inline(col_or_cols, lambda t: math.log10(float(t)), dmsg = dmsg)
         else:
             raise Exception("transform_inline_log: base value is not supported: {}".format(base))
 
-    def transform_inline_log2(self, col_or_cols, inherit_message = ""):
-        inherit_message2 = inherit_message + ": transform_inline_log2" if (len(inherit_message) > 0) else "transform_inline_log2"
-        return self.transform_inline_log(col_or_cols, base = 2, inherit_message = inherit_message2)
+    def transform_inline_log2(self, col_or_cols, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "transform_inline_log2")
+        return self.transform_inline_log(col_or_cols, base = 2, dmsg = dmsg)
 
-    def transform_inline_log10(self, col_or_cols, inherit_message = ""):
-        inherit_message2 = inherit_message + ": transform_inline_log10" if (len(inherit_message) > 0) else "transform_inline_log10"
-        return self.transform_inline_log(col_or_cols, base = 10, inherit_message = inherit_message2)
+    def transform_inline_log10(self, col_or_cols, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "transform_inline_log10")
+        return self.transform_inline_log(col_or_cols, base = 10, dmsg = dmsg)
 
-    def transform_inline_log1p(self, col_or_cols, base = None, inherit_message = ""):
-        inherit_message2 = inherit_message + ": transform_inline_log1p" if (len(inherit_message) > 0) else "transform_inline_log1p"
+    def transform_inline_log1p(self, col_or_cols, base = None, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "transform_inline_log1p")
         if (base is None):
-            return self.transform_inline(col_or_cols, lambda t: math.log(1 + float(t)), inherit_message = inherit_message2)
+            return self.transform_inline(col_or_cols, lambda t: math.log(1 + float(t)), dmsg = dmsg)
         elif (base == 2):
-            return self.transform_inline(col_or_cols, lambda t: math.log2(1 + float(t)), inherit_message = inherit_message2)
+            return self.transform_inline(col_or_cols, lambda t: math.log2(1 + float(t)), dmsg = dmsg)
         elif (base == 10):
-            return self.transform_inline(col_or_cols, lambda t: math.log10(1 + float(t)), inherit_message = inherit_message2)
+            return self.transform_inline(col_or_cols, lambda t: math.log10(1 + float(t)), dmsg = dmsg)
         else:
             raise Exception("transform_inline_log1p: base value is not supported: {}".format(base))
 
-    def transform_inline_log1p_base10(self, col_or_cols, inherit_message = ""):
-        inherit_message2 = inherit_message + ": transform_inline_log1p_base10" if (len(inherit_message) > 0) else "transform_inline_log1p_base10"
-        return self.transform_inline_log1p(col_or_cols, base = 10, inherit_message = inherit_message2)
+    def transform_inline_log1p_base10(self, col_or_cols, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "transform_inline_log1p_base10")
+        return self.transform_inline_log1p(col_or_cols, base = 10, dmsg = dmsg)
         
-    def rename(self, col, new_col):
+    def rename(self, col, new_col, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             raise Exception("rename: empty tsv")
 
         # validation
-        if (col not in self.header_map.keys()):
+        if (self.has_col(col) == False):
             raise Exception("Column: {} not found in {}".format(str(col), str(self.get_header_fields())))
 
         # validation
-        if (new_col in self.header_map.keys()):
+        if (self.has_col(new_col) == True):
             raise Exception("New Column: {} already exists in {}".format(str(new_col), str(self.get_header_fields())))
 
-        index = self.header_map[col]
-        header_fields2 = []
-        for h in self.get_header_fields():
-            if (h == col):
-                header_fields2.append(new_col)
-            else:
-                header_fields2.append(h)
+        # new header fields
+        new_header_fields = list([new_col if (h == col) else h for h in self.get_header_fields()])
+        new_header = "\t".join(new_header_fields)
 
-        new_header = "\t".join(header_fields2)
-        return TSV(new_header, self.data)
+        # return 
+        return TSV(new_header, self.get_data())
 
     def get_header(self):
         return self.header
@@ -1329,12 +1367,16 @@ class TSV:
         except ValueError:
             return str(x)
 
-    # TODO
-    def to_numeric(self, cols, precision = 6, inherit_message = ""):
-        inherit_message2 = inherit_message + ": to_numeric" if (len(inherit_message) > 0) else "to_numeric"
-        return self.transform_inline(cols, lambda x: self.__convert_to_numeric__(x, precision), inherit_message = inherit_message2)
+    def to_int(self, cols, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "to_int")
+        return self.transform_inline(cols, lambda x: int(float(x)), dmsg = dmsg)
 
-    def add_seq_num(self, new_col, start = 1, inherit_message = ""):
+    # TODO
+    def to_numeric(self, cols, precision = 6, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "to_numeric")
+        return self.transform_inline(cols, lambda x: self.__convert_to_numeric__(x, precision), dmsg = dmsg)
+
+    def add_seq_num(self, new_col, start = 1, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             utils.warn("add_seq_num: empty tsv")
@@ -1352,13 +1394,15 @@ class TSV:
         counter = start - 1 
         for line in self.get_data():
             counter = counter + 1
-            utils.report_progress("add_seq_num: [1/1] adding new column", inherit_message, counter, len(self.get_data()))
+            utils.report_progress("add_seq_num: [1/1] adding new column", dmsg, counter, len(self.get_data()))
             new_data.append(str(counter) + "\t" + line)
 
         # return
         return TSV(new_header, new_data)
 
-    def show_transpose(self, n = 1, max_col_width = None, title = None):
+    def show_transpose(self, n = 1, title = None, max_col_width = None, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "show_transpose")
+
         # check empty
         if (self.has_empty_header()):
             return self
@@ -1373,17 +1417,21 @@ class TSV:
             max_col_width = int(max_width / (n + 1))
 
         # print
-        self.transpose(n).show(n = self.num_cols(), max_col_width = max_col_width, title = title)
+        self \
+            .transpose(n, dmsg = dmsg) \
+            .show(n = self.num_cols(), max_col_width = max_col_width, title = title, dmsg = dmsg)
 
         # return self
         return self
 
-    def show(self, n = 100, max_col_width = 40, title = None):
+    def show(self, n = 100, title = None, max_col_width = 40, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "show")
+
         # check empty
         if (self.has_empty_header()):
             return self
 
-        self.take(n).__show_topn__(max_col_width, title)
+        self.take(n, dmsg = dmsg).__show_topn__(max_col_width, title)
         # return the original tsv
         return self
 
@@ -1419,7 +1467,7 @@ class TSV:
         # print label
         if (title is not None):
             print("=============================================================================================================================================")
-            print(title)
+            print("Title: {}, Num Rows: {}, Num Cols: {}".format(title, self.num_rows(), self.num_cols()))
             print("=============================================================================================================================================")
 
         # iterate and print. +1 for header
@@ -1441,8 +1489,12 @@ class TSV:
                 row.append(str(value))
             print("\t".join(row))
 
+        # print footer
         if (title is not None):
             print("=============================================================================================================================================")
+
+        # print blank lines
+        print("")
 
         # return self
         return self
@@ -1498,13 +1550,20 @@ class TSV:
             raise Exception("cols_as_map: empty tsv")
 
         # warn
-        utils.warn("This api has changed from prev implementation")
+        utils.debug_once("[OLD_WARN]: cols_as_map: This api has changed from prev implementation")
 
         # validation
         key_cols = self.__get_matching_cols__(key_cols)
 
         # check for all columns in the value part
         value_cols = self.__get_matching_cols__(value_cols)
+
+        # Change in criteria. This api is confusing and for now restrict to single key and value
+        if (len(key_cols) > 1):
+            raise Exception("cols_as_map: using key_cols as more than 1 column is deprecated: {}".format(key_cols)) 
+
+        if (len(value_cols) > 1):
+            raise Exception("cols_as_map: using value_cols as more than 1 column is deprecated: {}".format(value_cols)) 
 
         # create map
         mp = {}
@@ -1544,7 +1603,7 @@ class TSV:
 
         return tuple(values)
 
-    def sort(self, cols = None, reverse = False, reorder = False, all_numeric = None, ignore_if_missing = False):
+    def sort(self, cols = None, reverse = False, reorder = False, all_numeric = None, ignore_if_missing = False, dmsg = ""):
         # check empty
         if (self.has_empty_header() and cols is None):
             utils.raise_exception_or_warn("sort: empty tsv", ignore_if_missing)
@@ -1582,16 +1641,18 @@ class TSV:
         new_data = sorted(self.data, key = lambda line: self.__sort_helper__(line, indexes, all_numeric = all_numeric), reverse = reverse)
 
         # check if need to reorder the fields
+        dmsg = utils.extend_inherit_message(dmsg, "sort")
         if (reorder == True):
-            return TSV(self.header, new_data).reorder(matching_cols, inherit_message = "sort")
+            return TSV(self.header, new_data).reorder(matching_cols, dmsg = dmsg)
         else:
             return TSV(self.header, new_data)
 
-    def reverse_sort(self, cols = None, reorder = False, all_numeric = None, ignore_if_missing = False):
-        return self.sort(cols = cols, reverse = True, reorder = reorder, all_numeric = all_numeric, ignore_if_missing = ignore_if_missing)
+    def reverse_sort(self, cols = None, reorder = False, all_numeric = None, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "reverse_sort")
+        return self.sort(cols = cols, reverse = True, reorder = reorder, all_numeric = all_numeric, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
     # reorder the specific columns
-    def reorder(self, cols, use_existing_order = True, inherit_message = ""):
+    def reorder(self, cols, use_existing_order = True, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             if (cols is None):
@@ -1620,7 +1681,7 @@ class TSV:
                 all_cols.apppend(c)
 
             # return
-            return self.select(all_cols).reorder(cols, use_existing_order = False, inherit_message = inherit_message)
+            return self.select(all_cols).reorder(cols, use_existing_order = False, dmsg = dmsg)
 
         # create a map of columns that match the criteria
         new_header_fields = []
@@ -1636,15 +1697,15 @@ class TSV:
                 new_header_fields.append(h)
 
         # pass on the message
-        inherit_message2 = inherit_message + ": reorder" if (len(inherit_message) > 0) else "reorder"
-        return self.select(new_header_fields, inherit_message = inherit_message2)
+        dmsg = utils.extend_inherit_message(dmsg, "reorder")
+        return self.select(new_header_fields, dmsg = dmsg)
 
-    def reorder_reverse(self, cols, inherit_message = ""):
+    def reorder_reverse(self, cols, dmsg = ""):
         utils.warn("Please use reverse_reorder instead")
-        return self.reverse_reorder(cols, inherit_message)
+        return self.reverse_reorder(cols, dmsg)
 
     # reorder for pushing the columns to the end
-    def reverse_reorder(self, cols, inherit_message = ""):
+    def reverse_reorder(self, cols, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             raise Exception("reorder: empty tsv")
@@ -1659,8 +1720,8 @@ class TSV:
                 rcols.append(h)
 
         # pass on the message
-        inherit_message2 = inherit_message + ": reorder_reverse" if (len(inherit_message) > 0) else "reorder_reverse"
-        return self.reorder(rcols, inherit_message = inherit_message2)
+        dmsg = utils.extend_inherit_message(dmsg, "reorder_reverse")
+        return self.reorder(rcols, dmsg = dmsg)
 
     def noop(self, *args, **kwargs):
         return self
@@ -1719,6 +1780,9 @@ class TSV:
         # return
         return pd.DataFrame(df_map)
 
+    def to_simple_df(self, n = None):
+        return self.to_df(n = n, infer_data_types = False)
+
     def export_to_df(self, n = -1):
         utils.warn("Deprecated. Use to_df()")
         return self.to_df(n)
@@ -1754,23 +1818,31 @@ class TSV:
         # still return as tsv with single column that is special
         return TSV(new_header, new_data)
 
-    def url_encode_inline(self, col_or_cols, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": url_encode_inline" if (len(inherit_message) > 0) else "url_encode_inline"
-        return self.transform_inline(col_or_cols, lambda x: utils.url_encode(x), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def url_encode_inline(self, col_or_cols, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "url_encode_inline")
+        return self.transform_inline(col_or_cols, lambda x: utils.url_encode(x), ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def url_decode_inline(self, col_or_cols, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": url_decode_inline" if (len(inherit_message) > 0) else "url_decode_inline"
-        return self.transform_inline(col_or_cols, lambda x: utils.url_decode(x), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def url_decode_inline(self, col_or_cols, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "url_decode_inline")
+        return self.transform_inline(col_or_cols, lambda x: utils.url_decode(x), ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def url_decode_clean_inline(self, col_or_cols, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": url_decode_clean_inline" if (len(inherit_message) > 0) else "url_decode_clean_inline"
-        return self.transform_inline(col_or_cols, lambda x: utils.url_decode_clean(x), ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def url_decode_clean_inline(self, col_or_cols, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "url_decode_clean_inline")
+        return self.transform_inline(col_or_cols, lambda x: utils.url_decode_clean(x), ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def url_encode(self, col, newcol):
-        return self.transform([col], lambda x: utils.url_encode(x), newcol)
+    def url_encode(self, col, newcol, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "url_encode")
+        return self.transform([col], lambda x: utils.url_encode(x), newcol, dmsg = dmsg)
 
-    def url_decode(self, col, newcol):
-        return self.transform([col], lambda x: utils.url_decode(x), newcol)
+    def url_decode(self, col, newcol, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "url_decode")
+        return self.transform([col], lambda x: utils.url_decode(x), newcol, dmsg = dmsg)
+
+    def resolve_url_encoded_cols(self, suffix = "url_encoded", ignore_if_missing = True, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "resolve_url_encoded_cols")
+        return self \
+            .url_decode_inline(".*:{}".format(suffix), ignore_if_missing = ignore_if_missing, dmsg = dmsg) \
+            .remove_suffix(suffix, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
     def union(self, tsv_or_that_arr):
         # check if this is a single element TSV or an array
@@ -1817,9 +1889,11 @@ class TSV:
         return TSV(self.header, new_data)
 
     # this method finds the set difference between this and that. if cols is None, then all columns are taken
-    def difference(self, that, cols = None):
+    # TODO: hash collision
+    def difference(self, that, cols = None, seed = 0):
         # print some warning for api that is still under development
         utils.warn("difference: to be used where duplicate rows will be removed")
+        utils.warn("difference method uses hash that is not handling hash collisions")
 
         # check this empty. return empty
         if (self.has_empty_header() or self.num_rows() == 0):
@@ -1843,15 +1917,15 @@ class TSV:
 
         # generate key hash
         temp_col = "__difference_col__"
-        hash_tsv1= self.generate_key_hash(cols1, temp_col)
-        hash_tsv2 = that.generate_key_hash(cols2, temp_col)
+        hash_tsv1 = self.generate_key_hash(cols1, temp_col, seed = seed)
+        hash_tsv2 = that.generate_key_hash(cols2, temp_col, seed = seed)
 
         # remove entries from this where the hashes exist in that
         return hash_tsv1 \
             .values_not_in(temp_col, hash_tsv2.col_as_array_uniq(temp_col)) \
             .drop_cols(temp_col)
 
-    def add_const(self, col, value, inherit_message = ""):
+    def add_const(self, col, value, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             # checking empty value
@@ -1862,10 +1936,10 @@ class TSV:
                 raise Exception("add_const: empty header but non empty data: {}".format(value))
 
         # return
-        inherit_message2 = inherit_message + ": add_const" if (len(inherit_message) > 0) else "add_const"
-        return self.transform([self.header_fields[0]], lambda x: str(value), col, inherit_message = inherit_message2)
+        dmsg = utils.extend_inherit_message(dmsg, "add_const")
+        return self.transform([self.header_fields[0]], lambda x: str(value), col, dmsg = dmsg)
 
-    def add_const_if_missing(self, col, value, inherit_message = ""):
+    def add_const_if_missing(self, col, value, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             # checking empty value
@@ -1879,10 +1953,10 @@ class TSV:
         if (col in self.header_fields):
             return self
         else:
-            inherit_message2 = inherit_message + ": add_const_if_missing" if (len(inherit_message) > 0) else "add_const_if_missing"
-            return self.add_const(col, value, inherit_message = inherit_message2)
+            dmsg = utils.extend_inherit_message(dmsg, "add_const_if_missing")
+            return self.add_const(col, value, dmsg = dmsg)
 
-    def add_empty_cols_if_missing(self, col_or_cols, inherit_message = ""):
+    def add_empty_cols_if_missing(self, col_or_cols, dmsg = ""):
         # check if this is a single col name or an array
         is_array = utils.is_array_of_string_values(col_or_cols)
 
@@ -1920,7 +1994,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("add_empty_cols_if_missing: [1/1] calling function", inherit_message, counter, len(self.get_data()))
+            utils.report_progress("add_empty_cols_if_missing: [1/1] calling function", dmsg, counter, len(self.get_data()))
 
             # create new line
             new_line = "\t".join([line, empty_row])
@@ -1979,11 +2053,11 @@ class TSV:
         # create new row
         return self.add_row(new_fields)
 
-    def assign_value(self, col_or_cols, value, inherit_message = ""):
-        inherit_message2 = inherit_message + ": assign_value" if (len(inherit_message) > 0) else "assign_value"
-        return self.transform_inline(col_or_cols, lambda x: value, inherit_message = inherit_message2)
+    def assign_value(self, col_or_cols, value, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "assign_value")
+        return self.transform_inline(col_or_cols, lambda x: value, dmsg = dmsg)
 
-    def concat_as_cols(self, that):
+    def concat_as_cols(self, that, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             utils.warn("concat_as_cols: empty tsv")
@@ -2017,11 +2091,11 @@ class TSV:
 
         return TSV(new_header, new_data)
 
-    def add_col_prefix(self, cols, prefix):
+    def add_col_prefix(self, cols, prefix, dmsg = ""):
         utils.warn("Deprecated: Use add_prefix instead")
         return self.add_prefix(self, prefix, cols)
 
-    def remove_suffix(self, suffix, prefix = None, ignore_if_missing = False):
+    def remove_suffix(self, suffix, prefix = None, ignore_if_missing = False, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             utils.raise_exception_or_warn("remove_suffix: empty tsv", ignore_if_missing)
@@ -2052,7 +2126,7 @@ class TSV:
         new_header = "\t".join(list([h if (h not in mp.keys()) else mp[h] for h in self.header_fields]))
         return TSV(new_header, self.data)
 
-    def add_prefix(self, prefix, cols = None, ignore_if_missing = False):
+    def add_prefix(self, prefix, cols = None, ignore_if_missing = False, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             utils.raise_exception_or_warn("add_prefix: empty tsv", ignore_if_missing)
@@ -2078,7 +2152,7 @@ class TSV:
         # return
         return TSV("\t".join(new_header_fields), self.data)
 
-    def add_suffix(self, suffix, cols = None, ignore_if_missing = False):
+    def add_suffix(self, suffix, cols = None, ignore_if_missing = False, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             utils.raise_exception_or_warn("add_suffix: empty tsv", ignore_if_missing)
@@ -2104,7 +2178,7 @@ class TSV:
         # return
         return TSV("\t".join(new_header_fields), self.data)
 
-    def rename_prefix(self, old_prefix, new_prefix, cols = None, ignore_if_missing = False):
+    def rename_prefix(self, old_prefix, new_prefix, cols = None, ignore_if_missing = False, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             utils.raise_exception_or_warn("rename_prefix: empty tsv", ignore_if_missing)
@@ -2131,7 +2205,7 @@ class TSV:
         # return
         return TSV("\t".join(new_header_fields), self.data)
 
-    def rename_suffix(self, old_suffix, new_suffix, cols = None, ignore_if_missing = False):
+    def rename_suffix(self, old_suffix, new_suffix, cols = None, ignore_if_missing = False, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             utils.raise_exception_or_warn("rename_suffix: empty tsv", ignore_if_missing)
@@ -2158,7 +2232,7 @@ class TSV:
         # return
         return TSV("\t".join(new_header_fields), self.data)
 
-    def remove_prefix(self, prefix, ignore_if_missing = False):
+    def remove_prefix(self, prefix, ignore_if_missing = False, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             utils.raise_exception_or_warn("remove_prefix: empty tsv", ignore_if_missing)
@@ -2181,12 +2255,12 @@ class TSV:
 
         # validation
         if (len(mp) == 0):
-            utils.raise_exception_or_warn("prefix didnt match any of the columns: {}, {}, ignore_if_missing: {}".format(prefix, str(self.get_header_fields())), ignore_if_missing)
+            utils.raise_exception_or_warn("prefix didnt match any of the columns: {}, {}".format(prefix, str(self.get_header_fields())), ignore_if_missing)
 
         new_header = "\t".join(list([h if (h not in mp.keys()) else mp[h] for h in self.get_header_fields()]))
         return TSV(new_header, self.data)
 
-    def sample(self, sampling_ratio, seed = 0, with_replacement = False, inherit_message = ""):
+    def sample(self, sampling_ratio, seed = 0, with_replacement = False, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             utils.warn("sample: empty tsv")
@@ -2206,7 +2280,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("sample: [1/1] calling function", inherit_message, counter, len(self.get_data()))
+            utils.report_progress("sample: [1/1] calling function", dmsg, counter, len(self.get_data()))
 
             # this random number is only for basic sampling and not for doing anything sensitive.
             if (random.random() <= sampling_ratio):  # nosec
@@ -2214,20 +2288,20 @@ class TSV:
 
         return TSV(self.header, new_data)
 
-    def sample_without_replacement(self, sampling_ratio, seed = 0, inherit_message = ""):
-        inherit_message2 = inherit_message + ": sample_without_replacement" if (inherit_message != "") else "sample_without_replacement"
-        return self.sample(sampling_ratio, seed, with_replacement = False, inherit_message = inherit_message2)
+    def sample_without_replacement(self, sampling_ratio, seed = 0, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "sample_without_replacement")
+        return self.sample(sampling_ratio, seed, with_replacement = False, dmsg = dmsg)
 
-    def sample_with_replacement(self, sampling_ratio, seed = 0, inherit_message = ""):
-        inherit_message2 = inherit_message + ": sample_with_replacement" if (inherit_message != "") else "sample_with_replacement"
-        return self.sample(sampling_ratio, seed, with_replacement = True, inherit_message = inherit_message2)
+    def sample_with_replacement(self, sampling_ratio, seed = 0, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "sample_with_replacement")
+        return self.sample(sampling_ratio, seed, with_replacement = True, dmsg = dmsg)
 
-    def sample_rows(self, n, seed = 0, inherit_message = ""):
+    def sample_rows(self, n, seed = 0, dmsg = ""):
         utils.warn("Please use sample_n")
-        inherit_message2 = inherit_message + ": sample_rows" if (inherit_message != "") else "sample_rows"
-        return self.sample_n(n, seed, inherit_message = inherit_message2)
+        dmsg = utils.extend_inherit_message(dmsg, "sample_rows")
+        return self.sample_n(n, seed, dmsg = dmsg)
 
-    def sample_n(self, n, seed = 0, inherit_message = ""):
+    def sample_n(self, n, seed = 0, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             utils.warn("sample_n: empty tsv")
@@ -2242,32 +2316,32 @@ class TSV:
         n = min(int(n), self.num_rows())
 
         # sample and return. the debug message is not in standard form, but its fine.
-        utils.report_progress("sample_n: [1/1] calling function", inherit_message, len(self.get_data()), len(self.get_data()))
+        utils.report_progress("sample_n: [1/1] calling function", dmsg, len(self.get_data()), len(self.get_data()))
         return TSV(self.header, random.sample(self.data, n))
 
-    def cap_min_inline(self, col, value, inherit_message = ""):
-        inherit_message2 = inherit_message + ": cap_min_inline" if (len(inherit_message) > 0) else "cap_min_inline"
-        return self.transform_inline([col], lambda x: str(x) if (float(value) < float(x)) else str(value), inherit_message = inherit_message2)
+    def cap_min_inline(self, col, value, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "cap_min_inline")
+        return self.transform_inline([col], lambda x: str(x) if (float(value) < float(x)) else str(value), dmsg = dmsg)
 
-    def cap_max_inline(self, col, value, inherit_message = ""):
-        inherit_message2 = inherit_message + ": cap_max_inline" if (len(inherit_message) > 0) else "cap_max_inline"
-        return self.transform_inline(col, lambda x: str(value) if (float(value) < float(x)) else str(x), inherit_message = inherit_message2)
+    def cap_max_inline(self, col, value, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "cap_max_inline")
+        return self.transform_inline(col, lambda x: str(value) if (float(value) < float(x)) else str(x), dmsg = dmsg)
 
-    def cap_min(self, col, value, newcol, inherit_message = ""):
-        inherit_message2 = inherit_message + ": cap_min" if (len(inherit_message) > 0) else "cap_min"
-        return self.transform_inline(col, lambda x: str(x) if (float(value) < float(x)) else str(value), newcol, inherit_message = inherit_message2)
+    def cap_min(self, col, value, newcol, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "cap_min")
+        return self.transform_inline(col, lambda x: str(x) if (float(value) < float(x)) else str(value), newcol, dmsg = dmsg)
 
-    def cap_max(self, col, value, newcol, inherit_message = ""):
-        inherit_message2 = inherit_message + ": cap_max" if (len(inherit_message) > 0) else "cap_max"
-        return self.transform([col], lambda x: str(value) if (float(value) < float(x)) else str(x), newcol, inherit_message = inherit_message2)
+    def cap_max(self, col, value, newcol, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "cap_max")
+        return self.transform([col], lambda x: str(value) if (float(value) < float(x)) else str(x), newcol, dmsg = dmsg)
 
-    def copy(self, col, newcol, inherit_message = ""):
-        inherit_message2 = inherit_message + ": copy" if (len(inherit_message) > 0) else "copy"
-        return self.transform([col], lambda x: x, newcol, inherit_message = inherit_message2)
+    def copy(self, col, newcol, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "copy")
+        return self.transform([col], lambda x: x, newcol, dmsg = dmsg)
 
     # sampling method to do class rebalancing where the class is defined by a specific col-value. As best practice,
     # the sampling ratios should be determined externally.
-    def sample_class(self, col, col_value, sampling_ratio, seed = 0, inherit_message = ""):
+    def sample_class(self, col, col_value, sampling_ratio, seed = 0, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             utils.warn("sample_class: empty tsv")
@@ -2290,7 +2364,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("sample_class: [1/1] calling function", inherit_message, counter, len(self.get_data()))
+            utils.report_progress("sample_class: [1/1] calling function", dmsg, counter, len(self.get_data()))
 
             # get fields
             fields = line.split("\t")
@@ -2336,7 +2410,7 @@ class TSV:
         return __sample_group_by_col_value_agg_func_inner__
 
     # sampling method where each sample group is restricted by the max values for a specific col-value. Useful for reducing skewness in dataset
-    def sample_group_by_col_value(self, grouping_cols, col, col_value, sampling_ratio, seed = 0, use_numeric = False, inherit_message = ""):
+    def sample_group_by_col_value(self, grouping_cols, col, col_value, sampling_ratio, seed = 0, use_numeric = False, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             utils.warn("sample_group_by_col_value: empty tsv")
@@ -2354,10 +2428,11 @@ class TSV:
             raise Exception("Sampling ratio has to be between 0 and 1: {}".format(sampling_ratio))
 
         # group by and apply the sampling on the value. The assumption is that all rows in the same group should have the same col_value
-        inherit_message2 = inherit_message + ": sample_group_by_col_value" if (len(inherit_message) > 0) else "sample_group_by_col_value"
-        agg_result = self.aggregate(grouping_cols, [col], [self.__sample_group_by_col_value_agg_func__(col_value, sampling_ratio, seed, use_numeric)], collapse = False, inherit_message = inherit_message2 + ": [1/3]") \
-            .values_in("{}:__sample_group_by_col_value_agg_func_inner__".format(col), ["1"], inherit_message = inherit_message2 + ": [2/3]") \
-            .drop_cols("{}:__sample_group_by_col_value_agg_func_inner__".format(col), inherit_message = inherit_message2 + ": [3/3]")
+        dmsg = utils.extend_inherit_message(dmsg, "sample_group_by_col_value")
+        agg_result = self \
+            .aggregate(grouping_cols, [col], [self.__sample_group_by_col_value_agg_func__(col_value, sampling_ratio, seed, use_numeric)], collapse = False, dmsg = utils.extend_inherit_message(dmsg, "[1/3]")) \
+            .values_in("{}:__sample_group_by_col_value_agg_func_inner__".format(col), ["1"], dmsg = utils.extend_inherit_message(dmsg, "[2/3]")) \
+            .drop_cols("{}:__sample_group_by_col_value_agg_func_inner__".format(col), dmsg = utils.extend_inherit_message(dmsg, "[3/3]"))
 
         # return
         return agg_result
@@ -2382,7 +2457,7 @@ class TSV:
         
         return __sample_group_by_max_uniq_values_exact_group_by_inner__
 
-    def sample_group_by_max_uniq_values_exact(self, grouping_cols, col, max_uniq_values, seed = 0, inherit_message = ""):
+    def sample_group_by_max_uniq_values_exact(self, grouping_cols, col, max_uniq_values, seed = 0, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             utils.warn("sample_group_by_max_uniq_values_exact: empty tsv")
@@ -2404,14 +2479,14 @@ class TSV:
             raise Exception("max_uniq_values has to be more than 0: {}".format(max_uniq_values))
 
         # agg result
-        inherit_message2 = inherit_message + ": sample_group_by_max_uniq_values_exact" if (len(inherit_message) > 0) else "sample_group_by_max_uniq_values_exact"
+        dmsg = utils.extend_inherit_message(dmsg, "sample_group_by_max_uniq_values_exact")
 
         # compute
         agg_result = self \
             .group_by_key(grouping_cols, col, self.__sample_group_by_max_uniq_values_exact_group_by__(col, max_uniq_values, seed), suffix = "__sample_group_by_max_uniq_values_exact_group_by__",
-                collapse = False, inherit_message = inherit_message2 + ": [1/3]")  \
-            .filter([col, "found:__sample_group_by_max_uniq_values_exact_group_by__"], lambda x,y: x in y.split(","), inherit_message = inherit_message2 + ": [2/3]") \
-            .drop_cols("found:__sample_group_by_max_uniq_values_exact_group_by__", inherit_message = inherit_message2 + ": [3/3]") 
+                collapse = False, dmsg = utils.extend_inherit_message(dmsg, "[1/3]"))  \
+            .filter([col, "found:__sample_group_by_max_uniq_values_exact_group_by__"], lambda x,y: x in y.split(","), dmsg = utils.extend_inherit_message(dmsg, "[2/3]")) \
+            .drop_cols("found:__sample_group_by_max_uniq_values_exact_group_by__", dmsg = utils.extend_inherit_message(dmsg, "[3/3]"))
 
         # return
         return agg_result
@@ -2420,7 +2495,7 @@ class TSV:
         return len(set(vs))
 
     # sampling method to take a grouping key, and a column where the number of unique values for column are capped. this uses approximate sampling technique
-    def sample_group_by_max_uniq_values_approx(self, grouping_cols, col, max_uniq_values, seed = 0, inherit_message = ""):
+    def sample_group_by_max_uniq_values_approx(self, grouping_cols, col, max_uniq_values, seed = 0, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             utils.warn("sample_group_by_max_uniq_values_approx: empty tsv")
@@ -2451,31 +2526,32 @@ class TSV:
         sample_grouping_cols.append(col)
 
         # agg result
-        inherit_message2 = inherit_message + ": sample_group_by_max_uniq_values_approx" if (len(inherit_message) > 0) else "sample_group_by_max_uniq_values_approx"
-        agg_result = self.aggregate(grouping_cols, [col], [self.__sample_group_by_max_uniq_values_approx_uniq_count__], collapse = False, inherit_message = inherit_message2 + ": [1/5]") \
-            .transform(["{}:__sample_group_by_max_uniq_values_approx_uniq_count__".format(col)], lambda c: max_uniq_values / float(c) if (float(c) > max_uniq_values) else 1, "{}:__sample_group_by_max_uniq_values_approx_sampling_ratio__".format(col), inherit_message = inherit_message2 + ": [2/5]") \
-            .transform(sample_grouping_cols, lambda x: abs(utils.compute_hash("\t".join(x), seed)) / sys.maxsize, "{}:__sample_group_by_max_uniq_values_approx_sampling_key__".format(col), use_array_notation = True, inherit_message = inherit_message2 + ": [3/5]") \
-            .filter(["{}:__sample_group_by_max_uniq_values_approx_sampling_key__".format(col), "{}:__sample_group_by_max_uniq_values_approx_sampling_ratio__".format(col)], lambda x, y: float(x) <= float(y), inherit_message = inherit_message2 + ": [4/5]") \
-            .drop_cols("{}:__sample_group_by_max_uniq_values_approx.*".format(col), inherit_message = inherit_message2 + ": [5/5]")
+        dmsg = utils.extend_inherit_message(dmsg, "sample_group_by_max_uniq_values_approx")
+        agg_result = self \
+            .aggregate(grouping_cols, [col], [self.__sample_group_by_max_uniq_values_approx_uniq_count__], collapse = False, dmsg = utils.extend_inherit_message(dmsg, "[1/5]")) \
+            .transform(["{}:__sample_group_by_max_uniq_values_approx_uniq_count__".format(col)], lambda c: max_uniq_values / float(c) if (float(c) > max_uniq_values) else 1, "{}:__sample_group_by_max_uniq_values_approx_sampling_ratio__".format(col), dmsg = utils.extend_inherit_message(dmsg, "[2/5]")) \
+            .transform(sample_grouping_cols, lambda x: abs(utils.compute_hash("\t".join(x), seed)) / sys.maxsize, "{}:__sample_group_by_max_uniq_values_approx_sampling_key__".format(col), use_array_notation = True, dmsg = utils.extend_inherit_message(dmsg, "[3/5]")) \
+            .filter(["{}:__sample_group_by_max_uniq_values_approx_sampling_key__".format(col), "{}:__sample_group_by_max_uniq_values_approx_sampling_ratio__".format(col)], lambda x, y: float(x) <= float(y), dmsg = utils.extend_inherit_message(dmsg, "[4/5]")) \
+            .drop_cols("^{}:__sample_group_by_max_uniq_values_approx.*".format(col), dmsg = utils.extend_inherit_message(dmsg, "[5/5]"))
 
         # return
         return agg_result
 
-    def sample_group_by_max_uniq_values(self, grouping_cols, col, max_uniq_values, seed = 0, use_approx = True, inherit_message = ""):
+    def sample_group_by_max_uniq_values(self, grouping_cols, col, max_uniq_values, seed = 0, use_approx = True, dmsg = ""):
         # debug message
-        inherit_message2 = inherit_message + ": sample_group_by_max_uniq_values_approx" if (inherit_message != "") else "sample_group_by_max_uniq_values_approx"
+        dmsg = utils.extend_inherit_message(dmsg, "sample_group_by_max_uniq_values_approx")
 
         # select the function with approximation if needed
         if (use_approx == True):
-            return self.sample_group_by_max_uniq_values_approx(grouping_cols, col, max_uniq_values, seed = seed, inherit_message = inherit_message2)
+            return self.sample_group_by_max_uniq_values_approx(grouping_cols, col, max_uniq_values, seed = seed, dmsg = dmsg)
         else:
-            return self.sample_group_by_max_uniq_values_exact(grouping_cols, col, max_uniq_values, inherit_message = inherit_message2)
+            return self.sample_group_by_max_uniq_values_exact(grouping_cols, col, max_uniq_values, dmsg = dmsg)
 
     def __sample_group_by_max_uniq_values_per_class_uniq_count__(self, vs):
         return len(set(vs))
 
     # sampling method to take a grouping key, and a column where the number of unique values for column are capped.
-    def sample_group_by_max_uniq_values_per_class(self, grouping_cols, class_col, col, max_uniq_values_map, def_max_uniq_values = None , seed = 0, inherit_message = ""):
+    def sample_group_by_max_uniq_values_per_class(self, grouping_cols, class_col, col, max_uniq_values_map, def_max_uniq_values = None , seed = 0, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             utils.warn("sample_group_by_max_uniq_values_per_class: empty tsv")
@@ -2508,19 +2584,20 @@ class TSV:
         sample_grouping_cols.append(col)
 
         # aggregate result
-        inherit_message2 = inherit_message + ": sample_group_by_max_uniq_values_per_class" if (len(inherit_message) > 0) else "sample_group_by_max_uniq_values_per_class"
-        agg_result = self.aggregate(grouping_cols, [col], "", [self.__sample_group_by_max_uniq_values_per_class_uniq_count__], collapse = False, inherit_message = inherit_message2 + ": [1/6]") \
-            .transform([class_col], lambda c: str(max_uniq_values_map[c]) if (c in max_uniq_values_map.keys()) else str(def_max_uniq_values), "{}:__sample_group_by_max_uniq_values_per_class_max_uniq_values__".format(col), inherit_message = inherit_message2 + ": [2/6]") \
-            .transform(["{}:__sample_group_by_max_uniq_values_per_class_uniq_count__".format(col), "{}:__sample_group_by_max_uniq_values_per_class_max_uniq_values__".format(col)], lambda c, m: float(m) / float(c) if (float(c) > float(m)) else 1, "{}:__sample_group_by_max_uniq_values_per_class_sampling_ratio__".format(col), inherit_message = inherit_message2 + ": [3/6]") \
-            .transform(sample_grouping_cols, lambda x: abs(utils.compute_hash("\t".join(x), seed)) / sys.maxsize, "{}:__sample_group_by_max_uniq_values_per_class_sampling_key__".format(col), use_array_notation = True, inherit_message = inherit_message2 + ": [4/6]") \
-            .filter(["{}:__sample_group_by_max_uniq_values_per_class_sampling_key__".format(col), "{}:__sample_group_by_max_uniq_values_per_class_sampling_ratio__".format(col)], lambda x, y: float(x) <= float(y), inherit_message = inherit_message2 + ": [5/6]") \
-            .drop_cols("{}:__sample_group_by_max_uniq_values_per_class.*".format(col), inherit_message = inherit_message2 + ": [6/6]")
+        dmsg = utils.extend_inherit_message(dmsg, "sample_group_by_max_uniq_values_per_class")
+        agg_result = self \
+            .aggregate(grouping_cols, [col], "", [self.__sample_group_by_max_uniq_values_per_class_uniq_count__], collapse = False, dmsg = utils.extend_inherit_message(dmsg, "[1/6]")) \
+            .transform([class_col], lambda c: str(max_uniq_values_map[c]) if (c in max_uniq_values_map.keys()) else str(def_max_uniq_values), "{}:__sample_group_by_max_uniq_values_per_class_max_uniq_values__".format(col), dmsg = utils.extend_inherit_message(dmsg, "[2/6]")) \
+            .transform(["{}:__sample_group_by_max_uniq_values_per_class_uniq_count__".format(col), "{}:__sample_group_by_max_uniq_values_per_class_max_uniq_values__".format(col)], lambda c, m: float(m) / float(c) if (float(c) > float(m)) else 1, "{}:__sample_group_by_max_uniq_values_per_class_sampling_ratio__".format(col), dmsg = utils.extend_inherit_message(dmsg, "[3/6]")) \
+            .transform(sample_grouping_cols, lambda x: abs(utils.compute_hash("\t".join(x), seed)) / sys.maxsize, "{}:__sample_group_by_max_uniq_values_per_class_sampling_key__".format(col), use_array_notation = True, dmsg = utils.extend_inherit_message(dmsg, "[4/6]")) \
+            .filter(["{}:__sample_group_by_max_uniq_values_per_class_sampling_key__".format(col), "{}:__sample_group_by_max_uniq_values_per_class_sampling_ratio__".format(col)], lambda x, y: float(x) <= float(y), dmsg = utils.extend_inherit_message(dmsg, "[5/6]")) \
+            .drop_cols("^{}:__sample_group_by_max_uniq_values_per_class.*".format(col), dmsg = utils.extend_inherit_message(dmsg, "[6/6]"))
 
         # return
         return agg_result
 
     # random sampling within a group
-    def sample_group_by_key(self, grouping_cols, sampling_ratio, seed = 0, inherit_message = ""):
+    def sample_group_by_key(self, grouping_cols, sampling_ratio, seed = 0, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             utils.warn("sample_group_by_key: empty tsv")
@@ -2539,7 +2616,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("sample_group_by_key: [1/1] calling function", inherit_message, counter, len(self.get_data()))
+            utils.report_progress("sample_group_by_key: [1/1] calling function", dmsg, counter, len(self.get_data()))
 
             keys = []
             fields = line.split("\t")
@@ -2555,7 +2632,7 @@ class TSV:
         return TSV(self.header, new_data)
 
     # sample by taking only n number of unique values for a specific column
-    def sample_column_by_max_uniq_values(self, col, max_uniq_values, seed = 0, inherit_message = ""):
+    def sample_column_by_max_uniq_values(self, col, max_uniq_values, seed = 0, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             utils.warn("sample_column_by_max_uniq_values: empty tsv")
@@ -2569,64 +2646,64 @@ class TSV:
         if (len(uniq_values) > max_uniq_values):
             # this random number is only for basic sampling and not for doing anything sensitive.
             selected_values = random.sample(uniq_values, max_uniq_values)  # nosec`
-            inherit_message2 = inherit_message + ": sample_column_by_max_uniq_values" if (inherit_message != "") else "sample_column_by_max_uniq_values"
-            return self.values_in(col, selected_values, inherit_message = inherit_message2)
+            dmsg = utils.extend_inherit_message(dmsg, "sample_column_by_max_uniq_values")
+            return self.values_in(col, selected_values, dmsg = dmsg)
         else:
             utils.warn("sample_column_by_max_uniq_values: max sample size: {} more than number of uniq values: {}".format(max_uniq_values, len(uniq_values)))
             return self
 
     # create descriptive methods for join
-    def left_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, num_par = 0, inherit_message = ""):
+    def left_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, num_par = 0, dmsg = ""):
         # check for empty
         if (self.has_empty_header()):
             utils.warn("left_join: empty this tsv")
             return self
 
         # return
-        inherit_message2 = inherit_message + ": left_join" if (inherit_message != "") else "left_join"
-        return self.__join__(that, lkeys, rkeys, join_type = "left", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, num_par = num_par, inherit_message = inherit_message2)
+        dmsg = utils.extend_inherit_message(dmsg, "left_join")
+        return self.__join__(that, lkeys, rkeys, join_type = "left", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, num_par = num_par, dmsg = dmsg)
 
-    def right_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, num_par = 0, inherit_message = ""):
+    def right_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, num_par = 0, dmsg = ""):
         # check for empty
         if (self.has_empty_header()):
             utils.warn("right_join: empty this tsv")
             return that
 
         # return
-        inherit_message2 = inherit_message + ": right_join" if (inherit_message != "") else "right_join"
-        return self.__join__(that, lkeys, rkeys, join_type = "right", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, num_par = num_par, inherit_message = inherit_message2)
+        dmsg = utils.extend_inherit_message(dmsg, "right_join")
+        return self.__join__(that, lkeys, rkeys, join_type = "right", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, num_par = num_par, dmsg = dmsg)
 
-    def inner_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, num_par = 0, inherit_message = ""):
+    def inner_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, num_par = 0, dmsg = ""):
         # check for empty
         if (self.has_empty_header()):
             raise Exception("inner_join: empty this tsv")
 
         # return
-        inherit_message2 = inherit_message + ": inner_join" if (inherit_message != "") else "inner_join"
-        return self.__join__(that, lkeys, rkeys, join_type = "inner", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, num_par = num_par, inherit_message = inherit_message2)
+        dmsg = utils.extend_inherit_message(dmsg, "inner_join")
+        return self.__join__(that, lkeys, rkeys, join_type = "inner", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, num_par = num_par, dmsg = dmsg)
 
-    def outer_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, num_par = 0, inherit_message = ""):
+    def outer_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, num_par = 0, dmsg = ""):
         # check for empty
         if (self.has_empty_header()):
             utils.warn("outer_join: empty this tsv")
             return that
 
         # return
-        inherit_message2 = inherit_message + ": outer_join" if (inherit_message != "") else "outer_join"
-        return self.__join__(that, lkeys, rkeys, join_type = "outer", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, num_par = num_par, inherit_message = inherit_message2)
+        dmsg = utils.extend_inherit_message(dmsg, "outer_join")
+        return self.__join__(that, lkeys, rkeys, join_type = "outer", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, num_par = num_par, dmsg = dmsg)
 
     def join(self, *args, **kwargs):
         utils.warn("Use the other methods: inner_join, left_join, right_join, outer_join versions of this api and not this one directly")
         return self.__join__(*args, **kwargs)
 
     # primary join method. Use the other inner, left, right versions and not this directly. TODO: not efficient
-    def __join__(self, that, lkeys, rkeys = None, join_type = "inner", lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, num_par = 0, inherit_message = ""):
+    def __join__(self, that, lkeys, rkeys = None, join_type = "inner", lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, num_par = 0, dmsg = ""):
         utils.warn_once("__join__: this method is not fully tested and also is very inefficient. Dont use for more than 10000 rows data")
         utils.warn_once("__join__: split_threshold parameter is replaced with num_par")
 
         # matching
         lkeys = self.__get_matching_cols__(lkeys)
-        rkeys = that.__get_matching_cols__(rkeys) if (rkeys is not None) else lkeys
+        rkeys = that.__get_matching_cols__(rkeys) if (rkeys is not None) else that.__get_matching_cols__(lkeys)
 
         # find the indexes
         lkey_indexes = []
@@ -2663,8 +2740,8 @@ class TSV:
         # Check for num_par. TODO: Experimental
         if (num_par > 0):
             # split left and right sides
-            left_batches = self.__split_batches_by_cols__(num_par, lkeys)
-            right_batches = that.__split_batches_by_cols__(num_par, rkeys)
+            left_batches = self.__split_batches_by_cols__(num_par, lkeys, dmsg = dmsg)
+            right_batches = that.__split_batches_by_cols__(num_par, rkeys, dmsg = dmsg)
 
             # call join on individual batches and then return the merge
             tasks = []
@@ -2673,9 +2750,9 @@ class TSV:
                 utils.debug("Calling join on batch: {}, left: {}, right: {}".format(i, left_batches[i].num_rows(), right_batches[i].num_rows()))
 
                 # call join on the batch
-                inherit_message2 = inherit_message + ": __join__ batch: {}".format(i) if (inherit_message != "") else "__join__ batch: {}".format(i)
+                dmsg2 = utils.extend_inherit_message(dmsg, "__join__ batch: {}".format(i))
                 tasks.append(utils.ThreadPoolTask(left_batches[i].__join__, right_batches[i], lkeys, rkeys, join_type = join_type, lsuffix = lsuffix, rsuffix = rsuffix,
-                    default_val = default_val, def_val_map = def_val_map, num_par = 0, inherit_message = inherit_message2))
+                    default_val = default_val, def_val_map = def_val_map, num_par = 0, dmsg = dmsg2))
 
             # call thread executor
             results = utils.run_with_thread_pool(tasks, num_par = num_par)
@@ -2689,7 +2766,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("join: [1/3] building map for left side", inherit_message, counter, len(self.get_data()))
+            utils.report_progress("join: [1/3] building map for left side", dmsg, counter, len(self.get_data()))
 
             # parse data
             fields = line.split("\t")
@@ -2714,7 +2791,7 @@ class TSV:
         for line in that.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("join: [2/3] building map for right side", inherit_message, counter, len(that.get_data()))
+            utils.report_progress("join: [2/3] building map for right side", dmsg, counter, len(that.get_data()))
 
             # parse data
             fields = line.split("\t")
@@ -2724,7 +2801,7 @@ class TSV:
 
             # right side values are not unique
             if (rvals1_str in rvkeys.keys()):
-                utils.trace("right side values are not unique: rvals1: {}, rvals2: {}, rvkeys[rvals1_str]: {}".format(rvals1, rvals2, rvkeys[rvals1_str]))
+                utils.trace("right side values are not unique")
 
             # check if the key already exists, else create an array
             if (rvals1_str not in rvkeys.keys()):
@@ -2741,15 +2818,18 @@ class TSV:
 
         # for each type of join, merge the values
         new_header_fields = []
+        new_header_copy_fields_map = {} 
 
         # create the keys
         for lkey in lkeys:
             new_header_fields.append(lkey)
 
         # print message for rkeys that are ignored
-        for rkey in rkeys:
+        for rkey_index in range(len(rkeys)):
+            rkey = rkeys[rkey_index]
             if (rkey not in new_header_fields):
-                utils.debug("rkey ignored from output: {}".format(rkey))
+                utils.warn_once("rkey has a different name: {}".format(rkey))
+                new_header_copy_fields_map[lkeys[rkey_index]] = rkey
 
         # add the left side columns
         for i in range(len(self.get_header_fields())):
@@ -2770,6 +2850,7 @@ class TSV:
                     else:
                         raise Exception("Duplicate key names found. Use lsuffix or rsuffix: {}".format(that.get_header_fields()[i]))
 
+        new_header_fields.append("__join_keys_matched__")
         # construct new_header
         new_header = "\t".join(new_header_fields)
 
@@ -2799,19 +2880,21 @@ class TSV:
         for lvkey in lvkeys.keys():
             # report progress
             counter = counter + 1
-            utils.report_progress("join: [3/3] join the two groups", inherit_message, counter, len(self.get_data()))
+            utils.report_progress("join: [3/3] join the two groups", dmsg, counter, len(self.get_data()))
 
             # get the values
             lvals2_arr = lvkeys[lvkey]
             rvals2_arr = [default_rvals]
+            keys_matched = 0
             if (lvkey in rvkeys.keys()):
                   rvals2_arr = rvkeys[lvkey]
+                  keys_matched = 1
 
             # do a MxN merge of left side values and right side values
             for lvals2 in lvals2_arr:
                 for rvals2 in rvals2_arr:
                     # construct the new line
-                    new_line = "\t".join(utils.merge_arrays([[lvkey], lvals2, rvals2]))
+                    new_line = "\t".join(utils.merge_arrays([[lvkey], lvals2, rvals2, [str(keys_matched)]]))
 
                     # take care of different join types
                     if (join_type == "inner"):
@@ -2839,7 +2922,7 @@ class TSV:
             for lvals2 in lvals2_arr:
                 for rvals2 in rvals2_arr:
                     # construct the new line
-                    new_line = "\t".join(utils.merge_arrays([[rvkey], lvals2, rvals2]))
+                    new_line = "\t".join(utils.merge_arrays([[rvkey], lvals2, rvals2, [str(keys_matched)]]))
 
                     # take care of different join types
                     if (join_type == "inner"):
@@ -2856,10 +2939,19 @@ class TSV:
                         raise Exception("Unknown join type: {}".format(join_type))
 
         # return
-        return TSV(new_header, new_data)
+        result = TSV(new_header, new_data)
+        for lkey in new_header_copy_fields_map.keys():
+            result = result.transform([lkey, "__join_keys_matched__"], lambda t1, t2: t1 if (t2 == "1") else "", new_header_copy_fields_map[lkey], dmsg = dmsg)
+            
+        # remove the temporary column
+        result = result \
+            .drop_cols("__join_keys_matched__", dmsg = dmsg)
+
+        # return
+        return result 
 
     # method to do map join. The right side is stored in a hashmap. only applicable to inner joins
-    def natural_join(self, that, inherit_message = ""):
+    def natural_join(self, that, dmsg = ""):
         # check for empty
         if (self.has_empty_header()):
             utils.warn("natural_join: empty tsv")
@@ -2915,7 +3007,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("natural_join: [1/1] adding values from hashmap", inherit_message, counter, len(self.get_data()))
+            utils.report_progress("natural_join: [1/1] adding values from hashmap", dmsg, counter, len(self.get_data()))
 
             # split line and get fields
             fields = line.split("\t")
@@ -2948,22 +3040,22 @@ class TSV:
         # return
         return TSV(new_header, new_data)
 
-    def inner_map_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, num_par = 0, inherit_message = ""):
-        inherit_message2 = inherit_message + ": inner_map_join" if (inherit_message != "") else "inner_map_join"
-        return self.__map_join__(that, lkeys, rkeys = rkeys, join_type = "inner", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, num_par = num_par, inherit_message = inherit_message2)
+    def inner_map_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, num_par = 0, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "inner_map_join")
+        return self.__map_join__(that, lkeys, rkeys = rkeys, join_type = "inner", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, num_par = num_par, dmsg = dmsg)
 
-    def left_map_join(self, that, lkeys, rkeys = None, join_type = "inner", lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, num_par = 0, inherit_message = ""):
-        inherit_message2 = inherit_message + ": left_map_join" if (inherit_message != "") else "left_map_join"
-        return self.__map_join__(that, lkeys, rkeys = rkeys, join_type = "left", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, num_par = num_par, inherit_message = inherit_message2)
+    def left_map_join(self, that, lkeys, rkeys = None, join_type = "inner", lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, num_par = 0, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "left_map_join")
+        return self.__map_join__(that, lkeys, rkeys = rkeys, join_type = "left", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, num_par = num_par, dmsg = dmsg)
 
-    def __map_join__(self, that, lkeys, rkeys = None, join_type = "inner", lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, num_par = 0, inherit_message = ""):
+    def __map_join__(self, that, lkeys, rkeys = None, join_type = "inner", lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, num_par = 0, dmsg = ""):
         # validation
         if (join_type not in ["inner", "left", "left_outer"]):
             raise Exception("__map_join__: join_type: {} is not supported".format(join_type))
 
         # matching
         lkeys = self.__get_matching_cols__(lkeys)
-        rkeys = that.__get_matching_cols__(rkeys) if (rkeys is not None) else lkeys
+        rkeys = that.__get_matching_cols__(rkeys) if (rkeys is not None) else that.__get_matching_cols__(lkeys)
 
         # find the indexes
         lkey_indexes = []
@@ -3000,8 +3092,8 @@ class TSV:
         # Check for num_par. TODO: Experimental
         if (num_par > 0):
             # split left and right sides
-            left_batches = self.__split_batches_by_cols__(num_par, lkeys)
-            right_batches = that.__split_batches_by_cols__(num_par, rkeys)
+            left_batches = self.__split_batches_by_cols__(num_par, lkeys, seed = seed)
+            right_batches = that.__split_batches_by_cols__(num_par, rkeys, seed = seed)
 
             # call join on individual batches and then return the merge
             tasks = []
@@ -3010,9 +3102,9 @@ class TSV:
                 utils.debug("Calling join on batch: {}, left: {}, right: {}".format(i, left_batches[i].num_rows(), right_batches[i].num_rows()))
 
                 # call join on the batch
-                inherit_message2 = inherit_message + ": __map_join__ batch: {}".format(i) if (inherit_message != "") else "__map_join__ batch: {}".format(i)
+                dmsg = utils.extend_inherit_message(dmsg, "__map_join__ batch: {}".format(i))
                 tasks.append(utils.ThreadPoolTask(left_batches[i].__map_join__, right_batches[i], lkeys, rkeys, join_type = join_type, lsuffix = lsuffix, rsuffix = rsuffix,
-                    default_val = default_val, def_val_map = def_val_map, num_par = 0, inherit_message = inherit_message2))
+                    default_val = default_val, def_val_map = def_val_map, num_par = 0, dmsg = dmsg))
 
             # call thread executor
             results = utils.run_with_thread_pool(tasks, num_par = num_par)
@@ -3026,7 +3118,7 @@ class TSV:
         for line in that.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("__map_join__: building map for right side", inherit_message, counter, len(that.get_data()))
+            utils.report_progress("__map_join__: building map for right side", dmsg, counter, len(that.get_data()))
 
             # parse data
             fields = line.split("\t")
@@ -3049,15 +3141,18 @@ class TSV:
 
         # for each type of join, merge the values
         new_header_fields = []
+        new_header_copy_fields_map = {}
 
         # create the keys
         for lkey in lkeys:
             new_header_fields.append(lkey)
 
         # print message for rkeys that are ignored
-        for rkey in rkeys:
+        for rkey_index in range(len(rkeys)):
+            rkey = rkeys[rkey_index]
             if (rkey not in new_header_fields):
-                utils.debug("rkey ignored from output: {}".format(rkey))
+                utils.warn_once("rkey has a different name: {}".format(rkey))
+                new_header_copy_fields_map[lkeys[rkey_index]] = rkey
 
         # add the left side columns
         for i in range(len(self.get_header_fields())):
@@ -3077,6 +3172,9 @@ class TSV:
                         new_header_fields.append(that.get_header_fields()[i])
                     else:
                         raise Exception("Duplicate key names found. Use lsuffix or rsuffix: {}".format(that.get_header_fields()[i]))
+
+        # add a new column to depict if join leys matched
+        new_header_fields.append("__map_join_keys_matched__")
 
         # construct new_header
         new_header = "\t".join(new_header_fields)
@@ -3098,7 +3196,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("__map_join__: join the two groups", inherit_message, counter, len(self.get_data()))
+            utils.report_progress("__map_join__: join the two groups", dmsg, counter, len(self.get_data()))
 
             # get fields
             fields = line.split("\t")
@@ -3110,13 +3208,15 @@ class TSV:
 
             # get ride side values
             rvals2_arr = [default_rvals]
+            keys_matched = 0
             if (lvkey in rvkeys.keys()):
                   rvals2_arr = rvkeys[lvkey]
+                  keys_matched = 1
 
             # iterate on the right side
             for rvals2 in rvals2_arr:
                 # construct the new line
-                new_line = "\t".join(utils.merge_arrays([[lvkey], lvals2, rvals2]))
+                new_line = "\t".join(utils.merge_arrays([[lvkey], lvals2, rvals2, [str(keys_matched)]]))
 
                 # take care of different join types
                 if (join_type == "inner"):
@@ -3127,33 +3227,55 @@ class TSV:
                 else:
                     raise Exception("Unknown join type: {} ".format(join_type))
 
+        # create tsv
+        result = TSV(new_header, new_data)
+
+        # create the rkeys columns that had different names
+        for lkey in new_header_copy_fields_map.keys():
+            result = result.transform([lkey, "__map_join_keys_matched__"], lambda t1, t2: t1 if (t2 == "1") else "", new_header_copy_fields_map[lkey])
+
+        # remove the temporary column
+        result = result \
+            .drop_cols("__map_join_keys_matched__", dmsg = dmsg)
+
         # return
-        return TSV(new_header, new_data)
+        return result
 
     # public method handling both random and cols based splitting
-    def split_batches(self, num_batches, cols = None, preserve_order = False):
+    def split_batches(self, num_batches, cols = None, preserve_order = False, seed = None, dmsg = ""):
         # check for empty
         if (self.has_empty_header()):
             # check for cols
             if (cols is None):
                 utils.warn("split_batches: empty tsv")
-                return self
+                return [self]
             else:
                 raise Exception("split_batches: empty tsv")
 
         # check for empty rows
         if (self.num_rows() == 0):
             utils.warn("split_batches: empty tsv")
-            return self
+            return [self]
 
         # check if cols are defined or not
+        dmsg = utils.extend_inherit_message(dmsg, "split_batches")
         if (cols is None):
-            return self.__split_batches_randomly__(num_batches, preserve_order = preserve_order)
+            return self.__split_batches_randomly__(num_batches, preserve_order = preserve_order, seed = seed, dmsg = dmsg)
         else:
-            return self.__split_batches_by_cols__(num_batches, cols)
+            return self.__split_batches_by_cols__(num_batches, cols, seed = seed, dmsg = dmsg)
 
     # split method to split randomly
-    def __split_batches_randomly__(self, num_batches, preserve_order = False):
+    def __split_batches_randomly__(self, num_batches, preserve_order = False, seed = None, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "__split_batches_randomly__")
+
+        # validation
+        if (preserve_order == True ):
+            if (seed is not None):
+                raise Exception("__split_batches_randomly__: seed is only valid when preserve_order is False")
+        else:
+            if (seed is None):
+                seed = 0
+
         # create array to store result
         xtsv_list = []
         data_list = []
@@ -3167,12 +3289,17 @@ class TSV:
             data_list.append([])
 
         # iterate to split data
+        counter = 0
         for i in range(len(self.get_data())):
+            # report progress
+            counter = counter + 1
+            utils.report_progress("__split_batches_randomly__: [1/1] assigning batch index", dmsg, counter, len(self.get_data()))
+
             # check if original order of data needs to be preserved
             if (preserve_order == True):
                 batch_index = int(i / batch_size)
             else:
-                batch_index = i % effective_batches
+                batch_index = (i + seed) % effective_batches
 
             # append to the splits data
             data_list[batch_index].append(self.data[i])
@@ -3181,11 +3308,17 @@ class TSV:
         for i in range(effective_batches):
             xtsv_list.append(TSV(self.header, data_list[i]))
 
+        # filter out empty batches
+        xtsv_list = list(filter(lambda t: t.num_rows() > 0, xtsv_list))
+
         # return
         return xtsv_list
 
     # split method to split tsv into batches
-    def __split_batches_by_cols__(self, num_batches, cols):
+    # TODO: add dmsg
+    def __split_batches_by_cols__(self, num_batches, cols, seed = 0, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "__split_batches_by_cols__")
+
         # get matching cols
         cols = self.__get_matching_cols__(cols)
 
@@ -3194,7 +3327,7 @@ class TSV:
         temp_col2 = "__split_batches_by_cols__:batch:{}".format(num_batches)
 
         # generate hash
-        hashed_tsv = self.generate_key_hash(cols, temp_col1)
+        hashed_tsv = self.generate_key_hash(cols, temp_col1, seed = seed)
 
         # take all uniq value of hashes
         hashes = hashed_tsv.col_as_array_uniq(temp_col1)
@@ -3213,7 +3346,12 @@ class TSV:
 
         # assign each record to its correct place
         batch_index = hashed_tsv2.get_col_index(temp_col2)
+        counter = 0
         for line in hashed_tsv2.get_data():
+            # report progress
+            counter = counter + 1
+            utils.report_progress("__split_batches_by_cols__: [1/1] assigning batch index", dmsg, counter, len(hashed_tsv2.get_data()))
+
             fields = line.split("\t")
             batch_id = int(fields[batch_index])
             new_data_list[batch_id].append(line)
@@ -3224,11 +3362,14 @@ class TSV:
                 .drop_cols([temp_col1, temp_col2])
             new_tsvs.append(new_tsv)
 
+        # filter out empty batches
+        new_tsvs = list(filter(lambda t: t.num_rows() > 0, new_tsvs))
+
         # return
         return new_tsvs
 
     # method to generate a hash for a given set of columns
-    def generate_key_hash(self, cols, new_col):
+    def generate_key_hash(self, cols, new_col, seed = 0, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             raise Exception("generate_key_hash: empty tsv")
@@ -3238,7 +3379,7 @@ class TSV:
         indexes = self.__get_col_indexes__(cols)
 
         # validation
-        if (new_col in self.columns()):
+        if (new_col in self.get_columns()):
             raise Exception("new column already exists: {}".format(new_col))
 
         # generate deterministic hash
@@ -3256,7 +3397,7 @@ class TSV:
             value_str = "\t".join(values)
 
             # apply hash
-            hash_value = str(utils.compute_hash(value_str))
+            hash_value = str(utils.compute_hash(value_str, seed = seed))
 
             # add to new data
             new_data.append("\t".join([line, hash_value]))
@@ -3337,7 +3478,8 @@ class TSV:
         return TSV(new_header, new_data)
 
     # TODO: Need better naming. The suffix semantics have been changed.
-    def explode(self, cols, exp_func, prefix, default_val = None, collapse = True, ignore_if_missing = False, inherit_message = ""):
+    # This doesnt handle empty data correctly. the output cols need add_empty_cols_if_missing
+    def explode(self, cols, exp_func, prefix, default_val = None, collapse = True, ignore_if_missing = False, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             utils.raise_exception_or_warn("explode: empty tsv", ignore_if_missing)
@@ -3358,7 +3500,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("explode: [1/2] calling explode function", inherit_message, counter, len(self.get_data()))
+            utils.report_progress("explode: [1/2] calling explode function", dmsg, counter, len(self.get_data()))
 
             # process data
             fields = line.split("\t")
@@ -3418,7 +3560,7 @@ class TSV:
         for i in range(len(self.get_data())):
             # report progress
             counter = counter + 1
-            utils.report_progress("explode: [2/2] generating data", inherit_message, counter, len(self.get_data()))
+            utils.report_progress("explode: [2/2] generating data", dmsg, counter, len(self.get_data()))
 
             # process data
             line = self.data[i]
@@ -3483,7 +3625,7 @@ class TSV:
             # best effort in detecting the type and parsing for robustness
             if (json_str.startswith("%7B") == False and json_str.startswith("%5B") == False):
                 if (json_str.startswith("{") or json_str.startswith("[")):
-                    utils.warn("explode_json called with column that is not url encoded json. Assuming plain json string")
+                    utils.warn_once("explode_json called with column that is not url encoded json. Assuming plain json string")
                     json_mp = json.loads(json_str)
                 else:
                     json_str10 = json_str[0:10] + "..." if (len(json_str) > 10) else json_str
@@ -3528,10 +3670,6 @@ class TSV:
             list_results_arr = []
             dict_results = []
 
-            # trace
-            cid11 = str(json_mp["cid"]) if ("cid" in json_mp.keys()) else "NA"
-            utils.trace("__explode_json_transform_func_expand_json__: debug: {}".format(cid11))
-
             # iterate over all key values
             for k in json_mp.keys():
                 # check for inclusion and exclusion
@@ -3569,7 +3707,7 @@ class TSV:
                     if (isinstance(v, list) and len(v) > 0):
                         single_results[k + ":__explode_json_len__"] = str(len(v))
                         if (len(list_results_arr) > 0 and utils.is_debug()):
-                            utils.warn("explode_json: multiple lists are not fully supported. Confirm data parsing or Use accepted_cols or excluded_cols: {}".format(str(k)))
+                            utils.warn_once("explode_json: multiple lists are not fully supported. Confirm data parsing or Use accepted_cols or excluded_cols: {}".format(str(k)))
 
                         # create a new entry for holding the list array
                         list_results_arr.append([])
@@ -3791,7 +3929,12 @@ class TSV:
     # TODO: need proper xpath based exclusion to better handle noise
     def explode_json(self, col, prefix = None, accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None,
         merge_list_method = "cogroup", collapse_primitive_list = True, url_encoded_cols = None, nested_cols = None, collapse = True, max_results = None, ignore_if_missing = False,
-        default_val = "", inherit_message = ""):
+        default_val = "", dmsg = ""):
+
+        # validation
+        if (prefix is None):
+            utils.warn("explode_json: prefix = None is deprecated. Using the original column name as prefix: {}".format(col))
+            prefix = col
 
         # check empty
         if (self.has_empty_header()):
@@ -3822,16 +3965,17 @@ class TSV:
             collapse_primitive_list = collapse_primitive_list, max_results = max_results)
 
         # use explode to do this parsing
-        inherit_message2 = inherit_message + ": explode_json" if (inherit_message != "") else "explode_json"
+        dmsg = utils.extend_inherit_message(dmsg, "explode_json")
         return self \
-            .add_seq_num(prefix + ":__json_index__", inherit_message = inherit_message2) \
-            .explode([col], exp_func, prefix = prefix, default_val = default_val, collapse = collapse, inherit_message = inherit_message2) \
+            .add_seq_num(prefix + ":__json_index__", dmsg = dmsg) \
+            .explode([col], exp_func, prefix = prefix, default_val = default_val, collapse = collapse, dmsg = dmsg) \
             .validate()
 
-    def transpose(self, n = 1):
-        return self.take(n).__transpose_topn__()
+    def transpose(self, n = 1, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "transpose")
+        return self.take(n).__transpose_topn__(dmsg = dmsg)
 
-    def __transpose_topn__(self):
+    def __transpose_topn__(self, dmsg = ""):
         # construct new header
         new_header_fields = []
         new_header_fields.append("col_name")
@@ -3908,7 +4052,7 @@ class TSV:
 
         return TSV(new_header, new_data)
 
-    def to_tuples(self, cols, inherit_message = ""):
+    def to_tuples(self, cols, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             raise Exception("to_tuples: empty tsv")
@@ -3923,11 +4067,11 @@ class TSV:
 
         # progress counters
         counter = 0
-        inherit_message2 = inherit_message + ": to_tuples" if (inherit_message != "") else inherit_message
-        for line in self.select(cols, inherit_message = inherit_message2).get_data():
+        dmsg = utils.extend_inherit_message(dmsg, "to_tuples")
+        for line in self.select(cols, dmsg = dmsg).get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("to_tuples: [1/1] converting to tuples", inherit_message, counter, len(self.get_data()))
+            utils.report_progress("to_tuples: [1/1] converting to tuples", dmsg, counter, len(self.get_data()))
 
             fields = line.split("\t")
             result.append(self.__expand_to_tuple__(fields))
@@ -3971,9 +4115,9 @@ class TSV:
             raise Exception("Length of values is more than 10. Not supported: {}".format(str(vs)))
 
     # this method sets the missing values for columns
-    def set_missing_values(self, cols, default_val, ignore_if_missing = False, inherit_message = ""):
-        inherit_message2 = inherit_message + ": set_missing_values" if (len(inherit_message) > 0) else "set_missing_values"
-        return self.transform_inline(cols, lambda x: x if (x != "") else default_val, ignore_if_missing = ignore_if_missing, inherit_message = inherit_message2)
+    def set_missing_values(self, cols, default_val, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "set_missing_values")
+        return self.transform_inline(cols, lambda x: x if (x != "") else default_val, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
     # calls class that inherits TSV
     def extend_class(self, newclass, *args, **kwargs):
@@ -4015,7 +4159,7 @@ class TSV:
         return result
 
     # placeholder for new method to do xpath based filtering for json blobs
-    def filter_json_by_xpath(self, col, xpath_filter, inherit_message = ""):
+    def filter_json_by_xpath(self, col, xpath_filter, dmsg = ""):
         raise Exception("Not implemented yet")
 
     def get_col_index(self, col):
@@ -4024,7 +4168,7 @@ class TSV:
             raise Exception("get_col_index: empty tsv")
 
         # validation
-        if (col not in self.columns()):
+        if (col not in self.get_columns()):
             raise Exception("Column not found: {}".format(col))
 
         # return
@@ -4070,11 +4214,13 @@ class TSV:
         # return self
         return self
 
-    def show_group_count(self, col_or_cols, n = 100, max_col_width = 40, title = "Group Count"):
+    def show_group_count(self, col_or_cols, n = 100, max_col_width = 40, title = "Group Count", dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "show_group_count")
+
         # call show transpose after custom func
         self \
-            .group_count(col_or_cols) \
-            .show(n = n, title = title, max_col_width = max_col_width)
+            .group_count(col_or_cols, dmsg = dmsg) \
+            .show(n = n, title = title, max_col_width = max_col_width, dmsg = dmsg)
 
         # return self
         return self
@@ -4128,6 +4274,10 @@ class TSV:
         if (col_or_cols is None or len(col_or_cols) == 0):
             return []
 
+        # check for wild card
+        if (col_or_cols == ".*" or col_or_cols[0] == ".*"):
+            return self.get_columns()
+
         # check if there is comma. If yes, then map it to array
         if ("," in col_or_cols):
             col_or_cols = col_or_cols.split(",")
@@ -4142,10 +4292,40 @@ class TSV:
         else:
             col_patterns.append(col_or_cols)
 
+        # transform col_patterns into a stronger prefix or suffix match wherever applicable
+        col_patterns_transformed = []
+        for col_pattern in col_patterns:
+            num_wild_cards = len(col_pattern.split("*")) - 1 if (col_pattern.find(".*") != -1) else 0
+
+            # check how many wild cards are present
+            if (num_wild_cards > 0):
+                # check for prefix and suffix
+                if (num_wild_cards == 1):
+                    # check for prefix
+                    if (col_pattern.startswith(".*") == True):
+                        if (col_pattern != ".*" and col_pattern.endswith("$") == False):
+                            utils.debug_once("__get_matching_cols__: rewriting pattern: {}".format(col_pattern))
+                            col_pattern = str(col_pattern) + "$"
+
+                    # check for suffix
+                    if (col_pattern.endswith(".*") == True):
+                        if (col_pattern != ".*" and col_pattern.startswith("^") == False):
+                            utils.debug_once("__get_matching_cols__: rewriting pattern: {}".format(col_pattern))
+                            col_pattern = "^" + str(col_pattern)
+                elif (num_wild_cards == 2):
+                    # check if wild cards are anywhere except as prefix or suffix
+                    if (col_pattern.startswith(".*") == False or col_pattern.endswith(".*") == False):
+                        utils.warn_once("__get_matching_cols__: multiple wildcards in col patterns can be confusing: {}".format(col_pattern))
+                else:
+                    utils.warn_once("__get_matching_cols__: multiple wildcards in col patterns can be confusing: {}".format(col_pattern))
+
+            # append
+            col_patterns_transformed.append(col_pattern)
+
         # now iterate through all the column names, check if it is a regular expression and find
         # all matching ones
         matching_cols = []
-        for col_pattern in col_patterns:
+        for col_pattern in col_patterns_transformed:
             # check for matching columns for the pattern
             col_pattern_found = False
 
@@ -4239,83 +4419,125 @@ class TSV:
         # return
         return __split_exp_func_inner__
 
-    def split(self, col_or_cols, prefix, sep = ",", collapse = True, inherit_message = ""):
+ 
+    def split(self, *args, **kwargs):
+        utils.warn_once("split: use split_str method instead")
+        return self.split_str(*args, **kwargs)
+ 
+    def split_str(self, col_or_cols, prefix, sep = ",", collapse = True, dmsg = ""):
         # resolve columns
         cols = self.__get_matching_cols__(col_or_cols)
+        new_cols = list(["{}:{}".format(prefix, t) for t in cols])
 
         # call explode
-        inherit_message2 = "{}: split".format(inherit_message) if (inherit_message != "") else "split"
+        dmsg = "{}: split".format(dmsg) if (len(dmsg) > 0) else "split"
         return self \
-            .explode(col_or_cols, self.__split_exp_func__(cols, sep), prefix, collapse = collapse, inherit_message = inherit_message2)
+            .explode(col_or_cols, self.__split_exp_func__(cols, sep), prefix, collapse = collapse, dmsg = dmsg) \
+            .add_empty_cols_if_missing(new_cols)
+
+    def sample_group_by_topk(self, grouping_cols, sort_col, k, use_string_datatype = False, reverse = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "sample_group_by_topk")
+        utils.warn_once("sample_group_by_topk: this needs to do deterministic selection when there are more entries of same sort_col value")
+
+        def __sample_group_by_topk_inner_func__(mps):
+            sorted_mps = sorted(mps, key = lambda t: str(t[sort_col]) if (use_string_datatype == True) else float(t[sort_col]))
+            sorted_mps = sorted_mps[0:k] if (reverse == False) else sorted_mps[-k:]
+            result = {}
+            result["__top_selected_indexes__"] = ",".join([mp["__sample_group_by_topk_sno__"] for mp in sorted_mps])
+            return result
+
+        # return
+        return self \
+            .add_seq_num("__sample_group_by_topk_sno__", dmsg = dmsg) \
+            .group_by_key(grouping_cols, [sort_col, "__sample_group_by_topk_sno__"], __sample_group_by_topk_inner_func__, suffix = "__sample_group_by_topk_inner_func__", collapse = False, dmsg = dmsg) \
+            .filter(["__sample_group_by_topk_sno__", "__top_selected_indexes__:__sample_group_by_topk_inner_func__"], lambda t1, t2: t1 in t2.split(","), dmsg = dmsg) \
+            .drop_cols(["__sample_group_by_topk_sno__", "__top_selected_indexes__:__sample_group_by_topk_inner_func__"], dmsg = dmsg)
+
+    # this method fills values of this type {col} in the template col with the value of the col. If col_or_cols is None, then all remaining columns are used
+    # this is an expensive query as it has to lookup each possible input col
+    def resolve_template_col(self, template_col, output_col, col_or_cols = None, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "resolve_template_col")
+
+        # validation
+        if (template_col not in self.get_columns()):
+            raise Exception("template_col: {} is not present".format(template_col))
+
+        # validation
+        if (output_col in self.get_columns()):
+            raise Exception("output_col: {} already exists ".format(output_col))
+
+        # some guards
+        if (col_or_cols is None and self.num_rows() >= 100):
+            utils.warn("{}: col_or_cols is None and the data hqs more than 100 rows. This api is expensive and defining col_or_cols can speed up".format(dmsg))
+
+        # validation
+        input_cols = self.__get_matching_cols__(col_or_cols) if (col_or_cols is not None) else list(filter(lambda t: t != template_col, self.get_columns()))
+
+        # validation
+        if (template_col in input_cols):
+            raise Exception("template_col: {} is also in input columns: {}".format(template_col, input_cols))
+
+        # explode function
+        def __resolve_template_col_transform_func__(mp):
+            template_value = mp[template_col]
+
+            # iterate
+            for input_col in input_cols:
+                input_val = str(mp[input_col])
+                input_template = "{" + input_col + "}"
+
+                # check if the input col is present in template form
+                if (template_value.find(input_template) != -1):
+                    template_value = template_value.replace(input_template, input_val)
+
+            # generate output
+            result_mp = {output_col: template_value}
+
+            # return
+            return [result_mp]
+
+
+        # input for explode
+        explode_cols = input_cols + [template_col]
+
+        # return
+        return self \
+            .explode(explode_cols, __resolve_template_col_transform_func__, "__resolve_template_col__", collapse = False, dmsg = dmsg) \
+            .remove_prefix("__resolve_template_col__", dmsg = dmsg)
+
+    def resolve_template_col_inline(self, template_col, col_or_cols = None, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "resolve_template_col_inline")
+
+        # temp output col
+        output_col = "__resolve_template_col_inline_output__"
+
+        # return
+        return self \
+            .resolve_template_col(template_col, output_col, col_or_cols = col_or_cols, dmsg = dmsg) \
+            .drop_cols(template_col, dmsg = dmsg) \
+            .rename(output_col, template_col, dmsg = dmsg)
+ 
+    def enable_debug_mode(self):
+        utils.enable_debug_mode()
+        return self
+
+    def disable_debug_mode(self):
+        utils.disable_debug_mode()
+        return self
+
+    def enable_info_mode(self):
+        utils.enable_info_mode()
+        return self
+
+    def disable_info_mode(self):
+        utils.disable_info_mode()
+        return self
 
 def get_version():
     return "v0.3.9:empty_tsv"
 
 def get_func_name(f):
     return f.__name__
-
-def get_rolling_func_init(func_name):
-    if (func_name == "sum"):
-        return [0]
-    elif (func_name == "min"):
-        return [float('inf')]
-    elif (func_name == "max"):
-        return [float('-inf')]
-    elif (func_name == "mean"):
-        return [0, 0]
-    elif (func_name == "len"):
-        return [0]
-    else:
-        raise Exception("rolling agg func not supported: {}".format(func_name))
-
-def get_rolling_func_update(arr, v, func_name):
-    if (func_name == "sum"):
-        arr[0] = arr[0] + v
-    elif (func_name == "min"):
-        arr[0] = min(arr[0], v)
-    elif (func_name == "max"):
-        arr[0] = max(arr[0], v)
-    elif (func_name == "mean"):
-        arr[0] = arr[0] + v
-        arr[1] = arr[1] + 1
-    elif (func_name == "len"):
-        arr[0] = arr[0] + 1
-    else:
-        raise Exception("rolling agg func not supported: {}".format(func_name))
-
-def get_rolling_func_update_sum(arr, v):
-    arr[0] = arr[0] + v
-
-def get_rolling_func_update_mean(arr, v):
-    arr[0] = arr[0] + v
-    arr[1] = arr[1] + 1
-
-def get_rolling_func_update_min(arr, v):
-    arr[0] = min(arr[0], v)
-
-def get_rolling_func_update_max(arr, v):
-    arr[0] = max(arr[0], v)
-
-def get_rolling_func_update_len(arr, v):
-    arr[0] = arr[0] + 1
-
-def get_rolling_func_closing(arr, func_name):
-    if (func_name == "sum"):
-        return arr[0]
-    elif (func_name == "min"):
-        return arr[0]
-    elif (func_name == "max"):
-        return arr[0]
-    elif (func_name == "mean"):
-        if (arr[1] > 0):
-            return arr[0] / arr[1]
-        else:
-            print("Divide by zero. Returning 0")
-            return 0
-    elif (func_name == "len"):
-        return arr[0]
-    else:
-        raise Exception("rolling agg func not supported: {}".format(func_name))
 
 def read(paths, sep = None, do_union = False, def_val_map = None):
     # TODO: remove this after fixing design
@@ -4385,4 +4607,11 @@ def new_with_cols(cols, data = []):
 
 def create_empty():
     return new_with_cols([])
+
+def __is_builtin_func__(func):
+    # check type
+    if (type(func) in (type(sum), type(math.ceil))):
+        return True
+    else:
+        return False
 

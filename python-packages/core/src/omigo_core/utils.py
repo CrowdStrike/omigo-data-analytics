@@ -25,7 +25,7 @@ def is_error():
     return str(os.environ.get("OMIGO_ERROR", "0")) == "1"
 
 def is_warn():
-    return str(os.environ.get("OMIGO_WARN", "0")) == "1"
+    return str(os.environ.get("OMIGO_WARN", "1")) == "1"
 
 def is_info():
     return str(os.environ.get("OMIGO_INFO", "1")) == "1"
@@ -74,7 +74,7 @@ def debug(msg):
 
 def debug_once(msg):
     # check if enabled
-    if (is_warn() == False):
+    if (is_debug() == False):
         return
 
     # refer to global variable
@@ -255,10 +255,10 @@ def get_counts_map(xs):
 
     return mp
 
-def report_progress(msg, inherit_message, counter, total):
+def report_progress(msg, dmsg, counter, total):
     report_progress = get_report_progress()
     report_progress_min_threshold = get_report_progress_min_thresh()
-    msg2 = inherit_message + ": " + msg if (len(inherit_message) > 0) else msg
+    msg2 = dmsg + ": " + msg if (dmsg is not None and len(dmsg) > 0) else msg
     if (is_debug() and report_progress > 0 and total >= report_progress_min_threshold):
         progress_size = int(report_progress * total)
         if (progress_size > 0 and counter % progress_size == 0):
@@ -375,10 +375,14 @@ def run_with_thread_pool(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0):
             # return
             return results
 
-def raise_exception_or_warn(msg, ignore_if_missing):
+def raise_exception_or_warn(msg, ignore_if_missing, max_len = 2000):
+    # strip the message to max_len
+    if (max_len is not None and max_len > 0 and len(msg) > max_len):
+        msg = msg[0:max_len] + " ..."
+
     # print message if ignore_if_missing flag is true
     if (ignore_if_missing == True):
-        warn_once(msg)
+        debug_once(msg)
     else:
         raise Exception(msg)
 
@@ -464,4 +468,6 @@ def resolve_default_parameter(name, value, default_value, msg):
 
     # return
     return value
-        
+
+def extend_inherit_message(old_msg, new_msg):
+     return "{}: {}".format(old_msg, new_msg) if (old_msg is not None and len(old_msg) > 0) else "{}".format(new_msg)
