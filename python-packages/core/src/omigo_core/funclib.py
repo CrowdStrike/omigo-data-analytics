@@ -116,6 +116,18 @@ def maxstr(vs):
 
     return str(max_value)
 
+def sumint(vs):
+    if (len(vs) == 0):
+        return 0
+    else:
+        return sum([int(float(t)) for t in vs])
+
+def sumfloat(vs):
+    if (len(vs) == 0):
+        return 0.0
+    else:
+        return sum([float(t) for t in vs])
+
 def uniq_count(vs):
     return len(set(vs))
 

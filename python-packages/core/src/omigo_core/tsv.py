@@ -1550,7 +1550,7 @@ class TSV:
             raise Exception("cols_as_map: empty tsv")
 
         # warn
-        utils.warn_once("cols_as_map: This api has changed from prev implementation")
+        utils.debug_once("[OLD_WARN]: cols_as_map: This api has changed from prev implementation")
 
         # validation
         key_cols = self.__get_matching_cols__(key_cols)
@@ -1779,6 +1779,9 @@ class TSV:
 
         # return
         return pd.DataFrame(df_map)
+
+    def to_simple_df(self, n = None):
+        return self.to_df(n = n, infer_data_types = False)
 
     def export_to_df(self, n = -1):
         utils.warn("Deprecated. Use to_df()")
@@ -3239,7 +3242,7 @@ class TSV:
         return result
 
     # public method handling both random and cols based splitting
-    def split_batches(self, num_batches, cols = None, preserve_order = False, seed = 0, dmsg = ""):
+    def split_batches(self, num_batches, cols = None, preserve_order = False, seed = None, dmsg = ""):
         # check for empty
         if (self.has_empty_header()):
             # check for cols
@@ -3305,6 +3308,9 @@ class TSV:
         for i in range(effective_batches):
             xtsv_list.append(TSV(self.header, data_list[i]))
 
+        # filter out empty batches
+        xtsv_list = list(filter(lambda t: t.num_rows() > 0, xtsv_list))
+
         # return
         return xtsv_list
 
@@ -3355,6 +3361,9 @@ class TSV:
             new_tsv = TSV(hashed_tsv2.get_header(), new_data_list[i]) \
                 .drop_cols([temp_col1, temp_col2])
             new_tsvs.append(new_tsv)
+
+        # filter out empty batches
+        new_tsvs = list(filter(lambda t: t.num_rows() > 0, new_tsvs))
 
         # return
         return new_tsvs
@@ -4265,6 +4274,10 @@ class TSV:
         if (col_or_cols is None or len(col_or_cols) == 0):
             return []
 
+        # check for wild card
+        if (col_or_cols == ".*" or col_or_cols[0] == ".*"):
+            return self.get_columns()
+
         # check if there is comma. If yes, then map it to array
         if ("," in col_or_cols):
             col_or_cols = col_or_cols.split(",")
@@ -4424,6 +4437,7 @@ class TSV:
 
     def sample_group_by_topk(self, grouping_cols, sort_col, k, use_string_datatype = False, reverse = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "sample_group_by_topk")
+        utils.warn_once("sample_group_by_topk: this needs to do deterministic selection when there are more entries of same sort_col value")
 
         def __sample_group_by_topk_inner_func__(mps):
             sorted_mps = sorted(mps, key = lambda t: str(t[sort_col]) if (use_string_datatype == True) else float(t[sort_col]))
