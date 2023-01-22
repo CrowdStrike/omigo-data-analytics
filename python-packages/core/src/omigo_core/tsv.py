@@ -1418,8 +1418,9 @@ class TSV:
 
         # print
         self \
+            .show_title(title) \
             .transpose(n, dmsg = dmsg) \
-            .show(n = self.num_cols(), max_col_width = max_col_width, title = title, dmsg = dmsg)
+            .show(n = self.num_cols(), max_col_width = max_col_width, dmsg = dmsg)
 
         # return self
         return self
@@ -1431,10 +1432,23 @@ class TSV:
         if (self.has_empty_header()):
             return self
 
-        self.take(n, dmsg = dmsg).__show_topn__(max_col_width, title)
+        # show topn
+        self \
+            .take(n, dmsg = dmsg) \
+            .__show_topn__(max_col_width, title)
+
         # return the original tsv
         return self
 
+    def show_title(self, title):
+        # print label
+        if (title is not None):
+            print("=============================================================================================================================================")
+            print("Title: {}, Num Rows: {}, Num Cols: {}".format(title, self.num_rows(), self.num_cols()))
+            print("=============================================================================================================================================")
+
+        # return
+        return self
     def __show_topn__(self, max_col_width, title):
         spaces = " ".join([""]*max_col_width)
 
@@ -1464,11 +1478,8 @@ class TSV:
         for line in self.get_data():
             all_data.append(line)
 
-        # print label
-        if (title is not None):
-            print("=============================================================================================================================================")
-            print("Title: {}, Num Rows: {}, Num Cols: {}".format(title, self.num_rows(), self.num_cols()))
-            print("=============================================================================================================================================")
+        # print title
+        self.show_title(title)
 
         # iterate and print. +1 for header
         for i in range(len(all_data)):
@@ -3128,9 +3139,9 @@ class TSV:
             # create value string for rkey
             rvals1_str = "\t".join(rvals1)
 
-            # right side values are not unique
-            if (rvals1_str in rvkeys.keys()):
-                utils.trace("right side values are not unique: rvals1: {}, rvals2: {}, rvkeys[rvals1_str]: {}".format(rvals1, rvals2, rvkeys[rvals1_str]))
+            # TODO: why this debug right side values are not unique
+            # if (rvals1_str in rvkeys.keys()):
+            #     utils.trace("right side values are not unique: rvals1: {}, rvals2: {}, rvkeys[rvals1_str]: {}".format(rvals1, rvals2, rvkeys[rvals1_str]))
 
             # check if the key already exists, else create an array
             if (rvals1_str not in rvkeys.keys()):
@@ -3891,7 +3902,7 @@ class TSV:
                 results.append(combined_map)
 
             # trace
-            if (len(results) >= 10):
+            if (len(results) >= 100):
                 utils.trace("__explode_json_transform_func_expand_json__: with count: {} >= 10, parent_prefix: {}, results[0]: {}".format(len(results), parent_prefix, results[0]))
 
             # return
@@ -4229,7 +4240,8 @@ class TSV:
         # call show transpose after custom func
         self \
             .custom_func(func, *args, **kwargs) \
-            .show_transpose(n = n, title = title)
+            .show_title(title) \
+            .show_transpose(n = n)
 
         # return self
         return self
