@@ -1418,9 +1418,10 @@ class TSV:
 
         # print
         self \
-            .show_title(title) \
+            .__show_title_header__(title) \
             .transpose(n, dmsg = dmsg) \
-            .show(n = self.num_cols(), max_col_width = max_col_width, dmsg = dmsg)
+            .show(n = self.num_cols(), title = None, max_col_width = max_col_width, dmsg = dmsg) \
+            .__show_title_footer__(title)
 
         # return self
         return self
@@ -1434,13 +1435,15 @@ class TSV:
 
         # show topn
         self \
+            .__show_title_header__(title) \
             .take(n, dmsg = dmsg) \
-            .__show_topn__(max_col_width, title)
+            .__show_topn__(max_col_width) \
+            .__show_title_footer__(title)
 
         # return the original tsv
         return self
 
-    def show_title(self, title):
+    def __show_title_header__(self, title):
         # print label
         if (title is not None):
             print("=============================================================================================================================================")
@@ -1449,7 +1452,19 @@ class TSV:
 
         # return
         return self
-    def __show_topn__(self, max_col_width, title):
+
+    def __show_title_footer__(self, title):
+        # check for title
+        if (title is not None):
+            print("=============================================================================================================================================")
+
+        # print blank
+        print("")
+
+        # return
+        return self
+
+    def __show_topn__(self, max_col_width):
         spaces = " ".join([""]*max_col_width)
 
         # gather data about width of columns
@@ -1478,9 +1493,6 @@ class TSV:
         for line in self.get_data():
             all_data.append(line)
 
-        # print title
-        self.show_title(title)
-
         # iterate and print. +1 for header
         for i in range(len(all_data)):
             line = all_data[i]
@@ -1499,10 +1511,6 @@ class TSV:
 
                 row.append(str(value))
             print("\t".join(row))
-
-        # print footer
-        if (title is not None):
-            print("=============================================================================================================================================")
 
         # print blank lines
         print("")
@@ -1687,12 +1695,12 @@ class TSV:
             # all cols
             all_cols = []
             for c in matching_cols:
-                all_cols.apppend(c)
+                all_cols.append(c)
             for c in non_matching_cols:
-                all_cols.apppend(c)
+                all_cols.append(c)
 
             # return
-            return self.select(all_cols).reorder(cols, use_existing_order = False, dmsg = dmsg)
+            return self.select(all_cols).reorder(cols, use_existing_order = True, dmsg = dmsg)
 
         # create a map of columns that match the criteria
         new_header_fields = []
@@ -3489,11 +3497,14 @@ class TSV:
         return TSV(new_header, new_data)
 
     # TODO: Need better naming. The suffix semantics have been changed.
+    # default_val should be empty string
     # This doesnt handle empty data correctly. the output cols need add_empty_cols_if_missing
     def explode(self, cols, exp_func, prefix, default_val = None, collapse = True, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "explode")
+
         # check empty
         if (self.has_empty_header()):
-            utils.raise_exception_or_warn("explode: empty tsv", ignore_if_missing)
+            utils.raise_exception_or_warn("{}: empty tsv".format(dmsg), ignore_if_missing)
             return self
 
         # get matching column and indexes
@@ -3502,7 +3513,7 @@ class TSV:
 
         # check for no matching cols
         if (len(matching_cols) == 0):
-            utils.raise_exception_or_warn("explode: no matching cols: {}".format(cols), ignore_if_missing)
+            utils.raise_exception_or_warn("{}: no matching cols: {}".format(dmsg, cols), ignore_if_missing)
             return self
 
         # iterate
@@ -3511,7 +3522,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("explode: [1/2] calling explode function", dmsg, counter, len(self.get_data()))
+            utils.report_progress("[1/2] calling explode function", dmsg, counter, len(self.get_data()))
 
             # process data
             fields = line.split("\t")
@@ -3527,7 +3538,7 @@ class TSV:
                 for k, v in evm.items():
                     # validation
                     if (len(k) == 0):
-                        raise Exception("Invalid key in the hashmap:{}: {}".format(k, v))
+                        utils.error_and_raise_exception("{}: Invalid key in the hashmap:{}: {}".format(dmsg, k, v))
                     exploded_keys[k] = 1
 
         # create an ordered list of keys
@@ -3571,7 +3582,7 @@ class TSV:
         for i in range(len(self.get_data())):
             # report progress
             counter = counter + 1
-            utils.report_progress("explode: [2/2] generating data", dmsg, counter, len(self.get_data()))
+            utils.report_progress("[2/2] generating data", dmsg, counter, len(self.get_data()))
 
             # process data
             line = self.data[i]
@@ -3606,7 +3617,8 @@ class TSV:
                         if (default_val is not None):
                             new_vals.append(str(default_val))
                         else:
-                            raise Exception("Not all output values are returned from function: evm: {}, exploded_keys_sorted: {}, key: {}".format(str(evm), str(exploded_keys_sorted, k)))
+                            utils.error_and_raise_exception("{}: Not all output values are returned from function and default_val is None: evm: {}, exploded_keys_sorted: {}, key: {}".format(
+                                dmsg, evm, exploded_keys_sorted, k))
 
                 # TODO: move this to a proper function
                 new_data.append("\t".join(utils.merge_arrays([new_fields, new_vals])))
@@ -4240,8 +4252,7 @@ class TSV:
         # call show transpose after custom func
         self \
             .custom_func(func, *args, **kwargs) \
-            .show_title(title) \
-            .show_transpose(n = n)
+            .show_transpose(n = n, title = title)
 
         # return self
         return self
