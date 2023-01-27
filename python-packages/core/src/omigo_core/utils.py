@@ -481,10 +481,26 @@ def resolve_default_parameter(name, value, default_value, msg):
     return value
 
 def extend_inherit_message(old_msg, new_msg):
+     # check if both msgs are defined
+     if (old_msg is not None and new_msg is not None):
+         parts1 = list([t.strip() for t in old_msg.split(":")])
+         parts2 = list([t.strip() for t in new_msg.split(":")])
+
+         # do a fuzzy match
+         if (len(parts2) == 2):
+             if (len(parts1) >= 2 and parts1[-2] == parts2[0]):
+                 new_msg = parts2[1]
+             elif (len(parts1) >= 3 and parts1[-3] == parts2[0]):
+                 new_msg = parts2[1]
+             elif (len(parts1) >= 4 and parts1[-4] == parts2[0]):
+                 new_msg = parts2[1]
+             elif (len(parts1) >= 5 and parts1[-5] == parts2[0]):
+                 new_msg = parts2[1]
+
+     # return
      return "{}: {}".format(old_msg, new_msg) if (old_msg is not None and len(old_msg) > 0) else "{}".format(new_msg)
 
-
-def max_dmsg_str(dmsg, max_len = 50):
+def max_dmsg_str(dmsg, max_len = 300):
     if (dmsg is None or len(dmsg) <= max_len):
         return dmsg
     else:

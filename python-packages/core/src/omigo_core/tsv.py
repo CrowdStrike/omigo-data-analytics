@@ -1400,11 +1400,15 @@ class TSV:
         # return
         return TSV(new_header, new_data)
 
-    def show_transpose(self, n = 1, title = None, max_col_width = None, dmsg = ""):
+    def show_transpose(self, n = 1, title = None, max_col_width = None, debug_only = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "show_transpose")
 
         # check empty
         if (self.has_empty_header()):
+            return self
+
+        # check debug_only flag
+        if (debug_only == True and utils.is_debug() == False):
             return self
 
         # validation and doing min
@@ -1426,11 +1430,15 @@ class TSV:
         # return self
         return self
 
-    def show(self, n = 100, title = None, max_col_width = 40, dmsg = ""):
+    def show(self, n = 100, title = None, max_col_width = 40, debug_only = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "show")
 
         # check empty
         if (self.has_empty_header()):
+            return self
+
+        # check debug_only flag
+        if (debug_only == True and utils.is_debug() == False):
             return self
 
         # show topn
@@ -2337,6 +2345,38 @@ class TSV:
         # sample and return. the debug message is not in standard form, but its fine.
         utils.report_progress("sample_n: [1/1] calling function", dmsg, len(self.get_data()), len(self.get_data()))
         return TSV(self.header, random.sample(self.data, n))
+
+    # TODO: WIP
+    def sample_n_with_warn(self, limit, msg = None, seed = 0, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "sample_n_with_warn")
+        utils.warn_once("sample_n_with_warn: this api name might change")
+
+        # check if input exceeds the max limit
+        if (self.num_rows() > limit):
+            if (msg is not None):
+                utils.warn("{}: {}, num_rows: {}, limit: {}".format(dmsg, msg, self.num_rows(), limit))
+            else:
+                utils.warn("{}: Input exceeds the limit. {} > {}. Taking a sample".format(dmsg, self.num_rows(), limit))
+
+            # return
+            return self \
+                .sample_n(limit, seed = seed, dmsg = dmsg)
+        else:
+            return self
+
+    def warn_if_limit_reached(self, limit, msg = None, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "warn_if_limit_reached")
+        utils.warn_once("warn_if_limit_reached: this api name might change")
+
+        # check for limit
+        if (self.num_rows() >= limit):
+            if (msg is not None):
+                utils.warn("{}: {}, num_rows: {}, limit: {} reached".format(dmsg, msg, self.num_rows(), limit))
+            else:
+                utils.warn("{}: num_rows: {}, limit: {} reached".format(dmsg, self.num_rows(), limit))
+
+        # return
+        return self
 
     def cap_min_inline(self, col, value, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "cap_min_inline")
