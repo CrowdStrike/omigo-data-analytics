@@ -41,7 +41,7 @@ class MultiThreadTSV(tsv.TSV):
             combined_result = __parallelize__(self, func, *args, **kwargs)
         else:
             # print batch size
-            utils.info("{}: num_rows: {}, num_par: {}, num_batches: {}, batch_size: {}, status_check_interval_sec: {}".format(self.dmsg,
+            utils.debug("{}: num_rows: {}, num_par: {}, num_batches: {}, batch_size: {}, status_check_interval_sec: {}".format(self.dmsg,
                 self.num_rows(), self.num_par, self.num_batches, batch_size, self.status_check_interval_sec))
 
             # run thread pool

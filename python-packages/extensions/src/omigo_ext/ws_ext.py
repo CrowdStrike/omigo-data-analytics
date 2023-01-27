@@ -46,6 +46,9 @@ def __call_web_service__(xtsv, xtsv_timeout_sec, xtsv_verify, xtsv_enable_opt_ex
     body_params_cols = []
     all_sel_cols = []
 
+    # debug
+    # utils.trace("__call_web_service__: url: {}, query_params: {}, header_params: {}, body_params: {}".format(url, query_params, header_params, body_params))
+
     # iterate over all the columns and find where all they exist
     for c in xtsv.get_header_fields():
         cstr = "{" + c + "}"
@@ -92,7 +95,9 @@ def __call_web_service__(xtsv, xtsv_timeout_sec, xtsv_verify, xtsv_enable_opt_ex
     xtsv_dmsg = xtsv_dmsg + ": call_web_service" if (xtsv_dmsg != "") else "call_web_service"
 
     # take only distinct all_sel_cols
-    hash_tsv = xtsv.select(all_sel_cols, dmsg = xtsv_dmsg).distinct()
+    hash_tsv = xtsv \
+        .select(all_sel_cols, dmsg = xtsv_dmsg) \
+        .distinct()
 
     # if the number of rows are different, print some stats
     if (hash_tsv.num_rows() < xtsv.num_rows()):

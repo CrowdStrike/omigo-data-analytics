@@ -1400,11 +1400,15 @@ class TSV:
         # return
         return TSV(new_header, new_data)
 
-    def show_transpose(self, n = 1, title = None, max_col_width = None, dmsg = ""):
+    def show_transpose(self, n = 1, title = None, max_col_width = None, debug_only = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "show_transpose")
 
         # check empty
         if (self.has_empty_header()):
+            return self
+
+        # check debug_only flag
+        if (debug_only == True and utils.is_debug() == False):
             return self
 
         # validation and doing min
@@ -1418,24 +1422,57 @@ class TSV:
 
         # print
         self \
+            .__show_title_header__(title) \
             .transpose(n, dmsg = dmsg) \
-            .show(n = self.num_cols(), max_col_width = max_col_width, title = title, dmsg = dmsg)
+            .show(n = self.num_cols(), title = None, max_col_width = max_col_width, dmsg = dmsg) \
+            .__show_title_footer__(title)
 
         # return self
         return self
 
-    def show(self, n = 100, title = None, max_col_width = 40, dmsg = ""):
+    def show(self, n = 100, title = None, max_col_width = 40, debug_only = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "show")
 
         # check empty
         if (self.has_empty_header()):
             return self
 
-        self.take(n, dmsg = dmsg).__show_topn__(max_col_width, title)
+        # check debug_only flag
+        if (debug_only == True and utils.is_debug() == False):
+            return self
+
+        # show topn
+        self \
+            .__show_title_header__(title) \
+            .take(n, dmsg = dmsg) \
+            .__show_topn__(max_col_width) \
+            .__show_title_footer__(title)
+
         # return the original tsv
         return self
 
-    def __show_topn__(self, max_col_width, title):
+    def __show_title_header__(self, title):
+        # print label
+        if (title is not None):
+            print("=============================================================================================================================================")
+            print("Title: {}, Num Rows: {}, Num Cols: {}".format(title, self.num_rows(), self.num_cols()))
+            print("=============================================================================================================================================")
+
+        # return
+        return self
+
+    def __show_title_footer__(self, title):
+        # check for title
+        if (title is not None):
+            print("=============================================================================================================================================")
+
+        # print blank
+        print("")
+
+        # return
+        return self
+
+    def __show_topn__(self, max_col_width):
         spaces = " ".join([""]*max_col_width)
 
         # gather data about width of columns
@@ -1464,12 +1501,6 @@ class TSV:
         for line in self.get_data():
             all_data.append(line)
 
-        # print label
-        if (title is not None):
-            print("=============================================================================================================================================")
-            print("Title: {}, Num Rows: {}, Num Cols: {}".format(title, self.num_rows(), self.num_cols()))
-            print("=============================================================================================================================================")
-
         # iterate and print. +1 for header
         for i in range(len(all_data)):
             line = all_data[i]
@@ -1488,10 +1519,6 @@ class TSV:
 
                 row.append(str(value))
             print("\t".join(row))
-
-        # print footer
-        if (title is not None):
-            print("=============================================================================================================================================")
 
         # print blank lines
         print("")
@@ -1676,12 +1703,12 @@ class TSV:
             # all cols
             all_cols = []
             for c in matching_cols:
-                all_cols.apppend(c)
+                all_cols.append(c)
             for c in non_matching_cols:
-                all_cols.apppend(c)
+                all_cols.append(c)
 
             # return
-            return self.select(all_cols).reorder(cols, use_existing_order = False, dmsg = dmsg)
+            return self.select(all_cols).reorder(cols, use_existing_order = True, dmsg = dmsg)
 
         # create a map of columns that match the criteria
         new_header_fields = []
@@ -2318,6 +2345,38 @@ class TSV:
         # sample and return. the debug message is not in standard form, but its fine.
         utils.report_progress("sample_n: [1/1] calling function", dmsg, len(self.get_data()), len(self.get_data()))
         return TSV(self.header, random.sample(self.data, n))
+
+    # TODO: WIP
+    def sample_n_with_warn(self, limit, msg = None, seed = 0, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "sample_n_with_warn")
+        utils.warn_once("sample_n_with_warn: this api name might change")
+
+        # check if input exceeds the max limit
+        if (self.num_rows() > limit):
+            if (msg is not None):
+                utils.warn("{}: {}, num_rows: {}, limit: {}".format(dmsg, msg, self.num_rows(), limit))
+            else:
+                utils.warn("{}: Input exceeds the limit. {} > {}. Taking a sample".format(dmsg, self.num_rows(), limit))
+
+            # return
+            return self \
+                .sample_n(limit, seed = seed, dmsg = dmsg)
+        else:
+            return self
+
+    def warn_if_limit_reached(self, limit, msg = None, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "warn_if_limit_reached")
+        utils.warn_once("warn_if_limit_reached: this api name might change")
+
+        # check for limit
+        if (self.num_rows() >= limit):
+            if (msg is not None):
+                utils.warn("{}: {}, num_rows: {}, limit: {} reached".format(dmsg, msg, self.num_rows(), limit))
+            else:
+                utils.warn("{}: num_rows: {}, limit: {} reached".format(dmsg, self.num_rows(), limit))
+
+        # return
+        return self
 
     def cap_min_inline(self, col, value, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "cap_min_inline")
@@ -3128,9 +3187,9 @@ class TSV:
             # create value string for rkey
             rvals1_str = "\t".join(rvals1)
 
-            # right side values are not unique
-            if (rvals1_str in rvkeys.keys()):
-                utils.trace("right side values are not unique: rvals1: {}, rvals2: {}, rvkeys[rvals1_str]: {}".format(rvals1, rvals2, rvkeys[rvals1_str]))
+            # TODO: why this debug right side values are not unique
+            # if (rvals1_str in rvkeys.keys()):
+            #     utils.trace("right side values are not unique: rvals1: {}, rvals2: {}, rvkeys[rvals1_str]: {}".format(rvals1, rvals2, rvkeys[rvals1_str]))
 
             # check if the key already exists, else create an array
             if (rvals1_str not in rvkeys.keys()):
@@ -3478,11 +3537,14 @@ class TSV:
         return TSV(new_header, new_data)
 
     # TODO: Need better naming. The suffix semantics have been changed.
+    # default_val should be empty string
     # This doesnt handle empty data correctly. the output cols need add_empty_cols_if_missing
     def explode(self, cols, exp_func, prefix, default_val = None, collapse = True, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "explode")
+
         # check empty
         if (self.has_empty_header()):
-            utils.raise_exception_or_warn("explode: empty tsv", ignore_if_missing)
+            utils.raise_exception_or_warn("{}: empty tsv".format(dmsg), ignore_if_missing)
             return self
 
         # get matching column and indexes
@@ -3491,7 +3553,7 @@ class TSV:
 
         # check for no matching cols
         if (len(matching_cols) == 0):
-            utils.raise_exception_or_warn("explode: no matching cols: {}".format(cols), ignore_if_missing)
+            utils.raise_exception_or_warn("{}: no matching cols: {}".format(dmsg, cols), ignore_if_missing)
             return self
 
         # iterate
@@ -3500,7 +3562,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("explode: [1/2] calling explode function", dmsg, counter, len(self.get_data()))
+            utils.report_progress("[1/2] calling explode function", dmsg, counter, len(self.get_data()))
 
             # process data
             fields = line.split("\t")
@@ -3516,7 +3578,7 @@ class TSV:
                 for k, v in evm.items():
                     # validation
                     if (len(k) == 0):
-                        raise Exception("Invalid key in the hashmap:{}: {}".format(k, v))
+                        utils.error_and_raise_exception("{}: Invalid key in the hashmap:{}: {}".format(dmsg, k, v))
                     exploded_keys[k] = 1
 
         # create an ordered list of keys
@@ -3560,7 +3622,7 @@ class TSV:
         for i in range(len(self.get_data())):
             # report progress
             counter = counter + 1
-            utils.report_progress("explode: [2/2] generating data", dmsg, counter, len(self.get_data()))
+            utils.report_progress("[2/2] generating data", dmsg, counter, len(self.get_data()))
 
             # process data
             line = self.data[i]
@@ -3595,7 +3657,8 @@ class TSV:
                         if (default_val is not None):
                             new_vals.append(str(default_val))
                         else:
-                            raise Exception("Not all output values are returned from function: evm: {}, exploded_keys_sorted: {}, key: {}".format(str(evm), str(exploded_keys_sorted, k)))
+                            utils.error_and_raise_exception("{}: Not all output values are returned from function and default_val is None: evm: {}, exploded_keys_sorted: {}, key: {}".format(
+                                dmsg, evm, exploded_keys_sorted, k))
 
                 # TODO: move this to a proper function
                 new_data.append("\t".join(utils.merge_arrays([new_fields, new_vals])))
@@ -3891,7 +3954,7 @@ class TSV:
                 results.append(combined_map)
 
             # trace
-            if (len(results) >= 10):
+            if (len(results) >= 100):
                 utils.trace("__explode_json_transform_func_expand_json__: with count: {} >= 10, parent_prefix: {}, results[0]: {}".format(len(results), parent_prefix, results[0]))
 
             # return
