@@ -97,20 +97,21 @@ def __plot_graph__(vertex_map, edges_maps, node_props, edge_props, vertex_id_col
             for k1 in edge_props:
                 # get the value and generate key-value string
                 v1 = str(mp[k1]) if (k1 in mp.keys()) else ""
-                kv_str = "{}".format(v1)
+                if (v1 != ""):
+                    kv_str = "[{}]".format(v1)
 
-                # truncate the value if it exceeds a specific threshold
-                if (max_len is not None and len(kv_str) > max_len):
-                    if (max_len > 3):
-                        kv_str = kv_str[0:(max_len - 3)] + "..."
-                    else:
-                        kv_str = kv_str[0:max_len]
+                    # truncate the value if it exceeds a specific threshold
+                    if (max_len is not None and len(kv_str) > max_len):
+                        if (max_len > 3):
+                            kv_str = kv_str[0:(max_len - 3)] + "..."
+                        else:
+                            kv_str = kv_str[0:max_len]
 
-                # append to the list of attributes
-                ed_props.append(kv_str)
+                    # append to the list of attributes
+                    ed_props.append(kv_str)
 
             # add style information
-            edge_props_str = ", ".join([k2 for k2 in ed_props])
+            edge_props_str = "\n".join([k2 for k2 in ed_props])
             edge_str = "{} [ label = \"{}\" ]".format(edge_str, edge_props_str)
 
         # append

@@ -1983,12 +1983,18 @@ class TSV:
             dmsg = utils.extend_inherit_message(dmsg, "add_const_if_missing")
             return self.add_const(col, value, dmsg = dmsg)
 
-    def add_empty_cols_if_missing(self, col_or_cols, dmsg = ""):
+    def add_empty_cols_if_missing(self, col_or_cols, prefix = None, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "add_empty_cols_if_missing")
+
         # check if this is a single col name or an array
         is_array = utils.is_array_of_string_values(col_or_cols)
 
         # convert to array format
         cols = col_or_cols if (is_array == True) else [col_or_cols]
+
+        # check for prefix
+        if (prefix is not None):
+            cols = list(["{}:{}".format(prefix, t) for t in cols])
 
         # check empty
         if (self.has_empty_header()):
@@ -2021,7 +2027,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("add_empty_cols_if_missing: [1/1] calling function", dmsg, counter, len(self.get_data()))
+            utils.report_progress("[1/1] calling function", dmsg, counter, len(self.get_data()))
 
             # create new line
             new_line = "\t".join([line, empty_row])
@@ -2033,11 +2039,11 @@ class TSV:
     def add_row(self, row_fields):
         # check empty
         if (self.has_empty_header()):
-            raise Exception("add_row: empty tsv")
+            raise Exception("{}: add_row: empty tsv".format(dmsg))
 
         # validation
         if (len(row_fields) != self.num_cols()):
-            raise Exception("Number of fields is not matching with number of columns: {} != {}".format(len(row_fields), self.num_cols()))
+            raise Exception("{}: Number of fields is not matching with number of columns: {} != {}".format(dmsg, len(row_fields), self.num_cols()))
 
         # create new row
         new_line = "\t".join(row_fields)
