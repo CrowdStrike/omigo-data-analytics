@@ -1451,6 +1451,27 @@ class TSV:
         # return the original tsv
         return self
 
+    def show_sample(self, n = 100, title = None, max_col_width = 40, debug_only = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "show_sample")
+
+        # check empty
+        if (self.has_empty_header()):
+            return self
+
+        # check debug_only flag
+        if (debug_only == True and utils.is_debug() == False):
+            return self
+
+        # show topn
+        self \
+            .__show_title_header__(title) \
+            .sample_n(n, dmsg = dmsg) \
+            .__show_topn__(max_col_width) \
+            .__show_title_footer__(title)
+
+        # return
+        return self
+
     def __show_title_header__(self, title):
         # print label
         if (title is not None):
