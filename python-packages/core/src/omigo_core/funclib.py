@@ -35,15 +35,22 @@ def uniq_mkstr(vs):
                 vs2.add(str(k))
     return ",".join(sorted([str(x) for x in vs2]))
 
+def split_merge_uniq_mkstr(vs):
+    vs2 = []
+    for v in vs:
+        vs2 = vs2 + v.split(",")
+    vs2 = list(set(filter(lambda t: len(t.strip()) > 0, vs2)))
+    return ",".join(sorted([str(x) for x in vs2]))
+
 def mean(vs):
     return statistics.mean(vs)
 
 def mkstr(vs):
-    vs2 = list([str(x) for x in vs])
+    vs2 = list(filter(lambda t: len(t.strip()) > 0, [str(x) for x in vs]))
     return ",".join(vs2)
 
 def sorted_mkstr(vs):
-    vs2 = sorted(list([str(x) for x in vs]))
+    vs2 = sorted(list(filter(lambda t: len(t.strip()) > 0, [str(x) for x in vs])))
     return ",".join(vs2)
 
 def mkstr4f(vs):

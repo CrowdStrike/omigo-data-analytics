@@ -1348,6 +1348,8 @@ class TSV:
 
     def to_maps(self):
         mps = []
+
+        # create a map for each row
         for line in self.get_data():
             fields = line.split("\t")
             mp = {}
@@ -1355,6 +1357,7 @@ class TSV:
                 mp[self.header_fields[i]] = str(fields[i])
             mps.append(mp)
 
+        # return
         return mps
 
     def __convert_to_numeric__(self, x, precision = 6):
@@ -1400,7 +1403,7 @@ class TSV:
         # return
         return TSV(new_header, new_data)
 
-    def show_transpose(self, n = 1, title = None, max_col_width = None, debug_only = False, dmsg = ""):
+    def show_transpose(self, n = 1, title = "Show Transpose", max_col_width = None, debug_only = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "show_transpose")
 
         # check empty
@@ -1430,7 +1433,7 @@ class TSV:
         # return self
         return self
 
-    def show(self, n = 100, title = None, max_col_width = 40, debug_only = False, dmsg = ""):
+    def show(self, n = 100, title = "Show", max_col_width = 40, debug_only = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "show")
 
         # check empty
@@ -1449,6 +1452,27 @@ class TSV:
             .__show_title_footer__(title)
 
         # return the original tsv
+        return self
+
+    def show_sample(self, n = 100, title = None, max_col_width = 40, debug_only = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "show_sample")
+
+        # check empty
+        if (self.has_empty_header()):
+            return self
+
+        # check debug_only flag
+        if (debug_only == True and utils.is_debug() == False):
+            return self
+
+        # show topn
+        self \
+            .__show_title_header__(title) \
+            .sample_n(n, dmsg = dmsg) \
+            .__show_topn__(max_col_width) \
+            .__show_title_footer__(title)
+
+        # return
         return self
 
     def __show_title_header__(self, title):
@@ -1679,7 +1703,7 @@ class TSV:
         return self.sort(cols = cols, reverse = True, reorder = reorder, all_numeric = all_numeric, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
     # reorder the specific columns
-    def reorder(self, cols, use_existing_order = True, dmsg = ""):
+    def reorder(self, cols, use_existing_order = False, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             if (cols is None):
@@ -1983,12 +2007,18 @@ class TSV:
             dmsg = utils.extend_inherit_message(dmsg, "add_const_if_missing")
             return self.add_const(col, value, dmsg = dmsg)
 
-    def add_empty_cols_if_missing(self, col_or_cols, dmsg = ""):
+    def add_empty_cols_if_missing(self, col_or_cols, prefix = None, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "add_empty_cols_if_missing")
+
         # check if this is a single col name or an array
         is_array = utils.is_array_of_string_values(col_or_cols)
 
         # convert to array format
         cols = col_or_cols if (is_array == True) else [col_or_cols]
+
+        # check for prefix
+        if (prefix is not None):
+            cols = list(["{}:{}".format(prefix, t) for t in cols])
 
         # check empty
         if (self.has_empty_header()):
@@ -2021,7 +2051,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("add_empty_cols_if_missing: [1/1] calling function", dmsg, counter, len(self.get_data()))
+            utils.report_progress("[1/1] calling function", dmsg, counter, len(self.get_data()))
 
             # create new line
             new_line = "\t".join([line, empty_row])
@@ -2033,11 +2063,11 @@ class TSV:
     def add_row(self, row_fields):
         # check empty
         if (self.has_empty_header()):
-            raise Exception("add_row: empty tsv")
+            raise Exception("{}: add_row: empty tsv".format(dmsg))
 
         # validation
         if (len(row_fields) != self.num_cols()):
-            raise Exception("Number of fields is not matching with number of columns: {} != {}".format(len(row_fields), self.num_cols()))
+            raise Exception("{}: Number of fields is not matching with number of columns: {} != {}".format(dmsg, len(row_fields), self.num_cols()))
 
         # create new row
         new_line = "\t".join(row_fields)
@@ -2723,32 +2753,35 @@ class TSV:
         return self.__join__(that, lkeys, rkeys, join_type = "left", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, num_par = num_par, dmsg = dmsg)
 
     def right_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, num_par = 0, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "right_join")
+
         # check for empty
         if (self.has_empty_header()):
             utils.warn("right_join: empty this tsv")
             return that
 
         # return
-        dmsg = utils.extend_inherit_message(dmsg, "right_join")
         return self.__join__(that, lkeys, rkeys, join_type = "right", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, num_par = num_par, dmsg = dmsg)
 
     def inner_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, num_par = 0, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "inner_join")
+
         # check for empty
         if (self.has_empty_header()):
             raise Exception("inner_join: empty this tsv")
 
         # return
-        dmsg = utils.extend_inherit_message(dmsg, "inner_join")
         return self.__join__(that, lkeys, rkeys, join_type = "inner", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, num_par = num_par, dmsg = dmsg)
 
     def outer_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, num_par = 0, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "outer_join")
+
         # check for empty
         if (self.has_empty_header()):
             utils.warn("outer_join: empty this tsv")
             return that
 
         # return
-        dmsg = utils.extend_inherit_message(dmsg, "outer_join")
         return self.__join__(that, lkeys, rkeys, join_type = "outer", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, num_par = num_par, dmsg = dmsg)
 
     def join(self, *args, **kwargs):
@@ -2757,8 +2790,10 @@ class TSV:
 
     # primary join method. Use the other inner, left, right versions and not this directly. TODO: not efficient
     def __join__(self, that, lkeys, rkeys = None, join_type = "inner", lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, num_par = 0, dmsg = ""):
-        utils.warn_once("__join__: this method is not fully tested and also is very inefficient. Dont use for more than 10000 rows data")
-        utils.warn_once("__join__: split_threshold parameter is replaced with num_par")
+        dmsg = utils.extend_inherit_message(dmsg, "__join__")
+
+        utils.warn_once("{}: this method is not fully tested and also is very inefficient. Dont use for more than 10000 rows data".format(dmsg))
+        utils.warn_once("{}: split_threshold parameter is replaced with num_par".format(dmsg))
 
         # matching
         lkeys = self.__get_matching_cols__(lkeys)
@@ -2794,7 +2829,7 @@ class TSV:
             raise Exception("Length mismatch in lkeys and rkeys: {}, {}".format(lkeys, rkeys))
 
         # print stats for left and right side
-        utils.debug("__join__: left num_rows: {}, right num_rows: {}".format(self.num_rows(), that.num_rows()))
+        utils.debug("{}: left num_rows: {}, right num_rows: {}".format(dmsg, self.num_rows(), that.num_rows()))
 
         # Check for num_par. TODO: Experimental
         if (num_par > 0):
@@ -2825,7 +2860,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("join: [1/3] building map for left side", dmsg, counter, len(self.get_data()))
+            utils.report_progress("[1/3] building map for left side", dmsg, counter, len(self.get_data()))
 
             # parse data
             fields = line.split("\t")
@@ -2850,7 +2885,7 @@ class TSV:
         for line in that.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("join: [2/3] building map for right side", dmsg, counter, len(that.get_data()))
+            utils.report_progress("[2/3] building map for right side", dmsg, counter, len(that.get_data()))
 
             # parse data
             fields = line.split("\t")
@@ -2887,7 +2922,7 @@ class TSV:
         for rkey_index in range(len(rkeys)):
             rkey = rkeys[rkey_index]
             if (rkey not in new_header_fields):
-                utils.warn_once("rkey has a different name: {}".format(rkey))
+                utils.debug_once("rkey has a different name: {}".format(rkey))
                 new_header_copy_fields_map[lkeys[rkey_index]] = rkey
 
         # add the left side columns
@@ -2939,7 +2974,7 @@ class TSV:
         for lvkey in lvkeys.keys():
             # report progress
             counter = counter + 1
-            utils.report_progress("join: [3/3] join the two groups", dmsg, counter, len(self.get_data()))
+            utils.report_progress("[3/3] join the two groups", dmsg, counter, len(self.get_data()))
 
             # get the values
             lvals2_arr = lvkeys[lvkey]
@@ -3210,7 +3245,7 @@ class TSV:
         for rkey_index in range(len(rkeys)):
             rkey = rkeys[rkey_index]
             if (rkey not in new_header_fields):
-                utils.warn_once("rkey has a different name: {}".format(rkey))
+                utils.debug_once("rkey has a different name: {}".format(rkey))
                 new_header_copy_fields_map[lkeys[rkey_index]] = rkey
 
         # add the left side columns
@@ -4277,12 +4312,31 @@ class TSV:
         # return self
         return self
 
-    def show_group_count(self, col_or_cols, n = 100, max_col_width = 40, title = "Group Count", dmsg = ""):
+    def show_group_count(self, col_or_cols, n = 100, max_col_width = 40, title = "Group Count", sort_by_key = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "show_group_count")
 
         # call show transpose after custom func
+        result = self \
+            .group_count(col_or_cols, dmsg = dmsg)
+
+        # sorting
+        if (sort_by_key == True):
+            result = result \
+                .sort(col_or_cols)
+
+        # show
+        result \
+            .show(n = n, title = title, max_col_width = max_col_width, dmsg = dmsg)
+
+        # return self
+        return self
+
+    def show_select_func(self, n, title, col_or_cols, max_col_width = 40, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "show_select_func")
+
+        # show
         self \
-            .group_count(col_or_cols, dmsg = dmsg) \
+            .select(col_or_cols, dmsg = dmsg) \
             .show(n = n, title = title, max_col_width = max_col_width, dmsg = dmsg)
 
         # return self

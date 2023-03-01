@@ -226,7 +226,7 @@ def parse_encoded_json(s):
         return {}
 
 def encode_json_obj(json_obj):
-    return utl_encode(json.dumps(json_obj))
+    return url_encode(json.dumps(json_obj))
 
 # TODO: make it more robust. The object key doesnt have / prefix or suffix
 def split_s3_path(path):
