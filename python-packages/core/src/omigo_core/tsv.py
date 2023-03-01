@@ -1348,6 +1348,8 @@ class TSV:
 
     def to_maps(self):
         mps = []
+
+        # create a map for each row
         for line in self.get_data():
             fields = line.split("\t")
             mp = {}
@@ -1355,6 +1357,7 @@ class TSV:
                 mp[self.header_fields[i]] = str(fields[i])
             mps.append(mp)
 
+        # return
         return mps
 
     def __convert_to_numeric__(self, x, precision = 6):
@@ -1700,7 +1703,7 @@ class TSV:
         return self.sort(cols = cols, reverse = True, reorder = reorder, all_numeric = all_numeric, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
     # reorder the specific columns
-    def reorder(self, cols, use_existing_order = True, dmsg = ""):
+    def reorder(self, cols, use_existing_order = False, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             if (cols is None):
@@ -2919,7 +2922,7 @@ class TSV:
         for rkey_index in range(len(rkeys)):
             rkey = rkeys[rkey_index]
             if (rkey not in new_header_fields):
-                utils.warn_once("rkey has a different name: {}".format(rkey))
+                utils.debug_once("rkey has a different name: {}".format(rkey))
                 new_header_copy_fields_map[lkeys[rkey_index]] = rkey
 
         # add the left side columns
@@ -3242,7 +3245,7 @@ class TSV:
         for rkey_index in range(len(rkeys)):
             rkey = rkeys[rkey_index]
             if (rkey not in new_header_fields):
-                utils.warn_once("rkey has a different name: {}".format(rkey))
+                utils.debug_once("rkey has a different name: {}".format(rkey))
                 new_header_copy_fields_map[lkeys[rkey_index]] = rkey
 
         # add the left side columns
@@ -4309,12 +4312,31 @@ class TSV:
         # return self
         return self
 
-    def show_group_count(self, col_or_cols, n = 100, max_col_width = 40, title = "Group Count", dmsg = ""):
+    def show_group_count(self, col_or_cols, n = 100, max_col_width = 40, title = "Group Count", sort_by_key = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "show_group_count")
 
         # call show transpose after custom func
+        result = self \
+            .group_count(col_or_cols, dmsg = dmsg)
+
+        # sorting
+        if (sort_by_key == True):
+            result = result \
+                .sort(col_or_cols)
+
+        # show
+        result \
+            .show(n = n, title = title, max_col_width = max_col_width, dmsg = dmsg)
+
+        # return self
+        return self
+
+    def show_select_func(self, n, title, col_or_cols, max_col_width = 40, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "show_select_func")
+
+        # show
         self \
-            .group_count(col_or_cols, dmsg = dmsg) \
+            .select(col_or_cols, dmsg = dmsg) \
             .show(n = n, title = title, max_col_width = max_col_width, dmsg = dmsg)
 
         # return self
