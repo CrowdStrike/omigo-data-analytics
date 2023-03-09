@@ -40,8 +40,9 @@ def merge(tsv_list, def_val_map = None):
     # warn if a huge tsv is found 
     for i in range(len(tsv_list)):
         if (tsv_list[i].size_in_gb() >= 1):
-            utils.warn("merge: Found a very big tsv: {} / {}, num_rows: {}, size (GB): {}. Displaying the first row".format(i + 1, len(tsv_list), tsv_list[i].num_rows(), tsv_list[i].size_in_gb()))
-            tsv_list[i].show_transpose(1, title = "merge: big tsv")
+            utils.warn("merge: Found a very big tsv: {} / {}, num_rows: {}, size (GB): {}. max_size_cols_stats: {}".format(
+                i + 1, len(tsv_list), tsv_list[i].num_rows(), tsv_list[i].size_in_gb(), str(tsv_list[i].get_max_size_cols_stats())))
+            # tsv_list[i].show_transpose(1, title = "merge: big tsv")
 
     # check for valid headers
     header = tsv_list[0].get_header()
@@ -533,15 +534,17 @@ def read_url_response(url, query_params = {}, headers = {}, body = None, usernam
 
     # check for error codes
     if (response.status_code != 200):
-        if (response.status_code == 429):
+        # check for website saying too many requests (429) or service unavailable (503)
+        if (response.status_code == 429 or response.status_code == 503):
             # too many requests. wait and try again.
             if (num_retries > 0):
-                utils.debug("read_url_response: url: {}, query_params: {}, got 429. Attempts remaining: {}. Retrying after sleeping for {} seconds".format(url, query_params, num_retries, retry_sleep_sec))
+                utils.debug("read_url_response: url: {}, query_params: {}, got status: {}. Attempts remaining: {}. Retrying after sleeping for {} seconds".format(url, query_params,
+                    response.status_code, num_retries, retry_sleep_sec))
                 time.sleep(retry_sleep_sec)
                 return read_url_response(url, query_params = query_params, headers = headers, body = body, username = username, password = password, timeout_sec = timeout_sec, verify = verify,
                     num_retries = num_retries - 1, retry_sleep_sec = retry_sleep_sec * 2)
             else:
-                utils.debug("read_url_response: url: {}, getting 429 too many requests. Use num_retries parameter to for backoff and retry.".format(url))
+                utils.debug("read_url_response: url: {}, getting 429 too many requests or 5XX error. Use num_retries parameter to for backoff and retry.".format(url))
                 return "", response.status_code, response.reason
         else:
             return "", response.status_code, response.reason
