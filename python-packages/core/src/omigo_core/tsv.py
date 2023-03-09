@@ -1669,6 +1669,7 @@ class TSV:
 
         return tuple(values)
 
+    # TODO: this api needs to remove the auto detection of all_numeric flag
     def sort(self, cols = None, reverse = False, reorder = False, all_numeric = None, ignore_if_missing = False, dmsg = ""):
         # check empty
         if (self.has_empty_header() and cols is None):
