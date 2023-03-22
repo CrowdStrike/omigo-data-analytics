@@ -31,10 +31,10 @@ OMIGO_CODE_TODO_WARNING = "OMIGO_CODE_TODO_WARNING"
 OMIGO_BIG_TSV_WARN_SIZE_THRESH = "OMIGO_BIG_TSV_WARN_SIZE_THRESH"
 
 def is_critical():
-    return str(os.environ.get(OMIGO_CRITICAL, "0")) == "1"
+    return str(os.environ.get(OMIGO_CRITICAL, "1")) == "1"
 
 def is_error():
-    return str(os.environ.get(OMIGO_ERROR, "0")) == "1"
+    return str(os.environ.get(OMIGO_ERROR, "1")) == "1"
 
 def is_warn():
     return str(os.environ.get(OMIGO_WARN, "1")) == "1"

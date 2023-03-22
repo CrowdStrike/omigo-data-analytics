@@ -4352,7 +4352,7 @@ class TSV:
         # return self
         return self
 
-    def show_group_count(self, col_or_cols, n = 100, max_col_width = 40, title = "Group Count", sort_by_key = False, dmsg = ""):
+    def show_group_count(self, col_or_cols, n = 20, title = "Group Count", max_col_width = 40, sort_by_key = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "show_group_count")
 
         # call show transpose after custom func
@@ -4371,7 +4371,7 @@ class TSV:
         # return self
         return self
 
-    def show_select_func(self, n, title, col_or_cols, max_col_width = 40, dmsg = ""):
+    def show_select_func(self, col_or_cols, n = 20, title = "Group Count", max_col_width = 40, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "show_select_func")
 
         # show
