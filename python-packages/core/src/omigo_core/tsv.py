@@ -1061,7 +1061,7 @@ class TSV:
 
         # check empty
         if (self.has_empty_header()):
-            raise Exception("transform: empty tsv")
+            raise Exception("transform: empty header tsv")
 
         # resolve to matching_cols
         matching_cols = self.__get_matching_cols__(cols)

@@ -194,7 +194,7 @@ def __call_web_service_exp_func__(xtsv_timeout_sec, xtsv_verify, url, query_para
 
             # some debugging
             if (str(resp_status_code).startswith("5")):
-                utils.error("__call_web_service_exp_func_inner__: Got 5xx status code: mp: {}".format(mp))
+                utils.error("__call_web_service_exp_func_inner__: Got status code: {}: mp: {}".format(resp_status_code, mp))
         else:
             # for some reason, this row is not meant to be executed. Ignore.
             resp_str, resp_status_code, resp_err = "", 0, ""
