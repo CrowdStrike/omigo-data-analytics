@@ -20,7 +20,7 @@ def __default_dot_style_func__(mp):
     return props
 
 # TODO: Use graphviz apis instead of constructing strings
-def __plot_graph__(vertex_map, edges_maps, node_props, edge_props, vertex_id_col, edge_src_col, edge_dest_col, vertex_display_id_col, style_func, max_len):
+def __get_graphviz_data__(vertex_map, edges_maps, node_props, edge_props, vertex_id_col, edge_src_col, edge_dest_col, vertex_display_id_col, style_func, max_len):
     # check for custom display
     if (style_func is None):
         style_func = __default_dot_style_func__
@@ -125,9 +125,9 @@ def __plot_graph__(vertex_map, edges_maps, node_props, edge_props, vertex_id_col
     utils.debug(digraph_str)
 
     # return
-    return graphviz.Source(digraph_str)
+    return digraph_str
 
-def plot_graph(vtsv, etsv, vertex_id_col, src_edge_col, dest_edge_col, vertex_display_id_col = None, node_props = None, edge_props = None, style_func = None,
+def get_graphviz_data(vtsv, etsv, vertex_id_col, src_edge_col, dest_edge_col, vertex_display_id_col = None, node_props = None, edge_props = None, style_func = None,
     max_len = None, create_missing_vertices = False):
 
     # default for vertex display
@@ -183,5 +183,14 @@ def plot_graph(vtsv, etsv, vertex_id_col, src_edge_col, dest_edge_col, vertex_di
         edges_maps[(mp[src_edge_col], mp[dest_edge_col])] = mp
 
     # get the graphviz output
-    return __plot_graph__(vertex_map, edges_maps, node_props, edge_props, vertex_id_col, src_edge_col, dest_edge_col, vertex_display_id_col, style_func, max_len)
+    return __get_graphviz_data__(vertex_map, edges_maps, node_props, edge_props, vertex_id_col, src_edge_col, dest_edge_col, vertex_display_id_col, style_func, max_len)
+
+def plot_graph(vtsv, etsv, vertex_id_col, src_edge_col, dest_edge_col, vertex_display_id_col = None, node_props = None, edge_props = None, style_func = None,
+    max_len = None, create_missing_vertices = False):
+
+    digraph_str = get_graphviz_data(vtsv, etsv, vertex_id_col, src_edge_col, dest_edge_col, vertex_display_id_col = vertex_display_id_col, node_props = node_props,
+        edge_props = edge_props, style_func = style_func, max_len = max_len, create_missing_vertices = create_missing_vertices)
+
+    # return
+    return graphviz.Source(digraph_str)
 

@@ -58,13 +58,13 @@ class TSV:
     # check data format
     def validate(self):
         # data validation
-        count = 0
+        counter = 0
         for line in self.get_data():
-            count = count + 1
+            counter = counter + 1
             fields = line.split("\t")
             if (len(fields) != len(self.get_header_fields())):
                 raise Exception("Header length is not matching with data length. position: {}, len(header): {}, header: {}, len(fields): {}, fields: {}".format(
-                    count, len(self.get_header_fields()), self.header_fields, len(fields), str(fields)))
+                    counter, len(self.get_header_fields()), self.header_fields, len(fields), str(fields)))
 
         # return
         return self
@@ -92,7 +92,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("select: [1/1] selecting columns", dmsg, counter, len(self.get_data()))
+            utils.report_progress("select: [1/1] selecting columns", dmsg, counter, self.num_rows())
 
             # get fields
             fields = line.split("\t")
@@ -356,7 +356,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("[1/1] calling function", dmsg, counter, len(self.get_data()))
+            utils.report_progress("[1/1] calling function", dmsg, counter, self.num_rows())
 
             # check if the line doesnt exist already
             if (line not in key_map.keys()):
@@ -482,7 +482,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("window_aggregate: [1/1] calling function", dmsg, counter, len(self.get_data()))
+            utils.report_progress("window_aggregate: [1/1] calling function", dmsg, counter, self.num_rows())
 
             # parse data
             fields = line.split("\t")
@@ -539,7 +539,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("group_by_key: [1/3] grouping: progress", dmsg, counter, len(self.get_data()))
+            utils.report_progress("group_by_key: [1/3] grouping: progress", dmsg, counter, self.num_rows())
 
             # parse data
             fields = line.split("\t")
@@ -614,7 +614,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("group_by_key: [3/3] generating data", dmsg, counter, len(self.get_data()))
+            utils.report_progress("group_by_key: [3/3] generating data", dmsg, counter, self.num_rows())
 
             # process data
             fields = line.split("\t")
@@ -824,7 +824,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("[1/2] building groups", dmsg, counter, len(self.get_data()))
+            utils.report_progress("[1/2] building groups", dmsg, counter, self.num_rows())
 
             # process data
             fields = line.split("\t")
@@ -860,7 +860,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("[2/2] calling function", dmsg, counter, len(self.get_data()))
+            utils.report_progress("[2/2] calling function", dmsg, counter, self.num_rows())
 
             # data processing
             fields = line.split("\t")
@@ -894,7 +894,7 @@ class TSV:
         # return
         return result_xtsv
 
-    def filter(self, cols, func, include_cond = True, ignore_if_missing = False, dmsg = ""):
+    def filter(self, cols, func, include_cond = True, use_array_notation = False, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "filter")
 
         # check empty
@@ -920,36 +920,51 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("[1/1] calling function", dmsg, counter, len(self.get_data()))
+            utils.report_progress("[1/1] calling function", dmsg, counter, self.num_rows())
 
             fields = line.split("\t")
             col_values = []
             for index in indexes:
                 col_values.append(fields[index])
 
-            # switch case for different number of inputs
-            if (num_cols == 1):
-                result = func(col_values[0])
-            elif (num_cols == 2):
-                result = func(col_values[0], col_values[1])
-            elif (num_cols == 3):
-                result = func(col_values[0], col_values[1], col_values[2])
-            elif (num_cols == 4):
-                result = func(col_values[0], col_values[1], col_values[2], col_values[3])
-            elif (num_cols == 5):
-                result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4])
-            elif (num_cols == 6):
-                result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4], col_values[5])
-            elif (num_cols == 7):
-                result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4], col_values[5], col_values[6])
-            elif (num_cols == 8):
-                result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4], col_values[5], col_values[6], col_values[7])
-            elif (num_cols == 9):
-                result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4], col_values[5], col_values[6], col_values[7], col_values[8])
-            elif (num_cols == 10):
-                result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4], col_values[5], col_values[6], col_values[7], col_values[8], col_values[9])
+            # use_array_notation
+            if (use_array_notation == False):
+                # switch case for different number of inputs
+                if (num_cols == 1):
+                    result = func(col_values[0])
+                elif (num_cols == 2):
+                    result = func(col_values[0], col_values[1])
+                elif (num_cols == 3):
+                    result = func(col_values[0], col_values[1], col_values[2])
+                elif (num_cols == 4):
+                    result = func(col_values[0], col_values[1], col_values[2], col_values[3])
+                elif (num_cols == 5):
+                    result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4])
+                elif (num_cols == 6):
+                    result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4], col_values[5])
+                elif (num_cols == 7):
+                    result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4], col_values[5], col_values[6])
+                elif (num_cols == 8):
+                    result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4], col_values[5], col_values[6], col_values[7])
+                elif (num_cols == 9):
+                    result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4], col_values[5], col_values[6], col_values[7], col_values[8])
+                elif (num_cols == 10):
+                    result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4], col_values[5], col_values[6], col_values[7], col_values[8], col_values[9])
+                elif (num_cols == 11):
+                    result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4], col_values[5], col_values[6], col_values[7], col_values[8], col_values[9], col_values[10])
+                elif (num_cols == 12):
+                    result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4], col_values[5], col_values[6], col_values[7], col_values[8], col_values[9], col_values[10], col_values[11])
+                elif (num_cols == 13):
+                    result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4], col_values[5], col_values[6], col_values[7], col_values[8], col_values[9], col_values[10], col_values[11], col_values[12])
+                elif (num_cols == 14):
+                    result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4], col_values[5], col_values[6], col_values[7], col_values[8], col_values[9], col_values[10], col_values[11], col_values[12], col_values[13])
+                elif (num_cols == 15):
+                    result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4], col_values[5], col_values[6], col_values[7], col_values[8], col_values[9], col_values[10], col_values[11], col_values[12], col_values[13], col_values[14])
+                else:
+                    raise Exception("Number of columns is not supported beyond 10: {}".format(str(cols)))
             else:
-                raise Exception("Number of columns is not supported beyond 10: {}".format(str(cols)))
+                result = func(col_values)
+
 
             if (result == include_cond):
                 new_data.append(line)
@@ -1046,7 +1061,7 @@ class TSV:
 
         # check empty
         if (self.has_empty_header()):
-            raise Exception("transform: empty tsv")
+            raise Exception("transform: empty header tsv")
 
         # resolve to matching_cols
         matching_cols = self.__get_matching_cols__(cols)
@@ -1094,7 +1109,7 @@ class TSV:
         # iterate over data
         for line in self.get_data():
             counter = counter + 1
-            utils.report_progress("[1/1] calling function", dmsg, counter, len(self.get_data()))
+            utils.report_progress("[1/1] calling function", dmsg, counter, self.num_rows())
 
             # get fields
             fields = line.split("\t")
@@ -1136,7 +1151,7 @@ class TSV:
                 elif (num_cols == 14):
                     result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4], col_values[5], col_values[6], col_values[7], col_values[8], col_values[9], col_values[10], col_values[11], col_values[12], col_values[13])
                 elif (num_cols == 15):
-                    result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4], col_values[5], col_values[6], col_values[7], col_values[8], col_values[9], col_values[10], col_values[11], col_values[12], col_values[13], col_values[15])
+                    result = func(col_values[0], col_values[1], col_values[2], col_values[3], col_values[4], col_values[5], col_values[6], col_values[7], col_values[8], col_values[9], col_values[10], col_values[11], col_values[12], col_values[13], col_values[14])
                 else:
                     raise Exception("Number of columns is not supported beyond 15. Probably try to use use_array_notation approach: {}".format(str(cols)))
             else:
@@ -1219,7 +1234,7 @@ class TSV:
         counter = 0
         for line in self.get_data():
             counter = counter + 1
-            utils.report_progress("[1/1] calling function", dmsg, counter, len(self.get_data()))
+            utils.report_progress("[1/1] calling function", dmsg, counter, self.num_rows())
 
             fields = line.split("\t")
             new_fields = []
@@ -1397,7 +1412,7 @@ class TSV:
         counter = start - 1 
         for line in self.get_data():
             counter = counter + 1
-            utils.report_progress("add_seq_num: [1/1] adding new column", dmsg, counter, len(self.get_data()))
+            utils.report_progress("add_seq_num: [1/1] adding new column", dmsg, counter, self.num_rows())
             new_data.append(str(counter) + "\t" + line)
 
         # return
@@ -1654,6 +1669,7 @@ class TSV:
 
         return tuple(values)
 
+    # TODO: this api needs to remove the auto detection of all_numeric flag
     def sort(self, cols = None, reverse = False, reorder = False, all_numeric = None, ignore_if_missing = False, dmsg = ""):
         # check empty
         if (self.has_empty_header() and cols is None):
@@ -1701,6 +1717,14 @@ class TSV:
     def reverse_sort(self, cols = None, reorder = False, all_numeric = None, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "reverse_sort")
         return self.sort(cols = cols, reverse = True, reorder = reorder, all_numeric = all_numeric, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
+
+    def numerical_sort(self, cols = None, reorder = False, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "numerical_sort")
+        return self.sort(cols = cols, reorder = reorder, all_numeric = True, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
+
+    def reverse_numerical_sort(self, cols = None, reorder = False, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "reverse_numerical_sort")
+        return self.reverse_sort(cols = cols, reorder = reorder, all_numeric = True, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
     # reorder the specific columns
     def reorder(self, cols, use_existing_order = False, dmsg = ""):
@@ -2051,7 +2075,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("[1/1] calling function", dmsg, counter, len(self.get_data()))
+            utils.report_progress("[1/1] calling function", dmsg, counter, self.num_rows())
 
             # create new line
             new_line = "\t".join([line, empty_row])
@@ -2337,7 +2361,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("sample: [1/1] calling function", dmsg, counter, len(self.get_data()))
+            utils.report_progress("sample: [1/1] calling function", dmsg, counter, self.num_rows())
 
             # this random number is only for basic sampling and not for doing anything sensitive.
             if (random.random() <= sampling_ratio):  # nosec
@@ -2365,8 +2389,12 @@ class TSV:
             return self
 
         # validation
-        if (n < 1):
-            raise Exception("n cant be negative or less than 1: {}".format(n))
+        if (n < 0):
+            raise Exception("n cant be negative: {}".format(n))
+
+        # check if n == 0
+        if (n == 0):
+            return self.take(0)
 
         # set seed
         random.seed(seed)
@@ -2393,6 +2421,16 @@ class TSV:
                 .sample_n(limit, seed = seed, dmsg = dmsg)
         else:
             return self
+
+    def sample_group_by_topk_if_reached_limit(self, limit, *args, **kwargs):
+        utils.warn_once("sample_group_by_topk_if_reached_limit: this api name might change")
+
+        # check if sampling is needed
+        if (self.num_rows() > limit):
+            return self \
+                .sample_group_by_topk(*args, **kwargs)
+        else:
+            return self 
 
     def warn_if_limit_reached(self, limit, msg = None, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "warn_if_limit_reached")
@@ -2453,7 +2491,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("sample_class: [1/1] calling function", dmsg, counter, len(self.get_data()))
+            utils.report_progress("sample_class: [1/1] calling function", dmsg, counter, self.num_rows())
 
             # get fields
             fields = line.split("\t")
@@ -2705,7 +2743,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("sample_group_by_key: [1/1] calling function", dmsg, counter, len(self.get_data()))
+            utils.report_progress("sample_group_by_key: [1/1] calling function", dmsg, counter, self.num_rows())
 
             keys = []
             fields = line.split("\t")
@@ -2860,7 +2898,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("[1/3] building map for left side", dmsg, counter, len(self.get_data()))
+            utils.report_progress("[1/3] building map for left side", dmsg, counter, self.num_rows())
 
             # parse data
             fields = line.split("\t")
@@ -3101,7 +3139,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("natural_join: [1/1] adding values from hashmap", dmsg, counter, len(self.get_data()))
+            utils.report_progress("natural_join: [1/1] adding values from hashmap", dmsg, counter, self.num_rows())
 
             # split line and get fields
             fields = line.split("\t")
@@ -3290,7 +3328,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("__map_join__: join the two groups", dmsg, counter, len(self.get_data()))
+            utils.report_progress("__map_join__: join the two groups", dmsg, counter, self.num_rows())
 
             # get fields
             fields = line.split("\t")
@@ -3387,7 +3425,7 @@ class TSV:
         for i in range(len(self.get_data())):
             # report progress
             counter = counter + 1
-            utils.report_progress("__split_batches_randomly__: [1/1] assigning batch index", dmsg, counter, len(self.get_data()))
+            utils.report_progress("__split_batches_randomly__: [1/1] assigning batch index", dmsg, counter, self.num_rows())
 
             # check if original order of data needs to be preserved
             if (preserve_order == True):
@@ -3597,7 +3635,7 @@ class TSV:
         for line in self.get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("[1/2] calling explode function", dmsg, counter, len(self.get_data()))
+            utils.report_progress("[1/2] calling explode function", dmsg, counter, self.num_rows())
 
             # process data
             fields = line.split("\t")
@@ -3657,7 +3695,7 @@ class TSV:
         for i in range(len(self.get_data())):
             # report progress
             counter = counter + 1
-            utils.report_progress("[2/2] generating data", dmsg, counter, len(self.get_data()))
+            utils.report_progress("[2/2] generating data", dmsg, counter, self.num_rows())
 
             # process data
             line = self.data[i]
@@ -4261,6 +4299,8 @@ class TSV:
         raise Exception("Not implemented yet")
 
     def get_col_index(self, col):
+        utils.warn("Use get_column_index and remove this function")
+
         # check empty
         if (self.has_empty_header()):
             raise Exception("get_col_index: empty tsv")
@@ -4312,7 +4352,7 @@ class TSV:
         # return self
         return self
 
-    def show_group_count(self, col_or_cols, n = 100, max_col_width = 40, title = "Group Count", sort_by_key = False, dmsg = ""):
+    def show_group_count(self, col_or_cols, n = 20, title = "Group Count", max_col_width = 40, sort_by_key = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "show_group_count")
 
         # call show transpose after custom func
@@ -4331,7 +4371,7 @@ class TSV:
         # return self
         return self
 
-    def show_select_func(self, n, title, col_or_cols, max_col_width = 40, dmsg = ""):
+    def show_select_func(self, col_or_cols, n = 20, title = "Group Count", max_col_width = 40, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "show_select_func")
 
         # show
@@ -4503,6 +4543,40 @@ class TSV:
         utils.info(msg2)
         return self
 
+    # get top k columns by byte size
+    def get_max_size_cols_stats(self, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "get_max_size_cols_stats")
+
+        # create array to hold sizes
+        total_sizes = list([0 for c in self.get_columns()])
+ 
+        # data validation
+        counter = 0
+        for line in self.get_data():
+            counter = counter + 1
+            utils.report_progress("[1/1] selecting columns", dmsg, counter, self.num_rows())
+            fields = line.split("\t")
+            for i in range(len(fields)):
+                total_sizes[i] = total_sizes[i] + len(fields[i])
+
+        # find the max size
+        max_value = max(total_sizes)
+
+        # find the columns with the max size
+        max_value_indexes = list(filter(lambda i: total_sizes[i] == max_value, range(len(total_sizes))))
+        
+        # create map with the list of indexes and their size, relative size
+        mps = []
+        for i in max_value_indexes:
+            mp = {}
+            mp["col"] = self.get_columns()[i]
+            mp["size_in_bytes"] = max_value
+            mp["relative_size"] = "{0:.4f}".format(max_value / sum(total_sizes))
+            mps.append(mp)
+
+        # return
+        return mps
+                
     # some methods for effects
     def sleep(self, secs):
         time.sleep(secs)

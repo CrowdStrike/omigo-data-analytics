@@ -19,6 +19,10 @@ def parse_image_file_base_name(x):
 def get_len(vs):
     return str(len(vs))
 
+def get_non_empty_len(vs):
+    vs = list(filter(lambda t: len(t.strip()) > 0, vs))
+    return str(len(vs))
+
 def uniq_len(vs):
     vs2 = set()
     for t in vs:

@@ -18,35 +18,53 @@ WARN_MSG_CACHE = {}
 DEBUG_MSG_CACHE = {}
 TRACE_MSG_CACHE = {}
 
+# some env variables
+OMIGO_CRITICAL = "OMIGO_CRITICAL"
+OMIGO_ERROR = "OMIGO_ERROR"
+OMIGO_WARN = "OMIGO_WARN"
+OMIGO_INFO = "OMIGO_INFO"
+OMIGO_DEBUG = "OMIGO_DEBUG"
+OMIGO_TRACE = "OMIGO_TRACE"
+OMIGO_DEBUG_REPORT_PROGRESS_PERC = "OMIGO_DEBUG_REPORT_PROGRESS_PERC"
+OMIGO_DEBUG_REPORT_PROGRESS_MIN_THRESH = "OMIGO_DEBUG_REPORT_PROGRESS_MIN_THRESH"
+OMIGO_CODE_TODO_WARNING = "OMIGO_CODE_TODO_WARNING"
+OMIGO_BIG_TSV_WARN_SIZE_THRESH = "OMIGO_BIG_TSV_WARN_SIZE_THRESH"
+
 def is_critical():
-    return str(os.environ.get("OMIGO_CRITICAL", "0")) == "1"
+    return str(os.environ.get(OMIGO_CRITICAL, "1")) == "1"
 
 def is_error():
-    return str(os.environ.get("OMIGO_ERROR", "0")) == "1"
+    return str(os.environ.get(OMIGO_ERROR, "1")) == "1"
 
 def is_warn():
-    return str(os.environ.get("OMIGO_WARN", "1")) == "1"
+    return str(os.environ.get(OMIGO_WARN, "1")) == "1"
 
 def is_info():
-    return str(os.environ.get("OMIGO_INFO", "1")) == "1"
+    return str(os.environ.get(OMIGO_INFO, "1")) == "1"
 
 def is_debug():
-    return str(os.environ.get("OMIGO_DEBUG", "0")) == "1"
+    return str(os.environ.get(OMIGO_DEBUG, "0")) == "1"
 
 def is_trace():
-    return str(os.environ.get("OMIGO_TRACE", "0")) == "1"
+    return str(os.environ.get(OMIGO_TRACE, "0")) == "1"
 
 def get_report_progress():
-    return float(os.environ.get("OMIGO_DEBUG_REPORT_PROGRESS_PERC", "0"))
+    return float(os.environ.get(OMIGO_DEBUG_REPORT_PROGRESS_PERC, "0"))
 
 def get_report_progress_min_thresh():
-    return float(os.environ.get("OMIGO_DEBUG_REPORT_PROGRESS_MIN_THRESH", "100000"))
+    return float(os.environ.get(OMIGO_DEBUG_REPORT_PROGRESS_MIN_THRESH, "100000"))
 
 def set_report_progress_perc(perc):
-    os.environ["OMIGO_DEBUG_REPORT_PROGRESS_PERC"] = str(perc)
+    os.environ[OMIGO_DEBUG_REPORT_PROGRESS_PERC] = str(perc)
 
 def set_report_progress_min_thresh(thresh):
-    os.environ["OMIGO_DEBUG_REPORT_PROGRESS_MIN_THRESH"] = str(thresh)
+    os.environ[OMIGO_DEBUG_REPORT_PROGRESS_MIN_THRESH] = str(thresh)
+
+def get_big_tsv_warn_size_thresh():
+    return float(os.environ.get(OMIGO_BIG_TSV_WARN_SIZE_THRESH, "1000000000"))
+
+def set_big_tsv_warn_size_thresh(thresh):
+    os.environ[OMIGO_BIG_TSV_WARN_SIZE_THRESH] = str(thresh)
 
 def trace(msg):
     if (is_trace()):
@@ -129,40 +147,40 @@ def error_once(msg):
         trace(msg)
 
 def enable_critical_mode():
-    os.environ["OMIGO_CRITICAL"] = "1"
+    os.environ[OMIGO_CRITICAL] = "1"
 
 def enable_error_mode():
-    os.environ["OMIGO_ERROR"] = "1"
+    os.environ[OMIGO_ERROR] = "1"
 
 def enable_warn_mode():
-    os.environ["OMIGO_WARN"] = "1"
+    os.environ[OMIGO_WARN] = "1"
 
 def enable_info_mode():
-    os.environ["OMIGO_INFO"] = "1"
+    os.environ[OMIGO_INFO] = "1"
 
 def enable_debug_mode():
-    os.environ["OMIGO_DEBUG"] = "1"
+    os.environ[OMIGO_DEBUG] = "1"
 
 def enable_trace_mode():
-    os.environ["OMIGO_TRACE"] = "1"
+    os.environ[OMIGO_TRACE] = "1"
 
 def disable_critical_mode():
-    os.environ["OMIGO_CRITICAL"] = "0"
+    os.environ[OMIGO_CRITICAL] = "0"
 
 def disable_error_mode():
-    os.environ["OMIGO_ERROR"] = "0"
+    os.environ[OMIGO_ERROR] = "0"
 
 def disable_warn_mode():
-    os.environ["OMIGO_WARN"] = "0"
+    os.environ[OMIGO_WARN] = "0"
 
 def disable_info_mode():
-    os.environ["OMIGO_INFO"] = "0"
+    os.environ[OMIGO_INFO] = "0"
 
 def disable_debug_mode():
-    os.environ["OMIGO_DEBUG"] = "0"
+    os.environ[OMIGO_DEBUG] = "0"
 
 def disable_trace_mode():
-    os.environ["OMIGO_TRACE"] = "0"
+    os.environ[OMIGO_TRACE] = "0"
 
 def warn(msg):
     if (is_warn() or is_error() or is_critical()):
@@ -185,7 +203,7 @@ def warn_once(msg):
             WARN_MSG_CACHE = {}
 
 def is_code_todo_warning():
-    return str(os.environ.get("OMIGO_CODE_TODO_WARNING", "0")) == "1"
+    return str(os.environ.get(OMIGO_CODE_TODO_WARNING, "0")) == "1"
 
 def print_code_todo_warning(msg):
     if (is_code_todo_warning()):
