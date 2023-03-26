@@ -4438,6 +4438,7 @@ class TSV:
     # this is a utility function that takes list of column names that support regular expression.
     # col_or_cols is a special variable that can be either single column name or an array. python
     # treats a string as an array of characters, so little hacky but a more intuitive api wise
+    # TODO: mp.keys() doesnt return a list and can break the string matching
     def __get_matching_cols__(self, col_or_cols, ignore_if_missing = False):
         # handle boundary conditions
         if (col_or_cols is None or len(col_or_cols) == 0):
