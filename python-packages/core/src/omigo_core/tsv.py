@@ -1361,15 +1361,27 @@ class TSV:
         utils.warn("Please use to_maps()")
         return self.to_maps()
 
-    def to_maps(self):
+    def to_maps(self, resolve_url_encoded_cols = False):
         mps = []
+        suffix_len = len(":url_encoded")
 
         # create a map for each row
         for line in self.get_data():
             fields = line.split("\t")
             mp = {}
             for i in range(len(self.get_header_fields())):
-                mp[self.header_fields[i]] = str(fields[i])
+                key = self.header_fields[i]
+                value = str(fields[i])
+
+                # check for resolving url encoded cols
+                if (resolve_url_encoded_cols == True and key.endswith(":url_encoded")):
+                    key = key[0:-suffix_len]
+                    value = utils.url_decode(value)
+
+                # set new value 
+                mp[key] = str(value)
+
+            # append
             mps.append(mp)
 
         # return
