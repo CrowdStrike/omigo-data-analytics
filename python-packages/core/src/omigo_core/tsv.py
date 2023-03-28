@@ -77,7 +77,7 @@ class TSV:
     def select(self, col_or_cols, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
-            raise Exception("select: empty tsv")
+            raise Exception("select: empty header tsv")
 
         # get matching column and indexes
         matching_cols = self.__get_matching_cols__(col_or_cols)
@@ -284,7 +284,7 @@ class TSV:
 
         # check empty
         if (self.has_empty_header()):
-            raise Exception("group_count: empty tsv")
+            raise Exception("group_count: empty header tsv")
 
         # find the matching cols and indexes
         cols = self.__get_matching_cols__(cols)
@@ -382,7 +382,7 @@ class TSV:
 
         # check empty
         if (self.has_empty_header()):
-            utils.raise_exception_or_warn("drop: empty tsv", ignore_if_missing)
+            utils.raise_exception_or_warn("drop: empty header tsv", ignore_if_missing)
             return self
 
         # get matching column and indexes
@@ -421,7 +421,7 @@ class TSV:
     def window_aggregate(self, win_col, agg_cols, agg_funcs, winsize, select_cols = None, sliding = False, collapse = True, suffix = "", precision = 2, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
-            raise Exception("window_aggregate: empty tsv")
+            raise Exception("window_aggregate: empty header tsv")
 
         # get the matching cols
         if (select_cols is None):
@@ -513,7 +513,7 @@ class TSV:
     def group_by_key(self, grouping_cols, agg_cols, agg_func, suffix = "", collapse = True, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
-            raise Exception("group_by_key: empty tsv")
+            raise Exception("group_by_key: empty header tsv")
 
         # resolve grouping and agg_cols
         grouping_cols = self.__get_matching_cols__(grouping_cols)
@@ -755,7 +755,7 @@ class TSV:
 
         # check empty
         if (self.has_empty_header()):
-            raise Exception("aggregate: empty tsv")
+            raise Exception("aggregate: empty header tsv")
 
         # check for usage of builtin functions
         for agg_func in agg_funcs:
@@ -899,7 +899,7 @@ class TSV:
 
         # check empty
         if (self.has_empty_header()):
-            utils.raise_exception_or_warn("filter: empty tsv", ignore_if_missing)
+            utils.raise_exception_or_warn("filter: empty header tsv", ignore_if_missing)
             return self
 
         # TODO: Filter should not use regex. Need to add warning as the order of fields matter
@@ -979,7 +979,7 @@ class TSV:
     def any_col_with_cond_exists_filter(self, cols, func, ignore_if_missing = False, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
-            utils.raise_exception_or_warn("any_col_with_cond_exists_filter: empty tsv", ignore_if_missing)
+            utils.raise_exception_or_warn("any_col_with_cond_exists_filter: empty header tsv", ignore_if_missing)
             return self
 
         # find the matching cols and indexes
@@ -1019,7 +1019,7 @@ class TSV:
     def all_cols_with_cond_exists_filter(self, cols, func, ignore_if_missing = False, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
-            utils.raise_exception_or_warn("all_cols_with_cond_exists_filter: empty tsv", ignore_if_missing)
+            utils.raise_exception_or_warn("all_cols_with_cond_exists_filter: empty header tsv", ignore_if_missing)
             return self
 
         # find the matching cols and indexes
@@ -1213,7 +1213,7 @@ class TSV:
 
         # check empty
         if (self.has_empty_header()):
-            utils.raise_exception_or_warn("transform_inline: empty tsv", ignore_if_missing)
+            utils.raise_exception_or_warn("transform_inline: empty header tsv", ignore_if_missing)
             return self
 
         # find the matching cols and indexes
@@ -1286,7 +1286,7 @@ class TSV:
     def rename(self, col, new_col, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
-            raise Exception("rename: empty tsv")
+            raise Exception("rename: empty header tsv")
 
         # validation
         if (self.has_col(col) == False):
@@ -1347,7 +1347,7 @@ class TSV:
     def get_column_index(self, col):
         # check empty
         if (self.has_empty_header()):
-            raise Exception("get_column_index: empty tsv")
+            raise Exception("get_column_index: empty header tsv")
 
         # validation
         if (col not in self.get_columns()):
@@ -1409,7 +1409,7 @@ class TSV:
     def add_seq_num(self, new_col, start = 1, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
-            utils.warn("add_seq_num: empty tsv")
+            utils.warn("add_seq_num: empty header tsv")
             return self
 
         # validation
@@ -1580,7 +1580,7 @@ class TSV:
     def col_as_array(self, col):
         # check empty
         if (self.has_empty_header()):
-            raise Exception("col_as_array: empty tsv")
+            raise Exception("col_as_array: empty header tsv")
 
         # validation
         if (col not in self.header_map.keys()):
@@ -1597,7 +1597,7 @@ class TSV:
     def col_as_float_array(self, col):
         # check empty
         if (self.has_empty_header()):
-            raise Exception("col_as_float_array: empty tsv")
+            raise Exception("col_as_float_array: empty header tsv")
 
         values = self.col_as_array(col)
         float_values = [float(v) for v in values]
@@ -1606,7 +1606,7 @@ class TSV:
     def col_as_int_array(self, col):
         # check empty
         if (self.has_empty_header()):
-            raise Exception("col_as_int_array: empty tsv")
+            raise Exception("col_as_int_array: empty header tsv")
 
         values = self.col_as_float_array(col)
         numeric_values = [int(v) for v in values]
@@ -1615,7 +1615,7 @@ class TSV:
     def col_as_array_uniq(self, col):
         # check empty
         if (self.has_empty_header()):
-            raise Exception("col_as_array_uniq: empty tsv")
+            raise Exception("col_as_array_uniq: empty header tsv")
 
         values = self.col_as_array(col)
         return list(dict.fromkeys(values))
@@ -1625,7 +1625,7 @@ class TSV:
     def cols_as_map(self, key_cols, value_cols):
         # check empty
         if (self.has_empty_header()):
-            raise Exception("cols_as_map: empty tsv")
+            raise Exception("cols_as_map: empty header tsv")
 
         # warn
         utils.debug_once("[OLD_WARN]: cols_as_map: This api has changed from prev implementation")
@@ -1685,7 +1685,7 @@ class TSV:
     def sort(self, cols = None, reverse = False, reorder = False, all_numeric = None, ignore_if_missing = False, dmsg = ""):
         # check empty
         if (self.has_empty_header() and cols is None):
-            utils.raise_exception_or_warn("sort: empty tsv", ignore_if_missing)
+            utils.raise_exception_or_warn("sort: empty header tsv", ignore_if_missing)
             return self
 
         # if nothing is specified sort on all columns
@@ -1743,10 +1743,10 @@ class TSV:
         # check empty
         if (self.has_empty_header()):
             if (cols is None):
-                utils.warn("reorder: empty tsv")
+                utils.warn("reorder: empty header tsv")
                 return self
             else:
-                raise Exception("reorder: empty tsv")
+                raise Exception("reorder: empty header tsv")
 
         # get matching column and indexes
         matching_cols = self.__get_matching_cols__(cols)
@@ -1795,7 +1795,7 @@ class TSV:
     def reverse_reorder(self, cols, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
-            raise Exception("reorder: empty tsv")
+            raise Exception("reorder: empty header tsv")
 
         # get matching column and indexes
         matching_cols = self.__get_matching_cols__(cols)
@@ -2031,10 +2031,10 @@ class TSV:
         if (self.has_empty_header()):
             # checking empty value
             if (value == ""):
-                utils.warn("add_const_if_missing: empty tsv and empty value. extending just the header")
+                utils.warn("add_const_if_missing: empty header tsv and empty value. extending just the header")
                 return new_with_cols([col])
             else:
-                raise Exception("add_const_if_missing: empty tsv but non empty value")
+                raise Exception("add_const_if_missing: empty header tsv but non empty value")
 
         # check for presence
         if (col in self.header_fields):
@@ -2099,7 +2099,7 @@ class TSV:
     def add_row(self, row_fields):
         # check empty
         if (self.has_empty_header()):
-            raise Exception("{}: add_row: empty tsv".format(dmsg))
+            raise Exception("{}: add_row: empty header tsv".format(dmsg))
 
         # validation
         if (len(row_fields) != self.num_cols()):
@@ -2120,7 +2120,7 @@ class TSV:
     def add_map_as_row(self, mp, default_val = None):
         # check empty
         if (self.has_empty_header()):
-            raise Exception("add_map_as_row: empty tsv")
+            raise Exception("add_map_as_row: empty header tsv")
 
         # validation
         for k in mp.keys():
@@ -2153,7 +2153,7 @@ class TSV:
     def concat_as_cols(self, that, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
-            utils.warn("concat_as_cols: empty tsv")
+            utils.warn("concat_as_cols: empty header tsv")
             return that
 
         # validation
@@ -2191,7 +2191,7 @@ class TSV:
     def remove_suffix(self, suffix, prefix = None, ignore_if_missing = False, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
-            utils.raise_exception_or_warn("remove_suffix: empty tsv", ignore_if_missing)
+            utils.raise_exception_or_warn("remove_suffix: empty header tsv", ignore_if_missing)
             return self
 
         # create a map
@@ -2222,7 +2222,7 @@ class TSV:
     def add_prefix(self, prefix, cols = None, ignore_if_missing = False, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
-            utils.raise_exception_or_warn("add_prefix: empty tsv", ignore_if_missing)
+            utils.raise_exception_or_warn("add_prefix: empty header tsv", ignore_if_missing)
             return self
 
         # by default all columns are renamed
@@ -2248,7 +2248,7 @@ class TSV:
     def add_suffix(self, suffix, cols = None, ignore_if_missing = False, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
-            utils.raise_exception_or_warn("add_suffix: empty tsv", ignore_if_missing)
+            utils.raise_exception_or_warn("add_suffix: empty header tsv", ignore_if_missing)
             return self
 
         # by default all columns are renamed
@@ -2274,7 +2274,7 @@ class TSV:
     def rename_prefix(self, old_prefix, new_prefix, cols = None, ignore_if_missing = False, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
-            utils.raise_exception_or_warn("rename_prefix: empty tsv", ignore_if_missing)
+            utils.raise_exception_or_warn("rename_prefix: empty header tsv", ignore_if_missing)
             return self
 
         # either selective columns can be renamed or all matching ones
@@ -2301,7 +2301,7 @@ class TSV:
     def rename_suffix(self, old_suffix, new_suffix, cols = None, ignore_if_missing = False, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
-            utils.raise_exception_or_warn("rename_suffix: empty tsv", ignore_if_missing)
+            utils.raise_exception_or_warn("rename_suffix: empty header tsv", ignore_if_missing)
             return self
 
         # either selective columns can be renamed or all matching ones
@@ -2328,7 +2328,7 @@ class TSV:
     def remove_prefix(self, prefix, ignore_if_missing = False, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
-            utils.raise_exception_or_warn("remove_prefix: empty tsv", ignore_if_missing)
+            utils.raise_exception_or_warn("remove_prefix: empty header tsv", ignore_if_missing)
             return self
 
         # create a map
@@ -2356,7 +2356,7 @@ class TSV:
     def sample(self, sampling_ratio, seed = 0, with_replacement = False, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
-            utils.warn("sample: empty tsv")
+            utils.warn("sample: empty header tsv")
             return self
 
         # TODO
@@ -2397,7 +2397,7 @@ class TSV:
     def sample_n(self, n, seed = 0, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
-            utils.warn("sample_n: empty tsv")
+            utils.warn("sample_n: empty header tsv")
             return self
 
         # validation
@@ -2483,7 +2483,7 @@ class TSV:
     def sample_class(self, col, col_value, sampling_ratio, seed = 0, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
-            utils.warn("sample_class: empty tsv")
+            utils.warn("sample_class: empty header tsv")
             return self
 
         # Validation
@@ -2552,7 +2552,7 @@ class TSV:
     def sample_group_by_col_value(self, grouping_cols, col, col_value, sampling_ratio, seed = 0, use_numeric = False, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
-            utils.warn("sample_group_by_col_value: empty tsv")
+            utils.warn("sample_group_by_col_value: empty header tsv")
             return self
 
         # resolve grouping_cols
@@ -2599,7 +2599,7 @@ class TSV:
     def sample_group_by_max_uniq_values_exact(self, grouping_cols, col, max_uniq_values, seed = 0, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
-            utils.warn("sample_group_by_max_uniq_values_exact: empty tsv")
+            utils.warn("sample_group_by_max_uniq_values_exact: empty header tsv")
             return self
 
         # check for no data
@@ -2637,7 +2637,7 @@ class TSV:
     def sample_group_by_max_uniq_values_approx(self, grouping_cols, col, max_uniq_values, seed = 0, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
-            utils.warn("sample_group_by_max_uniq_values_approx: empty tsv")
+            utils.warn("sample_group_by_max_uniq_values_approx: empty header tsv")
             return self
 
         # check seed
@@ -2693,7 +2693,7 @@ class TSV:
     def sample_group_by_max_uniq_values_per_class(self, grouping_cols, class_col, col, max_uniq_values_map, def_max_uniq_values = None , seed = 0, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
-            utils.warn("sample_group_by_max_uniq_values_per_class: empty tsv")
+            utils.warn("sample_group_by_max_uniq_values_per_class: empty header tsv")
             return self
 
         # resolve grouping_cols
@@ -2739,7 +2739,7 @@ class TSV:
     def sample_group_by_key(self, grouping_cols, sampling_ratio, seed = 0, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
-            utils.warn("sample_group_by_key: empty tsv")
+            utils.warn("sample_group_by_key: empty header tsv")
             return self
 
         # resolve grouping_cols
@@ -2774,7 +2774,7 @@ class TSV:
     def sample_column_by_max_uniq_values(self, col, max_uniq_values, seed = 0, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
-            utils.warn("sample_column_by_max_uniq_values: empty tsv")
+            utils.warn("sample_column_by_max_uniq_values: empty header tsv")
             return self
 
         # get unique values
@@ -3098,7 +3098,7 @@ class TSV:
     def natural_join(self, that, dmsg = ""):
         # check for empty
         if (self.has_empty_header()):
-            utils.warn("natural_join: empty tsv")
+            utils.warn("natural_join: empty header tsv")
             return that
 
         # find the list of common cols
@@ -3391,14 +3391,14 @@ class TSV:
         if (self.has_empty_header()):
             # check for cols
             if (cols is None):
-                utils.warn("split_batches: empty tsv")
+                utils.warn("split_batches: empty header tsv")
                 return [self]
             else:
-                raise Exception("split_batches: empty tsv")
+                raise Exception("split_batches: empty header tsv")
 
         # check for empty rows
         if (self.num_rows() == 0):
-            utils.warn("split_batches: empty tsv")
+            utils.warn("split_batches: empty data tsv")
             return [self]
 
         # check if cols are defined or not
@@ -3516,7 +3516,7 @@ class TSV:
     def generate_key_hash(self, cols, new_col, seed = 0, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
-            raise Exception("generate_key_hash: empty tsv")
+            raise Exception("generate_key_hash: empty header tsv")
 
         # resolve cols
         cols = self.__get_matching_cols__(cols)
@@ -3552,7 +3552,7 @@ class TSV:
     def cumulative_sum(self, col, new_col, as_int = True):
         # check empty
         if (self.has_empty_header()):
-            raise Exception("cumulative_sum: empty tsv")
+            raise Exception("cumulative_sum: empty header tsv")
 
         # check for presence of col
         if (col not in self.header_map.keys()):
@@ -3591,7 +3591,7 @@ class TSV:
     def replicate_rows(self, col, new_col = None, max_repl = 0):
         # check empty
         if (self.has_empty_header()):
-            raise Exception("replicate_rows: empty tsv")
+            raise Exception("replicate_rows: empty header tsv")
 
         # check for presence of col
         if (col not in self.header_map.keys()):
@@ -3629,7 +3629,7 @@ class TSV:
 
         # check empty
         if (self.has_empty_header()):
-            utils.raise_exception_or_warn("{}: empty tsv".format(dmsg), ignore_if_missing)
+            utils.raise_exception_or_warn("{}: empty header tsv".format(dmsg), ignore_if_missing)
             return self
 
         # get matching column and indexes
@@ -4086,7 +4086,7 @@ class TSV:
 
         # check empty
         if (self.has_empty_header()):
-            utils.raise_exception_or_warn("explode_json: empty tsv", ignore_if_missing)
+            utils.raise_exception_or_warn("explode_json: empty header tsv", ignore_if_missing)
             return self
 
         # warn
@@ -4147,7 +4147,7 @@ class TSV:
     def reverse_transpose(self, grouping_cols, transpose_key, transpose_cols, default_val = ""):
         # check empty
         if (self.has_empty_header()):
-            raise Exception("reverse_transpose empty tsv")
+            raise Exception("reverse_transpose empty header tsv")
 
         utils.print_code_todo_warning("reverse_transpose: is not implemented efficiently")
         # resolve the grouping and transpose_cols
@@ -4176,7 +4176,7 @@ class TSV:
     def flatmap(self, col, func, new_col):
         # check empty
         if (self.has_empty_header()):
-            raise Exception("flatmap: empty tsv")
+            raise Exception("flatmap: empty header tsv")
 
         # validation
         if (col not in self.header_map.keys()):
@@ -4203,7 +4203,7 @@ class TSV:
     def to_tuples(self, cols, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
-            raise Exception("to_tuples: empty tsv")
+            raise Exception("to_tuples: empty header tsv")
 
         # validate cols
         for col in cols:
@@ -4315,7 +4315,7 @@ class TSV:
 
         # check empty
         if (self.has_empty_header()):
-            raise Exception("get_col_index: empty tsv")
+            raise Exception("get_col_index: empty header tsv")
 
         # validation
         if (col not in self.get_columns()):
@@ -4328,7 +4328,7 @@ class TSV:
     def get_hash(self):
         # check empty
         if (self.has_empty_header()):
-            utils.warn("get_hash: empty tsv")
+            utils.warn("get_hash: empty header tsv")
 
         # create array
         hashes = []

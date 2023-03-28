@@ -259,8 +259,9 @@ def datetime_to_utctimestamp(x):
         raise Exception("Unknown date format. Problem with UTC: '{}'".format(x))
 
 # TODO: Converts seconds format only
+# Its utc so removed the last timezone
 def utctimestamp_to_datetime_str(x):
-    return utctimestamp_to_datetime(x).isoformat()
+    return utctimestamp_to_datetime(x).isoformat()[0:19]
 
 # TODO: Converts seconds format only
 def utctimestamp_to_datetime(x):
