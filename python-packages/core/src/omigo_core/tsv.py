@@ -417,6 +417,42 @@ class TSV:
         dmsg = utils.extend_inherit_message(dmsg, "drop_cols_if_exists")
         return self.drop_cols(col_or_cols, ignore_if_missing = True, dmsg = dmsg)
 
+    def drop_empty_cols(self, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "drop_empty_cols")
+
+        # check for empty data
+        if (self.num_rows() == 0):
+            return self
+
+        # iterate through each column and flag if there was a non empty value
+        fill_flags = list([0 for i in range(self.num_cols())])
+
+        # iterate and add
+        counter = 0
+        for line in self.get_data():
+            # report progress
+            counter = counter + 1
+            utils.report_progress("[1/1] calling function", dmsg, counter, self.num_rows())
+
+            # parse
+            fields = line.split("\t")
+            for i in range(self.num_cols()):
+                if (fields[i] != ""):
+                    fill_flags[i] = 1
+
+        # find the column indexes that didnt have any value
+        empty_cols = []
+        for i in range(len(fill_flags)):
+            if (fill_flags[i] == 0):
+                empty_cols.append(self.get_column(i))
+
+        # if there are empty cols, drop them
+        if (len(empty_cols) > 0):
+            return self \
+                .drop_cols(empty_cols, dmsg = dmsg)
+        else:
+            return self
+ 
     # TODO: the select_cols is not implemented properly
     def window_aggregate(self, win_col, agg_cols, agg_funcs, winsize, select_cols = None, sliding = False, collapse = True, suffix = "", precision = 2, dmsg = ""):
         # check empty
@@ -1340,6 +1376,14 @@ class TSV:
     def get_columns(self):
         return self.get_header_fields()
 
+    def get_column(self, index):
+        # validation
+        if (index < 0 or index >= self.num_cols()):
+            raise Exception("get_column: invalid index: {}".format(index))
+
+        # return
+        return self.get_header_fields()[index]
+
     def columns(self):
         utils.warn("Deprecated. Use get_columns() instead")
         return self.get_columns()
@@ -1363,7 +1407,6 @@ class TSV:
 
     def to_maps(self, resolve_url_encoded_cols = False):
         mps = []
-        suffix_len = len(":url_encoded")
 
         # create a map for each row
         for line in self.get_data():
@@ -1374,9 +1417,16 @@ class TSV:
                 value = str(fields[i])
 
                 # check for resolving url encoded cols
-                if (resolve_url_encoded_cols == True and key.endswith(":url_encoded")):
-                    key = key[0:-suffix_len]
-                    value = utils.url_decode(value)
+                if (resolve_url_encoded_cols == True):
+                    if (key.endswith(":url_encoded") == True):
+                        key = key[0:-len(":url_encoded")]
+                        value = utils.url_decode(value)
+                    elif (key.endswith(":url_encoded:uniq_mkstr") == True):
+                        key = key[0:-len(":url_encoded:uniq_mkstr")] + ":uniq_mkstr"
+                        value = ",".join([utils.url_decode(t) for t in value.split(",")])
+                    elif (key.endswith(":url_encoded:mkstr") == True):
+                        key = key[0:-len(":url_encoded:mkstr")] + ":mkstr"
+                        value = ",".join([utils.url_decode(t) for t in value.split(",")])
 
                 # set new value 
                 mp[key] = str(value)
@@ -1925,11 +1975,14 @@ class TSV:
         dmsg = utils.extend_inherit_message(dmsg, "url_decode")
         return self.transform([col], lambda x: utils.url_decode(x), newcol, dmsg = dmsg)
 
-    def resolve_url_encoded_cols(self, suffix = "url_encoded", ignore_if_missing = True, dmsg = ""):
+    def resolve_url_encoded_cols(self, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "resolve_url_encoded_cols")
         return self \
-            .url_decode_inline(".*:{}".format(suffix), ignore_if_missing = ignore_if_missing, dmsg = dmsg) \
-            .remove_suffix(suffix, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
+            .transform_inline([".*:url_encoded", ".*:url_encoded:uniq_mkstr", ".*:url_encoded:mkstr"],
+                lambda t: ",".join([utils.url_decode(t1) for t1 in t.split(",")]) if (t != "") else t, ignore_if_missing = True) \
+            .remove_suffix("url_encoded", ignore_if_missing = True, dmsg = dmsg) \
+            .replace_suffix("url_encoded:uniq_mkstr", "uniq_mkstr", ignore_if_missing = True) \
+            .replace_suffix("url_encoded:mkstr", "mkstr", ignore_if_missing = True)
 
     def union(self, tsv_or_that_arr):
         # check if this is a single element TSV or an array
@@ -2350,6 +2403,65 @@ class TSV:
         if (len(mp) == 0):
             utils.raise_exception_or_warn("prefix didnt match any of the columns: {}, {}".format(prefix, str(self.get_header_fields())), ignore_if_missing)
 
+        # return
+        new_header = "\t".join(list([h if (h not in mp.keys()) else mp[h] for h in self.get_header_fields()]))
+        return TSV(new_header, self.data)
+
+    def replace_prefix(self, old_prefix, new_prefix, ignore_if_missing = False, dmsg = ""):
+        # check empty
+        if (self.has_empty_header()):
+            utils.raise_exception_or_warn("replace_prefix: empty header tsv", ignore_if_missing)
+            return self
+
+        # create a map
+        mp = {}
+
+        # validation
+        if (old_prefix.endswith(":") == False):
+            old_prefix = prefix + ":"
+
+        # check for matching cols
+        for c in self.get_header_fields():
+            if (c.startswith(old_prefix)):
+                new_col = "{}:{}".format(new_prefix, c[len(old_prefix):])
+                if (new_col in self.get_header_fields() or len(new_col) == 0):
+                    raise Exception("Duplicate names. Cant do the prefix: {}, {}, {}".format(c, new_col, str(self.get_header_fields())))
+                mp[c] = new_col
+
+        # validation
+        if (len(mp) == 0):
+            utils.raise_exception_or_warn("prefix didnt match any of the columns: {}, {}".format(prefix, str(self.get_header_fields())), ignore_if_missing)
+
+        # return
+        new_header = "\t".join(list([h if (h not in mp.keys()) else mp[h] for h in self.get_header_fields()]))
+        return TSV(new_header, self.data)
+
+    def replace_suffix(self, old_suffix, new_suffix, ignore_if_missing = False, dmsg = ""):
+        # check empty
+        if (self.has_empty_header()):
+            utils.raise_exception_or_warn("replace_suffix: empty header tsv", ignore_if_missing)
+            return self
+
+        # create a map
+        mp = {}
+
+        # validation
+        if (old_suffix.startswith(":") == False):
+            old_suffix = ":" + old_suffix
+
+        # check for matching cols
+        for c in self.get_header_fields():
+            if (c.endswith(old_suffix)):
+                new_col = "{}:{}".format(c[0:-len(old_suffix)], new_suffix)
+                if (new_col in self.get_header_fields() or len(new_col) == 0):
+                    raise Exception("Duplicate names. Cant do the suffix: {}, {}, {}".format(c, new_col, str(self.get_header_fields())))
+                mp[c] = new_col
+
+        # validation
+        if (len(mp) == 0):
+            utils.raise_exception_or_warn("suffix didnt match any of the columns: {}, {}".format(old_suffix, str(self.get_header_fields())), ignore_if_missing)
+
+        # return
         new_header = "\t".join(list([h if (h not in mp.keys()) else mp[h] for h in self.get_header_fields()]))
         return TSV(new_header, self.data)
 
@@ -4040,7 +4152,7 @@ class TSV:
 
             # trace
             if (len(results) >= 100):
-                utils.trace("__explode_json_transform_func_expand_json__: with count: {} >= 10, parent_prefix: {}, results[0]: {}".format(len(results), parent_prefix, results[0]))
+                utils.trace("__explode_json_transform_func_expand_json__: with count: {} >= 100, parent_prefix: {}, results[0]: {}".format(len(results), parent_prefix, results[0]))
 
             # return
             return results
