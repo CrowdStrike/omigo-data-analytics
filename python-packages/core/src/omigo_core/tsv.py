@@ -1627,7 +1627,7 @@ class TSV:
         # return self
         return self
 
-    def col_as_array(self, col):
+    def col_as_array(self, col, include_empty = True):
         # check empty
         if (self.has_empty_header()):
             raise Exception("col_as_array: empty header tsv")
@@ -1636,12 +1636,19 @@ class TSV:
         if (col not in self.header_map.keys()):
             raise Exception("Column not found: {}, {}".format(str(col), str(self.get_header_fields())))
 
+        # index
         index = self.header_map[col]
         ret_values = []
         for line in self.get_data():
             fields = line.split("\t")
-            ret_values.append(str(fields[index]))
+            value = str(fields[index])
+            if (value != ""):
+                ret_values.append(value)
+            else:
+                if (include_empty == True):
+                    ret_values.append(value)
 
+        # return
         return ret_values
 
     def col_as_float_array(self, col):
@@ -1669,6 +1676,9 @@ class TSV:
 
         values = self.col_as_array(col)
         return list(dict.fromkeys(values))
+
+    def col_as_array_uniq_non_empty(self, col):
+        return list(filter(lambda t: t != "", self.col_as_array_uniq(col)))
 
     # this method returns hashmap of key->map[k:v]
     # TODO: keys should be changed to single column
@@ -1977,12 +1987,29 @@ class TSV:
 
     def resolve_url_encoded_cols(self, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "resolve_url_encoded_cols")
+
+        # return
         return self \
-            .transform_inline([".*:url_encoded", ".*:url_encoded:uniq_mkstr", ".*:url_encoded:mkstr"],
-                lambda t: ",".join([utils.url_decode(t1) for t1 in t.split(",")]) if (t != "") else t, ignore_if_missing = True) \
-            .remove_suffix("url_encoded", ignore_if_missing = True, dmsg = dmsg) \
-            .replace_suffix("url_encoded:uniq_mkstr", "uniq_mkstr", ignore_if_missing = True) \
-            .replace_suffix("url_encoded:mkstr", "mkstr", ignore_if_missing = True)
+            .transform_inline(".*:url_encoded", utils.url_decode, ignore_if_missing = True, dmsg = dmsg) \
+            .remove_suffix("url_encoded", ignore_if_missing = True, dmsg = dmsg)
+
+    def resolve_url_encoded_list_cols(self, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "resolve_url_encoded_list_cols")
+
+        # return
+        return self \
+            .transform_inline([".*:url_encoded:uniq_mkstr", ".*:url_encoded:mkstr"],
+                lambda t: ",".join([utils.url_decode(t1) for t1 in t.split(",")]) if (t != "") else t, ignore_if_missing = True, dmsg = dmsg) \
+            .replace_suffix("url_encoded:uniq_mkstr", "uniq_mkstr", ignore_if_missing = True, dmsg = dmsg) \
+            .replace_suffix("url_encoded:mkstr", "mkstr", ignore_if_missing = True, dmsg = dmsg)
+
+    def resolve_all_url_encoded_cols(self, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "resolve_all_url_encoded_cols")
+
+        # return
+        return self \
+            .resolve_url_encoded_cols(dmsg = dmsg) \
+            .resolve_url_encoded_list_cols(dmsg = dmsg)
 
     def union(self, tsv_or_that_arr):
         # check if this is a single element TSV or an array

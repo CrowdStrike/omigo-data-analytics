@@ -201,7 +201,7 @@ def read_file_content_as_lines(path, s3_region = None, aws_profile = None):
     # check for s3
     if (path.startswith("s3://")):
         bucket_name, object_key = utils.split_s3_path(path)
-        data = s3_wrapper.get_s3_file_content_as_text(bucket_name, object_key, s3_region, aws_profile)
+        data = s3_wrapper.get_file_content_as_text(bucket_name, object_key, s3_region, aws_profile)
         data = data.split("\n")
     else:
         if (path.endswith(".gz")):

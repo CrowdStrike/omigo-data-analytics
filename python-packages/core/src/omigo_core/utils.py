@@ -523,3 +523,10 @@ def max_dmsg_str(dmsg, max_len = 300):
         return dmsg
     else:
         return "{}... ".format(dmsg[0:max_len - 4])
+
+def is_tsv_file_extension(path):
+    # check extensions
+    if (path.endswith(".tsv") or path.endswith(".tsv.gz") or path.endswith(".csv") or path.endswith(".csv.gz")):
+        return True
+    else:
+        return False

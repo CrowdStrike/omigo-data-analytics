@@ -351,3 +351,54 @@ class S3FSWrapper:
     def __local_get_last_modified_timestamp__(self, path):
         return local_fs_wrapper.get_last_modified_timestamp(path)
 
+    def copy_leaf_dir(self, src_path, dest_path, overwrite = False, append = True):
+        # check if src exists
+        if (self.dir_exists(src_path) == False):
+            raise Exception("copy_leaf_dir: src_path doesnt exist: {}".format(src_path))
+
+        # check if it is not a leaf dir
+        if (len(self.list_dirs(dest_path)) > 0):
+            raise Exception("copy_leaf_dir: can not copy non leaf directories: {}".format(dest_path))
+
+        # check if dest exists
+        if (self.dir_exists(dest_path) == True):
+            # check if overwrite is False
+            if (overwrite == False):
+                raise Exception("copy_leaf_dir: dest_path exists and overwrite = False: {}".format(dest_path))
+
+        # create dir
+        self.create_dir(dest_path)
+
+        # gather the list of files to copy 
+        src_files = self.list_files(src_path)
+        dest_files = self.list_files(dest_path)
+
+        # check if there are files that will not be overwritten
+        files_not_in_src = list(set(dest_files).difference(set(src_files)))
+
+        # check for append flag
+        if (len(files_not_in_src) > 0):
+            if (append == False):
+                raise Exception("copy_leaf_dir: there are files in dest that will not be replaced and append = False: {}".format(files_not_in_src))
+            else:
+                # debug
+                utils.warn("copy_leaf_dir: there are files in dest that will not be replaced: {}".format(files_not_in_src))
+
+        # iterate
+        for f in src_files:
+            # debug
+            utils.info("copy_leaf_dir: copying: {}".format(f))
+
+            # if file exists in dest, warn
+            if (self.file_exists("{}/{}".format(dest_path, f))):
+                utils.warn("copy_leaf_dir: overwriting existing file: {}".format(f))
+
+            # check for tsv file
+            if (utils.is_tsv_file_extension(f)):
+                tsv \
+                  .read("{}/{}".format(src_path, f)) \
+                  .write("{}/{}".format(dest_path, f))
+            else:
+                contents = self.read_file_contents_as_text("{}/{}".format(src_path, f))
+                self.write_text_file("{}/{}".format(dest_path, f), contents)
+

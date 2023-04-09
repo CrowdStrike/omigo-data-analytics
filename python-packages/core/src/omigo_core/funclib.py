@@ -5,6 +5,8 @@ import numpy as np
 from dateutil import parser
 import datetime
 
+# TODO: mkstr variantgs needs to use *args
+
 def parse_image_file_base_name(x):
     if (len(x) <= 1):
         return x
