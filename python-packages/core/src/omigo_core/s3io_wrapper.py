@@ -356,9 +356,9 @@ class S3FSWrapper:
         if (self.dir_exists(src_path) == False):
             raise Exception("copy_leaf_dir: src_path doesnt exist: {}".format(src_path))
 
-        # check if it is not a leaf dir
-        if (len(self.list_dirs(dest_path)) > 0):
-            raise Exception("copy_leaf_dir: can not copy non leaf directories: {}".format(dest_path))
+        # # check if it is not a leaf dir
+        # if (len(self.list_dirs(dest_path)) > 0):
+        #     raise Exception("copy_leaf_dir: can not copy non leaf directories: {}".format(dest_path))
 
         # check if dest exists
         if (self.dir_exists(dest_path) == True):
@@ -393,12 +393,7 @@ class S3FSWrapper:
             if (self.file_exists("{}/{}".format(dest_path, f))):
                 utils.warn("copy_leaf_dir: overwriting existing file: {}".format(f))
 
-            # check for tsv file
-            if (utils.is_tsv_file_extension(f)):
-                tsv \
-                  .read("{}/{}".format(src_path, f)) \
-                  .write("{}/{}".format(dest_path, f))
-            else:
-                contents = self.read_file_contents_as_text("{}/{}".format(src_path, f))
-                self.write_text_file("{}/{}".format(dest_path, f), contents)
+            # copy
+            contents = self.read_file_contents_as_text("{}/{}".format(src_path, f))
+            self.write_text_file("{}/{}".format(dest_path, f), contents)
 
