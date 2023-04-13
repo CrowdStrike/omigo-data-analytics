@@ -4,6 +4,7 @@ import statistics
 import numpy as np
 from dateutil import parser
 import datetime
+from omigo_core import utils
 
 # TODO: mkstr variantgs needs to use *args
 
@@ -229,6 +230,31 @@ def get_str_map_without_keys(mp, excluded_keys):
 
     return mp2
 
+def datetime_to_utctimestamp_millis(x):
+    # convert this to string first for failsafe
+    x = str(x)
+
+    # 1681202675933
+    if (len(str(x)) == 13 and str(x).isnumeric() == True):
+        # this looks like numeric timestamp in millis
+        return int(x)
+
+    # 1681202675.933
+    if (len(str(x)) == 14 and str(x).find(".") == 10 and str(x).isnumeric() == True):
+        # this looks like numeric timestamp in millis
+        return int(x)
+
+    # 2023-04-11T08:44:35.933Z
+    if (len(x) == 24 and x.endswith("Z")):
+        return int(parser.parse(x).timestamp() * 1000)
+
+    # 2023-04-11T08:44:35.933+00:00
+    if (len(x) == 29 and x[-6] == "+"):
+        return int(parser.parse(x).timestamp() * 1000)
+
+    # this seems to be a timestamp with second precision.
+    return int(datetime_to_utctimestamp(x) * 1000)
+
 # TODO. better naming
 def datetime_to_utctimestamp(x):
     # convert this to string first for failsafe
@@ -261,20 +287,30 @@ def datetime_to_utctimestamp(x):
         raise Exception("Unknown date format. Problem with UTC: '{}'".format(x))
 
 # TODO: Converts seconds format only
+def utctimestamp_to_datetime(x):
+    # use the string form
+    x = str(x)
+    if (len(x) == 10 and x.isnumeric() == True):
+        return datetime.datetime.utcfromtimestamp(int(x)).replace(tzinfo = datetime.timezone.utc)
+    elif (len(x) == 13 and x.isnumeric() == True):
+        return datetime.datetime.utcfromtimestamp(int(x)/1000).replace(tzinfo = datetime.timezone.utc)
+    elif (len(x) > 10 and x.find(".") == 10 and utils.is_float(x)): 
+        return datetime.datetime.utcfromtimestamp(float(x)).replace(tzinfo = datetime.timezone.utc)
+    else:
+        raise Exception("Unknown timestamp format: {}".format(x))
+
+# TODO: Converts seconds format only
+def utctimestamp_millis_to_datetime(x):
+    return utctimestamp_to_datetime(x)
+
+# TODO: Converts seconds format only
 # Its utc so removed the last timezone
 def utctimestamp_to_datetime_str(x):
     return utctimestamp_to_datetime(x).isoformat()[0:19]
 
-# TODO: Converts seconds format only
-def utctimestamp_to_datetime(x):
-    # take it as int
-    x = int(x)
-    if (len(str(x)) == 10):
-        return datetime.datetime.utcfromtimestamp(x).replace(tzinfo = datetime.timezone.utc)
-    elif (len(str(x)) == 13):
-        return datetime.datetime.utcfromtimestamp(int(x)//1000).replace(tzinfo = datetime.timezone.utc)
-    else:
-        raise Exception("Unknown timestamp format: {}".format(x))
+# Its utc so removed the last timezone
+def utctimestamp_millis_to_datetime_str(x):
+    return utctimestamp_to_datetime(x).isoformat()[0:23]
 
 def datetime_to_timestamp(x):
     raise Exception("Please use datetime_to_utctimestamp")
