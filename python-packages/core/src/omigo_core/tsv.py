@@ -4503,7 +4503,7 @@ class TSV:
         # return self
         return self
 
-    def show_group_count(self, col_or_cols, n = 20, title = "Group Count", max_col_width = 40, sort_by_key = False, dmsg = ""):
+    def show_group_count(self, col_or_cols, n = 20, title = "Group Count", max_col_width = 40, sort_by_key = False, seq_col = "sno", dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "show_group_count")
 
         # call show transpose after custom func
@@ -4514,6 +4514,11 @@ class TSV:
         if (sort_by_key == True):
             result = result \
                 .sort(col_or_cols)
+
+        # add seq num 
+        if (seq_col is not None):
+            result = result \
+                .add_seq_num(seq_col)
 
         # show
         result \

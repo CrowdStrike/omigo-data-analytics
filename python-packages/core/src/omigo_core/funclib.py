@@ -245,12 +245,16 @@ def datetime_to_utctimestamp_millis(x):
         return int(x)
 
     # 2023-04-11T08:44:35.933Z
-    if (len(x) == 24 and x.endswith("Z")):
-        return int(parser.parse(x).timestamp() * 1000)
+    if (len(x) == 24 and x[19] == "." and x.endswith("Z")):
+        return int(float(parser.parse(x).timestamp() * 1000))
+
+    # 2023-04-15T15:05:16.175000Z
+    if (len(x) == 27 and x[19] == "." and x.endswith("Z")):
+        return int(float(parser.parse(x).timestamp() * 1000))
 
     # 2023-04-11T08:44:35.933+00:00
     if (len(x) == 29 and x[-6] == "+"):
-        return int(parser.parse(x).timestamp() * 1000)
+        return int(float(parser.parse(x).timestamp() * 1000))
 
     # this seems to be a timestamp with second precision.
     return int(datetime_to_utctimestamp(x) * 1000)
@@ -276,6 +280,12 @@ def datetime_to_utctimestamp(x):
     elif (len(x) == 26):
         # 2021-11-01T00:00:00.000000
         x = x + "Z"
+        return int(parser.parse(x).timestamp())
+    elif (len(x) == 27 and x[19] == "." and x.endswith("Z")):
+        # 2023-04-15T15:05:16.175000Z
+        return int(parser.parse(x).timestamp())
+    elif (len(x) == 29 and x[-6] == "+"):
+        # 2023-04-11T08:44:35.933+00:00
         return int(parser.parse(x).timestamp())
     elif (len(str(x)) == 10 and str(x).isnumeric() == True):
         # this looks like a numeric timestamp
