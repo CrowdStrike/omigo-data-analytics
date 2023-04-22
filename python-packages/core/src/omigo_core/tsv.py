@@ -1012,10 +1012,12 @@ class TSV:
         dmsg = utils.extend_inherit_message(dmsg, "exclude_filter")
         return self.filter(cols, func, include_cond = False, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def any_col_with_cond_exists_filter(self, cols, func, ignore_if_missing = False, dmsg = ""):
+    def __any_col_with_cond_exists_filter__(self, cols, func, exclude_flag = False, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "__any_col_with_cond_exists_filter__")
+
         # check empty
         if (self.has_empty_header()):
-            utils.raise_exception_or_warn("any_col_with_cond_exists_filter: empty header tsv", ignore_if_missing)
+            utils.raise_exception_or_warn("__any_col_with_cond_exists_filter__: empty header tsv", ignore_if_missing)
             return self
 
         # find the matching cols and indexes
@@ -1024,12 +1026,12 @@ class TSV:
 
         # check if there were any matching columns
         if (len(matching_cols) == 0):
-            utils.raise_exception_or_warn("any_col_with_cond_exists_filter: no matching columns", ignore_if_missing)
+            utils.raise_exception_or_warn("{}: no matching columns".format(dmsg), ignore_if_missing)
             return self
 
         # print which columns are going to be transformed
         if (len(matching_cols) != len(cols) and len(matching_cols) != 1):
-            utils.debug("any_col_with_cond_exists_filter: list of columns that will be checked: {}".format(str(matching_cols)))
+            utils.debug("{}: list of columns that will be checked: {}".format(dmsg, str(matching_cols)))
 
         # iterate
         new_data = []
@@ -1045,17 +1047,23 @@ class TSV:
                     flag = True
                     break
 
-            # check if all conditions met
+            # check if all conditions met. apply exclude filter
             if (flag == True):
-                new_data.append(line)
+                if (exclude_flag == False):
+                    new_data.append(line)
+            else:
+                if (exclude_flag == True):
+                    new_data.append(line)
 
         # return
         return TSV(self.get_header(), new_data)
  
-    def all_cols_with_cond_exists_filter(self, cols, func, ignore_if_missing = False, dmsg = ""):
+    def __all_cols_with_cond_exists_filter__(self, cols, func, exclude_flag = False, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "__all_cols_with_cond_exists_filter__")
+
         # check empty
         if (self.has_empty_header()):
-            utils.raise_exception_or_warn("all_cols_with_cond_exists_filter: empty header tsv", ignore_if_missing)
+            utils.raise_exception_or_warn("__all_cols_with_cond_exists_filter__: empty header tsv", ignore_if_missing)
             return self
 
         # find the matching cols and indexes
@@ -1064,12 +1072,12 @@ class TSV:
 
         # check if there were any matching columns
         if (len(matching_cols) == 0):
-            utils.raise_exception_or_warn("any_col_with_cond_exists_filter: no matching columns", ignore_if_missing)
+            utils.raise_exception_or_warn("{}: no matching columns".format(dmsg), ignore_if_missing)
             return self
 
         # print which columns are going to be transformed
         if (len(matching_cols) != len(cols) and len(matching_cols) != 1):
-            utils.debug("any_col_with_cond_exists_filter: list of columns that will be checked: {}".format(str(matching_cols)))
+            utils.debug("{}: list of columns that will be checked: {}".format(dmsg, str(matching_cols)))
 
         # iterate
         new_data = []
@@ -1087,11 +1095,31 @@ class TSV:
 
             # check if all conditions met
             if (flag == True):
-                new_data.append(line)
+                if (exclude_flag == False):
+                    new_data.append(line)
+            else:
+                if (exclude_flag == True):
+                    new_data.append(line)
 
         # return
-        return TSV(self.get_header(), new_data) 
-        
+        return TSV(self.get_header(), new_data)
+
+    def any_col_with_cond_exists_filter(self, cols, func, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "any_col_with_cond_exists_filter")
+        return self.__any_col_with_cond_exists_filter__(cols, func, exclude_flag = False, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
+
+    def any_col_with_cond_exists_exclude_filter(self, cols, func, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "any_col_with_cond_exists_exclude_filter")
+        return self.__any_col_with_cond_exists_filter__(cols, func, exclude_flag = True, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
+
+    def all_col_with_cond_exists_filter(self, cols, func, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "all_col_with_cond_exists_filter")
+        return self.__all_col_with_cond_exists_filter__(cols, func, exclude_flag = False, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
+
+    def all_col_with_cond_exists_exclude_filter(self, cols, func, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "all_col_with_cond_exists_exclude_filter")
+        return self.__all_col_with_cond_exists_filter__(cols, func, exclude_flag = True, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
+
     def transform(self, cols, func, new_col_or_cols, use_array_notation = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "transform")
 
