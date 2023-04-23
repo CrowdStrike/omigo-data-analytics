@@ -530,3 +530,114 @@ def is_tsv_file_extension(path):
         return True
     else:
         return False
+
+# TODO: Move this to proper package 
+class CombGenerator:
+    def __init__(self):
+        self.comb1_cache = {}
+        self.comb2_cache = {}
+        self.comb3_cache = {}
+        self.comb4_cache = {}
+        self.comb5_cache = {}
+        self.comb6_cache = {}
+        self.comb7_cache = {}
+
+    def gen_comb1(self, n):
+        if (n not in self.comb1_cache.keys()):
+            self.comb1_cache[n] = self.__gen_comb1__(n)
+        return self.comb1_cache[n]
+
+    def gen_comb2(self, n):
+        if (n not in self.comb2_cache.keys()):
+            self.comb2_cache[n] = self.__gen_comb2__(n)
+        return self.comb2_cache[n]
+
+    def gen_comb3(self, n):
+        if (n not in self.comb3_cache.keys()):
+            self.comb3_cache[n] = self.__gen_comb3__(n)
+        return self.comb3_cache[n]
+
+    def gen_comb4(self, n):
+        if (n not in self.comb4_cache.keys()):
+            self.comb4_cache[n] = self.__gen_comb4__(n)
+        return self.comb4_cache[n]
+
+    def gen_comb5(self, n):
+        if (n not in self.comb5_cache.keys()):
+            self.comb5_cache[n] = self.__gen_comb5__(n)
+        return self.comb5_cache[n]
+
+    def gen_comb6(self, n):
+        if (n not in self.comb6_cache.keys()):
+            self.comb6_cache[n] = self.__gen_comb6__(n)
+        return self.comb6_cache[n]
+
+    def gen_comb7(self, n):
+        if (n not in self.comb7_cache.keys()):
+            self.comb7_cache[n] = self.__gen_comb7__(n)
+        return self.comb7_cache[n]
+
+    def __gen_comb1__(self, n):
+       result = []
+       for i1 in range(0, n):
+           result.append([i1])
+       return result
+    
+    def __gen_comb2__(self, n):
+       result = []
+       for i2 in range(0, n-1):
+           for i1 in range(i2+1, n):
+               result.append([i2, i1])
+       return result
+    
+    def __gen_comb3__(self, n):
+       result = []
+       for i3 in range(0, n-2):
+           for i2 in range(i3+1, n-1):
+               for i1 in range(i2+1, n):
+                   result.append([i3, i2, i1])
+       return result
+    
+    def __gen_comb4__(self, n):
+       result = []
+       for i4 in range(0, n-3):
+           for i3 in range(i4+1, n-2):
+               for i2 in range(i3+1, n-1):
+                   for i1 in range(i2+1, n):
+                       result.append([i4, i3, i2, i1])
+       return result
+    
+    def __gen_comb5__(self, n):
+       result = []
+       for i5 in range(0, n-4):
+           for i4 in range(i5+1, n-3):
+               for i3 in range(i4+1, n-2):
+                   for i2 in range(i3+1, n-1):
+                       for i1 in range(i2+1, n):
+                           result.append([i5, i4, i3, i2, i1])
+       return result
+    
+    def __gen_comb6__(self, n):
+       result = []
+       for i6 in range(0, n-5):
+           for i5 in range(i6+1, n-4):
+               for i4 in range(i5+1, n-3):
+                   for i3 in range(i4+1, n-2):
+                       for i2 in range(i3+1, n-1):
+                           for i1 in range(i2+1, n):
+                               result.append([i6, i5, i4, i3, i2, i1])
+       return result
+    
+    def __gen_comb7__(self, n):
+       result = []
+       for i7 in range(0, n-6):
+           for i6 in range(i7+1, n-5):
+               for i5 in range(i6+1, n-4):
+                   for i4 in range(i5+1, n-3):
+                       for i3 in range(i4+1, n-2):
+                           for i2 in range(i3+1, n-1):
+                               for i1 in range(i2+1, n):
+                                   result.append([i7, i6, i5, i4, i3, i2, i1])
+       return result
+
+

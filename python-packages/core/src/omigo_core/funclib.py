@@ -497,3 +497,47 @@ def get_time_diffs(vs):
 
     # return
     return ",".join(result)
+
+def simple_map_to_url_encoded_col_names(cols, url_encoded_cols = None):
+    # create result
+    results = []
+    if (url_encoded_cols is not None):
+        # iterate
+        for c in cols:
+            if (c in url_encoded_cols):
+                results.append("{}:url_encoded".format(c))
+            else:
+                results.append(c)
+    else:
+        results = cols
+
+    # return
+    return results
+
+def map_to_url_encoded_col_names(cols, prefix = None, url_encoded_cols = None):
+    results = []
+
+    # iterate
+    for c in cols:
+        col = c
+        # check if there is prefix 
+        if (col.find(":") != -1):
+            col = col.split(":")[-1]
+
+        # assign
+        result = c
+
+        # handle url_encoded suffix
+        if (url_encoded_cols is not None and col in url_encoded_cols):
+            result = "{}:url_encoded".format(c)
+
+        # handle prefix
+        if (prefix is not None):
+            result = "{}:{}".format(prefix, result)
+
+        # append
+        results.append(result)
+
+    # return
+    return results
+
