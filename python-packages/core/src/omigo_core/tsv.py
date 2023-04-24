@@ -1433,7 +1433,10 @@ class TSV:
         utils.warn("Please use to_maps()")
         return self.to_maps()
 
-    def to_maps(self, resolve_url_encoded_cols = False):
+    def to_maps(self, resolve_url_encoded_cols = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "to_maps")
+
+        # create maps
         mps = []
 
         # create a map for each row
@@ -2297,9 +2300,11 @@ class TSV:
         return self.add_prefix(self, prefix, cols)
 
     def remove_suffix(self, suffix, prefix = None, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "remove_suffix")
+
         # check empty
         if (self.has_empty_header()):
-            utils.raise_exception_or_warn("remove_suffix: empty header tsv", ignore_if_missing)
+            utils.raise_exception_or_warn("{}: empty header tsv".format(dmsg), ignore_if_missing)
             return self
 
         # create a map
@@ -2316,14 +2321,15 @@ class TSV:
                 if (prefix is None or c.startswith(prefix + ":") == True):
                     new_col =  c[0:-len(suffix)]
                     if (new_col in self.header_fields or len(new_col) == 0):
-                        utils.warn("remove_suffix: Duplicate names found. Ignoring removal of prefix for col: {} to new_col: {}".format(c, new_col))
+                        utils.warn("{}: Duplicate names found. Ignoring removal of suffix for col: {} to new_col: {}".format(dmsg, c, new_col))
                     else:
                         mp[c] = new_col
 
         # validation
         if (len(mp) == 0):
-            utils.raise_exception_or_warn("suffix didnt match any of the columns: {}, {}".format(suffix, str(self.get_header_fields())), ignore_if_missing)
+            utils.raise_exception_or_warn("{}: suffix didnt match any of the columns: {}, {}".format(dmsg, suffix, str(self.get_header_fields())), ignore_if_missing)
 
+        # return
         new_header = "\t".join(list([h if (h not in mp.keys()) else mp[h] for h in self.header_fields]))
         return TSV(new_header, self.data)
 
@@ -2434,9 +2440,11 @@ class TSV:
         return TSV("\t".join(new_header_fields), self.data)
 
     def remove_prefix(self, prefix, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "remove_prefix")
+
         # check empty
         if (self.has_empty_header()):
-            utils.raise_exception_or_warn("remove_prefix: empty header tsv", ignore_if_missing)
+            utils.raise_exception_or_warn("{}: empty header tsv".format(dmsg), ignore_if_missing)
             return self
 
         # create a map
@@ -2450,22 +2458,27 @@ class TSV:
         for c in self.get_header_fields():
             if (c.startswith(prefix)):
                 new_col = c[len(prefix):]
+                # validation
                 if (new_col in self.get_header_fields() or len(new_col) == 0):
-                    raise Exception("Duplicate names. Cant do the prefix: {}, {}, {}".format(c, new_col, str(self.get_header_fields())))
+                    raise Exception("{}: Duplicate names. Cant do the prefix: {}, {}, {}".format(dmsg, c, new_col, str(self.get_header_fields())))
+
+                # assign new col
                 mp[c] = new_col
 
         # validation
         if (len(mp) == 0):
-            utils.raise_exception_or_warn("prefix didnt match any of the columns: {}, {}".format(prefix, str(self.get_header_fields())), ignore_if_missing)
+            utils.raise_exception_or_warn("{}: prefix didnt match any of the columns: {}, {}".format(dmsg, prefix, str(self.get_header_fields())), ignore_if_missing)
 
         # return
         new_header = "\t".join(list([h if (h not in mp.keys()) else mp[h] for h in self.get_header_fields()]))
         return TSV(new_header, self.data)
 
     def replace_prefix(self, old_prefix, new_prefix, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "replace_prefix")
+
         # check empty
         if (self.has_empty_header()):
-            utils.raise_exception_or_warn("replace_prefix: empty header tsv", ignore_if_missing)
+            utils.raise_exception_or_warn("{}: empty header tsv".format(dmsg), ignore_if_missing)
             return self
 
         # create a map
@@ -2480,21 +2493,23 @@ class TSV:
             if (c.startswith(old_prefix)):
                 new_col = "{}:{}".format(new_prefix, c[len(old_prefix):])
                 if (new_col in self.get_header_fields() or len(new_col) == 0):
-                    raise Exception("Duplicate names. Cant do the prefix: {}, {}, {}".format(c, new_col, str(self.get_header_fields())))
+                    raise Exception("{}: Duplicate names. Cant do the prefix: {}, {}, {}".format(dmsg, c, new_col, str(self.get_header_fields())))
                 mp[c] = new_col
 
         # validation
         if (len(mp) == 0):
-            utils.raise_exception_or_warn("prefix didnt match any of the columns: {}, {}".format(prefix, str(self.get_header_fields())), ignore_if_missing)
+            utils.raise_exception_or_warn("{}: prefix didnt match any of the columns: {}, {}".format(dmsg, prefix, str(self.get_header_fields())), ignore_if_missing)
 
         # return
         new_header = "\t".join(list([h if (h not in mp.keys()) else mp[h] for h in self.get_header_fields()]))
         return TSV(new_header, self.data)
 
     def replace_suffix(self, old_suffix, new_suffix, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "replace_suffix")
+
         # check empty
         if (self.has_empty_header()):
-            utils.raise_exception_or_warn("replace_suffix: empty header tsv", ignore_if_missing)
+            utils.raise_exception_or_warn("{}: empty header tsv".format(dmsg), ignore_if_missing)
             return self
 
         # create a map
@@ -2509,12 +2524,12 @@ class TSV:
             if (c.endswith(old_suffix)):
                 new_col = "{}:{}".format(c[0:-len(old_suffix)], new_suffix)
                 if (new_col in self.get_header_fields() or len(new_col) == 0):
-                    raise Exception("Duplicate names. Cant do the suffix: {}, {}, {}".format(c, new_col, str(self.get_header_fields())))
+                    raise Exception("{}: Duplicate names. Cant do the suffix: {}, {}, {}".format(dmsg, c, new_col, str(self.get_header_fields())))
                 mp[c] = new_col
 
         # validation
         if (len(mp) == 0):
-            utils.raise_exception_or_warn("suffix didnt match any of the columns: {}, {}".format(old_suffix, str(self.get_header_fields())), ignore_if_missing)
+            utils.raise_exception_or_warn("{}: suffix didnt match any of the columns: {}, {}".format(dmsg, old_suffix, str(self.get_header_fields())), ignore_if_missing)
 
         # return
         new_header = "\t".join(list([h if (h not in mp.keys()) else mp[h] for h in self.get_header_fields()]))
