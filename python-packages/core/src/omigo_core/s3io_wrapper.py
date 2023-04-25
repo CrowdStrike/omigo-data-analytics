@@ -129,6 +129,7 @@ class S3FSWrapper:
     def __simplify_dir_list__(self, path, listings, include_reserved_files = False):
         path = self.__normalize_path__(path)
 
+        # get index to simplify output
         index = len(path)
         result1 = list(filter(lambda t: include_reserved_files == True or t.endswith("/" + RESERVED_HIDDEN_FILE) == False, listings))
         result2 = list(map(lambda t: t[index + 1:], result1))
@@ -137,7 +138,7 @@ class S3FSWrapper:
         return result2
 
     # TODO: this is a wait method and confusing
-    def ls(self, path, include_reserved_files = False, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS):
+    def ls(self, path, include_reserved_files = False, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS, skip_exist_check = False):
         path = self.__normalize_path__(path)
 
         # go into a wait loop for s3 to sync if the path is missing
@@ -146,18 +147,19 @@ class S3FSWrapper:
             time.sleep(wait_sec)
             return self.ls(path, include_reserved_files = include_reserved_files, wait_sec = wait_sec, attempts = attempts - 1)
 
-        listings = self.get_directory_listing(path)
+        # get directory listings
+        listings = self.get_directory_listing(path, skip_exist_check = skip_exist_check)
         return self.__simplify_dir_list__(path, listings, include_reserved_files = include_reserved_files)
 
 
-    def get_directory_listing(self, path):
+    def get_directory_listing(self, path, skip_exist_check = False):
         if (self.__is_s3__(path)):
-            return self.__s3_get_directory_listing__(path)
+            return self.__s3_get_directory_listing__(path, skip_exist_check = skip_exist_check)
         else:
-            return self.__local_get_directory_listing__(path)
+            return self.__local_get_directory_listing__(path, skip_exist_check = skip_exist_check)
 
-    def __s3_get_directory_listing__(self, path):
-        return s3_wrapper.get_directory_listing(path)
+    def __s3_get_directory_listing__(self, path, skip_exist_check = False):
+        return s3_wrapper.get_directory_listing(path, skip_exist_check = skip_exist_check)
 
     def __local_get_directory_listing__(self, path): 
         return local_fs_wrapper.get_directory_listing(path)
@@ -397,3 +399,5 @@ class S3FSWrapper:
             contents = self.read_file_contents_as_text("{}/{}".format(src_path, f))
             self.write_text_file("{}/{}".format(dest_path, f), contents)
 
+    def list_leaf_dir(self, path, include_reserved_files = False, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS):
+        return self.ls(path, include_reserved_files = include_reserved_files, wait_sec = wait_sec, attempts = attempts, skip_exist_check = True)

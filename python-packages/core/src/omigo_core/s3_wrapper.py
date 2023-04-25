@@ -218,7 +218,7 @@ def __get_all_s3_objects__(s3, **base_kwargs):
         continuation_token = response.get('NextContinuationToken')
 
 # FIXME: This method is implemented using reverse engineering. Not so reliable
-def get_directory_listing(path, filter_func = None, fail_if_missing = True, region = None, profile = None):
+def get_directory_listing(path, filter_func = None, fail_if_missing = True, skip_exist_check = False, region = None, profile = None):
     region, profile = resolve_region_profile(region, profile)
     s3 = get_s3_client_cache(region, profile)
 
@@ -278,7 +278,8 @@ def get_directory_listing(path, filter_func = None, fail_if_missing = True, regi
     filenames = sorted(list(set(filenames)))
 
     # valid files as boto does a prefix search
-    filenames = list(filter(lambda t: check_path_exists(t), filenames))
+    if (skip_exist_check == False):
+        filenames = list(filter(lambda t: check_path_exists(t), filenames))
 
     # apply filter func if any
     if (filter_func is not None):
