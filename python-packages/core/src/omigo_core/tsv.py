@@ -836,7 +836,7 @@ class TSV:
 
         # check for empty data
         if (self.num_rows() == 0):
-            utils.debug("aggregate: no data. Returning new header only")
+            utils.trace("aggregate: no data. Returning new header only")
 
         # take the indexes
         agg_col_indexes = []
@@ -3413,7 +3413,7 @@ class TSV:
             raise Exception("Length mismatch in lkeys and rkeys: {}, {}".format(lkeys, rkeys))
 
         # print stats for left and right side
-        utils.debug("__map_join__: left num_rows: {}, right num_rows: {}".format(self.num_rows(), that.num_rows()))
+        utils.trace("__map_join__: left num_rows: {}, right num_rows: {}".format(self.num_rows(), that.num_rows()))
 
         # Check for num_par. TODO: Experimental
         if (num_par > 0):
@@ -4017,7 +4017,7 @@ class TSV:
                 # handle null scenario. json string can have a special value called null to represent empty or null value, which is converted to None in json parser.
                 # such null value should be okay to read as empty string
                 if (v is None):
-                    utils.warn_once("__explode_json_transform_func_expand_json__: None type value found. Taking it as empty string. Key: {}".format(k))
+                    utils.debug_once("__explode_json_transform_func_expand_json__: None type value found. Taking it as empty string. Key: {}".format(k))
                     v = ""
 
                 # handle nested_cols scenario where the entire value is to be set as url encoded json blob
