@@ -448,8 +448,12 @@ class TSV:
 
         # if there are empty cols, drop them
         if (len(empty_cols) > 0):
-            return self \
-                .drop_cols(empty_cols, dmsg = dmsg)
+            if (len(empty_cols) == self.num_cols()):
+                return self \
+                    .get_columns()
+            else:
+                return self \
+                    .drop_cols(empty_cols, dmsg = dmsg)
         else:
             return self
  
