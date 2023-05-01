@@ -130,6 +130,46 @@ def maxstr(vs):
 
     return str(max_value)
 
+def minint_failsafe(vs):
+    if (vs is None or len(vs) == 0):
+        return None
+    else:
+        vs = list(filter(lambda t: t != "", vs))
+        if (len(vs) == 0):
+            return None
+        else:
+            return minint(vs) 
+
+def maxint_failsafe(vs):
+    if (vs is None or len(vs) == 0):
+        return None
+    else:
+        vs = list(filter(lambda t: t != "", vs))
+        if (len(vs) == 0):
+            return None
+        else:
+            return maxint(vs) 
+
+def minstr_failsafe(vs):
+    if (vs is None or len(vs) == 0):
+        return None
+    else:
+        vs = list(filter(lambda t: t != "", vs))
+        if (len(vs) == 0):
+            return None
+        else:
+            return minstr(vs) 
+            
+def maxstr_failsafe(vs):
+    if (vs is None or len(vs) == 0):
+        return None
+    else:
+        vs = list(filter(lambda t: t != "", vs))
+        if (len(vs) == 0):
+            return None
+        else:
+            return maxstr(vs)
+
 def sumint(vs):
     if (len(vs) == 0):
         return 0
