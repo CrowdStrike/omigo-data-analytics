@@ -132,41 +132,41 @@ def maxstr(vs):
 
 def minint_failsafe(vs):
     if (vs is None or len(vs) == 0):
-        return None
+        return "" 
     else:
         vs = list(filter(lambda t: t != "", vs))
         if (len(vs) == 0):
-            return None
+            return "" 
         else:
             return minint(vs) 
 
 def maxint_failsafe(vs):
     if (vs is None or len(vs) == 0):
-        return None
+        return "" 
     else:
         vs = list(filter(lambda t: t != "", vs))
         if (len(vs) == 0):
-            return None
+            return "" 
         else:
             return maxint(vs) 
 
 def minstr_failsafe(vs):
     if (vs is None or len(vs) == 0):
-        return None
+        return "" 
     else:
         vs = list(filter(lambda t: t != "", vs))
         if (len(vs) == 0):
-            return None
+            return "" 
         else:
             return minstr(vs) 
             
 def maxstr_failsafe(vs):
     if (vs is None or len(vs) == 0):
-        return None
+        return "" 
     else:
         vs = list(filter(lambda t: t != "", vs))
         if (len(vs) == 0):
-            return None
+            return "" 
         else:
             return maxstr(vs)
 
@@ -296,6 +296,10 @@ def datetime_to_utctimestamp_millis(x):
     if (len(x) == 29 and x[-6] == "+"):
         return int(float(parser.parse(x).timestamp() * 1000))
 
+    # 2023-04-18T18:47:45 or 2023-04-18 18:47:45
+    if (len(x) == 19 and (x[10] == "T" or x[10] == " ")):
+        return int(float(parser.parse(x + "+00:00").timestamp() * 1000))
+
     # this seems to be a timestamp with second precision.
     return int(datetime_to_utctimestamp(x) * 1000)
 
@@ -327,12 +331,15 @@ def datetime_to_utctimestamp(x):
     elif (len(x) == 29 and x[-6] == "+"):
         # 2023-04-11T08:44:35.933+00:00
         return int(parser.parse(x).timestamp())
-    elif (len(str(x)) == 10 and str(x).isnumeric() == True):
+    elif (len(x) == 10 and str(x).isnumeric() == True):
         # this looks like a numeric timestamp
         return int(x)
-    elif (len(str(x)) == 13 and str(x).isnumeric() == True):
+    elif (len(x) == 13 and str(x).isnumeric() == True):
         # this looks like numeric timestamp in millis
         return int(int(x) / 1000)
+    elif (len(x) == 19 and (x[10] == "T" or x[10] == " ")):
+        # 2023-04-18T18:47:45 or 2023-04-18 18:47:45
+        return int(float(parser.parse(x + "+00:00").timestamp() * 1000))
     else:
         raise Exception("Unknown date format. Problem with UTC: '{}'".format(x))
 

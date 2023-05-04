@@ -888,7 +888,8 @@ class TSV:
         # for each possible index, do aggregation
         for j in range(len(agg_col_indexes)):
             for k, vs in value_map_arr[j].items():
-                value_func_map_arr[j][k] = agg_funcs[j](vs)
+                agg_value = agg_funcs[j](vs)
+                value_func_map_arr[j][k] = agg_value if (agg_value) is not None else ""
 
         # create new header and data
         new_header = "\t".join(utils.merge_arrays([self.header_fields, new_cols]))
