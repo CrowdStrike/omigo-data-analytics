@@ -183,40 +183,40 @@ class S3FSWrapper:
         return self.file_exists("{}/{}".format(path, RESERVED_HIDDEN_FILE))
 
     # TODO: confusing logic
-    def delete_file_with_wait(self, path, ignore_missing = True, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS):
+    def delete_file_with_wait(self, path, ignore_if_missing = True, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS):
         # check for ignore missing
         if (self.file_exists(path) == False):
-            if (ignore_missing == True):
-                utils.debug("delete_file_with_wait: path doesnt exist. ignore_missing: {}, returning".format(ignore_missing))
+            if (ignore_if_missing == True):
+                utils.debug("delete_file_with_wait: path doesnt exist. ignore_if_missing: {}, returning".format(ignore_if_missing))
                 return True
             else:
                 # check if attempts left
                 if (attempts > 0):
-                    utils.info("delete_file_with_wait: path: {} doesnt exists. ignore_missing is False. attempts: {}, sleep for : {} seconds".format(path, attempts, wait_sec))
+                    utils.info("delete_file_with_wait: path: {} doesnt exists. ignore_if_missing is False. attempts: {}, sleep for : {} seconds".format(path, attempts, wait_sec))
                     time.sleep(wait_sec)
-                    return self.delete_file_with_wait(path, ignore_missing = ignore_missing, wait_sec = wait_sec, attempts = attempts - 1)
+                    return self.delete_file_with_wait(path, ignore_if_missing = ignore_if_missing, wait_sec = wait_sec, attempts = attempts - 1)
                 else:
-                    utils.info("delete_file_with_wait: path doesnt exists. ignore_missing is False. attempts: over")
+                    utils.info("delete_file_with_wait: path doesnt exists. ignore_if_missing is False. attempts: over")
                     raise Exception("delete_file_with_wait: unable to delete file: {}".format(path))
         else:
             # file exists. call delete
-            self.delete_file(path, ignore_missing = ignore_missing)
+            self.delete_file(path, ignore_if_missing = ignore_if_missing)
 
             # verify that the file is deleted
             return self.file_not_exists_with_wait(path)
 
-    def delete_file(self, path, ignore_missing = None):
+    def delete_file(self, path, ignore_if_missing = None):
         if (self.__is_s3__(path)):
-            return self.__s3_delete_file__(path, ignore_missing = ignore_missing)
+            return self.__s3_delete_file__(path, ignore_if_missing = ignore_if_missing)
         else:
-            return self.__local_delete_file__(path, ignore_missing = ignore_missing)
+            return self.__local_delete_file__(path, ignore_if_missing = ignore_if_missing)
 
-    def __s3_delete_file__(self, path, ignore_missing = None):
-        return s3_wrapper.delete_file(path, fail_if_missing = ignore_missing)
+    def __s3_delete_file__(self, path, ignore_if_missing = None):
+        return s3_wrapper.delete_file(path, ignore_if_missing = ignore_if_missing)
 
-    def __local_delete_file__(self, path, ignore_missing = None):
+    def __local_delete_file__(self, path, ignore_if_missing = None):
         # delete file
-        local_fs_wrapper.delete_file(path, fail_if_missing = ignore_missing)
+        local_fs_wrapper.delete_file(path, fail_if_missing = ignore_if_missing)
 
         # check if this was the reserved file for directory
         if (path.endswith("/" + RESERVED_HIDDEN_FILE)):
@@ -224,14 +224,14 @@ class S3FSWrapper:
             dir_path = path[0:path.rindex("/")]
             local_fs_wrapper.delete_dir(dir_path)
 
-    def delete_dir_with_wait(self, path, ignore_missing = True, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS):
+    def delete_dir_with_wait(self, path, ignore_if_missing = True, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS):
         path = self.__normalize_path__(path)
         file_path = "{}/{}".format(path, RESERVED_HIDDEN_FILE)
 
         # check for existence 
         if (self.file_exists(file_path) == False):
-            if (ignore_missing == True):
-                utils.warn("delete_dir: path doesnt exist: {}, ignore_missing: {}".format(path, ignore_missing))
+            if (ignore_if_missing == True):
+                utils.warn("delete_dir: path doesnt exist: {}, ignore_if_missing: {}".format(path, ignore_if_missing))
                 return
             else:
                 raise Exception("delete_dir: path doesnt exist: {}".format(path))
@@ -242,7 +242,7 @@ class S3FSWrapper:
             return False
 
         # delete the reserved file 
-        return self.delete_file_with_wait(file_path, ignore_missing = ignore_missing, wait_sec = wait_sec, attempts = attempts)
+        return self.delete_file_with_wait(file_path, ignore_if_missing = ignore_if_missing, wait_sec = wait_sec, attempts = attempts)
 
     def get_parent_directory(self, path):
         # normalize

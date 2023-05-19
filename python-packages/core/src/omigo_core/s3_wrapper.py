@@ -218,7 +218,8 @@ def __get_all_s3_objects__(s3, **base_kwargs):
         continuation_token = response.get('NextContinuationToken')
 
 # FIXME: This method is implemented using reverse engineering. Not so reliable
-def get_directory_listing(path, filter_func = None, fail_if_missing = True, skip_exist_check = False, region = None, profile = None):
+# TODO: ignore_if_missing should be FALSE by default
+def get_directory_listing(path, filter_func = None, ignore_if_missing = False, skip_exist_check = False, region = None, profile = None):
     region, profile = resolve_region_profile(region, profile)
     s3 = get_s3_client_cache(region, profile)
 
@@ -228,7 +229,7 @@ def get_directory_listing(path, filter_func = None, fail_if_missing = True, skip
     filenames = []
     # validation
     if (check_path_exists(path, region, profile) == False):
-        if (fail_if_missing):
+        if (ignore_if_missing == False):
             raise Exception("Directory does not exist: " + path)
         else:
             if (utils.is_debug()):
@@ -288,7 +289,7 @@ def get_directory_listing(path, filter_func = None, fail_if_missing = True, skip
     # return
     return filenames
 
-def delete_file(path, fail_if_missing = False, region = None, profile = None):
+def delete_file(path, ignore_if_missing = False, region = None, profile = None):
     region, profile = resolve_region_profile(region, profile)
     s3 = get_s3_client_cache(region, profile)
 
@@ -297,7 +298,7 @@ def delete_file(path, fail_if_missing = False, region = None, profile = None):
 
     # check if the file exists
     if (check_path_exists(path) == False):
-        if (fail_if_missing):
+        if (ignore_if_missing == False):
             raise Exception("delete_file: path doesnt exist: {}".format(path))
         else:
             utils.debug("delete_file: path doesnt exist: {}".format(path))
@@ -307,10 +308,10 @@ def delete_file(path, fail_if_missing = False, region = None, profile = None):
     # delete
     s3.delete_object(Bucket = bucket_name, Key = object_key)
 
-def get_last_modified_time(path, fail_if_missing = False, region = None, profile = None):
+def get_last_modified_time(path, ignore_if_missing = False, region = None, profile = None):
     # check if exists
     if (check_path_exists(path) == False):
-        if (fail_if_missing):
+        if (ignore_if_missing == False):
             raise Exception("get_last_modified_time: path doesnt exist: {}".format(path))
         else:
             utils.debug("get_last_modified_time: path doesnt exist: {}".format(path))
