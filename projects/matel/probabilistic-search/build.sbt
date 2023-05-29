@@ -1,4 +1,4 @@
-name := "Statistical Trends Analysis in Spark"
+name := "Probabilistic Search"
 
 version := "0.1"
 
