@@ -1,4 +1,4 @@
-package omigo.core
+package omigo.matel
 
 object TestMain {
 
