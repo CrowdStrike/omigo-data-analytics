@@ -16,6 +16,10 @@ class TSV(val header: String, val data: List[String]) {
     header_fields
   }
 
+  def get_columns(): List[String] = {
+    get_header_fields()
+  }
+
   def get_header_map(): Map[String, Int] = {
     header_map
   }

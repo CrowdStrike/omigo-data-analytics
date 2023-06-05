@@ -199,7 +199,7 @@ object TSVUtils {
         val data = lines.drop(1) 
 
         // check if a custom separator is defined
-        if (sep != null)
+        if (sep != null && sep != "\t")
           throw new Exception("custom sep is not supported")
 
         tsv_list.append(new TSV(header, data))
