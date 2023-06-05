@@ -161,6 +161,29 @@ class TSV(val header: String, val data: List[String]) {
     new TSV(new_header, new_data.toList)
   }
 
+  def to_tuples5(col_or_cols: Any, inherit_message: String): Seq[(String, String, String, String, String)] = {
+    // check empty
+    if (has_empty_header())
+      throw new Exception("to_tuples5: empty tsv")
+
+    // get matching column and indexes
+    val matching_cols = __get_matching_cols__(col_or_cols, false)
+    val indexes = __get_col_indexes__(matching_cols)
+
+    var counter = 0
+    val new_data = new scala.collection.mutable.ListBuffer[(String, String, String, String, String)]()
+    get_data().foreach({ line =>
+      // report progress
+      counter = counter + 1
+      Utils.report_progress("to_tuples5: [1/1] selecting columns", inherit_message, counter, data.length)
+
+      val fields = line.split("\t")
+      new_data.append((fields(indexes(0)), fields(indexes(1)), fields(indexes(2)), fields(indexes(3)), fields(indexes(4))))
+    })
+
+    new_data.toSeq
+  }
+
   // TODO: java implementation supports partially
   def __get_matching_cols__(col_or_cols_org: Any, ignore_if_missing: Boolean): List[String] = {
     def __java_re_match__(pstr: String, v: String) = {
