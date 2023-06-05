@@ -22,7 +22,8 @@ libraryDependencies ++= Seq(
 
 libraryDependencies ++= Seq(
   "com.facebook.presto" % "presto-jdbc" % "0.156",
-  "com.fasterxml.jackson.core" % "jackson-databind" % "2.10.0" 
+  "com.fasterxml.jackson.core" % "jackson-databind" % "2.10.0", 
+  "joda-time" % "joda-time" % "2.10.13"
 )
 
 libraryDependencies ++= Seq(
