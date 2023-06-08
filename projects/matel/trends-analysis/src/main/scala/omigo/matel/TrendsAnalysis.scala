@@ -96,6 +96,7 @@ object TrendsAnalysis {
     // create parquet file with all necessary columns
     val df = spark.createDataFrame(spark.sparkContext.parallelize(tuples)).toDF(cols:_*)
     df.show()
+
     // tuples
   }
 
