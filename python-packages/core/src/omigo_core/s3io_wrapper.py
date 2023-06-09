@@ -205,16 +205,16 @@ class S3FSWrapper:
             # verify that the file is deleted
             return self.file_not_exists_with_wait(path)
 
-    def delete_file(self, path, ignore_if_missing = None):
+    def delete_file(self, path, ignore_if_missing = False):
         if (self.__is_s3__(path)):
             return self.__s3_delete_file__(path, ignore_if_missing = ignore_if_missing)
         else:
             return self.__local_delete_file__(path, ignore_if_missing = ignore_if_missing)
 
-    def __s3_delete_file__(self, path, ignore_if_missing = None):
+    def __s3_delete_file__(self, path, ignore_if_missing = False):
         return s3_wrapper.delete_file(path, ignore_if_missing = ignore_if_missing)
 
-    def __local_delete_file__(self, path, ignore_if_missing = None):
+    def __local_delete_file__(self, path, ignore_if_missing = False):
         # delete file
         local_fs_wrapper.delete_file(path, fail_if_missing = ignore_if_missing)
 
@@ -232,7 +232,7 @@ class S3FSWrapper:
         if (self.file_exists(file_path) == False):
             if (ignore_if_missing == True):
                 utils.warn("delete_dir: path doesnt exist: {}, ignore_if_missing: {}".format(path, ignore_if_missing))
-                return
+                return False
             else:
                 raise Exception("delete_dir: path doesnt exist: {}".format(path))
 
@@ -302,7 +302,6 @@ class S3FSWrapper:
     def __s3_makedirs__(self, path, levels = None):
         # normalize path
         path = self.__normalize_path__(path)
-        parts = path.split("/")
 
         # split path into bucket and key
         bucket_name, object_key = utils.split_s3_path(path)
