@@ -227,60 +227,158 @@ class S3IOWrapper {
     }
   }
 
-  def delete_file(path: String, ignore_if_missing: Boolean) = {
-    throw new RuntimeException("Not Implemented Yet")
+  def delete_file(path: String, ignore_if_missing: Boolean = false) = {
+    if (__is_s3__(path))
+      __s3_delete_file__(path, ignore_if_missing = ignore_if_missing)
+    else
+      __local_delete_file__(path, ignore_if_missing = ignore_if_missing)
   }
 
-  def __s3_delete_file__(path: String, ignore_if_missing: Boolean) = {
-    throw new RuntimeException("Not Implemented Yet")
+  def __s3_delete_file__(path: String, ignore_if_missing: Boolean = false) = {
+    S3Wrapper.delete_file(path, ignore_if_missing = ignore_if_missing)
   }
 
-  def __local_delete_file__(path: String, ignore_if_missing: Boolean) = {
-    throw new RuntimeException("Not Implemented Yet")
+  def __local_delete_file__(path: String, ignore_if_missing: Boolean = false) = {
+    // delete file
+    LocalFSWrapper.delete_file(path, fail_if_missing = ignore_if_missing)
+
+    // check if this was the reserved file for directory
+    if (path.endsWith("/" + RESERVED_HIDDEN_FILE)) {
+      // delete the directory
+      val dir_path = path.take(path.lastIndexOf("/"))
+      LocalFSWrapper.delete_dir(dir_path)
+    }
   }
 
   def delete_dir_with_wait(path: String, ignore_if_missing: Boolean, wait_sec: Int = DEFAULT_WAIT_SEC, attempts: Int = DEFAULT_ATTEMPTS): Boolean = {
-    throw new RuntimeException("Not Implemented Yet")
+    val path2 = __normalize_path__(path)
+    val file_path = "%s/%s".format(path, RESERVED_HIDDEN_FILE)
+
+    // check for existence 
+    if (file_exists(file_path) == false) {
+      if (ignore_if_missing == true) {
+        Utils.warn("delete_dir: path doesnt exist: %s, ignore_if_missing: %s".format(path, ignore_if_missing))
+        return false 
+      } else {
+        throw new RuntimeException("delete_dir: path doesnt exist: %s".format(path))
+      }
+    }
+
+    // check if the directory is empty or not. to prevent race conditions
+    if (ls(path).length > 0) {
+        Utils.warn("delete_dir: directory not empty: %s".format(path))
+        return false
+    }
+
+    // delete the reserved file 
+    delete_file_with_wait(file_path, ignore_if_missing = ignore_if_missing, wait_sec = wait_sec, attempts = attempts)
   }
 
   def get_parent_directory(path: String) = {
-    throw new RuntimeException("Not Implemented Yet")
+    // normalize
+    val path2 = __normalize_path__(path)
+
+    // get the last index
+    val index = path.lastIndexOf("/")
+
+    // return
+    path.take(index)
   }
 
   def write_text_file(path: String, text: String) = {
-    throw new RuntimeException("Not Implemented Yet")
+    if (__is_s3__(path))
+      __s3_write_text_file__(path, text)
+    else
+      __local_write_text_file__(path, text)
   }
 
   def __s3_write_text_file__(path: String, text: String) = {
-    throw new RuntimeException("Not Implemented Yet")
+    val path2 = __normalize_path__(path)
+    val (bucket_name, object_key) = Utils.split_s3_path(path2)
+    S3Wrapper.put_file_with_text_content(bucket_name, object_key, text)
   }
 
   def __local_write_text_file__(path: String, text: String) = {
-    throw new RuntimeException("Not Implemented Yet")
+    val path2 = __normalize_path__(path)
+    LocalFSWrapper.put_file_with_text_content(path2, text)
   }
 
   def create_dir(path: String) = {
-    throw new RuntimeException("Not Implemented Yet")
+    Utils.debug("create_dir: %s".format(path))
+    if (__is_s3__(path))
+      __s3_create_dir__(path)
+    else
+      __local_create_dir__(path)
   }
 
   def __s3_create_dir__(path: String) = {
-    throw new RuntimeException("Not Implemented Yet")
+    val path2 = __normalize_path__(path)
+    val file_path = "%s/%s".format(path, RESERVED_HIDDEN_FILE)
+    val text = ""
+    write_text_file(file_path, text)
   }
 
   def __local_create_dir__(path: String) = {
-    throw new RuntimeException("Not Implemented Yet")
+    val path2 = __normalize_path__(path)
+    // create the directory
+    LocalFSWrapper.makedirs(path2)
+
+    // create the reserved file
+    val file_path = "%s/%s".format(path, RESERVED_HIDDEN_FILE)
+    val text = ""
+    write_text_file(file_path, text)
   }
 
-  def makedirs(path: String,levels: Int) = {
-    throw new RuntimeException("Not Implemented Yet")
+  def makedirs(path: String, levels: Int = 1) = {
+    Utils.trace("makedirs: path: %s, levels: %s".format(path, levels))
+    if (__is_s3__(path))
+        __s3_makedirs__(path, levels = levels)
+    else
+        __local_makedirs__(path, levels = levels)
   }
 
-  def __s3_makedirs__(path: String, levels: Int) = {
-    throw new RuntimeException("Not Implemented Yet")
+  def __s3_makedirs__(path: String, levels: Int = -999) = {
+    // normalize path
+    val path2 = __normalize_path__(path)
+
+    // split path into bucket and key
+    val (bucket_name, object_key) = Utils.split_s3_path(path2)
+    // TODO: silent bug probably. The split creates an empty string as first part for leading '/'
+    val parts = object_key.split("/")
+
+    // iterate over all ancestors
+    Range(0, math.min(levels, parts.length)).foreach({ i =>
+      // construct parent directory
+      val parent_dir = "s3://%s/%s".format(bucket_name, parts.take(parts.length - levels + i + 1).mkString("/"))
+      Utils.debug("__s3_makedirs__: path: %s, levels: %s, i: %s, parent_dir: %s".format(path, levels, i, parent_dir))
+
+      // create the directory if it doesnt exist. This will cover path too
+      if (is_directory(parent_dir) == false)
+        create_dir(parent_dir)
+    })
   }
 
-  def __local_makedirs__(path: String, levels: Int) = {
-    throw new RuntimeException("Not Implemented Yet")
+  def __local_makedirs__(path: String, levels: Int = -999) = {
+    // normalize path
+    val path2 = __normalize_path__(path)
+    // TODO: silent bug probably. The split creates an empty string as first part for leading '/'
+    val parts = path2.split("/")
+
+    // iterate over all ancestors
+    Range(0, math.min(levels, parts.length)).foreach({ i =>
+      // construct parent directory
+      val parent_dir = parts.take(parts.length - levels + i + 1).mkString("/")
+      val parent_dir2 = {
+        if (parent_dir.startsWith("/") == false)
+          "/" + parent_dir
+        else
+          parent_dir
+      }
+
+      // create the directory if it doesnt exist. This will cover path too
+      if (is_directory(parent_dir2) == false)
+          create_dir(parent_dir)
+    })
   }
 
   def get_last_modified_timestamp(path: String) = {
@@ -296,11 +394,55 @@ class S3IOWrapper {
   }
 
   def copy_leaf_dir(src_path: String, dest_path: String, overwrite: Boolean = false, append: Boolean = true) = {
-    throw new RuntimeException("Not Implemented Yet")
+    // check if src exists
+    if (dir_exists(src_path) == false)
+        throw new RuntimeException("copy_leaf_dir: src_path doesnt exist: %s".format(src_path))
+
+    // // check if it is not a leaf dir
+    // if (len(self.list_dirs(dest_path)) > 0):
+    //     throw new RuntimeException("copy_leaf_dir: can not copy non leaf directories: %s".format(dest_path))
+
+    // check if dest exists
+    if (dir_exists(dest_path) == true)
+        // check if overwrite is False
+        if (overwrite == false)
+            throw new RuntimeException("copy_leaf_dir: dest_path exists and overwrite = False: %s".format(dest_path))
+
+    // create dir
+    create_dir(dest_path)
+
+    // gather the list of files to copy 
+    val src_files = list_files(src_path)
+    val dest_files = list_files(dest_path)
+
+    // check if there are files that will not be overwritten
+    val files_not_in_src = (Set(dest_files).diff(Set(src_files))).toSeq
+
+    // check for append flag
+    if (files_not_in_src.length > 0)
+      if (append == false)
+        throw new RuntimeException("copy_leaf_dir: there are files in dest that will not be replaced and append = False: %s".format(files_not_in_src))
+      else
+        // debug
+        Utils.warn("copy_leaf_dir: there are files in dest that will not be replaced: %s".format(files_not_in_src))
+
+    // iterate
+    src_files.foreach({ f =>
+      // debug
+      Utils.info("copy_leaf_dir: copying: %s".format(f))
+
+      // if file exists in dest, warn
+      if (file_exists("%s/%s".format(dest_path, f)))
+          Utils.warn("copy_leaf_dir: overwriting existing file: %s".format(f))
+
+      // copy
+      val contents = read_file_contents_as_text("%s/%s".format(src_path, f))
+      write_text_file("%s/%s".format(dest_path, f), contents)
+    })
   }
 
   def list_leaf_dir(path: String, include_reserved_files: Boolean = false, wait_sec: Int = DEFAULT_WAIT_SEC, attempts: Int = DEFAULT_ATTEMPTS) = {
-    throw new RuntimeException("Not Implemented Yet")
+    ls(path, include_reserved_files = include_reserved_files, wait_sec = wait_sec, attempts = attempts, skip_exist_check = true)
   }
 }
 
