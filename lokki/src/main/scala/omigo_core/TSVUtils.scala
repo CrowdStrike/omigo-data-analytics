@@ -180,7 +180,7 @@ object TSVUtils {
   }
 
   // TODO : this is minimal implementation. python code needs to fix aws settings
-  def read(input_file_or_files: Any, sep: String, s3_region: String, aws_profile: String): TSV = {
+  def read(input_file_or_files: Any, sep: String = null, def_val_map: Map[String, String] = null, s3_region: String = null, aws_profile: String = null): TSV = {
     val input_files = if (input_file_or_files.isInstanceOf[String]) List(input_file_or_files.asInstanceOf[String]) else input_file_or_files.asInstanceOf[List[String]]
 
     // input_files = __get_argument_as_array__(input_file_or_files)
@@ -192,7 +192,7 @@ object TSVUtils {
         throw new Exception("http format not supported")
       } else {
         // read file content
-        val lines = FilePathsUtil.readFileContentAsLines(input_file, s3_region, aws_profile)
+        val lines = FilePathsUtil.read_file_content_as_lines(input_file, s3_region = s3_region, aws_profile = aws_profile)
 
         // take header and dat
         val header = lines(0)
@@ -210,23 +210,24 @@ object TSVUtils {
   }
 
   // TODO: this is minimal implementation
-  def readWithFilterTransform(inputFileOrFiles: Any, filterTransformFunc: Any, transformFunc: Any, s3Region: String, awsProfile: String): TSV = {
+  def read_with_filter_transform(input_file_or_files: Any, sep: String = null, def_val_map: Map[String, String] = null, filter_transform_func: Any = null, transform_func: Any = null,
+    s3_region: String = null, aws_profile: String = null): TSV = {
     // TODO: no support for transform func
-    if (filterTransformFunc != null || transformFunc != null)
+    if (filter_transform_func != null || transform_func != null)
       throw new Exception("transform func not supported")
 
-    read(inputFileOrFiles, null, s3Region, awsProfile)
+    read(input_file_or_files, sep = sep, def_val_map = def_val_map, s3_region = s3_region, aws_profile = aws_profile)
   }
 
-  def read_by_date_range(path: String, start_date_str: String, end_date_str: String, prefix: String, s3_region: String, aws_profile: String, granularity: String) {
+  def read_by_date_range(path: String, start_date_str: String, end_date_str: String, prefix: String, s3_region: String = null, aws_profile: String = null, granularity: String) {
     throw new Exception("Not Implemented")
   }
 
-  def load_from_dir(path: String, start_date_str: String, end_date_str: String, prefix: String, s3_region: String, aws_profile: String, granularity: String) {
+  def load_from_dir(path: String, start_date_str: String, end_date_str: String, prefix: String, s3_region: String = null, aws_profile: String = null, granularity: String) {
     throw new Exception("Not Implemented")
   }
 
-  def load_from_files(filepaths: List[String], s3_region: String, aws_profile: String) {
+  def load_from_files(filepaths: List[String], s3_region: String = null, aws_profile: String = null) {
     throw new Exception("Not Implemented")
   }
 
@@ -234,13 +235,13 @@ object TSVUtils {
     throw new Exception("Not Implemented")
   }
 
-  def save_to_file(xtsv: TSV, output_file_name: String, s3_region: String, aws_profile: String) {
+  def save_to_file(xtsv: TSV, output_file_name: String, s3_region: String = null, aws_profile: String = null) {
     throw new Exception("Not Implemented")
   }
 
   // TODO: python needs fixing
-  def check_exists(path: String, s3_region: String, aws_profile: String): Boolean = {
-    FilePathsUtil.check_exists(path, s3_region, aws_profile)
+  def check_exists(path: String, s3_region: String = null, aws_profile: String = null): Boolean = {
+    FilePathsUtil.check_exists(path, s3_region = s3_region, aws_profile = aws_profile)
   }
 
   def sort_func(vs: Int) {

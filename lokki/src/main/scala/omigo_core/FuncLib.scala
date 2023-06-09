@@ -106,7 +106,7 @@ object FuncLib {
   }
 
   // TODO: Not sure of these APIs
-  def dateTimeToUTCTimestamp(x: String): Long = {
+  def datetime_to_utctimestamp_millis(x: String): Long = {
     // 2022-05-20T05:00:00+00:00
     if (x.endsWith("UTC") || x.endsWith("GMT")) {
       val formatter = DateTimeFormatter.ofPattern("yyyy-MMM-dd'T'HH:mm:ss z")
@@ -148,7 +148,7 @@ object FuncLib {
     }
   }
 
-  def utcTimestampToDateTimeStr(x: Long) = {
+  def utctimestamp_to_datetime_str(x: Long) = {
     Instant.ofEpochSecond(x).toString()
   }
 
@@ -160,12 +160,12 @@ object FuncLib {
     throw new Exception("Not Implemented for Java")
   }
 
-  def getUTCTimestampSec() = {
+  def get_utctimestamp_sec() = {
     (Instant.now().toEpochMilli() / 1000.0).toLong
   }
 
-  def dateStrToDateTime(x: String) = {
-    val utcTimestamp = dateTimeToUTCTimestamp(x)
+  def datestr_to_datetime(x: String) = {
+    val utcTimestamp = datetime_to_utctimestamp_millis(x)
     Instant.ofEpochSecond(utcTimestamp)
   }
 }

@@ -13,7 +13,7 @@ class FilePathsDataReader(val filePaths: List[String], val s3Region: String, val
       if (filePathsReaders.hasNext()) {
         // initial load
         val filePath = filePathsReaders.next()
-        curData = FilePathsUtil.readFileContentAsLines(filePath, s3Region, awsProfile)
+        curData = FilePathsUtil.read_file_content_as_lines(filePath, s3Region, awsProfile)
 
         // check for validity
         if (curData.length == 0) {
@@ -94,7 +94,7 @@ class FilePathsDataReader(val filePaths: List[String], val s3Region: String, val
           if (filePathsReaders.hasNext()) {
             // read the next block and reinitialize the cur_index
             val filePath = filePathsReaders.next()
-            curData = FilePathsUtil.readFileContentAsLines(filePath, s3Region, awsProfile)
+            curData = FilePathsUtil.read_file_content_as_lines(filePath, s3Region, awsProfile)
             curIndex = 1
 
             // check if found a valid file

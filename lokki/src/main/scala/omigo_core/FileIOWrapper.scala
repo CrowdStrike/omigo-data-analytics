@@ -11,39 +11,39 @@ import java.util.Random
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
 
-class FileWriter(val outputFileName: String, val s3Region: String, val awsProfile: String) {
+class FileWriter(val output_file_name: String, val s3_region: String = null, val aws_profile: String = null) {
   // TODO: Not needed probably
 }
 
-class TSVFileWriter(val s3Region: String, val awsProfile: String) {
-  def save(xtsv: TSV, outputFileName: String): Unit = {
+class TSVFileWriter(val s3_region: String, val aws_profile: String) {
+  def save(xtsv: TSV, output_file_name: String): Unit = {
     val content = List(xtsv.get_header(), xtsv.get_data().mkString("\n")).mkString("\n")
 
     // check s3 or local
-    if (outputFileName.startsWith("s3://")) {
-      val (bucketName, objectKey) = Utils.splitS3Path(outputFileName)
-      S3Wrapper.put_s3_file_with_text_content(bucketName, objectKey, content, s3Region, awsProfile)
-      println("file saved to: " + outputFileName)
+    if (output_file_name.startsWith("s3://")) {
+      val (bucket_name, object_key) = Utils.split_s3_path(output_file_name)
+      S3Wrapper.put_s3_file_with_text_content(bucket_name, object_key, content, s3_region = s3_region, aws_profile = aws_profile)
+      println("file saved to: " + output_file_name)
     } else {
       // get bytes
       var barr = content.getBytes()
 
       // check file extensions
-      if (outputFileName.endsWith(".gz")) {
+      if (output_file_name.endsWith(".gz")) {
         val byteStream = new ByteArrayOutputStream(barr.length)
         val zipStream = new GZIPOutputStream(byteStream)
         zipStream.write(barr)
         zipStream.close()
         barr = byteStream.toByteArray()
-      } else if (outputFileName.endsWith(".zip")) {
+      } else if (output_file_name.endsWith(".zip")) {
         throw new Exception("Not supported")
       }
 
       // open FileOutputStream and write
-      val fos = new FileOutputStream(new File(outputFileName))
+      val fos = new FileOutputStream(new File(output_file_name))
       fos.write(barr)
       fos.close()
-      println("file saved to: " + outputFileName)
+      println("file saved to: " + output_file_name)
     }
   }
 }

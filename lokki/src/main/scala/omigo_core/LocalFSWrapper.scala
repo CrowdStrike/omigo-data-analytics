@@ -15,24 +15,24 @@ object LocalFSWrapper {
     new File(path).exists()
   }
 
-  def get_directory_listing(path: String, filter_func: (String) => Boolean, fail_if_missing: Boolean) = {
-    if (check_path_exists(path) == false) {
-      if (fail_if_missing == true)
-        throw new RuntimeException("Directory does not exist: %s".format(path))
-      else
-        List.empty
-    } else {
-      val full_paths = (new File(path).listFiles()).map({ p => path + "/" + p })
-     
-      // apply filter func if any
-      if (filter_func != null)
-        full_paths.filter({ p => filter_func(p) })
-      else
-        full_paths
+  def get_directory_listing(path: String, filter_func: (String) => Boolean = null, fail_if_missing: Boolean = true, skip_exist_check: Boolean = false): List[String] = {
+    if (skip_exist_check == false) {
+      if (check_path_exists(path) == false) {
+        if (fail_if_missing == true)
+          throw new RuntimeException("Directory does not exist: %s".format(path))
+      }
     }
+
+    val full_paths = (new File(path).listFiles()).map({ p => path + "/" + p }).toList
+    
+    // apply filter func if any
+    if (filter_func != null)
+      full_paths.filter({ p => filter_func(p) })
+    else
+      full_paths
   } 
 
-  def makedirs(path: String, exist_ok: Boolean) = {
+  def makedirs(path: String, exist_ok: Boolean = true) = {
     if (check_path_exists(path) == false) {
       new File(path).mkdir()
     } else {
@@ -75,7 +75,7 @@ object LocalFSWrapper {
     printWriter.close() 
   }
 
-  def delete_file(path: String, fail_if_missing: Boolean): Unit = {
+  def delete_file(path: String, fail_if_missing: Boolean = false): Unit = {
     // check if the file exists
     if (check_path_exists(path) == false) {
       if (fail_if_missing)
@@ -90,7 +90,7 @@ object LocalFSWrapper {
     new File(path).delete()
   }
 
-  def delete_dir(path: String, fail_if_missing: Boolean): Unit = {
+  def delete_dir(path: String, fail_if_missing: Boolean = false): Unit = {
     // check if the file exists
     if (check_path_exists(path) == false) {
       if (fail_if_missing)

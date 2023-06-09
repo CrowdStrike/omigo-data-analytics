@@ -158,7 +158,7 @@ object Utils {
   }
 
   // len(s3://) = 5
-  def splitS3Path(path: String): (String, String) = {
+  def split_s3_path(path: String): (String, String) = {
     val part1 = path.substring(5)
     val index = part1.indexOf("/")
     val bucketName = part1.substring(0, index)
