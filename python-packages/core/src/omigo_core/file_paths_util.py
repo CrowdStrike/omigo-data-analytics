@@ -261,7 +261,7 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
 
         # get the list of files. This needs to be failsafe as not all directories may exist
         if (path.startswith("s3://")):
-            tasks.append(utils.ThreadPoolTask(s3_wrapper.get_directory_listing, cur_path, filter_func = None, fail_if_missing = False, skip_exist_check = True,
+            tasks.append(utils.ThreadPoolTask(s3_wrapper.get_directory_listing, cur_path, filter_func = None, ignore_if_missing = False, skip_exist_check = True,
                 region = s3_region, profile = aws_profile))
         else:
             tasks.append(utils.ThreadPoolTask(get_local_directory_listing, cur_path, filter_func = None, fail_if_missing = False, skip_exist_check = True))
