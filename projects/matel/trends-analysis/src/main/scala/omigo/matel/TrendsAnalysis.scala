@@ -80,39 +80,57 @@ object TrendsAnalysis {
     createDicts(spark, outputDir + "/groups", outputDir + "/dicts")
   }
 
-  def readBaseData(spark: SparkSession, inputFile: String, outputDir: String, props: Properties) = {
+  def readBaseData(spark: SparkSession, inputFile: String, outputPath: String, props: Properties) = {
     import spark.implicits._
+    import spark.sqlContext.implicits._
 
     // read the tsv file
     val xtsv = TSV.read(inputFile, "\t")
 
     // read the data
-    val cols = Seq("id_level1", "id_level2", "uid", "node_id", "parent_id")
+    val cols = Seq("id_level1", "id_level2", "uid", "node_id", "parent_id", "event_id")
     println(cols)
 
-    val tuples = xtsv.to_tuples5(cols, "readBaseData")
+    val tuples = xtsv.to_tuples6(cols, "readBaseData")
     // println(tuples)
 
     // create parquet file with all necessary columns
     val df = spark.createDataFrame(spark.sparkContext.parallelize(tuples)).toDF(cols:_*)
-    df.show()
 
-    // tuples
+    // persist 
+    df.write.mode(SaveMode.Overwrite).parquet(outputPath)
   }
 
-  def runEnrichment(spark: SparkSession, inputDir: String, outputDir: String): Unit = {
+  def runEnrichment(spark: SparkSession, inputPath: String, outputPath: String): Unit = {
+    import spark.implicits._
+    import spark.sqlContext.implicits._
+
+    // check if already exists
+    if (Utils.checkIfExists(spark, outputPath) == true) {
+      println("doEnrichment: outputPath already exists. Skipping ... : " + outputPath)
+      return
+    }
+
+    val base = spark.read.parquet(inputPath)
+    base.createOrReplaceTempView("base")
+
+    // read data
+    val df = spark.sql("select * from base")
+
+    // persist
+    df.write.mode(SaveMode.Overwrite).parquet(outputPath)
+    spark.catalog.dropTempView("base")
+  }
+
+  def runAncestry(spark: SparkSession, inputPath: String, outputPath: String): Unit = {
 
   }
 
-  def runAncestry(spark: SparkSession, inputDir: String, outputDir: String): Unit = {
+  def createGroups(spark: SparkSession, inputPath: String, outputPath: String): Unit = {
 
   }
 
-  def createGroups(spark: SparkSession, inputDir: String, outputDir: String): Unit = {
-
-  }
-
-  def createDicts(spark: SparkSession, inputDir: String, outputDir: String): Unit = {
+  def createDicts(spark: SparkSession, inputPath: String, outputPath: String): Unit = {
 
   }
 }
