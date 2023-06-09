@@ -1,6 +1,5 @@
 """utlity methods to read and write tsv data."""
 
-from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlencode
 #from urllib.request import Request, urlopen
 #from urllib.error import HTTPError, URLError
@@ -21,6 +20,7 @@ from requests import exceptions
 
 # TODO: find the difference between ascii and utf-8 encoding
 # requests.post doesnt take data properly. Use json parameter.
+# TODO: use the local_fs_wrapper to use shared code for reading and writing
 
 # TODO: need to document that a simple union can be achieved by setting def_val_map = {}
 def merge(tsv_list, def_val_map = None):
@@ -37,6 +37,13 @@ def merge(tsv_list, def_val_map = None):
         utils.warn("List of tsv is empty. Returning")
         return tsv.create_empty()
 
+    # warn if a huge tsv is found 
+    for i in range(len(tsv_list)):
+        if (tsv_list[i].size_in_gb() >= 1):
+            utils.warn("merge: Found a very big tsv: {} / {}, num_rows: {}, size (GB): {}. max_size_cols_stats: {}".format(
+                i + 1, len(tsv_list), tsv_list[i].num_rows(), tsv_list[i].size_in_gb(), str(tsv_list[i].get_max_size_cols_stats())))
+            tsv_list[i].show_transpose(1, title = "merge: big tsv")
+
     # check for valid headers
     header = tsv_list[0].get_header()
     header_fields = tsv_list[0].get_header_fields()
@@ -47,6 +54,8 @@ def merge(tsv_list, def_val_map = None):
         # Use a different method for merging if the header is different
         if (header != t.get_header()):
             header_diffs = get_diffs_in_headers(tsv_list)
+
+            # display warning according to kind of differences found
             if (len(header_diffs) > 0):
                 # TODO
                 if (def_val_map is None):
@@ -54,8 +63,11 @@ def merge(tsv_list, def_val_map = None):
                         index, str(header_diffs)))
             else:
                 utils.warn("Mismatch in order of header fields: {}, {}. Using merge intersect".format(header.split("\t"), t.get_header().split("\t")))
-            return merge_intersect(tsv_list, def_val_map)
 
+            # return
+            return merge_intersect(tsv_list, def_val_map = def_val_map)
+
+        # increment
         index = index + 1
 
     # simple condition
@@ -127,10 +139,10 @@ def merge_intersect(tsv_list, def_val_map = None):
             # assign empty string to the columns for which default value was not defined
             for h in diff_cols:
                 if (h in def_val_map.keys()):
-                    utils.debug("merge_intersect: assigning default value for {}: {}".format(h, def_val_map[h]))
-                    effective_def_val_map[h] = def_val_map[h]
+                    utils.trace_once("merge_intersect: assigning default value for {}: {}".format(h, def_val_map[h]))
+                    effective_def_val_map[h] = str(def_val_map[h])
                 else:
-                    utils.debug("merge_intersect: assigning empty string as default value to column: {}".format(h))
+                    utils.trace_once("merge_intersect: assigning empty string as default value to column: {}".format(h))
                     effective_def_val_map[h] = ""
 
             # get the list of keys in order
@@ -146,13 +158,18 @@ def merge_intersect(tsv_list, def_val_map = None):
             # create a list of new tsvs
             new_tsvs = []
             for t in tsv_list:
+                # TODO: use better design
                 t1 = t
-                for d in diff_cols:
-                    t1 = t1.add_const_if_missing(d, effective_def_val_map[d])
+                if (def_val_map is not None and len(def_val_map) > 0):
+                    for d in diff_cols:
+                        t1 = t1.add_const_if_missing(d, effective_def_val_map[d])
+                else:
+                    t1 = t1.add_empty_cols_if_missing(diff_cols)
+                # append to tsv list
                 new_tsvs.append(t1.select(keys_order))
 
-            # return after merging
-            return merge(new_tsvs)
+            # return after merging. dont call merge recursively as thats a bad design
+            return new_tsvs[0].union(new_tsvs[1:]) 
         else:
             # handle boundary condition of no matching cols
             if (len(same_cols) == 0):
@@ -163,7 +180,7 @@ def merge_intersect(tsv_list, def_val_map = None):
                 for t in tsv_list:
                     new_tsvs.append(t.select(same_cols))
 
-                return merge(new_tsvs)
+                return new_tsvs[0].union(new_tsvs[1:])
     else:
         # probably landed here because of mismatch in headers position
         tsv_list2 = []
@@ -171,7 +188,7 @@ def merge_intersect(tsv_list, def_val_map = None):
             tsv_list2.append(t.select(same_cols))
         return merge(tsv_list2)
 
-def read(input_file_or_files, sep = None, s3_region = None, aws_profile = None):
+def read(input_file_or_files, sep = None, def_val_map = None, s3_region = None, aws_profile = None):
     input_files = __get_argument_as_array__(input_file_or_files)
     tsv_list = []
     for input_file in input_files:
@@ -199,12 +216,34 @@ def read(input_file_or_files, sep = None, s3_region = None, aws_profile = None):
 
             tsv_list.append(tsv.TSV(header, data))
 
-    return merge(tsv_list)
+    # merge and return
+    return merge(tsv_list, def_val_map = def_val_map)
 
-def read_with_filter_transform(input_file_or_files, filter_transform_func = None, transform_func = None, s3_region = None, aws_profile = None):
+def __read_with_filter_transform_select_func__(cols):
+    # create a inner function
+    def __read_with_filter_transform_select_func_inner__(mp):
+        result_mp = {}
+        for c in cols:
+            if (c in mp.keys()):
+                result_mp[c] = str(mp[c])
+
+        # return
+        return result_mp
+
+    return __read_with_filter_transform_select_func_inner__
+
+def read_with_filter_transform(input_file_or_files, sep = None, def_val_map = None, filter_transform_func = None, cols = None, transform_func = None, s3_region = None, aws_profile = None):
+    # check if cols is defined
+    if (filter_transform_func is not None and cols is not None):
+        raise Exception("tsvutils: read_with_filter_transform: either of filter_transform_func or cols parameter can be used")
+
+    # use the map function for cols
+    if (cols is not None and len(cols) > 0):
+        filter_transform_func = __read_with_filter_transform_select_func__(cols)
+
     # check if filter_transform_func is defined
     if (filter_transform_func is None):
-        xtsv = read(input_file_or_files, s3_region = s3_region, aws_profile = aws_profile)
+        xtsv = read(input_file_or_files, sep = sep, def_val_map = def_val_map, s3_region = s3_region, aws_profile = aws_profile)
 
         # apply transform_func if defined
         xtsv_transform = transform_func(xtsv) if (transform_func is not None) else xtsv
@@ -224,7 +263,7 @@ def read_with_filter_transform(input_file_or_files, filter_transform_func = None
         # iterate over all input files
         for input_file in input_files:
             # read the file
-            x = read(input_file)
+            x = read(input_file, sep = sep, def_val_map = def_val_map, s3_region = s3_region, aws_profile = aws_profile)
 
             # update the common
             for h in x.get_header_fields():
@@ -249,7 +288,7 @@ def read_with_filter_transform(input_file_or_files, filter_transform_func = None
             if (len(keys) > 0):
                 # output keys
                 keys_sorted = []
-                first_file = read(input_files[0])
+                first_file = read(input_files[0], sep = sep, def_val_map = def_val_map, s3_region = s3_region, aws_profile = aws_profile)
                 for h in first_file.get_header_fields():
                     if (h in keys.keys()):
                         keys_sorted.append(h)
@@ -282,7 +321,7 @@ def read_with_filter_transform(input_file_or_files, filter_transform_func = None
         else:
             # create an empty data tsv file with common header fields
             header_fields = []
-            first_file = read(input_files[0])
+            first_file = read(input_files[0], sep = sep, def_val_map = def_val_map, s3_region = s3_region, aws_profile = aws_profile)
             for h in first_file.get_header_fields():
                 if (common_keys[h] == len(input_files)):
                     header_fields.append(h)
@@ -295,6 +334,7 @@ def read_with_filter_transform(input_file_or_files, filter_transform_func = None
 
 # TODO: replace this by etl_ext
 def read_by_date_range(path, start_date_str, end_date_str, prefix, s3_region = None, aws_profile = None, granularity = "daily"):
+    utils.warn_once("read_by_date_range: probably Deprecated")
     # read filepaths
     filepaths = file_paths_util.read_filepaths(path, start_date_str, end_date_str, prefix, s3_region, aws_profile, granularity)
 
@@ -384,7 +424,7 @@ def load_from_array_of_map(map_arr):
         data.append(line)
 
     # create tsv
-    return tsv.TSV(header, data)
+    return tsv.TSV(header, data).validate()
 
 def save_to_file(xtsv, output_file_name, s3_region = None, aws_profile = None):
     # do some validation
@@ -470,10 +510,10 @@ def read_url_json(url, query_params = {}, headers = {}, body = None, username = 
         if (isinstance(json_obj, list)):
             # iterate and add as row
             for v in json_obj:
-                fields = [utils.url_encode(json.dumps(v)).replace("\n", " "), str(status_code), str(error_msg)]
+                fields = [utils.url_encode(json.dumps(v).replace("\n", " ")), str(status_code), str(error_msg)]
                 data.append("\t".join(fields))
         elif (isinstance(json_obj, dict)):
-            fields = [utils.url_encode(json.dumps(response_str)).replace("\n", " "), str(status_code), str(error_msg)]
+            fields = [utils.url_encode(json.dumps(json_obj).replace("\n", " ")), str(status_code), str(error_msg)]
             data.append("\t".join(fields))
         else:
             fields = ["", "0", "Unable to parse the json response: {}".format(response_str)]
@@ -494,15 +534,17 @@ def read_url_response(url, query_params = {}, headers = {}, body = None, usernam
 
     # check for error codes
     if (response.status_code != 200):
-        if (response.status_code == 429):
+        # check for website saying too many requests (429) or service unavailable (503)
+        if (response.status_code == 429 or response.status_code == 503):
             # too many requests. wait and try again.
             if (num_retries > 0):
-                utils.debug("read_url_response: url: {}, query_params: {}, got 429. Attempts remaining: {}. Retrying after sleeping for {} seconds".format(url, query_params, num_retries, retry_sleep_sec))
+                utils.debug("read_url_response: url: {}, query_params: {}, got status: {}. Attempts remaining: {}. Retrying after sleeping for {} seconds".format(url, query_params,
+                    response.status_code, num_retries, retry_sleep_sec))
                 time.sleep(retry_sleep_sec)
                 return read_url_response(url, query_params = query_params, headers = headers, body = body, username = username, password = password, timeout_sec = timeout_sec, verify = verify,
                     num_retries = num_retries - 1, retry_sleep_sec = retry_sleep_sec * 2)
             else:
-                utils.debug("read_url_response: url: {}, getting 429 too many requests. Use num_retries parameter to for backoff and retry.".format(url))
+                utils.debug("read_url_response: url: {}, getting 429 too many requests or 5XX error. Use num_retries parameter to for backoff and retry.".format(url))
                 return "", response.status_code, response.reason
         else:
             return "", response.status_code, response.reason
@@ -606,8 +648,10 @@ def read_url_as_tsv(url, query_params = {}, headers = {}, sep = None, username =
     return tsv.TSV(header, data).validate()
 
 # convert from data frame. TODO: df can have multiple header lines coz of indexes
+# TODO: take care of map data type
 def from_df(df):
-    utils.warn("from_df() api doesnt support reading indexed columns in pandas dataframes yet.")
+    utils.warn_once("from_df() api doesnt support reading indexed columns in pandas dataframes yet.")
+    utils.warn_once("from_df() api doesnt handle map data type properly")
 
     # get the csv str
     tsv_lines = df.to_csv(sep = "\t").rstrip("\n").split("\n")

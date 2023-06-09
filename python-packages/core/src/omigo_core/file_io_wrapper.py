@@ -24,7 +24,7 @@ class FileWriter:
         if (self.output_file_name.startswith("s3://")):
             content = "".join(self.data)
             bucket_name, object_key = utils.split_s3_path(self.output_file_name)
-            s3_wrapper.put_s3_file_with_text_content(bucket_name, object_key, content, self.s3_region, self.aws_profile)
+            s3_wrapper.put_file_with_text_content(bucket_name, object_key, content, self.s3_region, self.aws_profile)
         else:
             # construct output file
             if (self.output_file_name.endswith(".gz")):
@@ -65,7 +65,7 @@ class TSVFileWriter:
         if (output_file_name.startswith("s3://")):
             content = xtsv.get_header() + "\n" + "\n".join(xtsv.get_data()) if (xtsv.num_rows() > 0) else xtsv.get_header()
             bucket_name, object_key = utils.split_s3_path(output_file_name)
-            s3_wrapper.put_s3_file_with_text_content(bucket_name, object_key, content, self.s3_region, self.aws_profile)
+            s3_wrapper.put_file_with_text_content(bucket_name, object_key, content, self.s3_region, self.aws_profile)
         else:
             # construct output file
             if (output_file_name.endswith(".gz")):
@@ -80,7 +80,8 @@ class TSVFileWriter:
                 output_file = output_zipf.open(output_file_name.split("/")[-1][0:-4], "w")
                 # write header
                 output_file.write(xtsv.get_header() + "\n")
-                # write all the content
+                # write all the content. TODO: what is str.encode doing here?
+                utils.warn_once("str.encode used. Not sure why") 
                 for line in xtsv.get_data():
                     output_file.write(str.encode(line + "\n"))
             else:

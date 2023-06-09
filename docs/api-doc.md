@@ -180,6 +180,8 @@ sepal_length	sepal_width	petal_length	petal_width	class
    - **endswith**(col, value): Returns rows where string value of _col_ ends with  _value_.
    - **regex_match**(col, value): Returns rows where string value of _col_ matches the regular expression in _value_.
    - **not_eq_str**(col, value): Returns rows where string value of _col_ not equal to  _value_.
+   - **not_eq_int**(col, value): Returns rows where int value of _col_ not equal to  _value_.
+   - **not_eq_float**(col, value): Returns rows where float value of _col_ not equal to  _value_.
    - **not_startswith**(col, value): Returns rows where string value of _col_ does not start with  _value_.
    - **not_endswith**(col, value): Returns rows where string value of _col_ does not end with _value_.
    - **not_regex_match**(col, value): Returns rows where string value of _col_ does not match regular expression in _value_.
@@ -389,7 +391,7 @@ sepal_length	sepal_width	petal_length	petal_width	class_label
    - **rename_prefix**: This api renames the columns having prefix _prefix_ by removing the prefix from their names.
    - **add_prefix**(prefix, _cols_): This api adds prefix to all the given _cols_. If _cols = None_ then prefix is added to all columns. 
 renames the columns having suffix _suffix_ by removing the suffix from their names.
-   - **add_prefix**(suffix, _cols_): This api adds suffix to all the given _cols_. If _cols = None_ then prefix is added to all columns. 
+   - **add_suffix**(suffix, _cols_): This api adds suffix to all the given _cols_. If _cols = None_ then prefix is added to all columns. 
 
 *Examples*
 
