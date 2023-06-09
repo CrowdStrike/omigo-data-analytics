@@ -161,8 +161,8 @@ class S3FSWrapper:
     def __s3_get_directory_listing__(self, path, skip_exist_check = False):
         return s3_wrapper.get_directory_listing(path, skip_exist_check = skip_exist_check)
 
-    def __local_get_directory_listing__(self, path): 
-        return local_fs_wrapper.get_directory_listing(path)
+    def __local_get_directory_listing__(self, path, skip_exist_check = False):
+        return local_fs_wrapper.get_directory_listing(path, skip_exist_check = skip_exist_check)
 
     def list_dirs(self, path):
         path = self.__normalize_path__(path)

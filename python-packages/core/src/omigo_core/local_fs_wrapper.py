@@ -9,23 +9,25 @@ def check_path_exists(path):
 def check_file_exists(path):
     return os.path.exists(path)
 
-def get_directory_listing(path, filter_func = None, fail_if_missing = True):
-    if (check_path_exists(path) == False):
-        if (fail_if_missing):
-            raise Exception("Directory does not exist: {}".format(path))
-        else:
-            return []
-    else:
-        full_paths = []
-        for p in os.listdir(path):
-            full_paths.append(path + "/" + p)
+def get_directory_listing(path, filter_func = None, fail_if_missing = True, skip_exist_check = False):
+    # skip_exist_check is for performance and parity with s3
+    if (skip_exist_check == False):
+        if (check_path_exists(path) == False):
+            if (fail_if_missing):
+                raise Exception("Directory does not exist: {}".format(path))
+            else:
+                return []
 
-        # apply filter func if any
-        if (filter_func is not None):
-            full_paths = list(filter(lambda t: filter_func(t), full_paths))
+    full_paths = []
+    for p in os.listdir(path):
+        full_paths.append(path + "/" + p)
 
-        # return
-        return full_paths
+    # apply filter func if any
+    if (filter_func is not None):
+        full_paths = list(filter(lambda t: filter_func(t), full_paths))
+
+    # return
+    return full_paths
 
 # TODO: not in s3
 def makedirs(path, exist_ok = True):
