@@ -25,7 +25,7 @@ object FilePathsUtil {
   }
 
   def check_exists(path: String, s3_region: String, aws_profile: String): Boolean = {
-    if (path.startsWith("s3://") && S3Wrapper.checkPathExists(path, s3_region, aws_profile))
+    if (path.startsWith("s3://") && S3Wrapper.check_path_exists(path, s3_region, aws_profile))
       return true
 
     if ((new File(path)).exists())
@@ -56,7 +56,7 @@ object FilePathsUtil {
     // check for s3
     if (path.startsWith("s3://")) {
       val (bucketName, objectKey) = Utils.splitS3Path(path)
-      data = S3Wrapper.getS3FileContentAsText(bucketName, objectKey, s3Region, awsProfile)
+      data = S3Wrapper.get_s3_file_content_as_text(bucketName, objectKey, s3Region, awsProfile)
         .split("\n")
         .toList
     } else {
@@ -121,7 +121,7 @@ object FilePathsUtil {
       // else:
       //   tasks.append(utils.ThreadPoolTask(get_local_directory_listing, curPath, fail_if_missing = False))
       if (path.startsWith("s3://")) {
-        tasks.append(S3Wrapper.getDirectoryListing(curPath, null, false, null, null))
+        tasks.append(S3Wrapper.get_directory_listing(curPath, null, false, null, null))
       } else {
         tasks.append(getLocalDirectoryListing(curPath, false))
       }

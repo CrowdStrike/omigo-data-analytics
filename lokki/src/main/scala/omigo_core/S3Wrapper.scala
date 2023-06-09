@@ -52,7 +52,7 @@ object S3Wrapper {
     (regionStr, profileStr)
   }
 
-  def putS3FileContent(bucketName: String, objectKey: String, barr: Array[Byte], regionStr: String, profileStr: String) {
+  def put_s3_file_content(bucketName: String, objectKey: String, barr: Array[Byte], regionStr: String, profileStr: String) {
     val objectRequest = PutObjectRequest.builder()
       .bucket(bucketName)
       .key(objectKey)
@@ -61,7 +61,7 @@ object S3Wrapper {
     s3.putObject(objectRequest, RequestBody.fromByteBuffer(ByteBuffer.wrap(barr)))
   }
 
-  def putS3FileWithTextContent(bucketName: String, objectKey: String, text: String, regionStr: String, profileStr: String) {
+  def put_s3_file_with_text_content(bucketName: String, objectKey: String, text: String, regionStr: String, profileStr: String) {
     var barr = text.getBytes()
     if (objectKey.endsWith(".gz")) {
         val byteStream = new ByteArrayOutputStream(barr.length)
@@ -76,15 +76,15 @@ object S3Wrapper {
         zipStream.close()
         barr = byteStream.toByteArray()
     }
-    putS3FileContent(bucketName, objectKey, barr, regionStr, profileStr)
+    put_s3_file_content(bucketName, objectKey, barr, regionStr, profileStr)
   } 
 
-  def checkPathExists(path: String, regionStr: String, profileStr: String): Boolean = {
+  def check_path_exists(path: String, regionStr: String, profileStr: String): Boolean = {
     val (bucketName, objectKey) = Utils.splitS3Path(path)
     throw new RuntimeException("No need to implement yet")
   }
 
-  def checkFileExists(path: String, regionStr: String, profileStr: String): Boolean = {
+  def check_file_exists(path: String, regionStr: String, profileStr: String): Boolean = {
     val (regionStr2, profileStr2) = resolveRegionProfile(regionStr, profileStr)
     val (bucketName, objectKey) = Utils.splitS3Path(path)
 
@@ -101,7 +101,7 @@ object S3Wrapper {
     }
   }
 
-  def getS3FileContent(bucketName: String, objectKey: String, regionStr: String, profileStr: String): Array[Byte] = {
+  def get_s3_file_content(bucketName: String, objectKey: String, regionStr: String, profileStr: String): Array[Byte] = {
     val (regionStr2, profileStr2) = resolveRegionProfile(regionStr, profileStr)
 
     try {
@@ -116,8 +116,8 @@ object S3Wrapper {
     }
   }
 
-  def getS3FileContentAsText(bucketName: String, objectKey: String, regionStr: String, profileStr: String): String = {
-    var barr = getS3FileContent(bucketName, objectKey, regionStr, profileStr)
+  def get_s3_file_content_as_text(bucketName: String, objectKey: String, regionStr: String, profileStr: String): String = {
+    var barr = get_s3_file_content(bucketName, objectKey, regionStr, profileStr)
     if (objectKey.endsWith(".gz")) {
       val byteStream = new ByteArrayInputStream(barr)
       val inputStream = new GZIPInputStream(byteStream)
@@ -138,7 +138,7 @@ object S3Wrapper {
   }
 
   // TODO: The actual implementation is complex and inefficient. python needs fixing too
-  def getDirectoryListing(path: String, filterFunc: String, failIfMissing: Boolean, regionStr: String, profileStr: String): List[String] = {
+  def get_directory_listing(path: String, filterFunc: String, failIfMissing: Boolean, regionStr: String, profileStr: String): List[String] = {
     val (regionStr2, profileStr2) = resolveRegionProfile(regionStr, profileStr)
     val (bucketName, objectKey) = Utils.splitS3Path(path)
 
@@ -195,9 +195,9 @@ object S3Wrapper {
     val bucketName = "tsv-data-analytics-sample"
     val objectKey = "test-folder1/temp.txt.zip"
     val content = args(0)
-    // S3Wrapper.putS3FileWithTextContent(bucketName, objectKey, content, null, null)
-    // println(S3Wrapper.getS3FileContentAsText(bucketName, objectKey, null, null)) 
-    println(S3Wrapper.getDirectoryListing(args(0), null, false, null, null))
+    // S3Wrapper.put_s3_file_with_text_content(bucketName, objectKey, content, null, null)
+    // println(S3Wrapper.get_s3_file_content_as_text(bucketName, objectKey, null, null)) 
+    println(S3Wrapper.get_directory_listing(args(0), null, false, null, null))
   }
 }
 

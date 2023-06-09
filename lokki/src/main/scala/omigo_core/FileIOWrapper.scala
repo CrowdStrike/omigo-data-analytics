@@ -22,7 +22,7 @@ class TSVFileWriter(val s3Region: String, val awsProfile: String) {
     // check s3 or local
     if (outputFileName.startsWith("s3://")) {
       val (bucketName, objectKey) = Utils.splitS3Path(outputFileName)
-      S3Wrapper.putS3FileWithTextContent(bucketName, objectKey, content, s3Region, awsProfile)
+      S3Wrapper.put_s3_file_with_text_content(bucketName, objectKey, content, s3Region, awsProfile)
       println("file saved to: " + outputFileName)
     } else {
       // get bytes
