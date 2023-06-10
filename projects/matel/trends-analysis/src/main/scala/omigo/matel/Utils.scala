@@ -27,9 +27,7 @@ import scala.util.Random
 
 object Utils {
   def checkIfExists(spark: SparkSession, path: String) = {
-    // println("checkIfExists: path: " + path)
     val index = "s3://".length() + path.substring("s3://".length()).indexOf("/")
-    // println("S3 bucket: " + path.substring(0, index))
     val fs = FileSystem.get(new URI(path.substring(0, index)), spark.sparkContext.hadoopConfiguration)
   
     // check if already exists
