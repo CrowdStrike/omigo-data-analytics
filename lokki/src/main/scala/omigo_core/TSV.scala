@@ -248,7 +248,7 @@ class TSV(val header: String, val data: List[String]) {
   def to_tuples6(col_or_cols: Any, inherit_message: String): Seq[(String, String, String, String, String, String)] = {
     // check empty
     if (has_empty_header())
-      throw new Exception("to_tuples5: empty tsv")
+      throw new Exception("to_tuples6: empty tsv")
 
     // get matching column and indexes
     val matching_cols = __get_matching_cols__(col_or_cols, false)
@@ -269,7 +269,7 @@ class TSV(val header: String, val data: List[String]) {
   def to_tuples7(col_or_cols: Any, inherit_message: String): Seq[(String, String, String, String, String, String, String)] = {
     // check empty
     if (has_empty_header())
-      throw new Exception("to_tuples5: empty tsv")
+      throw new Exception("to_tuples7: empty tsv")
 
     // get matching column and indexes
     val matching_cols = __get_matching_cols__(col_or_cols, false)
@@ -290,7 +290,7 @@ class TSV(val header: String, val data: List[String]) {
   def to_tuples8(col_or_cols: Any, inherit_message: String): Seq[(String, String, String, String, String, String, String, String)] = {
     // check empty
     if (has_empty_header())
-      throw new Exception("to_tuples5: empty tsv")
+      throw new Exception("to_tuples8: empty tsv")
 
     // get matching column and indexes
     val matching_cols = __get_matching_cols__(col_or_cols, false)
@@ -301,6 +301,28 @@ class TSV(val header: String, val data: List[String]) {
     get_data().foreach({ line =>
       val fields = line.split("\t")
       new_data.append((fields(indexes(0)), fields(indexes(1)), fields(indexes(2)), fields(indexes(3)), fields(indexes(4)), fields(indexes(5)), fields(indexes(6)), fields(indexes(7))))
+    })
+
+    // return
+    new_data.toSeq
+  }
+
+  // TODO: java implementation supports partially
+  def to_tuples9(col_or_cols: Any, inherit_message: String): Seq[(String, String, String, String, String, String, String, String, String)] = {
+    // check empty
+    if (has_empty_header())
+      throw new Exception("to_tuples9: empty tsv")
+
+    // get matching column and indexes
+    val matching_cols = __get_matching_cols__(col_or_cols, false)
+    val indexes = __get_col_indexes__(matching_cols)
+
+    // get data
+    val new_data = new scala.collection.mutable.ListBuffer[(String, String, String, String, String, String, String, String, String)]()
+    get_data().foreach({ line =>
+      val fields = line.split("\t")
+      new_data.append((fields(indexes(0)), fields(indexes(1)), fields(indexes(2)), fields(indexes(3)), fields(indexes(4)), fields(indexes(5)), fields(indexes(6)),
+        fields(indexes(7)), fields(indexes(8))))
     })
 
     // return
