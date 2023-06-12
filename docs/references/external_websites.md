@@ -178,7 +178,6 @@ print(certifi.where())
 
 https://www.atlassian.com/blog/jira-software/jql-the-most-flexible-way-to-search-jira-24
 
-
 --------------------------------------------------------------------------------------------------------------------
 4. GUI D3 Visualization 
 --------------------------------------------------------------------------------------------------------------------
@@ -275,5 +274,14 @@ https://www.paoloambrosio.net/2016/12/14/akka-location-transparency.html
 https://www.lightbend.com/blog/how-akka-cluster-works-actors-living-in-a-cluster
 
 https://www.youtube.com/watch?v=eduilEkSL_0
+
+
+--------------------------------------------------------------------------------------------------------------------
+9. Spark Scala 
+--------------------------------------------------------------------------------------------------------------------
+
+Task not serializable error
+Implement Serializable
+https://medium.com/swlh/spark-serialization-errors-e0eebcf0f6e6
 
 
