@@ -93,6 +93,9 @@ object TrendsAnalysis {
    
       // 5. generate different kinds of dictionaries
       createDicts(spark, outputDir + "/groups", outputDir + "/dicts")
+
+      // 6. generate stats of different kinds
+      genStats(spark, outputDir + "/dicts", outputDir + "/stats")
     }
    
     def readBaseData(spark: SparkSession, inputFile: String, outputPath: String, props: Properties) = {
@@ -675,4 +678,140 @@ object TrendsAnalysis {
       base.unpersist()
       spark.catalog.dropTempView("base")
    }
+
+   def genStats(spark: SparkSession, dictPath: String, outputPath: String, numReducers: Int = 10): Unit = {
+      // check if output already exists
+      if (false && Utils.checkIfExists(spark, outputPath)) {
+        println("genStats: output already exists. Skipping... : " + outputPath)
+        return
+      }   
+
+      // read input 
+      val dict = spark.read.parquet(dictPath)
+      dict.createOrReplaceTempView("dict")
+            
+      // aggregate
+      val query = "select id_level1, id_level2, uuid, grouping_level, agg_key_name, agg_key_value, event_set, post_anchor_flag," +
+        " event_name, col_name1, col_name2, col_name3, col_value1, col_value2, col_value3, count from dict"
+ 
+      // debug
+      println("genStats: query: " + query)
+
+      // compute stats 
+      val stats = spark.sql(query).rdd.map({ row =>
+        val id_level1 = row.getString(row.fieldIndex("id_level1")) 
+        val id_level2 = row.getString(row.fieldIndex("id_level2")) 
+        val uuid = row.getString(row.fieldIndex("uuid"))
+        val grouping_level = row.getString(row.fieldIndex("grouping_level"))
+        val agg_key_name = row.getString(row.fieldIndex("agg_key_name"))
+        val agg_key_value = row.getString(row.fieldIndex("agg_key_value"))
+        val event_set = row.getString(row.fieldIndex("event_set"))
+        val post_anchor_flag = row.getString(row.fieldIndex("post_anchor_flag"))
+        val event_name = row.getString(row.fieldIndex("event_name"))
+        val col_name1 = row.getString(row.fieldIndex("col_name1"))
+        val col_name2 = row.getString(row.fieldIndex("col_name2"))
+        val col_name3 = row.getString(row.fieldIndex("col_name3"))
+        val col_value1 = row.getString(row.fieldIndex("col_value1"))
+        val col_value2 = row.getString(row.fieldIndex("col_value2"))
+        val col_value3 = row.getString(row.fieldIndex("col_value3"))
+        val count = row.getInt(row.fieldIndex("count"))
+
+        // tuples 
+        ((id_level1, id_level2, uuid, grouping_level, agg_key_name, agg_key_value, event_set, post_anchor_flag, event_name, col_name1, col_name2, col_name3),
+          (col_value1, col_value2, col_value3, count))
+      })
+      .groupByKey(numReducers)
+      .map({ case ((id_level1, id_level2, uuid, grouping_level, agg_key_name, agg_key_value, event_set, post_anchor_flag, event_name, col_name1, col_name2, col_name3), vs) =>
+        // take care of iterators
+        val vs2 = vs.toList
+
+        // total count
+        val totalCount = vs2.map({ case (col_value1, col_value2, col_value3, count) => count }).sum
+
+        // unique entries count
+        val uniqCount = vs2.size
+
+        // entropy
+        val entropy = vs2.map({ case (col_value1, col_value2, col_value3, count) =>
+          val prob = math.max(math.min((if (totalCount > 0) 1f * count / totalCount else 0f), 1f), 0f)
+          if (prob != 0) -1f * prob * math.log(prob) / math.log(2) else 0f
+        }).sum
+
+        (id_level1, id_level2, uuid, grouping_level, agg_key_name, agg_key_value, event_set, post_anchor_flag, event_name, col_name1, col_name2, col_name3,
+          uniqCount, totalCount, "%.6f".format(entropy).toFloat)
+      })
+
+      // create dataframe
+      val df = spark.createDataFrame(stats)
+        .toDF("id_level1", "id_level2", "uuid", "grouping_level", "agg_key_name", "agg_key_value", "event_set", "post_anchor_flag", "event_name",
+          "col_name1", "col_name2", "col_name3", "uniqCount", "totalCount", "entropy")
+
+      // persist
+      df.write.mode(SaveMode.Overwrite).parquet(outputPath)
+
+      // unpersist
+      dict.unpersist()
+      spark.catalog.dropTempView("dict")
+    }
+
+          
+    def computeHash(nonce: String, value: String) = {
+      math.abs((nonce + value).hashCode())
+    }     
+          
+    def computeCosSim(x: Map[String, Int], y: Map[String, Int]) = {
+      if (x.size == 0 || y.size == 0 || x.size != y.size) {
+        0f  
+      } else { 
+        val combined = (x.keys.toSet union y.keys.toSet).toList.sorted
+        val xvect = combined.map({ c => x.get(c).getOrElse(0) })
+        val yvect = combined.map({ c => y.get(c).getOrElse(0) })
+                
+        val dp = xvect.zip(yvect).map({ case (x1, y1) => x1 * y1 }).sum
+        val xLen = math.sqrt(xvect.map({ x1 => x1 * x1 }).sum)
+        val yLen = math.sqrt(yvect.map({ y1 => y1 * y1 }).sum)
+              
+        "%.6f".format((1.0 * dp / (xLen * yLen).toFloat)).toFloat
+      }       
+    }       
+          
+    def computeStats(y: List[Float]) = {
+      val x = y.sorted
+      if (x.size == 0) { 
+        (0f, 0f, 0f, 0f)
+      } else {
+        val mean = 1f * x.sum / x.size
+        val median = x((x.size * 0.5).toInt)
+        val stdDev = math.sqrt(x.map({ x1 => (x1 - mean) * (x1 - mean) }).sum / x.size.toFloat)
+        val mad = x((x.size * 0.75).toInt) -  x((x.size * 0.25).toInt)
+
+        (mean.toFloat, median, stdDev.toFloat, mad.toFloat)
+      }
+    }
+
+    def computePercStats(y: List[Float]) = {
+      val x = y.sorted
+      if (x.size == 0) {
+        (0f, 0f, 0f, 0f)
+      } else {
+        val perc05 = x((x.size * 0.05).toInt)
+        val perc10 = x((x.size * 0.10).toInt)
+        val perc90 = x((x.size * 0.90).toInt)
+        val perc95 = x((x.size * 0.95).toInt)
+
+        val madAlpha5 = (perc95 - perc05)
+        val madAlpha10 = (perc90 - perc10)
+
+        (perc90, perc95, madAlpha10, madAlpha5)
+      }
+    }
+
+    def getPercentile(x: Float, y: List[Float]) = {
+      1f * y.filter({ y1 => x >= y1 }).size / y.size
+    }
+
+    def computeJacSim(x: Set[String], y: Set[String]) = {
+      1f * (x intersect y).size / (x union y).size
+    }
+
 }
