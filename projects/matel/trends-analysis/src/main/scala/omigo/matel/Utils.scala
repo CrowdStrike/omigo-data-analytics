@@ -33,4 +33,10 @@ object Utils {
     // check if already exists
     fs.exists(new Path(path + "/_SUCCESS")) 
   }
+
+  
+  def convertNullToEmptyString(str: String): String = {
+    if (str == null) "" else str
+  }
+
 }
