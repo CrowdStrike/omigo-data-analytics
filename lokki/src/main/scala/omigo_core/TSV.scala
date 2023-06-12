@@ -84,7 +84,7 @@ class TSV(val header: String, val data: List[String]) {
     new TSV(header, new_data.toList)
   }
 
-  def add_const(col: String, value: String, inherit_message: String): TSV = {
+  def add_const(col: String, value: String, inherit_message: String = ""): TSV = {
     // check empty
     if (has_empty_header()) {
       // checking empty value
@@ -105,7 +105,7 @@ class TSV(val header: String, val data: List[String]) {
     new TSV(header2, data2)
   }
 
-  def add_const_if_missing(col: String, value: String, inherit_message: String): TSV = {
+  def add_const_if_missing(col: String, value: String, inherit_message: String = ""): TSV = {
     // check empty
     if (has_empty_header()) {
       // checking empty value
@@ -126,7 +126,7 @@ class TSV(val header: String, val data: List[String]) {
     }
   }
 
-  def select(col_or_cols: Any, inherit_message: String): TSV = {
+  def select(col_or_cols: Any, inherit_message: String = ""): TSV = {
     // check empty
     if (has_empty_header())
       throw new Exception("select: empty tsv")
@@ -161,7 +161,28 @@ class TSV(val header: String, val data: List[String]) {
     new TSV(new_header, new_data.toList)
   }
 
-  def to_tuples2(col_or_cols: Any, inherit_message: String): Seq[(String, String)] = {
+  def to_tuples1(col_or_cols: Any, inherit_message: String = ""): Seq[(String)] = {
+    // check empty
+    if (has_empty_header())
+      throw new Exception("to_tuples5: empty tsv")
+
+    // get matching column and indexes
+    val matching_cols = __get_matching_cols__(col_or_cols, false)
+    val indexes = __get_col_indexes__(matching_cols)
+
+    // get data
+    val new_data = new scala.collection.mutable.ListBuffer[(String)]()
+    get_data().foreach({ line =>
+      val fields = line.split("\t")
+      new_data.append((fields(indexes(0))))
+    })
+
+    // return
+    new_data.toSeq
+  }
+
+  // TODO: java implementation supports partially
+  def to_tuples2(col_or_cols: Any, inherit_message: String = ""): Seq[(String, String)] = {
     // check empty
     if (has_empty_header())
       throw new Exception("to_tuples5: empty tsv")
@@ -182,7 +203,7 @@ class TSV(val header: String, val data: List[String]) {
   }
 
   // TODO: java implementation supports partially
-  def to_tuples3(col_or_cols: Any, inherit_message: String): Seq[(String, String, String)] = {
+  def to_tuples3(col_or_cols: Any, inherit_message: String = ""): Seq[(String, String, String)] = {
     // check empty
     if (has_empty_header())
       throw new Exception("to_tuples5: empty tsv")
@@ -203,7 +224,7 @@ class TSV(val header: String, val data: List[String]) {
   }
 
   // TODO: java implementation supports partially
-  def to_tuples4(col_or_cols: Any, inherit_message: String): Seq[(String, String, String, String)] = {
+  def to_tuples4(col_or_cols: Any, inherit_message: String = ""): Seq[(String, String, String, String)] = {
     // check empty
     if (has_empty_header())
       throw new Exception("to_tuples5: empty tsv")
@@ -224,7 +245,7 @@ class TSV(val header: String, val data: List[String]) {
   }
 
   // TODO: java implementation supports partially
-  def to_tuples5(col_or_cols: Any, inherit_message: String): Seq[(String, String, String, String, String)] = {
+  def to_tuples5(col_or_cols: Any, inherit_message: String = ""): Seq[(String, String, String, String, String)] = {
     // check empty
     if (has_empty_header())
       throw new Exception("to_tuples5: empty tsv")
@@ -245,7 +266,7 @@ class TSV(val header: String, val data: List[String]) {
   }
 
   // TODO: java implementation supports partially
-  def to_tuples6(col_or_cols: Any, inherit_message: String): Seq[(String, String, String, String, String, String)] = {
+  def to_tuples6(col_or_cols: Any, inherit_message: String = ""): Seq[(String, String, String, String, String, String)] = {
     // check empty
     if (has_empty_header())
       throw new Exception("to_tuples6: empty tsv")
@@ -266,7 +287,7 @@ class TSV(val header: String, val data: List[String]) {
   }
 
   // TODO: java implementation supports partially
-  def to_tuples7(col_or_cols: Any, inherit_message: String): Seq[(String, String, String, String, String, String, String)] = {
+  def to_tuples7(col_or_cols: Any, inherit_message: String = ""): Seq[(String, String, String, String, String, String, String)] = {
     // check empty
     if (has_empty_header())
       throw new Exception("to_tuples7: empty tsv")
@@ -287,7 +308,7 @@ class TSV(val header: String, val data: List[String]) {
   }
 
   // TODO: java implementation supports partially
-  def to_tuples8(col_or_cols: Any, inherit_message: String): Seq[(String, String, String, String, String, String, String, String)] = {
+  def to_tuples8(col_or_cols: Any, inherit_message: String = ""): Seq[(String, String, String, String, String, String, String, String)] = {
     // check empty
     if (has_empty_header())
       throw new Exception("to_tuples8: empty tsv")
@@ -308,7 +329,7 @@ class TSV(val header: String, val data: List[String]) {
   }
 
   // TODO: java implementation supports partially
-  def to_tuples9(col_or_cols: Any, inherit_message: String): Seq[(String, String, String, String, String, String, String, String, String)] = {
+  def to_tuples9(col_or_cols: Any, inherit_message: String = ""): Seq[(String, String, String, String, String, String, String, String, String)] = {
     // check empty
     if (has_empty_header())
       throw new Exception("to_tuples9: empty tsv")
@@ -328,6 +349,90 @@ class TSV(val header: String, val data: List[String]) {
     // return
     new_data.toSeq
   }
+
+  // TODO: java implementation supports partially
+  def to_tuples10(col_or_cols: Any, inherit_message: String = ""): Seq[(String, String, String, String, String, String, String, String, String, String)] = {
+    // check empty
+    if (has_empty_header())
+      throw new Exception("to_tuples9: empty tsv")
+
+    // get matching column and indexes
+    val matching_cols = __get_matching_cols__(col_or_cols, false)
+    val indexes = __get_col_indexes__(matching_cols)
+
+    // get data
+    val new_data = new scala.collection.mutable.ListBuffer[(String, String, String, String, String, String, String, String, String, String)]()
+    get_data().foreach({ line =>
+      val fields = line.split("\t")
+      new_data.append((fields(indexes(0)), fields(indexes(1)), fields(indexes(2)), fields(indexes(3)), fields(indexes(4)), fields(indexes(5)), fields(indexes(6)),
+        fields(indexes(7)), fields(indexes(8)), fields(indexes(9))))
+    })
+
+    // return
+    new_data.toSeq
+  }
+
+  // TODO: java implementation supports partially
+  def to_tuples11(col_or_cols: Any, inherit_message: String = ""): Seq[(String, String, String, String, String, String, String, String, String, String, String)] = {
+    // check empty
+    if (has_empty_header())
+      throw new Exception("to_tuples9: empty tsv")
+
+    // get matching column and indexes
+    val matching_cols = __get_matching_cols__(col_or_cols, false)
+    val indexes = __get_col_indexes__(matching_cols)
+
+    // get data
+    val new_data = new scala.collection.mutable.ListBuffer[(String, String, String, String, String, String, String, String, String, String, String)]()
+    get_data().foreach({ line =>
+      val fields = line.split("\t")
+      new_data.append((fields(indexes(0)), fields(indexes(1)), fields(indexes(2)), fields(indexes(3)), fields(indexes(4)), fields(indexes(5)), fields(indexes(6)),
+        fields(indexes(7)), fields(indexes(8)), fields(indexes(9)), fields(indexes(10))))
+    })
+
+    // return
+    new_data.toSeq
+  }
+
+  // TODO: java implementation supports partially
+  def to_tuples12(col_or_cols: Any, inherit_message: String = ""): Seq[(String, String, String, String, String, String, String, String, String, String, String, String)] = {
+    // check empty
+    if (has_empty_header())
+      throw new Exception("to_tuples9: empty tsv")
+
+    // get matching column and indexes
+    val matching_cols = __get_matching_cols__(col_or_cols, false)
+    val indexes = __get_col_indexes__(matching_cols)
+
+    // get data
+    val new_data = new scala.collection.mutable.ListBuffer[(String, String, String, String, String, String, String, String, String, String, String, String)]()
+    get_data().foreach({ line =>
+      val fields = line.split("\t")
+      new_data.append((fields(indexes(0)), fields(indexes(1)), fields(indexes(2)), fields(indexes(3)), fields(indexes(4)), fields(indexes(5)), fields(indexes(6)),
+        fields(indexes(7)), fields(indexes(8)), fields(indexes(9)), fields(indexes(10)), fields(indexes(11))))
+    })
+
+    // return
+    new_data.toSeq
+  }
+
+  def to_tuples(col_or_cols: Any) = {
+    // check empty
+    if (has_empty_header())
+      throw new Exception("to_tuples9: empty tsv")
+
+    // get matching column and indexes
+    val matching_cols = __get_matching_cols__(col_or_cols, false)
+    val numCols = matching_cols.length
+
+    if (numCols == 1)
+      to_tuples1(matching_cols)
+    else if (numCols == 2)
+      to_tuples2(matching_cols)
+    else
+      throw new Exception("to_tuples")
+  }
+
 
   // TODO: java implementation supports partially
   def __get_matching_cols__(col_or_cols_org: Any, ignore_if_missing: Boolean): List[String] = {
