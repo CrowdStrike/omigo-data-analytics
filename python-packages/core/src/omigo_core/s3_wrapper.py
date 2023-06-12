@@ -22,19 +22,19 @@ S3_DEFAULT_PROFILE = "default"
 #S3_WARNING_GIVEN = "0"
 
 def create_session_key(s3_region = None, aws_profile = None):
-    s3_region, aws_profile = resolve_s3_region_aws_profile(s3_region, aws_profile)
+    s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
     if (s3_region is None and aws_profile is None):
         return "DEFAULT_KEY"
     else:
         return s3_region + ":" + aws_profile
 
 def get_s3_session(s3_region = None, aws_profile = None):
-    s3_region, aws_profile = resolve_s3_region_aws_profile(s3_region, aws_profile)
+    s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
 
     # generate s3_session
     if (s3_region is not None and aws_profile is not None):
         utils.debug("get_s3_session: s3_region: {}, aws_profile: {}".format(s3_region, aws_profile))
-        session = boto3.session.Session(s3_region_name = s3_region, aws_profile_name = aws_profile)
+        session = boto3.session.Session(region_name = s3_region, profile_name = aws_profile)
     else:
         utils.debug("get_s3_session: no s3_region or aws_profile")
         session = boto3.session.Session()
@@ -43,7 +43,7 @@ def get_s3_session(s3_region = None, aws_profile = None):
     return session
 
 def get_s3_session_cache(s3_region = None, aws_profile = None):
-    s3_region, aws_profile = resolve_s3_region_aws_profile(s3_region, aws_profile)
+    s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
     key = create_session_key(s3_region, aws_profile)
 
     # make it thread safe
@@ -55,13 +55,13 @@ def get_s3_session_cache(s3_region = None, aws_profile = None):
 
 # TODO
 def get_s3_resource(s3_region = None, aws_profile = None):
-    s3_region, aws_profile = resolve_s3_region_aws_profile(s3_region, aws_profile)
+    s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
     session = get_s3_session_cache(s3_region, aws_profile)
 
     return session.resource("s3")
 
 def get_s3_resource_cache(s3_region = None, aws_profile = None):
-    s3_region, aws_profile = resolve_s3_region_aws_profile(s3_region, aws_profile)
+    s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
     key = create_session_key(s3_region, aws_profile)
 
     # make it thread safe
@@ -72,13 +72,13 @@ def get_s3_resource_cache(s3_region = None, aws_profile = None):
     return S3_RESOURCE[key]
 
 def get_s3_client(s3_region = None, aws_profile = None):
-    s3_region, aws_profile = resolve_s3_region_aws_profile(s3_region, aws_profile)
+    s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
     session = get_s3_session_cache(s3_region, aws_profile)
 
     return session.client("s3")
 
 def get_s3_client_cache(s3_region = None, aws_profile = None):
-    s3_region, aws_profile = resolve_s3_region_aws_profile(s3_region, aws_profile)
+    s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
     key = create_session_key(s3_region, aws_profile)
 
     # make it thread safe
@@ -89,20 +89,20 @@ def get_s3_client_cache(s3_region = None, aws_profile = None):
     return S3_CLIENTS[key]
 
 def get_s3_bucket(bucket_name, s3_region = None, aws_profile = None):
-    s3_region, aws_profile = resolve_s3_region_aws_profile(s3_region, aws_profile)
+    s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
     s3 = get_s3_resource_cache(s3_region, aws_profile)
 
     return s3.Bucket(bucket_name)
 
 def get_s3_bucket_cache(bucket_name, s3_region = None, aws_profile = None):
-    s3_region, aws_profile = resolve_s3_region_aws_profile(s3_region, aws_profile)
+    s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
     if ((bucket_name in S3_BUCKETS.keys()) == False):
         S3_BUCKETS[bucket_name] = get_s3_bucket(bucket_name, s3_region, aws_profile)
 
     return S3_BUCKETS[bucket_name]
 
 def get_file_content(bucket_name, object_key, s3_region = None, aws_profile = None):
-    s3_region, aws_profile = resolve_s3_region_aws_profile(s3_region, aws_profile)
+    s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
     s3_bucket = get_s3_bucket_cache(bucket_name, s3_region, aws_profile)
     obj = s3_bucket.Object(object_key)
     obj_content = obj.get()
@@ -123,7 +123,7 @@ def get_s3_file_content_as_text(bucket_name, object_key, s3_region = None, aws_p
     return get_file_content_as_text(bucket_name, object_key, s3_region = s3_region, aws_profile = aws_profile)
 
 def get_file_content_as_text(bucket_name, object_key, s3_region = None, aws_profile = None):
-    s3_region, aws_profile = resolve_s3_region_aws_profile(s3_region, aws_profile)
+    s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
     barr = get_file_content(bucket_name, object_key, s3_region, aws_profile)
     if (object_key.endswith(".gz")):
         barr = gzip.decompress(barr)
@@ -138,7 +138,7 @@ def get_file_content_as_text(bucket_name, object_key, s3_region = None, aws_prof
 
 # TODO: this is expensive and works in specific scenarios only especially for files
 def check_path_exists(path, s3_region = None, aws_profile = None):
-    s3_region, aws_profile = resolve_s3_region_aws_profile(s3_region, aws_profile)
+    s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
     s3 = get_s3_client_cache(s3_region = s3_region, aws_profile = aws_profile)
     bucket_name, object_key = utils.split_s3_path(path)
 
@@ -146,7 +146,7 @@ def check_path_exists(path, s3_region = None, aws_profile = None):
     return "Contents" in results
 
 def check_file_exists(path, s3_region = None, aws_profile = None):
-    s3_region, aws_profile = resolve_s3_region_aws_profile(s3_region, aws_profile)
+    s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
     s3 = get_s3_client_cache(s3_region = s3_region, aws_profile = aws_profile)
     bucket_name, object_key = utils.split_s3_path(path)
     try:
@@ -162,7 +162,7 @@ def check_file_exists(path, s3_region = None, aws_profile = None):
         return False
 
 def put_file_content(bucket_name, object_key, barr, s3_region = None, aws_profile = None):
-    s3_region, aws_profile = resolve_s3_region_aws_profile(s3_region, aws_profile)
+    s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
     s3_bucket = get_s3_resource_cache(s3_region, aws_profile)
     obj = s3_bucket.Object(bucket_name, object_key)
     obj.put(Body = barr)
@@ -173,7 +173,7 @@ def put_s3_file_content(bucket_name, object_key, barr, s3_region = None, aws_pro
     return put_file_content(bucket_name, object_key, barr, s3_region = None, aws_profile = None)
 
 def put_file_with_text_content(bucket_name, object_key, text, s3_region = None, aws_profile = None):
-    s3_region, aws_profile = resolve_s3_region_aws_profile(s3_region, aws_profile)
+    s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
     barr = str.encode(text)
     if (object_key.endswith(".gz")):
         barr = gzip.compress(barr)
@@ -192,7 +192,7 @@ def put_s3_file_with_text_content(bucket_name, object_key, text, s3_region = Non
     utils.warn_once("use put_file_with_text_content instead")
     put_file_with_text_content(bucket_name, object_key, text, s3_region = s3_region, aws_profile = aws_profile)
  
-def resolve_s3_region_aws_profile(s3_region = None, aws_profile = None):
+def resolve_region_profile(s3_region = None, aws_profile = None):
     # resolve s3_region
     if ((s3_region == "" or s3_region is None) and "S3_REGION" in os.environ.keys()):
         s3_region = os.environ["S3_REGION"]
@@ -220,7 +220,7 @@ def __get_all_s3_objects__(s3, **base_kwargs):
 # FIXME: This method is implemented using reverse engineering. Not so reliable
 # TODO: ignore_if_missing should be FALSE by default
 def get_directory_listing(path, filter_func = None, ignore_if_missing = False, skip_exist_check = False, s3_region = None, aws_profile = None):
-    s3_region, aws_profile = resolve_s3_region_aws_profile(s3_region, aws_profile)
+    s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
     s3 = get_s3_client_cache(s3_region = s3_region, aws_profile = aws_profile)
 
     # split the path
@@ -289,7 +289,7 @@ def get_directory_listing(path, filter_func = None, ignore_if_missing = False, s
     return filenames
 
 def delete_file(path, ignore_if_missing = False, s3_region = None, aws_profile = None):
-    s3_region, aws_profile = resolve_s3_region_aws_profile(s3_region, aws_profile)
+    s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
     s3 = get_s3_client_cache(s3_region = s3_region, aws_profile = aws_profile)
 
     # split the path
@@ -318,7 +318,7 @@ def get_last_modified_time(path, ignore_if_missing = False, s3_region = None, aw
         return None
 
     # parse
-    s3_region, aws_profile = resolve_s3_region_aws_profile(s3_region, aws_profile)
+    s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
     s3 = get_s3_client_cache(s3_region = s3_region, aws_profile = aws_profile)
 
     # split the path
