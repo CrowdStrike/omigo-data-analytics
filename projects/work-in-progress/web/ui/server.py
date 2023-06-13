@@ -10,23 +10,27 @@ import os
 class AuthHTTPRequestHandler(SimpleHTTPRequestHandler):
     """ Main class to present webpages and authentication. """
 
+    # constructor
     def __init__(self, *args, **kwargs):
         username = os.environ["DEMO_USER"]
         password = os.environ["DEMO_PASS"]
         self._auth = base64.b64encode(f"{username}:{password}".encode()).decode()
         super().__init__(*args, **kwargs)
 
+    # head operation
     def do_HEAD(self):
         self.send_response(200)
         self.send_header("Content-type", "text/html")
         self.end_headers()
 
+    # head with auth
     def do_AUTHHEAD(self):
         self.send_response(401)
         self.send_header("WWW-Authenticate", 'Basic realm="Test"')
         self.send_header("Content-type", "text/html")
         self.end_headers()
 
+    # get operation
     def do_GET(self):
         """ Present frontpage with user authentication. """
         if self.headers.get("Authorization") == None:

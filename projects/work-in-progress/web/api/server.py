@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from omigo_core import s3io_wrapper
 from omigo_core import tsv, utils, funclib
+from omigo_ext import graphviz_ext
 import json
 import os
 import secrets
@@ -18,7 +19,9 @@ app = FastAPI()
 
 # set the origins for CORS
 origins = [
-    "http://localhost"
+    # "http://127.0.0.1", # These are not needed
+    # "http://127.0.0.1:9001", # These are not needed
+    "http://127.0.0.1:9002"
 ]
 
 # add middleware to handle CORS headers
@@ -72,6 +75,50 @@ async def root(request: Request):
 @app.get("/hello")
 async def do_hello(request: Request, auth: str = Depends(validate_credentials)):
     content = {"result": {"message": "hello", "authentication": auth }}
+    return JSONResponse(content = content, headers = standard_headers)
+
+@app.get("/get_iris_data")
+async def get_iris_data(request: Request, auth: str = Depends(validate_credentials)):
+    xtsv = tsv.read("https://raw.githubusercontent.com/CrowdStrike/omigo-data-analytics/main/data/iris.tsv")
+    content = { "data": xtsv.add_seq_num("sno").to_maps() }
+    return JSONResponse(content = content, headers = standard_headers)
+
+@app.get("/get_avengers")
+async def get_avengers(request: Request, node_props: str = None, edge_props: str = None, output_format: str = None, auth: str = Depends(validate_credentials)):
+    # read data
+    vtsv = tsv.read("marvel_vtsv.tsv")
+    etsv = tsv.read("marvel_etsv.tsv")
+
+    # convert to desired output format and return
+    node_props = utils.split_str_to_arr(utils.resolve_default_parameter("node_props", node_props, "", "demo"))
+    edge_props = utils.split_str_to_arr(utils.resolve_default_parameter("edge_props", edge_props, "", "demo"))
+    output_format = utils.resolve_default_parameter("output_format", output_format, "graphviz", "demo")
+
+    # switch
+    content = None
+    if (output_format == "graphviz"):
+        # define custom function to control the style
+        def custom_style_func(mp):
+            props = graphviz_ext.__default_dot_style_func__(mp)
+            if (mp["type"] == "actor"):
+                props["shape"] = "oval"
+                props["color"] = "lightgreen"
+            else:
+                props["shape"] = "rectangle"
+                props["color"] = "lightgrey"        
+            return props    
+
+        # generate the graph string
+        digraph_str = graphviz_ext.get_graphviz_data(vtsv, etsv, "name", "src", "dst", vertex_display_id_col = "name", node_props = node_props, edge_props = edge_props,
+            style_func = custom_style_func, max_len = 50, display_vertex_keys = ["type"], display_edge_keys = ["type"])
+        content = { "digraph": digraph_str }
+    else:
+        # get the standard nodes and links format
+        nodes = vtsv.drop_cols("id").rename("name", "id").to_maps()
+        links = etsv.noop("type", "acts_in").rename("src", "source").rename("dst", "target").add_const("value", "1").to_maps()
+        content = { "nodes": nodes, "links": links }
+
+    # return 
     return JSONResponse(content = content, headers = standard_headers)
 
 # main
