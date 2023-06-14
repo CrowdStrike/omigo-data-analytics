@@ -11,7 +11,7 @@ var option;
 myChart.showLoading();
 const queryString = window.location.search;
 const urlParams = new URLSearchParams(queryString);
-const myurl = "http://127.0.0.1:9001/get_avengers?output_format=json";
+const myurl = "http://127.0.0.1:9001/get_avengers?output_format=graph";
 window.onload = function() {
   d3.json(myurl, {
     method: "GET",

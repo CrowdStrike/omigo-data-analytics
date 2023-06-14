@@ -86,13 +86,13 @@ async def get_iris_data(request: Request, auth: str = Depends(validate_credentia
 @app.get("/get_avengers")
 async def get_avengers(request: Request, node_props: str = None, edge_props: str = None, output_format: str = None, auth: str = Depends(validate_credentials)):
     # read data
-    vtsv = tsv.read("data/marvel_vtsv.tsv")
-    etsv = tsv.read("data/marvel_etsv.tsv")
+    vtsv = tsv.read("data/marvel/vtsv.tsv")
+    etsv = tsv.read("data/marvel/etsv.tsv")
 
     # convert to desired output format and return
     node_props = utils.split_str_to_arr(utils.resolve_default_parameter("node_props", node_props, "", "demo"))
     edge_props = utils.split_str_to_arr(utils.resolve_default_parameter("edge_props", edge_props, "", "demo"))
-    output_format = utils.resolve_default_parameter("output_format", output_format, "graphviz", "demo")
+    output_format = utils.resolve_default_parameter("output_format", output_format, "default", "demo")
 
     # switch
     content = None
@@ -112,11 +112,14 @@ async def get_avengers(request: Request, node_props: str = None, edge_props: str
         digraph_str = graphviz_ext.get_graphviz_data(vtsv, etsv, "name", "src", "dst", vertex_display_id_col = "name", node_props = node_props, edge_props = edge_props,
             style_func = custom_style_func, max_len = 50, display_vertex_keys = ["type"], display_edge_keys = ["type"])
         content = { "digraph": digraph_str }
-    else:
+    elif (output_format == "graph"):
         # get the standard nodes and links format
         nodes = vtsv.drop_cols("id").rename("name", "id").to_maps()
         links = etsv.noop("type", "acts_in").rename("src", "source").rename("dst", "target").add_const("value", "1").to_maps()
         content = { "nodes": nodes, "links": links }
+    else:
+       # return default
+       content = { "nodes": vtsv.to_maps(), "edges": etsv.to_maps() }
 
     # return 
     return JSONResponse(content = content, headers = standard_headers)
