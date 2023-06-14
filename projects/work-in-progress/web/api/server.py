@@ -86,8 +86,8 @@ async def get_iris_data(request: Request, auth: str = Depends(validate_credentia
 @app.get("/get_avengers")
 async def get_avengers(request: Request, node_props: str = None, edge_props: str = None, output_format: str = None, auth: str = Depends(validate_credentials)):
     # read data
-    vtsv = tsv.read("data/marvel/vtsv.tsv")
-    etsv = tsv.read("data/marvel/etsv.tsv")
+    vtsv = tsv.read("data/avengers/vtsv.tsv")
+    etsv = tsv.read("data/avengers/etsv.tsv")
 
     # convert to desired output format and return
     node_props = utils.split_str_to_arr(utils.resolve_default_parameter("node_props", node_props, "", "demo"))
