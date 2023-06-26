@@ -649,7 +649,7 @@ object TrendsAnalysis extends Serializable {
         // run binary features only for LevelNodeId
         // generate binary features
         if (true) {
-          val binaryFeatures = for {
+          val binary_features = for {
             ((col_value1_1, col_value2_1, col_value3_1, count_1), index_1) <- vs2.zipWithIndex
             ((col_value1_2, col_value2_2, col_value3_2, count_2), index_2) <- vs2.zipWithIndex
             if (col_value1_1 < col_value1_2 && col_value2_1 == col_value2_2 && col_value3_1 == col_value3_2)
@@ -662,7 +662,7 @@ object TrendsAnalysis extends Serializable {
           })
 
           // val vs2Selected = vs2
-          val ternaryFeatures = for {
+          val ternary_features = for {
             ((col_value1_1, col_value2_1, col_value3_1, count_1), index_1) <- vs2Selected.zipWithIndex
             ((col_value1_2, col_value2_2, col_value3_2, count_2), index_2) <- vs2Selected.zipWithIndex
             ((col_value1_3, col_value2_3, col_value3_3, count_3), index_3) <- vs2Selected.zipWithIndex
@@ -1267,10 +1267,10 @@ object TrendsAnalysis extends Serializable {
         // leave one for inferencing
         val trendValues = Range(0, agg_key_values_rev_sorted.size).flatMap({ case index =>
           // the value at index as what we are inferencing
-          val infAggKeyValue = agg_key_values_rev_sorted(index)
+          val inf_agg_key_value = agg_key_values_rev_sorted(index)
 
           // these learning values are the last N non zero values. we need to create the dense representation
-          val infDateTime = LocalDateTime.parse(infAggKeyValue, DateTimeFormatter.ofPattern("yyyy-MM-dd-HHmmss"))
+          val infDateTime = LocalDateTime.parse(inf_agg_key_value, DateTimeFormatter.ofPattern("yyyy-MM-dd-HHmmss"))
           val infDateTimeLastLearning = infDateTime.minusMinutes(learningWindow * AggKeyNamesMinutesMultiplierMap(agg_key_name))
 
           // orionDt in the same format as agg_key_value
@@ -1282,11 +1282,11 @@ object TrendsAnalysis extends Serializable {
           val fixedTimeLearningValues = fixedLengthLearningValues.filter({ x => x >= infLastLearningValue })
 
           // generate features for both dense and sparse learning values
-          Seq((fixedLengthLearningValues, "fixed_length"), (fixedTimeLearningValues, "fixed_time")).map({ case (learningValues, learningValuesType) =>
+          Seq((fixedLengthLearningValues, "fixed_length"), (fixedTimeLearningValues, "fixed_time")).map({ case (learningValues, learning_values_type) =>
             // generate learning seq and inference value
             val learningSeq = learningValues.map({ x => vs2Map(x) match { case (count, is_anchor_window, post_anchor_flag) => count } })
             val learningSeqAsFloat = learningSeq.map(_.toFloat)
-            val (infCountValue, infIsAnchorWindow, infPostAnchorFlag) = vs2Map(infAggKeyValue) match { case (count, is_anchor_window, post_anchor_flag) => (count.toFloat,
+            val (infCountValue, infer_is_anchor_win, infer_post_anchor_flag) = vs2Map(inf_agg_key_value) match { case (count, is_anchor_window, post_anchor_flag) => (count.toFloat,
               is_anchor_window, post_anchor_flag) }
 
             val (learningMean, learningMedian, learningStdDev, learningMad) = computeStats(learningSeqAsFloat)
@@ -1334,8 +1334,8 @@ object TrendsAnalysis extends Serializable {
               ("learningMax", learningMax.toString),
               ("infDiffFromMax", infDiffFromMax.toString),
               ("numLearningSeq", learningSeq.size.toInt.toString),
-              ("infIsAnchorWindow", infIsAnchorWindow.toInt.toString),
-              ("infPostAnchorFlag", infPostAnchorFlag.toInt.toString),
+              ("infer_is_anchor_win", infer_is_anchor_win.toInt.toString),
+              ("infer_post_anchor_flag", infer_post_anchor_flag.toInt.toString),
               ("learningValues", learningValues.mkString(",")),
               ("learningSeq", learningSeq.mkString(",")),
               ("learningDevFromMedianSeq", learningDevFromMedianSeq.mkString(",")),
@@ -1343,8 +1343,8 @@ object TrendsAnalysis extends Serializable {
               ("event_set", event_set)
             ).toMap
 
-            (id_level1, id_level2, uuid, grouping_level, learningValuesType, event_name, col_name1, col_name2, col_name3, col_value1, col_value2, col_value3,
-              cardinality, agg_key_name, learningWindow, learningValues.size, infAggKeyValue, infCountValue.toInt, infLastLearningValue, kv)
+            (id_level1, id_level2, uuid, grouping_level, learning_values_type, event_name, col_name1, col_name2, col_name3, col_value1, col_value2, col_value3,
+              cardinality, agg_key_name, learningWindow, learningValues.size, inf_agg_key_value, infCountValue.toInt, infLastLearningValue, kv)
           })
         })
         trendValues
@@ -1352,8 +1352,8 @@ object TrendsAnalysis extends Serializable {
 
       // create data frame
       val df = spark.createDataFrame(aggTrendValues)
-        .toDF("id_level1", "id_level2", "uuid", "grouping_level", "learningValuesType", "event_name", "col_name1", "col_name2", "col_name3", "col_value1", "col_value2", "col_value3",
-          "cardinality", "agg_key_name", "learningWindow", "numLearningValues", "infAggKeyValue", "infCountValue", "infLastLearningValue", "kv")
+        .toDF("id_level1", "id_level2", "uuid", "grouping_level", "learning_values_type", "event_name", "col_name1", "col_name2", "col_name3", "col_value1", "col_value2", "col_value3",
+          "cardinality", "agg_key_name", "learningWindow", "numLearningValues", "inf_agg_key_value", "infCountValue", "infLastLearningValue", "kv")
 
       // save
       df.write.mode(SaveMode.Overwrite).parquet(outputPath)
@@ -1371,7 +1371,7 @@ object TrendsAnalysis extends Serializable {
       }
 
       println("generateTrendsAnalysis: [WARN] : commenting dict and generic types features")
-      println("generateTrendsAnalysis: [WARN] : this is generating topk features only if it contains strong_diff")
+      println("generateTrendsAnalysis: [WARN] : this is generating topk features only if it contains intensity_level0")
 
       // read all trends
       val trends = spark.read.parquet(trendsPath) //.cache
@@ -1386,11 +1386,11 @@ object TrendsAnalysis extends Serializable {
       .filter({ case (xuuid, xuuidOutputPath) => true || Utils.checkIfExists(spark, xuuidOutputPath) == false })
       .foreach({ case (xuuid, xuuidOutputPath) =>
         // create query
-        val query = "select id_level1, id_level2, uuid, grouping_level, learningValuesType, event_name, col_name1, col_name2, col_name3, col_value1, col_value2, col_value3, cardinality, " +
-          " agg_key_name, infAggKeyValue, " +
+        val query = "select id_level1, id_level2, uuid, grouping_level, learning_values_type, event_name, col_name1, col_name2, col_name3, col_value1, col_value2, col_value3, cardinality, " +
+          " agg_key_name, inf_agg_key_value, " +
           " kv.infDiffInStdDevNonNeg, kv.infDiffInMadNonNeg, kv.infDiffInMad90NonNeg, kv.infDiffFromMedian, kv.infDiffFromMax, kv.numFeaturesInInference, " +
-          " kv.learningMedian, kv.learningMax, kv.learningDevFromMedianAbsMean, kv.learningDevFromMedianStdDev, infCountValue, kv.numLearningSeq, kv.infIsAnchorWindow, " +
-          " kv.infPostAnchorFlag, kv.anchor_ts_str, kv.event_set from trends where id_level1 LIKE '%s%%'".format(xuuid)
+          " kv.learningMedian, kv.learningMax, kv.learningDevFromMedianAbsMean, kv.learningDevFromMedianStdDev, infCountValue, kv.numLearningSeq, kv.infer_is_anchor_win, " +
+          " kv.infer_post_anchor_flag, kv.anchor_ts_str, kv.event_set from trends where id_level1 LIKE '%s%%'".format(xuuid)
 
         // debug
         println("generateTrendsAnalysis: xuuid query: %s".format(query))
@@ -1401,7 +1401,7 @@ object TrendsAnalysis extends Serializable {
           val id_level2 = row.getString(row.fieldIndex("id_level2"))
           val uuid = row.getString(row.fieldIndex("uuid"))
           val grouping_level = row.getString(row.fieldIndex("grouping_level"))
-          val learningValuesType = row.getString(row.fieldIndex("learningValuesType"))
+          val learning_values_type = row.getString(row.fieldIndex("learning_values_type"))
           val event_name = row.getString(row.fieldIndex("event_name"))
           val col_name1 = row.getString(row.fieldIndex("col_name1"))
           val col_name2 = row.getString(row.fieldIndex("col_name2"))
@@ -1411,7 +1411,7 @@ object TrendsAnalysis extends Serializable {
           val col_value3 = row.getString(row.fieldIndex("col_value3"))
           val cardinality = row.getString(row.fieldIndex("cardinality"))
           val agg_key_name = row.getString(row.fieldIndex("agg_key_name"))
-          val infAggKeyValue = row.getString(row.fieldIndex("infAggKeyValue"))
+          val inf_agg_key_value = row.getString(row.fieldIndex("inf_agg_key_value"))
           val infDiffInStdDevNonNeg = row.getString(row.fieldIndex("infDiffInStdDevNonNeg")).toFloat
           val infDiffInMadNonNeg = row.getString(row.fieldIndex("infDiffInMadNonNeg")).toFloat
           val infDiffInMad90NonNeg = row.getString(row.fieldIndex("infDiffInMad90NonNeg")).toFloat
@@ -1424,8 +1424,8 @@ object TrendsAnalysis extends Serializable {
           val learningDevFromMedianStdDev = row.getString(row.fieldIndex("learningDevFromMedianStdDev")).toFloat
           val infCountValue = row.getString(row.fieldIndex("infCountValue")).toInt
           val numLearningSeq = row.getString(row.fieldIndex("numLearningSeq")).toInt
-          val infIsAnchorWindow = row.getString(row.fieldIndex("infIsAnchorWindow")).toInt
-          val infPostAnchorFlag = row.getString(row.fieldIndex("infPostAnchorFlag")).toInt
+          val infer_is_anchor_win = row.getString(row.fieldIndex("infer_is_anchor_win")).toInt
+          val infer_post_anchor_flag = row.getString(row.fieldIndex("infer_post_anchor_flag")).toInt
           val anchor_ts_str = row.getString(row.fieldIndex("anchor_ts_str"))
           val event_set = row.getString(row.fieldIndex("event_set"))
 
@@ -1433,8 +1433,8 @@ object TrendsAnalysis extends Serializable {
           val (metric, metricType, metricVariable, metricThresh) = {
             if (learningDevFromMedianAbsMean <= 0.5 && learningDevFromMedianStdDev <= 1.0 && numLearningSeq >= MinStrongTrendNumLearningSeq &&
               learningMedian >= MinStrongTrendLearningMedian) {
-              // (infDiffFromMedian, "strong_diff_from_median", learningMedian, MinStrongTrendLearningMedian)
-              (infDiffFromMedian, "strong_diff", learningMedian, MinStrongTrendLearningMedian)
+              // (infDiffFromMedian, "intensity_level0_from_median", learningMedian, MinStrongTrendLearningMedian)
+              (infDiffFromMedian, "intensity_level0", learningMedian, MinStrongTrendLearningMedian)
             } else {
               val minEventTypeThreshold = {
                 if (event_name == "ANY" && col_name1 == "event_name") {
@@ -1451,9 +1451,9 @@ object TrendsAnalysis extends Serializable {
               } else {
                 // find the min thresholds for metric value for each event type
                 if (minEventTypeThreshold > 0 && infDiffFromMax >= minEventTypeThreshold && numLearningSeq >= 1) {
-                  (infDiffFromMedian, "weak_diff", learningMax, minEventTypeThreshold)
+                  (infDiffFromMedian, "intensity_level1", learningMax, minEventTypeThreshold)
                 } else if (minEventTypeThreshold > 0 && infCountValue >= minEventTypeThreshold && numLearningSeq == 0) {
-                  (infDiffFromMedian, "sudden_spike", 0f, minEventTypeThreshold)
+                  (infDiffFromMedian, "spike", 0f, minEventTypeThreshold)
                 } else {
                   (0f, "", 0f, 0)
                 }
@@ -1486,87 +1486,87 @@ object TrendsAnalysis extends Serializable {
           // remove some excluded dict columns
           val dmetricTypeV2 = (if (ExcludedEventGroupNames.contains(col_value1)) "" else dmetricType)
 
-          // generate strong_diff features separately too
-          val metricTypeStrong = (if (metricType == "strong_diff") metricType else "")
+          // generate intensity_level0 features separately too
+          val metricTypeStrong = (if (metricType == "intensity_level0") metricType else "")
 
           // val metric = infDiffFromMedian // infDiffInMadNonNeg
-          val featureName = List(event_name, col_name1, col_name2, col_name3, col_value1, col_value2, col_value3, cardinality).mkString(":")
+          val feature_name = List(event_name, col_name1, col_name2, col_name3, col_value1, col_value2, col_value3, cardinality).mkString(":")
 
           // generate both diff and dict metrics
           Seq(
-            ((id_level1, id_level2, uuid, grouping_level, learningValuesType, agg_key_name, anchor_ts_str, infAggKeyValue, infIsAnchorWindow, infPostAnchorFlag),
-              (numFeaturesInInference, metric, metricTypeV2, metricVariable, metricThresh, featureName, infCountValue)),
-            ((id_level1, id_level2, uuid, grouping_level, learningValuesType, agg_key_name, anchor_ts_str, infAggKeyValue, infIsAnchorWindow, infPostAnchorFlag),
-              (numFeaturesInInference, metric, metricTypeStrong, metricVariable, metricThresh, featureName, infCountValue)),
-            ((id_level1, id_level2, uuid, grouping_level, learningValuesType, agg_key_name, anchor_ts_str, infAggKeyValue, infIsAnchorWindow, infPostAnchorFlag),
-              (numFeaturesInInference, dmetric, dmetricTypeV2, dmetricVariable, dmetricThresh, featureName, infCountValue))
+            ((id_level1, id_level2, uuid, grouping_level, learning_values_type, agg_key_name, anchor_ts_str, inf_agg_key_value, infer_is_anchor_win, infer_post_anchor_flag),
+              (numFeaturesInInference, metric, metricTypeV2, metricVariable, metricThresh, feature_name, infCountValue)),
+            ((id_level1, id_level2, uuid, grouping_level, learning_values_type, agg_key_name, anchor_ts_str, inf_agg_key_value, infer_is_anchor_win, infer_post_anchor_flag),
+              (numFeaturesInInference, metric, metricTypeStrong, metricVariable, metricThresh, feature_name, infCountValue)),
+            ((id_level1, id_level2, uuid, grouping_level, learning_values_type, agg_key_name, anchor_ts_str, inf_agg_key_value, infer_is_anchor_win, infer_post_anchor_flag),
+              (numFeaturesInInference, dmetric, dmetricTypeV2, dmetricVariable, dmetricThresh, feature_name, infCountValue))
           )
         })
-        .filter({ case ((id_level1, id_level2, uuid, grouping_level, learningValuesType, agg_key_name, anchor_ts_str, infAggKeyValue, infIsAnchorWindow, infPostAnchorFlag),
-          (numFeaturesInInference, metric, metricType, metricVariable, metricThresh, featureName, infCountValue)) =>
+        .filter({ case ((id_level1, id_level2, uuid, grouping_level, learning_values_type, agg_key_name, anchor_ts_str, inf_agg_key_value, infer_is_anchor_win, infer_post_anchor_flag),
+          (numFeaturesInInference, metric, metricType, metricVariable, metricThresh, feature_name, infCountValue)) =>
           // remove this comment to include dict and generic types
           // metricType != ""
-          metricType != "" && Set("dict", "generic", "weak_diff").contains(metricType) == false
+          metricType != "" && Set("dict", "generic", "intensity_level1").contains(metricType) == false
         })
         .groupByKey(numReducers)
-        .map({ case ((id_level1, id_level2, uuid, grouping_level, learningValuesType, agg_key_name, anchor_ts_str, infAggKeyValue, infIsAnchorWindow, infPostAnchorFlag), vs) =>
+        .map({ case ((id_level1, id_level2, uuid, grouping_level, learning_values_type, agg_key_name, anchor_ts_str, inf_agg_key_value, infer_is_anchor_win, infer_post_anchor_flag), vs) =>
           // do analysis of the trend in the metric, spotting outliers or generating a graph
           val vs2 = vs.toList
           val TopKValues = 10000
           val MinMetricValue = 2
-          val topKFeatures = vs2
-            .map({ case (numFeaturesInInference, metric, metricType, metricVariable, metricThresh, featureName, infCountValue) =>
-              (featureName.split(":", -1).filter({ x => x.startsWith("empty") == false && x.trim.length > 0 }).mkString(":"), metric.toInt, metricType, metricVariable.toInt,
+          val top_k_features = vs2
+            .map({ case (numFeaturesInInference, metric, metricType, metricVariable, metricThresh, feature_name, infCountValue) =>
+              (feature_name.split(":", -1).filter({ x => x.startsWith("empty") == false && x.trim.length > 0 }).mkString(":"), metric.toInt, metricType, metricVariable.toInt,
                 metricThresh.toInt, infCountValue.toInt)
             })
-            //.map({ case (numFeaturesInInference, metric, featureName) =>
-            //  (featureName.split(":", -1).filter({ x => x != "ANY" && x != "event_name" && x.startsWith("empty") == false && x.trim.length > 0 }).mkString(":"), metric.toInt)
+            //.map({ case (numFeaturesInInference, metric, feature_name) =>
+            //  (feature_name.split(":", -1).filter({ x => x != "ANY" && x != "event_name" && x.startsWith("empty") == false && x.trim.length > 0 }).mkString(":"), metric.toInt)
             //})
-            .map({ case (featureName, metric, metricType, metricVariable, metricThresh, infCountValue) =>
-              (featureName.replaceAll("ANY:event_name:", ""), metric, metricType, metricVariable, metricThresh, infCountValue)
+            .map({ case (feature_name, metric, metricType, metricVariable, metricThresh, infCountValue) =>
+              (feature_name.replaceAll("ANY:event_name:", ""), metric, metricType, metricVariable, metricThresh, infCountValue)
             })
-            .filter({ case (featureName, metric, metricType, metricVariable, metricThresh, infCountValue) =>
-              (featureName.indexOf("strong_diff") != -1 && metric >= 1) ||
-              (featureName.indexOf("Level1NodeId") != -1 && metric >= 1) ||
-              (featureName.indexOf("Level2NodeId") != -1 && metric >= 1) ||
-              (featureName.endsWith("unary") && metric >= 1) ||
+            .filter({ case (feature_name, metric, metricType, metricVariable, metricThresh, infCountValue) =>
+              (feature_name.indexOf("intensity_level0") != -1 && metric >= 1) ||
+              (feature_name.indexOf("Level1NodeId") != -1 && metric >= 1) ||
+              (feature_name.indexOf("Level2NodeId") != -1 && metric >= 1) ||
+              (feature_name.endsWith("unary") && metric >= 1) ||
               metric >= MinMetricValue
             })
-            .sortBy({ case (featureName, metric, metricType, metricVariable, metricThresh, infCountValue) => featureName })
-            .sortBy({ case (featureName, metric, metricType, metricVariable, metricThresh, infCountValue) => metric })
+            .sortBy({ case (feature_name, metric, metricType, metricVariable, metricThresh, infCountValue) => feature_name })
+            .sortBy({ case (feature_name, metric, metricType, metricVariable, metricThresh, infCountValue) => metric })
             .reverse
             .take(math.min(vs2.size, TopKValues))
             .mkString("|")
 
           val numFeaturesInInferenceStr = vs2
-           .map({ case (numFeaturesInInference, metric, metricType, metricVariable, metricThresh, featureName, infCountValue) => numFeaturesInInference })
+           .map({ case (numFeaturesInInference, metric, metricType, metricVariable, metricThresh, feature_name, infCountValue) => numFeaturesInInference })
            .distinct.toList.mkString(",")
 
-          // sort by the infAggKeyValue
-          val vsMetrics = vs.map({ case (numFeaturesInInference, metric, metricType, metricVariable, metricThresh, featureName, infCountValue) =>
-            val metric3Diff = (if (metric >= 2) metric else 0f)
-            val metric2Diff = (if (metric >= 1) metric else 0f)
+          // sort by the inf_agg_key_value
+          val vsMetrics = vs.map({ case (numFeaturesInInference, metric, metricType, metricVariable, metricThresh, feature_name, infCountValue) =>
+            val metric_b = (if (metric >= 2) metric else 0f)
+            val metric_a = (if (metric >= 1) metric else 0f)
             // infCountValue is not propagated beyond this point
-            (metric3Diff, metric2Diff, metric, metric / numFeaturesInInference)
+            (metric_b, metric_a, metric, metric / numFeaturesInInference)
           })
 
           // compute sum and num values in sum
-          val (metric3Diff, numMetric3Diff, metric2Diff, numMetric2Diff, metricSum, metricAvg) = (vsMetrics.map(_._1).sum.toInt, vsMetrics.filter(_._1 > 0).size,
+          val (metric_b, metric_b_count, metric_a, metric_a_count, metricSum, metricAvg) = (vsMetrics.map(_._1).sum.toInt, vsMetrics.filter(_._1 > 0).size,
             vsMetrics.map(_._2).sum.toInt, vsMetrics.filter(_._2 > 0).size, vsMetrics.map(_._3).sum, vsMetrics.map(_._4).sum)
           // val metricAvg = vs.map({ case (numFeaturesInInference, infDiffInMad95NonNeg) => infDiffInMad95NonNeg / numFeaturesInInference }).sum
 
-          ((id_level1, id_level2, uuid, grouping_level, learningValuesType, agg_key_name, anchor_ts_str), (infAggKeyValue, infIsAnchorWindow, infPostAnchorFlag, metric3Diff,
-            numMetric3Diff, metric2Diff, numMetric2Diff, metricSum, metricAvg, topKFeatures, numFeaturesInInferenceStr))
+          ((id_level1, id_level2, uuid, grouping_level, learning_values_type, agg_key_name, anchor_ts_str), (inf_agg_key_value, infer_is_anchor_win, infer_post_anchor_flag, metric_b,
+            metric_b_count, metric_a, metric_a_count, metricSum, metricAvg, top_k_features, numFeaturesInInferenceStr))
         })
         .groupByKey(numReducers)
-        .flatMap({ case ((id_level1, id_level2, uuid, grouping_level, learningValuesType, agg_key_name, anchor_ts_str), vs) =>
+        .flatMap({ case ((id_level1, id_level2, uuid, grouping_level, learning_values_type, agg_key_name, anchor_ts_str), vs) =>
           val vs2 = vs.toList
           vs2
-            .sortBy({ case (infAggKeyValue, infIsAnchorWindow, infPostAnchorFlag, metric3Diff, numMetric3Diff, metric2Diff, numMetric2Diff, metricSum, metricAvg, topKFeatures,
-              numFeaturesInInferenceStr) => infAggKeyValue
+            .sortBy({ case (inf_agg_key_value, infer_is_anchor_win, infer_post_anchor_flag, metric_b, metric_b_count, metric_a, metric_a_count, metricSum, metricAvg, top_k_features,
+              numFeaturesInInferenceStr) => inf_agg_key_value
             })
             .zipWithIndex
-            .map({ case ((infAggKeyValue, infIsAnchorWindow, infPostAnchorFlag, metric3Diff, numMetric3Diff, metric2Diff, numMetric2Diff, metricSum, metricAvg, topKFeatures,
+            .map({ case ((inf_agg_key_value, infer_is_anchor_win, infer_post_anchor_flag, metric_b, metric_b_count, metric_a, metric_a_count, metricSum, metricAvg, top_k_features,
               numFeaturesInInferenceStr), index) =>
 
               val anchorTimestamp = 0L
@@ -1596,29 +1596,29 @@ object TrendsAnalysis extends Serializable {
 
               // different flags
               val valuesSet = Set(dateTimeDateStr, dateTimeHourlyStr, dateTimeHourly3Str, dateTimeHourly6Str, dateTimeMinute15Str)
-              val part_of_anchor = (if (infPostAnchorFlag > 0 && keyValuesSet.contains((agg_key_name, infAggKeyValue))) 1 else 0)
-              val post_anchor_flag = (if (infPostAnchorFlag > 0 && keyValuesSet.exists({ case (k, v) => k == agg_key_name && v >= infAggKeyValue })) 1 else 0)
-              val predictWindowFlag = (if (infPostAnchorFlag == 0 && keyValuesSet.exists({ case (k, v) => k == agg_key_name && v < infAggKeyValue })) 1 else 0)
+              val part_of_anchor = (if (infer_post_anchor_flag > 0 && keyValuesSet.contains((agg_key_name, inf_agg_key_value))) 1 else 0)
+              val post_anchor_flag = (if (infer_post_anchor_flag > 0 && keyValuesSet.exists({ case (k, v) => k == agg_key_name && v >= inf_agg_key_value })) 1 else 0)
+              val pred_win_flag = (if (infer_post_anchor_flag == 0 && keyValuesSet.exists({ case (k, v) => k == agg_key_name && v < inf_agg_key_value })) 1 else 0)
               val fmt = DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss")
               val dtStr = fmt.print(dateTime)
               val anchor_time_str = (if (part_of_anchor == 1) dtStr else "")
 
               // also take only the strong features out of topk for debugging
-              val topKFeaturesStrongDiff = topKFeatures.split("[|]").filter({ x => x.indexOf("strong_diff") != -1 || x.indexOf("sudden_spike") != -1 }).mkString("|")
+              val top_k_features_intensity_level0 = top_k_features.split("[|]").filter({ x => x.indexOf("intensity_level0") != -1 || x.indexOf("spike") != -1 }).mkString("|")
 
               // generate output
-              (id_level1, id_level2, uuid, grouping_level, learningValuesType, agg_key_name, anchor_ts_str, infAggKeyValue, infIsAnchorWindow, infPostAnchorFlag,
-                metric3Diff, numMetric3Diff,
-                metric2Diff, numMetric3Diff, topKFeatures, numFeaturesInInferenceStr, part_of_anchor, post_anchor_flag, anchor_time_str, predictWindowFlag, topKFeaturesStrongDiff)
+              (id_level1, id_level2, uuid, grouping_level, learning_values_type, agg_key_name, anchor_ts_str, inf_agg_key_value, infer_is_anchor_win, infer_post_anchor_flag,
+                metric_b, metric_b_count,
+                metric_a, metric_b_count, top_k_features, numFeaturesInInferenceStr, part_of_anchor, post_anchor_flag, anchor_time_str, pred_win_flag, top_k_features_intensity_level0)
             })
         })
         .repartition(numReducers)
 
         // create dataframe
         val df = spark.createDataFrame(trendsValues)
-          .toDF("id_level1", "id_level2", "uuid", "grouping_level", "learningValuesType", "agg_key_name", "anchor_ts_str", "infAggKeyValue", "infIsAnchorWindow", "infPostAnchorFlag",
-            "metric3Diff", "numMetric3Diff", "metric2Diff", "numMetric2Diff",
-            "topKFeatures", "numFeaturesInInferenceStr", "part_of_anchor", "post_anchor_flag", "anchor_time_str", "predictWindowFlag", "topKFeaturesStrongDiff")
+          .toDF("id_level1", "id_level2", "uuid", "grouping_level", "learning_values_type", "agg_key_name", "anchor_ts_str", "inf_agg_key_value", "infer_is_anchor_win", "infer_post_anchor_flag",
+            "metric_b", "metric_b_count", "metric_a", "metric_a_count",
+            "top_k_features", "numFeaturesInInferenceStr", "part_of_anchor", "post_anchor_flag", "anchor_time_str", "pred_win_flag", "top_k_features_intensity_level0")
 
         // persist
         df.write.mode(SaveMode.Overwrite).parquet(xuuidOutputPath)
@@ -1651,131 +1651,131 @@ object TrendsAnalysis extends Serializable {
       println("generateTrendsDataset: using xminute60 instead of xminute05")
 
       // create output
-      val rdd = spark.sql("select id_level1, id_level2, grouping_level, learningValuesType, agg_key_name, infAggKeyValue, infIsAnchorWindow, infPostAnchorFlag, topKFeatures, " +
+      val rdd = spark.sql("select id_level1, id_level2, grouping_level, learning_values_type, agg_key_name, inf_agg_key_value, infer_is_anchor_win, infer_post_anchor_flag, top_k_features, " +
         " anchor_ts_str from trends_analysis" +
-        " where (grouping_level like 'level2-%-min10-positive%') AND int(infIsAnchorWindow) >=1 AND int(infPostAnchorFlag)=1 AND learningValuesType='fixed_length' " +
-        " AND topKFeatures != '' AND agg_key_name like 'xminute60'").rdd.flatMap({ row =>
+        " where (grouping_level like 'level2-%-min10-positive%') AND int(infer_is_anchor_win) >=1 AND int(infer_post_anchor_flag)=1 AND learning_values_type='fixed_length' " +
+        " AND top_k_features != '' AND agg_key_name like 'xminute60'").rdd.flatMap({ row =>
         // read
         val id_level1 = row.getString(row.fieldIndex("id_level1"))
         val id_level2 = row.getString(row.fieldIndex("id_level2"))
         val grouping_level = row.getString(row.fieldIndex("grouping_level"))
-        val learningValuesType = row.getString(row.fieldIndex("learningValuesType"))
+        val learning_values_type = row.getString(row.fieldIndex("learning_values_type"))
         val agg_key_name = row.getString(row.fieldIndex("agg_key_name"))
-        val infAggKeyValue = row.getString(row.fieldIndex("infAggKeyValue"))
-        val infIsAnchorWindow = row.getString(row.fieldIndex("infIsAnchorWindow")).toFloat.toInt
-        val infPostAnchorFlag = row.getInt(row.fieldIndex("infPostAnchorFlag"))
-        val topKFeatures = row.getString(row.fieldIndex("topKFeatures"))
+        val inf_agg_key_value = row.getString(row.fieldIndex("inf_agg_key_value"))
+        val infer_is_anchor_win = row.getString(row.fieldIndex("infer_is_anchor_win")).toFloat.toInt
+        val infer_post_anchor_flag = row.getInt(row.fieldIndex("infer_post_anchor_flag"))
+        val top_k_features = row.getString(row.fieldIndex("top_k_features"))
         val anchor_ts_str = row.getString(row.fieldIndex("anchor_ts_str"))
-        val isPositive = if (grouping_level.endsWith("positive")) 1 else 0
-        val isPostAnchor = if (infAggKeyValue >= anchor_ts_str.replace("T", "-").replace(":", "-")) 1 else 0
+        val is_pos = if (grouping_level.endsWith("positive")) 1 else 0
+        val is_post_anchor = if (inf_agg_key_value >= anchor_ts_str.replace("T", "-").replace(":", "-")) 1 else 0
 
         // maximum value to address extreme values
         val MaxFeatureValue = 1000
 
-        // parse topKFeatures and generate faeture columns
-        val topKFeaturesList = topKFeatures.split("[|]")
+        // parse top_k_features and generate faeture columns
+        val top_k_features_list = top_k_features.split("[|]")
           .map({ t => t.replaceAll("[()]", "") })
           .map({ t => t.split(",").toList
             match {
-              case List(eventName, value, featureType, _, _, _) => (eventName, value.toFloat, featureType)
+              case List(event_name, value, feature_type, _, _, _) => (event_name, value.toFloat, feature_type)
             }
           })
-          .map({ case (eventName, value, featureType) => (eventName, math.min(MaxFeatureValue, value), featureType) })
+          .map({ case (event_name, value, feature_type) => (event_name, math.min(MaxFeatureValue, value), feature_type) })
           .toList
 
         // output only a sample
-        // if (infPostAnchorFlag == 1) {
-        Some((id_level1, id_level2, grouping_level, learningValuesType, agg_key_name, infAggKeyValue, infIsAnchorWindow, infPostAnchorFlag, isPositive, isPostAnchor,
-          anchor_ts_str, topKFeaturesList))
+        // if (infer_post_anchor_flag == 1) {
+        Some((id_level1, id_level2, grouping_level, learning_values_type, agg_key_name, inf_agg_key_value, infer_is_anchor_win, infer_post_anchor_flag, is_pos, is_post_anchor,
+          anchor_ts_str, top_k_features_list))
         // } else {
         //   None
         // }
       })
 
       // get the names
-      val allFeaturesMap = rdd.flatMap({ case (id_level1, id_level2, grouping_level, learningValuesType, agg_key_name, infAggKeyValue, infIsAnchorWindow, infPostAnchorFlag, isPositive,
-        isPostAnchor, anchor_ts_str, topKFeaturesList) =>
+      val all_features_map = rdd.flatMap({ case (id_level1, id_level2, grouping_level, learning_values_type, agg_key_name, inf_agg_key_value, infer_is_anchor_win, infer_post_anchor_flag, is_pos,
+        is_post_anchor, anchor_ts_str, top_k_features_list) =>
 
-        val unaryFeatures = topKFeaturesList.map({ case (eventName, value, featureType) => (eventName + "_" + featureType, 1) })
-        val featureNames = topKFeaturesList.map({ case (eventName, value, featureType) => eventName + "_" + featureType })
+        val unaryFeatures = top_k_features_list.map({ case (event_name, value, feature_type) => (event_name + "_" + feature_type, 1) })
+        val feature_names = top_k_features_list.map({ case (event_name, value, feature_type) => event_name + "_" + feature_type })
         // TODO: Hack
-        // val binaryFeatures = featureNames.filter(_.indexOf("unary") != -1).flatMap({ x1 => featureNames.flatMap({ x2 => if (x1 < x2) Some((x1 + "_" + x2, 2)) else None }) })
-        // val ternaryFeatures = featureNames.flatMap({ x1 =>
-        //   featureNames.flatMap({ x2 => featureNames.flatMap({ x3 => if (x1 < x2 && x2 < x3) Some((x1 + "_" + x2 + "_" + x3, 3)) else None }) })
+        // val binary_features = feature_names.filter(_.indexOf("unary") != -1).flatMap({ x1 => feature_names.flatMap({ x2 => if (x1 < x2) Some((x1 + "_" + x2, 2)) else None }) })
+        // val ternary_features = feature_names.flatMap({ x1 =>
+        //   feature_names.flatMap({ x2 => feature_names.flatMap({ x3 => if (x1 < x2 && x2 < x3) Some((x1 + "_" + x2 + "_" + x3, 3)) else None }) })
         // })
-        // (unaryFeatures ++ binaryFeatures ++ ternaryFeatures)
+        // (unaryFeatures ++ binary_features ++ ternary_features)
         (unaryFeatures)
-          .map({ case (featureName, featureSize) => (featureName, featureSize, isPositive, id_level2.substring(0, 5)) })
+          .map({ case (feature_name, featureSize) => (feature_name, featureSize, is_pos, id_level2.substring(0, 5)) })
           .toSeq
       })
       .distinct()
-      .map({ case (featureName, featureSize, isPositive, id_level2) => ((featureName, featureSize, isPositive), Set(id_level2)) })
+      .map({ case (feature_name, featureSize, is_pos, id_level2) => ((feature_name, featureSize, is_pos), Set(id_level2)) })
       .reduceByKey({ case (c1, c2) => c1 ++ c2 }, numPartitions = numReducers)
-      .filter({ case ((featureName, featureSize, isPositive), uniqLevel2Ids) =>
-        val threshold = (if (isPositive == 1) MinDictFeaturesCountPos else MinDictFeaturesCountNeg)
-        if (featureName.endsWith("_dict")) {
-          uniqLevel2Ids.size >= threshold
+      .filter({ case ((feature_name, featureSize, is_pos), uniq_level2_ids) =>
+        val threshold = (if (is_pos == 1) MinDictFeaturesCountPos else MinDictFeaturesCountNeg)
+        if (feature_name.endsWith("_dict")) {
+          uniq_level2_ids.size >= threshold
         } else {
-          if (featureName == "strong_diff") {
-            uniqLevel2Ids.size >= threshold
+          if (feature_name == "intensity_level0") {
+            uniq_level2_ids.size >= threshold
           } else {
-            uniqLevel2Ids.size >= threshold
+            uniq_level2_ids.size >= threshold
           }
         }
       })
-      .map({ case ((featureName, featureSize, isPositive), uniqLevel2Ids) => ((featureName, featureSize), uniqLevel2Ids) })
+      .map({ case ((feature_name, featureSize, is_pos), uniq_level2_ids) => ((feature_name, featureSize), uniq_level2_ids) })
       .reduceByKey({ case (c1, c2) => c1 ++ c2 })
-      .map({ case ((featureName, featureSize), uniqLevel2Ids) => (featureName, uniqLevel2Ids.size) })
+      .map({ case ((feature_name, featureSize), uniq_level2_ids) => (feature_name, uniq_level2_ids.size) })
       .collect()
       .toList
       .toMap
 
       // print
-      println("Features Map features: %d".format(allFeaturesMap.size))
+      println("Features Map features: %d".format(all_features_map.size))
 
       // list
-      // val allFeaturesList = allFeaturesMap.keys.toList.sorted
-      val allFeaturesList = allFeaturesMap.keys.toSet
+      // val allFeaturesList = all_features_map.keys.toList.sorted
+      val allFeaturesList = all_features_map.keys.toSet
 
       // create broadcast variable
-      val allFeaturesListBC = spark.sparkContext.broadcast(allFeaturesList)
+      val all_features_list_bc = spark.sparkContext.broadcast(allFeaturesList)
 
       // iterate again to create a dense output. spark data frame wont support these many features, so just need to output as lines
-      val datasetData = rdd.map({ case (id_level1, id_level2, grouping_level, learningValuesType, agg_key_name, infAggKeyValue, infIsAnchorWindow, infPostAnchorFlag,
-        isPositive, isPostAnchor, anchor_ts_str, topKFeaturesList) =>
+      val datasetData = rdd.map({ case (id_level1, id_level2, grouping_level, learning_values_type, agg_key_name, inf_agg_key_value, infer_is_anchor_win, infer_post_anchor_flag,
+        is_pos, is_post_anchor, anchor_ts_str, top_k_features_list) =>
         // feature set for different granularity
-        val topKUnaryFeaturesMap = topKFeaturesList.map({ case (eventName, value, featureType) => ((eventName + "_" + featureType), value.toString) }).toMap
-        // val topKBinaryFeaturesMap = topKFeaturesList.flatMap({ case (eventName1, value1, featureType1) =>
-        //   topKFeaturesList.flatMap({ case (eventName2, value2, featureType2) =>
-        //     if (eventName1.indexOf("unary") != -1 && eventName2.indexOf("unary") != -1 && eventName1 < eventName2)
-        //       Some((eventName1 + "_" + featureType1 + "_" + eventName2 + "_" + featureType2), math.min(value1, value2))
+        val top_k_unary_features_map = top_k_features_list.map({ case (event_name, value, feature_type) => ((event_name + "_" + feature_type), value.toString) }).toMap
+        // val topKBinaryFeaturesMap = top_k_features_list.flatMap({ case (event_name1, value1, feature_type1) =>
+        //   top_k_features_list.flatMap({ case (event_name2, value2, feature_type2) =>
+        //     if (event_name1.indexOf("unary") != -1 && event_name2.indexOf("unary") != -1 && event_name1 < event_name2)
+        //       Some((event_name1 + "_" + feature_type1 + "_" + event_name2 + "_" + feature_type2), math.min(value1, value2))
         //     else
         //       None
         //   })
         // })
         // .toMap
-        // val topKTernaryFeaturesMap = topKFeaturesList.flatMap({ case (eventName1, value1, featureType1) =>
-        //   topKFeaturesList.flatMap({ case (eventName2, value2, featureType2) =>
-        //     topKFeaturesList.flatMap({ case (eventName3, value3, featureType3) =>
-        //       if (eventName1 < eventName2 && eventName2 < eventName3) Some((eventName1 + "_" + eventName2 + "_" + eventName3), math.min(math.min(value1, value2), value3)) else None
+        // val top_k_ternary_features_map = top_k_features_list.flatMap({ case (event_name1, value1, feature_type1) =>
+        //   top_k_features_list.flatMap({ case (event_name2, value2, feature_type2) =>
+        //     top_k_features_list.flatMap({ case (event_name3, value3, feature_type3) =>
+        //       if (event_name1 < event_name2 && event_name2 < event_name3) Some((event_name1 + "_" + event_name2 + "_" + event_name3), math.min(math.min(value1, value2), value3)) else None
         //     })
         //   })
         // })
         // .toMap
 
         // generate features
-        // val features = allFeaturesListBC.value.map({ case featureName =>
-        //   if (topKUnaryFeaturesMap.contains(featureName))
-        //     topKUnaryFeaturesMap(featureName)
+        // val features = all_features_list_bc.value.map({ case feature_name =>
+        //   if (top_k_unary_features_map.contains(feature_name))
+        //     top_k_unary_features_map(feature_name)
         //   else
-        //     topKBinaryFeaturesMap.get(featureName).getOrElse(topKTernaryFeaturesMap.get(featureName).getOrElse(0f))
+        //     topKBinaryFeaturesMap.get(feature_name).getOrElse(top_k_ternary_features_map.get(feature_name).getOrElse(0f))
         // })
-        // val features = allFeaturesListBC.value.map({ case featureName => topKUnaryFeaturesMap.get(featureName).getOrElse(topKBinaryFeaturesMap.get(featureName).getOrElse(0f)) })
-        // val features = allFeaturesListBC.value.map({ case featureName => "\"%s\": \"%s\"".format(featureName.replaceAll(":", "_"), topKUnaryFeaturesMap.get(featureName)) }).flatten
-        val features = topKUnaryFeaturesMap.flatMap({ case (k, v) => if (allFeaturesListBC.value.contains(k)) Some("\"%s\":\"%s\"".format(k.replaceAll(":", "_"), v)) else None })
-        val featuresStr = Utils.urlEncode("{" + features.mkString(",") + "}")
-        (id_level1, id_level2, grouping_level, learningValuesType, agg_key_name, infAggKeyValue, infIsAnchorWindow, infPostAnchorFlag, isPositive, isPostAnchor,
-          anchor_ts_str, featuresStr)
+        // val features = all_features_list_bc.value.map({ case feature_name => top_k_unary_features_map.get(feature_name).getOrElse(topKBinaryFeaturesMap.get(feature_name).getOrElse(0f)) })
+        // val features = all_features_list_bc.value.map({ case feature_name => "\"%s\": \"%s\"".format(feature_name.replaceAll(":", "_"), top_k_unary_features_map.get(feature_name)) }).flatten
+        val features = top_k_unary_features_map.flatMap({ case (k, v) => if (all_features_list_bc.value.contains(k)) Some("\"%s\":\"%s\"".format(k.replaceAll(":", "_"), v)) else None })
+        val features_str = Utils.urlEncode("{" + features.mkString(",") + "}")
+        (id_level1, id_level2, grouping_level, learning_values_type, agg_key_name, inf_agg_key_value, infer_is_anchor_win, infer_post_anchor_flag, is_pos, is_post_anchor,
+          anchor_ts_str, features_str)
         // fields.mkString("\t")
       })
       // .repartition(1)
@@ -1785,8 +1785,8 @@ object TrendsAnalysis extends Serializable {
       // val featuresHeader = allFeaturesList.map(_.replaceAll(":", "_")).mkString("\t")
       val featuresHeader = "features:json_encoded"
       val df = spark.createDataFrame(datasetData)
-        .toDF("id_level1", "id_level2", "grouping_level", "learningValuesType", "agg_key_name", "infAggKeyValue", "infIsAnchorWindow", "infPostAnchorFlag",
-        "isPositive", "isPostAnchor", "anchor_ts_str", featuresHeader)
+        .toDF("id_level1", "id_level2", "grouping_level", "learning_values_type", "agg_key_name", "inf_agg_key_value", "infer_is_anchor_win", "infer_post_anchor_flag",
+        "is_pos", "is_post_anchor", "anchor_ts_str", featuresHeader)
 
       // append header
       // val featuresHeader = allFeaturesList.map(_.replaceAll(":", "_")).mkString("\t")
@@ -1797,7 +1797,7 @@ object TrendsAnalysis extends Serializable {
       // spark.sparkContext.parallelize(dataset, 1).saveAsTextFile(outputPath, classOf[GzipCodec])
 
       // release broadcast variable
-      allFeaturesListBC.unpersist()
+      all_features_list_bc.unpersist()
       spark.catalog.dropTempView("trends_analysis")
     }
 }
