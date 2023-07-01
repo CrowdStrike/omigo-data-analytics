@@ -39,6 +39,10 @@ class GeoMapTSV(tsv.TSV):
         # map ip to latitude and longitude
         xtsv = self \
             .select(list(display_cols_mp.keys()), dmsg = dmsg) \
+            .is_nonempty_str(lat_col) \
+            .is_nonempty_str(lon_col) \
+            .is_nonzero_float(lat_col) \
+            .is_nonzero_float(lon_col) \
             .distinct(dmsg = dmsg) \
             .add_const("circle_size", "15") \
             .add_const("color_index", "0") \

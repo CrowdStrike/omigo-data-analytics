@@ -4936,7 +4936,7 @@ class TSV:
         return self
 
 def get_version():
-    return "v0.3.9:empty_tsv"
+    return "v0.5.2_1:mean"
 
 def get_func_name(f):
     return f.__name__
