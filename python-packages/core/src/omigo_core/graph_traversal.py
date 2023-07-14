@@ -210,7 +210,7 @@ def get_time_based_forward_edges_only(etsv, ts_col, prefix):
 
 def remove_dangling_edges(etsv, retain_node_filter_func = None, max_iter = 5, dmsg = ""):
     dmsg = utils.extend_inherit_message(dmsg, "remove_dangling_edges")
-    utils.warn_once("{}: this can remove event detect_keys if there is no incoming or outgoing edge".format(dmsg))
+    utils.warn_once("{}: this can remove event retain keys if there is no incoming or outgoing edge".format(dmsg))
 
     # check for column names
     if (etsv.has_col("src") == False or etsv.has_col("target") == False):
