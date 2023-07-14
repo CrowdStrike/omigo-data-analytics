@@ -326,3 +326,104 @@ def remove_cycles(vtsv, etsv, ts_col, retain_node_filter_func = None, dmsg = "")
     # return
     return vtsv2, etsv2
 
+def merge_similar_nodes_reference(self, vtsv, etsv, retain_vertex_ids, ts_col, retain_node_filter_func = None, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "merge_similar_nodes")
+
+    # check for cycles
+    vtsv_nocycle, etsv_nocycle = remove_cycles(vtsv, etsv, ts_col, retain_node_filter_func = retain_node_filter_func)
+        
+    # warn if cycles were present, and then remove them
+    if (etsv.num_rows() != etsv_nocycle.num_rows()):
+        utils.warn_once("merge_similar_nodes: this api is unpredictable in presence of cycles. removing them for robustness")
+        # debug
+        etsv \
+            .filter(["src", "target"], lambda src, tgt: (src, tgt) not in etsv_nocycle.to_tuples(["src", "target"])) \
+            .show_transpose(3, title = "{}: edges removed because of cycle".format(dmsg), max_col_width = 20)
+        
+        # assign to original variables
+        vtsv, etsv = vtsv_nocycle, etsv_nocycle
+        
+    # remove columns that are created again
+    etsv_sel = etsv
+
+    # find the number of outgoing edges to mark leaves
+    etsv_edge_count = etsv_sel \
+        .aggregate(["target"], ["src"], [funclib.uniq_len], collapse = False) \
+        .rename("src:uniq_len", "incoming_target") \
+        .transform("target", lambda t: 1 if (t in retain_vertex_ids) else 0, "target_is_retain_vertex") \
+        .transform(prop_col, lambda arr: ",".join(arr), "target_level2", use_array_notation = True) \
+        .aggregate("src", ["target", "target_level2", "count"], [funclib.uniq_len, funclib.uniq_mkstr, funclib.sumint], collapse = False) \
+        .rename("target:uniq_len", "outgoing_target") \
+        .rename("target_level2:uniq_mkstr", "edge_target_level2") \
+        .rename("count:sumint", "count_target_level2") \
+        .drop_cols("target_level2")
+
+    etsv_num_outgoing_target = etsv_edge_count \
+        .select(["src", "outgoing_target", "edge_target_level2", "count_target_level2"]) \
+        .rename("src", "right:src") \
+        .distinct() \
+        .noop("merge_similar_nodes: etsv_num_outgoing_target")
+
+    etsv_target_edge_count = etsv_edge_count \
+        .drop_cols(["outgoing_target", "edge_target_level2", "count_target_level2"]) \
+        .left_map_join(etsv_num_outgoing_target, ["target"], rkeys = ["right:src"], def_val_map = {"outgoing_target": "0", "edge_target_level2": "", "count_target_level2": "0"}) \
+        .drop_cols_with_prefix("right") \
+        .reorder(["src", "target"])
+
+    etsv_flags = etsv_target_edge_count \
+        .transform(["src", "incoming_target", "outgoing_target"], lambda t1, t2, t3: 1 if (self.is_spl_node(t1) == False and (int(t2) <= 1 and int(t3) == 0)) else 0, "is_leaf_target") \
+        .transform(["src", "incoming_target", "outgoing_target"], lambda t1, t2, t3: 1 if (int(t2) <= 1 and int(t3) == 1) else 0, "is_leaf_edge_target")
+
+    etsv_flags \
+        .exclude_filter(["is_leaf_target", "is_leaf_edge_target"], lambda t1, t2: t1 == "0" and t2 == "0")
+
+    # group the leaf nodes based on collapse flag
+    etsv_grouped_leaf0 = etsv_flags \
+        .exclude_filter(["is_leaf_target", "is_leaf_edge_target"], lambda t1, t2: t1 == "1" or t2 == "1") \
+        .add_const("num_nodes", "1") \
+        .add_const("etsv_grouped_source", "leaf0")
+
+    etsv_grouped_leaf1 = etsv_flags \
+        .eq_str("is_leaf_target", "1") \
+        .aggregate(["src", "target_is_retain_vertex", "is_leaf_target"], ["target", "target"], [funclib.uniq_mkstr, funclib.get_len]) \
+        .rename("target:uniq_mkstr", "target") \
+        .rename("target:get_len", "num_nodes") \
+        .add_const("etsv_grouped_source", "leaf1")
+
+    etsv_grouped_leaf2 = etsv_flags \
+        .eq_str("is_leaf_edge_target", "1") \
+        .aggregate(["src", "edge_target_level2", "is_leaf_edge_target"], ["target", "target"], [funclib.uniq_mkstr, funclib.get_len]) \
+        .rename("target:uniq_mkstr", "target") \
+        .rename("target:get_len", "num_nodes") \
+        .add_const("etsv_grouped_source", "leaf2")
+
+    etsv_grouped = tsv.merge_union([etsv_grouped_leaf0, etsv_grouped_leaf1, etsv_grouped_leaf2]) \
+        .drop_cols(["incoming_target", "outgoing_target", "edge_target_level2", "count_target_level2", "is_leaf_target", "is_leaf_edge_target"]) \
+        .reorder(["src", "target", "num_nodes"]) \
+        .reverse_sort(["num_nodes"])
+
+    # map of node ids for collapsed nodes
+    vtsv_target_map = {}
+    for t in etsv_grouped.col_as_array_uniq("target"):
+        for t1 in t.split(","):
+            vtsv_target_map[str(t1)] = str(t)
+
+    # map for count of collapsed nodes         
+    vtsv_node_count_map = {}
+    for t1, t2 in etsv_grouped.to_tuples(["target", "num_nodes"]):
+        vtsv_node_count_map[str(t1)] = str(t2)
+
+    # create summarized columns. TODO: this reference is confusing
+    etsv_grouped2 = etsv_grouped \
+        .transform_inline("src", lambda t: vtsv_target_map[t] if (t in vtsv_target_map.keys()) else t)
+
+    # create new ids. TODO: poor reference
+    vtsv_grouped = vtsv \
+        .transform_inline("node_id", lambda t: vtsv_target_map[t] if (t in vtsv_target_map.keys()) else t) \
+        .aggregate(["node_id"], ["__is_root__", "__is_retain_vertex__"],
+            [funclib.uniq_mkstr, funclib.uniq_mkstr]) \
+        .remove_suffix("uniq_mkstr", dmsg = dmsg) \
+        .transform("node_id", lambda t: vtsv_node_count_map[t] if (t in vtsv_node_count_map.keys()) else "0", "num_nodes")
+
+    # return 
+    return vtsv_grouped, etsv_grouped2
