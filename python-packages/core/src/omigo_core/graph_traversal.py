@@ -206,3 +206,73 @@ def get_time_based_forward_edges_only(etsv, src_col, dest_col, ts_col, prefix):
     return etsv \
         .transform(dest_col, lambda t: ",".join(paths[t]) if (t in paths.keys()) else "", "{}:src_paths".format(prefix)) \
         .transform(dest_col, lambda t: ",".join(all_paths[t]) if (t in all_paths.keys()) else "", "{}:all_paths".format(prefix))
+
+
+def remove_dangling_edges(vtsv, etsv, max_iter = 5, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "remove_dangling_edges")
+    utils.warn_once("{}: this can remove event detect_keys if there is no incoming or outgoing edge".format(dmsg))
+
+    # check for column names
+    if (vtsv.has_col("node_id") == False or etsv.has_col("src") == False or etsv.has_col("target") == False):
+        raise Exception("{}: predefined column names not found".format(dmsg))
+
+    # flag to maintain current state
+    dangling_edges_pruned = False
+    count = 0
+
+    # initialize results
+    vtsv_result = vtsv
+    etsv_result = etsv
+
+    # loop
+    while (dangling_edges_pruned == False and count <= max_iter):
+        # increase counter
+        count = count + 1
+    
+        # count edges
+        etsv_edge_count = etsv_result \
+            .aggregate(["target"], ["src"], [funclib.uniq_len], collapse = False) \
+            .rename("src:uniq_len", "incoming_target") \
+            .aggregate(["src"], ["target"], [funclib.uniq_len], collapse = False) \
+            .rename("target:uniq_len", "outgoing_target")
+    
+        # get outgoing edges
+        etsv_num_outgoing_target = etsv_edge_count \
+            .select(["src", "outgoing_target"]) \
+            .rename("src", "right:src") \
+            .distinct()
+        
+        # ege count flag
+        etsv2_edge_flags = etsv_edge_count \
+            .print_stats(msg = "etsv_edge_count") \
+            .drop_cols(["outgoing_target"]) \
+            .left_map_join(etsv_num_outgoing_target, ["target"], rkeys = ["right:src"], def_val_map = {"outgoing_target": "0"}) \
+            .drop_cols_with_prefix("right") \
+            .transform(["src", "target", "incoming_target", "outgoing_target"], lambda s,t,i,o: 1 if (self.is_spl_node(s) and int(o) == 0) else 0, "outgoing_target_zero_flag") \
+            .transform(["src", "target", "incoming_target", "outgoing_target"], lambda s,t,i,o: 1 if (self.is_spl_node(s) and int(i) > 1) else 0, "incoming_target_mult_flag") \
+            .sort(["outgoing_target_zero_flag", "incoming_target_mult_flag", "src", "target"]) \
+            .noop(1000, "etsv2_edge_flags", tsv.TSV.select, ["src", "target", "incoming_target", "outgoing_target", "outgoing_target_zero_flag", "incoming_target_mult_flag"])
+
+        etsv2_sync = etsv2_edge_flags \
+            .not_eq_str("outgoing_target_zero_flag", "1") \
+            .not_eq_str("incoming_target_mult_flag", "1") \
+            .noop(10000, "etsv2_sync", tsv.TSV.select, ["src", "target", "incoming_target", "outgoing_target", "data_source", "outgoing_target_zero_flag", "incoming_target_mult_flag"]) \
+            .drop_cols(["incoming_target", "outgoing_target", "outgoing_target_zero_flag", "incoming_target_mult_flag"])
+
+        # check for running the flag
+        if (etsv2_edge_flags.num_rows() == etsv2_sync.num_rows()):
+            dangling_edges_pruned = True
+            utils.debug("etsv: no more dangling edges found")
+        else:
+            utils.info("etsv: dangling edges found. running the loop again : {} / {}".format(count, max_iter))
+
+        # update the core data structure 
+        etsv_result = etsv2_sync
+
+        # only keep vertices that had edges
+        vtsv_result = vtsv_result \
+            .values_in("node_id", etsv_result.col_as_array_uniq("src") + etsv_result.col_as_array_uniq("target"))
+
+    # return
+    return vtsv_result, etsv_result
+
