@@ -4,7 +4,7 @@ import queue
 # This is WIP. This detects cycles and ignore assigning them levels
 # TODO: there is this reverse_first flag which can be confusing. This api needs to be broken down into
 # forward or reverse only
-def get_bfs_levels(etsv, vertex_ids, src_col, dest_col, reverse_first = True):
+def get_bfs_levels(etsv, vertex_ids, reverse_first = True):
     # create map of levels
     fwd_levels = {}
     found_ids = []
@@ -20,7 +20,7 @@ def get_bfs_levels(etsv, vertex_ids, src_col, dest_col, reverse_first = True):
     current_level = 0
     while (flag == True):
         new_flag = False
-        for src, dest in etsv.to_tuples([src_col, dest_col]):
+        for src, dest in etsv.to_tuples(["src", "target"]):
             # check if it is a new id
             if (src in found_ids and dest not in found_ids and fwd_levels[src] <= current_level):
                 fwd_levels[dest] = fwd_levels[src] + 1
@@ -47,7 +47,7 @@ def get_bfs_levels(etsv, vertex_ids, src_col, dest_col, reverse_first = True):
     current_level = 0
     while (flag == True):
         new_flag = False
-        for src, dest in etsv.to_tuples([dest_col, src_col]):
+        for src, dest in etsv.to_tuples(["target", "src"]):
             # check if it is a new id
             if (src in found_ids and dest not in found_ids and rev_levels[src] >= current_level):
                 # if level is not mapped already
@@ -75,30 +75,30 @@ def get_bfs_levels(etsv, vertex_ids, src_col, dest_col, reverse_first = True):
     # return
     return levels
 
-def get_forward_edges_only(etsv, src_col, dest_col, prefix, sep = ","):
+def get_forward_edges_only(etsv, prefix, sep = ","):
     # list of ids found so far in crawl
     paths = {}
     all_paths = {}
 
     # initialize
-    for node in set(etsv.col_as_array_uniq(src_col) + etsv.col_as_array_uniq(dest_col)):
+    for node in set(etsv.col_as_array_uniq("src") + etsv.col_as_array_uniq("target")):
         paths[node] = []
         all_paths[node] = []
 
     # create a map of children
     children_map = {}
-    for (parent, cstr) in etsv.aggregate(src_col, [dest_col], [funclib.uniq_mkstr]).to_tuples([src_col, "{}:uniq_mkstr".format(dest_col)]):
+    for (parent, cstr) in etsv.aggregate("src", ["target"], [funclib.uniq_mkstr]).to_tuples(["src", "target:uniq_mkstr"]):
         children = cstr.split(sep)
         children_map[parent] = children
 
     # create a map of parents
     parents_map = {}
-    for (child, pstr) in etsv.aggregate(dest_col, [src_col], [funclib.uniq_mkstr]).to_tuples([dest_col, "{}:uniq_mkstr".format(src_col)]):
+    for (child, pstr) in etsv.aggregate("target", ["src"], [funclib.uniq_mkstr]).to_tuples(["target", "src:uniq_mkstr"]):
         parents = pstr.split(sep)
         parents_map[child] = parents
 
     # root nodes
-    root_nodes = set(etsv.col_as_array_uniq(src_col)).difference(set(parents_map.keys()))
+    root_nodes = set(etsv.col_as_array_uniq("src")).difference(set(parents_map.keys()))
 
     # do a forward crawl to fill paths and all_paths
     forward_queue = queue.Queue()
@@ -156,18 +156,18 @@ def get_forward_edges_only(etsv, src_col, dest_col, prefix, sep = ","):
 
     # find all unique paths to all the target nodes
     ancestors_map = {}
-    for dest in etsv.col_as_array_uniq(dest_col):
+    for dest in etsv.col_as_array_uniq("target"):
         # do a backtrack and create unique paths
         ancestors = __get_ancestor_paths__(dest)
         ancestors_map[dest] = list([",".join(vs) for vs in ancestors])
 
     # return
     return etsv \
-        .transform(dest_col, lambda t: ",".join(paths[t]) if (t in paths.keys()) else "", "{}:src_paths".format(prefix)) \
-        .transform(dest_col, lambda t: ",".join(all_paths[t]) if (t in all_paths.keys()) else "", "{}:all_paths".format(prefix)) \
-        .transform(dest_col, lambda t: "|".join(ancestors_map[t]) if (t in ancestors_map.keys()) else "", "{}:ancestors".format(prefix))
+        .transform("target", lambda t: ",".join(paths[t]) if (t in paths.keys()) else "", "{}:src_paths".format(prefix)) \
+        .transform("target", lambda t: ",".join(all_paths[t]) if (t in all_paths.keys()) else "", "{}:all_paths".format(prefix)) \
+        .transform("target", lambda t: "|".join(ancestors_map[t]) if (t in ancestors_map.keys()) else "", "{}:ancestors".format(prefix))
 
-def get_time_based_forward_edges_only(etsv, src_col, dest_col, ts_col, prefix):
+def get_time_based_forward_edges_only(etsv, ts_col, prefix):
     utils.warn_once("get_time_based_forward_edges_only: this is hard to understand and time ordering is tricky. Use get_forward_edges_only")
 
     # list of ids found so far in crawl
@@ -176,9 +176,9 @@ def get_time_based_forward_edges_only(etsv, src_col, dest_col, ts_col, prefix):
 
     # run loop
     sorted_edges = etsv \
-        .filter([src_col, dest_col], lambda t1, t2: t1 != t2) \
+        .filter(["src", "target"], lambda t1, t2: t1 != t2) \
         .numerical_sort([ts_col]) \
-        .to_tuples([src_col, dest_col])
+        .to_tuples(["src", "target"])
 
     # iterate over sorted edges
     for src, dest in sorted_edges:
@@ -204,16 +204,16 @@ def get_time_based_forward_edges_only(etsv, src_col, dest_col, ts_col, prefix):
 
     # return
     return etsv \
-        .transform(dest_col, lambda t: ",".join(paths[t]) if (t in paths.keys()) else "", "{}:src_paths".format(prefix)) \
-        .transform(dest_col, lambda t: ",".join(all_paths[t]) if (t in all_paths.keys()) else "", "{}:all_paths".format(prefix))
+        .transform("target", lambda t: ",".join(paths[t]) if (t in paths.keys()) else "", "{}:src_paths".format(prefix)) \
+        .transform("target", lambda t: ",".join(all_paths[t]) if (t in all_paths.keys()) else "", "{}:all_paths".format(prefix))
 
 
-def remove_dangling_edges(vtsv, etsv, max_iter = 5, dmsg = ""):
+def remove_dangling_edges(etsv, retain_node_filter_func = None, max_iter = 5, dmsg = ""):
     dmsg = utils.extend_inherit_message(dmsg, "remove_dangling_edges")
     utils.warn_once("{}: this can remove event detect_keys if there is no incoming or outgoing edge".format(dmsg))
 
     # check for column names
-    if (vtsv.has_col("node_id") == False or etsv.has_col("src") == False or etsv.has_col("target") == False):
+    if (etsv.has_col("src") == False or etsv.has_col("target") == False):
         raise Exception("{}: predefined column names not found".format(dmsg))
 
     # flag to maintain current state
@@ -221,7 +221,6 @@ def remove_dangling_edges(vtsv, etsv, max_iter = 5, dmsg = ""):
     count = 0
 
     # initialize results
-    vtsv_result = vtsv
     etsv_result = etsv
 
     # loop
@@ -248,8 +247,8 @@ def remove_dangling_edges(vtsv, etsv, max_iter = 5, dmsg = ""):
             .drop_cols(["outgoing_target"]) \
             .left_map_join(etsv_num_outgoing_target, ["target"], rkeys = ["right:src"], def_val_map = {"outgoing_target": "0"}) \
             .drop_cols_with_prefix("right") \
-            .transform(["src", "target", "incoming_target", "outgoing_target"], lambda s,t,i,o: 1 if (self.is_spl_node(s) and int(o) == 0) else 0, "outgoing_target_zero_flag") \
-            .transform(["src", "target", "incoming_target", "outgoing_target"], lambda s,t,i,o: 1 if (self.is_spl_node(s) and int(i) > 1) else 0, "incoming_target_mult_flag") \
+            .transform(["src", "target", "incoming_target", "outgoing_target"], lambda s,t,i,o: 1 if (retain_node_filter_func(s) and int(o) == 0) else 0, "outgoing_target_zero_flag") \
+            .transform(["src", "target", "incoming_target", "outgoing_target"], lambda s,t,i,o: 1 if (retain_node_filter_func(s) and int(i) > 1) else 0, "incoming_target_mult_flag") \
             .sort(["outgoing_target_zero_flag", "incoming_target_mult_flag", "src", "target"]) \
             .noop(1000, "etsv2_edge_flags", tsv.TSV.select, ["src", "target", "incoming_target", "outgoing_target", "outgoing_target_zero_flag", "incoming_target_mult_flag"])
 
@@ -269,10 +268,61 @@ def remove_dangling_edges(vtsv, etsv, max_iter = 5, dmsg = ""):
         # update the core data structure 
         etsv_result = etsv2_sync
 
-        # only keep vertices that had edges
-        vtsv_result = vtsv_result \
-            .values_in("node_id", etsv_result.col_as_array_uniq("src") + etsv_result.col_as_array_uniq("target"))
+    # return
+    return etsv_result
+
+# TODO: This method is a reference implementation
+def remove_cycles(vtsv, etsv, ts_col, retain_node_filter_func = None, dmsg = ""):
+    utils.extend_inherit_message(dmsg, "remove_cycles")
+    utils.warn_once("remove_cycles: This logic needs to be corrected for same edges from multiple data_sources to not confuse each other")
+    utils.warn_once("remove_cycles: there is a weird check for single edge. the t1 in t2.split is not clear")
+
+    # validation
+    if (vtsv.has_col("node_id") == False or etsv.has_col("src") == False or etsv.has_col("target") == False or etsv.has_col("data_source") == False or etsv.has_col(ts_col) == False):
+        raise Exception("{}: predefined column names not found".format(dmsg))
+
+    # edge count for the edges originating from the same data source 
+    etsv_spl = etsv \
+        .filter("src", retain_node_filter_func) \
+        .aggregate(["src", "target", ts_col], ["data_source"], [funclib.uniq_mkstr]) \
+        .distinct() \
+        .noop(1000, title = "etsv_spl")
+
+    # edge count for edges that are associated with vertices that need to be retained
+    etsv_non_spl = etsv \
+        .exclude_filter("src", retain_node_filter_func) \
+        .aggregate(["src", "target", ts_col], ["data_source"], [funclib.uniq_mkstr]) \
+        .distinct() \
+        .noop(1000, title = "etsv_non_spl")
+ 
+    # get forward edges and do some dedup based on ts_col 
+    etsv_non_spl2 = get_time_based_forward_edges_only(etsv_non_spl, ts_col, "graph") \
+        .sort([ts_col, "target", "src"]) \
+        .transform("graph:src_paths", lambda t: ",".join([t1[0:4] for t1 in t.split(",")]) if (t != "") else "", "graph:src_paths2") \
+        .transform("graph:all_paths", lambda t: ",".join([t1[0:4] for t1 in t.split(",")]) if (t != "") else "", "graph:all_paths2") \
+        .noop(ts_col, funclib.utctimestamp_to_datetime_str, "graph:ts_min2") \
+        .transform(["src", "graph:src_paths"], lambda t1, t2: 1 if (t1 in t2.split(",")) else 0, "graph:flag") \
+        .noop(1000, "etsv_non_spl2 1", tsv.TSV.select, ["src", "target", ts_col, "graph:src_paths2", "graph:all_paths2", "graph:flag", "data_source:uniq_mkstr"]) \
+        .eq_int("graph:flag", 1) \
+        .drop_cols_with_prefix("graph") \
+        .noop(1000, "etsv_non_spl2 2", tsv.TSV.select, ["src", "target", ts_col, "data_source:uniq_mkstr"])
+
+    etsv2_included = tsv.merge_union([etsv_spl, etsv_non_spl2]) \
+        .select(["src", "target", ts_col]) \
+        .distinct() \
+        .noop(1000, title = "etsv2_included") \
+        .to_tuples(["src", "target", ts_col])
+
+    # take only edges that have been picked to be included
+    etsv2 = etsv \
+        .filter(["src", "target", ts_col], lambda t1, t2, t3: (t1, t2, t3) in etsv2_included) \
+        .sort(["src", "target"]) \
+        .noop(1000, title = "etsv2", max_col_width = 20)
+
+    # take only vertices that have edges
+    vtsv2 = vtsv \
+        .filter("node_id", lambda t: t in etsv2.col_as_array_uniq("src") + etsv2.col_as_array_uniq("target"))
 
     # return
-    return vtsv_result, etsv_result
+    return vtsv2, etsv2
 
