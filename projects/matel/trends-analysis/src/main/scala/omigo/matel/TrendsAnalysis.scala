@@ -1538,7 +1538,7 @@ object TrendsAnalysis extends Serializable {
             .take(math.min(vs2.size, TopKValues))
             .mkString("|")
 
-          val numFeaturesInInferenceStr = vs2
+          val num_features_in_inference_str = vs2
            .map({ case (numFeaturesInInference, metric, metricType, metricVariable, metricThresh, feature_name, infCountValue) => numFeaturesInInference })
            .distinct.toList.mkString(",")
 
@@ -1556,18 +1556,18 @@ object TrendsAnalysis extends Serializable {
           // val metricAvg = vs.map({ case (numFeaturesInInference, infDiffInMad95NonNeg) => infDiffInMad95NonNeg / numFeaturesInInference }).sum
 
           ((id_level1, id_level2, uuid, grouping_level, learning_values_type, agg_key_name, anchor_ts_str), (inf_agg_key_value, infer_is_anchor_win, infer_post_anchor_flag, metric_b,
-            metric_b_count, metric_a, metric_a_count, metricSum, metricAvg, top_k_features, numFeaturesInInferenceStr))
+            metric_b_count, metric_a, metric_a_count, metricSum, metricAvg, top_k_features, num_features_in_inference_str))
         })
         .groupByKey(numReducers)
         .flatMap({ case ((id_level1, id_level2, uuid, grouping_level, learning_values_type, agg_key_name, anchor_ts_str), vs) =>
           val vs2 = vs.toList
           vs2
             .sortBy({ case (inf_agg_key_value, infer_is_anchor_win, infer_post_anchor_flag, metric_b, metric_b_count, metric_a, metric_a_count, metricSum, metricAvg, top_k_features,
-              numFeaturesInInferenceStr) => inf_agg_key_value
+              num_features_in_inference_str) => inf_agg_key_value
             })
             .zipWithIndex
             .map({ case ((inf_agg_key_value, infer_is_anchor_win, infer_post_anchor_flag, metric_b, metric_b_count, metric_a, metric_a_count, metricSum, metricAvg, top_k_features,
-              numFeaturesInInferenceStr), index) =>
+              num_features_in_inference_str), index) =>
 
               val anchorTimestamp = 0L
               val dateTime = new DateTime(anchorTimestamp, DateTimeZone.UTC)
@@ -1609,16 +1609,16 @@ object TrendsAnalysis extends Serializable {
               // generate output
               (id_level1, id_level2, uuid, grouping_level, learning_values_type, agg_key_name, anchor_ts_str, inf_agg_key_value, infer_is_anchor_win, infer_post_anchor_flag,
                 metric_b, metric_b_count,
-                metric_a, metric_b_count, top_k_features, numFeaturesInInferenceStr, part_of_anchor, post_anchor_flag, anchor_time_str, pred_win_flag, top_k_features_intensity_level0)
+                metric_a, metric_b_count, top_k_features, num_features_in_inference_str, part_of_anchor, post_anchor_flag, anchor_time_str, pred_win_flag, top_k_features_intensity_level0)
             })
         })
         .repartition(numReducers)
 
         // create dataframe
         val df = spark.createDataFrame(trendsValues)
-          .toDF("id_level1", "id_level2", "uuid", "grouping_level", "learning_values_type", "agg_key_name", "anchor_ts_str", "inf_agg_key_value", "infer_is_anchor_win", "infer_post_anchor_flag",
-            "metric_b", "metric_b_count", "metric_a", "metric_a_count",
-            "top_k_features", "numFeaturesInInferenceStr", "part_of_anchor", "post_anchor_flag", "anchor_time_str", "pred_win_flag", "top_k_features_intensity_level0")
+          .toDF("id_level1", "id_level2", "uuid", "grouping_level", "learning_values_type", "agg_key_name", "anchor_ts_str", "inf_agg_key_value", "infer_is_anchor_win",
+            "infer_post_anchor_flag", "metric_b", "metric_b_count", "metric_a", "metric_a_count",
+            "top_k_features", "num_features_in_inference_str", "part_of_anchor", "post_anchor_flag", "anchor_time_str", "pred_win_flag", "top_k_features_intensity_level0")
 
         // persist
         df.write.mode(SaveMode.Overwrite).parquet(xuuidOutputPath)
