@@ -31,7 +31,6 @@ import org.apache.spark.broadcast.Broadcast
 import java.util.BitSet
 import org.apache.spark.api.java.function.FilterFunction
 import scala.reflect.ClassTag
-import scala.reflect.runtime.universe._
 
 /**
  * FilterFunction implementation for bitset filters.
