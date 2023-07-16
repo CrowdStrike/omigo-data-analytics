@@ -9,7 +9,6 @@ import java.net.URI
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-import java.util.BitSet
 import org.apache.hadoop.fs._
 import org.apache.spark._
 import org.apache.spark.api.java.JavaRDD
