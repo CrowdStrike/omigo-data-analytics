@@ -33,46 +33,5 @@ import org.apache.spark.api.java.function.FilterFunction
 import scala.reflect.ClassTag
 
 object WIPUtils {
-  def readDataFrameMultiplePaths(path: String, batchSize: Int): DataFrame = {
 
-    // read the dataframe holding all the locations of different input_file_name
-    val indexedPathsDF = spark.read.parquet(path).cache()
-
-    // number of input files
-    val numFiles = indexedPathsDF.count
-    val numBatches = math.ceil(1.0 * numFiles / batchSize).toInt
-
-    println("readDataFrameMultiplePaths: %s, batch: %s, reading path: %s, batchSize: %d, numFiles: %d, numBatches: %d".format(getName(), batchHashPrefix, path,
-      batchSize, numFiles, numBatches))
-
-    // check for no match
-    if (numFiles == 0) {
-      return null
-    } else {
-      // iterate
-      val dfList = Range(0, numBatches).map({ batchNumber =>
-        // create the filter
-        val inputFileNameBatchFilter = new InputFileNameBatchFilter(spark.sparkContext.broadcast(numBatches), spark.sparkContext.broadcast(batchNumber))
-
-        // apply the filter to get the batches
-        val indexedPathsDFBatch = indexedPathsDF.filter(inputFileNameBatchFilter)
-
-        // unpersist
-        inputFileNameBatchFilter.unpersist()
-
-        // read the filenames
-        val inputFileNames = indexedPathsDFBatch.select(col("input_file_name")).rdd.map(_.getString(0)).collect().toList
-        println("readDataFrameMultiplePaths: reading paths: %d".format(inputFileNames.size))
-        
-        // read the parquet files
-        spark.read.parquet(inputFileNames: _*)
-      })
-      
-      // unpersist
-      indexedPathsDF.unpersist()
-      
-      // do a union of all dataframes
-      dfList.reduceLeft({ (a, b) => a.union(b) })
-    }
-  }
 }
