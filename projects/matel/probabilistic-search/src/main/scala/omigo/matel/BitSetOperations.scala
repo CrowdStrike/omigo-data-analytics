@@ -77,6 +77,40 @@ class BitSetFilterFunctions(filterBitSetAndMapBC: Broadcast[Map[String, BitSet]]
 }
 
 /**
+ * create filter class for working with data frame.
+ */
+class InputFileNameBatchFilter(val numBatchesBC: Broadcast[Int], val batchNumberBC: Broadcast[Int]) extends FilterFunction[Row] {
+  override def call(row: Row): Boolean = {
+    val inputFileName = row.getString(row.fieldIndex("input_file_name"))
+    inputFileName.hashCode().abs % numBatchesBC.value == batchNumberBC.value
+  }
+
+  def unpersist(): Unit = {
+    numBatchesBC.unpersist()
+    batchNumberBC.unpersist()
+  }
+}
+
+class BatchInput(val df: DataFrame) {
+  var count = -1L
+
+  def getDataFrame(): DataFrame = {
+    df
+  }
+
+  def getCount(): Long = {
+    // cache the count
+    if (count < 0)
+      if (df == null)
+        count = 0L
+      else
+        count = df.count
+
+    count
+  }
+}
+
+/**
  * Class for doing map and reduce operations using bit set filters.
  */
 class BitSetOperations {
