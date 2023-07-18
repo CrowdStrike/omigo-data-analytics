@@ -1,4 +1,4 @@
-name := "Probabilistic Search"
+name := "Text Analysis"
 
 version := "0.1"
 
