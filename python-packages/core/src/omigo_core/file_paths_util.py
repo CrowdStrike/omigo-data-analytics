@@ -14,11 +14,11 @@ from omigo_core import local_fs_wrapper
 NUM_HOURS = 24
 
 # method to read the data
-def read_filepaths(path, start_date_str, end_date_str, fileprefix, s3_region, aws_profile, granularity, ignore_missing = False):
+def read_filepaths(path, start_date_str, end_date_str, fileprefix, s3_region = None, aws_profile = None, granularity = "hourly", ignore_missing = False):
     if (granularity == "hourly"):
-        return read_filepaths_hourly(path, start_date_str, end_date_str, fileprefix, s3_region, aws_profile, "", ignore_missing)
+        return read_filepaths_hourly(path, start_date_str, end_date_str, fileprefix, s3_region = s3_region, aws_profile = aws_profile, etl_level = "", ignore_missing = ignore_missing)
     elif (granularity == "daily"):
-        return read_filepaths_daily(path, start_date_str, end_date_str, fileprefix, s3_region, aws_profile, "", ignore_missing)
+        return read_filepaths_daily(path, start_date_str, end_date_str, fileprefix, s3_region = s3_region, aws_profile = aws_profile, etl_level = "", ignore_missing = ignore_missing)
     else:
         raise Exception("Unknown granularity value", granularity)
 
@@ -43,7 +43,8 @@ def get_etl_level_prefix(curdate, etl_level):
 
     return prefix
 
-def read_filepaths_hourly(path, start_date_str, end_date_str, fileprefix, s3_region, aws_profile, etl_level, ignore_missing):
+def read_filepaths_hourly(path, start_date_str, end_date_str, fileprefix, s3_region = None, aws_profile = None, etl_level = "", ignore_missing = False):
+    utils.warn_once("read_filepaths_hourly is confusing and may be unsupported")
     # parse input dates
     start_date = datetime.datetime.strptime(start_date_str,"%Y-%m-%d")
     end_date = datetime.datetime.strptime(end_date_str,"%Y-%m-%d")
@@ -66,11 +67,11 @@ def read_filepaths_hourly(path, start_date_str, end_date_str, fileprefix, s3_reg
 
             # check if this is s3 file
             if (filepath_tsv.startswith("s3://")):
-                if (s3_wrapper.check_path_exists(filepath_tsv, s3_region, aws_profile)):
+                if (s3_wrapper.check_path_exists(filepath_tsv, s3_region = s3_region, aws_profile = aws_profile)):
                     filepaths.append(filepath_tsv)
-                elif (s3_wrapper.check_path_exists(filepath_tsvgz, s3_region, aws_profile)):
+                elif (s3_wrapper.check_path_exists(filepath_tsvgz, s3_region = s3_region, aws_profile = aws_profile)):
                     filepaths.append(filepath_tsvgz)
-                elif (s3_wrapper.check_path_exists(filepath_tsvzip, s3_region, aws_profile)):
+                elif (s3_wrapper.check_path_exists(filepath_tsvzip, s3_region = s3_region, aws_profile = aws_profile)):
                     filepaths.append(filepath_tsvzip)
                 else:
                     if (ignore_missing == False):
@@ -95,7 +96,7 @@ def read_filepaths_hourly(path, start_date_str, end_date_str, fileprefix, s3_reg
     return filepaths
 
 def check_exists(path, s3_region = None, aws_profile = None):
-    if (path.startswith("s3://") and s3_wrapper.check_path_exists(path, s3_region, aws_profile)):
+    if (path.startswith("s3://") and s3_wrapper.check_path_exists(path, s3_region = s3_region, aws_profile = aws_profile)):
         return True
 
     if (local_fs_wrapper.check_path_exists(path)):
@@ -103,7 +104,8 @@ def check_exists(path, s3_region = None, aws_profile = None):
 
     return False
 
-def read_filepaths_daily(path, start_date_str, end_date_str, fileprefix, s3_region, aws_profile, etl_level, ignore_missing):
+def read_filepaths_daily(path, start_date_str, end_date_str, fileprefix, s3_region = None, aws_profile = None, etl_level = "", ignore_missing = False):
+    utils.warn_once("read_filepaths_daily is confusing and may be unsupported")
     # parse input dates
     start_date = datetime.datetime.strptime(start_date_str, "%Y-%m-%d")
     end_date = datetime.datetime.strptime(end_date_str, "%Y-%m-%d")
@@ -124,9 +126,9 @@ def read_filepaths_daily(path, start_date_str, end_date_str, fileprefix, s3_regi
 
         # check if this is s3 file
         if (filepath_tsv.startswith("s3://") or filepath_tsvgz.startswith("s3://")):
-            if (s3_wrapper.check_path_exists(filepath_tsv, s3_region, aws_profile)):
+            if (s3_wrapper.check_path_exists(filepath_tsv, s3_region = s3_region, aws_profile = aws_profile)):
                 filepaths.append(filepath_tsv)
-            elif (s3_wrapper.check_path_exists(filepath_tsvgz, s3_region, aws_profile)):
+            elif (s3_wrapper.check_path_exists(filepath_tsvgz, s3_region = s3_region, aws_profile = aws_profile)):
                 filepaths.append(filepath_tsvgz)
             else:
                 if (ignore_missing == False):
@@ -158,7 +160,7 @@ def has_same_headers(filepaths, s3_region = None, aws_profile = None):
         # print(filepath)
 
         # read content
-        lines = read_file_content_as_lines(filepath, s3_region, aws_profile)
+        lines = read_file_content_as_lines(filepath, s3_region = s3_region, aws_profile = aws_profile)
 
         # read header
         headerline = lines[0].rstrip("\n")
@@ -201,7 +203,7 @@ def read_file_content_as_lines(path, s3_region = None, aws_profile = None):
     # check for s3
     if (path.startswith("s3://")):
         bucket_name, object_key = utils.split_s3_path(path)
-        data = s3_wrapper.get_s3_file_content_as_text(bucket_name, object_key, s3_region, aws_profile)
+        data = s3_wrapper.get_file_content_as_text(bucket_name, object_key, s3_region = s3_region, aws_profile = aws_profile)
         data = data.split("\n")
     else:
         if (path.endswith(".gz")):
@@ -259,9 +261,10 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
 
         # get the list of files. This needs to be failsafe as not all directories may exist
         if (path.startswith("s3://")):
-            tasks.append(utils.ThreadPoolTask(s3_wrapper.get_directory_listing, cur_path, filter_func = None, fail_if_missing = False, region = s3_region, profile = aws_profile))
+            tasks.append(utils.ThreadPoolTask(s3_wrapper.get_directory_listing, cur_path, filter_func = None, ignore_if_missing = False, skip_exist_check = True,
+                region = s3_region, profile = aws_profile))
         else:
-            tasks.append(utils.ThreadPoolTask(get_local_directory_listing, cur_path, filter_func = None, fail_if_missing = False))
+            tasks.append(utils.ThreadPoolTask(get_local_directory_listing, cur_path, filter_func = None, fail_if_missing = False, skip_exist_check = True))
 
     # execute the tasks
     results = utils.run_with_thread_pool(tasks, num_par = num_par, wait_sec = wait_sec)
@@ -318,8 +321,8 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
     # return
     return paths_found
 
-def get_local_directory_listing(path, filter_func = None, fail_if_missing = True):
-    return local_fs_wrapper.get_directory_listing(path, filter_func = filter_func, fail_if_missing = fail_if_missing)
+def get_local_directory_listing(path, filter_func = None, fail_if_missing = True, skip_exist_check = False):
+    return local_fs_wrapper.get_directory_listing(path, filter_func = filter_func, fail_if_missing = fail_if_missing, skip_exist_check = skip_exist_check)
 
 # this method is not robust against complex path creations with dot(.). FIXME. TODO
 def create_local_parent_dir(filepath):

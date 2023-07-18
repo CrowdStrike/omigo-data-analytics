@@ -134,7 +134,7 @@ def get_etl_file_base_name_by_ts(prefix, start_ts, end_ts):
     # return
     return "{}-{}-{}".format(prefix, start_datetime_str, end_datetime_str)
 
-def scan_by_datetime_range(path, start_date_str, end_date_str, prefix, filter_transform_func = None, transform_func = None, spillover_window = 1, num_par = 5,
+def scan_by_datetime_range(path, start_date_str, end_date_str, prefix, filter_transform_func = None, cols = None, transform_func = None, spillover_window = 1, num_par = 5,
     wait_sec = 5, timeout_seconds = 600, def_val_map = {}, sampling_rate = None, s3_region = None, aws_profile = None):
 
     # debug
@@ -158,7 +158,8 @@ def scan_by_datetime_range(path, start_date_str, end_date_str, prefix, filter_tr
 
     # iterate over filepaths and submit
     for filepath in filepaths:
-        tasks.append(utils.ThreadPoolTask(tsvutils.read_with_filter_transform, filepath, filter_transform_func, transform_func, s3_region, aws_profile))
+        tasks.append(utils.ThreadPoolTask(tsvutils.read_with_filter_transform, filepath, filter_transform_func = filter_transform_func, cols = cols, transform_func = transform_func,
+            s3_region = s3_region, aws_profile = aws_profile))
 
     # execute and get results
     tsv_list = utils.run_with_thread_pool(tasks, num_par = num_par, wait_sec = wait_sec)

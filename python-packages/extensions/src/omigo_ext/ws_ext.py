@@ -6,7 +6,7 @@ from omigo_ext import multithread_ext
 
 # TODO: selective_execution doesnt feel like a good design pattern.
 class WebServiceTSV(tsv.TSV):
-    def __init__(self, header, data, num_par = 0, timeout_sec = 5, num_batches = 10, status_check_interval_sec = 10, verify = True, enable_opt_exec = True, inherit_message = ""):
+    def __init__(self, header, data, num_par = 0, timeout_sec = 5, num_batches = 10, status_check_interval_sec = 10, verify = True, enable_opt_exec = True, dmsg = ""):
         super().__init__(header, data)
         self.num_par = num_par
         self.timeout_sec = timeout_sec
@@ -14,13 +14,13 @@ class WebServiceTSV(tsv.TSV):
         self.status_check_interval_sec = status_check_interval_sec
         self.verify = verify
         self.enable_opt_exec = enable_opt_exec
-        self.inherit_message = inherit_message + ": WebServiceTSV" if (inherit_message != "") else "WebServiceTSV"
+        self.dmsg = utils.extend_inherit_message(dmsg, "WebServiceTSV")
 
     def call_web_service(self, *args, **kwargs):
         # get response
         xtsv = self \
-            .extend_class(multithread_ext.MultiThreadTSV, num_par = self.num_par, num_batches = self.num_batches, status_check_interval_sec = self.status_check_interval_sec, inherit_message = self.inherit_message) \
-            .parallelize(__call_web_service__, self.timeout_sec, self.verify, self.enable_opt_exec, self.inherit_message, *args, **kwargs)
+            .extend_class(multithread_ext.MultiThreadTSV, num_par = self.num_par, num_batches = self.num_batches, status_check_interval_sec = self.status_check_interval_sec, dmsg = self.dmsg) \
+            .parallelize(__call_web_service__, self.timeout_sec, self.verify, self.enable_opt_exec, self.dmsg, *args, **kwargs)
 
         # trace
         utils.trace("call_web_service: num_rows: {}, size in bytes (MB): {}".format(xtsv.num_rows(), xtsv.size_in_gb()))
@@ -29,7 +29,7 @@ class WebServiceTSV(tsv.TSV):
         return xtsv
 
 # call web service function.
-def __call_web_service__(xtsv, xtsv_timeout_sec, xtsv_verify, xtsv_enable_opt_exec, xtsv_inherit_message, url, prefix, query_params = None, header_params = None,
+def __call_web_service__(xtsv, xtsv_timeout_sec, xtsv_verify, xtsv_enable_opt_exec, xtsv_dmsg, url, prefix, query_params = None, header_params = None,
     body_params = None, username = None, password = None, include_resolved_values = False, selective_execution_func = None):
 
     # initialize variables
@@ -45,6 +45,9 @@ def __call_web_service__(xtsv, xtsv_timeout_sec, xtsv_verify, xtsv_enable_opt_ex
     header_params_cols = []
     body_params_cols = []
     all_sel_cols = []
+
+    # debug
+    # utils.trace("__call_web_service__: url: {}, query_params: {}, header_params: {}, body_params: {}".format(url, query_params, header_params, body_params))
 
     # iterate over all the columns and find where all they exist
     for c in xtsv.get_header_fields():
@@ -84,19 +87,21 @@ def __call_web_service__(xtsv, xtsv_timeout_sec, xtsv_verify, xtsv_enable_opt_ex
     all_sel_cols = list(set(all_sel_cols))
 
     # print
-    utils.trace("{}: call_web_service: url: {}, query_params: {}".format(xtsv_inherit_message, str(url), str(query_params)))
-    utils.trace("{}: call_web_service: url_cols: {}, query_params_cols: {}, header_params_cols: {}, body_params_cols: {}".format(xtsv_inherit_message, str(url_cols), str(query_params_cols),
+    utils.trace("{}: call_web_service: url: {}, query_params: {}".format(xtsv_dmsg, str(url), str(query_params)))
+    utils.trace("{}: call_web_service: url_cols: {}, query_params_cols: {}, header_params_cols: {}, body_params_cols: {}".format(xtsv_dmsg, str(url_cols), str(query_params_cols),
         str(header_params_cols), str(body_params_cols)))
 
-    # use the same inherit_message
-    xtsv_inherit_message2 = xtsv_inherit_message + ": call_web_service" if (xtsv_inherit_message != "") else "call_web_service"
+    # use the same dmsg
+    xtsv_dmsg = xtsv_dmsg + ": call_web_service" if (xtsv_dmsg != "") else "call_web_service"
 
     # take only distinct all_sel_cols
-    hash_tsv = xtsv.select(all_sel_cols, inherit_message = xtsv_inherit_message2).distinct()
+    hash_tsv = xtsv \
+        .select(all_sel_cols, dmsg = xtsv_dmsg) \
+        .distinct()
 
     # if the number of rows are different, print some stats
     if (hash_tsv.num_rows() < xtsv.num_rows()):
-        utils.debug("{}: call_web_service: Number of rows: {}, Number of distinct rows for web service: {}, enable_opt_exec: {}".format(xtsv_inherit_message2,
+        utils.debug("{}: call_web_service: Number of rows: {}, Number of distinct rows for web service: {}, enable_opt_exec: {}".format(xtsv_dmsg,
             xtsv.num_rows(), hash_tsv.num_rows(), xtsv_enable_opt_exec))
 
     # avoid making duplicate calls to the web service by hashing the all_sel_cols
@@ -105,16 +110,16 @@ def __call_web_service__(xtsv, xtsv_timeout_sec, xtsv_verify, xtsv_enable_opt_ex
         hash_explode_tsv = hash_tsv \
             .explode(all_sel_cols, __call_web_service_exp_func__(xtsv_timeout_sec, xtsv_verify, url, query_params, header_params, body_params, username, password, url_cols,
                 query_params_cols, header_params_cols, body_params_cols, include_resolved_values, selective_execution_func),
-                prefix = prefix, collapse = False, inherit_message = xtsv_inherit_message2)
+                prefix = prefix, collapse = False, dmsg = xtsv_dmsg)
 
         # merge the results back to the original using map_join
-        return xtsv.natural_join(hash_explode_tsv, inherit_message = xtsv_inherit_message2)
+        return xtsv.natural_join(hash_explode_tsv, dmsg = xtsv_dmsg)
     else:
         # run transforms multiple times to generate resolved state of each variable
         return xtsv \
             .explode(all_sel_cols, __call_web_service_exp_func__(xtsv_timeout_sec, xtsv_verify, url, query_params, header_params, body_params, username, password, url_cols,
                 query_params_cols, header_params_cols, body_params_cols, include_resolved_values, selective_execution_func),
-                prefix = prefix, collapse = False, inherit_message = xtsv_inherit_message2)
+                prefix = prefix, collapse = False, dmsg = xtsv_dmsg)
 
 # the explode func for web service
 def __call_web_service_exp_func__(xtsv_timeout_sec, xtsv_verify, url, query_params, header_params, body_params, username, password, url_cols, query_params_cols, header_params_cols, body_params_cols,
@@ -186,9 +191,13 @@ def __call_web_service_exp_func__(xtsv_timeout_sec, xtsv_verify, url, query_para
                 username = username, password = password, timeout_sec = xtsv_timeout_sec, verify = xtsv_verify)
             result_mp["response:success"] = "1" if (str(resp_status_code).startswith("2")) else "0"
             result_mp["response:selective_execution"] = "1"
+
+            # some debugging
+            if (str(resp_status_code).startswith("5")):
+                utils.error("__call_web_service_exp_func_inner__: Got status code: {}: mp: {}".format(resp_status_code, mp))
         else:
             # for some reason, this row is not meant to be executed. Ignore.
-            resp_str, resp_status_code, resp_err = "", 0, ""
+            resp_str, resp_status_code, resp_err = "", 200, ""
             result_mp["response:success"] = "0"
             result_mp["response:selective_execution"] = "0"
 

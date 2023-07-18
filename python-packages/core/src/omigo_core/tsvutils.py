@@ -1,6 +1,5 @@
 """utlity methods to read and write tsv data."""
 
-from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlencode
 #from urllib.request import Request, urlopen
 #from urllib.error import HTTPError, URLError
@@ -41,7 +40,8 @@ def merge(tsv_list, def_val_map = None):
     # warn if a huge tsv is found 
     for i in range(len(tsv_list)):
         if (tsv_list[i].size_in_gb() >= 1):
-            utils.warn("merge: Found a very big tsv: {} / {}, num_rows: {}, size (GB): {}. Displaying the first row".format(i + 1, len(tsv_list), tsv_list[i].num_rows(), tsv_list[i].size_in_gb()))
+            utils.warn("merge: Found a very big tsv: {} / {}, num_rows: {}, size (GB): {}. max_size_cols_stats: {}".format(
+                i + 1, len(tsv_list), tsv_list[i].num_rows(), tsv_list[i].size_in_gb(), str(tsv_list[i].get_max_size_cols_stats())))
             tsv_list[i].show_transpose(1, title = "merge: big tsv")
 
     # check for valid headers
@@ -219,7 +219,28 @@ def read(input_file_or_files, sep = None, def_val_map = None, s3_region = None, 
     # merge and return
     return merge(tsv_list, def_val_map = def_val_map)
 
-def read_with_filter_transform(input_file_or_files, sep = None, def_val_map = None, filter_transform_func = None, transform_func = None, s3_region = None, aws_profile = None):
+def __read_with_filter_transform_select_func__(cols):
+    # create a inner function
+    def __read_with_filter_transform_select_func_inner__(mp):
+        result_mp = {}
+        for c in cols:
+            if (c in mp.keys()):
+                result_mp[c] = str(mp[c])
+
+        # return
+        return result_mp
+
+    return __read_with_filter_transform_select_func_inner__
+
+def read_with_filter_transform(input_file_or_files, sep = None, def_val_map = None, filter_transform_func = None, cols = None, transform_func = None, s3_region = None, aws_profile = None):
+    # check if cols is defined
+    if (filter_transform_func is not None and cols is not None):
+        raise Exception("tsvutils: read_with_filter_transform: either of filter_transform_func or cols parameter can be used")
+
+    # use the map function for cols
+    if (cols is not None and len(cols) > 0):
+        filter_transform_func = __read_with_filter_transform_select_func__(cols)
+
     # check if filter_transform_func is defined
     if (filter_transform_func is None):
         xtsv = read(input_file_or_files, sep = sep, def_val_map = def_val_map, s3_region = s3_region, aws_profile = aws_profile)
@@ -513,15 +534,17 @@ def read_url_response(url, query_params = {}, headers = {}, body = None, usernam
 
     # check for error codes
     if (response.status_code != 200):
-        if (response.status_code == 429):
+        # check for website saying too many requests (429) or service unavailable (503)
+        if (response.status_code == 429 or response.status_code == 503):
             # too many requests. wait and try again.
             if (num_retries > 0):
-                utils.debug("read_url_response: url: {}, query_params: {}, got 429. Attempts remaining: {}. Retrying after sleeping for {} seconds".format(url, query_params, num_retries, retry_sleep_sec))
+                utils.debug("read_url_response: url: {}, query_params: {}, got status: {}. Attempts remaining: {}. Retrying after sleeping for {} seconds".format(url, query_params,
+                    response.status_code, num_retries, retry_sleep_sec))
                 time.sleep(retry_sleep_sec)
                 return read_url_response(url, query_params = query_params, headers = headers, body = body, username = username, password = password, timeout_sec = timeout_sec, verify = verify,
                     num_retries = num_retries - 1, retry_sleep_sec = retry_sleep_sec * 2)
             else:
-                utils.debug("read_url_response: url: {}, getting 429 too many requests. Use num_retries parameter to for backoff and retry.".format(url))
+                utils.debug("read_url_response: url: {}, getting 429 too many requests or 5XX error. Use num_retries parameter to for backoff and retry.".format(url))
                 return "", response.status_code, response.reason
         else:
             return "", response.status_code, response.reason

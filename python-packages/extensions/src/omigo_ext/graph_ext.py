@@ -22,20 +22,20 @@ class VisualTSV(tsv.TSV):
     def ecdf(self, xcol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_class_col = 10, props = None):
         return __sns_ecdf__(self, xcol, class_col, title, xfigsize, yfigsize, max_class_col, props)
 
-    def density(self, ycols, class_col = None, xfigsize = 25, yfigsize = 5, props = None):
-        return __sns_density__(self, ycols, class_col, xfigsize, yfigsize, props)
+    def density(self, ycols, class_col = None, title = None, xfigsize = 25, yfigsize = 5, props = None):
+        return __sns_density__(self, ycols, class_col, title, xfigsize, yfigsize, props)
 
-    def barchart(self, xcol, ycol, class_col = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10, props = None):
-        return __sns_barplot__(self, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, max_class_col, props)
+    def barchart(self, xcol, ycol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10, props = None):
+        return __sns_barplot__(self, xcol, ycol, class_col, title, xfigsize, yfigsize, max_rows, max_class_col, props)
 
-    def boxplot(self, xcol, ycol, class_col = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10, props = None):
-        return __sns_boxplot__(self, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, max_class_col, props)
+    def boxplot(self, xcol, ycol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10, props = None):
+        return __sns_boxplot__(self, xcol, ycol, class_col, title, xfigsize, yfigsize, max_rows, max_class_col, props)
 
-    def corr_heatmap(self, cols, xfigsize = 25, yfigsize = 5, max_rows = 6, props = None):
-        return __sns_corr_heatmp__(self, cols, xfigsize, yfigsize, max_rows, props)
+    def corr_heatmap(self, cols, title = None, xfigsize = 25, yfigsize = 5, max_rows = 6, props = None):
+        return __sns_corr_heatmp__(self, cols, title, xfigsize, yfigsize, max_rows, props)
 
-    def pairplot(self, cols, class_col = None, xfigsize = 5, yfigsize = 5, max_rows = 6, max_class_col = 6, props = None):
-        return __sns_pairplot__(self, cols, class_col, xfigsize, yfigsize, max_rows, max_class_col, props)
+    def pairplot(self, cols, class_col = None, title = None, xfigsize = 5, yfigsize = 5, max_rows = 6, max_class_col = 6, props = None):
+        return __sns_pairplot__(self, cols, class_col, title, xfigsize, yfigsize, max_rows, max_class_col, props)
 
 def __create_data_frame_with_types__(xtsv, xcol = None, ycols = None, zcol = None):
     # convert to array
@@ -150,7 +150,11 @@ def __sns_scatterplot__(xtsv, xcol, ycol, class_col, title, xfigsize, yfigsize, 
 
     # plot
     ax.set_title(title)
-    sns.scatterplot(ax = ax, x = xcol, y = ycol, hue = class_col, hue_order = hue_order, data = df, **props)
+    plt = sns.scatterplot(ax = ax, x = xcol, y = ycol, hue = class_col, hue_order = hue_order, data = df, **props)
+
+    # check for title
+    if (title is not None and title != ""):
+        plt.set(title = title)
 
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
@@ -181,10 +185,15 @@ def __sns_histogram__(xtsv, xcol, class_col, bins, title, binwidth, xfigsize, yf
     hue_order = sorted(xtsv.col_as_array_uniq(class_col)) if (class_col is not None) else None
 
     # binwidth overrides bins. TODO: This hue parameter is not giving class color consistently
+    plt = None
     if (binwidth is not None):
-        sns.histplot(data = df, x = xcol, hue = class_col, hue_order = hue_order, binwidth = binwidth, **props2)
+        plt = sns.histplot(data = df, x = xcol, hue = class_col, hue_order = hue_order, binwidth = binwidth, **props2)
     else:
-        sns.histplot(data = df, x = xcol, hue = class_col, hue_order = hue_order, bins = bins, **props2)
+        plt = sns.histplot(data = df, x = xcol, hue = class_col, hue_order = hue_order, bins = bins, **props2)
+
+    # check for title
+    if (title is not None and title != ""):
+        plt.set(title = title)
 
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
@@ -215,13 +224,17 @@ def __sns_ecdf__(xtsv, xcol, class_col, title, xfigsize, yfigsize, max_class_col
     hue_order = sorted(xtsv.col_as_array_uniq(class_col)) if (class_col is not None) else None
 
     # binwidth overrides bins. TODO: This hue parameter is not giving class color consistently
-    sns.ecdfplot(data = df, x = xcol, hue = class_col, hue_order = hue_order, **props2)
+    plt = sns.ecdfplot(data = df, x = xcol, hue = class_col, hue_order = hue_order, **props2)
+
+    # check for title
+    if (title is not None and title != ""):
+        plt.set(title = title)
 
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
 
 # the syntax is non intuitive. need to follow row major or column major. splitting by class_col is not possible
-def __sns_density__(xtsv, ycols, class_col, xfigsize, yfigsize, props):
+def __sns_density__(xtsv, ycols, class_col, title, xfigsize, yfigsize, props):
     # default props
     default_props = dict(multiple = "layer")
     props2 = __merge_props__(props, default_props)
@@ -241,18 +254,23 @@ def __sns_density__(xtsv, ycols, class_col, xfigsize, yfigsize, props):
     # multiple = props["multiple"] if (props is not None and "multiple" in props.keys()) else "layer"
 
     # check for class col
+    plt = None
     if (class_col is not None):
         if (len(ycols) == 1):
-            sns.kdeplot(data = df, x = ycols[0], hue = class_col, hue_order = hue_order, **props2)
+            plt = sns.kdeplot(data = df, x = ycols[0], hue = class_col, hue_order = hue_order, **props2)
         else:
             raise Exception("__sns_density__: class_col with multiple ycols is not supported: {}".format(ycols))
     else:
-       sns.kdeplot(data = df, **props2)
+       plt = sns.kdeplot(data = df, **props2)
+
+    # check for title
+    if (title is not None and title != ""):
+        plt.set(title = title)
 
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
 
-def __sns_barplot__(xtsv, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, max_class_col, props):
+def __sns_barplot__(xtsv, xcol, ycol, class_col, title, xfigsize, yfigsize, max_rows, max_class_col, props):
     # default props
     default_props = dict()
     props2 = __merge_props__(props, default_props)
@@ -283,12 +301,16 @@ def __sns_barplot__(xtsv, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, m
     hue_order = sorted(xtsv.col_as_array_uniq(class_col)) if (class_col is not None) else None
 
     # plot
-    sns.barplot(data = df, x = xcol, y = ycol, hue = class_col, hue_order = hue_order, **props2)
+    plt = sns.barplot(data = df, x = xcol, y = ycol, hue = class_col, hue_order = hue_order, **props2)
+
+    # check for title
+    if (title is not None and title != ""):
+        plt.set(title = title)
 
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
 
-def __sns_boxplot__(xtsv, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, max_class_col, props):
+def __sns_boxplot__(xtsv, xcol, ycol, class_col, title, xfigsize, yfigsize, max_rows, max_class_col, props):
     # default props
     default_props = dict()
     props2 = __merge_props__(props, default_props)
@@ -316,12 +338,16 @@ def __sns_boxplot__(xtsv, xcol, ycol, class_col, xfigsize, yfigsize, max_rows, m
     hue_order = sorted(xtsv.col_as_array_uniq(class_col)) if (class_col is not None) else None
 
     # plot 
-    sns.boxplot(data = df, x = xcol, y = ycol, hue = class_col, hue_order = hue_order, **props2)
+    plt = sns.boxplot(data = df, x = xcol, y = ycol, hue = class_col, hue_order = hue_order, **props2)
+
+    # check for title
+    if (title is not None and title != ""):
+        plt.set(title = title)
 
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
 
-def __sns_corr_heatmp__(xtsv, cols, xfigsize, yfigsize, max_rows, props):
+def __sns_corr_heatmp__(xtsv, cols, title, xfigsize, yfigsize, max_rows, props):
     # default props
     default_props = dict(annot = True)
     props2 = __merge_props__(props, default_props)
@@ -346,12 +372,16 @@ def __sns_corr_heatmp__(xtsv, cols, xfigsize, yfigsize, max_rows, props):
     fig, ax = pyplot.subplots(figsize = figsize)
 
     # plot
-    sns.heatmap(df.corr(), **props2)
+    plt = sns.heatmap(df.corr(), **props2)
+
+    # check for title
+    if (title is not None and title != ""):
+        plt.set(title = title)
 
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
 
-def __sns_pairplot__(xtsv, cols, class_col, xfigsize, yfigsize, max_rows, max_class_col, props):
+def __sns_pairplot__(xtsv, cols, class_col, title, xfigsize, yfigsize, max_rows, max_class_col, props):
     # default props
     default_props = dict(kind = None, diag_kind = None)
     props2 = __merge_props__(props, default_props)
@@ -380,7 +410,11 @@ def __sns_pairplot__(xtsv, cols, class_col, xfigsize, yfigsize, max_rows, max_cl
 
     # define aspect and plot
     aspect = xfigsize / yfigsize
-    sns.pairplot(df, hue = class_col, hue_order = hue_order, kind = kind, diag_kind = diag_kind, aspect = aspect, height = yfigsize, **props2)
+    plt = sns.pairplot(df, hue = class_col, hue_order = hue_order, kind = kind, diag_kind = diag_kind, aspect = aspect, height = yfigsize, **props2)
+
+    # check for title
+    if (title is not None and title != ""):
+        plt.set(title = title)
 
     # return
     return VisualTSV(xtsv.get_header(), xtsv.get_data())
