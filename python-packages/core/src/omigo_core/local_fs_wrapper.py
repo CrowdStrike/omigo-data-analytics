@@ -2,6 +2,7 @@ import os
 import datetime
 from omigo_core import funclib
 from omigo_core import utils
+import zipfile, gzip
 
 def check_path_exists(path):
     return os.path.exists(path)
