@@ -24,7 +24,7 @@ class FileWriter:
         if (self.output_file_name.startswith("s3://")):
             content = "".join(self.data)
             bucket_name, object_key = utils.split_s3_path(self.output_file_name)
-            s3_wrapper.put_s3_file_with_text_content(bucket_name, object_key, content, self.s3_region, self.aws_profile)
+            s3_wrapper.put_file_with_text_content(bucket_name, object_key, content, self.s3_region, self.aws_profile)
         else:
             # construct output file
             if (self.output_file_name.endswith(".gz")):
@@ -65,7 +65,7 @@ class TSVFileWriter:
         if (output_file_name.startswith("s3://")):
             content = xtsv.get_header() + "\n" + "\n".join(xtsv.get_data()) if (xtsv.num_rows() > 0) else xtsv.get_header()
             bucket_name, object_key = utils.split_s3_path(output_file_name)
-            s3_wrapper.put_s3_file_with_text_content(bucket_name, object_key, content, self.s3_region, self.aws_profile)
+            s3_wrapper.put_file_with_text_content(bucket_name, object_key, content, self.s3_region, self.aws_profile)
         else:
             # construct output file
             if (output_file_name.endswith(".gz")):

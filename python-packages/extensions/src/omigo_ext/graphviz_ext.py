@@ -20,7 +20,9 @@ def __default_dot_style_func__(mp):
     return props
 
 # TODO: Use graphviz apis instead of constructing strings
-def __get_graphviz_data__(vertex_map, edges_maps, node_props, edge_props, vertex_id_col, edge_src_col, edge_dest_col, vertex_display_id_col, style_func, max_len):
+def __get_graphviz_data__(vertex_map, edges_maps, node_props, edge_props, vertex_id_col, edge_src_col, edge_dest_col, vertex_display_id_col, style_func, max_len,
+    display_vertex_keys, display_edge_keys):
+
     # check for custom display
     if (style_func is None):
         style_func = __default_dot_style_func__
@@ -54,7 +56,13 @@ def __get_graphviz_data__(vertex_map, edges_maps, node_props, edge_props, vertex
             for k1 in node_props:
                 # get the value and generate key-value string
                 v1 = str(mp[k1]) if (k1 in mp.keys()) else ""
-                kv_str = "[{} = {}]".format(k1, v1)
+
+                # decide whether to display keys
+                kv_str = None
+                if (display_vertex_keys is None or k1 in display_vertex_keys):
+                    kv_str = "[{} = {}]".format(k1, v1)
+                else:
+                    kv_str = "[{}]".format(v1)
 
                 # truncate the value if it exceeds a specific threshold
                 if (max_len is not None and len(kv_str) > max_len):
@@ -97,8 +105,14 @@ def __get_graphviz_data__(vertex_map, edges_maps, node_props, edge_props, vertex
             for k1 in edge_props:
                 # get the value and generate key-value string
                 v1 = str(mp[k1]) if (k1 in mp.keys()) else ""
+
                 if (v1 != ""):
-                    kv_str = "[{}]".format(v1)
+                    # decide whether to display keys
+                    kv_str = None
+                    if (display_edge_keys is None or k1 in display_edge_keys):
+                        kv_str = "[{} = {}]".format(k1, v1)
+                    else:
+                        kv_str = "[{}]".format(v1)
 
                     # truncate the value if it exceeds a specific threshold
                     if (max_len is not None and len(kv_str) > max_len):
@@ -128,7 +142,7 @@ def __get_graphviz_data__(vertex_map, edges_maps, node_props, edge_props, vertex
     return digraph_str
 
 def get_graphviz_data(vtsv, etsv, vertex_id_col, src_edge_col, dest_edge_col, vertex_display_id_col = None, node_props = None, edge_props = None, style_func = None,
-    max_len = None, create_missing_vertices = False):
+    max_len = None, create_missing_vertices = False, display_vertex_keys = None, display_edge_keys = None):
 
     # default for vertex display
     if (vertex_display_id_col is None):
@@ -183,13 +197,15 @@ def get_graphviz_data(vtsv, etsv, vertex_id_col, src_edge_col, dest_edge_col, ve
         edges_maps[(mp[src_edge_col], mp[dest_edge_col])] = mp
 
     # get the graphviz output
-    return __get_graphviz_data__(vertex_map, edges_maps, node_props, edge_props, vertex_id_col, src_edge_col, dest_edge_col, vertex_display_id_col, style_func, max_len)
+    return __get_graphviz_data__(vertex_map, edges_maps, node_props, edge_props, vertex_id_col, src_edge_col, dest_edge_col, vertex_display_id_col, style_func, max_len,
+        display_vertex_keys, display_edge_keys)
 
 def plot_graph(vtsv, etsv, vertex_id_col, src_edge_col, dest_edge_col, vertex_display_id_col = None, node_props = None, edge_props = None, style_func = None,
-    max_len = None, create_missing_vertices = False):
+    max_len = None, create_missing_vertices = False, display_vertex_keys = None, display_edge_keys = None):
 
     digraph_str = get_graphviz_data(vtsv, etsv, vertex_id_col, src_edge_col, dest_edge_col, vertex_display_id_col = vertex_display_id_col, node_props = node_props,
-        edge_props = edge_props, style_func = style_func, max_len = max_len, create_missing_vertices = create_missing_vertices)
+        edge_props = edge_props, style_func = style_func, max_len = max_len, create_missing_vertices = create_missing_vertices, display_vertex_keys = display_vertex_keys,
+        display_edge_keys = display_edge_keys)
 
     # return
     return graphviz.Source(digraph_str)
