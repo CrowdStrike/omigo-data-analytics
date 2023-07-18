@@ -50,6 +50,7 @@ def split_merge_uniq_mkstr(vs):
     return ",".join(sorted([str(x) for x in vs2]))
 
 def mean(vs):
+    vs = list([float(v) for v in vs])
     return statistics.mean(vs)
 
 def mkstr(vs):

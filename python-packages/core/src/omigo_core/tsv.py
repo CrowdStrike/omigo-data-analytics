@@ -2982,15 +2982,42 @@ class TSV:
             utils.warn("sample_column_by_max_uniq_values: max sample size: {} more than number of uniq values: {}".format(max_uniq_values, len(uniq_values)))
             return self
 
+    def sample_class_by_min_class_count(self, col, seed = 0, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "sample_class_by_min_class_count")
+
+        # get the cap on any class
+        min_count = int(min(self.group_count(col).col_as_int_array("group:count")))
+
+        # temporary column name
+        temp_col = "__sample_class_by_min_class_count_temp__"
+
+        # return
+        return self \
+            .add_seq_num(temp_col, dmsg = dmsg) \
+            .sample_group_by_max_uniq_values_exact(col, temp_col, min_count, dmsg = dmsg) \
+            .drop_cols(temp_col, dmsg = dmsg) 
+
+    def sample_class_by_max_values(self, col, n, seed = 0, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "sample_class_by_max_values")
+
+        # temporary column name
+        temp_col = "__sample_class_by_min_class_count_temp__"
+
+        # return
+        return self \
+            .add_seq_num(temp_col, dmsg = dmsg) \
+            .sample_group_by_max_uniq_values_exact(col, temp_col, n, dmsg = dmsg) \
+            .drop_cols(temp_col, dmsg = dmsg) 
+
     # create descriptive methods for join
     def left_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, num_par = 0, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "left_join")
         # check for empty
         if (self.has_empty_header()):
             utils.warn("left_join: empty this tsv")
             return self
 
         # return
-        dmsg = utils.extend_inherit_message(dmsg, "left_join")
         return self.__join__(that, lkeys, rkeys, join_type = "left", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, num_par = num_par, dmsg = dmsg)
 
     def right_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, num_par = 0, dmsg = ""):
@@ -4936,7 +4963,7 @@ class TSV:
         return self
 
 def get_version():
-    return "v0.3.9:empty_tsv"
+    return "v0.5.2_1:mean"
 
 def get_func_name(f):
     return f.__name__

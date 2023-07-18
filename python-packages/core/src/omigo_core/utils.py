@@ -641,3 +641,9 @@ class CombGenerator:
        return result
 
 
+def split_str_to_arr(x):
+    if (x is None or x == ""):
+        return []
+    else:
+        return list(filter(lambda t: t != "", x.split(",")))
+
