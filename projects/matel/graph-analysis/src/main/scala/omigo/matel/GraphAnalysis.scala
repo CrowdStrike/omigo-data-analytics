@@ -895,7 +895,7 @@ object RunQuery {
     lazy val hierarchy2 = new Hierarchy()
  
     lazy val nodes = Seq(
-      table1.as("Command")
+      table1.as("Table1")
       hierarchy1.as("Child1")
       hierarchy2.as("Child2").time_window(60).min_group_size(10)
     )
