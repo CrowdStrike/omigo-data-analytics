@@ -4963,7 +4963,7 @@ class TSV:
         return self
 
 def get_version():
-    return "v0.5.2_1:mean"
+    return "v0.5.6"
 
 def get_func_name(f):
     return f.__name__
