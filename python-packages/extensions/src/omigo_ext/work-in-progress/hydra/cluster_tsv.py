@@ -422,6 +422,9 @@ class HydraTSV(HydraBaseTSV):
     def transform_inline_log1p_base10(self, *args, **kwargs):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.transform_inline_log1p_base10, self.requirements, *args, **kwargs))
 
+    def transform_inline_log1p_base2(self, *args, **kwargs):
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.transform_inline_log1p_base2, self.requirements, *args, **kwargs))
+
     def rename(self, *args, **kwargs):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.rename, self.requirements, *args, **kwargs))
 
