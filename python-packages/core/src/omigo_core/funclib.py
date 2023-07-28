@@ -589,3 +589,27 @@ def map_to_url_encoded_col_names(cols, prefix = None, url_encoded_cols = None):
     # return
     return results
 
+def get_display_relative_time_str(v):
+    # compute units
+    days = v // 86400
+    hours = (v - (days * 86400)) // 3600
+    minutes = (v - (days * 86400 + hours * 3600)) // 60
+    seconds = v - (days * 86400 + hours * 3600 + minutes * 60)
+            
+    # compute display string
+    results = []
+    count = 0
+    max_display_values = 2
+    if (days > 0 and count < max_display_values):
+        results.append("{}d".format(days))
+        count = count + 1
+    if (hours > 0 and count < max_display_values):
+        results.append("{}h".format(hours))
+        count = count + 1
+    if (minutes > 0 and count < max_display_values):
+        results.append("{}m".format(minutes))
+        count = count + 1
+    if (seconds > 0 and count < max_display_values):
+        results.append("{}s".format(seconds))
+        count = count + 1
+

@@ -647,3 +647,9 @@ def split_str_to_arr(x):
     else:
         return list(filter(lambda t: t != "", x.split(",")))
 
+    # get string
+    result = " ".join(results)
+
+    # return
+    return result
+

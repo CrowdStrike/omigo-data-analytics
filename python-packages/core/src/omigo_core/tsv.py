@@ -1352,6 +1352,10 @@ class TSV:
         else:
             raise Exception("transform_inline_log1p: base value is not supported: {}".format(base))
 
+    def transform_inline_log1p_base2(self, col_or_cols, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "transform_inline_log1p_base2")
+        return self.transform_inline_log1p(col_or_cols, base = 2, dmsg = dmsg)
+        
     def transform_inline_log1p_base10(self, col_or_cols, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "transform_inline_log1p_base10")
         return self.transform_inline_log1p(col_or_cols, base = 10, dmsg = dmsg)
@@ -1992,8 +1996,9 @@ class TSV:
 
         return TSV(new_header, new_data)
 
-    def to_csv(self, comma_replacement = ";"):
-        utils.warn("to_csv: This is not a standard csv conversion. The commas are just replaced with another character specified in comma_replacement parameter.")
+    def to_csv(self, comma_replacement = ";", dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "to_csv")
+        utils.warn_once("{}: This is not a standard csv conversion. The commas are just replaced with another character specified in comma_replacement parameter.".format(dmsg))
 
         # create new data
         new_header = self.header.replace(",", comma_replacement).replace("\t", ",")
