@@ -613,3 +613,8 @@ def get_display_relative_time_str(v):
         results.append("{}s".format(seconds))
         count = count + 1
 
+    # get string
+    result = " ".join(results)
+
+    # return
+    return result

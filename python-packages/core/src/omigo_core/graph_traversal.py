@@ -208,7 +208,7 @@ def get_time_based_forward_edges_only(etsv, ts_col, prefix):
         .transform("target", lambda t: ",".join(all_paths[t]) if (t in all_paths.keys()) else "", "{}:all_paths".format(prefix))
 
 
-def remove_dangling_edges(etsv, retain_node_filter_func = None, max_iter = 5, dmsg = ""):
+def remove_dangling_edges(etsv, retain_vertex_ids, retain_node_filter_func, max_iter = 5, dmsg = ""):
     dmsg = utils.extend_inherit_message(dmsg, "remove_dangling_edges")
     utils.warn_once("{}: this can remove event retain keys if there is no incoming or outgoing edge".format(dmsg))
 
@@ -253,8 +253,8 @@ def remove_dangling_edges(etsv, retain_node_filter_func = None, max_iter = 5, dm
             .noop(1000, "etsv2_edge_flags", tsv.TSV.select, ["src", "target", "incoming_target", "outgoing_target", "outgoing_target_zero_flag", "incoming_target_mult_flag"])
 
         etsv2_sync = etsv2_edge_flags \
-            .not_eq_str("outgoing_target_zero_flag", "1") \
-            .not_eq_str("incoming_target_mult_flag", "1") \
+            .exclude_filter(["target", "outgoing_target_zero_flag"], lambda tgt, t: tgt not in retain_vertex_ids and t == "1") \
+            .exclude_filter(["target", "incoming_target_mult_flag"], lambda tgt, t: tgt not in retain_vertex_ids and t == "1") \
             .noop(10000, "etsv2_sync", tsv.TSV.select, ["src", "target", "incoming_target", "outgoing_target", "data_source", "outgoing_target_zero_flag", "incoming_target_mult_flag"]) \
             .drop_cols(["incoming_target", "outgoing_target", "outgoing_target_zero_flag", "incoming_target_mult_flag"])
 
@@ -326,7 +326,7 @@ def remove_cycles(vtsv, etsv, ts_col, retain_node_filter_func = None, dmsg = "")
     # return
     return vtsv2, etsv2
 
-def merge_similar_nodes_reference(self, vtsv, etsv, retain_vertex_ids, ts_col, retain_node_filter_func = None, dmsg = ""):
+def merge_similar_nodes_reference(vtsv, etsv, retain_vertex_ids, ts_col, retain_node_filter_func, dmsg = ""):
     dmsg = utils.extend_inherit_message(dmsg, "merge_similar_nodes")
 
     # check for cycles
@@ -427,3 +427,43 @@ def merge_similar_nodes_reference(self, vtsv, etsv, retain_vertex_ids, ts_col, r
 
     # return 
     return vtsv_grouped, etsv_grouped2
+
+# retain_vertex_annotations are the start and end timestamps for the retained vertex ids
+def split_graph_filter_func(src, tgt, ts, retain_vertex_ids, retain_vertex_annotations, retain_node_filter_func, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "split_graph_filter_func")
+
+    # return True for special nodes
+    if (retain_node_filter_func(src) or retain_node_filter_func(tgt)):
+        return True
+
+    # return True if neither are detections
+    if (src not in retain_vertex_ids and tgt not in retain_vertex_ids):
+        return True
+
+    # check before and after flag
+    before_flag = True
+    after_flag = True
+
+    # important, for both nodes as detection, keep the edge
+    if (src in retain_vertex_ids and tgt in retain_vertex_ids):
+        return True
+
+    # before detection
+    if (tgt in retain_vertex_ids):
+        if (tgt in retain_vertex_annotations.keys()):
+            (retain_vertex_ts_min, retain_vertex_ts_max) = retain_vertex_annotations[tgt]
+            if (int(ts) > int(retain_vertex_ts_max)):
+                before_flag = False
+
+    # after detection
+    if (src in retain_vertex_ids):
+        if (src in retain_vertex_annotations.keys()):
+            (retain_vertex_ts_min, retain_vertex_ts_max) = retain_vertex_annotations[src]
+            if (int(retain_vertex_ts_min) > int(ts)):
+                after_flag = False
+
+    # default
+    if (before_flag == False or after_flag == False):
+        return False
+    else:
+        return True

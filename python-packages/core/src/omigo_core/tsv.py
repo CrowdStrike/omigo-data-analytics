@@ -4786,6 +4786,14 @@ class TSV:
         utils.info(msg2)
         return self
 
+    def warn(self, msg):
+        utils.warn(msg)
+        return self
+
+    def warn_once(self, msg):
+        utils.warn_once(msg)
+        return self
+
     # get top k columns by byte size
     def get_max_size_cols_stats(self, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "get_max_size_cols_stats")
