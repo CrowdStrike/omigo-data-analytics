@@ -230,10 +230,14 @@ def remove_dangling_edges(etsv, retain_vertex_ids, retain_node_filter_func, max_
     
         # count edges
         etsv_edge_count = etsv_result \
+            .noop(["src", "target", "evports", "users", "ts_min", "ts_max", "count"], n = 1000, title = "etsv_result") \
             .aggregate(["target"], ["src"], [funclib.uniq_len], collapse = False) \
             .rename("src:uniq_len", "incoming_target") \
+            .noop(["src", "target", "incoming_target"], n = 1000, title = "etsv_result incoming_target") \
             .aggregate(["src"], ["target"], [funclib.uniq_len], collapse = False) \
-            .rename("target:uniq_len", "outgoing_target")
+            .rename("target:uniq_len", "outgoing_target") \
+            .noop(["src", "target", "outgoing_target"], n = 1000, title = "etsv_result outgoing_target") \
+            .noop(["src", "target", "evports", "incoming_target", "outgoing_target"], n = 1000, title = "etsv_edge_count")
     
         # get outgoing edges
         etsv_num_outgoing_target = etsv_edge_count \
@@ -246,17 +250,20 @@ def remove_dangling_edges(etsv, retain_vertex_ids, retain_node_filter_func, max_
             .print_stats(msg = "etsv_edge_count") \
             .drop_cols(["outgoing_target"]) \
             .left_map_join(etsv_num_outgoing_target, ["target"], rkeys = ["right:src"], def_val_map = {"outgoing_target": "0"}) \
+            .noop(["src", "target", "incoming_target", "outgoing_target", "right:.*"], n = 1000, title = "etsv_edge_count join") \
             .drop_cols_with_prefix("right") \
             .transform(["src", "target", "incoming_target", "outgoing_target"], lambda s,t,i,o: 1 if (retain_node_filter_func(s) and int(o) == 0) else 0, "outgoing_target_zero_flag") \
             .transform(["src", "target", "incoming_target", "outgoing_target"], lambda s,t,i,o: 1 if (retain_node_filter_func(s) and int(i) > 1) else 0, "incoming_target_mult_flag") \
             .sort(["outgoing_target_zero_flag", "incoming_target_mult_flag", "src", "target"]) \
-            .noop(1000, "etsv2_edge_flags", tsv.TSV.select, ["src", "target", "incoming_target", "outgoing_target", "outgoing_target_zero_flag", "incoming_target_mult_flag"])
+            .noop(["src", "target", "incoming_target", "outgoing_target", "outgoing_target_zero_flag", "incoming_target_mult_flag"], n = 1000, title = "etsv2_edge_flags")
 
         etsv2_sync = etsv2_edge_flags \
+            .noop(["src", "target", "outgoing_target_zero_flag", "incoming_target_mult_flag"], n = 1000, title = "etsv2_edge_flags 1") \
             .exclude_filter(["target", "outgoing_target_zero_flag"], lambda tgt, t: tgt not in retain_vertex_ids and t == "1") \
             .exclude_filter(["target", "incoming_target_mult_flag"], lambda tgt, t: tgt not in retain_vertex_ids and t == "1") \
-            .exclude_filter(["target", "incoming_target_mult_flag", "outgoing_target_zero_flag"], lambda tgt, imulti, ozero: tgt in retain_vertex_ids and ozero != "1" and imulti == "1") \
-            .exclude_filter(["outgoing_target_zero_flag", "incoming_target_mult_flag"], lambda t1, t2: t1 == "1" or t2 == "1") \
+            .exclude_filter(["target", "incoming_target_mult_flag", "outgoing_target_zero_flag"], lambda tgt, imulti, ozero: tgt in retain_vertex_ids and imulti == "1") \
+            .noop(["src", "target", "outgoing_target_zero_flag", "incoming_target_mult_flag"], n = 1000, title = "etsv2_edge_flags 2") \
+            .noop(["outgoing_target_zero_flag", "incoming_target_mult_flag"], lambda t1, t2: t1 == "1" or t2 == "1") \
             .noop(10000, "etsv2_sync", tsv.TSV.select, ["src", "target", "incoming_target", "outgoing_target", "data_source", "outgoing_target_zero_flag", "incoming_target_mult_flag"]) \
             .drop_cols(["incoming_target", "outgoing_target", "outgoing_target_zero_flag", "incoming_target_mult_flag"])
 
