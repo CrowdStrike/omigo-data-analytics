@@ -255,6 +255,8 @@ def remove_dangling_edges(etsv, retain_vertex_ids, retain_node_filter_func, max_
         etsv2_sync = etsv2_edge_flags \
             .exclude_filter(["target", "outgoing_target_zero_flag"], lambda tgt, t: tgt not in retain_vertex_ids and t == "1") \
             .exclude_filter(["target", "incoming_target_mult_flag"], lambda tgt, t: tgt not in retain_vertex_ids and t == "1") \
+            .exclude_filter(["target", "incoming_target_mult_flag", "outgoing_target_zero_flag"], lambda tgt, imulti, ozero: tgt in retain_vertex_ids and ozero != "1" and imulti == "1") \
+            .exclude_filter(["outgoing_target_zero_flag", "incoming_target_mult_flag"], lambda t1, t2: t1 == "1" or t2 == "1") \
             .noop(10000, "etsv2_sync", tsv.TSV.select, ["src", "target", "incoming_target", "outgoing_target", "data_source", "outgoing_target_zero_flag", "incoming_target_mult_flag"]) \
             .drop_cols(["incoming_target", "outgoing_target", "outgoing_target_zero_flag", "incoming_target_mult_flag"])
 
