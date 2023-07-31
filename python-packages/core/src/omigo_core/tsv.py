@@ -7,6 +7,7 @@ import json
 from omigo_core import utils, tsvutils, funclib
 import sys
 import time
+import numpy as np
 
 class TSV:
     """This is the main data processing class to apply different filter and transformation functions
@@ -2590,7 +2591,9 @@ class TSV:
         dmsg = utils.extend_inherit_message(dmsg, "sample_rows")
         return self.sample_n(n, seed, dmsg = dmsg)
 
-    def sample_n(self, n, seed = 0, dmsg = ""):
+    def sample_n(self, n, seed = 0, replace = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "sample_n")
+
         # check empty
         if (self.has_empty_header()):
             utils.warn("sample_n: empty header tsv")
@@ -2609,8 +2612,8 @@ class TSV:
         n = min(int(n), self.num_rows())
 
         # sample and return. the debug message is not in standard form, but its fine.
-        utils.report_progress("sample_n: [1/1] calling function", dmsg, len(self.get_data()), len(self.get_data()))
-        return TSV(self.header, random.sample(self.data, n))
+        utils.report_progress("[1/1] calling function", dmsg, len(self.get_data()), len(self.get_data()))
+        return TSV(self.header, np.random.choice(self.data, n, replace = replace))
 
     # TODO: WIP
     def sample_n_with_warn(self, limit, msg = None, seed = 0, dmsg = ""):
@@ -2630,6 +2633,16 @@ class TSV:
         else:
             return self
 
+    def sample_n_with_replacement(self, n, seed = 0, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "sample_n_with_replacement")
+        return self \
+            .sample_n(n, seed = seed, replace = True, dmsg = dmsg)
+ 
+    def sample_n_without_replacement(self, n, seed = 0, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "sample_n_without_replacement")
+        return self \
+            .sample_n(n, seed = seed, replace = False, dmsg = dmsg)
+ 
     def sample_group_by_topk_if_reached_limit(self, limit, *args, **kwargs):
         utils.warn_once("sample_group_by_topk_if_reached_limit: this api name might change")
 
