@@ -616,6 +616,18 @@ class HydraTSV(HydraBaseTSV):
         utils.warn("Not implemented for cluster")
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.sample_n, self.requirements, *args, **kwargs))
 
+    def sample_n_with_warn(self, *args, **kwargs):
+        utils.warn("Not implemented for cluster")
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.sample_n_with_warn, self.requirements, *args, **kwargs))
+
+    def sample_n_with_replacement(self, *args, **kwargs):
+        utils.warn("Not implemented for cluster")
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.sample_n_with_replacement, self.requirements, *args, **kwargs))
+
+    def sample_n_without_replacement(self, *args, **kwargs):
+        utils.warn("Not implemented for cluster")
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.sample_n_without_replacement, self.requirements, *args, **kwargs))
+
     def cap_min_inline(self, *args, **kwargs):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.cap_min_inline, self.requirements, *args, **kwargs))
 
