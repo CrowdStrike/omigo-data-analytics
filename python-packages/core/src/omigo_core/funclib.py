@@ -53,6 +53,10 @@ def mean(vs):
     vs = list([float(v) for v in vs])
     return statistics.mean(vs)
 
+def std_dev(vs):
+    vs = list([float(v) for v in vs])
+    return statistics.stdev(vs)
+
 def mkstr(vs):
     vs2 = list(filter(lambda t: len(t.strip()) > 0, [str(x) for x in vs]))
     return ",".join(vs2)
@@ -238,13 +242,13 @@ def min_str(xs):
     return xs[0]
 
 def to2digit(x):
-    return "{:.2f}".format(x)
+    return "{:.2f}".format(float(x))
 
 def to4digit(x):
-    return "{:.4f}".format(x)
+    return "{:.4f}".format(float(x))
 
 def to6digit(x):
-    return "{:.6f}".format(x)
+    return "{:.6f}".format(float(x))
 
 def convert_prob_to_binary(x, split=0.5):
     if (x >= split):
