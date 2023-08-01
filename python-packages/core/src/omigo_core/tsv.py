@@ -4989,7 +4989,7 @@ class TSV:
         return self
 
 def get_version():
-    return "v0.5.6"
+    return "v0.5.6-std_dev"
 
 def get_func_name(f):
     return f.__name__
