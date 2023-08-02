@@ -2609,11 +2609,19 @@ class TSV:
 
         # set seed
         random.seed(seed)
-        n = min(int(n), self.num_rows())
 
         # sample and return. the debug message is not in standard form, but its fine.
         utils.report_progress("[1/1] calling function", dmsg, len(self.get_data()), len(self.get_data()))
-        return TSV(self.header, np.random.choice(self.data, n, replace = replace))
+        if (replace == True):
+            return TSV(self.header, random.choices(self.data, k = n))
+        else:
+            # warn if needed
+            if (n > self.num_rows()):
+                utils.warn("{}: n = {} > num_rows = {}. selecting all elements".format(dmsg, n, self.num_rows()))
+
+            # limit n
+            n = min(int(n), self.num_rows())
+            return TSV(self.header, random.sample(self.data, n))
 
     # TODO: WIP
     def sample_n_with_warn(self, limit, msg = None, seed = 0, dmsg = ""):
