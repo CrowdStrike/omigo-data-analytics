@@ -477,7 +477,7 @@ def split_graph_filter_func(src, tgt, ts, retain_vertex_ids, retain_vertex_annot
     else:
         return True
 
-def apply_time_order_based_filter_reference(vtsv, etsv, retain_vertex_ids, retain_node_filter_func, strict_ordering_flag):
+def apply_time_order_based_filter(vtsv, etsv, retain_vertex_ids, retain_node_filter_func, strict_ordering_flag):
     # find the min and max timestamps
     etsv_min_max = etsv \
         .aggregate(["src", "target"], ["ts", "ts"], [funclib.minint, funclib.maxint]) \
