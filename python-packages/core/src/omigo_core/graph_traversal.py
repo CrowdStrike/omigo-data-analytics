@@ -476,3 +476,66 @@ def split_graph_filter_func(src, tgt, ts, retain_vertex_ids, retain_vertex_annot
         return False
     else:
         return True
+
+def apply_time_order_based_filter_reference(vtsv, etsv, retain_vertex_ids, retain_node_filter_func, strict_ordering_flag):
+    # find the min and max timestamps
+    etsv_min_max = etsv \
+        .aggregate(["src", "target"], ["ts", "ts"], [funclib.minint, funclib.maxint]) \
+        .rename("ts:minint", "ts_min") \
+        .rename("ts:maxint", "ts_max")
+
+    # create left and right sides. apply timestamp ordering logic to the subgraph to further prune edges
+    etsv_left = etsv_min_max.select(["src", "target", "ts_min"]).exclude_filter("src", retain_node_filter_func).add_prefix("left").distinct()
+    etsv_right = etsv_min_max.select(["src", "target", "ts_max"]).exclude_filter("src", retain_node_filter_func).add_prefix("right").distinct()
+
+    def __apply_time_order_based_filter_template__(lflag, rflag, ldetect, rdetect):
+        # if strict time ordering is asked, remove the forward edge
+        if (strict_ordering_flag == True):
+            return "right"
+
+        # check for detect flags
+        if (ldetect == 1 and rdetect == 1):
+            return ""
+        elif (ldetect == 1):
+            return "right"
+        elif (rdetect == 1):
+            return "left"
+        elif (lflag == "0"):
+            return "left"
+        elif (rflag == "0"):
+            return "right"
+        else:
+            raise Exception("Invalid parameters: lflag: {}, rflag: {}, ldetect: {}, rdetect: {}".format(lflag, rflag, ldetect, rdetect))
+
+    # excluded edges
+    excluded_edges = etsv_left \
+        .inner_map_join(etsv_right, ["left:target"], rkeys = ["right:src"]) \
+        .transform(["left:ts_min", "right:ts_max"], lambda t1,t2: 1 if (int(t1) <= int(t2)) else 0, "ts:flag") \
+        .transform_inline(["left:ts_min", "right:ts_max"], funclib.utctimestamp_to_datetime_str) \
+        .reorder(["left:src", "left:target", "right:src", "right:target"], use_existing_order = False) \
+        .aggregate(["left:src", "left:target"], ["ts:flag"], [funclib.uniq_mkstr], collapse = False) \
+        .rename("ts:flag:uniq_mkstr", "left:ts:flag:uniq_mkstr") \
+        .aggregate(["right:src", "right:target"], ["ts:flag"], [funclib.uniq_mkstr], collapse = False) \
+        .rename("ts:flag:uniq_mkstr", "right:ts:flag:uniq_mkstr") \
+        .filter(["left:ts:flag:uniq_mkstr", "right:ts:flag:uniq_mkstr"], lambda t1, t2: t1 == "0" or t2 == "0") \
+        .select(["left:src", "left:target", "right:src", "right:target", "left:ts:flag:uniq_mkstr", "right:ts:flag:uniq_mkstr"]) \
+        .distinct() \
+        .transform(["left:src", "left:target"], lambda t1, t2: 1 if (t1 in retain_vertex_ids or t2 in retain_vertex_ids) else 0, "left:is_detect") \
+        .transform(["right:src", "right:target"], lambda t1, t2: 1 if (t1 in retain_vertex_ids or t2 in retain_vertex_ids) else 0, "right:is_detect") \
+        .transform(["left:ts:flag:uniq_mkstr", "right:ts:flag:uniq_mkstr", "left:is_detect", "right:is_detect"], lambda lflag, rflag, ldetect, rdetect:
+            __apply_time_order_based_filter_determine_side__(strict_time_ordering_flag, lflag, rflag, int(ldetect), int(rdetect)), "exclude_side") \
+        .is_nonempty_str("exclude_side") \
+        .transform(["left:src", "left:target", "right:src", "right:target", "exclude_side"], lambda lsrc, ltgt, rsrc, rtgt, eside:
+            (lsrc, ltgt) if (eside == "left") else (rsrc, rtgt), ["excluded:src", "excluded:target"]) \
+        .select(["excluded:src", "excluded:target"]) \
+        .distinct()
+
+    # apply exclusion
+    etsv_result = etsv \
+        .exclude_filter(["src", "target"], lambda src, tgt: (src, tgt) in excluded_edges.to_tuples(["excluded:src", "excluded:target"]))
+    vtsv_result = vtsv \
+        .values_in("node_id", lambda t: t in etsv_result.col_as_array_uniq("src") + etsv_result.col_as_array_uniq("target"))
+
+    # return
+    return vtsv_result, etsv_result
+
