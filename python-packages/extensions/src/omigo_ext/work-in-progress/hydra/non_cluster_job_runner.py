@@ -3,9 +3,10 @@ from omigo_core import s3io_wrapper
 from omigo_ext import jira_ext
 import json
 import time
+import base64
 
 # Increment this version to rerun analysis
-RUN_VERSION = "version:v66"
+RUN_VERSION = "version:v01"
 DEFAULT_WAIT_60SEC = 60
 
 # Class RunnerBase
@@ -26,6 +27,9 @@ class RunnerBase:
 
     def get_job_status_dir(self):
         return "{}/job-status".format(self.base_dir)
+
+    def get_job_tags_dir(self):
+        return "{}/job-tags".format(self.base_dir)
 
     def get_job_status_created(self):
         return "{}/created".format(self.get_job_status_dir())
@@ -63,11 +67,33 @@ class RunnerBase:
     def get_job_graph_analysis_file(self, job_id):
         return "{}/graph_analysis.tsv.gz".format(self.get_job_output_dir(job_id))
 
+    def get_job_tag_empty_dir(self, job_id):
+        return "{}/{}".format(self.get_job_tags_dir(), "empty")
+
+    def get_job_tag_empty_dir_by_job_id(self, job_id):
+        return "{}/{}".format(self.get_job_tag_empty_dir(), job_id)
+
+    def get_job_tag_combined_dir(self):
+        return "{}/{}".format(self.get_job_tags_dir(), "combined")
+            
+    def get_job_tag_empty_dir_by_job_id(self, job_id):
+        return "{}/{}".format(self.get_job_tag_empty_dir(), job_id)
+            
+    def get_job_tag_combined_dir_by_job_id(self, job_id, key, value):
+        value_b16 = base64.b16encode(bytes(str(value), "utf-8")).decode("utf-8")
+        return "{}/{}-{}={}".format(self.get_job_tag_combined_dir(), job_id, key, value_b16)
+
     def get_shutdown_file(self):
         return "{}/shutdown".format(self.base_dir)
 
     def is_shutdown_mode(self):
         return self.fs.file_exists(self.get_shutdown_file())
+
+    def get_halt_file(self):
+        return "{}/halt".format(self.base_dir)
+
+    def is_halt_mode(self):
+        return self.fs.file_exists(self.get_halt_file())
 
 # Class BaseJobGenerator
 class BaseJobGenerator:
