@@ -380,6 +380,9 @@ def datetime_to_timestamp(x):
 def get_utctimestamp_sec():
     return int(datetime.datetime.now(datetime.timezone.utc).timestamp())
 
+def get_utctimestamp_millis():
+    return int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 1000)
+
 def datestr_to_datetime(x):
     return utctimestamp_to_datetime(datetime_to_utctimestamp(x))
 

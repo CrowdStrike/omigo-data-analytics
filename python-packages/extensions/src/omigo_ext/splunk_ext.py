@@ -19,7 +19,8 @@ import math
 # 4. There is a TERM constant for string constants match and avoids doing splitting on special characters
 # class to search splunk
 class SplunkSearch:
-    def __init__(self, host, app = None, username = None, password = None, cookie = None, timeout_sec = 600, wait_sec = 10, attempts = 3, enable_cache = False, use_partial_results = False):
+    def __init__(self, host, app = None, username = None, password = None, cookie = None, timeout_sec = 600, wait_sec = 10, attempts = 3, enable_cache = False, use_partial_results = False,
+        cache_instance_timeout_sec = 1800):
         # Validation
         if (host is None):
             raise Exception("Missing parameters: host")
@@ -51,6 +52,7 @@ class SplunkSearch:
         self.attempts = attempts
         self.enable_cache = enable_cache
         self.use_partial_results = use_partial_results
+        self.cache_instance_timeout_sec = cache_instance_timeout_sec
 
         # initialize parameters
         self.filters = []
@@ -60,15 +62,22 @@ class SplunkSearch:
         # use cache
         self.cache = {} if (self.enable_cache == True) else None
 
-        # create splunk_service once
-        if (self.cookie is not None):
-            self.splunk_service = splunk_client.connect(host = self.host, cookie = self.cookie, app = self.app)
-        else:
-            self.splunk_service = splunk_client.connect(host = self.host, username = self.username, password = self.password, app = self.app)
+        # initialize splunk_service
+        self.splunk_service = self.__get_splunk_service__()
 
         # message at creating a new instance
         utils.info("SplunkSearch: new instance created: host: {}, app: {}, timeout_sec: {}, wait_sec: {}, attempts: {}, enable_cache: {}, use_partial_results: {}".format(
             self.host, self.app, self.timeout_sec, self.wait_sec, self.attempts, self.enable_cache, self.use_partial_results))
+
+    def __get_splunk_service__(self):
+        # reset timestamp
+        self.instance_creation_timestamp = funclib.get_utctimestamp_sec()
+
+        # create splunk_service once
+        if (self.cookie is not None):
+            return splunk_client.connect(host = self.host, cookie = self.cookie, app = self.app)
+        else:
+            return splunk_client.connect(host = self.host, username = self.username, password = self.password, app = self.app)
 
     def set_max_results(self, m):
         self.max_results = m
@@ -211,6 +220,10 @@ class SplunkSearch:
             utils.debug_once("{}: returning result from cache: {}".format(dmsg, cache_key))
             return self.cache[cache_key]
 
+        # check for cache instance timeout
+        if (funclib.get_utctimestamp_sec() - self.instance_creation_timestamp > self.cache_instance_timeout_sec):
+            self.splunk_service = self.__get_splunk_service__()
+
         # execute query
         try: 
             splunk_job = self.splunk_service.jobs.create(query, **search_kwargs)
@@ -317,6 +330,9 @@ class SplunkSearch:
             if (attempts_remaining > 0):
                 # debug
                 utils.warn("{}: caught exception: {}, attempts remaining: {}".format(utils.max_dmsg_str(dmsg), str(e), attempts_remaining))
+
+                # reset the splunk_service because of sometimes the session is not valid
+                self.splunk_service = self.__get_splunk_service__()
 
                 # call again with lesser attempts_remaining
                 return self.__execute_normal_query__(query, start_time, end_time, url_encoded_cols, attempts_remaining - 1, include_internal_fields, limit,
