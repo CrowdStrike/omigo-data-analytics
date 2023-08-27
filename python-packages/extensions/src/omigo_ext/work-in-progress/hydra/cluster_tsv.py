@@ -2,6 +2,8 @@
 from omigo_core import tsv, utils, funclib
 import sys
 from omigo_core.tsv import TSV
+from omigo_ext.hydra.cluster_shell_ext import SparkJobShellExecutorTSV
+from omigo_ext.splunk_ext import SplunkTSV
 
 # awk command
 # awk -F '(' '{print $1}'|awk -F' ' '{print "    def "$2"(self, *args, **kwargs):\n        return HydraTSV(self.header, self.data, super().ctx, super().__copy_and_append_operations__(cluster_common_v2.ClusterMapOperation(TSV."$2", self.requirements, *args, **kwargs))\n"}'|pbcopy
@@ -316,6 +318,12 @@ class HydraTSV(HydraBaseTSV):
     def not_endswith(self, *args, **kwargs):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.not_endswith, self.requirements, *args, **kwargs))
 
+    def is_empty_str(self, *args, **kwargs):
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.is_empty_str, self.requirements, *args, **kwargs))
+
+    def is_nonempty_str(self, *args, **kwargs):
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.is_nonempty_str, self.requirements, *args, **kwargs))
+
     def replace_str_inline(self, *args, **kwargs):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.replace_str_inline, self.requirements, *args, **kwargs))
 
@@ -350,17 +358,31 @@ class HydraTSV(HydraBaseTSV):
         op = cluster_common_v2.ClusterReduceOperation(grouping_cols, self.num_splits, TSV.distinct, self.requirements, *args, **kwargs)
         return self.__new_hydra_tsv__(op)
 
+    def distinct_cols(self, *args, **kwargs):
+        grouping_cols = self.__get_columns__()
+        op = cluster_common_v2.ClusterReduceOperation(grouping_cols, self.num_splits, TSV.distinct_cols, self.requirements, *args, **kwargs)
+        return self.__new_hydra_tsv__(op)
+
     def drop(self, *args, **kwargs):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.drop, self.requirements, *args, **kwargs))
 
     def drop_cols(self, *args, **kwargs):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.drop_cols, self.requirements, *args, **kwargs))
 
+    def drop_cols_with_prefix(self, *args, **kwargs):
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.drop_cols_with_prefix, self.requirements, *args, **kwargs))
+
+    def drop_cols_with_suffix(self, *args, **kwargs):
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.drop_cols_with_suffix, self.requirements, *args, **kwargs))
+
     def drop_if_exists(self, *args, **kwargs):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.drop_if_exists, self.requirements, *args, **kwargs))
 
     def drop_cols_if_exists(self, *args, **kwargs):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.drop_cols_if_exists, self.requirements, *args, **kwargs))
+
+    def drop_empty_cols(self, *args, **kwargs):
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.drop_empty_cols, self.requirements, *args, **kwargs))
 
     def window_aggregate(self, *args, **kwargs):
         # create operation
@@ -400,6 +422,18 @@ class HydraTSV(HydraBaseTSV):
 
     def exclude_filter(self, *args, **kwargs):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.exclude_filter, self.requirements, *args, **kwargs))
+
+    def any_col_with_cond_exists_filter(self, *args, **kwargs):
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.any_col_with_cond_exists_filter, self.requirements, *args, **kwargs))
+
+    def any_col_with_cond_exists_exclude_filter(self, *args, **kwargs):
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.any_col_with_cond_exists_exclude_filter, self.requirements, *args, **kwargs))
+
+    def all_col_with_cond_exists_filter(self, *args, **kwargs):
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.all_col_with_cond_exists_filter, self.requirements, *args, **kwargs))
+
+    def all_col_with_cond_exists_exclude_filter(self, *args, **kwargs):
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.all_col_with_cond_exists_exclude_filter, self.requirements, *args, **kwargs))
 
     def transform(self, *args, **kwargs):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.transform, self.requirements, *args, **kwargs))
@@ -461,6 +495,9 @@ class HydraTSV(HydraBaseTSV):
     def get_columns(self, *args, **kwargs):
         raise Exception("Not implemented")
 
+    def get_column(self, *args, **kwargs):
+        raise Exception("Not implemented")
+
     def columns(self, *args, **kwargs):
         raise Exception("Not implemented")
 
@@ -473,43 +510,64 @@ class HydraTSV(HydraBaseTSV):
     def to_maps(self, *args, **kwargs):
         raise Exception("Not implemented")
 
+    def to_int(self, *args, **kwargs):
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.to_int, self.requirements, *args, **kwargs))
+
     def to_numeric(self, *args, **kwargs):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.to_numeric, self.requirements, *args, **kwargs))
 
     def add_seq_num(self, *args, **kwargs):
-        utils.warn("Not implemented for cluster")
+        utils.warn("add_seq_num: Not implemented for cluster")
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.add_seq_num, self.requirements, *args, **kwargs))
 
     def show_transpose(self, *args, **kwargs):
-        utils.warn("Not implemented for cluster")
+        utils.warn("show_transpose: Not implemented for cluster")
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.show_transpose, self.requirements, *args, **kwargs))
 
     def show(self, *args, **kwargs):
-        utils.warn("Not implemented for cluster")
+        utils.warn("show: Not implemented for cluster")
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.show, self.requirements, *args, **kwargs))
 
+    def show_sample(self, *args, **kwargs):
+        utils.warn("show_sample: Not implemented for cluster")
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.show_sample, self.requirements, *args, **kwargs))
+
     def col_as_array(self, *args, **kwargs):
-        raise Exception("Not implemented")
+        raise Exception("col_as_array: Not implemented")
 
     def col_as_float_array(self, *args, **kwargs):
-        raise Exception("Not implemented")
+        raise Exception("col_as_float_array: Not implemented")
 
     def col_as_int_array(self, *args, **kwargs):
-        raise Exception("Not implemented")
+        raise Exception("col_as_int_array: Not implemented")
 
     def col_as_array_uniq(self, *args, **kwargs):
-        raise Exception("Not implemented")
+        raise Exception("col_as_array_uniq: Not implemented")
+
+    def col_as_array_uniq_non_empty(self, *args, **kwargs):
+        raise Exception("col_as_array_uniq_non_empty: Not implemented")
 
     def cols_as_map(self, *args, **kwargs):
-        raise Exception("Not implemented")
+        raise Exception("cols_as_map: Not implemented")
 
     def sort(self, *args, **kwargs):
-        utils.warn("Not implemented for cluster")
+        utils.warn("sort: Not implemented for cluster")
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.sort, self.requirements, *args, **kwargs))
 
     def reverse_sort(self, *args, **kwargs):
-        utils.warn("Not implemented for cluster")
+        utils.warn("reverse_sort: Not implemented for cluster")
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.reverse_sort, self.requirements, *args, **kwargs))
+
+    def col_as_array_uniq_non_empty(self, *args, **kwargs):
+        raise Exception("col_as_array_uniq_non_empty: Not implemented")
+
+    def numerical_sort(self, *args, **kwargs):
+        utils.warn("sort: Not implemented for cluster")
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.numerical_sort, self.requirements, *args, **kwargs))
+
+    def reverse_numerical_sort(self, *args, **kwargs):
+        utils.warn("sort: Not implemented for cluster")
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.reverse_numerical_sort, self.requirements, *args, **kwargs))
 
     def reorder(self, *args, **kwargs):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.reorder, self.requirements, *args, **kwargs))
@@ -524,6 +582,9 @@ class HydraTSV(HydraBaseTSV):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.noop, self.requirements, *args, **kwargs))
 
     def to_df(self, *args, **kwargs):
+        raise Exception("Not implemented")
+
+    def to_simple_df(self, *args, **kwargs):
         raise Exception("Not implemented")
 
     def export_to_df(self, *args, **kwargs):
@@ -550,6 +611,15 @@ class HydraTSV(HydraBaseTSV):
     def url_decode(self, *args, **kwargs):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.url_decode, self.requirements, *args, **kwargs))
 
+    def resolve_url_encoded_cols(self, *args, **kwargs):
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.resolve_url_encoded_cols, self.requirements, *args, **kwargs))
+
+    def resolve_url_encoded_list_cols(self, *args, **kwargs):
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.resolve_url_encoded_list_cols, self.requirements, *args, **kwargs))
+
+    def resolve_all_url_encoded_cols(self, *args, **kwargs):
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.resolve_all_url_encoded_cols, self.requirements, *args, **kwargs))
+
     def union(self, *args, **kwargs):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.union, self.requirements, *args, **kwargs))
 
@@ -566,11 +636,11 @@ class HydraTSV(HydraBaseTSV):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.add_empty_cols_if_missing, self.requirements, *args, **kwargs))
 
     def add_row(self, *args, **kwargs):
-        utils.warn("Not implemented for cluster")
+        utils.warn("add_row: Not implemented for cluster")
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.add_row, self.requirements, *args, **kwargs))
 
     def add_map_as_row(self, *args, **kwargs):
-        utils.warn("Not implemented for cluster")
+        utils.warn("add_map_as_row: Not implemented for cluster")
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.add_map_as_row, self.requirements, *args, **kwargs))
 
     def assign_value(self, *args, **kwargs):
@@ -600,6 +670,12 @@ class HydraTSV(HydraBaseTSV):
     def remove_prefix(self, *args, **kwargs):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.remove_prefix, self.requirements, *args, **kwargs))
 
+    def replace_suffix(self, *args, **kwargs):
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.replace_suffix, self.requirements, *args, **kwargs))
+
+    def replace_suffix(self, *args, **kwargs):
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.replace_suffix, self.requirements, *args, **kwargs))
+
     def sample(self, *args, **kwargs):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.sample, self.requirements, *args, **kwargs))
 
@@ -613,11 +689,11 @@ class HydraTSV(HydraBaseTSV):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.sample_rows, self.requirements, *args, **kwargs))
 
     def sample_n(self, *args, **kwargs):
-        utils.warn("Not implemented for cluster")
+        utils.warn("sample_n: Not implemented for cluster")
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.sample_n, self.requirements, *args, **kwargs))
 
     def sample_n_with_warn(self, *args, **kwargs):
-        utils.warn("Not implemented for cluster")
+        utils.warn("sample_n_with_warn: Not implemented for cluster")
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.sample_n_with_warn, self.requirements, *args, **kwargs))
 
     def sample_n_with_replacement(self, *args, **kwargs):
@@ -627,6 +703,10 @@ class HydraTSV(HydraBaseTSV):
     def sample_n_without_replacement(self, *args, **kwargs):
         utils.warn("Not implemented for cluster")
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.sample_n_without_replacement, self.requirements, *args, **kwargs))
+
+    def warn_if_limit_reached(self, *args, **kwargs):
+        utils.warn("warn_if_limit_reached: Not implemented for cluster")
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.warn_if_limit_reached, self.requirements, *args, **kwargs))
 
     def cap_min_inline(self, *args, **kwargs):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.cap_min_inline, self.requirements, *args, **kwargs))
@@ -679,41 +759,41 @@ class HydraTSV(HydraBaseTSV):
         return self.__new_hydra_tsv__(op)
 
     def sample_column_by_max_uniq_values(self, *args, **kwargs):
-        utils.warn("Not implemented for cluster")
+        utils.warn("sample_column_by_max_uniq_values: Not implemented for cluster")
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.sample_column_by_max_uniq_values, self.requirements, *args, **kwargs))
 
     def left_join(self, *args, **kwargs):
         raise Exception("Not implemented")
 
     def right_join(self, *args, **kwargs):
-        raise Exception("Not implemented")
+        raise Exception("right_join: Not implemented")
 
     def inner_join(self, *args, **kwargs):
-        raise Exception("Not implemented")
+        raise Exception("inner_join: Not implemented")
 
     def outer_join(self, *args, **kwargs):
-        raise Exception("Not implemented")
+        raise Exception("outer_join: Not implemented")
 
     def join(self, *args, **kwargs):
-        raise Exception("Not implemented")
+        raise Exception("join: Not implemented")
 
     def natural_join(self, *args, **kwargs):
-        raise Exception("Not implemented")
+        raise Exception("natural_join: Not implemented")
 
     def inner_map_join(self, *args, **kwargs):
-        raise Exception("Not implemented")
+        raise Exception("inner_map_join: Not implemented")
 
     def left_map_join(self, *args, **kwargs):
-        raise Exception("Not implemented")
+        raise Exception("left_map_join: Not implemented")
 
     def split_batches(self, *args, **kwargs):
-        raise Exception("Not implemented")
+        raise Exception("split_batches: Not implemented")
 
     def generate_key_hash(self, *args, **kwargs):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.generate_key_hash, self.requirements, *args, **kwargs))
 
     def cumulative_sum(self, *args, **kwargs):
-        raise Exception("Not implemented")
+        raise Exception("cumulative_sum: Not implemented")
 
     def replicate_rows(self, *args, **kwargs):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.replicate_rows, self.requirements, *args, **kwargs))
@@ -725,11 +805,11 @@ class HydraTSV(HydraBaseTSV):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.explode_json, self.requirements, *args, **kwargs))
 
     def transpose(self, *args, **kwargs):
-        utils.warn("Not implemented for cluster")
+        utils.warn("transpose: Not implemented for cluster")
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.transpose, self.requirements, *args, **kwargs))
 
     def reverse_transpose(self, *args, **kwargs):
-        utils.warn("Not implemented for cluster")
+        utils.warn("reverse_transpose: Not implemented for cluster")
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.transpose, self.requirements, *args, **kwargs))
 
     def flatmap(self, *args, **kwargs):
@@ -781,6 +861,9 @@ class HydraTSV(HydraBaseTSV):
     def print_stats(self, *args, **kwargs):
         raise Exception("Not implemented")
 
+    def get_max_size_cols_stats(self, *args, **kwargs):
+        raise Exception("Not implemented")
+
     def is_empty(self, *args, **kwargs):
         raise Exception("Not implemented")
 
@@ -791,15 +874,19 @@ class HydraTSV(HydraBaseTSV):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.write, self.requirements, *args, **kwargs))
 
     def show_custom_func(self, *args, **kwargs):
-        utils.warn("Not implemented for cluster")
+        utils.warn("show_custom_func: Not implemented for cluster")
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.show_custom_func, self.requirements, *args, **kwargs))
 
     def show_group_count(self, *args, **kwargs):
-        utils.warn("Not implemented for cluster")
+        utils.warn("show_group_count: Not implemented for cluster")
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.show_group_count, self.requirements, *args, **kwargs))
 
+    def show_select_func(self, *args, **kwargs):
+        utils.warn("show_select_func: Not implemented for cluster")
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.show_select_func, self.requirements, *args, **kwargs))
+
     def show_transpose_custom_func(self, *args, **kwargs):
-        utils.warn("Not implemented for cluster")
+        utils.warn("show_transpose_custom_func: Not implemented for cluster")
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.show_transpose_custom_func, self.requirements, *args, **kwargs))
 
     def sleep(self, *args, **kwargs):
@@ -808,7 +895,48 @@ class HydraTSV(HydraBaseTSV):
     def split(self, *args, **kwargs):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.split, self.requirements, *args, **kwargs))
 
+    def split_str(self, *args, **kwargs):
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.split_str, self.requirements, *args, **kwargs))
+
+    def sample_group_by_topk(self, *args, **kwargs):
+        grouping_cols = args[0]
+        op = cluster_common_v2.ClusterReduceOperation(grouping_cols, self.num_splits, TSV.sample_group_by_topk, self.requirements, *args, **kwargs)
+        return self.__new_hydra_tsv__(op)
+
+    def resolve_template_col(self, *args, **kwargs):
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.resolve_template_col, self.requirements, *args, **kwargs))
+
+    def resolve_template_col_inline(self, *args, **kwargs):
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.resolve_template_col_inline, self.requirements, *args, **kwargs))
+
+    def enable_debug_mode(self, *args, **kwargs):
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.enable_debug_mode, self.requirements, *args, **kwargs))
+
+    def disable_debug_mode(self, *args, **kwargs):
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.disable_debug_mode, self.requirements, *args, **kwargs))
+
+    def enable_info_mode(self, *args, **kwargs):
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.enable_info_mode, self.requirements, *args, **kwargs))
+
+    def disable_info_mode(self, *args, **kwargs):
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.disable_info_mode, self.requirements, *args, **kwargs))
+
 class HydraHelper:
     def new_hydra_tsv(hydra_base, new_op):
         return HydraTSV(hydra_base.header, hydra_base.data, ctx = hydra_base.ctx, operations = hydra_base.__copy_and_append_operations__(new_op))
+
+class HydraSparkJobShellExecutorTSV(HydraBaseTSV):
+    def __init__(self, header, data):
+        super().__init__(header, data)
+        super().set_hydra_requirements([ClusterCapabilities.SPARK, ClusterCapabilities.SHELL])
+
+    def execute(self, *args, **kwargs):
+        return HydraHelper.new_hydra_tsv(self, cluster_common_v2.ClusterMapOperation(SparkJobShellExecutorTSV.execute, self.requirements, *args, **kwargs))
+
+class HydraParquetTSV(HydraBaseTSV):
+    def __init__(self, header, data):
+        super().__init__(header, data)
+
+    def save_as_parquet(self, *args, **kwargs):
+        return HydraHelper.new_hydra_tsv(self, cluster_common_v2.ClusterMapOperation(ParquetTSV.save_as_parquet, self.requirements, *args, **kwargs))
 
