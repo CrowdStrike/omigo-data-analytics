@@ -1,5 +1,5 @@
 from omigo_core import tsv, utils, funclib
-from omigo_ow_ext import sql_helper
+from omigo_ext import sql_helper
 import os
 
 # TODO: This needs to be changed

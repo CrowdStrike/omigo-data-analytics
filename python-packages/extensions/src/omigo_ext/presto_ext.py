@@ -2,7 +2,7 @@ import prestodb
 import os
 from omigo_core import tsv
 from omigo_core import utils
-from omigo_ow_ext import sql_helper
+from omigo_ext import sql_helper
 
 # TODO: this needs to be moved to an inner class. the public class needs to return a TSV object
 class PrestoClient(sql_helper.HadoopSqlBase):

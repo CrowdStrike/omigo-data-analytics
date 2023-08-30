@@ -11,6 +11,7 @@ import os
 import json
 import time
 import math
+import traceback
 
 # NOTES: 
 # 1. where is tricky. use search if syntax is not well tested
@@ -330,6 +331,7 @@ class SplunkSearch:
             if (attempts_remaining > 0):
                 # debug
                 utils.warn("{}: caught exception: {}, attempts remaining: {}".format(utils.max_dmsg_str(dmsg), str(e), attempts_remaining))
+                utils.error("{}: Stack Trace: {}".format(utils.max_dmsg_str(dmsg), traceback.format_exc()))
 
                 # reset the splunk_service because of sometimes the session is not valid
                 self.splunk_service = self.__get_splunk_service__()
