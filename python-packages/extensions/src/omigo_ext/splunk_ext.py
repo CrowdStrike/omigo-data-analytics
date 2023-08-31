@@ -222,8 +222,9 @@ class SplunkSearch:
             return self.cache[cache_key]
 
         # check for cache instance timeout
-        if (funclib.get_utctimestamp_sec() - self.instance_creation_timestamp > self.cache_instance_timeout_sec):
-            self.splunk_service = self.__get_splunk_service__()
+        # if (funclib.get_utctimestamp_sec() - self.instance_creation_timestamp > self.cache_instance_timeout_sec):
+        utils.warn_once("{}: Creating a new splunk_service object for every call".format(dmsg))
+        self.splunk_service = self.__get_splunk_service__()
 
         # execute query
         try: 
