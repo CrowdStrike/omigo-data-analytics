@@ -2613,7 +2613,7 @@ class TSV:
         # sample and return. the debug message is not in standard form, but its fine.
         utils.report_progress("[1/1] calling function", dmsg, len(self.get_data()), len(self.get_data()))
         if (replace == True):
-            return TSV(self.header, random.choices(self.data, k = n))
+            return TSV(self.header, random.choices(self.data, k = n)) # nosec
         else:
             # warn if needed
             if (n > self.num_rows()):
