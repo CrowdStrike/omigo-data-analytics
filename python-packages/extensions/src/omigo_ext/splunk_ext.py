@@ -63,17 +63,11 @@ class SplunkSearch:
         # use cache
         self.cache = {} if (self.enable_cache == True) else None
 
-        # initialize splunk_service
-        self.splunk_service = self.__get_splunk_service__()
-
         # message at creating a new instance
         utils.info("SplunkSearch: new instance created: host: {}, app: {}, timeout_sec: {}, wait_sec: {}, attempts: {}, enable_cache: {}, use_partial_results: {}".format(
             self.host, self.app, self.timeout_sec, self.wait_sec, self.attempts, self.enable_cache, self.use_partial_results))
 
-    def __get_splunk_service__(self):
-        # reset timestamp
-        self.instance_creation_timestamp = funclib.get_utctimestamp_sec()
-
+    def get_splunk_service(self):
         # create splunk_service once
         if (self.cookie is not None):
             return splunk_client.connect(host = self.host, cookie = self.cookie, app = self.app)
@@ -221,14 +215,9 @@ class SplunkSearch:
             utils.debug_once("{}: returning result from cache: {}".format(dmsg, cache_key))
             return self.cache[cache_key]
 
-        # check for cache instance timeout
-        # if (funclib.get_utctimestamp_sec() - self.instance_creation_timestamp > self.cache_instance_timeout_sec):
-        utils.warn_once("{}: Creating a new splunk_service object for every call".format(dmsg))
-        self.splunk_service = self.__get_splunk_service__()
-
         # execute query
         try: 
-            splunk_job = self.splunk_service.jobs.create(query, **search_kwargs)
+            splunk_job = self.get_splunk_service().jobs.create(query, **search_kwargs)
             job_id_trim = self.__get_splunk_job_display_id__(splunk_job)
             utils.info("{}: Splunk Job submitted: {}".format(utils.max_dmsg_str(dmsg), job_id_trim))
 
@@ -334,9 +323,6 @@ class SplunkSearch:
                 utils.warn("{}: caught exception: {}, attempts remaining: {}".format(utils.max_dmsg_str(dmsg), str(e), attempts_remaining))
                 utils.error("{}: Stack Trace: {}".format(utils.max_dmsg_str(dmsg), traceback.format_exc()))
 
-                # reset the splunk_service because of sometimes the session is not valid
-                self.splunk_service = self.__get_splunk_service__()
-
                 # call again with lesser attempts_remaining
                 return self.__execute_normal_query__(query, start_time, end_time, url_encoded_cols, attempts_remaining - 1, include_internal_fields, limit,
                     num_par_on_limit, dmsg = dmsg)
@@ -378,7 +364,7 @@ class SplunkSearch:
 
         # execute query
         try: 
-            splunk_job = self.splunk_service.jobs.create(query, **search_kwargs)
+            splunk_job = self.get_splunk_service().jobs.create(query, **search_kwargs)
             result = self.__parse_results__(splunk_job, query, start_time, end_time, url_encoded_cols, include_internal_fields)
             if (self.enable_cache == True):
                 self.cache[cache_key] = result
