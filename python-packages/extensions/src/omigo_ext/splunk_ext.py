@@ -21,7 +21,7 @@ import traceback
 # class to search splunk
 class SplunkSearch:
     def __init__(self, host, app = None, username = None, password = None, cookie = None, timeout_sec = 600, wait_sec = 10, attempts = 3, enable_cache = False, use_partial_results = False,
-        cache_instance_timeout_sec = 1800):
+        cache_instance_timeout_sec = 1800, attempt_sleep_sec = 30):
         # Validation
         if (host is None):
             raise Exception("Missing parameters: host")
@@ -54,6 +54,7 @@ class SplunkSearch:
         self.enable_cache = enable_cache
         self.use_partial_results = use_partial_results
         self.cache_instance_timeout_sec = cache_instance_timeout_sec
+        self.attempt_sleep_sec = attempt_sleep_sec
 
         # initialize parameters
         self.filters = []
@@ -321,9 +322,11 @@ class SplunkSearch:
             if (attempts_remaining > 0):
                 # debug
                 utils.warn("{}: caught exception: {}, attempts remaining: {}".format(utils.max_dmsg_str(dmsg), str(e), attempts_remaining))
-                utils.error("{}: Stack Trace: {}".format(utils.max_dmsg_str(dmsg), traceback.format_exc()))
+                # utils.error("{}: Stack Trace: {}".format(utils.max_dmsg_str(dmsg), traceback.format_exc()))
 
                 # call again with lesser attempts_remaining
+                utils.info("{}: Sleeping for {} seconds before attempting again".format(dmsg, self.attempt_sleep_sec))
+                time.sleep(self.attempt_sleep_sec)
                 return self.__execute_normal_query__(query, start_time, end_time, url_encoded_cols, attempts_remaining - 1, include_internal_fields, limit,
                     num_par_on_limit, dmsg = dmsg)
             else:
@@ -378,6 +381,8 @@ class SplunkSearch:
                 utils.info("SplunkSearch: __execute_blocking_query__: caught exception: {}, attempts remaining: {}".format(str(e), attempts_remaining))
 
                 # call again with lesser attempts_remaining
+                utils.info("{}: Sleeping for {} seconds before attempting again".format(dmsg, self.attempt_sleep_sec))
+                time.sleep(self.attempt_sleep_sec)
                 return self.__execute_blocking_query__(query, start_time, end_time, url_encoded_cols, attempts_remaining - 1, include_internal_fields, limit, num_par_on_limit)
             else:
                 # error
@@ -551,13 +556,13 @@ class SplunkSearch:
 # class to do data manipulation on TSV
 class SplunkTSV(tsv.TSV):
     def __init__(self, header, data, splunk_search = None, host = None, app = None, username = None, password = None, cookie = None, timeout_sec = 600, wait_sec = 10, attempts = 3,
-        enable_cache = False, use_partial_results = False, num_par = 0):
+        enable_cache = False, use_partial_results = False, num_par = 0, attempt_sleep_sec = 30):
         super().__init__(header, data)
 
         # check if new splunk search instance is needed
         if (splunk_search is None):
             splunk_search = SplunkSearch(host, app = app, username = username, password = password, cookie = cookie, timeout_sec = timeout_sec, wait_sec = wait_sec, attempts = attempts,
-                enable_cache = enable_cache, use_partial_results = use_partial_results)
+                enable_cache = enable_cache, use_partial_results = use_partial_results, attempt_sleep_sec = attempt_sleep_sec)
 
         self.splunk_search = splunk_search
         self.host = host
@@ -571,6 +576,7 @@ class SplunkTSV(tsv.TSV):
         self.enable_cache = enable_cache
         self.use_partial_results = use_partial_results
         self.num_par = num_par
+        self.attempt_sleep_sec = attempt_sleep_sec
 
     def get_events(self, query_filter, start_ts_col, end_ts_col, prefix, url_encoded_cols = None, include_internal_fields = False, limit = None, num_par_on_limit = 0, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "SplunkTSV: get_events")
