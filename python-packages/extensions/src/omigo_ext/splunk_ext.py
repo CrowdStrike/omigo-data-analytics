@@ -230,8 +230,9 @@ class SplunkSearch:
                 while not splunk_job.is_ready():
                     # check for timeout
                     exec_cur_time = funclib.get_utctimestamp_sec()
-                    if (exec_cur_time - exec_start_time > self.timeout_sec):
-                        utils.error_and_raise_exception("{}: timeout reached, failed to finish query".format(utils.max_dmsg_str(dmsg)))
+                    exec_diff_sec = exec_cur_time - exec_start_time
+                    if (exec_diff_sec > self.timeout_sec):
+                        utils.error_and_raise_exception("{}: timeout: {} > {} reached, failed to finish query".format(utils.max_dmsg_str(dmsg), exec_diff_sec, self.timeout_sec))
 
                     # else pass
                     utils.info("{}: waiting for is_ready, sleeping for {} seconds".format(utils.max_dmsg_str(dmsg), self.wait_sec))
