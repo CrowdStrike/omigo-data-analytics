@@ -2,17 +2,17 @@ from omigo_core import tsv, utils, funclib
 from omigo_ext import sql_helper
 import os
 
-# TODO: This needs to be changed
-import findspark
-if ("SPARK_HOME" in os.environ.keys()):
-    findspark.init()
-
 from pyspark import SparkContext, SparkConf
 from pyspark.sql import SQLContext
 from pyspark.sql import SparkSession
 
 class SparkClient(sql_helper.HadoopSqlBase):
     def __init__(self, props = None, master = "yarn", app_name = "test"):
+        # TODO: This needs to be changed
+        import findspark
+        if ("SPARK_HOME" in os.environ.keys()):
+            findspark.init()
+
         # create spark session
         spark_conf = SparkConf() \
             .setMaster(master) \
