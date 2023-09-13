@@ -8,6 +8,9 @@ class HadoopSqlBase:
     def execute_query(self, columns = ["*"], table = None, where_clause = "", group_by_cols = None, having_clause = "",
         order_by_cols = None, sort_order = None, distinct_flag = None, limit = None, url_encoded_cols = None, map_cols = None):
 
+        # warn
+        utils.warn_once("HadoopSqlBase: execute_query: this is provided as reference implementation and should be used carefully in prod to avoid issues with sql")
+
         # some validation
         if (table is None):
             raise Exception("HadoopSqlBase: execute_query: table can not be none")
@@ -53,9 +56,9 @@ class HadoopSqlBase:
 
         # base query
         if (distinct_flag is None or distinct_flag == False):
-            query = "select {} from {}".format(", ".join(effective_columns), table)
+            query = "select {} from {}".format(", ".join(effective_columns), table) # nosec
         else:
-            query = "select distinct {} from {}".format(", ".join(effective_columns), table)
+            query = "select distinct {} from {}".format(", ".join(effective_columns), table) # nosec
 
         # where clause
         if (where_clause != ""):
