@@ -17,9 +17,6 @@ S3_CLIENTS = {}
 S3_RESOURCE_LOCK = threading.Lock()
 S3_SESSION_LOCK = threading.Lock()
 S3_CLIENT_LOCK = threading.Lock()
-S3_DEFAULT_REGION = "us-west-1"
-S3_DEFAULT_PROFILE = "default"
-#S3_WARNING_GIVEN = "0"
 
 def create_session_key(s3_region = None, aws_profile = None):
     s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
@@ -30,6 +27,9 @@ def create_session_key(s3_region = None, aws_profile = None):
 
 def get_s3_session(s3_region = None, aws_profile = None):
     s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
+
+    # show the s3 settings
+    utils.info_once("get_s3_session: s3_region: {}, aws_profile: {}".format(s3_region, aws_profile))
 
     # generate s3_session
     if (s3_region is not None and aws_profile is not None):
@@ -139,6 +139,10 @@ def get_file_content_as_text(bucket_name, object_key, s3_region = None, aws_prof
 # TODO: this is expensive and works in specific scenarios only especially for files
 def check_path_exists(path, s3_region = None, aws_profile = None):
     s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
+
+    # show the s3 settings
+    utils.info_once("get_s3_session: s3_region: {}, aws_profile: {}".format(s3_region, aws_profile))
+
     s3 = get_s3_client_cache(s3_region = s3_region, aws_profile = aws_profile)
     bucket_name, object_key = utils.split_s3_path(path)
 
@@ -194,11 +198,11 @@ def put_s3_file_with_text_content(bucket_name, object_key, text, s3_region = Non
  
 def resolve_region_profile(s3_region = None, aws_profile = None):
     # resolve s3_region
-    if ((s3_region == "" or s3_region is None) and "S3_REGION" in os.environ.keys()):
+    if ((s3_region is None or s3_region == "") and "S3_REGION" in os.environ.keys()):
         s3_region = os.environ["S3_REGION"]
 
     # resolve aws_profile
-    if ((aws_profile == "" or aws_profile is None) and "AWS_PROFILE" in os.environ.keys()):
+    if ((aws_profile is None or aws_profile == "") and "AWS_PROFILE" in os.environ.keys()):
         aws_profile = os.environ["AWS_PROFILE"]
 
     # return
