@@ -24,7 +24,9 @@ def create_session_key(s3_region = None, aws_profile = None):
     if (s3_region is None and aws_profile is None):
         return "DEFAULT_KEY"
     else:
-        return s3_region + ":" + aws_profile
+        s3_region_str = "" if (s3_region is None) else s3_region
+        aws_profile_str = "" if (aws_profile is None) else aws_profile 
+        return "{}:{}".format(s3_region_str, aws_profile_str)
 
 def get_s3_session(s3_region = None, aws_profile = None):
     s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
@@ -78,6 +80,9 @@ def get_s3_client(s3_region = None, aws_profile = None):
     session = get_s3_session_cache(s3_region, aws_profile)
     utils.debug("get_s3_client: s3_region: {}, aws_profile: {}, session: {}, session profile; {}".format(s3_region, aws_profile, session, session.profile_name))
     return session.client("s3")
+
+    # return boto3.resource('s3')
+    # return boto3.client('s3')
 
 def get_s3_client_cache(s3_region = None, aws_profile = None):
     s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
