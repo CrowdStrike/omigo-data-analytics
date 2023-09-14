@@ -37,7 +37,7 @@ def get_s3_session(s3_region = None, aws_profile = None):
         session = boto3.session.Session(region_name = s3_region, profile_name = aws_profile)
         utils.debug("get_s3_session: s3_region: {}, aws_profile: {}, session: {}".format(s3_region, aws_profile, session))
     else:
-        session = boto3.session.Session()
+        session = boto3.session.Session(region_name = s3_region, profile_name = aws_profile)
         utils.debug("get_s3_session: no s3_region or aws_profile, session: {}".format(session))
 
     # return
@@ -52,6 +52,7 @@ def get_s3_session_cache(s3_region = None, aws_profile = None):
         if ((key in S3_SESSIONS.keys()) == False):
             S3_SESSIONS[key] = get_s3_session(s3_region, aws_profile)
 
+    utils.debug("get_s3_session_cache: s3_region: {}, aws_profile: {}, key: {}, sessions: {}".format(s3_region, aws_profile, key, S3_SESSIONS))
     return S3_SESSIONS[key]
 
 # TODO
@@ -75,7 +76,7 @@ def get_s3_resource_cache(s3_region = None, aws_profile = None):
 def get_s3_client(s3_region = None, aws_profile = None):
     s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
     session = get_s3_session_cache(s3_region, aws_profile)
-
+    utils.debug("get_s3_client: s3_region: {}, aws_profile: {}, session: {}, session profile; {}".format(s3_region, aws_profile, session, session.profile_name))
     return session.client("s3")
 
 def get_s3_client_cache(s3_region = None, aws_profile = None):
@@ -87,6 +88,7 @@ def get_s3_client_cache(s3_region = None, aws_profile = None):
         if ((key in S3_CLIENTS.keys()) == False):
             S3_CLIENTS[key] = get_s3_client(s3_region, aws_profile)
 
+    utils.debug("get_s3_client_cache: s3_region: {}, aws_profile: {}, key: {}, clients: {}".format(s3_region, aws_profile, key, S3_CLIENTS))
     return S3_CLIENTS[key]
 
 def get_s3_bucket(bucket_name, s3_region = None, aws_profile = None):
