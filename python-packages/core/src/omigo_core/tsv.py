@@ -7,6 +7,7 @@ import json
 from omigo_core import utils, tsvutils, funclib
 import sys
 import time
+import numpy as np
 
 class TSV:
     """This is the main data processing class to apply different filter and transformation functions
@@ -1352,6 +1353,10 @@ class TSV:
         else:
             raise Exception("transform_inline_log1p: base value is not supported: {}".format(base))
 
+    def transform_inline_log1p_base2(self, col_or_cols, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "transform_inline_log1p_base2")
+        return self.transform_inline_log1p(col_or_cols, base = 2, dmsg = dmsg)
+        
     def transform_inline_log1p_base10(self, col_or_cols, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "transform_inline_log1p_base10")
         return self.transform_inline_log1p(col_or_cols, base = 10, dmsg = dmsg)
@@ -1992,8 +1997,9 @@ class TSV:
 
         return TSV(new_header, new_data)
 
-    def to_csv(self, comma_replacement = ";"):
-        utils.warn("to_csv: This is not a standard csv conversion. The commas are just replaced with another character specified in comma_replacement parameter.")
+    def to_csv(self, comma_replacement = ";", dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "to_csv")
+        utils.warn_once("{}: This is not a standard csv conversion. The commas are just replaced with another character specified in comma_replacement parameter.".format(dmsg))
 
         # create new data
         new_header = self.header.replace(",", comma_replacement).replace("\t", ",")
@@ -2585,7 +2591,9 @@ class TSV:
         dmsg = utils.extend_inherit_message(dmsg, "sample_rows")
         return self.sample_n(n, seed, dmsg = dmsg)
 
-    def sample_n(self, n, seed = 0, dmsg = ""):
+    def sample_n(self, n, seed = 0, replace = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "sample_n")
+
         # check empty
         if (self.has_empty_header()):
             utils.warn("sample_n: empty header tsv")
@@ -2601,11 +2609,19 @@ class TSV:
 
         # set seed
         random.seed(seed)
-        n = min(int(n), self.num_rows())
 
         # sample and return. the debug message is not in standard form, but its fine.
-        utils.report_progress("sample_n: [1/1] calling function", dmsg, len(self.get_data()), len(self.get_data()))
-        return TSV(self.header, random.sample(self.data, n))
+        utils.report_progress("[1/1] calling function", dmsg, len(self.get_data()), len(self.get_data()))
+        if (replace == True):
+            return TSV(self.header, random.choices(self.data, k = n)) # nosec
+        else:
+            # warn if needed
+            if (n > self.num_rows()):
+                utils.warn("{}: n = {} > num_rows = {}. selecting all elements".format(dmsg, n, self.num_rows()))
+
+            # limit n
+            n = min(int(n), self.num_rows())
+            return TSV(self.header, random.sample(self.data, n))
 
     # TODO: WIP
     def sample_n_with_warn(self, limit, msg = None, seed = 0, dmsg = ""):
@@ -2625,6 +2641,16 @@ class TSV:
         else:
             return self
 
+    def sample_n_with_replacement(self, n, seed = 0, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "sample_n_with_replacement")
+        return self \
+            .sample_n(n, seed = seed, replace = True, dmsg = dmsg)
+ 
+    def sample_n_without_replacement(self, n, seed = 0, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "sample_n_without_replacement")
+        return self \
+            .sample_n(n, seed = seed, replace = False, dmsg = dmsg)
+ 
     def sample_group_by_topk_if_reached_limit(self, limit, *args, **kwargs):
         utils.warn_once("sample_group_by_topk_if_reached_limit: this api name might change")
 
@@ -4781,6 +4807,14 @@ class TSV:
         utils.info(msg2)
         return self
 
+    def warn(self, msg):
+        utils.warn(msg)
+        return self
+
+    def warn_once(self, msg):
+        utils.warn_once(msg)
+        return self
+
     # get top k columns by byte size
     def get_max_size_cols_stats(self, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "get_max_size_cols_stats")
@@ -4963,7 +4997,7 @@ class TSV:
         return self
 
 def get_version():
-    return "v0.5.2_1:mean"
+    return "v0.5.6-std_dev"
 
 def get_func_name(f):
     return f.__name__

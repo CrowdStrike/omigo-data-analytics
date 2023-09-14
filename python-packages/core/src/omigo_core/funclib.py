@@ -53,6 +53,10 @@ def mean(vs):
     vs = list([float(v) for v in vs])
     return statistics.mean(vs)
 
+def std_dev(vs):
+    vs = list([float(v) for v in vs])
+    return statistics.stdev(vs)
+
 def mkstr(vs):
     vs2 = list(filter(lambda t: len(t.strip()) > 0, [str(x) for x in vs]))
     return ",".join(vs2)
@@ -238,13 +242,13 @@ def min_str(xs):
     return xs[0]
 
 def to2digit(x):
-    return "{:.2f}".format(x)
+    return "{:.2f}".format(float(x))
 
 def to4digit(x):
-    return "{:.4f}".format(x)
+    return "{:.4f}".format(float(x))
 
 def to6digit(x):
-    return "{:.6f}".format(x)
+    return "{:.6f}".format(float(x))
 
 def convert_prob_to_binary(x, split=0.5):
     if (x >= split):
@@ -375,6 +379,9 @@ def datetime_to_timestamp(x):
 
 def get_utctimestamp_sec():
     return int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+
+def get_utctimestamp_millis():
+    return int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 1000)
 
 def datestr_to_datetime(x):
     return utctimestamp_to_datetime(datetime_to_utctimestamp(x))
@@ -588,4 +595,34 @@ def map_to_url_encoded_col_names(cols, prefix = None, url_encoded_cols = None):
 
     # return
     return results
+
+def get_display_relative_time_str(v):
+    # compute units
+    days = v // 86400
+    hours = (v - (days * 86400)) // 3600
+    minutes = (v - (days * 86400 + hours * 3600)) // 60
+    seconds = v - (days * 86400 + hours * 3600 + minutes * 60)
+            
+    # compute display string
+    results = []
+    count = 0
+    max_display_values = 2
+    if (days > 0 and count < max_display_values):
+        results.append("{}d".format(days))
+        count = count + 1
+    if (hours > 0 and count < max_display_values):
+        results.append("{}h".format(hours))
+        count = count + 1
+    if (minutes > 0 and count < max_display_values):
+        results.append("{}m".format(minutes))
+        count = count + 1
+    if (seconds > 0 and count < max_display_values):
+        results.append("{}s".format(seconds))
+        count = count + 1
+
+    # get string
+    result = " ".join(results)
+
+    # return
+    return result
 

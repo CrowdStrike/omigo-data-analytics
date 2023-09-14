@@ -8,6 +8,7 @@ from io import BytesIO
 # local import
 from omigo_core import utils
 import threading
+import traceback
 
 # define some global variables for caching s3 bucket and session
 S3_RESOURCE = {}
@@ -17,9 +18,6 @@ S3_CLIENTS = {}
 S3_RESOURCE_LOCK = threading.Lock()
 S3_SESSION_LOCK = threading.Lock()
 S3_CLIENT_LOCK = threading.Lock()
-S3_DEFAULT_REGION = "us-west-1"
-S3_DEFAULT_PROFILE = "default"
-#S3_WARNING_GIVEN = "0"
 
 def create_session_key(s3_region = None, aws_profile = None):
     s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
@@ -31,13 +29,16 @@ def create_session_key(s3_region = None, aws_profile = None):
 def get_s3_session(s3_region = None, aws_profile = None):
     s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
 
+    # show the s3 settings
+    utils.info_once("get_s3_session: s3_region: {}, aws_profile: {}".format(s3_region, aws_profile))
+
     # generate s3_session
     if (s3_region is not None and aws_profile is not None):
-        utils.debug("get_s3_session: s3_region: {}, aws_profile: {}".format(s3_region, aws_profile))
         session = boto3.session.Session(region_name = s3_region, profile_name = aws_profile)
+        utils.debug("get_s3_session: s3_region: {}, aws_profile: {}, session: {}".format(s3_region, aws_profile, session))
     else:
-        utils.debug("get_s3_session: no s3_region or aws_profile")
-        session = boto3.session.Session()
+        session = boto3.session.Session(region_name = s3_region, profile_name = aws_profile)
+        utils.debug("get_s3_session: no s3_region or aws_profile, session: {}".format(session))
 
     # return
     return session
@@ -51,6 +52,7 @@ def get_s3_session_cache(s3_region = None, aws_profile = None):
         if ((key in S3_SESSIONS.keys()) == False):
             S3_SESSIONS[key] = get_s3_session(s3_region, aws_profile)
 
+    utils.debug("get_s3_session_cache: s3_region: {}, aws_profile: {}, key: {}, sessions: {}".format(s3_region, aws_profile, key, S3_SESSIONS))
     return S3_SESSIONS[key]
 
 # TODO
@@ -74,7 +76,7 @@ def get_s3_resource_cache(s3_region = None, aws_profile = None):
 def get_s3_client(s3_region = None, aws_profile = None):
     s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
     session = get_s3_session_cache(s3_region, aws_profile)
-
+    utils.debug("get_s3_client: s3_region: {}, aws_profile: {}, session: {}, session profile; {}".format(s3_region, aws_profile, session, session.profile_name))
     return session.client("s3")
 
 def get_s3_client_cache(s3_region = None, aws_profile = None):
@@ -86,6 +88,7 @@ def get_s3_client_cache(s3_region = None, aws_profile = None):
         if ((key in S3_CLIENTS.keys()) == False):
             S3_CLIENTS[key] = get_s3_client(s3_region, aws_profile)
 
+    utils.debug("get_s3_client_cache: s3_region: {}, aws_profile: {}, key: {}, clients: {}".format(s3_region, aws_profile, key, S3_CLIENTS))
     return S3_CLIENTS[key]
 
 def get_s3_bucket(bucket_name, s3_region = None, aws_profile = None):
@@ -139,8 +142,13 @@ def get_file_content_as_text(bucket_name, object_key, s3_region = None, aws_prof
 # TODO: this is expensive and works in specific scenarios only especially for files
 def check_path_exists(path, s3_region = None, aws_profile = None):
     s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
+
     s3 = get_s3_client_cache(s3_region = s3_region, aws_profile = aws_profile)
     bucket_name, object_key = utils.split_s3_path(path)
+
+    # show the s3 settings
+    utils.info_once("check_path_exists: s3_region: {}, aws_profile: {}".format(s3_region, aws_profile))
+    utils.info_once("check_path_exists: s3_region: {}, aws_profile: {}, s3: {}".format(s3_region, aws_profile, s3))
 
     results = s3.list_objects(Bucket = bucket_name, Prefix = object_key)
     return "Contents" in results
@@ -158,7 +166,9 @@ def check_file_exists(path, s3_region = None, aws_profile = None):
             return True
         else:
             return False
-    except:
+    except Exception as e:
+        utils.error("check_file_exists: path: {}, s3_region: {}, aws_profile: {}, exception: {}".format(path, s3_region, aws_profile, e))
+        utils.error("check_file_exists: StackTrace: {}".format(traceback.format_exc()))
         return False
 
 def put_file_content(bucket_name, object_key, barr, s3_region = None, aws_profile = None):
@@ -194,11 +204,11 @@ def put_s3_file_with_text_content(bucket_name, object_key, text, s3_region = Non
  
 def resolve_region_profile(s3_region = None, aws_profile = None):
     # resolve s3_region
-    if ((s3_region == "" or s3_region is None) and "S3_REGION" in os.environ.keys()):
+    if ((s3_region is None or s3_region == "") and "S3_REGION" in os.environ.keys()):
         s3_region = os.environ["S3_REGION"]
 
     # resolve aws_profile
-    if ((aws_profile == "" or aws_profile is None) and "AWS_PROFILE" in os.environ.keys()):
+    if ((aws_profile is None or aws_profile == "") and "AWS_PROFILE" in os.environ.keys()):
         aws_profile = os.environ["AWS_PROFILE"]
 
     # return
