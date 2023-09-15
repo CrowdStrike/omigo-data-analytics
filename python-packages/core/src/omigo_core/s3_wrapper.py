@@ -32,15 +32,15 @@ def get_s3_session(s3_region = None, aws_profile = None):
     s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
 
     # show the s3 settings
-    utils.info_once("get_s3_session: s3_region: {}, aws_profile: {}".format(s3_region, aws_profile))
+    # utils.info_once("get_s3_session: s3_region: {}, aws_profile: {}".format(s3_region, aws_profile))
 
     # generate s3_session
     if (s3_region is not None and aws_profile is not None):
         session = boto3.session.Session(region_name = s3_region, profile_name = aws_profile)
-        utils.debug("get_s3_session: s3_region: {}, aws_profile: {}, session: {}".format(s3_region, aws_profile, session))
+        # utils.debug("get_s3_session: s3_region: {}, aws_profile: {}, session: {}".format(s3_region, aws_profile, session))
     else:
         session = boto3.session.Session(region_name = s3_region, profile_name = aws_profile)
-        utils.debug("get_s3_session: no s3_region or aws_profile, session: {}".format(session))
+        # utils.debug("get_s3_session: no s3_region or aws_profile, session: {}".format(session))
 
     # return
     return session
@@ -73,16 +73,13 @@ def get_s3_resource_cache(s3_region = None, aws_profile = None):
         if ((key in S3_RESOURCE.keys()) == False):
             S3_RESOURCE[key] = get_s3_resource(s3_region, aws_profile)
 
+    # return
     return S3_RESOURCE[key]
 
 def get_s3_client(s3_region = None, aws_profile = None):
     s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
     session = get_s3_session_cache(s3_region, aws_profile)
-    utils.debug("get_s3_client: s3_region: {}, aws_profile: {}, session: {}, session profile; {}".format(s3_region, aws_profile, session, session.profile_name))
     return session.client("s3")
-
-    # return boto3.resource('s3')
-    # return boto3.client('s3')
 
 def get_s3_client_cache(s3_region = None, aws_profile = None):
     s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
@@ -93,7 +90,7 @@ def get_s3_client_cache(s3_region = None, aws_profile = None):
         if ((key in S3_CLIENTS.keys()) == False):
             S3_CLIENTS[key] = get_s3_client(s3_region, aws_profile)
 
-    utils.debug("get_s3_client_cache: s3_region: {}, aws_profile: {}, key: {}, clients: {}".format(s3_region, aws_profile, key, S3_CLIENTS))
+    # return
     return S3_CLIENTS[key]
 
 def get_s3_bucket(bucket_name, s3_region = None, aws_profile = None):
@@ -107,6 +104,7 @@ def get_s3_bucket_cache(bucket_name, s3_region = None, aws_profile = None):
     if ((bucket_name in S3_BUCKETS.keys()) == False):
         S3_BUCKETS[bucket_name] = get_s3_bucket(bucket_name, s3_region, aws_profile)
 
+    # return
     return S3_BUCKETS[bucket_name]
 
 def get_file_content(bucket_name, object_key, s3_region = None, aws_profile = None):
@@ -133,6 +131,8 @@ def get_s3_file_content_as_text(bucket_name, object_key, s3_region = None, aws_p
 def get_file_content_as_text(bucket_name, object_key, s3_region = None, aws_profile = None):
     s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
     barr = get_file_content(bucket_name, object_key, s3_region, aws_profile)
+
+    # check for gz or zip
     if (object_key.endswith(".gz")):
         barr = gzip.decompress(barr)
     elif(object_key.endswith(".zip")):
@@ -141,6 +141,7 @@ def get_file_content_as_text(bucket_name, object_key, s3_region = None, aws_prof
         barr = zfile.open(zfile.infolist()[0]).read()
         zfile.close()
 
+    # return bytearray
     barr = bytearray(barr)
     return barr.decode().rstrip("\n")
 
