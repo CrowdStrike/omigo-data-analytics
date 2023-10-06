@@ -32,15 +32,15 @@ def get_s3_session(s3_region = None, aws_profile = None):
     s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
 
     # show the s3 settings
-    # utils.info_once("get_s3_session: s3_region: {}, aws_profile: {}".format(s3_region, aws_profile))
+    utils.info_once("get_s3_session: s3_region: {}, aws_profile: {}".format(s3_region, aws_profile))
 
     # generate s3_session
     if (s3_region is not None and aws_profile is not None):
         session = boto3.session.Session(region_name = s3_region, profile_name = aws_profile)
-        # utils.debug("get_s3_session: s3_region: {}, aws_profile: {}, session: {}".format(s3_region, aws_profile, session))
+        utils.debug("get_s3_session: s3_region: {}, aws_profile: {}, session: {}".format(s3_region, aws_profile, session))
     else:
         session = boto3.session.Session(region_name = s3_region, profile_name = aws_profile)
-        # utils.debug("get_s3_session: no s3_region or aws_profile, session: {}".format(session))
+        utils.debug("get_s3_session: no s3_region or aws_profile, session: {}".format(session))
 
     # return
     return session
@@ -154,7 +154,7 @@ def check_path_exists(path, s3_region = None, aws_profile = None):
 
     # show the s3 settings
     utils.info_once("check_path_exists: s3_region: {}, aws_profile: {}".format(s3_region, aws_profile))
-    utils.info_once("check_path_exists: s3_region: {}, aws_profile: {}, s3: {}".format(s3_region, aws_profile, s3))
+    # utils.info_once("check_path_exists: s3_region: {}, aws_profile: {}, s3: {}".format(s3_region, aws_profile, s3))
 
     results = s3.list_objects(Bucket = bucket_name, Prefix = object_key)
     return "Contents" in results
@@ -173,8 +173,8 @@ def check_file_exists(path, s3_region = None, aws_profile = None):
         else:
             return False
     except Exception as e:
-        utils.error("check_file_exists: path: {}, s3_region: {}, aws_profile: {}, exception: {}".format(path, s3_region, aws_profile, e))
-        utils.error("check_file_exists: StackTrace: {}".format(traceback.format_exc()))
+        # utils.error("check_file_exists: path: {}, s3_region: {}, aws_profile: {}, exception: {}".format(path, s3_region, aws_profile, e))
+        # utils.error("check_file_exists: StackTrace: {}".format(traceback.format_exc()))
         return False
 
 def put_file_content(bucket_name, object_key, barr, s3_region = None, aws_profile = None):
