@@ -454,7 +454,7 @@ def sort_func(vs):
 # TODO: the body has to be a json payload. This is because of some bug in python requests.post api
 # TODO: allow_redirects=False
 # TODO: https://docs.python-requests.org/en/latest/user/quickstart/: Check the WARNINGS
-def __read_base_url__(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 5, verify = True):
+def __read_base_url__(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 120, verify = True):
     # check for query params
     if (len(query_params) > 0):
         params_encoded_str = urlencode(query_params)
@@ -491,7 +491,7 @@ def __read_base_url__(url, query_params = {}, headers = {}, body = None, usernam
         return None, e
 
 # TODO: the semantics of this api are not clear
-def read_url_json(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 5, verify = True):
+def read_url_json(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 120, verify = True):
     utils.warn("read_url_json will flatten json that comes out as list. This api is still under development")
 
     # read response
@@ -524,7 +524,7 @@ def read_url_json(url, query_params = {}, headers = {}, body = None, username = 
 
     return tsv.TSV(header, data).validate()
 
-def read_url_response(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 30, verify = True, num_retries = 1, retry_sleep_sec = 1):
+def read_url_response(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 120, verify = True, num_retries = 1, retry_sleep_sec = 1):
     # read response
     response, resp_exception = __read_base_url__(url, query_params, headers, body = body, username = username, password = password, timeout_sec = timeout_sec, verify = verify)
 
@@ -589,12 +589,12 @@ def read_url_response(url, query_params = {}, headers = {}, body = None, usernam
     return response_str, response.status_code, ""
 
 # TODO: Deprecated
-def read_url(url, query_params = {}, headers = {}, sep = None, username = None, password = None, timeout_sec = 30, verify = True):
+def read_url(url, query_params = {}, headers = {}, sep = None, username = None, password = None, timeout_sec = 120, verify = True):
     utils.warn("This method name is deprecated. Use read_url_as_tsv instead")
     return read_url_as_tsv(url, query_params = query_params, headers = headers, sep = sep, username = username, password = password, timeout_sec = timeout_sec, verify = verify)
 
 # TODO: the compressed file handling should be done separately in a function
-def read_url_as_tsv(url, query_params = {}, headers = {}, sep = None, username = None, password = None, timeout_sec = 30, verify = True):
+def read_url_as_tsv(url, query_params = {}, headers = {}, sep = None, username = None, password = None, timeout_sec = 120, verify = True):
     # use the file extension as alternate way of detecting type of file
     # TODO: move the file type and extension detection to separate function
     file_type = None
