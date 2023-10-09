@@ -188,13 +188,13 @@ def merge_intersect(tsv_list, def_val_map = None):
             tsv_list2.append(t.select(same_cols))
         return merge(tsv_list2)
 
-def read(input_file_or_files, sep = None, def_val_map = None, s3_region = None, aws_profile = None):
+def read(input_file_or_files, sep = None, def_val_map = None, username = None, password = None, s3_region = None, aws_profile = None):
     input_files = __get_argument_as_array__(input_file_or_files)
     tsv_list = []
     for input_file in input_files:
         # check if it is a file or url
         if (input_file.startswith("http")):
-            tsv_list.append(read_url_as_tsv(input_file))
+            tsv_list.append(read_url_as_tsv(input_file, username = username, password = password))
         else:
             # read file content
             lines = file_paths_util.read_file_content_as_lines(input_file, s3_region, aws_profile)

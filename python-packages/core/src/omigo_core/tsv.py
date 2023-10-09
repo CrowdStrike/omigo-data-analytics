@@ -5002,20 +5002,21 @@ def get_version():
 def get_func_name(f):
     return f.__name__
 
-def read(paths, sep = None, do_union = False, def_val_map = None):
+def read(paths, sep = None, do_union = False, def_val_map = None, username = None, password = None):
     # TODO: remove this after fixing design
     if (def_val_map is not None and do_union == False):
         raise Exception("Use do_union flag instead of relying on def_val_map to be non None")
 
     # check if union needs to be done. default is intersect
     if (do_union == False):
-        return tsvutils.read(paths, sep = sep)
+        return tsvutils.read(paths, sep = sep, username = username, password = password)
     else:
         # check if default values are checked explicitly
         if (def_val_map is None):
             def_val_map = {}
 
-        return tsvutils.read(paths, sep = sep, def_val_map = {})
+        # return
+        return tsvutils.read(paths, sep = sep, def_val_map = {}, username = username, password = password)
 
 def write(xtsv, path):
     return xtsv.write(path)
