@@ -56,6 +56,9 @@ class TSV:
     def to_string(self):
         return "Header: {}, Data: {}".format(str(self.header_map), str(len(self.get_data())))
 
+    def get_content_as_string(self):
+        return self.get_header() + "\n" + "\n".join(self.get_data())
+
     # check data format
     def validate(self):
         # data validation
