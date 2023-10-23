@@ -5,7 +5,7 @@ import json
 
 # env variables
 JIRA_API_USER = "JIRA_API_USER"
-JIRA_API_PASS = "JIRA_API_PASS"
+JIRA_API_PASS = "JIRA_API_PASS" # nosec
 
 # Create a list of selected columns as JIRA has lot of noise
 SELECTED_COLS = ["assignee", "attachment", "components", "created", "description", "issuetype", "labels", "project", "reporter", "resolution", "resolutiondate", "status", "summary",
