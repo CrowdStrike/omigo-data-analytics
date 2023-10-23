@@ -124,6 +124,13 @@ async def get_avengers(request: Request, node_props: str = None, edge_props: str
     # return 
     return JSONResponse(content = content, headers = standard_headers)
 
+# get headers and meta data
+# utils.info("Headers: {}".format(request.headers))
+# utils.info("Method: {}".format(request.method))
+# utils.info("URL: {}".format(request.url))
+# utils.info("Query Params: {}".format(request.query_params))
+# utils.info("Client Host: {}".format(request.client.host))
+
 # main
 if __name__ == "__main__":
     # run the app only on localhost
