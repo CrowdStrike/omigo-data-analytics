@@ -2074,3 +2074,183 @@ def demo_plot12_xtsv_bar_chart():
     show(__demo_plot12_xtsv_bar_chart__)
 
 
+# pylint: disable=too-many-locals, too-many-statements
+# Modified version of this: https://github.com/microsoft/msticpy/blob/main/msticpy/nbtools/process_tree.py
+def plot_process_tree_omigo(  # noqa: MC0001
+    data: pd.DataFrame,
+    schema: ProcSchema = None,
+    output_var: str = None,
+    legend_col: str = None,
+    show_table: bool = False,
+    **kwargs,
+) -> Tuple[figure, LayoutDOM]:
+    """
+    Plot a Process Tree Visualization.
+
+    Parameters
+    ----------
+    data : pd.DataFrame
+        DataFrame containing one or more Process Trees
+    schema : ProcSchema, optional
+        The data schema to use for the data set, by default None
+        (if None the schema is inferred)
+    output_var : str, optional
+        Output variable for selected items in the tree,
+        by default None
+    legend_col : str, optional
+        The column used to color the tree items, by default None
+    show_table: bool
+        Set to True to show a data table, by default False.
+
+    Other Parameters
+    ----------------
+    height : int, optional
+        The height of the plot figure
+        (the default is 700)
+    width : int, optional
+        The width of the plot figure (the default is 900)
+    title : str, optional
+        Title to display (the default is None)
+    hide_legend : bool, optional
+        Hide the legend box, even if legend_col is specified.
+    pid_fmt : str, optional
+        Display Process ID as 'dec' (decimal) or 'hex' (hexadecimal),
+        default is 'hex'.
+
+    Returns
+    -------
+    Tuple[figure, LayoutDOM]:
+        figure - The main bokeh.plotting.figure
+        Layout - Bokeh layout structure.
+
+    Raises
+    ------
+    ProcessTreeSchemaException
+        If the data set schema is not valid for the plot.
+
+    Notes
+    -----
+    The `output_var` variable will be overwritten with any selected
+    values.
+
+    """
+    check_kwargs(kwargs, _DEFAULT_KWARGS)
+    # reset_output()
+    # output_notebook()
+
+    plot_height: int = kwargs.pop("height", 700)
+    plot_width: int = kwargs.pop("width", 900)
+    title: str = kwargs.pop("title", "ProcessTree")
+    hide_legend = kwargs.pop("hide_legend", False)
+    pid_fmt = kwargs.pop("pid_fmt", "hex")
+
+    proc_data, schema, levels, n_rows = _pre_process_tree(data, schema, pid_fmt=pid_fmt)
+    if schema is None:
+        raise ProcessTreeSchemaException("Could not infer data schema from data set.")
+
+    source = ColumnDataSource(data=proc_data)
+    # Get legend/color bar map
+    fill_map, color_bar = _create_fill_map(source, legend_col)
+
+    max_level = max(levels) + 3
+    min_level = min(levels)
+
+    if color_bar:
+        title += " (color bar = {legend_col})"
+    visible_range = int(plot_height / 35)
+    y_start_range = (n_rows - visible_range, n_rows + 1)
+    b_plot = figure(
+        title=title,
+        plot_width=int(plot_width) - 15,
+        plot_height=plot_height,
+        x_range=(min_level, max_level),
+        y_range=y_start_range,
+        tools=["reset", "save", "tap", "ywheel_pan"],
+        toolbar_location="above",
+        active_scroll="ywheel_pan",
+    )
+
+    hover = HoverTool(
+        tooltips=_get_tool_tips(schema),
+        formatters={f"@{schema.time_stamp}": "datetime"},
+    )
+    b_plot.add_tools(hover)
+
+    # dodge to align rectangle with grid
+    rect_x = dodge("Level", 1.75, range=b_plot.x_range)
+    rect_plot_params = dict(
+        width=3.5, height=0.95, source=source, fill_alpha=0.4, fill_color=fill_map
+    )
+
+    if color_bar:
+        b_plot.add_layout(color_bar, "right")
+    elif legend_col:
+        rect_plot_params["legend_field"] = legend_col
+    rect_plot = b_plot.rect(x=rect_x, y="Row", **rect_plot_params)
+    if legend_col and not color_bar:
+        b_plot.legend.title = legend_col
+        b_plot.legend.label_text_font_size = "7pt"
+    if hide_legend:
+        b_plot.legend.visible = False
+
+    text_props = {"source": source, "text_align": "left", "text_baseline": "middle"}
+
+    def x_dodge(x_offset):
+        return dodge("Level", x_offset, range=b_plot.x_range)
+
+    def y_dodge(y_offset):
+        return dodge("Row", y_offset, range=b_plot.y_range)
+
+    b_plot.text(
+        x=x_dodge(0.1),
+        y=y_dodge(-0.2),
+        text="__cmd_line$$",
+        text_font_size="7pt",
+        **text_props,
+    )
+    b_plot.text(
+        x=x_dodge(0.1),
+        y=y_dodge(0.25),
+        text="__proc_name$$",
+        text_font_size="8pt",
+        **text_props,
+    )
+    b_plot.text(
+        x=x_dodge(2.2),
+        y=y_dodge(0.25),
+        text="__proc_id$$",
+        text_font_size="8pt",
+        **text_props,
+    )
+
+    # Plot options
+    _set_plot_option_defaults(b_plot)
+    b_plot.xaxis.ticker = sorted(levels)
+    b_plot.xgrid.ticker = sorted(levels)
+    b_plot.hover.renderers = [rect_plot]  # only hover element boxes
+
+    # Selection callback
+    if output_var is not None:
+        get_selected = _create_js_callback(source, output_var)
+        b_plot.js_on_event("tap", get_selected)
+        box_select = BoxSelectTool(callback=get_selected)
+        b_plot.add_tools(box_select)
+
+    range_tool = _create_vert_range_tool(
+        data=source,
+        min_y=0,
+        max_y=n_rows,
+        plot_range=b_plot.y_range,
+        width=90,
+        height=plot_height,
+        x_col="Level",
+        y_col="Row",
+        fill_map=fill_map,
+    )
+    plot_elems = row(b_plot, range_tool)
+    data_table = _create_data_table(source, schema, legend_col, width = int(plot_width) - 110, height = plot_height)
+    plot_elems2 = row(plot_elems, data_table)
+    # show(plot_elems)
+    return plot_elems2
+
+
