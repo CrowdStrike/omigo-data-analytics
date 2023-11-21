@@ -1015,7 +1015,6 @@ class StaticGraphGeoIPMap(BaseGraph):
         
         # add the size. the proxy_ip and proxy_host values need to map from the source data
         xtsv = xtsv \
-            .drop_cols("tg:.*", ignore_if_missing = True) \
             .distinct() \
             .values_not_in("latitude", ["", "0.0"]) \
             .aggregate(["proxy_ip"], ["Count:sum", "end_ts"], [sum, max], collapse = False) \

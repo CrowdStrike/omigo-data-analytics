@@ -1,4 +1,4 @@
-# Integration parameters for anything with omigo_arjun
+# These are the integration parameters with omigo_arjun
 
 # Meta parameters
 OMIGO_ARJUN_START_TS = "omigo.arjun.start_ts"

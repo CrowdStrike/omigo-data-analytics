@@ -1,4 +1,15 @@
+from omigo_hydra import cluster_common_v2
+from omigo_hydra import cluster_protocol_v2
+from omigo_hydra import cluster_tsv
+from omigo_hydra import cluster_arjun
+from omigo_hydra import cluster_funcs
+from omigo_hydra import cluster_shell_ext
+from omigo_hydra.cluster_common_v2 import EntityType
+from omigo_hydra.cluster_common_v2 import EntityState
+from omigo_hydra.cluster_common_v2 import ClusterCapabilities
+from omigo_hydra.cluster_common_v2 import ClusterPaths
 from omigo_core import utils, funclib, etl
+from omigo_ext import splunk_ext
 # utils.enable_debug_mode()
 import time
 from omigo_core import tsv
@@ -173,7 +184,6 @@ def run2(n = 10, wait_sec = 5):
         utils.info("Sleeping for {} seconds".format(wait_sec))
         time.sleep(wait_sec)
 
-
 # Debugging
 def get_cluster_handler():
     return ClusterPaths.get_cluster_handler()
@@ -234,7 +244,7 @@ def read_tsv(path):
 def write_tsv(path, xtsv):
     return get_cluster_handler().write_tsv(path, xtsv)
 
-def read_workflow_input(wf_id, max_duration = 3600, sleep_sec = 3):
+def read_workflow_input(wf_id, max_duration = 3*86400, sleep_sec = 3):
     # output file
     input_file = cluster_common_v2.ClusterPaths.get_entity_data_input_file(cluster_common_v2.EntityType.WF, wf_id, "input_id1", 0)
 
@@ -248,7 +258,7 @@ def read_workflow_output(wf_id, max_duration = 3600, sleep_sec = 3):
     # return
     return read_workflow_file_path(output_file, max_duration = max_duration, sleep_sec = sleep_sec)
 
-def read_workflow_file_path(file_path, max_duration = 3600, sleep_sec = 3):
+def read_workflow_file_path(file_path, max_duration = 3*86400, sleep_sec = 3):
     # check if the file exists, and run in a loop with sleep
     duration = 0
     found = False
@@ -261,7 +271,7 @@ def read_workflow_file_path(file_path, max_duration = 3600, sleep_sec = 3):
           found = True
           break
       else:
-          utils.debug("File: {} doesnt exists yet. Sleeping for {} seconds".format(file_path, sleep_sec))
+          utils.trace("File: {} doesnt exists yet. Sleeping for {} seconds".format(file_path, sleep_sec))
           time.sleep(sleep_sec)
           duration = duration + sleep_sec 
 
@@ -281,3 +291,129 @@ def read_workflow_file_path(file_path, max_duration = 3600, sleep_sec = 3):
 def scan_by_datetime_range(path, start_date_str, end_date_str, prefix):
     return etl.scan_by_datetime_range(get_cluster_handler().get_full_path(path), start_date_str, end_date_str, prefix)
 
+#######################################################################################################################
+# Script execution
+#######################################################################################################################
+def get_created_non_created_wf_ids(local_handler_flag = True, capabilities = []):
+    # result
+    created_wf_ids = []
+    alive_wf_ids = []
+    non_created_wf_ids = []
+    capabilities = set(capabilities)
+    handler = get_local_cluster_handler() if (local_handler_flag == True) else get_cluster_handler()
+
+    # iterate over all states
+    for state in cluster_common_v2.EntityState.get_all():
+        # get all workflow ids
+        ids = handler.list_dirs(ClusterPaths.get_entities_state_by_state(EntityType.WF, state))
+
+        # read each workflow filter the workflows based on the capabilities matching requirements
+        ids_allowed = []
+        for id1 in ids:
+            # read wf
+            wf = cluster_common_v2.ClusterEntityWF.from_json(handler.read_most_recent_json(ClusterPaths.get_entity(EntityType.WF, id1)))
+            requirements = set(wf.collect_requirements())
+
+            # check if all requirements are met
+            if (len(capabilities) == 0 or len(requirements.difference(capabilities)) == 0):
+                ids_allowed.append(id1)
+
+        # check for created
+        if (state in (EntityState.CREATED)):
+            for id1 in ids_allowed:
+                created_wf_ids.append(id1)
+
+        # check for alive
+        if (state in (EntityState.ALIVE)):
+            for id1 in ids_allowed:
+                alive_wf_ids.append(id1)
+
+        # check for finished.
+        if (state in (EntityState.COMPLETED, EntityState.FAILED, EntityState.ABORTED)):
+            for id1 in ids_allowed:
+                non_created_wf_ids.append(id1)
+
+    # debug
+    utils.debug("get_created_non_created_wf_ids: created_wf_ids: {}, alive_wf_ids: {}, non_created_wf_ids: {}".format(created_wf_ids, alive_wf_ids, non_created_wf_ids))
+
+    # effective ids
+    effective_created_wf_ids = set(created_wf_ids).difference(set(non_created_wf_ids))
+    effective_alive_wf_ids = set(alive_wf_ids).difference(set(non_created_wf_ids))
+    effective_non_created_wf_ids = set(non_created_wf_ids)
+
+    # return set difference
+    return effective_created_wf_ids, effective_alive_wf_ids, effective_non_created_wf_ids 
+
+def print_created_wf_ids(capabilities = []):
+    created_wf_ids, alive_wf_ids, non_created_wf_ids = get_created_non_created_wf_ids(local_handler_flag = False, capabilities = capabilities)
+    for id1 in created_wf_ids:
+        print(id1)
+
+def print_alive_wf_ids(capabilities = []):
+    created_wf_ids, alive_wf_ids, non_created_wf_ids = get_created_non_created_wf_ids(local_handler_flag = False, capabilities = capabilities)
+    for id1 in alive_wf_ids:
+        print(id1)
+
+def print_non_created_wf_ids(capabilities = []):
+    created_wf_ids, alive_wf_ids, non_created_wf_ids = get_created_non_created_wf_ids(local_handler_flag = False, capabilities = capabilities)
+    for id1 in non_created_wf_ids:
+        print(id1)
+
+def print_local_created_wf_ids(capabilities = []):
+    created_wf_ids, alive_wf_ids, non_created_wf_ids = get_created_non_created_wf_ids(local_handler_flag = True, capabilities = capabilities)
+    for id1 in created_wf_ids:
+        print(id1)
+
+def print_local_alive_wf_ids(capabilities = []):
+    created_wf_ids, alive_wf_ids, non_created_wf_ids = get_created_non_created_wf_ids(local_handler_flag = True, capabilities = capabilities)
+    for id1 in alive_wf_ids:
+        print(id1)
+
+def print_local_non_created_wf_ids(capabilities = []):
+    created_wf_ids, alive_wf_ids, non_created_wf_ids = get_created_non_created_wf_ids(local_handler_flag = True, capabilities = capabilities)
+    for id1 in non_created_wf_ids:
+        print(id1)
+
+# methods for external task execution
+def print_shell_executor_scripts(wf_id):
+    # read wf spec
+    wf = cluster_common_v2.ClusterEntityWF.from_json(get_cluster_handler().read_most_recent_json(ClusterPaths.get_entity(EntityType.WF, wf_id)))
+
+    # create wf protocol
+    wf_protocol = cluster_protocol_v2.ClusterWFProtocol(wf)
+
+    # read input. TODO: Use ctx api
+    input_id = wf.entity_spec.input_ids[0]
+    output_id = wf.entity_spec.output_ids[0]
+    file_index = 0
+    xinput = get_cluster_handler().read_tsv(ClusterPaths.get_entity_data_input_file(EntityType.WF, wf_id, input_id, file_index))
+
+    # resolve the meta parameters for external task
+    xinput_resolved = wf_protocol.resolve_external_task_meta_params(xinput, input_id, output_id, file_index)
+    operations = wf_protocol.execute_single_round_get_operations(wf.entity_spec)
+
+    # generate output
+    xoutput = wf_protocol.execute_single_round(operations, xinput_resolved)
+
+    # print the script
+    print(utils.url_decode(xoutput.col_as_array("shell:output:url_encoded")[0]))
+
+def print_wf_requirements(local_handler_flag = False):
+    # get handler
+    handler = get_local_cluster_handler() if (local_handler_flag == True) else get_cluster_handler()
+
+    # get all wfs
+    wf_ids = sorted(handler.list_dirs(ClusterPaths.get_entities_ids(EntityType.WF)))
+
+    # iterate
+    for wf_id in wf_ids:
+        # use protocol class to get the current state
+        xentity_state_protocol = cluster_protocol_v2.ClusterEntityStateProtocol(EntityType.WF, wf_id)
+        effective_state = xentity_state_protocol.get_registered_state_resolved()
+
+        # get wf details
+        wf = cluster_common_v2.ClusterEntityWF.from_json(handler.read_most_recent_json(ClusterPaths.get_entity(EntityType.WF, wf_id)))
+        requirements = wf.collect_requirements()
+
+        # print
+        utils.info("wf_id: {}, cur_state: {}, requirements: {}".format(wf_id, effective_state, requirements))

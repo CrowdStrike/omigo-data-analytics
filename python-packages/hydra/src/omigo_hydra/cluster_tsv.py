@@ -1,9 +1,13 @@
 # central place for all serialized version of the tsvs
 from omigo_core import tsv, utils, funclib
+from omigo_hydra import cluster_common_v2
+from omigo_hydra import cluster_class_reflection
+from omigo_hydra.cluster_common_v2 import ClusterCapabilities
 import sys
-from omigo_core.tsv import TSV
-from omigo_ext.hydra.cluster_shell_ext import SparkJobShellExecutorTSV
+from omigo_ext.parquet_ext import ParquetTSV
 from omigo_ext.splunk_ext import SplunkTSV
+from omigo_hydra.cluster_shell_ext import SparkJobShellExecutorTSV
+from omigo_core.tsv import TSV
 
 # awk command
 # awk -F '(' '{print $1}'|awk -F' ' '{print "    def "$2"(self, *args, **kwargs):\n        return HydraTSV(self.header, self.data, super().ctx, super().__copy_and_append_operations__(cluster_common_v2.ClusterMapOperation(TSV."$2", self.requirements, *args, **kwargs))\n"}'|pbcopy
@@ -670,8 +674,8 @@ class HydraTSV(HydraBaseTSV):
     def remove_prefix(self, *args, **kwargs):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.remove_prefix, self.requirements, *args, **kwargs))
 
-    def replace_suffix(self, *args, **kwargs):
-        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.replace_suffix, self.requirements, *args, **kwargs))
+    def replace_prefix(self, *args, **kwargs):
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.replace_prefix, self.requirements, *args, **kwargs))
 
     def replace_suffix(self, *args, **kwargs):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.replace_suffix, self.requirements, *args, **kwargs))
@@ -939,4 +943,15 @@ class HydraParquetTSV(HydraBaseTSV):
 
     def save_as_parquet(self, *args, **kwargs):
         return HydraHelper.new_hydra_tsv(self, cluster_common_v2.ClusterMapOperation(ParquetTSV.save_as_parquet, self.requirements, *args, **kwargs))
+
+class HydraSplunkTSV(HydraBaseTSV):
+    def __init__(self, header, data):
+        super().__init__(header, data)
+        super().set_hydra_requirements([ClusterCapabilities.SPLUNK])
+
+    def get_events_par(self, *args, **kwargs):
+        return HydraHelper.new_hydra_tsv(self, cluster_common_v2.ClusterMapOperation(SplunkTSV.get_events_par, self.requirements, *args, **kwargs))
+
+    def get_events_parsed(self, *args, **kwargs):
+        return HydraHelper.new_hydra_tsv(self, cluster_common_v2.ClusterMapOperation(SplunkTSV.get_events_parsed, self.requirements, *args, **kwargs))
 

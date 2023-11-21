@@ -1,7 +1,7 @@
 import inspect
 import importlib
-from omigo_core import tsv, utils, funclib
 import math
+from omigo_core import tsv, utils
 
 # TODO: Currying
 # https://stackoverflow.com/questions/3589311/get-defining-class-of-unbound-method-object-in-python-3/25959545#25959545

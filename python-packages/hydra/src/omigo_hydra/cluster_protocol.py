@@ -3,6 +3,8 @@ import os
 import random
 import math
 from omigo_core import tsv, utils, funclib
+from omigo_hydra import cluster_data
+from omigo_hydra import cluster_common
 import threading
 
 # time interval to sleep before running cleanup
@@ -529,7 +531,7 @@ class ClusterEntityProtocol:
 class ClusterMasterProtocol(ClusterEntityProtocol):
     def __init__(self, entity):
         super().__init__(entity)
-        self.cluster_props = cluster_common.ClusterProps.new({"S3": 10})
+        self.cluster_props = cluster_common.ClusterProps.new({"SPLUNK": 4, "S3": 10})
         self.is_master_current = False
         # self.__start__()
 

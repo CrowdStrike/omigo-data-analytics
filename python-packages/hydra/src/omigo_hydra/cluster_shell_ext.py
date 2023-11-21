@@ -36,7 +36,7 @@ class SparkJobShellExecutor(ShellExecutorBase):
 # export certain conf parameters to be read through System.getProperty()
 export OMIGO_ARJUN_INPUT_FILE="{omigo.arjun.input_file}"
 export OMIGO_ARJUN_OUTPUT_FILE="{omigo.arjun.output_file}"
-export HDFS_PATH=""
+export HDFS_PATH="s3://proxy-some-path/"
 
 spark-submit \\
   --class {omigo.prop.class} \\

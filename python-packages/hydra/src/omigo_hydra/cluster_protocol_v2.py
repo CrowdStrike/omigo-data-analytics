@@ -4,6 +4,8 @@ import random
 import math
 import threading
 from omigo_core import tsv, utils, funclib, etl
+from omigo_hydra import cluster_data, cluster_class_reflection, cluster_tsv, cluster_common_v2, cluster_arjun
+from omigo_hydra.cluster_common_v2 import EntityType, EntityState, ClusterTaskType, ClusterIds, ClusterPaths
 
 class ClusterHeartbeatProtocol:
     MAX_HEARTBEAT_WAIT = 30
@@ -858,10 +860,10 @@ class ClusterMasterProtocol(ClusterEntityProtocol):
             utils.info("calling assign_entity_to_supervisor: {}, {}, {}, active : {}".format(xsupevisor_entity_ref.entity_id, xentity_type, xentity_id, xentity_is_active))
             if (xentity_is_active == True):
                 self.cluster_handler.create(ClusterPaths.get_entity_active_children_by_id(xsupevisor_entity_ref.entity_type, xsupevisor_entity_ref.entity_id, xentity_type, xentity_id))
-            else: 
+            else:
                 self.cluster_handler.create(ClusterPaths.get_entity_passive_children_by_id(xsupevisor_entity_ref.entity_type, xsupevisor_entity_ref.entity_id, xentity_type, xentity_id))
         else:
-            utils.info("ClusterMasterProtocol: {}: assign_entity_to_supervisor: not able to find any alive available supervisor: {}, {}".format(self.get_entity_id(), xentity_type, xentity_id)) 
+            utils.info("ClusterMasterProtocol: {}: assign_entity_to_supervisor: not able to find any alive available supervisor: xentity_type: {}, xentity_id: {}".format(self.get_entity_id(), xentity_type, xentity_id))
 
     # TODO: Optimize this
     def __select_assigned_supervisor_entity__(self, xentity_type):
@@ -882,20 +884,31 @@ class ClusterMasterProtocol(ClusterEntityProtocol):
                 if (ClusterEntityStateProtocol(xsupervisor_entity_type, xsupervisor_id).is_alive()):
                     xalive_entity_ids.append(xsupervisor_id)
 
+            # debug
+            utils.info("__select_assigned_supervisor_entity__: xentity_type: {}, xsupervisor_ids: {}, xalive_entity_ids: {}".format(xentity_type, xsupervisor_ids, xalive_entity_ids))
+
             # check if there are any
             if (len(xalive_entity_ids) > 0):
                 utils.info("ClusterMasterProtocol: {}: __select_assigned_entity__: xentity_type: {}, supervisor candidates: xalive_entity_ids: {}".format(self.get_entity_id(), xentity_type, xalive_entity_ids))
                 # TODO: workaround to not select master if workers are available
                 if (len(xalive_entity_ids) > 1):
-                    xalive_entity_ids2 = xalive_entity_ids[1:]
-                    random.shuffle(xalive_entity_ids2)
-                    return cluster_common_v2.ClusterEntityRef.new(xsupervisor_entity_type, xalive_entity_ids2[0])
+                    xalive_entity_non_master_node_ids = list(filter(lambda t: self.__is_same_entity_node_as_current_master__(t) == False, xalive_entity_ids))
+                    xalive_entity_non_master_node_ids = utils.random_shuffle(xalive_entity_non_master_node_ids, seed = funclib.get_utctimestamp_sec())
+                    return cluster_common_v2.ClusterEntityRef.new(xsupervisor_entity_type, xalive_entity_non_master_node_ids[0])
                 else:
                     return cluster_common_v2.ClusterEntityRef.new(xsupervisor_entity_type, xalive_entity_ids[0])
             else:
                # return None
                return None
 
+    def __is_same_entity_node_as_current_master__(self, xentity_id):
+        utils.warn_once("TODO: check if the current node is also the current master and assign to a different supervisor")
+        entity_id_ts = self.get_entity_id().split("-")[-1]
+        xentity_id_ts = xentity_id.split("-")[-1]
+        if (entity_id_ts == xentity_id_ts):
+            return True
+        else:
+            return False
 # Resource Manager Protocol            
 class ClusterResourceManagerProtocol(ClusterEntityProtocol):
     def __init__(self, entity):
@@ -998,7 +1011,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
 
             # read input
             xinput = self.cluster_handler.read_tsv(ClusterPaths.get_entity_data_input_file(wf_entity.entity_type, wf_entity.entity_id, input_ids[0], file_index))
-            utils.info("ClusterWFProtocol: {}: execute_static: num rows: {}".format(self.get_entity_id(), xinput.num_rows()))
+            utils.info("ClusterWFProtocol: {}: execute_static: num rows: {}, num_cols: {}".format(self.get_entity_id(), xinput.num_rows(), xinput.num_cols()))
 
             # resolve start_ts. TODO: This needs to fall on some boundaries of timestamps
             wf_spec_start_ts = wf_spec.start_ts if (wf_spec.start_ts is not None and wf_spec.start_ts > 0) else funclib.get_utctimestamp_sec()
@@ -1211,7 +1224,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
                     final_state = EntityState.COMPLETED
 
                     # check for output to appear first. TODO: need better way to coordinate as this can still time out
-                    if (self.local_cluster_handler.file_exists_with_wait(ClusterPaths.get_entity_data_output_file(self.get_entity_type(), self.get_entity_id(), wf_spec.output_ids[0], 0), attempts = 30)): 
+                    if (self.local_cluster_handler.file_exists_with_wait(ClusterPaths.get_entity_data_output_file(self.get_entity_type(), self.get_entity_id(), wf_spec.output_ids[0], 0), attempts = 100)):
                         # read output
                         xoutput = self.local_cluster_handler.read_tsv(ClusterPaths.get_entity_data_output_file(self.get_entity_type(), self.get_entity_id(), wf_spec.output_ids[0], 0))
                         xoutput.show_transpose(3, title = "ClusterWFProtocol: execute_remote")
@@ -1394,7 +1407,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
     def execute_single_round(self, operations, xinput_resolved):
         # if the input is empty, return empty output
         if (xinput_resolved.num_rows() == 0):
-            return tsv.create_empty()
+            utils.warn_once("execute_single_round: empty tsv. continuing. The empty tsv can lead to unpredictable behavior")
 
         # read the input as the base
         otsv = xinput_resolved

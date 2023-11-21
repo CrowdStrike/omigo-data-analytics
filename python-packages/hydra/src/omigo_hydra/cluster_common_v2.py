@@ -7,21 +7,22 @@ import math
 import json 
 import threading
 from omigo_core import tsv, utils, tsvutils, etl, funclib
+from omigo_hydra import cluster_data, cluster_class_reflection
+from omigo_hydra import cluster_common as old_cluster_common 
 
 # class that takes the base path in S3, and implement all distributed communication under that.
 # takes care of protocol level things for future
 
 # global constants. TODO        
-# if ("HYDRA_PATH" in os.environ.keys()):
-#     HYDRA_PATH = os.environ["HYDRA_PATH"]
-# else:
 if ("HYDRA_PATH" in os.environ.keys()):
     HYDRA_PATH = os.environ["HYDRA_PATH"]
 else:
-    # HYDRA_PATH = ""
     raise Exception("Use HYDRA_PATH env variable")
 
-HYDRA_LOCAL_PATH = ""
+if ("HYDRA_LOCAL_PATH" in os.environ.keys()):
+    HYDRA_LOCAL_PATH = os.environ["HYDRA_LOCAL_PATH"]
+else:
+    raise Exception("Use HYDRA_LOCAL_PATH env variable")
 
 # global variables
 HYDRA_CLUSTER_HANDLER = None
@@ -253,6 +254,7 @@ EntityCapacityMap[EntityType.INTELI_AGENT] = 1
 class ClusterCapabilities:
     SPARK       = "spark"
     PRESTO      = "presto"
+    SPLUNK      = "splunk"
     SHELL       = "shell"
 
 # primary entity class

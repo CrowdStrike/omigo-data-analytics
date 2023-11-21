@@ -4,15 +4,24 @@ import json
 import os
 import time
 from omigo_core import tsv, utils, tsvutils, funclib
+from omigo_hydra import s3io_wrapper
+from omigo_hydra import cluster_data
+from omigo_hydra import cluster_class_reflection
 
 # class that takes the base path in S3, and implement all distributed communication under that.
 # takes care of protocol level things for future
 
-# global constants. TODO        
+# global constants. TODO
 if ("HYDRA_PATH" in os.environ.keys()):
     HYDRA_PATH = os.environ["HYDRA_PATH"]
 else:
     raise Exception("Use HYDRA_PATH env variable")
+
+# global constants. TODO
+if ("HYDRA_LOCAL_PATH" in os.environ.keys()):
+    HYDRA_LOCAL_PATH = os.environ["HYDRA_LOCAL_PATH"]
+else:
+    raise Exception("Use HYDRA_LOCAL_PATH env variable")
 
 # global clients
 HYDRA_CLIENT_ID = None 
@@ -608,7 +617,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
         if (xtsv is None):
             raise Exception("update: Null xtsv: {}".format(path))
  
-        utils.info("write_tsv   : {}, num_rows: {}".format(path, xtsv.num_rows()))
+        utils.info("write_tsv   : {}, num_rows: {}, num_cols: {}".format(path, xtsv.num_rows(), xtsv.num_cols()))
         tsv.write(xtsv, self.__makepath__(path))
 
     def update(self, path, msg, verify = True, ignore_logging = False):
@@ -844,10 +853,10 @@ class ClusterFileHandler(cluster_data.JsonSer):
             try:
                 return json.loads(content)
             except Exception as e:
-                utils.error("read_most_recent_json: caught exception in parsing json: {}, error: {}, attempts: {}, wait_sec: {}".format(e, attempts, wait_sec))
+                utils.error("read_most_recent_json: caught exception in parsing json: {}, error: {}, attempts: {}, wait_sec: {}".format(content, e, attempts, wait_sec))
                 if (attempts > 0):
                     time.sleep(wait_sec)
-                    return read_most_recent_json(path, wait_sec = wait_sec, attempts = attempts - 1)
+                    return self.read_most_recent_json(path, wait_sec = wait_sec, attempts = attempts - 1)
                 else:
                     raise e
         else:
@@ -1231,7 +1240,7 @@ class ClusterTSV:
         for path in xtsv.col_as_array_uniq(TSVReference.OMIGO_REFERENCE_PATH):
             # run through all the operations. the output is initialized with input itself
             xtsv_output = tsv.read(path)
-            utils.debug("ClusterTSV: call: initial input path: {}, num_rows: {}".format(path, xtsv_output.num_rows()))
+            utils.debug("ClusterTSV: call: initial input path: {}, num_rows: {}, num_cols: {}".format(path, xtsv_output.num_rows(), xtsv_output.num_cols()))
 
             # iterate through operations
             for operation in self.operations:
@@ -1255,7 +1264,7 @@ class ClusterTSV:
 
             # append to the list of outputs
             otsvs.append(xtsv_output)
-            utils.info("ClusterTSV: call: xtsv_output path: {}, num_rows: {}".format(path, xtsv_output.num_rows()))
+            utils.info("ClusterTSV: call: xtsv_output path: {}, num_rows: {}, num_cols: {}".format(path, xtsv_output.num_rows(), xtsv_output.num_cols()))
 
         # persist the final output. TODO: Dont know what to do here. Need error handling
         otsv = tsv.new_with_cols([".omigo.empty"]) if (len(otsvs) == 0) else tsvutils.merge(otsvs, def_val_map = {})

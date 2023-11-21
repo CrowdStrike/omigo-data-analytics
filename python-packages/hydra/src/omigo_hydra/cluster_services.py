@@ -3,6 +3,9 @@ import json
 import time
 import math
 
+from omigo_hydra import cluster_common
+from omigo_hydra import cluster_protocol
+from omigo_hydra import cluster_ext
 from dateutil import parser
 import datetime
 
@@ -256,3 +259,38 @@ def init_client_session():
     client_protocol.initialize()
     session_protocol.initialize()
 
+def get_job_data(job_id):
+    # read job parameters
+    cluster_handler = get_cluster_handler()
+    # job = cluster_common.ClusterJob.from_json(cluster_handler.read_most_recent_json(cluster_common.ClusterPaths.get_job_details(job_id)))
+
+    # check completion status
+    if (cluster_handler.dir_exists(cluster_common.ClusterPaths.get_job_statuses_completed(job_id)) and cluster_handler.file_exists(cluster_common.ClusterPaths.get_data_job_output(job_id))):
+        # debug
+        utils.info("get_job_data: job_id: {} completed".format(job_id))
+
+        # if completed, read the final output
+        return cluster_common.TSVReference(cluster_handler.read_tsv(cluster_common.ClusterPaths.get_data_job_output(job_id))).read()
+    else:
+        # defensive programming
+        if (cluster_handler.dir_exists(cluster_common.ClusterPaths.get_job_batches_statuses_incoming(job_id))):
+            # if still running, check the completion status of the batches, and then read partial output
+            batch_ids = cluster_handler.list_dirs(cluster_common.ClusterPaths.get_job_batches_statuses_incoming(job_id))
+            completed_batch_ids = cluster_handler.list_dirs(cluster_common.ClusterPaths.get_job_batches_statuses_completed(job_id))
+
+            # debug
+            utils.info("get_job_data: job_id: {} is not completed yet. Status: {} / {}".format(job_id, len(completed_batch_ids), len(batch_ids)))
+
+            # read partial output
+            xtsvs = []
+            for batch_id in completed_batch_ids:
+                xtsvs.append(cluster_handler.read_tsv(cluster_common.ClusterPaths.get_data_job_batch_output(job_id, batch_id)))
+
+            # return
+            if (len(xtsvs) > 0):
+                return tsvutils.merge(xtsvs)
+            else:
+                return None
+        else:
+            utils.info("get_job_data: job_id: {} is still initializing".format(job_id))
+            return None
