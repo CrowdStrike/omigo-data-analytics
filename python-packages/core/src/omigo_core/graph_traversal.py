@@ -208,7 +208,7 @@ def get_time_based_forward_edges_only(etsv, ts_col, prefix):
         .transform("target", lambda t: ",".join(all_paths[t]) if (t in all_paths.keys()) else "", "{}:all_paths".format(prefix))
 
 
-def remove_dangling_edges(etsv, retain_node_filter_func = None, max_iter = 5, dmsg = ""):
+def remove_dangling_edges(etsv, retain_vertex_ids, retain_node_filter_func, max_iter = 5, dmsg = ""):
     dmsg = utils.extend_inherit_message(dmsg, "remove_dangling_edges")
     utils.warn_once("{}: this can remove event retain keys if there is no incoming or outgoing edge".format(dmsg))
 
@@ -230,10 +230,14 @@ def remove_dangling_edges(etsv, retain_node_filter_func = None, max_iter = 5, dm
     
         # count edges
         etsv_edge_count = etsv_result \
+            .noop(["src", "target", "evports", "users", "ts_min", "ts_max", "count"], n = 1000, title = "etsv_result") \
             .aggregate(["target"], ["src"], [funclib.uniq_len], collapse = False) \
             .rename("src:uniq_len", "incoming_target") \
+            .noop(["src", "target", "incoming_target"], n = 1000, title = "etsv_result incoming_target") \
             .aggregate(["src"], ["target"], [funclib.uniq_len], collapse = False) \
-            .rename("target:uniq_len", "outgoing_target")
+            .rename("target:uniq_len", "outgoing_target") \
+            .noop(["src", "target", "outgoing_target"], n = 1000, title = "etsv_result outgoing_target") \
+            .noop(["src", "target", "evports", "incoming_target", "outgoing_target"], n = 1000, title = "etsv_edge_count")
     
         # get outgoing edges
         etsv_num_outgoing_target = etsv_edge_count \
@@ -246,15 +250,20 @@ def remove_dangling_edges(etsv, retain_node_filter_func = None, max_iter = 5, dm
             .print_stats(msg = "etsv_edge_count") \
             .drop_cols(["outgoing_target"]) \
             .left_map_join(etsv_num_outgoing_target, ["target"], rkeys = ["right:src"], def_val_map = {"outgoing_target": "0"}) \
+            .noop(["src", "target", "incoming_target", "outgoing_target", "right:.*"], n = 1000, title = "etsv_edge_count join") \
             .drop_cols_with_prefix("right") \
             .transform(["src", "target", "incoming_target", "outgoing_target"], lambda s,t,i,o: 1 if (retain_node_filter_func(s) and int(o) == 0) else 0, "outgoing_target_zero_flag") \
             .transform(["src", "target", "incoming_target", "outgoing_target"], lambda s,t,i,o: 1 if (retain_node_filter_func(s) and int(i) > 1) else 0, "incoming_target_mult_flag") \
             .sort(["outgoing_target_zero_flag", "incoming_target_mult_flag", "src", "target"]) \
-            .noop(1000, "etsv2_edge_flags", tsv.TSV.select, ["src", "target", "incoming_target", "outgoing_target", "outgoing_target_zero_flag", "incoming_target_mult_flag"])
+            .noop(["src", "target", "incoming_target", "outgoing_target", "outgoing_target_zero_flag", "incoming_target_mult_flag"], n = 1000, title = "etsv2_edge_flags")
 
         etsv2_sync = etsv2_edge_flags \
-            .not_eq_str("outgoing_target_zero_flag", "1") \
-            .not_eq_str("incoming_target_mult_flag", "1") \
+            .noop(["src", "target", "outgoing_target_zero_flag", "incoming_target_mult_flag"], n = 1000, title = "etsv2_edge_flags 1") \
+            .exclude_filter(["target", "outgoing_target_zero_flag"], lambda tgt, t: tgt not in retain_vertex_ids and t == "1") \
+            .exclude_filter(["target", "incoming_target_mult_flag"], lambda tgt, t: tgt not in retain_vertex_ids and t == "1") \
+            .exclude_filter(["target", "incoming_target_mult_flag", "outgoing_target_zero_flag"], lambda tgt, imulti, ozero: tgt in retain_vertex_ids and imulti == "1") \
+            .noop(["src", "target", "outgoing_target_zero_flag", "incoming_target_mult_flag"], n = 1000, title = "etsv2_edge_flags 2") \
+            .noop(["outgoing_target_zero_flag", "incoming_target_mult_flag"], lambda t1, t2: t1 == "1" or t2 == "1") \
             .noop(10000, "etsv2_sync", tsv.TSV.select, ["src", "target", "incoming_target", "outgoing_target", "data_source", "outgoing_target_zero_flag", "incoming_target_mult_flag"]) \
             .drop_cols(["incoming_target", "outgoing_target", "outgoing_target_zero_flag", "incoming_target_mult_flag"])
 
@@ -326,7 +335,7 @@ def remove_cycles(vtsv, etsv, ts_col, retain_node_filter_func = None, dmsg = "")
     # return
     return vtsv2, etsv2
 
-def merge_similar_nodes_reference(self, vtsv, etsv, retain_vertex_ids, ts_col, retain_node_filter_func = None, dmsg = ""):
+def merge_similar_nodes_reference(vtsv, etsv, retain_vertex_ids, ts_col, retain_node_filter_func, dmsg = ""):
     dmsg = utils.extend_inherit_message(dmsg, "merge_similar_nodes")
 
     # check for cycles
@@ -427,3 +436,106 @@ def merge_similar_nodes_reference(self, vtsv, etsv, retain_vertex_ids, ts_col, r
 
     # return 
     return vtsv_grouped, etsv_grouped2
+
+# retain_vertex_annotations are the start and end timestamps for the retained vertex ids
+def split_graph_filter_func(src, tgt, ts, retain_vertex_ids, retain_vertex_annotations, retain_node_filter_func, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "split_graph_filter_func")
+
+    # return True for special nodes
+    if (retain_node_filter_func(src) or retain_node_filter_func(tgt)):
+        return True
+
+    # return True if neither are detections
+    if (src not in retain_vertex_ids and tgt not in retain_vertex_ids):
+        return True
+
+    # check before and after flag
+    before_flag = True
+    after_flag = True
+
+    # important, for both nodes as detection, keep the edge
+    if (src in retain_vertex_ids and tgt in retain_vertex_ids):
+        return True
+
+    # before detection
+    if (tgt in retain_vertex_ids):
+        if (tgt in retain_vertex_annotations.keys()):
+            (retain_vertex_ts_min, retain_vertex_ts_max) = retain_vertex_annotations[tgt]
+            if (int(ts) > int(retain_vertex_ts_max)):
+                before_flag = False
+
+    # after detection
+    if (src in retain_vertex_ids):
+        if (src in retain_vertex_annotations.keys()):
+            (retain_vertex_ts_min, retain_vertex_ts_max) = retain_vertex_annotations[src]
+            if (int(retain_vertex_ts_min) > int(ts)):
+                after_flag = False
+
+    # default
+    if (before_flag == False or after_flag == False):
+        return False
+    else:
+        return True
+
+def apply_time_order_based_filter(vtsv, etsv, retain_vertex_ids, retain_node_filter_func, strict_ordering_flag):
+    # find the min and max timestamps
+    etsv_min_max = etsv \
+        .aggregate(["src", "target"], ["ts", "ts"], [funclib.minint, funclib.maxint]) \
+        .rename("ts:minint", "ts_min") \
+        .rename("ts:maxint", "ts_max")
+
+    # create left and right sides. apply timestamp ordering logic to the subgraph to further prune edges
+    etsv_left = etsv_min_max.select(["src", "target", "ts_min"]).exclude_filter("src", retain_node_filter_func).add_prefix("left").distinct()
+    etsv_right = etsv_min_max.select(["src", "target", "ts_max"]).exclude_filter("src", retain_node_filter_func).add_prefix("right").distinct()
+
+    def __apply_time_order_based_filter_template__(lflag, rflag, ldetect, rdetect):
+        # if strict time ordering is asked, remove the forward edge
+        if (strict_ordering_flag == True):
+            return "right"
+
+        # check for detect flags
+        if (ldetect == 1 and rdetect == 1):
+            return ""
+        elif (ldetect == 1):
+            return "right"
+        elif (rdetect == 1):
+            return "left"
+        elif (lflag == "0"):
+            return "left"
+        elif (rflag == "0"):
+            return "right"
+        else:
+            raise Exception("Invalid parameters: lflag: {}, rflag: {}, ldetect: {}, rdetect: {}".format(lflag, rflag, ldetect, rdetect))
+
+    # excluded edges
+    excluded_edges = etsv_left \
+        .inner_map_join(etsv_right, ["left:target"], rkeys = ["right:src"]) \
+        .transform(["left:ts_min", "right:ts_max"], lambda t1,t2: 1 if (int(t1) <= int(t2)) else 0, "ts:flag") \
+        .transform_inline(["left:ts_min", "right:ts_max"], funclib.utctimestamp_to_datetime_str) \
+        .reorder(["left:src", "left:target", "right:src", "right:target"], use_existing_order = False) \
+        .aggregate(["left:src", "left:target"], ["ts:flag"], [funclib.uniq_mkstr], collapse = False) \
+        .rename("ts:flag:uniq_mkstr", "left:ts:flag:uniq_mkstr") \
+        .aggregate(["right:src", "right:target"], ["ts:flag"], [funclib.uniq_mkstr], collapse = False) \
+        .rename("ts:flag:uniq_mkstr", "right:ts:flag:uniq_mkstr") \
+        .filter(["left:ts:flag:uniq_mkstr", "right:ts:flag:uniq_mkstr"], lambda t1, t2: t1 == "0" or t2 == "0") \
+        .select(["left:src", "left:target", "right:src", "right:target", "left:ts:flag:uniq_mkstr", "right:ts:flag:uniq_mkstr"]) \
+        .distinct() \
+        .transform(["left:src", "left:target"], lambda t1, t2: 1 if (t1 in retain_vertex_ids or t2 in retain_vertex_ids) else 0, "left:is_detect") \
+        .transform(["right:src", "right:target"], lambda t1, t2: 1 if (t1 in retain_vertex_ids or t2 in retain_vertex_ids) else 0, "right:is_detect") \
+        .transform(["left:ts:flag:uniq_mkstr", "right:ts:flag:uniq_mkstr", "left:is_detect", "right:is_detect"], lambda lflag, rflag, ldetect, rdetect:
+            __apply_time_order_based_filter_determine_side__(strict_time_ordering_flag, lflag, rflag, int(ldetect), int(rdetect)), "exclude_side") \
+        .is_nonempty_str("exclude_side") \
+        .transform(["left:src", "left:target", "right:src", "right:target", "exclude_side"], lambda lsrc, ltgt, rsrc, rtgt, eside:
+            (lsrc, ltgt) if (eside == "left") else (rsrc, rtgt), ["excluded:src", "excluded:target"]) \
+        .select(["excluded:src", "excluded:target"]) \
+        .distinct()
+
+    # apply exclusion
+    etsv_result = etsv \
+        .exclude_filter(["src", "target"], lambda src, tgt: (src, tgt) in excluded_edges.to_tuples(["excluded:src", "excluded:target"]))
+    vtsv_result = vtsv \
+        .values_in("node_id", lambda t: t in etsv_result.col_as_array_uniq("src") + etsv_result.col_as_array_uniq("target"))
+
+    # return
+    return vtsv_result, etsv_result
+

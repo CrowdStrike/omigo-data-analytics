@@ -333,16 +333,18 @@ class ThreadPoolTask:
         self.args = args
         self.kwargs = kwargs
 
-def run_with_thread_pool(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0):
+def run_with_thread_pool(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0, dmsg = ""):
+    dmsg = extend_inherit_message(dmsg, "run_with_thread_pool")
+
     # debug
-    info("run_with_thread_pool: num tasks: {}, num_par: {}".format(len(tasks), num_par))
+    info("{}: num tasks: {}, num_par: {}".format(dmsg, len(tasks), num_par))
 
     # define results
     results = []
 
     # check if this is to be run in multi threaded mode or not
     if (num_par == 0):
-        info("run_with_thread_pool: running in single threaded mode")
+        info("{}: running in single threaded mode".format(dmsg))
 
         # iterate
         for task in tasks:
@@ -375,10 +377,10 @@ def run_with_thread_pool(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0):
                 # check if all are done
                 if (done_count < len(future_results)):
                     # sleep for some additional time to allow notebook stop method to work
-                    info("run_with_thread_pool: futures not completed yet. Status: {} / {}. Sleeping for {} sec".format(done_count, len(future_results), wait_sec))
+                    info("{}: futures not completed yet. Status: {} / {}. Sleeping for {} sec".format(dmsg, done_count, len(future_results), wait_sec))
                     time.sleep(wait_sec)
                 else:
-                    info("run_with_thread_pool: finished")
+                    info("{}: run_with_thread_pool: finished".format(dmsg))
                     break
 
             # combine the results
@@ -387,7 +389,7 @@ def run_with_thread_pool(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0):
 
             # wait for post_wait_sec for mitigating eventual consistency
             if (post_wait_sec > 0):
-                info("run_with_thread_pool: sleeping for post_wait_sec: {}".format(post_wait_sec))
+                info("{}: sleeping for post_wait_sec: {}".format(dmsg, post_wait_sec))
                 time.sleep(post_wait_sec)
 
             # return
@@ -646,4 +648,10 @@ def split_str_to_arr(x):
         return []
     else:
         return list(filter(lambda t: t != "", x.split(",")))
+
+    # get string
+    result = " ".join(results)
+
+    # return
+    return result
 
