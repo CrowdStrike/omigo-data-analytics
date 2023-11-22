@@ -170,15 +170,22 @@ def has_valid_reflective_name(func):
 # get the hydra version of the class extension
 def get_hydra_class(class_ref, fallback_modules = None):
     # get the module and class name
-    module_name = inspect.getmodule(class_ref).__name__
+    module = inspect.getmodule(class_ref)
+    module_name = module.__name__
     class_name = class_ref.__name__
 
     # construct a new class name
     hydra_class_name = "Hydra{}".format(class_name)
 
+    # trace
+    utils.trace("get_hydra_class: class_name: {}, module_name: {}, hydra_class_name: {}".format(class_name, module_name, hydra_class_name))
+
     # check if the existing module has the hydra class present
-    for member in inspect.getmembers(module_name):
+    for member in inspect.getmembers(module):
         # the member is a tuple (name, reference)
+        utils.trace("get_hydra_class: member: {}".format(member[0]))
+
+        # compare
         if (member[0] == hydra_class_name):
             # found the hydra class
             utils.info_once("get_hydra_class: found hydra version for class: {}: {}.{}".format(class_ref.__name__, module_name, member[0]))

@@ -3,8 +3,7 @@ from datetime import timezone
 import json
 import os
 import time
-from omigo_core import tsv, utils, tsvutils, funclib
-from omigo_hydra import s3io_wrapper
+from omigo_core import tsv, utils, tsvutils, funclib, s3io_wrapper
 from omigo_hydra import cluster_data
 from omigo_hydra import cluster_class_reflection
 
@@ -450,6 +449,10 @@ class ClusterFileHandler(cluster_data.JsonSer):
         self.fs = s3io_wrapper.S3FSWrapper()
         
     def __makepath__(self, path):
+        # validation
+        if (path is None):
+            raise Exception("__makepath__: path is None")
+
         # remove any trailing '/'
         if (path.endswith("/")):
             path = path[0:-1]
@@ -457,6 +460,10 @@ class ClusterFileHandler(cluster_data.JsonSer):
         # remove any leading '/'
         if (path.startswith("/")):
             path = path[1:] 
+
+        # check for empty string
+        if (path == ""):
+            return self.base_path
 
         # return
         return "{}/{}".format(self.base_path, path)
@@ -516,51 +523,51 @@ class ClusterFileHandler(cluster_data.JsonSer):
         # return
         return sorted(results)
 
-    def remove_file(self, path, ignore_missing = False, verify = True, ignore_logging = False):
+    def remove_file(self, path, ignore_if_missing = False, verify = True, ignore_logging = False):
         if (ignore_logging == False):
             utils.info("remove_file : {}".format(path))
         else:
             utils.debug("remove_file : {}".format(path))
 
-        self.fs.delete_file_with_wait(self.__makepath__(path), ignore_missing = ignore_missing)
+        self.fs.delete_file_with_wait(self.__makepath__(path), ignore_if_missing = ignore_if_missing)
 
         # check for commit
         if (verify == True and self.file_not_exists_with_wait(path) == False):
             raise Exception("remove_file: path: {}, verify commit failed".format(path))
         
-    def remove_dir(self, path, ignore_missing = False, verify = True, ignore_logging = False):
+    def remove_dir(self, path, ignore_if_missing = False, verify = True, ignore_logging = False):
         # debug
         if (ignore_logging == False):
             utils.info("remove_dir  : {}".format(path))
         else:
             utils.debug("remove_dir  : {}".format(path))
 
-        # check for ignore_missing
+        # check for ignore_if_missing
         if (self.dir_exists(path) == False):
-            if (ignore_missing == True):
+            if (ignore_if_missing == True):
                 utils.warn("remove_dir: path missing: {}".format(path))
                 return
             else:
                 if (self.dir_exists_with_wait(path) == False):
                     raise Exception("remove_dir: path not found: {}".format(path))
         else:
-            self.fs.delete_dir_with_wait(self.__makepath__(path), ignore_missing = ignore_missing)
+            self.fs.delete_dir_with_wait(self.__makepath__(path), ignore_if_missing = ignore_if_missing)
 
         # check for commit
         if (verify == True and self.file_not_exists_with_wait(path) == False):
             raise Exception("remove_dir: path: {}, verify commit failed".format(path))
 
-    def remove_dir_recursive(self, path, ignore_missing = False, verify = True):
+    def remove_dir_recursive(self, path, ignore_if_missing = False, verify = True):
         # debug
         utils.info("remove_dir_r: {}".format(path))
 
-        # check for ignore_missing
+        # check for ignore_if_missing
         if (self.dir_exists(path) == False):
-            if (ignore_missing == True):
-                utils.warn("remove_dir_r: path missing: {}, ignore_missing: {}".format(path, ignore_missing))
+            if (ignore_if_missing == True):
+                utils.warn("remove_dir_r: path missing: {}, ignore_if_missing: {}".format(path, ignore_if_missing))
             else:
                if (self.dir_exists_with_wait(path) == False):
-                   raise Exception("remove_dir_r: path doesnt exist: {}, ignore_missing: {}".format(path, ignore_missing))
+                   raise Exception("remove_dir_r: path doesnt exist: {}, ignore_if_missing: {}".format(path, ignore_if_missing))
         else:
             # get all the files and directories
             listings = self.list_all_recursive(path)
@@ -586,7 +593,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
             # delete all the files first
             utils.info("remove_dir_r: files: {}".format(files))
             for f in files:
-                self.remove_file(f, ignore_missing = ignore_missing)
+                self.remove_file(f, ignore_if_missing = ignore_if_missing)
 
             # now delete all directories
             dirs = sorted(dirs, reverse = True)
@@ -594,10 +601,10 @@ class ClusterFileHandler(cluster_data.JsonSer):
             # now delete directories
             utils.info("remove_dir_r: dirs: {}".format(dirs))
             for d in dirs:
-                self.remove_dir(d, ignore_missing = ignore_missing)
+                self.remove_dir(d, ignore_if_missing = ignore_if_missing)
             
             # now remove the path
-            self.remove_dir(path, ignore_missing = ignore_missing)
+            self.remove_dir(path, ignore_if_missing = ignore_if_missing)
 
         # check for commit
         if (verify == True and self.file_not_exists_with_wait(path) == False):
