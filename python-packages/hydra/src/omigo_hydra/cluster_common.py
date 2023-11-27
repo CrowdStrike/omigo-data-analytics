@@ -14,13 +14,13 @@ from omigo_hydra import cluster_class_reflection
 if ("HYDRA_PATH" in os.environ.keys()):
     HYDRA_PATH = os.environ["HYDRA_PATH"]
 else:
-    raise Exception("Use HYDRA_PATH env variable")
+    utils.warn_once("Use HYDRA_PATH env variable")
 
 # global constants. TODO
 if ("HYDRA_LOCAL_PATH" in os.environ.keys()):
     HYDRA_LOCAL_PATH = os.environ["HYDRA_LOCAL_PATH"]
 else:
-    raise Exception("Use HYDRA_LOCAL_PATH env variable")
+    utils.warn_once("Use HYDRA_LOCAL_PATH env variable")
 
 # global clients
 HYDRA_CLIENT_ID = None 
