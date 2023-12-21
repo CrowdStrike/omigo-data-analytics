@@ -2,6 +2,7 @@
 
 import gzip
 import zipfile
+import time
 
 from omigo_core import s3_wrapper
 from omigo_core import utils
@@ -24,7 +25,25 @@ class FileWriter:
         if (self.output_file_name.startswith("s3://")):
             content = "".join(self.data)
             bucket_name, object_key = utils.split_s3_path(self.output_file_name)
+
+            # persist
             s3_wrapper.put_file_with_text_content(bucket_name, object_key, content, self.s3_region, self.aws_profile)
+
+            # TODO: wait for file to exist
+            utils.warn_once("FileWriter: this has wait incorporated. this needs to be merged with hydra")
+            num_attempts = 20
+            wait_sec = 0.1
+            for attempt in range(num_attempts):
+                if (s3_wrapper.check_file_exists(self.output_file_name) == True):
+                    return
+                else:
+                    utils.debug("FileWriter: file write doesnt finished yet. path: {}, waiting for {} seconds, attempt: {} / {}".format(self.output_file_name,
+                        wait_sec, attempt, num_attempts))
+                    time.sleep(wait_sec)
+
+            # error
+            if (s3_wrapper.check_file_exists(self.output_file_name) == False):
+                raise Exception("FileWriter: write failed after {} attempts: {}".format(num_attempts, self.output_file_name))
         else:
             # construct output file
             if (self.output_file_name.endswith(".gz")):

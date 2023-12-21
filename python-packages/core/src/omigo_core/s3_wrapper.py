@@ -178,9 +178,14 @@ def check_file_exists(path, s3_region = None, aws_profile = None):
         return False
 
 def put_file_content(bucket_name, object_key, barr, s3_region = None, aws_profile = None):
+    # get s3 references
     s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
     s3_bucket = get_s3_resource_cache(s3_region, aws_profile)
+
+    # get object
     obj = s3_bucket.Object(bucket_name, object_key)
+
+    # write
     obj.put(Body = barr)
 
 # TODO: Deprecated

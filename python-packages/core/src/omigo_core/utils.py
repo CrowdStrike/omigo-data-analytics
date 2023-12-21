@@ -655,3 +655,8 @@ def split_str_to_arr(x):
     # return
     return result
 
+def validate_nonnull_params(*args, **kwargs):
+    # iterate and throw exception if any of the parameters is None
+    for k in kwargs:
+        if (kwargs[k] is None):
+            raise Exception("Found None value in a mandatory parameter: {}".format(k))
