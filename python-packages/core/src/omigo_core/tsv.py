@@ -5000,7 +5000,7 @@ class TSV:
         return self
 
 def get_version():
-    return "v0.5.6-std_dev"
+    return "v0.6.3"
 
 def get_func_name(f):
     return f.__name__
