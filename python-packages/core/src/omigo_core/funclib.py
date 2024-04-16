@@ -55,6 +55,12 @@ def mean(vs):
 
 def std_dev(vs):
     vs = list([float(v) for v in vs])
+
+    # adding check for atleast 2 elements before calling the statistics package
+    if (len(vs) < 2):
+        return 0
+
+    # return
     return statistics.stdev(vs)
 
 def mkstr(vs):
