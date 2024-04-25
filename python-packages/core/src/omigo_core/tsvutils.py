@@ -390,8 +390,19 @@ def load_from_array_of_map(map_arr):
     # take a union of all keys
     keys = {}
 
-    # iterate over all maps
+    # copy map array and remove any white spaces
+    map_arr2 = []
     for mp in map_arr:
+        mp2 = {}
+        for k in mp.keys():
+            k2 = utils.strip_spl_white_spaces(k)
+            v2 = utils.strip_spl_white_spaces(mp[k])
+            mp2[k2] = v2
+
+        map_arr2.append(mp2)
+
+    # iterate over all maps
+    for mp in map_arr2:
         for k in mp.keys():
             keys[k] = 1
 
@@ -408,7 +419,7 @@ def load_from_array_of_map(map_arr):
 
     data = []
     # create data
-    for mp in map_arr:
+    for mp in map_arr2:
         fields = []
         for k in header_fields:
             v = ""
