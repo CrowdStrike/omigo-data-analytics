@@ -417,7 +417,12 @@ def error_and_raise_exception(msg, max_len = 2000):
     # raise exception
     raise Exception(msg)
 
+# Deprecated
 def strip_spl_white_spaces(v):
+    utils.warn_once("Deprecated: use replace_spl_white_spaces_with_space")
+    return replace_spl_white_spaces_with_space(v)
+
+def replace_spl_white_spaces_with_space(v):
     # check None
     if (v is None):
         return None
