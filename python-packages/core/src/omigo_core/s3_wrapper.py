@@ -240,12 +240,14 @@ def __get_all_s3_objects__(s3, **base_kwargs):
 
 # FIXME: This method is implemented using reverse engineering. Not so reliable
 # TODO: ignore_if_missing should be FALSE by default
+# FIXME: the prefix in aws s3 list command are hurting
 def get_directory_listing(path, filter_func = None, ignore_if_missing = False, skip_exist_check = False, s3_region = None, aws_profile = None):
     s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
     s3 = get_s3_client_cache(s3_region = s3_region, aws_profile = aws_profile)
 
     # split the path
     bucket_name, object_key = utils.split_s3_path(path)
+    # utils.info("get_directory_listing: bucket_name: {}, object_key: {}".format(bucket_name, object_key))
 
     filenames = []
     # validation
@@ -270,6 +272,14 @@ def get_directory_listing(path, filter_func = None, ignore_if_missing = False, s
         if (object_key == filename):
             continue
 
+        # check if there was a prefix match to a parallel directory or key at the same level. in that case ignore
+        if (filename.startswith(object_key)):
+            filename_remaining = filename[len(object_key):]
+
+            # check for valid prefix to a parallel directory
+            if (len(filename_remaining) > 0 and filename_remaining.startswith("/") == False):
+                continue
+
         # extract the key for remaining
         extracted_key = filename[len(object_key) + 1:]
         # utils.debug("extracted_key: {}".format(extracted_key))
@@ -293,7 +303,7 @@ def get_directory_listing(path, filter_func = None, ignore_if_missing = False, s
             filenames.append(path + "/" + base_filename)
 
     # print the number of object_keys found
-    utils.trace("Number of entries found in directory listing: {}: {}".format(path, count))
+    # utils.trace("Number of entries found in directory listing: {}: {}".format(path, count))
 
     # dedup
     filenames = sorted(list(set(filenames)))
