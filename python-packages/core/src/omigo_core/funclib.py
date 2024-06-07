@@ -316,6 +316,11 @@ def datetime_to_utctimestamp_millis(x):
 
 # TODO. better naming
 def datetime_to_utctimestamp(x):
+    # use datetime_to_utctimestamp_sec
+    utils.warn_once("datetime_to_utctimestamp: Deprecated. Use datetime_to_utctimestamp_sec instead")
+    return datetime_to_utctimestamp_sec(x)
+
+def datetime_to_utctimestamp_sec(x):
     # convert this to string first for failsafe
     x = str(x)
 
@@ -358,6 +363,7 @@ def datetime_to_utctimestamp(x):
     else:
         raise Exception("Unknown date format. Problem with UTC: '{}'".format(x))
 
+    
 # TODO: Converts seconds format only
 def utctimestamp_to_datetime(x):
     # use the string form
