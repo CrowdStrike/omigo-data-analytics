@@ -129,6 +129,7 @@ class S3FSWrapper:
     def __simplify_dir_list__(self, path, listings, include_reserved_files = False):
         path = self.__normalize_path__(path)
 
+        # get index to simplify output
         index = len(path)
         result1 = list(filter(lambda t: include_reserved_files == True or t.endswith("/" + RESERVED_HIDDEN_FILE) == False, listings))
         result2 = list(map(lambda t: t[index + 1:], result1))
@@ -137,7 +138,7 @@ class S3FSWrapper:
         return result2
 
     # TODO: this is a wait method and confusing
-    def ls(self, path, include_reserved_files = False, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS):
+    def ls(self, path, include_reserved_files = False, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS, skip_exist_check = False):
         path = self.__normalize_path__(path)
 
         # go into a wait loop for s3 to sync if the path is missing
@@ -146,21 +147,22 @@ class S3FSWrapper:
             time.sleep(wait_sec)
             return self.ls(path, include_reserved_files = include_reserved_files, wait_sec = wait_sec, attempts = attempts - 1)
 
-        listings = self.get_directory_listing(path)
+        # get directory listings
+        listings = self.get_directory_listing(path, skip_exist_check = skip_exist_check)
         return self.__simplify_dir_list__(path, listings, include_reserved_files = include_reserved_files)
 
 
-    def get_directory_listing(self, path):
+    def get_directory_listing(self, path, skip_exist_check = False):
         if (self.__is_s3__(path)):
-            return self.__s3_get_directory_listing__(path)
+            return self.__s3_get_directory_listing__(path, skip_exist_check = skip_exist_check)
         else:
-            return self.__local_get_directory_listing__(path)
+            return self.__local_get_directory_listing__(path, skip_exist_check = skip_exist_check)
 
-    def __s3_get_directory_listing__(self, path):
-        return s3_wrapper.get_directory_listing(path)
+    def __s3_get_directory_listing__(self, path, skip_exist_check = False):
+        return s3_wrapper.get_directory_listing(path, skip_exist_check = skip_exist_check)
 
-    def __local_get_directory_listing__(self, path): 
-        return local_fs_wrapper.get_directory_listing(path)
+    def __local_get_directory_listing__(self, path, skip_exist_check = False):
+        return local_fs_wrapper.get_directory_listing(path, skip_exist_check = skip_exist_check)
 
     def list_dirs(self, path):
         path = self.__normalize_path__(path)
@@ -181,40 +183,40 @@ class S3FSWrapper:
         return self.file_exists("{}/{}".format(path, RESERVED_HIDDEN_FILE))
 
     # TODO: confusing logic
-    def delete_file_with_wait(self, path, ignore_missing = True, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS):
+    def delete_file_with_wait(self, path, ignore_if_missing = True, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS):
         # check for ignore missing
         if (self.file_exists(path) == False):
-            if (ignore_missing == True):
-                utils.debug("delete_file_with_wait: path doesnt exist. ignore_missing: {}, returning".format(ignore_missing))
+            if (ignore_if_missing == True):
+                utils.debug("delete_file_with_wait: path doesnt exist. ignore_if_missing: {}, returning".format(ignore_if_missing))
                 return True
             else:
                 # check if attempts left
                 if (attempts > 0):
-                    utils.info("delete_file_with_wait: path: {} doesnt exists. ignore_missing is False. attempts: {}, sleep for : {} seconds".format(path, attempts, wait_sec))
+                    utils.info("delete_file_with_wait: path: {} doesnt exists. ignore_if_missing is False. attempts: {}, sleep for : {} seconds".format(path, attempts, wait_sec))
                     time.sleep(wait_sec)
-                    return self.delete_file_with_wait(path, ignore_missing = ignore_missing, wait_sec = wait_sec, attempts = attempts - 1)
+                    return self.delete_file_with_wait(path, ignore_if_missing = ignore_if_missing, wait_sec = wait_sec, attempts = attempts - 1)
                 else:
-                    utils.info("delete_file_with_wait: path doesnt exists. ignore_missing is False. attempts: over")
+                    utils.info("delete_file_with_wait: path doesnt exists. ignore_if_missing is False. attempts: over")
                     raise Exception("delete_file_with_wait: unable to delete file: {}".format(path))
         else:
             # file exists. call delete
-            self.delete_file(path, ignore_missing = ignore_missing)
+            self.delete_file(path, ignore_if_missing = ignore_if_missing)
 
             # verify that the file is deleted
             return self.file_not_exists_with_wait(path)
 
-    def delete_file(self, path, ignore_missing = None):
+    def delete_file(self, path, ignore_if_missing = False):
         if (self.__is_s3__(path)):
-            return self.__s3_delete_file__(path, ignore_missing = ignore_missing)
+            return self.__s3_delete_file__(path, ignore_if_missing = ignore_if_missing)
         else:
-            return self.__local_delete_file__(path, ignore_missing = ignore_missing)
+            return self.__local_delete_file__(path, ignore_if_missing = ignore_if_missing)
 
-    def __s3_delete_file__(self, path, ignore_missing = None):
-        return s3_wrapper.delete_file(path, fail_if_missing = ignore_missing)
+    def __s3_delete_file__(self, path, ignore_if_missing = False):
+        return s3_wrapper.delete_file(path, ignore_if_missing = ignore_if_missing)
 
-    def __local_delete_file__(self, path, ignore_missing = None):
+    def __local_delete_file__(self, path, ignore_if_missing = False):
         # delete file
-        local_fs_wrapper.delete_file(path, fail_if_missing = ignore_missing)
+        local_fs_wrapper.delete_file(path, fail_if_missing = ignore_if_missing)
 
         # check if this was the reserved file for directory
         if (path.endswith("/" + RESERVED_HIDDEN_FILE)):
@@ -222,15 +224,15 @@ class S3FSWrapper:
             dir_path = path[0:path.rindex("/")]
             local_fs_wrapper.delete_dir(dir_path)
 
-    def delete_dir_with_wait(self, path, ignore_missing = True, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS):
+    def delete_dir_with_wait(self, path, ignore_if_missing = True, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS):
         path = self.__normalize_path__(path)
         file_path = "{}/{}".format(path, RESERVED_HIDDEN_FILE)
 
         # check for existence 
         if (self.file_exists(file_path) == False):
-            if (ignore_missing == True):
-                utils.warn("delete_dir: path doesnt exist: {}, ignore_missing: {}".format(path, ignore_missing))
-                return
+            if (ignore_if_missing == True):
+                utils.warn("delete_dir: path doesnt exist: {}, ignore_if_missing: {}".format(path, ignore_if_missing))
+                return False
             else:
                 raise Exception("delete_dir: path doesnt exist: {}".format(path))
 
@@ -240,7 +242,7 @@ class S3FSWrapper:
             return False
 
         # delete the reserved file 
-        return self.delete_file_with_wait(file_path, ignore_missing = ignore_missing, wait_sec = wait_sec, attempts = attempts)
+        return self.delete_file_with_wait(file_path, ignore_if_missing = ignore_if_missing, wait_sec = wait_sec, attempts = attempts)
 
     def get_parent_directory(self, path):
         # normalize
@@ -300,7 +302,6 @@ class S3FSWrapper:
     def __s3_makedirs__(self, path, levels = None):
         # normalize path
         path = self.__normalize_path__(path)
-        parts = path.split("/")
 
         # split path into bucket and key
         bucket_name, object_key = utils.split_s3_path(path)
@@ -351,3 +352,51 @@ class S3FSWrapper:
     def __local_get_last_modified_timestamp__(self, path):
         return local_fs_wrapper.get_last_modified_timestamp(path)
 
+    def copy_leaf_dir(self, src_path, dest_path, overwrite = False, append = True):
+        # check if src exists
+        if (self.dir_exists(src_path) == False):
+            raise Exception("copy_leaf_dir: src_path doesnt exist: {}".format(src_path))
+
+        # # check if it is not a leaf dir
+        # if (len(self.list_dirs(dest_path)) > 0):
+        #     raise Exception("copy_leaf_dir: can not copy non leaf directories: {}".format(dest_path))
+
+        # check if dest exists
+        if (self.dir_exists(dest_path) == True):
+            # check if overwrite is False
+            if (overwrite == False):
+                raise Exception("copy_leaf_dir: dest_path exists and overwrite = False: {}".format(dest_path))
+
+        # create dir
+        self.create_dir(dest_path)
+
+        # gather the list of files to copy 
+        src_files = self.list_files(src_path)
+        dest_files = self.list_files(dest_path)
+
+        # check if there are files that will not be overwritten
+        files_not_in_src = list(set(dest_files).difference(set(src_files)))
+
+        # check for append flag
+        if (len(files_not_in_src) > 0):
+            if (append == False):
+                raise Exception("copy_leaf_dir: there are files in dest that will not be replaced and append = False: {}".format(files_not_in_src))
+            else:
+                # debug
+                utils.warn("copy_leaf_dir: there are files in dest that will not be replaced: {}".format(files_not_in_src))
+
+        # iterate
+        for f in src_files:
+            # debug
+            utils.info("copy_leaf_dir: copying: {}".format(f))
+
+            # if file exists in dest, warn
+            if (self.file_exists("{}/{}".format(dest_path, f))):
+                utils.warn("copy_leaf_dir: overwriting existing file: {}".format(f))
+
+            # copy
+            contents = self.read_file_contents_as_text("{}/{}".format(src_path, f))
+            self.write_text_file("{}/{}".format(dest_path, f), contents)
+
+    def list_leaf_dir(self, path, include_reserved_files = False, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS):
+        return self.ls(path, include_reserved_files = include_reserved_files, wait_sec = wait_sec, attempts = attempts, skip_exist_check = True)

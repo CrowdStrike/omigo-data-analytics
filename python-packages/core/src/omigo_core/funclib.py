@@ -4,6 +4,9 @@ import statistics
 import numpy as np
 from dateutil import parser
 import datetime
+from omigo_core import utils
+
+# TODO: mkstr variantgs needs to use *args
 
 def parse_image_file_base_name(x):
     if (len(x) <= 1):
@@ -47,7 +50,12 @@ def split_merge_uniq_mkstr(vs):
     return ",".join(sorted([str(x) for x in vs2]))
 
 def mean(vs):
+    vs = list([float(v) for v in vs])
     return statistics.mean(vs)
+
+def std_dev(vs):
+    vs = list([float(v) for v in vs])
+    return statistics.stdev(vs)
 
 def mkstr(vs):
     vs2 = list(filter(lambda t: len(t.strip()) > 0, [str(x) for x in vs]))
@@ -127,6 +135,46 @@ def maxstr(vs):
 
     return str(max_value)
 
+def minint_failsafe(vs):
+    if (vs is None or len(vs) == 0):
+        return "" 
+    else:
+        vs = list(filter(lambda t: t != "", vs))
+        if (len(vs) == 0):
+            return "" 
+        else:
+            return minint(vs) 
+
+def maxint_failsafe(vs):
+    if (vs is None or len(vs) == 0):
+        return "" 
+    else:
+        vs = list(filter(lambda t: t != "", vs))
+        if (len(vs) == 0):
+            return "" 
+        else:
+            return maxint(vs) 
+
+def minstr_failsafe(vs):
+    if (vs is None or len(vs) == 0):
+        return "" 
+    else:
+        vs = list(filter(lambda t: t != "", vs))
+        if (len(vs) == 0):
+            return "" 
+        else:
+            return minstr(vs) 
+            
+def maxstr_failsafe(vs):
+    if (vs is None or len(vs) == 0):
+        return "" 
+    else:
+        vs = list(filter(lambda t: t != "", vs))
+        if (len(vs) == 0):
+            return "" 
+        else:
+            return maxstr(vs)
+
 def sumint(vs):
     if (len(vs) == 0):
         return 0
@@ -194,13 +242,13 @@ def min_str(xs):
     return xs[0]
 
 def to2digit(x):
-    return "{:.2f}".format(x)
+    return "{:.2f}".format(float(x))
 
 def to4digit(x):
-    return "{:.4f}".format(x)
+    return "{:.4f}".format(float(x))
 
 def to6digit(x):
-    return "{:.6f}".format(x)
+    return "{:.6f}".format(float(x))
 
 def convert_prob_to_binary(x, split=0.5):
     if (x >= split):
@@ -227,6 +275,39 @@ def get_str_map_without_keys(mp, excluded_keys):
 
     return mp2
 
+def datetime_to_utctimestamp_millis(x):
+    # convert this to string first for failsafe
+    x = str(x)
+
+    # 1681202675933
+    if (len(str(x)) == 13 and str(x).isnumeric() == True):
+        # this looks like numeric timestamp in millis
+        return int(x)
+
+    # 1681202675.933
+    if (len(str(x)) == 14 and str(x).find(".") == 10 and str(x).isnumeric() == True):
+        # this looks like numeric timestamp in millis
+        return int(x)
+
+    # 2023-04-11T08:44:35.933Z
+    if (len(x) == 24 and x[19] == "." and x.endswith("Z")):
+        return int(float(parser.parse(x).timestamp() * 1000))
+
+    # 2023-04-15T15:05:16.175000Z
+    if (len(x) == 27 and x[19] == "." and x.endswith("Z")):
+        return int(float(parser.parse(x).timestamp() * 1000))
+
+    # 2023-04-11T08:44:35.933+00:00
+    if (len(x) == 29 and x[-6] == "+"):
+        return int(float(parser.parse(x).timestamp() * 1000))
+
+    # 2023-04-18T18:47:45 or 2023-04-18 18:47:45
+    if (len(x) == 19 and (x[10] == "T" or x[10] == " ")):
+        return int(float(parser.parse(x + "+00:00").timestamp() * 1000))
+
+    # this seems to be a timestamp with second precision.
+    return int(datetime_to_utctimestamp(x) * 1000)
+
 # TODO. better naming
 def datetime_to_utctimestamp(x):
     # convert this to string first for failsafe
@@ -249,35 +330,58 @@ def datetime_to_utctimestamp(x):
         # 2021-11-01T00:00:00.000000
         x = x + "Z"
         return int(parser.parse(x).timestamp())
-    elif (len(str(x)) == 10 and str(x).isnumeric() == True):
+    elif (len(x) == 27 and x[19] == "." and x.endswith("Z")):
+        # 2023-04-15T15:05:16.175000Z
+        return int(parser.parse(x).timestamp())
+    elif (len(x) == 29 and x[-6] == "+"):
+        # 2023-04-11T08:44:35.933+00:00
+        return int(parser.parse(x).timestamp())
+    elif (len(x) == 10 and str(x).isnumeric() == True):
         # this looks like a numeric timestamp
         return int(x)
-    elif (len(str(x)) == 13 and str(x).isnumeric() == True):
+    elif (len(x) == 13 and str(x).isnumeric() == True):
         # this looks like numeric timestamp in millis
         return int(int(x) / 1000)
+    elif (len(x) == 19 and (x[10] == "T" or x[10] == " ")):
+        # 2023-04-18T18:47:45 or 2023-04-18 18:47:45
+        return int(float(parser.parse(x + "+00:00").timestamp() * 1000))
     else:
         raise Exception("Unknown date format. Problem with UTC: '{}'".format(x))
 
 # TODO: Converts seconds format only
-def utctimestamp_to_datetime_str(x):
-    return utctimestamp_to_datetime(x).isoformat()
-
-# TODO: Converts seconds format only
 def utctimestamp_to_datetime(x):
-    # take it as int
-    x = int(x)
-    if (len(str(x)) == 10):
-        return datetime.datetime.utcfromtimestamp(x).replace(tzinfo = datetime.timezone.utc)
-    elif (len(str(x)) == 13):
-        return datetime.datetime.utcfromtimestamp(int(x)//1000).replace(tzinfo = datetime.timezone.utc)
+    # use the string form
+    x = str(x)
+    if (len(x) == 10 and x.isnumeric() == True):
+        return datetime.datetime.utcfromtimestamp(int(x)).replace(tzinfo = datetime.timezone.utc)
+    elif (len(x) == 13 and x.isnumeric() == True):
+        return datetime.datetime.utcfromtimestamp(int(x)/1000).replace(tzinfo = datetime.timezone.utc)
+    elif (len(x) > 10 and x.find(".") == 10 and utils.is_float(x)): 
+        return datetime.datetime.utcfromtimestamp(float(x)).replace(tzinfo = datetime.timezone.utc)
     else:
         raise Exception("Unknown timestamp format: {}".format(x))
+
+# TODO: Converts seconds format only
+def utctimestamp_millis_to_datetime(x):
+    return utctimestamp_to_datetime(x)
+
+# TODO: Converts seconds format only
+# Its utc so removed the last timezone
+def utctimestamp_to_datetime_str(x):
+    return utctimestamp_to_datetime(x).isoformat()[0:19]
+
+# Its utc so removed the last timezone
+def utctimestamp_millis_to_datetime_str(x):
+    return utctimestamp_to_datetime(x).isoformat()[0:23]
 
 def datetime_to_timestamp(x):
     raise Exception("Please use datetime_to_utctimestamp")
 
 def get_utctimestamp_sec():
     return int(datetime.datetime.now(datetime.timezone.utc).timestamp())
+
+def get_utctimestamp_millis():
+    return int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 1000)
 
 def datestr_to_datetime(x):
     return utctimestamp_to_datetime(datetime_to_utctimestamp(x))
@@ -448,3 +552,77 @@ def get_time_diffs(vs):
 
     # return
     return ",".join(result)
+
+def simple_map_to_url_encoded_col_names(cols, url_encoded_cols = None):
+    # create result
+    results = []
+    if (url_encoded_cols is not None):
+        # iterate
+        for c in cols:
+            if (c in url_encoded_cols):
+                results.append("{}:url_encoded".format(c))
+            else:
+                results.append(c)
+    else:
+        results = cols
+
+    # return
+    return results
+
+def map_to_url_encoded_col_names(cols, prefix = None, url_encoded_cols = None):
+    results = []
+
+    # iterate
+    for c in cols:
+        col = c
+        # check if there is prefix 
+        if (col.find(":") != -1):
+            col = col.split(":")[-1]
+
+        # assign
+        result = c
+
+        # handle url_encoded suffix
+        if (url_encoded_cols is not None and col in url_encoded_cols):
+            result = "{}:url_encoded".format(c)
+
+        # handle prefix
+        if (prefix is not None):
+            result = "{}:{}".format(prefix, result)
+
+        # append
+        results.append(result)
+
+    # return
+    return results
+
+def get_display_relative_time_str(v):
+    # compute units
+    days = v // 86400
+    hours = (v - (days * 86400)) // 3600
+    minutes = (v - (days * 86400 + hours * 3600)) // 60
+    seconds = v - (days * 86400 + hours * 3600 + minutes * 60)
+            
+    # compute display string
+    results = []
+    count = 0
+    max_display_values = 2
+    if (days > 0 and count < max_display_values):
+        results.append("{}d".format(days))
+        count = count + 1
+    if (hours > 0 and count < max_display_values):
+        results.append("{}h".format(hours))
+        count = count + 1
+    if (minutes > 0 and count < max_display_values):
+        results.append("{}m".format(minutes))
+        count = count + 1
+    if (seconds > 0 and count < max_display_values):
+        results.append("{}s".format(seconds))
+        count = count + 1
+
+    # get string
+    result = " ".join(results)
+
+    # return
+    return result
+

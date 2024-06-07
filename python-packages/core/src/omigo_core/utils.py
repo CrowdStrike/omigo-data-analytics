@@ -333,16 +333,18 @@ class ThreadPoolTask:
         self.args = args
         self.kwargs = kwargs
 
-def run_with_thread_pool(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0):
+def run_with_thread_pool(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0, dmsg = ""):
+    dmsg = extend_inherit_message(dmsg, "run_with_thread_pool")
+
     # debug
-    info("run_with_thread_pool: num tasks: {}, num_par: {}".format(len(tasks), num_par))
+    info("{}: num tasks: {}, num_par: {}".format(dmsg, len(tasks), num_par))
 
     # define results
     results = []
 
     # check if this is to be run in multi threaded mode or not
     if (num_par == 0):
-        info("run_with_thread_pool: running in single threaded mode")
+        info("{}: running in single threaded mode".format(dmsg))
 
         # iterate
         for task in tasks:
@@ -375,10 +377,10 @@ def run_with_thread_pool(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0):
                 # check if all are done
                 if (done_count < len(future_results)):
                     # sleep for some additional time to allow notebook stop method to work
-                    info("run_with_thread_pool: futures not completed yet. Status: {} / {}. Sleeping for {} sec".format(done_count, len(future_results), wait_sec))
+                    info("{}: futures not completed yet. Status: {} / {}. Sleeping for {} sec".format(dmsg, done_count, len(future_results), wait_sec))
                     time.sleep(wait_sec)
                 else:
-                    info("run_with_thread_pool: finished")
+                    info("{}: run_with_thread_pool: finished".format(dmsg))
                     break
 
             # combine the results
@@ -387,7 +389,7 @@ def run_with_thread_pool(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0):
 
             # wait for post_wait_sec for mitigating eventual consistency
             if (post_wait_sec > 0):
-                info("run_with_thread_pool: sleeping for post_wait_sec: {}".format(post_wait_sec))
+                info("{}: sleeping for post_wait_sec: {}".format(dmsg, post_wait_sec))
                 time.sleep(post_wait_sec)
 
             # return
@@ -523,3 +525,133 @@ def max_dmsg_str(dmsg, max_len = 300):
         return dmsg
     else:
         return "{}... ".format(dmsg[0:max_len - 4])
+
+def is_tsv_file_extension(path):
+    # check extensions
+    if (path.endswith(".tsv") or path.endswith(".tsv.gz") or path.endswith(".csv") or path.endswith(".csv.gz")):
+        return True
+    else:
+        return False
+
+# TODO: Move this to proper package 
+class CombGenerator:
+    def __init__(self):
+        self.comb1_cache = {}
+        self.comb2_cache = {}
+        self.comb3_cache = {}
+        self.comb4_cache = {}
+        self.comb5_cache = {}
+        self.comb6_cache = {}
+        self.comb7_cache = {}
+
+    def gen_comb1(self, n):
+        if (n not in self.comb1_cache.keys()):
+            self.comb1_cache[n] = self.__gen_comb1__(n)
+        return self.comb1_cache[n]
+
+    def gen_comb2(self, n):
+        if (n not in self.comb2_cache.keys()):
+            self.comb2_cache[n] = self.__gen_comb2__(n)
+        return self.comb2_cache[n]
+
+    def gen_comb3(self, n):
+        if (n not in self.comb3_cache.keys()):
+            self.comb3_cache[n] = self.__gen_comb3__(n)
+        return self.comb3_cache[n]
+
+    def gen_comb4(self, n):
+        if (n not in self.comb4_cache.keys()):
+            self.comb4_cache[n] = self.__gen_comb4__(n)
+        return self.comb4_cache[n]
+
+    def gen_comb5(self, n):
+        if (n not in self.comb5_cache.keys()):
+            self.comb5_cache[n] = self.__gen_comb5__(n)
+        return self.comb5_cache[n]
+
+    def gen_comb6(self, n):
+        if (n not in self.comb6_cache.keys()):
+            self.comb6_cache[n] = self.__gen_comb6__(n)
+        return self.comb6_cache[n]
+
+    def gen_comb7(self, n):
+        if (n not in self.comb7_cache.keys()):
+            self.comb7_cache[n] = self.__gen_comb7__(n)
+        return self.comb7_cache[n]
+
+    def __gen_comb1__(self, n):
+       result = []
+       for i1 in range(0, n):
+           result.append([i1])
+       return result
+    
+    def __gen_comb2__(self, n):
+       result = []
+       for i2 in range(0, n-1):
+           for i1 in range(i2+1, n):
+               result.append([i2, i1])
+       return result
+    
+    def __gen_comb3__(self, n):
+       result = []
+       for i3 in range(0, n-2):
+           for i2 in range(i3+1, n-1):
+               for i1 in range(i2+1, n):
+                   result.append([i3, i2, i1])
+       return result
+    
+    def __gen_comb4__(self, n):
+       result = []
+       for i4 in range(0, n-3):
+           for i3 in range(i4+1, n-2):
+               for i2 in range(i3+1, n-1):
+                   for i1 in range(i2+1, n):
+                       result.append([i4, i3, i2, i1])
+       return result
+    
+    def __gen_comb5__(self, n):
+       result = []
+       for i5 in range(0, n-4):
+           for i4 in range(i5+1, n-3):
+               for i3 in range(i4+1, n-2):
+                   for i2 in range(i3+1, n-1):
+                       for i1 in range(i2+1, n):
+                           result.append([i5, i4, i3, i2, i1])
+       return result
+    
+    def __gen_comb6__(self, n):
+       result = []
+       for i6 in range(0, n-5):
+           for i5 in range(i6+1, n-4):
+               for i4 in range(i5+1, n-3):
+                   for i3 in range(i4+1, n-2):
+                       for i2 in range(i3+1, n-1):
+                           for i1 in range(i2+1, n):
+                               result.append([i6, i5, i4, i3, i2, i1])
+       return result
+    
+    def __gen_comb7__(self, n):
+       result = []
+       for i7 in range(0, n-6):
+           for i6 in range(i7+1, n-5):
+               for i5 in range(i6+1, n-4):
+                   for i4 in range(i5+1, n-3):
+                       for i3 in range(i4+1, n-2):
+                           for i2 in range(i3+1, n-1):
+                               for i1 in range(i2+1, n):
+                                   result.append([i7, i6, i5, i4, i3, i2, i1])
+       return result
+
+
+def split_str_to_arr(x):
+    if (x is None or x == ""):
+        return []
+    else:
+        return list(filter(lambda t: t != "", x.split(",")))
+
+    # get string
+    result = " ".join(results)
+
+    # return
+    return result
+
