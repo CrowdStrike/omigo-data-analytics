@@ -613,6 +613,9 @@ def map_to_url_encoded_col_names(cols, prefix = None, url_encoded_cols = None):
     return results
 
 def get_display_relative_time_str(v):
+    # convert to int
+    v = int(v)
+
     # compute units
     days = v // 86400
     hours = (v - (days * 86400)) // 3600
