@@ -424,6 +424,9 @@ class TSV:
     def drop_empty_cols(self, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "drop_empty_cols")
 
+        # warn
+        utils.warn_once("{}: this api is very expensive".format(dmsg))
+
         # check for empty data
         if (self.num_rows() == 0):
             return self
@@ -2504,19 +2507,19 @@ class TSV:
 
         # validation
         if (old_prefix.endswith(":") == False):
-            old_prefix = prefix + ":"
+            old_prefix = new_prefix + ":"
 
         # check for matching cols
         for c in self.get_header_fields():
             if (c.startswith(old_prefix)):
                 new_col = "{}:{}".format(new_prefix, c[len(old_prefix):])
                 if (new_col in self.get_header_fields() or len(new_col) == 0):
-                    raise Exception("{}: Duplicate names. Cant do the prefix: {}, {}, {}".format(dmsg, c, new_col, str(self.get_header_fields())))
+                    raise Exception("{}: Duplicate names. Cant do the new prefix: {}, {}, {}".format(dmsg, c, new_col, str(self.get_header_fields())))
                 mp[c] = new_col
 
         # validation
         if (len(mp) == 0):
-            utils.raise_exception_or_warn("{}: prefix didnt match any of the columns: {}, {}".format(dmsg, prefix, str(self.get_header_fields())), ignore_if_missing)
+            utils.raise_exception_or_warn("{}: old prefix didnt match any of the columns: {}, {}".format(dmsg, old_prefix, str(self.get_header_fields())), ignore_if_missing)
 
         # return
         new_header = "\t".join(list([h if (h not in mp.keys()) else mp[h] for h in self.get_header_fields()]))
