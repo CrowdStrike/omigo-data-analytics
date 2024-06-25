@@ -465,7 +465,9 @@ def sort_func(vs):
 # TODO: the body has to be a json payload. This is because of some bug in python requests.post api
 # TODO: allow_redirects=False
 # TODO: https://docs.python-requests.org/en/latest/user/quickstart/: Check the WARNINGS
-def __read_base_url__(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 120, verify = True):
+def __read_base_url__(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 120, verify = True, dmsg = dmsg):
+    dmsg = utils.extend_inherit_message(dmsg, "__read_base_url__")
+
     # check for query params
     if (len(query_params) > 0):
         params_encoded_str = urlencode(query_params)
@@ -486,7 +488,7 @@ def __read_base_url__(url, query_params = {}, headers = {}, body = None, usernam
             try:
                 body_json = json.loads(body)
             except Exception as e:
-                utils.error("__read_base_url__: body is not well formed json: {}".format(body))
+                utils.error("{}: body is not well formed json: {}".format(dmsg, body))
                 raise e
 
             # make web service call
@@ -498,7 +500,7 @@ def __read_base_url__(url, query_params = {}, headers = {}, body = None, usernam
         # return response
         return response, None
     except exceptions.RequestException as e:
-        utils.warn("__read_base_url__: Found exception while making request: {}".format(e))
+        utils.warn("{}: Found exception while making request: {}".format(dmsg, e))
         return None, e
 
 # TODO: the semantics of this api are not clear

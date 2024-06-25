@@ -499,7 +499,9 @@ def is_text_content_col(col, text_columns):
 def resolve_default_parameter(name, value, default_value, msg):
     # check if prefix parameter is None
     if (value is None):
-        warn_once("{}: {} value is None. Using default value: {}".format(msg, name, str(default_value)))
+        default_value_display = str(default_value)
+        default_value_display = default_value_display if (len(default_value_display) < 30) else default_value_display[0:30] + "..."
+        warn_once("{}: {} value is None. Using default value: {}".format(msg, name, default_value_display))
         value = default_value
 
     # return
