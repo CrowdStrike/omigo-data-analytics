@@ -4767,7 +4767,7 @@ class TSV:
 
             # raise exception if some col or pattern is not found
             if (col_pattern_found == False):
-                utils.raise_exception_or_warn("Col name or pattern not found: {}, {}".format(col_pattern, str(self.get_header_fields())), ignore_if_missing)
+                utils.raise_exception_or_warn("Col name or pattern not found: {}, {}".format(col_pattern, str(self.get_header_fields())[0:100] + "..."), ignore_if_missing)
                 # dont return from here 
 
         # return

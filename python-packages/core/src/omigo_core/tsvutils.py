@@ -123,7 +123,7 @@ def merge_intersect(tsv_list, def_val_map = None):
     # print if number of unique headers are more than 1
     if (len(diff_cols) > 0):
         # debug
-        utils.debug("merge_intersect: missing columns: {}".format(str(diff_cols)))
+        utils.debug("merge_intersect: missing columns: {}".format(str(diff_cols)[0:100] + "..."))
 
         # check which of the columns among the diff have default values
         if (def_val_map is not None):
@@ -465,7 +465,7 @@ def sort_func(vs):
 # TODO: the body has to be a json payload. This is because of some bug in python requests.post api
 # TODO: allow_redirects=False
 # TODO: https://docs.python-requests.org/en/latest/user/quickstart/: Check the WARNINGS
-def __read_base_url__(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 120, verify = True, dmsg = dmsg):
+def __read_base_url__(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 120, verify = True, dmsg = ""):
     dmsg = utils.extend_inherit_message(dmsg, "__read_base_url__")
 
     # check for query params

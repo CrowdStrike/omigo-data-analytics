@@ -136,7 +136,7 @@ def __get_graphviz_data__(vertex_map, edges_maps, node_props, edge_props, vertex
     digraph_str = "\n".join(digraph_arr)
 
     # debug
-    utils.debug(digraph_str)
+    utils.trace(digraph_str[0:100] + "...")
 
     # return
     return digraph_str
@@ -173,7 +173,7 @@ def get_graphviz_data(vtsv, etsv, vertex_id_col, src_edge_col, dest_edge_col, ve
 
     # display warning for vertices that dont have edges
     if (len(no_edge_vertex_ids) > 0):
-        utils.warn("There are vertices that dont have edges: {}".format(no_edge_vertex_ids))
+        utils.warn("There are vertices that dont have edges: {}".format(str(no_edge_vertex_ids)[0:100] + "..."))
 
     # check if need to create proxy vertices for which there are edges but no vertex properties
     if (len(missing_edge_ids) > 0):
