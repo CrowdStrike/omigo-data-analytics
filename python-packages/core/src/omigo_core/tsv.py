@@ -2270,7 +2270,7 @@ class TSV:
         for h in self.get_header_fields():
             if (h in mp.keys()):
                 # append the value
-                new_fields.append(utils.strip_spl_white_spaces(mp[h]))
+                new_fields.append(utils.replace_spl_white_spaces_with_space(mp[h]))
             else:
                 # append default value
                 new_fields.append(default_val)
@@ -4094,7 +4094,7 @@ class TSV:
                     single_results[k + ":json:url_encoded"] = utils.url_encode(json.dumps(v))
                 # for each data type, there is a different kind of handling
                 elif (isinstance(v, (str, int, float))):
-                    v1 = utils.strip_spl_white_spaces(v)
+                    v1 = utils.replace_spl_white_spaces_with_space(v)
                     # check if encoding needs to be done
                     if (url_encoded_cols is not None and k in url_encoded_cols):
                         v1 = utils.url_encode(v1)
@@ -4116,7 +4116,7 @@ class TSV:
                             # treat primitive lists as single value or as yet another list
                             if (collapse_primitive_list == True):
                                 # do the encoding
-                                v1 = join_col.join(sorted(list([utils.strip_spl_white_spaces(t) for t in v])))
+                                v1 = join_col.join(sorted(list([utils.replace_spl_white_spaces_with_space(t) for t in v])))
                                 if (url_encoded_cols is not None and k in url_encoded_cols):
                                     v1 = utils.url_encode(v1)
                                     single_results[k + ":url_encoded"] = v1
@@ -4130,7 +4130,7 @@ class TSV:
                                     mp2_new = {}
 
                                     # do the encoding
-                                    v1 = utils.strip_spl_white_spaces(vt)
+                                    v1 = utils.replace_spl_white_spaces_with_space(vt)
                                     if (url_encoded_cols is not None and k in url_encoded_cols):
                                         v1 = utils.url_encode(v1)
                                         mp2_new[k + ":url_encoded"] = v1
