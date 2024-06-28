@@ -161,7 +161,7 @@ def get_graphviz_data(vtsv, etsv, vertex_id_col, src_edge_col, dest_edge_col, ve
             .group_count(vertex_id_col, "group") \
             .gt_int("group:count", 1) \
             .sort(vertex_id_col) \
-            .show(max_col_width = 1000)
+            .show(10, title = "Top 10 non unique vertex ids", max_col_width = 1000)
 
     # ideally all edge ids must be present in the vertices. fallback to create missing vertices
     missing_edge_ids = edge_ids.difference(vertex_ids)
