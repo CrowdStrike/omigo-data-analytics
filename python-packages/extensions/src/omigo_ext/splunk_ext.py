@@ -507,7 +507,7 @@ class SplunkSearch:
                     value2 = utils.url_encode(value2)
 
                 # assign to new map
-                result2[key2] = utils.strip_spl_white_spaces(str(value2))
+                result2[key2] = utils.replace_spl_white_spaces_with_space(str(value2))
 
             # append to array
             results2.append(result2)
