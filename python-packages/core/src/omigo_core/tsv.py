@@ -2188,12 +2188,12 @@ class TSV:
         cols2 = []
         for col in cols:
             if (col not in cols2):
-                cols2.append(c)
+                cols2.append(col)
             else:
                 utils.warn("{}: duplicate column names in input: {}".format(dmsg, col))
 
         # reassign
-        cols = cols
+        cols = cols2
 
         # check for prefix
         if (prefix is not None):
