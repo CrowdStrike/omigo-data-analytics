@@ -2184,6 +2184,17 @@ class TSV:
         # convert to array format
         cols = col_or_cols if (is_array == True) else [col_or_cols]
 
+        # do some deduping
+        cols2 = []
+        for col in cols:
+            if (col not in cols2):
+                cols2.append(c)
+            else:
+                utils.warn("{}: duplicate column names in input: {}".format(dmsg, col))
+
+        # reassign
+        cols = cols
+
         # check for prefix
         if (prefix is not None):
             cols = list(["{}:{}".format(prefix, t) for t in cols])
@@ -4986,14 +4997,6 @@ class TSV:
             .drop_cols(template_col, dmsg = dmsg) \
             .rename(output_col, template_col, dmsg = dmsg)
  
-    def enable_debug_mode(self):
-        utils.enable_debug_mode()
-        return self
-
-    def disable_debug_mode(self):
-        utils.disable_debug_mode()
-        return self
-
     def enable_info_mode(self):
         utils.enable_info_mode()
         return self
@@ -5002,6 +5005,22 @@ class TSV:
         utils.disable_info_mode()
         return self
 
+    def enable_debug_mode(self):
+        utils.enable_debug_mode()
+        return self
+
+    def disable_debug_mode(self):
+        utils.disable_debug_mode()
+        return self
+
+    def enable_trace_mode(self):
+        utils.enable_trace_mode()
+        return self
+        
+    def disable_trace_mode(self):
+        utils.disable_trace_mode()
+        return self
+        
 def get_version():
     return "v0.6.3"
 
