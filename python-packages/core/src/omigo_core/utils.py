@@ -675,8 +675,14 @@ def convert_ipv4_to_hex(ip):
 
     # split
     parts = ip.split('.')
-    hex_parts = hex(int(a[0])) + hex(int(a[1])) + hex(int(a[2])) + hex(int(a[3]))
+
+    # validation
+    if (len(parts) != 4):
+        raise Exception("convert_ipv4_to_hex: invalid input: {}".format(ip))
+
+    # convert
+    hex_parts = hex(int(parts[0])) + hex(int(parts[1])) + hex(int(parts[2])) + hex(int(parts[3]))
 
     # return
-    return hex_parts.replace('0x', '').upper()
+    return hex_parts.replace('0x', '')
 
