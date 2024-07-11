@@ -667,3 +667,16 @@ def validate_nonnull_params(*args, **kwargs):
     for k in kwargs:
         if (kwargs[k] is None):
             raise Exception("Found None value in a mandatory parameter: {}".format(k))
+
+def convert_ipv4_to_hex(ip):
+    # validation
+    if (ip is None or ip == ""):
+        raise Exception("convert_ipv4_to_hex: invalid input: {}".format(ip))
+
+    # split
+    parts = ip.split('.')
+    hex_parts = hex(int(a[0])) + hex(int(a[1])) + hex(int(a[2])) + hex(int(a[3]))
+
+    # return
+    return hex_parts.replace('0x', '').upper()
+

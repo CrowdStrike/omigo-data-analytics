@@ -2613,7 +2613,12 @@ class TSV:
 
         # check empty
         if (self.has_empty_header()):
-            utils.warn("sample_n: empty header tsv")
+            utils.warn("{}: empty header tsv".format(dmsg))
+            return self
+
+        # check for no data
+        if (self.num_rows() == 0):
+            utils.warn("{}: no data".format(dmsg))
             return self
 
         # validation
