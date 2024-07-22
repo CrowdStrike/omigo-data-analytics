@@ -468,9 +468,6 @@ class TSV:
     def drop_empty_rows(self, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "drop_empty_rows")
 
-        # warn
-        utils.warn_once("{}: this api is very expensive".format(dmsg))
-
         # check for empty data
         if (self.num_rows() == 0):
             return self
