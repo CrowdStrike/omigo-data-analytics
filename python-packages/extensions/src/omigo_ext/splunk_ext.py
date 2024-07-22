@@ -179,8 +179,8 @@ class SplunkSearch:
             return self.__execute_blocking_query__(query, start_time, end_time, url_encoded_cols, attempts_remaining, include_internal_fields, limit, num_par_on_limit, dmsg = dmsg)
 
     def __split_time_slots__(self, st, et, num_splits):
-        start_ts = funclib.datetime_to_utctimestamp(st)
-        end_ts = funclib.datetime_to_utctimestamp(et)
+        start_ts = funclib.datetime_to_utctimestamp_sec(st)
+        end_ts = funclib.datetime_to_utctimestamp_sec(et)
 
         # find time width
         width = int(math.floor((end_ts - start_ts) / num_splits))
@@ -568,7 +568,7 @@ class SplunkSearch:
             # return datetime.datetime.utcfromtimestamp(int(base_time.timestamp()) - diff_sec).replace(tzinfo = datetime.timezone.utc).isoformat()
             return funclib.utctimestamp_to_datetime_str(int(base_time.timestamp()) - diff_sec)
         else:
-            return funclib.utctimestamp_to_datetime_str(funclib.datetime_to_utctimestamp(x))
+            return funclib.utctimestamp_to_datetime_str(funclib.datetime_to_utctimestamp_sec(x))
 
 # class to do data manipulation on TSV
 class SplunkTSV(tsv.TSV):
