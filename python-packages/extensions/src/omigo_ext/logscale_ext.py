@@ -7,6 +7,7 @@ import json
 import time
 import math
 import traceback
+# !{sys.executable} -m pip install --upgrade humiolib
 from humiolib.HumioClient import HumioClient
 
 # Basic search class
