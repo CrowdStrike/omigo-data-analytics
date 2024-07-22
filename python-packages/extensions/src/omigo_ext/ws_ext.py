@@ -23,7 +23,7 @@ class WebServiceTSV(tsv.TSV):
             .parallelize(__call_web_service__, self.timeout_sec, self.verify, self.enable_opt_exec, self.dmsg, *args, **kwargs)
 
         # trace
-        utils.trace("call_web_service: num_rows: {}, size in bytes (MB): {}".format(xtsv.num_rows(), xtsv.size_in_gb()))
+        utils.trace("{}: num_rows: {}, size in bytes (MB): {}".format(self.dmsg, xtsv.num_rows(), xtsv.size_in_gb()))
 
         # return
         return xtsv
