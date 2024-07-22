@@ -95,7 +95,7 @@ class SplunkSearch:
 
     def set_time_range(self, start_time, end_time = None):
         # end time is optional
-        if (end_time == None):
+        if (end_time is None):
             end_time = "now"
 
         # resolve time strings
@@ -107,7 +107,7 @@ class SplunkSearch:
     
     def __get_filter_query__(self):
         # validation
-        if (self.start_time == None or self.end_time == None):
+        if (self.start_time is None or self.end_time is None):
             raise Exception("Missing mandatory parameters")
 
         # filters is mandatory
@@ -115,7 +115,7 @@ class SplunkSearch:
             raise Exception("Missing mandatory parameters")
 
         # check max results
-        if (self.max_results == None):
+        if (self.max_results is None):
             raise Exception("max_results is mandatory for adding some safe guards")
 
         # construct query
@@ -149,7 +149,7 @@ class SplunkSearch:
                 utils.warn_once("SplunkSearch: call_search(): for non aggregate queries, always use '| fields *' as the last operator otherwise splunk might return only limited columns: {}".format(query))
 
         # set default
-        if (end_time == None):
+        if (end_time is None):
             end_time = "now"
 
         # resolve time (probably again)

@@ -193,8 +193,10 @@ def sumfloat(vs):
     else:
         return sum([float(t) for t in vs])
 
+# TODO: The semantics are not clear
 def uniq_count(vs):
-    return len(set(vs))
+    vs2 = list(filter(lambda t: t.strip() != "", vs))
+    return len(set(vs2))
 
 def merge_uniq(vs):
     result = []
@@ -243,7 +245,7 @@ def max_str(xs):
     return xs[-1]
 
 def min_str(xs):
-    utils.warn_once("min_str is deprecated. Use maxstr")
+    utils.warn_once("min_str is deprecated. Use minstr")
     xs = sorted(xs)
     return xs[0]
 
