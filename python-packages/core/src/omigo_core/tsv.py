@@ -463,6 +463,28 @@ class TSV:
                     .drop_cols(empty_cols, dmsg = dmsg)
         else:
             return self
+
+    # method to remove empty rows
+    def drop_empty_rows(self, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "drop_empty_rows")
+
+        # warn
+        utils.warn_once("{}: this api is very expensive".format(dmsg))
+
+        # check for empty data
+        if (self.num_rows() == 0):
+            return self
+
+        # create new data
+        data = []
+
+        # iterate
+        for line in self.get_data():
+            if (line.strip() != ""):
+                data.append(line)
+
+        # return
+        return TSV(self.header, data)
  
     # TODO: the select_cols is not implemented properly
     def window_aggregate(self, win_col, agg_cols, agg_funcs, winsize, select_cols = None, sliding = False, collapse = True, suffix = "", precision = 2, dmsg = ""):
@@ -5077,7 +5099,25 @@ def from_df(df):
     return tsvutils.from_df(df)
 
 def from_maps(mps):
-    return tsvutils.load_from_array_of_map(mps)
+    # validation
+    if (len(mps) == 0):
+        raise Exception("from_maps: empty list")
+
+    # return tsvutils.load_from_array_of_map(mps)
+    xtsvs = []
+    for mp in mps:
+        header = "json"
+        data = [utils.url_encode(json.dumps(mp))]
+        xtsvs.append(TSV(header, data))
+
+    # use explode
+    result = merge_union(xtsvs) \
+        .explode_json("json", prefix = "json") \
+        .remove_prefix("json") \
+        .drop_cols_if_exists(["__json_index__", "__explode_json_index__"])
+
+    # return
+    return result 
 
 def enable_debug_mode():
     utils.enable_debug_mode()

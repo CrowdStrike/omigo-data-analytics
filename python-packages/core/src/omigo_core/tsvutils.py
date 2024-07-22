@@ -386,6 +386,7 @@ def load_from_files(filepaths, s3_region, aws_profile):
 
     return tsv.TSV(header, data)
 
+# TODO: use explode_json
 def load_from_array_of_map(map_arr):
     # take a union of all keys
     keys = {}
@@ -395,10 +396,27 @@ def load_from_array_of_map(map_arr):
     for mp in map_arr:
         mp2 = {}
         for k in mp.keys():
+            # for robustness remove any special white space characters
             k2 = utils.replace_spl_white_spaces_with_space(k)
-            v2 = utils.replace_spl_white_spaces_with_space(mp[k])
+            v = mp[k]
+
+            # check for the type of value
+            if (isinstance(v, (str))):
+                v2 = utils.replace_spl_white_spaces_with_space(v)
+            elif (isinstance(v, (list))):
+                v2 = ",".join(list([utils.replace_spl_white_spaces_with_space(t1) for t1 in v]))
+            elif (isinstance(v, (dict))):
+                v2 = utils.url_encode(json.dumps(v))
+                k2 = "{}:json_encoded".format(k2)
+            elif (isinstance(v, (int))):
+                v2 = str(v)
+            else:
+                v2 = str(v)
+
+            # assign to map 
             mp2[k2] = v2
 
+        # append
         map_arr2.append(mp2)
 
     # iterate over all maps
