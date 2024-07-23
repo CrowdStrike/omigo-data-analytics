@@ -314,7 +314,7 @@ def datetime_to_utctimestamp_millis(x):
         return int(float(parser.parse(x + "+00:00").timestamp() * 1000))
 
     # this seems to be a timestamp with second precision.
-    return int(datetime_to_utctimestamp(x) * 1000)
+    return int(datetime_to_utctimestamp_sec(x) * 1000)
 
 # TODO. better naming
 def datetime_to_utctimestamp(x):
@@ -402,7 +402,7 @@ def get_utctimestamp_millis():
     return int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 1000)
 
 def datestr_to_datetime(x):
-    return utctimestamp_to_datetime(datetime_to_utctimestamp(x))
+    return utctimestamp_to_datetime(datetime_to_utctimestamp_sec(x))
 
 def select_first_non_empty(*args, **kwargs):
     # variable name
@@ -543,7 +543,7 @@ def win32_timestamp_to_utctimestamp(x):
 
 def get_time_diffs(vs):
     # sort the input
-    vs = sorted(list([datetime_to_utctimestamp(t) for t in vs]))
+    vs = sorted(list([datetime_to_utctimestamp_sec(t) for t in vs]))
 
     # boundary condition
     if (len(vs) <= 1):
