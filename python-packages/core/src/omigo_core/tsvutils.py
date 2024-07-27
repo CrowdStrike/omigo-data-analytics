@@ -480,10 +480,18 @@ def sort_func(vs):
     vs_date = [v["date"] for v in vs_sorted]
     return [vs_date[0], ",".join(vs_date[1:])]
 
+# https://stackoverflow.com/questions/29931671/making-an-api-call-in-python-with-an-api-that-requires-a-bearer-token
+class BearerAuth(requests.auth.AuthBase):
+    def __init__(self, token):
+        self.token = token
+    def __call__(self, r):
+        r.headers["Authorization"] = "Bearer " + self.token
+        return r
+
 # TODO: the body has to be a json payload. This is because of some bug in python requests.post api
 # TODO: allow_redirects=False
 # TODO: https://docs.python-requests.org/en/latest/user/quickstart/: Check the WARNINGS
-def __read_base_url__(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 120, verify = True, dmsg = ""):
+def __read_base_url__(url, query_params = {}, headers = {}, body = None, username = None, password = None, api_token = None, timeout_sec = 120, verify = True, method = None, dmsg = ""):
     dmsg = utils.extend_inherit_message(dmsg, "__read_base_url__")
 
     # check for query params
@@ -491,16 +499,25 @@ def __read_base_url__(url, query_params = {}, headers = {}, body = None, usernam
         params_encoded_str = urlencode(query_params)
         url = "{}?{}".format(url, params_encoded_str)
 
+    # determine method
+    if (method is None):
+        if (body is None):
+            method = "GET"
+        else:
+            method = "POST"
+
     # exception handling
     try:
         # call the web service
-        if (body is None):
+        if (method == "GET"):
             # make web service call
             if (username is not None and password is not None):
                 response = requests.get(url, auth = (username, password), headers = headers, timeout = timeout_sec, verify = verify)
+            elif (api_token is not None):
+                response = requests.get(url, auth = BearerAuth(api_token), headers = headers, timeout = timeout_sec, verify = verify)
             else:
                 response = requests.get(url, headers = headers, timeout = timeout_sec, verify = verify)
-        else:
+        elif (method == "POST"):
             # do some validation on body
             body_json = None
             try:
@@ -512,8 +529,35 @@ def __read_base_url__(url, query_params = {}, headers = {}, body = None, usernam
             # make web service call
             if (username is not None and password is not None):
                 response = requests.post(url, auth = (username, password), json = body_json, headers = headers, timeout = timeout_sec, verify = verify)
+            elif (api_token is not None):
+                response = requests.post(url, auth = BearerAuth(api_token), json = body_json, headers = headers, timeout = timeout_sec, verify = verify)
             else:
                 response = requests.post(url, json = body_json, headers = headers, timeout = timeout_sec, verify = verify)
+        elif (method == "PUT"):
+            # do some validation on body
+            body_json = None
+            try:
+                body_json = json.loads(body)
+            except Exception as e:
+                utils.error("{}: body is not well formed json: {}".format(dmsg, body))
+                raise e
+
+            # make web service call
+            if (username is not None and password is not None):
+                response = requests.put(url, auth = (username, password), json = body_json, headers = headers, timeout = timeout_sec, verify = verify)
+            elif (api_token is not None):
+                response = requests.put(url, auth = BearerAuth(api_token), json = body_json, headers = headers, timeout = timeout_sec, verify = verify)
+            else:
+                response = requests.put(url, json = body_json, headers = headers, timeout = timeout_sec, verify = verify)
+        elif (method == "DELETE"):
+            if (username is not None and password is not None):
+                response = requests.delete(url, auth = (username, password), json = body_json, headers = headers, timeout = timeout_sec, verify = verify)
+            elif (api_token is not None):
+                response = requests.delete(url, auth = BearerAuth(api_token), json = body_json, headers = headers, timeout = timeout_sec, verify = verify)
+            else:
+                response = requests.delete(url, json = body_json, headers = headers, timeout = timeout_sec, verify = verify)
+        else:
+            raise Exception("Invalid method: {}".format(method))
 
         # return response
         return response, None
@@ -522,11 +566,12 @@ def __read_base_url__(url, query_params = {}, headers = {}, body = None, usernam
         return None, e
 
 # TODO: the semantics of this api are not clear
-def read_url_json(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 120, verify = True):
+def read_url_json(url, query_params = {}, headers = {}, body = None, username = None, password = None, api_token = None, timeout_sec = 120, verify = True, method = None):
     utils.warn("read_url_json will flatten json that comes out as list. This api is still under development")
 
     # read response
-    response_str, status_code, error_msg = read_url_response(url, query_params, headers, body = body, username = username, password = password, timeout_sec = timeout_sec, verify = verify)
+    response_str, status_code, error_msg = read_url_response(url, query_params, headers, body = body, username = username, password = password, api_token = api_token,
+        timeout_sec = timeout_sec, verify = verify, method = method)
 
     # construct header
     header = "\t".join(["json_encoded", "status_code", "error_msg"])
@@ -555,9 +600,11 @@ def read_url_json(url, query_params = {}, headers = {}, body = None, username = 
 
     return tsv.TSV(header, data).validate()
 
-def read_url_response(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 120, verify = True, num_retries = 1, retry_sleep_sec = 1):
+def read_url_response(url, query_params = {}, headers = {}, body = None, username = None, password = None, api_token = None, timeout_sec = 120, verify = True, method = None,
+    num_retries = 1, retry_sleep_sec = 1):
     # read response
-    response, resp_exception = __read_base_url__(url, query_params, headers, body = body, username = username, password = password, timeout_sec = timeout_sec, verify = verify)
+    response, resp_exception = __read_base_url__(url, query_params, headers, body = body, username = username, password = password, api_token = api_token,
+        timeout_sec = timeout_sec, verify = verify, method = method)
 
     # check for errors
     if (response is None):
@@ -572,8 +619,8 @@ def read_url_response(url, query_params = {}, headers = {}, body = None, usernam
                 utils.debug("read_url_response: url: {}, query_params: {}, got status: {}. Attempts remaining: {}. Retrying after sleeping for {} seconds".format(url, query_params,
                     response.status_code, num_retries, retry_sleep_sec))
                 time.sleep(retry_sleep_sec)
-                return read_url_response(url, query_params = query_params, headers = headers, body = body, username = username, password = password, timeout_sec = timeout_sec, verify = verify,
-                    num_retries = num_retries - 1, retry_sleep_sec = retry_sleep_sec * 2)
+                return read_url_response(url, query_params = query_params, headers = headers, body = body, username = username, password = password, api_token = api_token,
+                    timeout_sec = timeout_sec, verify = verify, method = method, num_retries = num_retries - 1, retry_sleep_sec = retry_sleep_sec * 2)
             else:
                 utils.debug("read_url_response: url: {}, getting 429 too many requests or 5XX error. Use num_retries parameter to for backoff and retry.".format(url))
                 return "", response.status_code, response.reason
@@ -620,12 +667,13 @@ def read_url_response(url, query_params = {}, headers = {}, body = None, usernam
     return response_str, response.status_code, ""
 
 # TODO: Deprecated
-def read_url(url, query_params = {}, headers = {}, sep = None, username = None, password = None, timeout_sec = 120, verify = True):
+def read_url(url, query_params = {}, headers = {}, sep = None, username = None, password = None, api_token = None, timeout_sec = 120, verify = True, method = None):
     utils.warn("This method name is deprecated. Use read_url_as_tsv instead")
-    return read_url_as_tsv(url, query_params = query_params, headers = headers, sep = sep, username = username, password = password, timeout_sec = timeout_sec, verify = verify)
+    return read_url_as_tsv(url, query_params = query_params, headers = headers, sep = sep, username = username, password = password, api_token = api_token,
+    timeout_sec = timeout_sec, verify = verify, method = method)
 
 # TODO: the compressed file handling should be done separately in a function
-def read_url_as_tsv(url, query_params = {}, headers = {}, sep = None, username = None, password = None, timeout_sec = 120, verify = True):
+def read_url_as_tsv(url, query_params = {}, headers = {}, sep = None, username = None, password = None, api_token = None, timeout_sec = 120, verify = True, method = None):
     # use the file extension as alternate way of detecting type of file
     # TODO: move the file type and extension detection to separate function
     file_type = None
@@ -647,7 +695,8 @@ def read_url_as_tsv(url, query_params = {}, headers = {}, sep = None, username =
         utils.warn("Unknown file extension. Doing best effort in content type detection")
 
     # read response
-    response_str, status_code, error_msg, = read_url_response(url, query_params, headers, body = None, username = username, password = password, timeout_sec = timeout_sec, verify = verify)
+    response_str, status_code, error_msg, = read_url_response(url, query_params, headers, body = None, username = username, password = password, api_token = api_token,
+        timeout_sec = timeout_sec, verify = verify, method = method)
 
     # check for status code
     if (status_code != 200):

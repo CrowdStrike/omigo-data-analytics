@@ -64,7 +64,7 @@ class LogScaleSearch:
         end_time_millis = funclib.datetime_to_utctimestamp_sec(end_time) * 1000
 
         # debug
-        utils.info("call_search: query: {}, start_time: {}, end_time: {}".format(query, start_time, end_time))
+        utils.debug("call_search: query: {}, start_time: {}, end_time: {}".format(query, start_time, end_time))
  
         # execute
         return self.__execute_query__(query, start_time_millis, end_time_millis, self.attempts, url_encoded_cols = url_encoded_cols,
@@ -78,11 +78,11 @@ class LogScaleSearch:
             return ""
 
     # inner method for calling query 
-    def __execute_query__(self, query, start_time, end_time, attempts_remaining, url_encoded_cols = None, limit = None, num_par_on_limit = 0, dmsg = ""):
+    def __execute_query__(self, query, start_time_millis, end_time_millis, attempts_remaining, url_encoded_cols = None, limit = None, num_par_on_limit = 0, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "LogScaleSearch: __execute_query__")
 
         # call and return
-        return self.__execute_normal_query__(query, start_time, end_time, url_encoded_cols, attempts_remaining, limit, num_par_on_limit, dmsg = dmsg)
+        return self.__execute_normal_query__(query, start_time_millis, end_time_millis, url_encoded_cols, attempts_remaining, limit, num_par_on_limit, dmsg = dmsg)
 
     def __split_time_slots_millis__(self, st_millis, et_millis, num_splits):
         # find time width
@@ -98,15 +98,16 @@ class LogScaleSearch:
         # return
         return slots
 
-    def __execute_normal_query__(self, query, start_time, end_time, url_encoded_cols, attempts_remaining, limit, num_par_on_limit, dmsg = ""):
+    def __execute_normal_query__(self, query, start_time_millis, end_time_millis, url_encoded_cols, attempts_remaining, limit, num_par_on_limit, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "LogScaleSearch: __execute_normal_query__")
 
         # execute query
         try:
             # submit job 
-            logscale_job = self.get_logscale_client().create_queryjob(query, start = start_time, end = end_time, is_live = False)
+            logscale_job = self.get_logscale_client().create_queryjob(query, start = start_time_millis, end = end_time_millis, is_live = False)
             job_id_trim = self.__get_logscale_job_display_id__(logscale_job)
-            utils.info("{}: LogScale Job submitted: {}, query: {}, start_time: {}, end_time: {}".format(utils.max_dmsg_str(dmsg), job_id_trim, query, start_time, end_time))
+            utils.info("{}: LogScale Job submitted: {}, query: {}, start_time: {}, end_time: {}".format(utils.max_dmsg_str(dmsg), job_id_trim, query,
+                funclib.utctimestamp_to_datetime_str(start_time_millis), funclib.utctimestamp_to_datetime_str(end_time_millis)))
 
             # create result
             events = []
@@ -149,7 +150,7 @@ class LogScaleSearch:
                         num_par_on_limit2 = 0
 
                         # split the time range into num_par_on_limit slots
-                        time_slots = self.__split_time_slots_millis__(start_time, end_time, num_par_on_limit)
+                        time_slots = self.__split_time_slots_millis__(start_time_millis, end_time_millis, num_par_on_limit)
                         xtsv_results = []
 
                         # iterate
@@ -169,7 +170,7 @@ class LogScaleSearch:
             # get the result if they were not returned by limit calls
             if (result is None):
                 # get the results
-                result = self.__parse_results__(logscale_job, events, query, start_time, end_time, url_encoded_cols)
+                result = self.__parse_results__(logscale_job, events, query, start_time_millis, end_time_millis, url_encoded_cols)
 
             # cancel the job
             # logscale_job.cancel()
@@ -195,11 +196,11 @@ class LogScaleSearch:
                     time.sleep(self.attempt_sleep_sec)
 
                 # return    
-                return self.__execute_normal_query__(query, start_time, end_time, url_encoded_cols, attempts_remaining - 1, limit,
+                return self.__execute_normal_query__(query, start_time_millis, end_time_millis, url_encoded_cols, attempts_remaining - 1, limit,
                     num_par_on_limit, dmsg = dmsg)
             else:
                 utils.error("{}: Exception: {}".format(utils.max_dmsg_str(dmsg), str(e)))
-                base_mp = self.__create_empty_results_map__(query, start_time, end_time)
+                base_mp = self.__create_empty_results_map__(query, start_time_millis, end_time_millis)
                 base_mp["__count__"] = "0"
                 base_mp["__error_msg__"] = str(e)
                 result = tsv.from_maps([base_mp])
@@ -210,14 +211,14 @@ class LogScaleSearch:
                 # return
                 return result
     
-    def __create_empty_results_map__(self, query, start_time, end_time):
+    def __create_empty_results_map__(self, query, start_time_millis, end_time_millis):
         # create base map
-        return {"__start_time__": start_time, "__end_time__": end_time, "__error_msg__": "", "__count__": "" }
+        return {"__start_time__": start_time_millis, "__end_time__": end_time_millis, "__error_msg__": "", "__count__": "" }
 
     # splunk returns lot of things. One of them is tag::eventtype which is excluded
-    def __parse_results__(self, logscale_job, events, query, start_time, end_time, url_encoded_cols):
+    def __parse_results__(self, logscale_job, events, query, start_time_millis, end_time_millis, url_encoded_cols):
         # create base map
-        base_mp = self.__create_empty_results_map__(query, start_time, end_time)
+        base_mp = self.__create_empty_results_map__(query, start_time_millis, end_time_millis)
 
         # check for empty results
         results_total = len(events)

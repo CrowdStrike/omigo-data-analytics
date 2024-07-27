@@ -365,8 +365,7 @@ def datetime_to_utctimestamp_sec(x):
     else:
         raise Exception("Unknown date format. Problem with UTC: '{}'".format(x))
 
-    
-# TODO: Converts seconds format only
+# TODO: Converts seconds format only. Even the original time in milliseconds will return seconds format
 def utctimestamp_to_datetime(x):
     # use the string form
     x = str(x)
@@ -388,9 +387,13 @@ def utctimestamp_millis_to_datetime(x):
 def utctimestamp_to_datetime_str(x):
     return utctimestamp_to_datetime(x).isoformat()[0:19]
 
-# Its utc so removed the last timezone
+# Its utc so removed the last timezone. TODO: Keep the UTC or Z
 def utctimestamp_millis_to_datetime_str(x):
-    return utctimestamp_to_datetime(x).isoformat()[0:23]
+    result = utctimestamp_to_datetime(x).isoformat()
+    if (result.endswith("UTC")):
+        return result[0:23]
+    else:
+        return result
 
 def datetime_to_timestamp(x):
     raise Exception("Please use datetime_to_utctimestamp")
