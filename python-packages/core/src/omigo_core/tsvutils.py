@@ -551,11 +551,11 @@ def __read_base_url__(url, query_params = {}, headers = {}, body = None, usernam
                 response = requests.put(url, json = body_json, headers = headers, timeout = timeout_sec, verify = verify)
         elif (method == "DELETE"):
             if (username is not None and password is not None):
-                response = requests.delete(url, auth = (username, password), json = body_json, headers = headers, timeout = timeout_sec, verify = verify)
+                response = requests.delete(url, auth = (username, password), headers = headers, timeout = timeout_sec, verify = verify)
             elif (api_token is not None):
-                response = requests.delete(url, auth = BearerAuth(api_token), json = body_json, headers = headers, timeout = timeout_sec, verify = verify)
+                response = requests.delete(url, auth = BearerAuth(api_token), headers = headers, timeout = timeout_sec, verify = verify)
             else:
-                response = requests.delete(url, json = body_json, headers = headers, timeout = timeout_sec, verify = verify)
+                response = requests.delete(url, headers = headers, timeout = timeout_sec, verify = verify)
         else:
             raise Exception("Invalid method: {}".format(method))
 
