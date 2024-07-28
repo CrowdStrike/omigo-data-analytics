@@ -136,7 +136,7 @@ class LogScaleSearch:
             exec_end_time = funclib.get_utctimestamp_sec()
 
             # debug
-            utils.info("{}: job_id: {}, query time taken: {} secs".format(dmsg, job_id_trim, (exec_end_time - exec_start_time)))
+            utils.info("{}: job_id: {}, event count: {}, query time taken: {} secs".format(dmsg, job_id_trim, len(events), (exec_end_time - exec_start_time)))
 
             # check if limit is defined
             result = None
