@@ -123,7 +123,7 @@ def merge_intersect(tsv_list, def_val_map = None):
     # print if number of unique headers are more than 1
     if (len(diff_cols) > 0):
         # debug
-        utils.debug("merge_intersect: missing columns: {}".format(str(diff_cols)))
+        utils.debug("merge_intersect: missing columns: {}".format(str(diff_cols)[0:100] + "..."))
 
         # check which of the columns among the diff have default values
         if (def_val_map is not None):
@@ -188,13 +188,13 @@ def merge_intersect(tsv_list, def_val_map = None):
             tsv_list2.append(t.select(same_cols))
         return merge(tsv_list2)
 
-def read(input_file_or_files, sep = None, def_val_map = None, s3_region = None, aws_profile = None):
+def read(input_file_or_files, sep = None, def_val_map = None, username = None, password = None, s3_region = None, aws_profile = None):
     input_files = __get_argument_as_array__(input_file_or_files)
     tsv_list = []
     for input_file in input_files:
         # check if it is a file or url
         if (input_file.startswith("http")):
-            tsv_list.append(read_url_as_tsv(input_file))
+            tsv_list.append(read_url_as_tsv(input_file, username = username, password = password))
         else:
             # read file content
             lines = file_paths_util.read_file_content_as_lines(input_file, s3_region, aws_profile)
@@ -386,12 +386,41 @@ def load_from_files(filepaths, s3_region, aws_profile):
 
     return tsv.TSV(header, data)
 
+# TODO: use explode_json
 def load_from_array_of_map(map_arr):
     # take a union of all keys
     keys = {}
 
-    # iterate over all maps
+    # copy map array and remove any white spaces
+    map_arr2 = []
     for mp in map_arr:
+        mp2 = {}
+        for k in mp.keys():
+            # for robustness remove any special white space characters
+            k2 = utils.replace_spl_white_spaces_with_space(k)
+            v = mp[k]
+
+            # check for the type of value
+            if (isinstance(v, (str))):
+                v2 = utils.replace_spl_white_spaces_with_space(v)
+            elif (isinstance(v, (list))):
+                v2 = ",".join(list([utils.replace_spl_white_spaces_with_space(t1) for t1 in v]))
+            elif (isinstance(v, (dict))):
+                v2 = utils.url_encode(json.dumps(v))
+                k2 = "{}:json_encoded".format(k2)
+            elif (isinstance(v, (int))):
+                v2 = str(v)
+            else:
+                v2 = str(v)
+
+            # assign to map 
+            mp2[k2] = v2
+
+        # append
+        map_arr2.append(mp2)
+
+    # iterate over all maps
+    for mp in map_arr2:
         for k in mp.keys():
             keys[k] = 1
 
@@ -408,13 +437,13 @@ def load_from_array_of_map(map_arr):
 
     data = []
     # create data
-    for mp in map_arr:
+    for mp in map_arr2:
         fields = []
         for k in header_fields:
             v = ""
             if (k in mp.keys()):
                 # read as string and replace any newline or tab characters
-                v = utils.strip_spl_white_spaces(mp[k])
+                v = utils.replace_spl_white_spaces_with_space(mp[k])
 
             # append
             fields.append(v)
@@ -451,51 +480,98 @@ def sort_func(vs):
     vs_date = [v["date"] for v in vs_sorted]
     return [vs_date[0], ",".join(vs_date[1:])]
 
+# https://stackoverflow.com/questions/29931671/making-an-api-call-in-python-with-an-api-that-requires-a-bearer-token
+class BearerAuth(requests.auth.AuthBase):
+    def __init__(self, token):
+        self.token = token
+    def __call__(self, r):
+        r.headers["Authorization"] = "Bearer " + self.token
+        return r
+
 # TODO: the body has to be a json payload. This is because of some bug in python requests.post api
 # TODO: allow_redirects=False
 # TODO: https://docs.python-requests.org/en/latest/user/quickstart/: Check the WARNINGS
-def __read_base_url__(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 5, verify = True):
+def __read_base_url__(url, query_params = {}, headers = {}, body = None, username = None, password = None, api_token = None, timeout_sec = 120, verify = True, method = None, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "__read_base_url__")
+
     # check for query params
     if (len(query_params) > 0):
         params_encoded_str = urlencode(query_params)
         url = "{}?{}".format(url, params_encoded_str)
 
+    # determine method
+    if (method is None):
+        if (body is None):
+            method = "GET"
+        else:
+            method = "POST"
+
     # exception handling
     try:
         # call the web service
-        if (body is None):
+        if (method == "GET"):
             # make web service call
             if (username is not None and password is not None):
                 response = requests.get(url, auth = (username, password), headers = headers, timeout = timeout_sec, verify = verify)
+            elif (api_token is not None):
+                response = requests.get(url, auth = BearerAuth(api_token), headers = headers, timeout = timeout_sec, verify = verify)
             else:
                 response = requests.get(url, headers = headers, timeout = timeout_sec, verify = verify)
-        else:
+        elif (method == "POST"):
             # do some validation on body
             body_json = None
             try:
                 body_json = json.loads(body)
             except Exception as e:
-                utils.error("__read_base_url__: body is not well formed json: {}".format(body))
+                utils.error("{}: body is not well formed json: {}".format(dmsg, body))
                 raise e
 
             # make web service call
             if (username is not None and password is not None):
                 response = requests.post(url, auth = (username, password), json = body_json, headers = headers, timeout = timeout_sec, verify = verify)
+            elif (api_token is not None):
+                response = requests.post(url, auth = BearerAuth(api_token), json = body_json, headers = headers, timeout = timeout_sec, verify = verify)
             else:
                 response = requests.post(url, json = body_json, headers = headers, timeout = timeout_sec, verify = verify)
+        elif (method == "PUT"):
+            # do some validation on body
+            body_json = None
+            try:
+                body_json = json.loads(body)
+            except Exception as e:
+                utils.error("{}: body is not well formed json: {}".format(dmsg, body))
+                raise e
+
+            # make web service call
+            if (username is not None and password is not None):
+                response = requests.put(url, auth = (username, password), json = body_json, headers = headers, timeout = timeout_sec, verify = verify)
+            elif (api_token is not None):
+                response = requests.put(url, auth = BearerAuth(api_token), json = body_json, headers = headers, timeout = timeout_sec, verify = verify)
+            else:
+                response = requests.put(url, json = body_json, headers = headers, timeout = timeout_sec, verify = verify)
+        elif (method == "DELETE"):
+            if (username is not None and password is not None):
+                response = requests.delete(url, auth = (username, password), headers = headers, timeout = timeout_sec, verify = verify)
+            elif (api_token is not None):
+                response = requests.delete(url, auth = BearerAuth(api_token), headers = headers, timeout = timeout_sec, verify = verify)
+            else:
+                response = requests.delete(url, headers = headers, timeout = timeout_sec, verify = verify)
+        else:
+            raise Exception("Invalid method: {}".format(method))
 
         # return response
         return response, None
     except exceptions.RequestException as e:
-        utils.warn("__read_base_url__: Found exception while making request: {}".format(e))
+        utils.warn("{}: Found exception while making request: {}".format(dmsg, e))
         return None, e
 
 # TODO: the semantics of this api are not clear
-def read_url_json(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 5, verify = True):
+def read_url_json(url, query_params = {}, headers = {}, body = None, username = None, password = None, api_token = None, timeout_sec = 120, verify = True, method = None):
     utils.warn("read_url_json will flatten json that comes out as list. This api is still under development")
 
     # read response
-    response_str, status_code, error_msg = read_url_response(url, query_params, headers, body = body, username = username, password = password, timeout_sec = timeout_sec, verify = verify)
+    response_str, status_code, error_msg = read_url_response(url, query_params, headers, body = body, username = username, password = password, api_token = api_token,
+        timeout_sec = timeout_sec, verify = verify, method = method)
 
     # construct header
     header = "\t".join(["json_encoded", "status_code", "error_msg"])
@@ -524,9 +600,11 @@ def read_url_json(url, query_params = {}, headers = {}, body = None, username = 
 
     return tsv.TSV(header, data).validate()
 
-def read_url_response(url, query_params = {}, headers = {}, body = None, username = None, password = None, timeout_sec = 30, verify = True, num_retries = 1, retry_sleep_sec = 1):
+def read_url_response(url, query_params = {}, headers = {}, body = None, username = None, password = None, api_token = None, timeout_sec = 120, verify = True, method = None,
+    num_retries = 1, retry_sleep_sec = 1):
     # read response
-    response, resp_exception = __read_base_url__(url, query_params, headers, body = body, username = username, password = password, timeout_sec = timeout_sec, verify = verify)
+    response, resp_exception = __read_base_url__(url, query_params, headers, body = body, username = username, password = password, api_token = api_token,
+        timeout_sec = timeout_sec, verify = verify, method = method)
 
     # check for errors
     if (response is None):
@@ -541,8 +619,8 @@ def read_url_response(url, query_params = {}, headers = {}, body = None, usernam
                 utils.debug("read_url_response: url: {}, query_params: {}, got status: {}. Attempts remaining: {}. Retrying after sleeping for {} seconds".format(url, query_params,
                     response.status_code, num_retries, retry_sleep_sec))
                 time.sleep(retry_sleep_sec)
-                return read_url_response(url, query_params = query_params, headers = headers, body = body, username = username, password = password, timeout_sec = timeout_sec, verify = verify,
-                    num_retries = num_retries - 1, retry_sleep_sec = retry_sleep_sec * 2)
+                return read_url_response(url, query_params = query_params, headers = headers, body = body, username = username, password = password, api_token = api_token,
+                    timeout_sec = timeout_sec, verify = verify, method = method, num_retries = num_retries - 1, retry_sleep_sec = retry_sleep_sec * 2)
             else:
                 utils.debug("read_url_response: url: {}, getting 429 too many requests or 5XX error. Use num_retries parameter to for backoff and retry.".format(url))
                 return "", response.status_code, response.reason
@@ -589,12 +667,13 @@ def read_url_response(url, query_params = {}, headers = {}, body = None, usernam
     return response_str, response.status_code, ""
 
 # TODO: Deprecated
-def read_url(url, query_params = {}, headers = {}, sep = None, username = None, password = None, timeout_sec = 30, verify = True):
+def read_url(url, query_params = {}, headers = {}, sep = None, username = None, password = None, api_token = None, timeout_sec = 120, verify = True, method = None):
     utils.warn("This method name is deprecated. Use read_url_as_tsv instead")
-    return read_url_as_tsv(url, query_params = query_params, headers = headers, sep = sep, username = username, password = password, timeout_sec = timeout_sec, verify = verify)
+    return read_url_as_tsv(url, query_params = query_params, headers = headers, sep = sep, username = username, password = password, api_token = api_token,
+    timeout_sec = timeout_sec, verify = verify, method = method)
 
 # TODO: the compressed file handling should be done separately in a function
-def read_url_as_tsv(url, query_params = {}, headers = {}, sep = None, username = None, password = None, timeout_sec = 30, verify = True):
+def read_url_as_tsv(url, query_params = {}, headers = {}, sep = None, username = None, password = None, api_token = None, timeout_sec = 120, verify = True, method = None):
     # use the file extension as alternate way of detecting type of file
     # TODO: move the file type and extension detection to separate function
     file_type = None
@@ -616,7 +695,8 @@ def read_url_as_tsv(url, query_params = {}, headers = {}, sep = None, username =
         utils.warn("Unknown file extension. Doing best effort in content type detection")
 
     # read response
-    response_str, status_code, error_msg, = read_url_response(url, query_params, headers, body = None, username = username, password = password, timeout_sec = timeout_sec, verify = verify)
+    response_str, status_code, error_msg, = read_url_response(url, query_params, headers, body = None, username = username, password = password, api_token = api_token,
+        timeout_sec = timeout_sec, verify = verify, method = method)
 
     # check for status code
     if (status_code != 200):
@@ -702,6 +782,9 @@ def __get_argument_as_array__(arg_or_args):
         return [arg_or_args]
     else:
         return arg_or_args
+
+def read_file_content_as_text(path):
+    return s3io_wrapper.read_file_content_as_text(path)
 
 # refactored methods
 def scan_by_datetime_range(*args, **kwargs):

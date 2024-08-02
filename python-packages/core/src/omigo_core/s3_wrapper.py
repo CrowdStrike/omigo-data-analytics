@@ -32,15 +32,15 @@ def get_s3_session(s3_region = None, aws_profile = None):
     s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
 
     # show the s3 settings
-    # utils.info_once("get_s3_session: s3_region: {}, aws_profile: {}".format(s3_region, aws_profile))
+    utils.info_once("get_s3_session: s3_region: {}, aws_profile: {}".format(s3_region, aws_profile))
 
     # generate s3_session
     if (s3_region is not None and aws_profile is not None):
         session = boto3.session.Session(region_name = s3_region, profile_name = aws_profile)
-        # utils.debug("get_s3_session: s3_region: {}, aws_profile: {}, session: {}".format(s3_region, aws_profile, session))
+        utils.debug("get_s3_session: s3_region: {}, aws_profile: {}, session: {}".format(s3_region, aws_profile, session))
     else:
         session = boto3.session.Session(region_name = s3_region, profile_name = aws_profile)
-        # utils.debug("get_s3_session: no s3_region or aws_profile, session: {}".format(session))
+        utils.debug("get_s3_session: no s3_region or aws_profile, session: {}".format(session))
 
     # return
     return session
@@ -154,7 +154,7 @@ def check_path_exists(path, s3_region = None, aws_profile = None):
 
     # show the s3 settings
     utils.info_once("check_path_exists: s3_region: {}, aws_profile: {}".format(s3_region, aws_profile))
-    utils.info_once("check_path_exists: s3_region: {}, aws_profile: {}, s3: {}".format(s3_region, aws_profile, s3))
+    # utils.info_once("check_path_exists: s3_region: {}, aws_profile: {}, s3: {}".format(s3_region, aws_profile, s3))
 
     results = s3.list_objects(Bucket = bucket_name, Prefix = object_key)
     return "Contents" in results
@@ -173,14 +173,19 @@ def check_file_exists(path, s3_region = None, aws_profile = None):
         else:
             return False
     except Exception as e:
-        utils.error("check_file_exists: path: {}, s3_region: {}, aws_profile: {}, exception: {}".format(path, s3_region, aws_profile, e))
-        utils.error("check_file_exists: StackTrace: {}".format(traceback.format_exc()))
+        # utils.error("check_file_exists: path: {}, s3_region: {}, aws_profile: {}, exception: {}".format(path, s3_region, aws_profile, e))
+        # utils.error("check_file_exists: StackTrace: {}".format(traceback.format_exc()))
         return False
 
 def put_file_content(bucket_name, object_key, barr, s3_region = None, aws_profile = None):
+    # get s3 references
     s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
     s3_bucket = get_s3_resource_cache(s3_region, aws_profile)
+
+    # get object
     obj = s3_bucket.Object(bucket_name, object_key)
+
+    # write
     obj.put(Body = barr)
 
 # TODO: Deprecated
@@ -235,12 +240,14 @@ def __get_all_s3_objects__(s3, **base_kwargs):
 
 # FIXME: This method is implemented using reverse engineering. Not so reliable
 # TODO: ignore_if_missing should be FALSE by default
+# FIXME: the prefix in aws s3 list command are hurting
 def get_directory_listing(path, filter_func = None, ignore_if_missing = False, skip_exist_check = False, s3_region = None, aws_profile = None):
     s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
     s3 = get_s3_client_cache(s3_region = s3_region, aws_profile = aws_profile)
 
     # split the path
     bucket_name, object_key = utils.split_s3_path(path)
+    # utils.info("get_directory_listing: bucket_name: {}, object_key: {}".format(bucket_name, object_key))
 
     filenames = []
     # validation
@@ -265,6 +272,14 @@ def get_directory_listing(path, filter_func = None, ignore_if_missing = False, s
         if (object_key == filename):
             continue
 
+        # check if there was a prefix match to a parallel directory or key at the same level. in that case ignore
+        if (filename.startswith(object_key)):
+            filename_remaining = filename[len(object_key):]
+
+            # check for valid prefix to a parallel directory
+            if (len(filename_remaining) > 0 and filename_remaining.startswith("/") == False):
+                continue
+
         # extract the key for remaining
         extracted_key = filename[len(object_key) + 1:]
         # utils.debug("extracted_key: {}".format(extracted_key))
@@ -288,7 +303,7 @@ def get_directory_listing(path, filter_func = None, ignore_if_missing = False, s
             filenames.append(path + "/" + base_filename)
 
     # print the number of object_keys found
-    utils.trace("Number of entries found in directory listing: {}: {}".format(path, count))
+    # utils.trace("Number of entries found in directory listing: {}: {}".format(path, count))
 
     # dedup
     filenames = sorted(list(set(filenames)))

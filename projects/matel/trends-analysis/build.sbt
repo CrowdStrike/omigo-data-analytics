@@ -1,8 +1,8 @@
-name := "Statistical Trends Analysis in Spark"
+name := "statistical-trends-analysis"
 
 version := "0.1"
 
-scalaVersion := "3.2.2"
+scalaVersion := "2.12.2"
 
 val sparkVersion = "3.2.0"
 
@@ -17,12 +17,17 @@ javacOptions ++= Seq("-source", "1.8", "-target", "1.8")
 // addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.14.10")
 
 libraryDependencies ++= Seq(
-  ("org.apache.spark" %% "spark-sql" % "3.2.0" % "provided").cross(CrossVersion.for3Use2_13)
+  ("org.apache.spark" %% "spark-core" % "3.2.0" % "provided").cross(CrossVersion.for3Use2_13),
+  ("org.apache.spark" %% "spark-sql" % "3.2.0" % "provided").cross(CrossVersion.for3Use2_13),
+  ("org.apache.spark" %% "spark-hive" % "3.2.0" % "provided").cross(CrossVersion.for3Use2_13)
+  // ("org.apache.spark" %% "spark-sql" % "3.2.0" % "provided").cross(CrossVersion.for3Use2_13)
 )
 
 libraryDependencies ++= Seq(
   "com.facebook.presto" % "presto-jdbc" % "0.156",
-  "com.fasterxml.jackson.core" % "jackson-databind" % "2.10.0" 
+  "com.fasterxml.jackson.core" % "jackson-databind" % "2.10.0", 
+  "joda-time" % "joda-time" % "2.10.13",
+  "omigo" % "lokki" % "1.0-SNAPSHOT"
 )
 
 libraryDependencies ++= Seq(
