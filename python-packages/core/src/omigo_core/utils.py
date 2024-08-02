@@ -417,7 +417,12 @@ def error_and_raise_exception(msg, max_len = 2000):
     # raise exception
     raise Exception(msg)
 
+# Deprecated
 def strip_spl_white_spaces(v):
+    warn_once("Deprecated: Instead of strip_spl_white_spaces use replace_spl_white_spaces_with_space")
+    return replace_spl_white_spaces_with_space(v)
+
+def replace_spl_white_spaces_with_space(v):
     # check None
     if (v is None):
         return None
@@ -494,7 +499,9 @@ def is_text_content_col(col, text_columns):
 def resolve_default_parameter(name, value, default_value, msg):
     # check if prefix parameter is None
     if (value is None):
-        warn_once("{}: {} value is None. Using default value: {}".format(msg, name, default_value))
+        default_value_display = str(default_value)
+        default_value_display = default_value_display if (len(default_value_display) < 30) else default_value_display[0:30] + "..."
+        warn_once("{}: {} value is None. Using default value: {}".format(msg, name, default_value_display))
         value = default_value
 
     # return
@@ -660,3 +667,22 @@ def validate_nonnull_params(*args, **kwargs):
     for k in kwargs:
         if (kwargs[k] is None):
             raise Exception("Found None value in a mandatory parameter: {}".format(k))
+
+def convert_ipv4_to_hex(ip):
+    # validation
+    if (ip is None or ip == ""):
+        raise Exception("convert_ipv4_to_hex: invalid input: {}".format(ip))
+
+    # split
+    parts = ip.split('.')
+
+    # validation
+    if (len(parts) != 4):
+        raise Exception("convert_ipv4_to_hex: invalid input: {}".format(ip))
+
+    # convert
+    hex_parts = hex(int(parts[0])) + hex(int(parts[1])) + hex(int(parts[2])) + hex(int(parts[3]))
+
+    # return
+    return hex_parts.replace('0x', '')
+

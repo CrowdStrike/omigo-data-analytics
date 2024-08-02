@@ -55,6 +55,12 @@ def mean(vs):
 
 def std_dev(vs):
     vs = list([float(v) for v in vs])
+
+    # adding check for atleast 2 elements before calling the statistics package
+    if (len(vs) < 2):
+        return 0
+
+    # return
     return statistics.stdev(vs)
 
 def mkstr(vs):
@@ -187,8 +193,10 @@ def sumfloat(vs):
     else:
         return sum([float(t) for t in vs])
 
+# TODO: The semantics are not clear
 def uniq_count(vs):
-    return len(set(vs))
+    vs2 = list(filter(lambda t: t.strip() != "", vs))
+    return len(set(vs2))
 
 def merge_uniq(vs):
     result = []
@@ -237,7 +245,7 @@ def max_str(xs):
     return xs[-1]
 
 def min_str(xs):
-    utils.warn_once("min_str is deprecated. Use maxstr")
+    utils.warn_once("min_str is deprecated. Use minstr")
     xs = sorted(xs)
     return xs[0]
 
@@ -306,10 +314,15 @@ def datetime_to_utctimestamp_millis(x):
         return int(float(parser.parse(x + "+00:00").timestamp() * 1000))
 
     # this seems to be a timestamp with second precision.
-    return int(datetime_to_utctimestamp(x) * 1000)
+    return int(datetime_to_utctimestamp_sec(x) * 1000)
 
 # TODO. better naming
 def datetime_to_utctimestamp(x):
+    # use datetime_to_utctimestamp_sec
+    utils.warn_once("datetime_to_utctimestamp: Deprecated. Use datetime_to_utctimestamp_sec instead")
+    return datetime_to_utctimestamp_sec(x)
+
+def datetime_to_utctimestamp_sec(x):
     # convert this to string first for failsafe
     x = str(x)
 
@@ -352,7 +365,7 @@ def datetime_to_utctimestamp(x):
     else:
         raise Exception("Unknown date format. Problem with UTC: '{}'".format(x))
 
-# TODO: Converts seconds format only
+# TODO: Converts seconds format only. Even the original time in milliseconds will return seconds format
 def utctimestamp_to_datetime(x):
     # use the string form
     x = str(x)
@@ -374,9 +387,13 @@ def utctimestamp_millis_to_datetime(x):
 def utctimestamp_to_datetime_str(x):
     return utctimestamp_to_datetime(x).isoformat()[0:19]
 
-# Its utc so removed the last timezone
+# Its utc so removed the last timezone. TODO: Keep the UTC or Z
 def utctimestamp_millis_to_datetime_str(x):
-    return utctimestamp_to_datetime(x).isoformat()[0:23]
+    result = utctimestamp_to_datetime(x).isoformat()
+    if (result.endswith("UTC")):
+        return result[0:23]
+    else:
+        return result
 
 def datetime_to_timestamp(x):
     raise Exception("Please use datetime_to_utctimestamp")
@@ -388,7 +405,7 @@ def get_utctimestamp_millis():
     return int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 1000)
 
 def datestr_to_datetime(x):
-    return utctimestamp_to_datetime(datetime_to_utctimestamp(x))
+    return utctimestamp_to_datetime(datetime_to_utctimestamp_sec(x))
 
 def select_first_non_empty(*args, **kwargs):
     # variable name
@@ -529,7 +546,7 @@ def win32_timestamp_to_utctimestamp(x):
 
 def get_time_diffs(vs):
     # sort the input
-    vs = sorted(list([datetime_to_utctimestamp(t) for t in vs]))
+    vs = sorted(list([datetime_to_utctimestamp_sec(t) for t in vs]))
 
     # boundary condition
     if (len(vs) <= 1):
@@ -601,6 +618,9 @@ def map_to_url_encoded_col_names(cols, prefix = None, url_encoded_cols = None):
     return results
 
 def get_display_relative_time_str(v):
+    # convert to int
+    v = int(v)
+
     # compute units
     days = v // 86400
     hours = (v - (days * 86400)) // 3600

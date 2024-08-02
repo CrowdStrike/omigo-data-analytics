@@ -1,4 +1,4 @@
-name := "statistical-trends-analysis"
+name := "graph-analysis"
 
 version := "0.1"
 
