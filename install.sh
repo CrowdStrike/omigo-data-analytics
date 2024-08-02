@@ -8,7 +8,7 @@ cd python-packages/core
 python3 -m build
 
 echo "Installing core package"
-pip3 install dist/omigo_core-0.7.3.tar.gz
+pip3 install dist/omigo_core-0.7.4.tar.gz
 
 echo "Building extensions package"
 cd -
@@ -16,5 +16,13 @@ cd python-packages/extensions
 python3 -m build
 
 echo "Installing extensions package"
-pip3 install dist/omigo_ext-0.7.3.tar.gz
+pip3 install dist/omigo_ext-0.7.4.tar.gz
+
+echo "Building hydra package"
+cd -
+cd python-packages/hydra
+python3 -m build
+
+echo "Installing hydra package"
+pip3 install dist/omigo_hydra-0.7.4.tar.gz
 
