@@ -333,16 +333,18 @@ class ThreadPoolTask:
         self.args = args
         self.kwargs = kwargs
 
-def run_with_thread_pool(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0):
+def run_with_thread_pool(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0, dmsg = ""):
+    dmsg = extend_inherit_message(dmsg, "run_with_thread_pool")
+
     # debug
-    info("run_with_thread_pool: num tasks: {}, num_par: {}".format(len(tasks), num_par))
+    info("{}: num tasks: {}, num_par: {}".format(dmsg, len(tasks), num_par))
 
     # define results
     results = []
 
     # check if this is to be run in multi threaded mode or not
     if (num_par == 0):
-        info("run_with_thread_pool: running in single threaded mode")
+        info("{}: running in single threaded mode".format(dmsg))
 
         # iterate
         for task in tasks:
@@ -375,10 +377,10 @@ def run_with_thread_pool(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0):
                 # check if all are done
                 if (done_count < len(future_results)):
                     # sleep for some additional time to allow notebook stop method to work
-                    info("run_with_thread_pool: futures not completed yet. Status: {} / {}. Sleeping for {} sec".format(done_count, len(future_results), wait_sec))
+                    info("{}: futures not completed yet. Status: {} / {}. Sleeping for {} sec".format(dmsg, done_count, len(future_results), wait_sec))
                     time.sleep(wait_sec)
                 else:
-                    info("run_with_thread_pool: finished")
+                    info("{}: run_with_thread_pool: finished".format(dmsg))
                     break
 
             # combine the results
@@ -387,7 +389,7 @@ def run_with_thread_pool(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0):
 
             # wait for post_wait_sec for mitigating eventual consistency
             if (post_wait_sec > 0):
-                info("run_with_thread_pool: sleeping for post_wait_sec: {}".format(post_wait_sec))
+                info("{}: sleeping for post_wait_sec: {}".format(dmsg, post_wait_sec))
                 time.sleep(post_wait_sec)
 
             # return
@@ -415,7 +417,12 @@ def error_and_raise_exception(msg, max_len = 2000):
     # raise exception
     raise Exception(msg)
 
+# Deprecated
 def strip_spl_white_spaces(v):
+    warn_once("Deprecated: Instead of strip_spl_white_spaces use replace_spl_white_spaces_with_space")
+    return replace_spl_white_spaces_with_space(v)
+
+def replace_spl_white_spaces_with_space(v):
     # check None
     if (v is None):
         return None
@@ -492,7 +499,9 @@ def is_text_content_col(col, text_columns):
 def resolve_default_parameter(name, value, default_value, msg):
     # check if prefix parameter is None
     if (value is None):
-        warn_once("{}: {} value is None. Using default value: {}".format(msg, name, default_value))
+        default_value_display = str(default_value)
+        default_value_display = default_value_display if (len(default_value_display) < 30) else default_value_display[0:30] + "..."
+        warn_once("{}: {} value is None. Using default value: {}".format(msg, name, default_value_display))
         value = default_value
 
     # return
@@ -646,4 +655,34 @@ def split_str_to_arr(x):
         return []
     else:
         return list(filter(lambda t: t != "", x.split(",")))
+
+    # get string
+    result = " ".join(results)
+
+    # return
+    return result
+
+def validate_nonnull_params(*args, **kwargs):
+    # iterate and throw exception if any of the parameters is None
+    for k in kwargs:
+        if (kwargs[k] is None):
+            raise Exception("Found None value in a mandatory parameter: {}".format(k))
+
+def convert_ipv4_to_hex(ip):
+    # validation
+    if (ip is None or ip == ""):
+        raise Exception("convert_ipv4_to_hex: invalid input: {}".format(ip))
+
+    # split
+    parts = ip.split('.')
+
+    # validation
+    if (len(parts) != 4):
+        raise Exception("convert_ipv4_to_hex: invalid input: {}".format(ip))
+
+    # convert
+    hex_parts = hex(int(parts[0])) + hex(int(parts[1])) + hex(int(parts[2])) + hex(int(parts[3]))
+
+    # return
+    return hex_parts.replace('0x', '')
 

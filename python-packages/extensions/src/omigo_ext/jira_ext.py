@@ -5,7 +5,7 @@ import json
 
 # env variables
 JIRA_API_USER = "JIRA_API_USER"
-JIRA_API_PASS = "JIRA_API_PASS"
+JIRA_API_PASS = "JIRA_API_PASS" # nosec
 
 # Create a list of selected columns as JIRA has lot of noise
 SELECTED_COLS = ["assignee", "attachment", "components", "created", "description", "issuetype", "labels", "project", "reporter", "resolution", "resolutiondate", "status", "summary",
@@ -33,7 +33,7 @@ SPECIAL_COLS = ["attachment", "comments", "components"]
 class JiraSearch:
     def __init__(self, server = None, username = None, password = None, verify = True):
         # warn
-        utils.warn_once("JiraSearch: This is work in progress in externsions package. Some of the constants need to be decoupled")
+        utils.warn_once("JiraSearch: This is work in progress in extensions package. Some of the constants need to be decoupled")
 
         # validation
         if (server is None):

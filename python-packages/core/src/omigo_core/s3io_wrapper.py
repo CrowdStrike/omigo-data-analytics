@@ -137,7 +137,7 @@ class S3FSWrapper:
         # return
         return result2
 
-    # TODO: this is a wait method and confusing
+    # TODO: this is a wait method and confusing. FIXME: The aws prefix way of listing is hurting
     def ls(self, path, include_reserved_files = False, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS, skip_exist_check = False):
         path = self.__normalize_path__(path)
 
