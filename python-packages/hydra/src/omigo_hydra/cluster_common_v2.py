@@ -891,7 +891,7 @@ class ClusterSpecBatch(ClusterSpecBase):
         super().__init__(EntityType.BATCH, num_inputs, num_outputs)
 
     def from_json(json_obj):
-        # check for None 
+        # check for None
         if (json_obj is None):
             return None
 
@@ -930,7 +930,7 @@ class ClusterOperation(cluster_data.JsonSer):
         self.kwargs = cluster_data.cluster_operand_serializer(kwargs)
 
     def from_json(json_obj):
-        # check for None 
+        # check for None
         if (json_obj is None):
             return None
 
@@ -957,11 +957,11 @@ class ClusterTaskOperation(ClusterOperation):
         self.task_type = task_type
 
     def from_json(json_obj):
-        # check for None 
+        # check for None
         if (json_obj is None):
             return None
 
-        # this parsing is tricky and has to be done inline 
+        # this parsing is tricky and has to be done inline
         name = json_obj["name"]
         requirements = json_obj["requirements"]
         args = cluster_data.load_native_objects(cluster_data.cluster_operand_deserializer(json_obj["args"]))
@@ -973,11 +973,11 @@ class ClusterExtendClassOperation(ClusterTaskOperation):
         super().__init__(ClusterTaskType.EXTEND_CLASS, name, requirements, *args, **kwargs)
 
     def from_json(json_obj):
-        # check for None 
+        # check for None
         if (json_obj is None):
             return None
 
-        # this parsing is tricky and has to be done inline 
+        # this parsing is tricky and has to be done inline
         name = json_obj["name"]
         requirements = json_obj["requirements"]
         args = cluster_data.load_native_objects(cluster_data.cluster_operand_deserializer(json_obj["args"]))
@@ -990,11 +990,11 @@ class ClusterMapOperation(ClusterTaskOperation):
         super().__init__(ClusterTaskType.MAP, name, requirements, *args, **kwargs)
 
     def from_json(json_obj):
-        # check for None 
+        # check for None
         if (json_obj is None):
             return None
 
-        # this parsing is tricky and has to be done inline 
+        # this parsing is tricky and has to be done inline
         name = json_obj["name"]
         requirements = json_obj["requirements"]
         args = cluster_data.load_native_objects(cluster_data.cluster_operand_deserializer(json_obj["args"]))
@@ -1009,11 +1009,11 @@ class ClusterReduceOperation(ClusterTaskOperation):
         self.num_splits = num_splits
 
     def from_json(json_obj):
-        # check for None 
+        # check for None
         if (json_obj is None):
             return None
 
-        # this parsing is tricky and has to be done inline 
+        # this parsing is tricky and has to be done inline
         name = json_obj["name"]
         requirements = json_obj["requirements"]
         args = cluster_data.load_native_objects(cluster_data.cluster_operand_deserializer(json_obj["args"]))
@@ -1040,6 +1040,25 @@ def deserialize_cluster_task_operation(json_obj):
     else:
         raise Exception("deserialize_cluster_task_operation: unknown task_type for ClusterTaskOperation: {}".format(task_type))
  
+# TODO: follow the same design as ClusterOperand with mulitple derived classes
+class ClusterInmemoryOperation(ClusterOperation):
+    def __init__(self, name, requirements, *args, **kwargs):
+        super().__init__(name, requirements, *args, **kwargs)
+
+    def from_json(json_obj):
+        # check for None
+        if (json_obj is None):
+            return None
+
+        # parsing
+        name = json_obj["name"]
+        requirements = json_obj["requirements"]
+        args = cluster_data.load_native_objects(cluster_data.cluster_operand_deserializer(json_obj["args"]))
+        kwargs = cluster_data.load_native_objects(cluster_data.cluster_operand_deserializer(json_obj["kwargs"]))
+
+        # return
+        return ClusterInmemoryOperation(name, requirements, *args, **kwargs)
+
 # Entity Heartbeat
 class ClusterHearbeat(cluster_data.JsonSer):
     def __init__(self, ts, lease):
