@@ -1404,7 +1404,7 @@ def __demo_plot3_multiple__(doc):
 
         # update a single point of the 1d multi-line data
         i = np.random.randint(200)
-        new_y = source1d.data['ys'][0][i] + (0.2 * np.random.random()-0.1)
+        new_y = source1d.data['ys'][0][i] + (0.2 * np.random.random()-0.1) #nosec
         source1d.patch({ 'ys' : [([0, i], [new_y])]})
 
         # update five rows of the 2d image data at a time
@@ -1846,8 +1846,8 @@ def demo_plot16_customjs_indices():
 
         output_file("callback.html")
 
-        x = [random() for x in range(500)]
-        y = [random() for y in range(500)]
+        x = [random() for x in range(500)] #nosec
+        y = [random() for y in range(500)] #nosec
 
         s1 = ColumnDataSource(data=dict(x=x, y=y))
         p1 = figure(width=400, height=400, tools="lasso_select", title="Select Here")
