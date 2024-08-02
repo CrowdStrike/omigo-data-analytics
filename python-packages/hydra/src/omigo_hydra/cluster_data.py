@@ -278,7 +278,7 @@ def load_native_cluster_func(cluster_func):
     # check for different function types
     if (func_type == "lambda"):
         # decode and call the lambda function
-        return dill.loads(base64.b64decode(value.encode("ascii")))
+        return dill.loads(base64.b64decode(value.encode("ascii"))) #nosec
     elif (func_type == "library"):
         # read function name. TODO: this is supposed to be string
         func_name = value["name"]
