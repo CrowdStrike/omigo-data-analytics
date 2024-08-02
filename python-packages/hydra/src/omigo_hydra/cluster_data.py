@@ -5,6 +5,9 @@ import base64
 import dill
 import json
 
+# warn
+utils.warn_once("cluster_data: this uses dill library for serializing python code. This is experimental and not used in production")
+
 # class to serialize all the data values as json
 # TBD: use json.loads properly 
 class JsonSer:
@@ -250,7 +253,8 @@ def load_native_objects(cluster_operand):
     elif (data_type == "object"):
         return load_native_objects(value)
     elif (data_type == "pyobject"):
-        return dill.loads(base64.b64decode(value.encode("ascii")))
+        # This is experimental and not used in production
+        return dill.loads(base64.b64decode(value.encode("ascii"))) #nosec
     # elif (data_type == "array_bool"):
     #     return list([bool(x) for x in value])
     # elif (data_type == "array_str"):
@@ -278,6 +282,7 @@ def load_native_cluster_func(cluster_func):
     # check for different function types
     if (func_type == "lambda"):
         # decode and call the lambda function
+        # This is experimental and not used in production
         return dill.loads(base64.b64decode(value.encode("ascii"))) #nosec
     elif (func_type == "library"):
         # read function name. TODO: this is supposed to be string
@@ -325,6 +330,7 @@ class ClusterFuncLambda(ClusterFunc):
 
         value = json_obj["value"]
         try:
+            # This is experimental and not used in production
             func = dill.loads(base64.b64decode(value.encode("ascii"))) #nosec 
             return ClusterFuncLambda(func)
         except Exception as e:
