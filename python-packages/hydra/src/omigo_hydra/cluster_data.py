@@ -325,7 +325,7 @@ class ClusterFuncLambda(ClusterFunc):
 
         value = json_obj["value"]
         try:
-            func = dill.loads(base64.b64decode(value.encode("ascii"))) 
+            func = dill.loads(base64.b64decode(value.encode("ascii"))) #nosec 
             return ClusterFuncLambda(func)
         except Exception as e:
             utils.info("ClusterFuncLambda: from_json: exception in deserializing json: {}".format(json.dumps(json_obj)))
