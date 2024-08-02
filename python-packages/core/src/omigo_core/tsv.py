@@ -7,6 +7,7 @@ import json
 from omigo_core import utils, tsvutils, funclib
 import sys
 import time
+import numpy as np
 
 class TSV:
     """This is the main data processing class to apply different filter and transformation functions
@@ -54,6 +55,9 @@ class TSV:
     # debugging
     def to_string(self):
         return "Header: {}, Data: {}".format(str(self.header_map), str(len(self.get_data())))
+
+    def get_content_as_string(self):
+        return self.get_header() + "\n" + "\n".join(self.get_data())
 
     # check data format
     def validate(self):
@@ -420,6 +424,9 @@ class TSV:
     def drop_empty_cols(self, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "drop_empty_cols")
 
+        # warn
+        utils.warn_once("{}: this api is very expensive".format(dmsg))
+
         # check for empty data
         if (self.num_rows() == 0):
             return self
@@ -456,6 +463,25 @@ class TSV:
                     .drop_cols(empty_cols, dmsg = dmsg)
         else:
             return self
+
+    # method to remove empty rows
+    def drop_empty_rows(self, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "drop_empty_rows")
+
+        # check for empty data
+        if (self.num_rows() == 0):
+            return self
+
+        # create new data
+        data = []
+
+        # iterate
+        for line in self.get_data():
+            if (line.strip() != ""):
+                data.append(line)
+
+        # return
+        return TSV(self.header, data)
  
     # TODO: the select_cols is not implemented properly
     def window_aggregate(self, win_col, agg_cols, agg_funcs, winsize, select_cols = None, sliding = False, collapse = True, suffix = "", precision = 2, dmsg = ""):
@@ -1352,6 +1378,10 @@ class TSV:
         else:
             raise Exception("transform_inline_log1p: base value is not supported: {}".format(base))
 
+    def transform_inline_log1p_base2(self, col_or_cols, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "transform_inline_log1p_base2")
+        return self.transform_inline_log1p(col_or_cols, base = 2, dmsg = dmsg)
+        
     def transform_inline_log1p_base10(self, col_or_cols, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "transform_inline_log1p_base10")
         return self.transform_inline_log1p(col_or_cols, base = 10, dmsg = dmsg)
@@ -1992,8 +2022,9 @@ class TSV:
 
         return TSV(new_header, new_data)
 
-    def to_csv(self, comma_replacement = ";"):
-        utils.warn("to_csv: This is not a standard csv conversion. The commas are just replaced with another character specified in comma_replacement parameter.")
+    def to_csv(self, comma_replacement = ";", dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "to_csv")
+        utils.warn_once("{}: This is not a standard csv conversion. The commas are just replaced with another character specified in comma_replacement parameter.".format(dmsg))
 
         # create new data
         new_header = self.header.replace(",", comma_replacement).replace("\t", ",")
@@ -2172,6 +2203,17 @@ class TSV:
         # convert to array format
         cols = col_or_cols if (is_array == True) else [col_or_cols]
 
+        # do some deduping
+        cols2 = []
+        for col in cols:
+            if (col not in cols2):
+                cols2.append(col)
+            else:
+                utils.warn("{}: duplicate column names in input: {}".format(dmsg, col))
+
+        # reassign
+        cols = cols2
+
         # check for prefix
         if (prefix is not None):
             cols = list(["{}:{}".format(prefix, t) for t in cols])
@@ -2258,7 +2300,7 @@ class TSV:
         for h in self.get_header_fields():
             if (h in mp.keys()):
                 # append the value
-                new_fields.append(utils.strip_spl_white_spaces(mp[h]))
+                new_fields.append(utils.replace_spl_white_spaces_with_space(mp[h]))
             else:
                 # append default value
                 new_fields.append(default_val)
@@ -2495,19 +2537,19 @@ class TSV:
 
         # validation
         if (old_prefix.endswith(":") == False):
-            old_prefix = prefix + ":"
+            old_prefix = new_prefix + ":"
 
         # check for matching cols
         for c in self.get_header_fields():
             if (c.startswith(old_prefix)):
                 new_col = "{}:{}".format(new_prefix, c[len(old_prefix):])
                 if (new_col in self.get_header_fields() or len(new_col) == 0):
-                    raise Exception("{}: Duplicate names. Cant do the prefix: {}, {}, {}".format(dmsg, c, new_col, str(self.get_header_fields())))
+                    raise Exception("{}: Duplicate names. Cant do the new prefix: {}, {}, {}".format(dmsg, c, new_col, str(self.get_header_fields())))
                 mp[c] = new_col
 
         # validation
         if (len(mp) == 0):
-            utils.raise_exception_or_warn("{}: prefix didnt match any of the columns: {}, {}".format(dmsg, prefix, str(self.get_header_fields())), ignore_if_missing)
+            utils.raise_exception_or_warn("{}: old prefix didnt match any of the columns: {}, {}".format(dmsg, old_prefix, str(self.get_header_fields())), ignore_if_missing)
 
         # return
         new_header = "\t".join(list([h if (h not in mp.keys()) else mp[h] for h in self.get_header_fields()]))
@@ -2585,10 +2627,17 @@ class TSV:
         dmsg = utils.extend_inherit_message(dmsg, "sample_rows")
         return self.sample_n(n, seed, dmsg = dmsg)
 
-    def sample_n(self, n, seed = 0, dmsg = ""):
+    def sample_n(self, n, seed = 0, replace = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "sample_n")
+
         # check empty
         if (self.has_empty_header()):
-            utils.warn("sample_n: empty header tsv")
+            utils.warn("{}: empty header tsv".format(dmsg))
+            return self
+
+        # check for no data
+        if (self.num_rows() == 0):
+            utils.warn("{}: no data".format(dmsg))
             return self
 
         # validation
@@ -2601,11 +2650,19 @@ class TSV:
 
         # set seed
         random.seed(seed)
-        n = min(int(n), self.num_rows())
 
         # sample and return. the debug message is not in standard form, but its fine.
-        utils.report_progress("sample_n: [1/1] calling function", dmsg, len(self.get_data()), len(self.get_data()))
-        return TSV(self.header, random.sample(self.data, n))
+        utils.report_progress("[1/1] calling function", dmsg, len(self.get_data()), len(self.get_data()))
+        if (replace == True):
+            return TSV(self.header, random.choices(self.data, k = n)) # nosec
+        else:
+            # warn if needed
+            if (n > self.num_rows()):
+                utils.warn("{}: n = {} > num_rows = {}. selecting all elements".format(dmsg, n, self.num_rows()))
+
+            # limit n
+            n = min(int(n), self.num_rows())
+            return TSV(self.header, random.sample(self.data, n))
 
     # TODO: WIP
     def sample_n_with_warn(self, limit, msg = None, seed = 0, dmsg = ""):
@@ -2625,6 +2682,16 @@ class TSV:
         else:
             return self
 
+    def sample_n_with_replacement(self, n, seed = 0, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "sample_n_with_replacement")
+        return self \
+            .sample_n(n, seed = seed, replace = True, dmsg = dmsg)
+ 
+    def sample_n_without_replacement(self, n, seed = 0, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "sample_n_without_replacement")
+        return self \
+            .sample_n(n, seed = seed, replace = False, dmsg = dmsg)
+ 
     def sample_group_by_topk_if_reached_limit(self, limit, *args, **kwargs):
         utils.warn_once("sample_group_by_topk_if_reached_limit: this api name might change")
 
@@ -4062,7 +4129,7 @@ class TSV:
                     single_results[k + ":json:url_encoded"] = utils.url_encode(json.dumps(v))
                 # for each data type, there is a different kind of handling
                 elif (isinstance(v, (str, int, float))):
-                    v1 = utils.strip_spl_white_spaces(v)
+                    v1 = utils.replace_spl_white_spaces_with_space(v)
                     # check if encoding needs to be done
                     if (url_encoded_cols is not None and k in url_encoded_cols):
                         v1 = utils.url_encode(v1)
@@ -4084,7 +4151,7 @@ class TSV:
                             # treat primitive lists as single value or as yet another list
                             if (collapse_primitive_list == True):
                                 # do the encoding
-                                v1 = join_col.join(sorted(list([utils.strip_spl_white_spaces(t) for t in v])))
+                                v1 = join_col.join(sorted(list([utils.replace_spl_white_spaces_with_space(t) for t in v])))
                                 if (url_encoded_cols is not None and k in url_encoded_cols):
                                     v1 = utils.url_encode(v1)
                                     single_results[k + ":url_encoded"] = v1
@@ -4098,7 +4165,7 @@ class TSV:
                                     mp2_new = {}
 
                                     # do the encoding
-                                    v1 = utils.strip_spl_white_spaces(vt)
+                                    v1 = utils.replace_spl_white_spaces_with_space(vt)
                                     if (url_encoded_cols is not None and k in url_encoded_cols):
                                         v1 = utils.url_encode(v1)
                                         mp2_new[k + ":url_encoded"] = v1
@@ -4735,7 +4802,7 @@ class TSV:
 
             # raise exception if some col or pattern is not found
             if (col_pattern_found == False):
-                utils.raise_exception_or_warn("Col name or pattern not found: {}, {}".format(col_pattern, str(self.get_header_fields())), ignore_if_missing)
+                utils.raise_exception_or_warn("Col name or pattern not found: {}, {}".format(col_pattern, str(self.get_header_fields())[0:100] + "..."), ignore_if_missing)
                 # dont return from here 
 
         # return
@@ -4779,6 +4846,14 @@ class TSV:
 
         msg2 = "{}num_rows: {}, num_cols: {}, size: {}".format(prefix, self.num_rows(), self.num_cols(), size_str)
         utils.info(msg2)
+        return self
+
+    def warn(self, msg):
+        utils.warn(msg)
+        return self
+
+    def warn_once(self, msg):
+        utils.warn_once(msg)
         return self
 
     # get top k columns by byte size
@@ -4945,15 +5020,6 @@ class TSV:
             .resolve_template_col(template_col, output_col, col_or_cols = col_or_cols, dmsg = dmsg) \
             .drop_cols(template_col, dmsg = dmsg) \
             .rename(output_col, template_col, dmsg = dmsg)
- 
-    def enable_debug_mode(self):
-        utils.enable_debug_mode()
-        return self
-
-    def disable_debug_mode(self):
-        utils.disable_debug_mode()
-        return self
-
     def enable_info_mode(self):
         utils.enable_info_mode()
         return self
@@ -4962,26 +5028,43 @@ class TSV:
         utils.disable_info_mode()
         return self
 
+    def enable_debug_mode(self):
+        utils.enable_debug_mode()
+        return self
+
+    def disable_debug_mode(self):
+        utils.disable_debug_mode()
+        return self
+
+    def enable_trace_mode(self):
+        utils.enable_trace_mode()
+        return self
+        
+    def disable_trace_mode(self):
+        utils.disable_trace_mode()
+        return self
+        
 def get_version():
-    return "v0.5.2_1:mean"
+    return "v0.6.3"
 
 def get_func_name(f):
     return f.__name__
 
-def read(paths, sep = None, do_union = False, def_val_map = None):
+def read(paths, sep = None, do_union = False, def_val_map = None, username = None, password = None):
     # TODO: remove this after fixing design
     if (def_val_map is not None and do_union == False):
         raise Exception("Use do_union flag instead of relying on def_val_map to be non None")
 
     # check if union needs to be done. default is intersect
     if (do_union == False):
-        return tsvutils.read(paths, sep = sep)
+        return tsvutils.read(paths, sep = sep, username = username, password = password)
     else:
         # check if default values are checked explicitly
         if (def_val_map is None):
             def_val_map = {}
 
-        return tsvutils.read(paths, sep = sep, def_val_map = {})
+        # return
+        return tsvutils.read(paths, sep = sep, def_val_map = {}, username = username, password = password)
 
 def write(xtsv, path):
     return xtsv.write(path)
@@ -5012,7 +5095,25 @@ def from_df(df):
     return tsvutils.from_df(df)
 
 def from_maps(mps):
-    return tsvutils.load_from_array_of_map(mps)
+    # validation
+    if (len(mps) == 0):
+        raise Exception("from_maps: empty list")
+
+    # return tsvutils.load_from_array_of_map(mps)
+    xtsvs = []
+    for mp in mps:
+        header = "json"
+        data = [utils.url_encode(json.dumps(mp))]
+        xtsvs.append(TSV(header, data))
+
+    # use explode
+    result = merge_union(xtsvs) \
+        .explode_json("json", prefix = "json") \
+        .remove_prefix("json") \
+        .drop_cols_if_exists(["__json_index__", "__explode_json_index__"])
+
+    # return
+    return result 
 
 def enable_debug_mode():
     utils.enable_debug_mode()

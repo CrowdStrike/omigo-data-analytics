@@ -26,7 +26,7 @@ WORKDIR /code
 
 # build
 RUN python3 -m pip install --upgrade build
-RUN pip3 install omigo-core omigo-ext --upgrade
+RUN pip3 install omigo-core omigo-ext omigo-hydra --upgrade
 RUN pip3 install jupyterlab
 RUN pip3 install yfinance 
 RUN pip3 install graphviz 
