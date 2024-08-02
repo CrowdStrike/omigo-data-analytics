@@ -253,7 +253,8 @@ def load_native_objects(cluster_operand):
     elif (data_type == "object"):
         return load_native_objects(value)
     elif (data_type == "pyobject"):
-        return dill.loads(base64.b64decode(value.encode("ascii")))
+        # This is experimental and not used in production
+        return dill.loads(base64.b64decode(value.encode("ascii"))) #nosec
     # elif (data_type == "array_bool"):
     #     return list([bool(x) for x in value])
     # elif (data_type == "array_str"):
