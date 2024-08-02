@@ -23,7 +23,7 @@ class WebServiceTSV(tsv.TSV):
             .parallelize(__call_web_service__, self.timeout_sec, self.verify, self.enable_opt_exec, self.dmsg, *args, **kwargs)
 
         # trace
-        utils.trace("call_web_service: num_rows: {}, size in bytes (MB): {}".format(xtsv.num_rows(), xtsv.size_in_gb()))
+        utils.trace("{}: num_rows: {}, size in bytes (MB): {}".format(self.dmsg, xtsv.num_rows(), xtsv.size_in_gb()))
 
         # return
         return xtsv
@@ -122,8 +122,8 @@ def __call_web_service__(xtsv, xtsv_timeout_sec, xtsv_verify, xtsv_enable_opt_ex
                 prefix = prefix, collapse = False, dmsg = xtsv_dmsg)
 
 # the explode func for web service
-def __call_web_service_exp_func__(xtsv_timeout_sec, xtsv_verify, url, query_params, header_params, body_params, username, password, url_cols, query_params_cols, header_params_cols, body_params_cols,
-    include_resolved_values, selective_execution_func):
+def __call_web_service_exp_func__(xtsv_timeout_sec, xtsv_verify, url, query_params, header_params, body_params, username, password, url_cols, query_params_cols,
+    header_params_cols, body_params_cols, include_resolved_values, selective_execution_func):
 
     def __call_web_service_exp_func_inner__(mp):
         # resolve url

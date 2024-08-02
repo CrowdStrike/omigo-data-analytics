@@ -14,7 +14,7 @@ class MultiThreadTSV(tsv.TSV):
         self.num_par = num_par
         self.status_check_interval_sec = status_check_interval_sec
         self.sleep_interval_sec = sleep_interval_sec
-        self.dmsg = dmsg + ": MultiThreadTSV" if (dmsg != "") else "MultiThreadTSV"
+        self.dmsg = utils.extend_inherit_message(dmsg, "MultiThreadTSV")
 
         # check if num_par is more than number of rows
         if (self.num_rows() < self.num_par):

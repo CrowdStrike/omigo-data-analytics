@@ -21,7 +21,7 @@ import traceback
 # class to search splunk
 class SplunkSearch:
     def __init__(self, host, app = None, username = None, password = None, cookie = None, timeout_sec = 600, wait_sec = 10, attempts = 3, enable_cache = False, use_partial_results = False,
-        cache_instance_timeout_sec = 1800, attempt_sleep_sec = 30):
+        cache_instance_timeout_sec = 1800, attempt_sleep_sec = 30, attempt_gateway_timeout_sleep_sec = 120):
         # Validation
         if (host is None):
             raise Exception("Missing parameters: host")
@@ -55,6 +55,7 @@ class SplunkSearch:
         self.use_partial_results = use_partial_results
         self.cache_instance_timeout_sec = cache_instance_timeout_sec
         self.attempt_sleep_sec = attempt_sleep_sec
+        self.attempt_gateway_timeout_sleep_sec = attempt_gateway_timeout_sleep_sec
 
         # initialize parameters
         self.filters = []
@@ -94,7 +95,7 @@ class SplunkSearch:
 
     def set_time_range(self, start_time, end_time = None):
         # end time is optional
-        if (end_time == None):
+        if (end_time is None):
             end_time = "now"
 
         # resolve time strings
@@ -106,7 +107,7 @@ class SplunkSearch:
     
     def __get_filter_query__(self):
         # validation
-        if (self.start_time == None or self.end_time == None):
+        if (self.start_time is None or self.end_time is None):
             raise Exception("Missing mandatory parameters")
 
         # filters is mandatory
@@ -114,7 +115,7 @@ class SplunkSearch:
             raise Exception("Missing mandatory parameters")
 
         # check max results
-        if (self.max_results == None):
+        if (self.max_results is None):
             raise Exception("max_results is mandatory for adding some safe guards")
 
         # construct query
@@ -148,7 +149,7 @@ class SplunkSearch:
                 utils.warn_once("SplunkSearch: call_search(): for non aggregate queries, always use '| fields *' as the last operator otherwise splunk might return only limited columns: {}".format(query))
 
         # set default
-        if (end_time == None):
+        if (end_time is None):
             end_time = "now"
 
         # resolve time (probably again)
@@ -178,8 +179,8 @@ class SplunkSearch:
             return self.__execute_blocking_query__(query, start_time, end_time, url_encoded_cols, attempts_remaining, include_internal_fields, limit, num_par_on_limit, dmsg = dmsg)
 
     def __split_time_slots__(self, st, et, num_splits):
-        start_ts = funclib.datetime_to_utctimestamp(st)
-        end_ts = funclib.datetime_to_utctimestamp(et)
+        start_ts = funclib.datetime_to_utctimestamp_sec(st)
+        end_ts = funclib.datetime_to_utctimestamp_sec(et)
 
         # find time width
         width = int(math.floor((end_ts - start_ts) / num_splits))
@@ -325,9 +326,18 @@ class SplunkSearch:
                 utils.warn("{}: caught exception: {}, attempts remaining: {}".format(utils.max_dmsg_str(dmsg), str(e), attempts_remaining))
                 # utils.error("{}: Stack Trace: {}".format(utils.max_dmsg_str(dmsg), traceback.format_exc()))
 
-                # call again with lesser attempts_remaining
-                utils.info("{}: Sleeping for {} seconds before attempting again".format(dmsg, self.attempt_sleep_sec))
-                time.sleep(self.attempt_sleep_sec)
+                # for gateway timeout do a longer wait by default
+                if (str(e).find("HTTP 504 Gateway Time-out") != -1):
+                    # call again with a different timeout
+                    attempt_multiplier = int(math.min(self.attempts - attempts_remaining, 10))
+                    utils.info("{}: Gateway timeout: Sleeping for {} seconds before attempting again".format(dmsg, self.attempt_gateway_timeout_sleep_sec * attempt_multiplier))
+                    time.sleep(self.attempt_gateway_timeout_sleep_sec * attempt_multiplier)
+                else:
+                    # call again with lesser attempts_remaining
+                    utils.info("{}: Sleeping for {} seconds before attempting again".format(dmsg, self.attempt_sleep_sec))
+                    time.sleep(self.attempt_sleep_sec)
+
+                # return    
                 return self.__execute_normal_query__(query, start_time, end_time, url_encoded_cols, attempts_remaining - 1, include_internal_fields, limit,
                     num_par_on_limit, dmsg = dmsg)
             else:
@@ -378,12 +388,18 @@ class SplunkSearch:
         except Exception as e:
             # check if multiple attempts are needed
             if (attempts_remaining > 0):
-                # debug
-                utils.info("SplunkSearch: __execute_blocking_query__: caught exception: {}, attempts remaining: {}".format(str(e), attempts_remaining))
+                # for gateway timeout do a longer wait by default
+                if (str(e).find("HTTP 504 Gateway Time-out") != -1):
+                    # call again with a different timeout
+                    attempt_multiplier = int(math.min(self.attempts - attempts_remaining, 10))
+                    utils.info("{}: Gateway timeout: Sleeping for {} seconds before attempting again".format(dmsg, self.attempt_gateway_timeout_sleep_sec * attempt_multiplier))
+                    time.sleep(self.attempt_gateway_timeout_sleep_sec * attempt_multiplier)
+                else:
+                    # call again with lesser attempts_remaining
+                    utils.info("{}: Sleeping for {} seconds before attempting again".format(dmsg, self.attempt_sleep_sec))
+                    time.sleep(self.attempt_sleep_sec)
 
                 # call again with lesser attempts_remaining
-                utils.info("{}: Sleeping for {} seconds before attempting again".format(dmsg, self.attempt_sleep_sec))
-                time.sleep(self.attempt_sleep_sec)
                 return self.__execute_blocking_query__(query, start_time, end_time, url_encoded_cols, attempts_remaining - 1, include_internal_fields, limit, num_par_on_limit)
             else:
                 # error
@@ -507,7 +523,7 @@ class SplunkSearch:
                     value2 = utils.url_encode(value2)
 
                 # assign to new map
-                result2[key2] = utils.strip_spl_white_spaces(str(value2))
+                result2[key2] = utils.replace_spl_white_spaces_with_space(str(value2))
 
             # append to array
             results2.append(result2)
@@ -552,18 +568,18 @@ class SplunkSearch:
             # return datetime.datetime.utcfromtimestamp(int(base_time.timestamp()) - diff_sec).replace(tzinfo = datetime.timezone.utc).isoformat()
             return funclib.utctimestamp_to_datetime_str(int(base_time.timestamp()) - diff_sec)
         else:
-            return funclib.utctimestamp_to_datetime_str(funclib.datetime_to_utctimestamp(x))
+            return funclib.utctimestamp_to_datetime_str(funclib.datetime_to_utctimestamp_sec(x))
 
 # class to do data manipulation on TSV
 class SplunkTSV(tsv.TSV):
     def __init__(self, header, data, splunk_search = None, host = None, app = None, username = None, password = None, cookie = None, timeout_sec = 600, wait_sec = 10, attempts = 3,
-        enable_cache = False, use_partial_results = False, num_par = 0, attempt_sleep_sec = 30):
+        enable_cache = False, use_partial_results = False, num_par = 0, attempt_sleep_sec = 30, attempt_gateway_timeout_sleep_sec = 120):
         super().__init__(header, data)
 
         # check if new splunk search instance is needed
         if (splunk_search is None):
             splunk_search = SplunkSearch(host, app = app, username = username, password = password, cookie = cookie, timeout_sec = timeout_sec, wait_sec = wait_sec, attempts = attempts,
-                enable_cache = enable_cache, use_partial_results = use_partial_results, attempt_sleep_sec = attempt_sleep_sec)
+                enable_cache = enable_cache, use_partial_results = use_partial_results, attempt_sleep_sec = attempt_sleep_sec, attempt_gateway_timeout_sleep_sec = attempt_gateway_timeout_sleep_sec)
 
         self.splunk_search = splunk_search
         self.host = host
@@ -578,6 +594,7 @@ class SplunkTSV(tsv.TSV):
         self.use_partial_results = use_partial_results
         self.num_par = num_par
         self.attempt_sleep_sec = attempt_sleep_sec
+        self.attempt_gateway_timeout_sleep_sec = attempt_gateway_timeout_sleep_sec
 
     def get_events(self, query_filter, start_ts_col, end_ts_col, prefix, url_encoded_cols = None, include_internal_fields = False, limit = None, num_par_on_limit = 0, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "SplunkTSV: get_events")
