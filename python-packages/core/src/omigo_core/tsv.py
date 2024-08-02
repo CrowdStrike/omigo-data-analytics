@@ -5020,7 +5020,6 @@ class TSV:
             .resolve_template_col(template_col, output_col, col_or_cols = col_or_cols, dmsg = dmsg) \
             .drop_cols(template_col, dmsg = dmsg) \
             .rename(output_col, template_col, dmsg = dmsg)
- 
     def enable_info_mode(self):
         utils.enable_info_mode()
         return self

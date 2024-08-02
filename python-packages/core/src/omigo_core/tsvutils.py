@@ -783,6 +783,9 @@ def __get_argument_as_array__(arg_or_args):
     else:
         return arg_or_args
 
+def read_file_content_as_text(path):
+    return s3io_wrapper.read_file_content_as_text(path)
+
 # refactored methods
 def scan_by_datetime_range(*args, **kwargs):
     raise Exception("use etl.scan_by_datetime_range instead")
