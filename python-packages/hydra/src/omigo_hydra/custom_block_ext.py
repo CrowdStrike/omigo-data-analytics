@@ -47,6 +47,7 @@ class CustomBlockTSV(tsv.TSV):
 
         # iterate and apply
         for func_op in func_ops:
+            print("noop. FIXME")
 
     def __load_custom_config_resolver__(self, json_obj):
         return CustomConfigResolution(json_obj)
