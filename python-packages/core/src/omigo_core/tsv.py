@@ -5097,7 +5097,8 @@ def from_df(df):
 def from_maps(mps):
     # validation
     if (len(mps) == 0):
-        raise Exception("from_maps: empty list")
+        utils.warn("from_maps: empty list")
+        return create_empty() 
 
     # return tsvutils.load_from_array_of_map(mps)
     xtsvs = []
