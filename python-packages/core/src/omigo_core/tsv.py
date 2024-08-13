@@ -4675,7 +4675,7 @@ class TSV:
         # return self
         return self
 
-    def show_select_func(self, col_or_cols, n = 20, title = "Group Count", max_col_width = 40, dmsg = ""):
+    def show_select_func(self, col_or_cols, n = 20, title = "Show", max_col_width = 40, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "show_select_func")
 
         # show
