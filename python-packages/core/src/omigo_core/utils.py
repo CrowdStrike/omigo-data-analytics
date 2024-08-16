@@ -25,6 +25,7 @@ OMIGO_WARN = "OMIGO_WARN"
 OMIGO_INFO = "OMIGO_INFO"
 OMIGO_DEBUG = "OMIGO_DEBUG"
 OMIGO_TRACE = "OMIGO_TRACE"
+OMIGO_WARN_ONCE_ONLY = "OMIGO_WARN_ONCE_ONLY"
 OMIGO_DEBUG_REPORT_PROGRESS_PERC = "OMIGO_DEBUG_REPORT_PROGRESS_PERC"
 OMIGO_DEBUG_REPORT_PROGRESS_MIN_THRESH = "OMIGO_DEBUG_REPORT_PROGRESS_MIN_THRESH"
 OMIGO_CODE_TODO_WARNING = "OMIGO_CODE_TODO_WARNING"
@@ -47,6 +48,9 @@ def is_debug():
 
 def is_trace():
     return str(os.environ.get(OMIGO_TRACE, "0")) == "1"
+
+def is_warn_once_only():
+    return str(os.environ.get(OMIGO_WARN_ONCE_ONLY, "0")) == "1"
 
 def get_report_progress():
     return float(os.environ.get(OMIGO_DEBUG_REPORT_PROGRESS_PERC, "0"))
@@ -182,13 +186,19 @@ def disable_debug_mode():
 def disable_trace_mode():
     os.environ[OMIGO_TRACE] = "0"
 
+def enable_warn_once_only_mode():
+    os.environ[OMIGO_WARN_ONCE_ONLY] = "1"
+
+def disable_warn_mode():
+    os.environ[OMIGO_WARN_ONCE_ONLY] = "1"
+
 def warn(msg):
     if (is_warn() or is_error() or is_critical()):
         print("[WARN]: " + msg)
 
 def warn_once(msg):
     # check if enabled
-    if (is_warn() == False):
+    if (is_warn_once_only() == False):
         return
 
     # refer to global variable
