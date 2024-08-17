@@ -5057,7 +5057,7 @@ def read(paths, sep = None, do_union = False, def_val_map = None, username = Non
 
     # check if union needs to be done. default is intersect
     if (do_union == False):
-        return tsvutils.read(paths, sep = sep, username = username, password = password)
+        return tsvutils.read(paths, sep = sep, username = username, password = password, num_par = num_par)
     else:
         # check if default values are checked explicitly
         if (def_val_map is None):
