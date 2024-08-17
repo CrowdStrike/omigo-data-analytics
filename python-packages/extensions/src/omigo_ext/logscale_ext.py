@@ -35,7 +35,7 @@ class LogScaleSearch:
         self.attempt_sleep_sec = attempt_sleep_sec
 
         # message at creating a new instance
-        utils.info("LogScaleSearch: new instance created: base_url: {}, repository: {}, timeout_sec: {}, wait_sec: {}, attempts: {}, attempt_sleep_sec: {}".format(
+        utils.debug("LogScaleSearch: new instance created: base_url: {}, repository: {}, timeout_sec: {}, wait_sec: {}, attempts: {}, attempt_sleep_sec: {}".format(
             self.base_url, self.repository, self.timeout_sec, self.wait_sec, self.attempts, self.attempt_sleep_sec))
 
         # warn
@@ -47,9 +47,6 @@ class LogScaleSearch:
 
     def call_search(self, query, start_time, end_time = None, url_encoded_cols = None, limit = None, num_par_on_limit = 0, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "LogScaleSearch: call_search")
-
-        # warn
-        utils.debug_once("LogScaleSearch: call_search() api is provided for research purposes only. Please use with caution")
 
         # set default
         if (end_time is None):
@@ -64,7 +61,7 @@ class LogScaleSearch:
         end_time_millis = funclib.datetime_to_utctimestamp_sec(end_time) * 1000
 
         # debug
-        utils.debug("call_search: query: {}, start_time: {}, end_time: {}".format(query, start_time, end_time))
+        utils.info("call_search: query: {}, start_time: {}, end_time: {}".format(query, start_time, end_time))
  
         # execute
         return self.__execute_query__(query, start_time_millis, end_time_millis, self.attempts, url_encoded_cols = url_encoded_cols,
@@ -123,7 +120,7 @@ class LogScaleSearch:
                 hasMoreEvents = extraData["hasMoreEvents"] if (extraData is not None and "hasMoreEvents" in extraData) else None
 
                 # debug
-                utils.info("{}: job: {}, eventCount: {}, hasMoreEvents: {}".format(utils.max_dmsg_str(dmsg), job_id_trim, poll_result.metadata["eventCount"], hasMoreEvents)) 
+                utils.debudebugg("{}: job: {}, eventCount: {}, hasMoreEvents: {}".format(utils.max_dmsg_str(dmsg), job_id_trim, poll_result.metadata["eventCount"], hasMoreEvents)) 
 
                 # count total results
                 results_total = results_total + poll_result.metadata["eventCount"]

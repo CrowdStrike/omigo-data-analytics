@@ -5050,7 +5050,7 @@ def get_version():
 def get_func_name(f):
     return f.__name__
 
-def read(paths, sep = None, do_union = False, def_val_map = None, username = None, password = None):
+def read(paths, sep = None, do_union = False, def_val_map = None, username = None, password = None, num_par = 0):
     # TODO: remove this after fixing design
     if (def_val_map is not None and do_union == False):
         raise Exception("Use do_union flag instead of relying on def_val_map to be non None")
@@ -5064,7 +5064,7 @@ def read(paths, sep = None, do_union = False, def_val_map = None, username = Non
             def_val_map = {}
 
         # return
-        return tsvutils.read(paths, sep = sep, def_val_map = {}, username = username, password = password)
+        return tsvutils.read(paths, sep = sep, def_val_map = {}, username = username, password = password, num_par = num_par)
 
 def write(xtsv, path):
     return xtsv.write(path)

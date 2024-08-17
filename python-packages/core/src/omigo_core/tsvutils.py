@@ -188,33 +188,46 @@ def merge_intersect(tsv_list, def_val_map = None):
             tsv_list2.append(t.select(same_cols))
         return merge(tsv_list2)
 
-def read(input_file_or_files, sep = None, def_val_map = None, username = None, password = None, s3_region = None, aws_profile = None):
+def read(input_file_or_files, sep = None, def_val_map = None, username = None, password = None, num_par = 0, s3_region = None, aws_profile = None):
+    # convert the input to array
     input_files = __get_argument_as_array__(input_file_or_files)
-    tsv_list = []
+
+    # tasks 
+    tasks = []
+
+    def __read_inner__(input_file):
+        # read file content                               
+        lines = file_paths_util.read_file_content_as_lines(input_file, s3_region, aws_profile)
+                                                          
+        # take header and dat
+        header = lines[0]
+        data = lines[1:]
+            
+        # check if a custom separator is defined
+        if (sep is not None):
+            # check for validation
+            for line in lines:
+                if ("\t" in line):
+                    raise Exception("Cant parse non tab separated file as it contains tab character:", input_file)
+
+            # create header and data
+            header = header.replace(sep, "\t")
+            data = [x.replace(sep, "\t") for x in data]
+
+        # return
+        return tsv.TSV(header, data)
+
+    # create tasks
     for input_file in input_files:
         # check if it is a file or url
         if (input_file.startswith("http")):
             tsv_list.append(read_url_as_tsv(input_file, username = username, password = password))
+            tasks.append(utils.ThreadPoolTask(read_url_as_tsv, input_file, username = username, password = password))
         else:
-            # read file content
-            lines = file_paths_util.read_file_content_as_lines(input_file, s3_region, aws_profile)
+            tasks.append(utils.ThreadPoolTask(__read_inner__, input_file))
 
-            # take header and dat
-            header = lines[0]
-            data = lines[1:]
-
-            # check if a custom separator is defined
-            if (sep is not None):
-                # check for validation
-                for line in lines:
-                    if ("\t" in line):
-                        raise Exception("Cant parse non tab separated file as it contains tab character:", input_file)
-
-                # create header and data
-                header = header.replace(sep, "\t")
-                data = [x.replace(sep, "\t") for x in data]
-
-            tsv_list.append(tsv.TSV(header, data))
+    # get result
+    tsv_list = utils.run_with_thread_pool(tasks, num_par = num_par, wait_sec = 1)
 
     # merge and return
     return merge(tsv_list, def_val_map = def_val_map)

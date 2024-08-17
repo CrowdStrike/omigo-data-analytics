@@ -209,7 +209,7 @@ class SplunkSearch:
         }
 
         # debug 
-        utils.info("{}: query: {}, attempts_remaining: {}, search_kwargs: {}".format(utils.max_dmsg_str(dmsg), query, attempts_remaining, str(search_kwargs)))
+        utils.debug("{}: query: {}, attempts_remaining: {}, search_kwargs: {}".format(utils.max_dmsg_str(dmsg), query, attempts_remaining, str(search_kwargs)))
 
         # check cache
         cache_key = "{}:{}".format(query, str(search_kwargs))
