@@ -347,14 +347,15 @@ def run_with_thread_pool(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0, d
     dmsg = extend_inherit_message(dmsg, "run_with_thread_pool")
 
     # debug
-    info("{}: num tasks: {}, num_par: {}".format(dmsg, len(tasks), num_par))
+    if (num_par > 0):
+        info("{}: num tasks: {}, num_par: {}".format(dmsg, len(tasks), num_par))
 
     # define results
     results = []
 
     # check if this is to be run in multi threaded mode or not
     if (num_par == 0):
-        info("{}: running in single threaded mode".format(dmsg))
+        debug("{}: running in single threaded mode".format(dmsg))
 
         # iterate
         for task in tasks:
