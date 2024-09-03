@@ -190,7 +190,7 @@ def enable_warn_once_only_mode():
     os.environ[OMIGO_WARN_ONCE_ONLY] = "1"
 
 def disable_warn_once_only_mode():
-    os.environ[OMIGO_WARN_ONCE_ONLY] = "1"
+    os.environ[OMIGO_WARN_ONCE_ONLY] = "0"
 
 def warn(msg):
     if (is_warn() or is_error() or is_critical()):
