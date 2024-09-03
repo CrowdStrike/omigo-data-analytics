@@ -249,7 +249,7 @@ class SplunkSearch:
                 }
 
                 # debug
-                utils.info("Status: job_id: {}, {}".format(job_id_trim, stats))
+                utils.debug("Status: job_id: {}, {}".format(job_id_trim, stats))
 
                 # check if job is done
                 if (stats["isDone"] == "1"):
