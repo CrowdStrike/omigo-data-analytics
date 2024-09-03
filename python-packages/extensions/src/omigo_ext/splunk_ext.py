@@ -236,7 +236,7 @@ class SplunkSearch:
                         utils.error_and_raise_exception("{}: timeout: {} > {} reached, failed to finish query".format(utils.max_dmsg_str(dmsg), exec_diff_sec, self.timeout_sec))
 
                     # else pass
-                    utils.info("{}: waiting for is_ready, sleeping for {} seconds".format(utils.max_dmsg_str(dmsg), self.wait_sec))
+                    utils.debug("{}: waiting for is_ready, sleeping for {} seconds".format(utils.max_dmsg_str(dmsg), self.wait_sec))
                     time.sleep(self.wait_sec)
                 
                 # check stats
