@@ -50,7 +50,7 @@ def is_trace():
     return str(os.environ.get(OMIGO_TRACE, "0")) == "1"
 
 def is_warn_once_only():
-    return str(os.environ.get(OMIGO_WARN_ONCE_ONLY, "0")) == "1"
+    return str(os.environ.get(OMIGO_WARN_ONCE_ONLY, "1")) == "1"
 
 def get_report_progress():
     return float(os.environ.get(OMIGO_DEBUG_REPORT_PROGRESS_PERC, "0"))
