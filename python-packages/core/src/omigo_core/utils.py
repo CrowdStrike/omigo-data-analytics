@@ -189,7 +189,7 @@ def disable_trace_mode():
 def enable_warn_once_only_mode():
     os.environ[OMIGO_WARN_ONCE_ONLY] = "1"
 
-def disable_warn_mode():
+def disable_warn_once_only_mode():
     os.environ[OMIGO_WARN_ONCE_ONLY] = "1"
 
 def warn(msg):
