@@ -8,6 +8,7 @@ from omigo_core import utils, tsvutils, funclib
 import sys
 import time
 import numpy as np
+from io import StringIO
 
 class TSV:
     """This is the main data processing class to apply different filter and transformation functions
@@ -78,7 +79,7 @@ class TSV:
         return col in self.header_map.keys()
 
     # cols is array of string
-    def select(self, col_or_cols, dmsg = ""):
+    def select(self, col_or_cols, add_if_missing = True, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             raise Exception("select: empty header tsv")
@@ -4363,9 +4364,16 @@ class TSV:
     # TODO: __explode_json_index__ needs to be tested and confirmed
     # TODO: need proper xpath based exclusion to better handle noise
     def explode_json(self, col, prefix = None, accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None,
-        merge_list_method = "cogroup", collapse_primitive_list = True, url_encoded_cols = None, nested_cols = None, collapse = True, max_results = None, ignore_if_missing = False,
-        default_val = "", dmsg = ""):
+        merge_list_method = None, collapse_primitive_list = None, url_encoded_cols = None, nested_cols = None, collapse = None, max_results = None, ignore_if_missing = None,
+        default_val = None, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "explode_json")
+
+        # resolve parameters
+        merge_list_method = utils.resolve_default_parameter("resolve_default_parameter", resolve_default_parameter, "join", dmsg) 
+        collapse_primitive_list = utils.resolve_default_parameter("collapse_primitive_list", collapse_primitive_list, False, dmsg)
+        collapse = utils.resolve_default_parameter("collapse", collapse, False, dmsg)
+        ignore_if_missing = utils.resolve_default_parameter("ignore_if_missing", ignore_if_missing, True, dmsg)
+        default_val = utils.resolve_default_parameter("default_val", default_val, "", dmsg)
 
         # validation
         if (prefix is None):
@@ -4405,6 +4413,63 @@ class TSV:
             .add_seq_num(prefix + ":__json_index__", dmsg = dmsg) \
             .explode([col], exp_func, prefix = prefix, default_val = default_val, collapse = collapse, dmsg = dmsg) \
             .validate()
+
+    # newer version of explode_json
+    def explode_json_v2(self, col, dmsg = "", **kwargs):
+        dmsg = utils.extend_inherit_message(dmsg, "explode_json_v2")
+
+        # input
+        xinput = self \
+            .select(col) \
+            .is_nonempty_str(col)
+
+        # get all original values
+        vs = xinput.col_as_array_uniq(col)
+
+        # variable to store values
+        json_arr = []
+        temp_col = "__explode_json_v2_temp_hash__"
+
+        # iterate
+        for v in vs:
+            # compute hash
+            hash_value = utils.compute_hash(v)
+
+            # TODO: hack
+            if (v.startswith("{'") or v.startswith("\"{'")):
+                utils.trace("{}: Found non standard json with mix of single and double quotes. Transforming: {}".format(dmsg, v))
+                v = v.replace("\"", "")
+                v = v.replace("'", "\"")
+
+            # load as json
+            mp = json.loads(v) if (v != "") else {}
+
+            # convert to string values
+            for k in mp.keys():
+                mp[k] = str(mp[k])
+
+            # append hash
+            mp[temp_col] = hash_value
+
+            # append
+            json_arr.append(json.dumps(mp))
+
+        # create string
+        json_str = "[" + ",".join(json_arr) + "]"
+
+        # parse
+        df = pd.read_json(StringIO(json_str))
+
+        # result
+        result = from_df(df) \
+            .add_prefix(col, dmsg = dmsg)
+
+        # return
+        return self \
+            .transform(col, utils.compute_hash, "{}:{}".format(col, temp_col), dmsg = dmsg) \
+            .drop_cols(col, dmsg = dmsg) \
+            .left_map_join(result, "{}:{}".format(col, temp_col), dmsg = dmsg) \
+            .drop_cols("{}:{}".format(col, temp_col), dmsg = dmsg)
 
     def transpose(self, n = 1, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "transpose")
@@ -5091,16 +5156,44 @@ def merge_intersect(xtsvs):
 def exists(path):
     return tsvutils.check_exists(path)
 
+# convert from data frame. TODO: df can have multiple header lines coz of indexes
+# TODO: take care of map data type
 def from_df(df):
-    return tsvutils.from_df(df)
+    utils.warn_once("from_df() api doesnt support reading indexed columns in pandas dataframes yet.")
+    utils.warn_once("from_df() api doesnt handle map data type properly")
 
-def from_maps(mps):
+    # get the csv str
+    tsv_lines = df.to_csv(sep = "\t").rstrip("\n").split("\n")
+
+    # get header and data
+    header = tsv_lines[0]
+    header_fields = header.split("\t")
+
+    # number of columns to skip with empty column name
+    skip_count = 0
+    for h in header_fields:
+        if (h == ""):
+            skip_count = skip_count + 1
+
+    # remove the skip_count columns
+    header_fields = header_fields[skip_count:]
+
+    # generate data
+    data = []
+    if (len(tsv_lines) > 1):
+        for line in tsv_lines[1:]:
+            fields = line.split("\t")[skip_count:]
+            data.append("\t".join(fields))
+
+    # return
+    return tsv.TSV("\t".join(header_fields), data).validate()
+
+def from_maps(mps, accepted_cols = None, excluded_cols = None, url_encoded_cols = None):
     # validation
     if (len(mps) == 0):
         utils.warn_once("from_maps: empty list")
         return create_empty() 
 
-    # return tsvutils.load_from_array_of_map(mps)
     xtsvs = []
     for mp in mps:
         header = "json"
@@ -5109,7 +5202,7 @@ def from_maps(mps):
 
     # use explode
     result = merge_union(xtsvs) \
-        .explode_json("json", prefix = "json") \
+        .explode_json("json", prefix = "json", accepted_cols = accepted_cols, excluded_cols = excluded_cols, url_encoded_cols = url_encoded_cols) \
         .remove_prefix("json") \
         .drop_cols_if_exists(["__json_index__", "__explode_json_index__"])
 

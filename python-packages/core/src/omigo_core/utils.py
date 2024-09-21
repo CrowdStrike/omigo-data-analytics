@@ -17,6 +17,8 @@ ERROR_MSG_CACHE = {}
 WARN_MSG_CACHE = {}
 DEBUG_MSG_CACHE = {}
 TRACE_MSG_CACHE = {}
+EXCEPTION_AFTER_WARNINGS_MSG_CACHE = {}
+RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE = {}
 
 # some env variables
 OMIGO_CRITICAL = "OMIGO_CRITICAL"
@@ -428,6 +430,35 @@ def error_and_raise_exception(msg, max_len = 2000):
     # raise exception
     raise Exception(msg)
 
+def raise_exception_after_n_warnings(msg, num_warnings = 1000):
+    global EXCEPTION_AFTER_WARNINGS_MSG_CACHE
+
+    # check if msg is new
+    if (msg not in EXCEPTION_AFTER_WARNINGS_MSG_CACHE.keys()):
+        EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg] = 1
+
+    # check the counter
+    if (EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg] < num_warnings):
+        EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg] = EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg] + 1
+        print("[WARN DEPRECATED]: {}".format(msg))
+    else:
+        del EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg]
+        raise Exception(msg)
+
+def rate_limit_after_n_warnings(msg, num_warnings = 1000, sleep_secs = 10):
+    global EXCEPTION_AFTER_WARNINGS_MSG_CACHE
+
+    # check if msg is new
+    if (msg not in EXCEPTION_AFTER_WARNINGS_MSG_CACHE.keys()):
+        EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg] = 1
+
+    # check the counter
+    if (EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg] < num_warnings):
+        EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg] = EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg] + 1
+        print("[WARN DEPRECATED]: {}".format(msg))
+    else:
+        time.sleep(sleep_secs)
+
 # Deprecated
 def strip_spl_white_spaces(v):
     warn_once("Deprecated: Instead of strip_spl_white_spaces use replace_spl_white_spaces_with_space")
@@ -505,7 +536,6 @@ def is_text_content_col(col, text_columns):
             return True
 
     return False
-
 
 def resolve_default_parameter(name, value, default_value, msg):
     # check if prefix parameter is None
@@ -704,3 +734,27 @@ def logger_info(logger, msg):
 def logger_warn(logger, msg):
     if (is_warn()):
         logger.warn(msg)
+
+# this method returns the arg_or_args as an array of single string if the input is just a string, or return as original array
+# useful for calling method arguments that can take single value or an array of values.
+# TBD: Relies on fact that paths are never single letter strings
+def get_argument_as_array(arg_or_args):
+    # check if it is of type list
+    if (isinstance(arg_or_args, list)):
+        if (len(arg_or_args) == 0):
+            raise Exception("get_argument_as_array: empty list")
+        elif (len(arg_or_args) == 1):
+            return get_argument_as_array(arg_or_args[0])
+
+    # check for single letter string
+    is_single_letter = True
+    for i in range(len(arg_or_args)):
+        if (len(arg_or_args[i]) > 1):
+            is_single_letter = False
+            break
+
+    if (is_single_letter == True):
+        return [arg_or_args]
+    else:
+        return arg_or_args
+

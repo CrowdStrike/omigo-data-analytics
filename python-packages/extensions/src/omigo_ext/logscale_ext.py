@@ -45,7 +45,7 @@ class LogScaleSearch:
         # create client once
         return HumioClient(base_url = self.base_url, repository = self.repository, user_token = self.user_token)
 
-    def call_search(self, query, start_time, end_time = None, url_encoded_cols = None, limit = None, num_par_on_limit = 0, dmsg = ""):
+    def call_search(self, query, start_time, end_time = None, accepted_cols = None, excluded_cols = None, url_encoded_cols = None, limit = None, num_par_on_limit = 0, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "LogScaleSearch: call_search")
 
         # set default
@@ -64,8 +64,8 @@ class LogScaleSearch:
         utils.info("call_search: query: {}, start_time: {}, end_time: {}".format(query, start_time, end_time))
  
         # execute
-        return self.__execute_query__(query, start_time_millis, end_time_millis, self.attempts, url_encoded_cols = url_encoded_cols,
-            limit = limit, num_par_on_limit = num_par_on_limit, dmsg = dmsg)
+        return self.__execute_query__(query, start_time_millis, end_time_millis, self.attempts, accepted_cols = accepted_cols, excluded_cols = excluded_cols,
+            url_encoded_cols = url_encoded_cols, limit = limit, num_par_on_limit = num_par_on_limit, dmsg = dmsg)
 
     # get splunk job id for display
     def __get_logscale_job_display_id__(self, logscale_job):
@@ -75,11 +75,13 @@ class LogScaleSearch:
             return ""
 
     # inner method for calling query 
-    def __execute_query__(self, query, start_time_millis, end_time_millis, attempts_remaining, url_encoded_cols = None, limit = None, num_par_on_limit = 0, dmsg = ""):
+    def __execute_query__(self, query, start_time_millis, end_time_millis, attempts_remaining, accepted_cols = None, excluded_cols = None,
+        url_encoded_cols = None, limit = None, num_par_on_limit = 0, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "LogScaleSearch: __execute_query__")
 
         # call and return
-        return self.__execute_normal_query__(query, start_time_millis, end_time_millis, url_encoded_cols, attempts_remaining, limit, num_par_on_limit, dmsg = dmsg)
+        return self.__execute_normal_query__(query, start_time_millis, end_time_millis, accepted_cols, excluded_cols, url_encoded_cols, attempts_remaining,
+            limit, num_par_on_limit, dmsg = dmsg)
 
     def __split_time_slots_millis__(self, st_millis, et_millis, num_splits):
         # find time width
@@ -95,7 +97,7 @@ class LogScaleSearch:
         # return
         return slots
 
-    def __execute_normal_query__(self, query, start_time_millis, end_time_millis, url_encoded_cols, attempts_remaining, limit, num_par_on_limit, dmsg = ""):
+    def __execute_normal_query__(self, query, start_time_millis, end_time_millis, accepted_cols, excluded_cols, url_encoded_cols, attempts_remaining, limit, num_par_on_limit, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "LogScaleSearch: __execute_normal_query__")
 
         # execute query
@@ -120,7 +122,7 @@ class LogScaleSearch:
                 hasMoreEvents = extraData["hasMoreEvents"] if (extraData is not None and "hasMoreEvents" in extraData) else None
 
                 # debug
-                utils.debudebugg("{}: job: {}, eventCount: {}, hasMoreEvents: {}".format(utils.max_dmsg_str(dmsg), job_id_trim, poll_result.metadata["eventCount"], hasMoreEvents)) 
+                utils.debug("{}: job: {}, eventCount: {}, hasMoreEvents: {}".format(utils.max_dmsg_str(dmsg), job_id_trim, poll_result.metadata["eventCount"], hasMoreEvents)) 
 
                 # count total results
                 results_total = results_total + poll_result.metadata["eventCount"]
@@ -152,7 +154,8 @@ class LogScaleSearch:
 
                         # iterate
                         for (st, et) in time_slots:
-                            xtsv_result = self.__execute_normal_query__(query, st, et, url_encoded_cols, attempts_remaining, limit2, num_par_on_limit2, dmsg = dmsg)
+                            xtsv_result = self.__execute_normal_query__(query, st, et, accepted_cols, excluded_cols, url_encoded_cols, attempts_remaining,
+                                limit2, num_par_on_limit2, dmsg = dmsg)
                             utils.info("{}: Executed query with new time range: start_time: {}, end_time: {}, num_rows: {}".format(dmsg, st, et, xtsv_result.num_rows()))
                             # check if results are still exceeding limit
                             if (xtsv_result.num_rows() >= limit):
@@ -167,7 +170,7 @@ class LogScaleSearch:
             # get the result if they were not returned by limit calls
             if (result is None):
                 # get the results
-                result = self.__parse_results__(logscale_job, events, query, start_time_millis, end_time_millis, url_encoded_cols)
+                result = self.__parse_results__(logscale_job, events, query, start_time_millis, end_time_millis, accepted_cols, excluded_cols, url_encoded_cols)
 
             # cancel the job
             # logscale_job.cancel()
@@ -193,7 +196,7 @@ class LogScaleSearch:
                     time.sleep(self.attempt_sleep_sec)
 
                 # return    
-                return self.__execute_normal_query__(query, start_time_millis, end_time_millis, url_encoded_cols, attempts_remaining - 1, limit,
+                return self.__execute_normal_query__(query, start_time_millis, end_time_millis, accepted_cols, excluded_cols, url_encoded_cols, attempts_remaining - 1, limit,
                     num_par_on_limit, dmsg = dmsg)
             else:
                 utils.error("{}: Exception: {}".format(utils.max_dmsg_str(dmsg), str(e)))
@@ -213,7 +216,7 @@ class LogScaleSearch:
         return {"__start_time__": start_time_millis, "__end_time__": end_time_millis, "__error_msg__": "", "__count__": "" }
 
     # splunk returns lot of things. One of them is tag::eventtype which is excluded
-    def __parse_results__(self, logscale_job, events, query, start_time_millis, end_time_millis, url_encoded_cols):
+    def __parse_results__(self, logscale_job, events, query, start_time_millis, end_time_millis, accepted_cols, excluded_cols, url_encoded_cols):
         # create base map
         base_mp = self.__create_empty_results_map__(query, start_time_millis, end_time_millis)
 
@@ -260,11 +263,6 @@ class LogScaleSearch:
                 # some of the keys have @ and # as prefix. Remove those prefixes
                 key2 = key2.replace("@", "").replace("#", "")
 
-                # check if the key-values are to be url encoded
-                if (url_encoded_cols is not None and key2 in url_encoded_cols):
-                    key2 = "{}:url_encoded".format(key2)
-                    value2 = utils.url_encode(value2)
-
                 # assign to new map
                 result[key2] = utils.replace_spl_white_spaces_with_space(str(value2))
 
@@ -272,7 +270,7 @@ class LogScaleSearch:
             results.append(result)
 
         # construct tsv from the list of hashmaps
-        return tsv.from_maps(results)
+        return tsv.from_maps(results, accepted_cols = accepted_cols, excluded_cols = excluded_cols, url_encoded_cols = url_encoded_cols)
         
     def __resolve_time_str__(self, x):
         # check for specific syntax with now

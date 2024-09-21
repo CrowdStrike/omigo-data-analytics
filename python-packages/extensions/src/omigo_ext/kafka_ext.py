@@ -34,6 +34,7 @@ class KafkaClient:
         self.nested_cols = nested_cols
 
         # utils.warn("This KafkaConsumer is Work in Progress.")
+        raise Exception("This KafkaClient is not ready")
 
     # method to read n messages from the topic.
     def read(self, n = 0, max_duration_sec = 0, sampling_rate = 1.0, seed = 0):

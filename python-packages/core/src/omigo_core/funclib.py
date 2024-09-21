@@ -5,264 +5,166 @@ import numpy as np
 from dateutil import parser
 import datetime
 from omigo_core import utils
+from omigo_core import udfs
 
-# TODO: mkstr variantgs needs to use *args
+# TODO: mkstr variants needs to use *args
 
-def parse_image_file_base_name(x):
-    if (len(x) <= 1):
-        return x
+def parse_image_file_base_name(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.parse_file_base_name(*args, **kwargs)
 
-    index = -1
-    if ("\\" in x):
-        index = x.rindex("\\")
-    elif ("/" in x):
-        index = x.rindex("/")
-    return str(x[index+1:])
+def get_len(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.get_len(*args, **kwargs)
 
-def get_len(vs):
-    return str(len(vs))
+def get_non_empty_len(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.get_non_empty_len(*args, **kwargs)
 
-def get_non_empty_len(vs):
-    vs = list(filter(lambda t: len(t.strip()) > 0, vs))
-    return str(len(vs))
+def uniq_len(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.uniq_len(*args, **kwargs)
 
-def uniq_len(vs):
-    vs2 = set()
-    for t in vs:
-        for k in str(t).split(","):
-            if (len(k.strip()) > 0):
-                vs2.add(str(k))
-    return str(len(vs2))
+def uniq_mkstr(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.uniq_mkstr(*args, **kwargs)
 
-def uniq_mkstr(vs):
-    vs2 = set()
-    for t in vs:
-        for k in str(t).split(","):
-            if (len(k.strip()) > 0):
-                vs2.add(str(k))
-    return ",".join(sorted([str(x) for x in vs2]))
+def split_merge_uniq_mkstr(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.split_merge_uniq_mkstr(*args, **kwargs)
 
-def split_merge_uniq_mkstr(vs):
-    vs2 = []
-    for v in vs:
-        vs2 = vs2 + v.split(",")
-    vs2 = list(set(filter(lambda t: len(t.strip()) > 0, vs2)))
-    return ",".join(sorted([str(x) for x in vs2]))
+def mean(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.mean(*args, **kwargs)
 
-def mean(vs):
-    vs = list([float(v) for v in vs])
-    return statistics.mean(vs)
+def std_dev(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.std_dev(*args, **kwargs)
 
-def std_dev(vs):
-    vs = list([float(v) for v in vs])
+def mkstr(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.mkstr(*args, **kwargs)
 
-    # adding check for atleast 2 elements before calling the statistics package
-    if (len(vs) < 2):
-        return 0
+def sorted_mkstr(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.sorted_mkstr(*args, **kwargs)
 
-    # return
-    return statistics.stdev(vs)
+def mkstr4f(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.mkstr4f(*args, **kwargs)
 
-def mkstr(vs):
-    vs2 = list(filter(lambda t: len(t.strip()) > 0, [str(x) for x in vs]))
-    return ",".join(vs2)
+def minint(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.minint(*args, **kwargs)
 
-def sorted_mkstr(vs):
-    vs2 = sorted(list(filter(lambda t: len(t.strip()) > 0, [str(x) for x in vs])))
-    return ",".join(vs2)
+def maxint(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.maxint(*args, **kwargs)
 
-def mkstr4f(vs):
-    vs2 = list(["{:4f}".format(float(x)) for x in vs])
-    return ",".join(vs2)
+def minfloat(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.minfloat(*args, **kwargs)
 
-def minint(vs):
-    if (vs is None or len(vs) == 0):
-        raise Exception("minint: empty vs")
+def maxfloat(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.maxfloat(*args, **kwargs)
 
-    min_value = str(vs[0])
-    for v in vs[1:]:
-        if (int(float(v)) < int(float(min_value))):
-            min_value = str(v)
+def minstr(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.minstr(*args, **kwargs)
 
-    return str(min_value)
+def maxstr(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.maxstr(*args, **kwargs)
 
-def maxint(vs):
-    if (vs is None or len(vs) == 0):
-        raise Exception("maxint: empty vs")
+def minint_failsafe(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.minint_failsafe(*args, **kwargs)
 
-    max_value = str(vs[0])
-    for v in vs[1:]:
-        if (int(float(v)) > int(float(max_value))):
-            max_value = str(v)
+def maxint_failsafe(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.maxint_failsafe(*args, **kwargs)
 
-    return str(max_value)
-
-def minfloat(vs):
-    if (vs is None or len(vs) == 0):
-        raise Exception("minfloat: empty vs")
-
-    min_value = str(vs[0])
-    for v in vs[1:]:
-        if (float(v) < float(min_value)):
-            min_value = str(v)
-
-    return str(min_value)
-
-def maxfloat(vs):
-    if (vs is None or len(vs) == 0):
-        raise Exception("maxfloat: empty vs")
-
-    max_value = str(vs[0])
-    for v in vs[1:]:
-        if (float(v) > float(max_value)):
-            max_value = str(v)
-
-    return str(max_value)
-
-def minstr(vs):
-    if (vs is None or len(vs) == 0):
-        raise Exception("minstr: empty vs")
-
-    min_value = str(vs[0])
-    for v in vs[1:]:
-        if (str(v) < min_value):
-            min_value = str(v)
-
-    return str(min_value)
-
-def maxstr(vs):
-    if (vs is None or len(vs) == 0):
-        raise Exception("maxstr: empty vs")
-
-    max_value = str(vs[0])
-    for v in vs[1:]:
-        if (str(v) > max_value):
-            max_value = str(v)
-
-    return str(max_value)
-
-def minint_failsafe(vs):
-    if (vs is None or len(vs) == 0):
-        return "" 
-    else:
-        vs = list(filter(lambda t: t != "", vs))
-        if (len(vs) == 0):
-            return "" 
-        else:
-            return minint(vs) 
-
-def maxint_failsafe(vs):
-    if (vs is None or len(vs) == 0):
-        return "" 
-    else:
-        vs = list(filter(lambda t: t != "", vs))
-        if (len(vs) == 0):
-            return "" 
-        else:
-            return maxint(vs) 
-
-def minstr_failsafe(vs):
-    if (vs is None or len(vs) == 0):
-        return "" 
-    else:
-        vs = list(filter(lambda t: t != "", vs))
-        if (len(vs) == 0):
-            return "" 
-        else:
-            return minstr(vs) 
+def minstr_failsafe(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.minstr_failsafe(*args, **kwargs)
             
-def maxstr_failsafe(vs):
-    if (vs is None or len(vs) == 0):
-        return "" 
-    else:
-        vs = list(filter(lambda t: t != "", vs))
-        if (len(vs) == 0):
-            return "" 
-        else:
-            return maxstr(vs)
+def maxstr_failsafe(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.maxstr_failsafe(*args, **kwargs)
 
-def sumint(vs):
-    if (len(vs) == 0):
-        return 0
-    else:
-        return sum([int(float(t)) for t in vs])
+def sumint(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.sumint(*args, **kwargs)
 
-def sumfloat(vs):
-    if (len(vs) == 0):
-        return 0.0
-    else:
-        return sum([float(t) for t in vs])
+def sumfloat(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.sumfloat(*args, **kwargs)
 
 # TODO: The semantics are not clear
-def uniq_count(vs):
-    vs2 = list(filter(lambda t: t.strip() != "", vs))
-    return len(set(vs2))
+def uniq_count(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.uniq_count(*args, **kwargs)
 
-def merge_uniq(vs):
-    result = []
-    for v in vs:
-        for v2 in v.split(","):
-            result.append(v2)
+def merge_uniq(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.merge_uniq(*args, **kwargs)
 
-    # return
-    return ",".join(sorted(list(set(result))))
+def select_first(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.select_first(*args, **kwargs)
 
-def select_first(x, y):
-    return x
+def select_first_non_empty(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.select_first_non_empty(*args, **kwargs)
 
-def select_max_int(x, y):
-    return int(max(int(x), int(y)))
+def select_max_int(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.select_max_int(*args, **kwargs)
 
 def str_arr_to_float(xs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
     return [float(x) for x in xs]
 
-def quantile(xs, start = 0, end = 1, by = 0.25, precision = 4):
-    if (start > end):
-        raise Exception("Start: {} > End: {}".format(start, end))
+def quantile(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.quantile(*args, **kwargs)
 
-    qarr = []
-    cur = start
-    while (cur < end):
-        qarr.append(cur)
-        cur = cur + by
+def quantile4(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.quantile4(*args, **kwargs)
 
-    format_str = "{:." + str(precision) + "f}"
-    quan = np.quantile(str_arr_to_float(xs), qarr)
-    return ",".join(format_str.format(x) for x in quan)
+def quantile10(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.quantile10(*args, **kwargs)
 
-def quantile4(xs):
-    return quantile(xs)
+def quantile40(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.quantile40(*args, **kwargs)
 
-def quantile10(xs):
-    return quantile(xs, by=1/10)
+def max_str(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.max_str(*args, **kwargs)
 
-def quantile40(xs):
-    return quantile(xs, by=1/40)
+def min_str(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.min_str(*args, **kwargs)
 
-def max_str(xs):
-    utils.warn_once("max_str is deprecated. Use maxstr")
-    xs = sorted(xs)
-    return xs[-1]
+def to2digit(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.to2digit(*args, **kwargs)
 
-def min_str(xs):
-    utils.warn_once("min_str is deprecated. Use minstr")
-    xs = sorted(xs)
-    return xs[0]
+def to4digit(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.to2digit(*args, **kwargs)
 
-def to2digit(x):
-    return "{:.2f}".format(float(x))
+def to6digit(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.to2digit(*args, **kwargs)
 
-def to4digit(x):
-    return "{:.4f}".format(float(x))
-
-def to6digit(x):
-    return "{:.6f}".format(float(x))
-
-def convert_prob_to_binary(x, split=0.5):
-    if (x >= split):
-        return 1
-    else:
-        return 0
+def convert_prob_to_binary(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
+    return udfs.convert_prob_to_binary(*args, **kwargs)
 
 def get_str_map_with_keys(mp, keys, fail_on_missing = True):
     mp2 = {}
@@ -283,262 +185,21 @@ def get_str_map_without_keys(mp, excluded_keys):
 
     return mp2
 
-def datetime_to_utctimestamp_millis(x):
-    # convert this to string first for failsafe
-    x = str(x)
-
-    # 1681202675933
-    if (len(str(x)) == 13 and str(x).isnumeric() == True):
-        # this looks like numeric timestamp in millis
-        return int(x)
-
-    # 1681202675.933
-    if (len(str(x)) == 14 and str(x).find(".") == 10 and str(x).isnumeric() == True):
-        # this looks like numeric timestamp in millis
-        return int(x)
-
-    # 2023-04-11T08:44:35.933Z
-    if (len(x) == 24 and x[19] == "." and x.endswith("Z")):
-        return int(float(parser.parse(x).timestamp() * 1000))
-
-    # 2023-04-15T15:05:16.175000Z
-    if (len(x) == 27 and x[19] == "." and x.endswith("Z")):
-        return int(float(parser.parse(x).timestamp() * 1000))
-
-    # 2023-04-11T08:44:35.933+00:00
-    if (len(x) == 29 and x[-6] == "+"):
-        return int(float(parser.parse(x).timestamp() * 1000))
-
-    # 2023-04-18T18:47:45 or 2023-04-18 18:47:45
-    if (len(x) == 19 and (x[10] == "T" or x[10] == " ")):
-        return int(float(parser.parse(x + "+00:00").timestamp() * 1000))
-
-    # this seems to be a timestamp with second precision.
-    return int(datetime_to_utctimestamp_sec(x) * 1000)
-
-# TODO. better naming
-def datetime_to_utctimestamp(x):
-    # use datetime_to_utctimestamp_sec
-    utils.warn_once("datetime_to_utctimestamp: Deprecated. Use datetime_to_utctimestamp_sec instead")
-    return datetime_to_utctimestamp_sec(x)
-
-def datetime_to_utctimestamp_sec(x):
-    # convert this to string first for failsafe
-    x = str(x)
-
-    # 2022-05-20T05:00:00+00:00
-    if (x.endswith("UTC") or x.endswith("GMT") or x.endswith("Z") or x.endswith("+00:00")):
-        return int(parser.parse(x).timestamp())
-    elif (len(x) == 10 and x.find("-") != -1):
-        # 2021-11-01
-        x = x + "T00:00:00Z"
-        return int(parser.parse(x).timestamp())
-    elif (len(x) == 19):
-        # 2021-11-01T00:00:00
-        x = x + "Z"
-        if (x[10] == " "):
-            x = x.replace(" ", "T")
-        return int(parser.parse(x).timestamp())
-    elif (len(x) == 23 and x[19] == "."):
-        # 2021-11-01T00:00:00.000
-        x = x + "Z"
-        return int(parser.parse(x).timestamp())
-    elif (len(x) == 26):
-        # 2021-11-01T00:00:00.000000
-        x = x + "Z"
-        return int(parser.parse(x).timestamp())
-    elif (len(x) == 27 and x[19] == "." and x.endswith("Z")):
-        # 2023-04-15T15:05:16.175000Z
-        return int(parser.parse(x).timestamp())
-    elif (len(x) == 29 and x[-6] == "+"):
-        # 2023-04-11T08:44:35.933+00:00
-        return int(parser.parse(x).timestamp())
-    elif (len(x) == 10 and str(x).isnumeric() == True):
-        # this looks like a numeric timestamp
-        return int(x)
-    elif (len(x) == 13 and str(x).isnumeric() == True):
-        # this looks like numeric timestamp in millis
-        return int(int(x) / 1000)
-    elif (len(x) == 19 and (x[10] == "T" or x[10] == " ")):
-        # 2023-04-18T18:47:45 or 2023-04-18 18:47:45
-        return int(float(parser.parse(x + "+00:00").timestamp() * 1000))
-    else:
-        raise Exception("Unknown date format. Problem with UTC: '{}'".format(x))
-
-# TODO: Converts seconds format only. Even the original time in milliseconds will return seconds format
-def utctimestamp_to_datetime(x):
-    # use the string form
-    x = str(x)
-    if (len(x) == 10 and x.isnumeric() == True):
-        return datetime.datetime.utcfromtimestamp(int(x)).replace(tzinfo = datetime.timezone.utc)
-    elif (len(x) == 13 and x.isnumeric() == True):
-        return datetime.datetime.utcfromtimestamp(int(x)/1000).replace(tzinfo = datetime.timezone.utc)
-    elif (len(x) > 10 and x.find(".") == 10 and utils.is_float(x)): 
-        return datetime.datetime.utcfromtimestamp(float(x)).replace(tzinfo = datetime.timezone.utc)
-    else:
-        raise Exception("Unknown timestamp format: {}".format(x))
-
-# TODO: Converts seconds format only
-def utctimestamp_millis_to_datetime(x):
-    return utctimestamp_to_datetime(x)
-
-# TODO: Converts seconds format only
-# Its utc so removed the last timezone
-def utctimestamp_to_datetime_str(x):
-    return utctimestamp_to_datetime(x).isoformat()[0:19]
-
-# Its utc so removed the last timezone. TODO: Keep the UTC or Z
-def utctimestamp_millis_to_datetime_str(x):
-    result = utctimestamp_to_datetime(x).isoformat()
-    if (result.endswith("UTC")):
-        return result[0:23]
-    else:
-        return result
-
-def datetime_to_timestamp(x):
-    raise Exception("Please use datetime_to_utctimestamp")
-
-def get_utctimestamp_sec():
-    return int(datetime.datetime.now(datetime.timezone.utc).timestamp())
-
-def get_utctimestamp_millis():
-    return int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 1000)
-
-def datestr_to_datetime(x):
-    return utctimestamp_to_datetime(datetime_to_utctimestamp_sec(x))
-
-def select_first_non_empty(*args, **kwargs):
-    # variable name
-    xs = args
-
-    # boundary condition
-    if (xs is None or len(xs) == 0):
-        return ""
-
-    # check if it is list or tuple
-    if (isinstance(xs[0], list)):
-        xs = xs[0]
-
-    # boundary conditions
-    for x in xs:
-        if (x is not None and x != ""):
-            return str(x)
-
-    # return default
-    return ""
-
 # def if_else_non_empty_str(x, v1, v2):
 def if_else_non_empty_str(*args):
-    # variable name
-    xs = args
-
-    # boundary condition
-    if (xs is None or len(xs) == 0):
-        raise Exception("if_else_non_empty_str: invalid input") 
-
-    # check if it is list or tuple
-    if (isinstance(xs[0], list)):
-        xs = xs[0]
-
-    # validation
-    if (len(xs) != 3):
-        raise Exception("if_else_non_empty_str: invalid input: {}".format(xs))
-
-    # assign variables
-    x = xs[0]
-    v1 = xs[1]
-    v2 = xs[2]
-
-    if (x is not None and str(x) != ""):
-        return str(v1)
-    else:
-        return str(v2)
+    return udfs.if_else_non_empty_str(*args)
 
 # def if_else_str(xinput, xval, v1, v2):
 def if_else_str(*args):
-    # variable name
-    xs = args
-
-    # boundary condition
-    if (xs is None or len(xs) == 0):
-        raise Exception("if_else_non_empty_str: invalid input") 
-
-    # check if it is list or tuple
-    if (isinstance(xs[0], list)):
-        xs = xs[0]
-
-    # validation
-    if (len(xs) != 4):
-        raise Exception("if_else_str: invalid input: {}".format(xs))
-
-    # assign variables
-    xinput = xs[0]
-    xval = xs[1]
-    v1 = xs[2]
-    v2 = xs[3]
-
-    # apply function
-    if (xinput is not None and str(xinput) == str(xval)):
-        return str(v1)
-    else:
-        return str(v2)
+    return udfs.if_else_str(*args)
 
 # def if_else_int(xinput, xval, v1, v2):
 def if_else_int(*args):
-    # variable name
-    xs = args
-
-    # boundary condition
-    if (xs is None or len(xs) == 0):
-        raise Exception("if_else_int: invalid input") 
-
-    # check if it is list or tuple
-    if (isinstance(xs[0], list)):
-        xs = xs[0]
-
-    # validation
-    if (len(xs) != 4):
-        raise Exception("if_else_int: invalid input: {}".format(xs))
-
-    # assign variables
-    xinput = xs[0]
-    xval = xs[1]
-    v1 = xs[2]
-    v2 = xs[3]
-
-    # apply function
-    if (xinput is not None and int(xinput) == int(xval)):
-        return v1
-    else:
-        return v2
+    return udfs.if_else_int(*args)
 
 # def if_else_non_zero_int(x, v1, v2):
 def if_else_non_zero_int(*args):
-    # variable name
-    xs = args
-
-    # boundary condition
-    if (xs is None or len(xs) == 0):
-        raise Exception("if_else_non_zero_int: invalid input") 
-
-    # check if it is list or tuple
-    if (isinstance(xs[0], list)):
-        xs = xs[0]
-
-    # validation
-    if (len(xs) != 3):
-        raise Exception("if_else_int: invalid input: {}".format(xs))
-
-    # assign variables
-    x = xs[0]
-    v1 = xs[1]
-    v2 = xs[2]
-
-    # apply function
-    if (x is None or int(x) != 0):
-        return v1
-    else:
-        return v2
+    return udfs.if_else_non_zero_int(*args)
 
 # TODO: this is bad implementation. The Win32 timestamp format needs proper handling
 def win32_timestamp_to_utctimestamp(x):
@@ -649,4 +310,48 @@ def get_display_relative_time_str(v):
 
     # return
     return result
+
+def datetime_to_utctimestamp_millis(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use timefuncs package")
+    return timefuncs.datetime_to_utctimestamp_millis(*args, **kwargs)
+
+def datetime_to_utctimestamp(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use timefuncs package")
+    return timefuncs.datetime_to_utctimestamp(*args, **kwargs)
+
+def datetime_to_utctimestamp_sec(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use timefuncs package")
+    return timefuncs.datetime_to_utctimestamp_sec(*args, **kwargs)
+
+def utctimestamp_to_datetime(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use timefuncs package")
+    return timefuncs.utctimestamp_to_datetime(*args, **kwargs)
+
+def utctimestamp_millis_to_datetime(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use timefuncs package")
+    return timefuncs.utctimestamp_millis_to_datetime(*args, **kwargs)
+
+def utctimestamp_to_datetime_str(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use timefuncs package")
+    return timefuncs.utctimestamp_to_datetime_str(*args, **kwargs)
+
+def utctimestamp_millis_to_datetime_str(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use timefuncs package")
+    return timefuncs.utctimestamp_millis_to_datetime_str(*args, **kwargs)
+
+def datetime_to_timestamp(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use timefuncs package")
+    return timefuncs.datetime_to_timestamp(*args, **kwargs)
+
+def get_utctimestamp_sec(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use timefuncs package")
+    return timefuncs.get_utctimestamp_sec(*args, **kwargs)
+
+def get_utctimestamp_millis(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use timefuncs package")
+    return timefuncs.get_utctimestamp_millis(*args, **kwargs)
+
+def datestr_to_datetime(*args, **kwargs):
+    utils.rate_limit_after_n_warnings("Deprecated. Use timefuncs package")
+    return datestr_to_datetime(*args, **kwargs)
 
