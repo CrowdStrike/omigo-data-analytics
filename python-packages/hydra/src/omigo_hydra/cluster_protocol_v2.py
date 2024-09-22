@@ -594,15 +594,15 @@ class ClusterEntityProtocol:
     def do_cleanup(self, xchild_entity):
         # delete from active
         self.cluster_handler.remove_dir_recursive(ClusterPaths.get_entity_active_children_by_id(self.get_entity_type(), self.get_entity_id(),
-            xchild_entity.entity_type, xchild_entity.entity_id), ignore_missing = True)
+            xchild_entity.entity_type, xchild_entity.entity_id), ignore_if_missing = True)
 
         # delete from passive
         self.cluster_handler.remove_dir_recursive(ClusterPaths.get_entity_passive_children_by_id(self.get_entity_type(), self.get_entity_id(),
-            xchild_entity.entity_type, xchild_entity.entity_id), ignore_missing = True)
+            xchild_entity.entity_type, xchild_entity.entity_id), ignore_if_missing = True)
 
         # delete from dependents
         self.cluster_handler.remove_dir_recursive(ClusterPaths.get_entity_dependents_by_id(self.get_entity_type(), self.get_entity_id(),
-            xchild_entity.entity_type, xchild_entity.entity_id), ignore_missing = True)
+            xchild_entity.entity_type, xchild_entity.entity_id), ignore_if_missing = True)
 
         # run cleanup that is common for all active entities in failsafe mode
         entity_cleanup_protocol = ClusterEntityCleanupProtocol(xchild_entity.entity_type, xchild_entity.entity_id)
@@ -736,37 +736,37 @@ class ClusterEntityCleanupProtocol:
 
     def cleanup(self):
         # delete entity heartbeat
-        self.cluster_handler.remove_dir_recursive(ClusterPaths.get_entity_heartbeat(self.entity_type, self.entity_id), ignore_missing = True)
+        self.cluster_handler.remove_dir_recursive(ClusterPaths.get_entity_heartbeat(self.entity_type, self.entity_id), ignore_if_missing = True)
 
         # delete active, passive and dependents
-        self.cluster_handler.remove_dir_recursive(ClusterPaths.get_entity_active_children(self.entity_type, self.entity_id), ignore_missing = True)
-        self.cluster_handler.remove_dir_recursive(ClusterPaths.get_entity_passive_children(self.entity_type, self.entity_id), ignore_missing = True)
-        self.cluster_handler.remove_dir_recursive(ClusterPaths.get_entity_dependents(self.entity_type, self.entity_id), ignore_missing = True)
+        self.cluster_handler.remove_dir_recursive(ClusterPaths.get_entity_active_children(self.entity_type, self.entity_id), ignore_if_missing = True)
+        self.cluster_handler.remove_dir_recursive(ClusterPaths.get_entity_passive_children(self.entity_type, self.entity_id), ignore_if_missing = True)
+        self.cluster_handler.remove_dir_recursive(ClusterPaths.get_entity_dependents(self.entity_type, self.entity_id), ignore_if_missing = True)
 
         # delete from incoming
-        self.cluster_handler.remove_dir_recursive(ClusterPaths.get_entity_incoming(self.entity_type, self.entity_id), ignore_missing = True)
+        self.cluster_handler.remove_dir_recursive(ClusterPaths.get_entity_incoming(self.entity_type, self.entity_id), ignore_if_missing = True)
 
         # delete from assigned
-        self.cluster_handler.remove_dir_recursive(ClusterPaths.get_entity_assigned_supervisor(self.entity_type, self.entity_id), ignore_missing = True)
-        self.cluster_handler.remove_dir_recursive(ClusterPaths.get_entity_assigned_executors(self.entity_type, self.entity_id), ignore_missing = True)
-        self.cluster_handler.remove_dir_recursive(ClusterPaths.get_entity_assigned_execution_tasks(self.entity_type, self.entity_id), ignore_missing = True)
+        self.cluster_handler.remove_dir_recursive(ClusterPaths.get_entity_assigned_supervisor(self.entity_type, self.entity_id), ignore_if_missing = True)
+        self.cluster_handler.remove_dir_recursive(ClusterPaths.get_entity_assigned_executors(self.entity_type, self.entity_id), ignore_if_missing = True)
+        self.cluster_handler.remove_dir_recursive(ClusterPaths.get_entity_assigned_execution_tasks(self.entity_type, self.entity_id), ignore_if_missing = True)
 
         # delete data 
-        self.cluster_handler.remove_dir_recursive(ClusterPaths.get_entity_data(self.entity_type, self.entity_id), ignore_missing = True)
+        self.cluster_handler.remove_dir_recursive(ClusterPaths.get_entity_data(self.entity_type, self.entity_id), ignore_if_missing = True)
 
         # delete entity
-        self.cluster_handler.remove_dir_recursive(ClusterPaths.get_entity(self.entity_type, self.entity_id), ignore_missing = True)
+        self.cluster_handler.remove_dir_recursive(ClusterPaths.get_entity(self.entity_type, self.entity_id), ignore_if_missing = True)
 
         # delete entities state except CLEANUP
         for state in EntityState.get_all():
             if (state != EntityState.CLEANUP):
-                self.cluster_handler.remove_dir_recursive(ClusterPaths.get_entities_state_by_id(self.entity_type, state, self.entity_id), ignore_missing = True)
+                self.cluster_handler.remove_dir_recursive(ClusterPaths.get_entities_state_by_id(self.entity_type, state, self.entity_id), ignore_if_missing = True)
 
         # delete CLEANUP
-        self.cluster_handler.remove_dir_recursive(ClusterPaths.get_entities_state_by_id(self.entity_type, EntityState.CLEANUP, self.entity_id), ignore_missing = True)
+        self.cluster_handler.remove_dir_recursive(ClusterPaths.get_entities_state_by_id(self.entity_type, EntityState.CLEANUP, self.entity_id), ignore_if_missing = True)
 
         # delete entity_id at the end
-        self.cluster_handler.remove_dir_recursive(ClusterPaths.get_entity_id(self.entity_type, self.entity_id), ignore_missing = True)
+        self.cluster_handler.remove_dir_recursive(ClusterPaths.get_entity_id(self.entity_type, self.entity_id), ignore_if_missing = True)
 
 # Master Protocol
 class ClusterMasterProtocol(ClusterEntityProtocol):
@@ -1825,26 +1825,26 @@ class ClusterAdmin:
         # remove entities state
         for xentity_type in EntityType.get_all():
             # delete at the level of entity type
-            tasks.append(utils.ThreadPoolTask(self.cluster_handler.remove_dir_recursive, ClusterPaths.get_entities_active_children(xentity_type), ignore_missing = True))
-            tasks.append(utils.ThreadPoolTask(self.cluster_handler.remove_dir_recursive, ClusterPaths.get_entities_passive_children(xentity_type), ignore_missing = True))
-            tasks.append(utils.ThreadPoolTask(self.cluster_handler.remove_dir_recursive, ClusterPaths.get_entities_dependents(xentity_type), ignore_missing = True))
-            tasks.append(utils.ThreadPoolTask(self.cluster_handler.remove_dir_recursive, ClusterPaths.get_entities_incoming(xentity_type), ignore_missing = True))
-            tasks.append(utils.ThreadPoolTask(self.cluster_handler.remove_dir_recursive, ClusterPaths.get_entities_assigned_supervisor(xentity_type), ignore_missing = True))
-            tasks.append(utils.ThreadPoolTask(self.cluster_handler.remove_dir_recursive, ClusterPaths.get_entities_assigned_executors(xentity_type), ignore_missing = True))
+            tasks.append(utils.ThreadPoolTask(self.cluster_handler.remove_dir_recursive, ClusterPaths.get_entities_active_children(xentity_type), ignore_if_missing = True))
+            tasks.append(utils.ThreadPoolTask(self.cluster_handler.remove_dir_recursive, ClusterPaths.get_entities_passive_children(xentity_type), ignore_if_missing = True))
+            tasks.append(utils.ThreadPoolTask(self.cluster_handler.remove_dir_recursive, ClusterPaths.get_entities_dependents(xentity_type), ignore_if_missing = True))
+            tasks.append(utils.ThreadPoolTask(self.cluster_handler.remove_dir_recursive, ClusterPaths.get_entities_incoming(xentity_type), ignore_if_missing = True))
+            tasks.append(utils.ThreadPoolTask(self.cluster_handler.remove_dir_recursive, ClusterPaths.get_entities_assigned_supervisor(xentity_type), ignore_if_missing = True))
+            tasks.append(utils.ThreadPoolTask(self.cluster_handler.remove_dir_recursive, ClusterPaths.get_entities_assigned_executors(xentity_type), ignore_if_missing = True))
 
             # update for all states
             for xentity_state in EntityState.get_all():
-                tasks.append(utils.ThreadPoolTask(self.cluster_handler.remove_dir_recursive, ClusterPaths.get_entities_state_by_state(xentity_type, xentity_state), ignore_missing = True))
+                tasks.append(utils.ThreadPoolTask(self.cluster_handler.remove_dir_recursive, ClusterPaths.get_entities_state_by_state(xentity_type, xentity_state), ignore_if_missing = True))
 
         # run under thread pool
         utils.run_with_thread_pool(tasks, num_par = 10)
 
         # iterate over base paths and remove
         for base_path in ClusterPaths.get_base_paths():
-            self.cluster_handler.remove_dir_recursive(base_path, ignore_missing = True)
+            self.cluster_handler.remove_dir_recursive(base_path, ignore_if_missing = True)
 
         # remove current master
-        self.cluster_handler.remove_dir_recursive(ClusterPaths.get_current_master(), ignore_missing = True)
+        self.cluster_handler.remove_dir_recursive(ClusterPaths.get_current_master(), ignore_if_missing = True)
 
     # TODO: this is only temporary
     def do_state_change(self, xentity_type, xentity_id, target_state):

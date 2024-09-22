@@ -116,7 +116,7 @@ class ClusterEntityProtocol:
             return False
 
         # avoid race condition of missing details
-        if (self.cluster_handler.dir_exists_with_wait(cluster_common.ClusterPaths.get_primary_entity_details(xentity_type, xentity_id), fail_if_missing = False) == False):
+        if (self.cluster_handler.dir_exists_with_wait(cluster_common.ClusterPaths.get_primary_entity_details(xentity_type, xentity_id), ignore_missing = True) == False):
             utils.debug("ClusterEntityProtocol: __is_alive__: entity details missing: {}".format(xentity_id))
             return False
 
@@ -480,7 +480,7 @@ class ClusterEntityProtocol:
             # check if dead
             if (self.__is_alive__(xentity_type, xentity_id) == False):
                 # read entity and check how long
-                xentity_json = self.cluster_handler.read_most_recent_json_with_wait(cluster_common.ClusterPaths.get_primary_entity_details(xentity_type, xentity_id), fail_if_missing = False)
+                xentity_json = self.cluster_handler.read_most_recent_json_with_wait(cluster_common.ClusterPaths.get_primary_entity_details(xentity_type, xentity_id), ignore_missing = True)
 
                 # check for None
                 if (xentity_json is None):

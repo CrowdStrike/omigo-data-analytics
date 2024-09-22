@@ -264,7 +264,7 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
             tasks.append(utils.ThreadPoolTask(s3_wrapper.get_directory_listing, cur_path, filter_func = None, ignore_if_missing = False, skip_exist_check = True,
                 region = s3_region, profile = aws_profile))
         else:
-            tasks.append(utils.ThreadPoolTask(get_local_directory_listing, cur_path, filter_func = None, fail_if_missing = False, skip_exist_check = True))
+            tasks.append(utils.ThreadPoolTask(get_local_directory_listing, cur_path, filter_func = None, ignore_if_missing = True, skip_exist_check = True))
 
     # execute the tasks
     results = utils.run_with_thread_pool(tasks, num_par = num_par, wait_sec = wait_sec)
@@ -321,8 +321,8 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
     # return
     return paths_found
 
-def get_local_directory_listing(path, filter_func = None, fail_if_missing = True, skip_exist_check = False):
-    return local_fs_wrapper.get_directory_listing(path, filter_func = filter_func, fail_if_missing = fail_if_missing, skip_exist_check = skip_exist_check)
+def get_local_directory_listing(path, filter_func = None, ignore_if_missing = False, skip_exist_check = False):
+    return local_fs_wrapper.get_directory_listing(path, filter_func = filter_func, ignore_if_missing = ignore_if_missing, skip_exist_check = skip_exist_check)
 
 # this method is not robust against complex path creations with dot(.). FIXME. TODO
 def create_local_parent_dir(filepath):

@@ -10,11 +10,11 @@ def check_path_exists(path):
 def check_file_exists(path):
     return os.path.exists(path)
 
-def get_directory_listing(path, filter_func = None, fail_if_missing = True, skip_exist_check = False):
+def get_directory_listing(path, filter_func = None, ignore_if_missing = False, skip_exist_check = False):
     # skip_exist_check is for performance and parity with s3
     if (skip_exist_check == False):
         if (check_path_exists(path) == False):
-            if (fail_if_missing):
+            if (ignore_if_missing == False):
                 raise Exception("Directory does not exist: {}".format(path))
             else:
                 return []
@@ -91,11 +91,11 @@ def put_file_with_text_content(path, text):
         output_file.close()
 
 # TODO: return success status
-def delete_file(path, fail_if_missing = False):
-    utils.debug("delete_file: path: {}, fail_if_missing: {}".format(path, fail_if_missing))
+def delete_file(path, ignore_if_missing = True):
+    utils.debug("delete_file: path: {}, ignore_if_missing: {}".format(path, ignore_if_missing))
     # check if the file exists
     if (check_path_exists(path) == False):
-        if (fail_if_missing):
+        if (ignore_if_missing == False):
             raise Exception("delete_file: path doesnt exist: {}".format(path))
         else:
             utils.debug("delete_file: path doesnt exist: {}".format(path))
@@ -106,12 +106,12 @@ def delete_file(path, fail_if_missing = False):
     os.remove(path)
   
 # TODO: This api doesnt have s3 counterpart 
-def delete_dir(path, fail_if_missing = False):
+def delete_dir(path, ignore_if_missing = True):
     utils.warn_once("delete_dir: this api doesnt have s3 counterpart")
-    utils.debug("delete_dir: path: {}, fail_if_missing: {}".format(path, fail_if_missing))
+    utils.debug("delete_dir: path: {}, ignore_if_missing: {}".format(path, ignore_if_missing))
     # check if the file exists
     if (check_path_exists(path) == False):
-        if (fail_if_missing):
+        if (ignore_if_missing == False):
             raise Exception("delete_dir: path doesnt exist: {}".format(path))
         else:
             utils.debug("delete_dir: path doesnt exist: {}".format(path))

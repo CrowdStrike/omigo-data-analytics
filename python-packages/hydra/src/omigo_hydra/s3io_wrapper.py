@@ -216,7 +216,7 @@ class S3FSWrapper:
 
     def __local_delete_file__(self, path, ignore_if_missing = False):
         # delete file
-        local_fs_wrapper.delete_file(path, fail_if_missing = ignore_if_missing)
+        local_fs_wrapper.delete_file(path, ignore_if_missing = ignore_if_missing)
 
         # check if this was the reserved file for directory
         if (path.endswith("/" + RESERVED_HIDDEN_FILE)):

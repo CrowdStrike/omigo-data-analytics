@@ -700,13 +700,13 @@ class ClusterFileHandler(cluster_data.JsonSer):
         utils.debug("file_exists    : {}".format(path))
         return self.fs.file_exists(self.__makepath__(path))
 
-    def file_exists_with_wait(self, path, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS, fail_if_missing = True):
-        # add fail_if_missing logic
+    def file_exists_with_wait(self, path, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS, ignore_if_missing = False):
+        # add ignore_if_missing logic
         try:
             return self.fs.file_exists_with_wait(self.__makepath__(path), wait_sec = wait_sec, attempts = attempts)
         except Exception as e:
-            # raise exception if fail_if_missing is True
-            if (fail_if_missing == True):
+            # raise exception if ignore_if_missing is False
+            if (ignore_if_missing == False):
                 raise e
             else:
                 return False
@@ -714,13 +714,13 @@ class ClusterFileHandler(cluster_data.JsonSer):
     def dir_exists(self, path):
         return self.fs.dir_exists(self.__makepath__(path))
 
-    def dir_exists_with_wait(self, path, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS, fail_if_missing = True):
-        # add fail_if_missing logic
+    def dir_exists_with_wait(self, path, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS, ignore_if_missing = False):
+        # add ignore_if_missing logic
         try:
             return self.fs.dir_exists_with_wait(self.__makepath__(path), wait_sec = wait_sec, attempts = attempts)
         except Exception as e:
-            # raise exception if fail_if_missing is True
-            if (fail_if_missing == True):
+            # raise exception if ignore_if_missing is False 
+            if (ignore_if_missing == False):
                 raise e
             else:
                 return False
@@ -867,7 +867,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
         else:
             return None
 
-    def read_most_recent_with_wait(self, path, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS, fail_if_missing = True):
+    def read_most_recent_with_wait(self, path, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS, ignore_if_missing = False):
         # read
         content = self.read_most_recent(path)
 
@@ -881,13 +881,13 @@ class ClusterFileHandler(cluster_data.JsonSer):
             time.sleep(wait_sec)
             return self.read_most_recent_with_wait(path, wait_sec = wait_sec, attempts = attempts - 1)
         else:
-            if (fail_if_missing == True):
+            if (ignore_if_missing == False):
                 raise Exception("read_most_recent_with_wait: path: {}, data not found. attempts: over".format(path))
             else:
                 return None
 
-    def read_most_recent_json_with_wait(self, path, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS, fail_if_missing = True):
-        content = self.read_most_recent_with_wait(path, wait_sec = wait_sec, attempts = attempts, fail_if_missing = fail_if_missing)
+    def read_most_recent_json_with_wait(self, path, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS, ignore_if_missing = False):
+        content = self.read_most_recent_with_wait(path, wait_sec = wait_sec, attempts = attempts, ignore_if_missing = ignore_if_missing)
         if (content is not None):
             return json.loads(content)
         else:
