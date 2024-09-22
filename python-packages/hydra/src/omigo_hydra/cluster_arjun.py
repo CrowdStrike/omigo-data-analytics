@@ -25,9 +25,11 @@ OMIGO_ARJUN_BASE_PATH_TEMPLATE = "{" + OMIGO_ARJUN_BASE_PATH + "}"
 OMIGO_ARJUN_INPUT_FILE_TEMPLATE = "{" + OMIGO_ARJUN_INPUT_FILE + "}" 
 OMIGO_ARJUN_OUTPUT_FILE_TEMPLATE = "{" + OMIGO_ARJUN_OUTPUT_FILE + "}"
 
+# get etl path by id
 def get_etl_path_by_id(strid):
     return "{}{}".format(OMIGO_ARJUN_ETL_PATH_PREFIX, strid)
 
+# is etl path
 def is_etl_path(path):
     # check for none
     if (path is None):
@@ -36,6 +38,7 @@ def is_etl_path(path):
     # return
     return path.startswith(OMIGO_ARJUN_ETL_PATH_PREFIX)
 
+# parse id from etl path
 def parse_id_from_etl_path(path):
     # check for none
     if (path is None):
@@ -47,5 +50,3 @@ def parse_id_from_etl_path(path):
         return path[index+1:]
     else:
         return None
-
-

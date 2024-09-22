@@ -42,6 +42,7 @@ def construct_dynamic_value_json():
 
 # Note: SHUTDOWN is implemented using?
 # TODO: Why there is no Running state 
+# EntityState
 class EntityState:
     CREATED            = "created"
     ALIVE              = "alive"
@@ -64,6 +65,7 @@ class EntityState:
             EntityState.CLEANUP
         ]
 
+# EntityCompletedState
 class EntityCompletedState:
     ABORT_COMPLETED    = "abort-completed"
     REASSIGN_COMPLETED = "reassign-completed"
@@ -76,6 +78,7 @@ class EntityCompletedState:
             EntityCompletedState.CLEANUP_COMPLETED
         ]
 
+# EntityType
 class EntityType:
     MASTER             = "master"
     RESOURCE_MANAGER   = "resource-manager"
@@ -276,6 +279,7 @@ class ClusterEntity(cluster_data.JsonSer):
         self.ts = ts
         self.lease = lease
 
+    # parse from json
     def from_json(json_obj):
         # check for None
         if (json_obj is None):
@@ -288,9 +292,11 @@ class ClusterEntity(cluster_data.JsonSer):
             json_obj["lease"]
         )
 
+    # constructor
     def new(entity_type, entity_id, ts, lease):
         return ClusterEntity(entity_type, entity_id, ts, lease)
 
+# deserialize clusetr entity
 def deserialize_cluster_entity(json_obj):
     # read entity type
     entity_type = json_obj["entity_type"]
@@ -338,6 +344,7 @@ class ClusterEntityMaster(ClusterEntity):
     def __init__(self, entity_id, ts, lease):
         super().__init__(EntityType.MASTER, entity_id, ts, lease)
 
+    # constructor
     def new(entity_id, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
         return ClusterEntityMaster(entity_id, ts, lease)
 
@@ -346,6 +353,7 @@ class ClusterEntityResourceManager(ClusterEntity):
     def __init__(self, entity_id, ts, lease):
         super().__init__(EntityType.RESOURCE_MANAGER, entity_id, ts, lease)
 
+    # constructor
     def new(entity_id, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
         return ClusterEntityResourceManager(entity_id, ts, lease)
 
@@ -354,6 +362,7 @@ class ClusterEntitySWFManager(ClusterEntity):
     def __init__(self, entity_id, ts, lease):
         super().__init__(EntityType.SWF_MANAGER, entity_id, ts, lease)
 
+    # constructor
     def new(entity_id, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
         return ClusterEntitySWFManager(entity_id, ts, lease)
 
@@ -362,6 +371,7 @@ class ClusterEntityWFManager(ClusterEntity):
     def __init__(self, entity_id, ts, lease):
         super().__init__(EntityType.WF_MANAGER, entity_id, ts, lease)
 
+    # constructor
     def new(entity_id, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
         return ClusterEntityWFManager(entity_id, ts, lease)
 
@@ -370,6 +380,7 @@ class ClusterEntityJobManager(ClusterEntity):
     def __init__(self, entity_id, ts, lease):
         super().__init__(EntityType.JOB_MANAGER, entity_id, ts, lease)
 
+    # constructor
     def new(entity_id, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
         return ClusterEntityJobManager(entity_id, ts, lease)
 
@@ -378,6 +389,7 @@ class ClusterEntityTaskManager(ClusterEntity):
     def __init__(self, entity_id, ts, lease):
         super().__init__(EntityType.TASK_MANAGER, entity_id, ts, lease)
 
+    # constructor
     def new(entity_id, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
         return ClusterEntityTaskManager(entity_id, ts, lease)
 
@@ -386,6 +398,7 @@ class ClusterEntityWorker(ClusterEntity):
     def __init__(self, entity_id, ts, lease):
         super().__init__(EntityType.WORKER, entity_id, ts, lease)
 
+    # constructor
     def new(entity_id, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
         return ClusterEntityWorker(entity_id, ts, lease)
 
@@ -394,6 +407,7 @@ class ClusterEntityAgent(ClusterEntity):
     def __init__(self, entity_id, ts, lease):
         super().__init__(EntityType.AGENT, entity_id, ts, lease)
 
+    # constructor
     def new(entity_id, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
         return ClusterEntityAgent(entity_id, ts, lease)
 
@@ -402,6 +416,7 @@ class ClusterEntityDoubleAgent(ClusterEntity):
     def __init__(self, entity_id, ts, lease):
         super().__init__(EntityType.DOUBLE_AGENT, entity_id, ts, lease)
 
+    # constructor
     def new(entity_id, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
         return ClusterEntityDoubleAgent(entity_id, ts, lease)
 
@@ -410,6 +425,7 @@ class ClusterEntityInteliAgent(ClusterEntity):
     def __init__(self, entity_id, ts, lease):
         super().__init__(EntityType.INTELI_AGENT, entity_id, ts, lease)
 
+    # constructor
     def new(entity_id, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
         return ClusterEntityInteliAgent(entity_id, ts, lease)
 
@@ -421,6 +437,7 @@ class ClusterEntitySWF(ClusterEntity):
         self.client_id = client_id
         self.session_id = session_id
 
+    # parse from json
     def from_json(json_obj):
         # check for None
         if (json_obj is None):
@@ -436,6 +453,7 @@ class ClusterEntitySWF(ClusterEntity):
             json_obj["lease"]
         )
 
+    # constructor
     def new(entity_id, client_id, session_id, entity_spec, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_PASSIVE_ENTITY_LEASE):
         return ClusterEntitySWF(entity_id, ts, lease, client_id, session_id, entity_spec)
 
@@ -478,6 +496,7 @@ class ClusterEntityWF(ClusterEntity):
         # return
         return requirements
 
+    # parse from json
     def from_json(json_obj):
         # check for None
         if (json_obj is None):
@@ -493,6 +512,7 @@ class ClusterEntityWF(ClusterEntity):
             json_obj["lease"]
         )
 
+    # constructor
     def new(entity_id, client_id, session_id, entity_spec, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_PASSIVE_ENTITY_LEASE):
         return ClusterEntityWF(entity_id, ts, lease, client_id, session_id, entity_spec)
 
@@ -515,6 +535,7 @@ class ClusterEntityTask(ClusterEntity):
         self.session_id = session_id
         self.entity_spec = entity_spec
 
+    # parse from json
     def from_json(json_obj):
         # check for None
         if (json_obj is None):
@@ -530,6 +551,7 @@ class ClusterEntityTask(ClusterEntity):
             json_obj["lease"]
         )
 
+    # constructor
     def new(entity_id, client_id, session_id, entity_spec, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_PASSIVE_ENTITY_LEASE):
         return ClusterEntityTask(entity_id, ts, lease, client_id, session_id, entity_spec)
 
@@ -541,6 +563,7 @@ class ClusterEntityBatch(ClusterEntity):
         self.session_id = session_id
         self.entity_spec = entity_spec
 
+    # constructor
     def new(entity_id, client_id, session_id, entity_spec, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_PASSIVE_ENTITY_LEASE):
         return ClusterEntityBatch(entity_id, ts, lease, client_id, session_id, entity_spec)
 
@@ -549,6 +572,7 @@ class ClusterEntityClient(ClusterEntity):
     def __init__(self, entity_id, ts, lease):
         super().__init__(EntityType.CLIENT, entity_id, ts, lease)
 
+    # constructor
     def new(entity_id, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_PASSIVE_ENTITY_LEASE):
         return ClusterEntityClient(entity_id, ts, lease)
 
@@ -557,6 +581,7 @@ class ClusterEntitySession(ClusterEntity):
     def __init__(self, entity_id, ts, lease):
         super().__init__(EntityType.SESSION, entity_id, ts, lease)
 
+    # constructor
     def new(entity_id, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
         return ClusterEntitySession(entity_id, ts, lease)
 
@@ -575,6 +600,7 @@ class ClusterSpecBase(cluster_data.JsonSer):
         if (self.xoutputs is None):
             raise Exception("ClusterSpecBase: build: xoutputs is None")
             
+    # parse from json
     def from_json(json_obj):
         # check for None
         if (json_obj is None):
@@ -627,6 +653,7 @@ class ClusterSpecSWF(ClusterSpecBase):
     def build(self):
         super().build()
 
+    # parse from json
     def from_json(json_obj):
         # check for None
         if (json_obj is None):
@@ -644,6 +671,7 @@ class ClusterSpecSWF(ClusterSpecBase):
             json_obj["num_outputs"]
         )
 
+    # constructor
     def new(wfs_specs, num_inputs = 1, num_outputs = 1):
         return ClusterSpecSWF(wfs_specs, num_inputs, num_outputs)
 
@@ -666,6 +694,7 @@ class ClusterSpecWF(ClusterSpecBase):
     def build(self):
         super().build()
 
+    # parse from json
     def from_json(json_obj):
         # check for None
         if (json_obj is None):
@@ -691,6 +720,7 @@ class ClusterSpecWF(ClusterSpecBase):
             json_obj["output_ids"]
         )
 
+    # constructor
     def new(jobs_specs, is_live = False, is_remote = False, is_external = False, max_job_execution_time = 600, interval = -1, start_ts = 0, use_full_data = False, duration = 0, input_ids = None, output_ids = None):
         # create defaults
         if (input_ids is None):
@@ -716,6 +746,7 @@ class ClusterSpecJob(ClusterSpecBase):
     def build(self):
         super().build()
 
+    # parse from json
     def from_json(json_obj):
         # check for None
         if (json_obj is None):
@@ -733,6 +764,7 @@ class ClusterSpecJob(ClusterSpecBase):
             json_obj["num_outputs"]
         )
 
+    # constructor
     def new(map_partitioner, map_task, reduce_partitioner, reduce_task, singleton_task, extend_class_def, num_inputs = 1, num_outputs = 1):
         return ClusterSpecJob(map_partitioner, map_task, reduce_partitioner, reduce_task, singleton_task, extend_class_def, num_inputs, num_outputs)
 
@@ -745,6 +777,7 @@ class ClusterSpecTask(ClusterSpecBase):
     def build(self):
         super().build()
 
+    # parse from json
     def from_json(json_obj):
         # check for None
         if (json_obj is None):
@@ -769,6 +802,7 @@ class ClusterSpecExtendClassDef(ClusterSpecTask):
     def build(self):
         super().build()
 
+    # parse from json
     def from_json(json_obj):
         # check for None
         if (json_obj is None):
@@ -781,6 +815,7 @@ class ClusterSpecExtendClassDef(ClusterSpecTask):
             json_obj["num_outputs"]
         )
 
+    # constructor
     def new(extend_class_def, num_inputs = 1, num_outputs = 1):
         return ClusterSpecExtendClassDef(extend_class_def, num_inputs, num_outputs)
 
@@ -792,6 +827,7 @@ class ClusterSpecMapTask(ClusterSpecTask):
     def build(self):
         super().build()
 
+    # parse from json
     def from_json(json_obj):
         # check for None
         if (json_obj is None):
@@ -809,6 +845,7 @@ class ClusterSpecMapTask(ClusterSpecTask):
             json_obj["num_outputs"]
         )
 
+    # constructor
     def new(map_ops, num_inputs = 1, num_outputs = 1):
         return ClusterSpecMapTask(map_ops, num_inputs, num_outputs)
 
@@ -820,6 +857,7 @@ class ClusterSpecReduceTask(ClusterSpecTask):
     def build(self):
         super().build()
 
+    # parse from json
     def from_json(json_obj):
         # check for None
         if (json_obj is None):
@@ -832,6 +870,7 @@ class ClusterSpecReduceTask(ClusterSpecTask):
             json_obj["num_outputs"]
         )
 
+    # constructor
     def new(reduce_op, num_inputs = 1, num_outputs = 1):
         return ClusterSpecReduceTask(reduce_op, num_inputs, num_outputs)
 
@@ -843,6 +882,7 @@ class ClusterSpecSingletonTask(ClusterSpecTask):
     def build(self):
         super().build()
 
+    # parse from json
     def from_json(json_obj):
         # check for None
         if (json_obj is None):
@@ -855,6 +895,7 @@ class ClusterSpecSingletonTask(ClusterSpecTask):
             json_obj["num_outputs"]
         )
 
+    # constructor
     def new(singleton_op, num_inputs = 1, num_outputs = 1):
         return ClusterSpecSingletonTask(singleton_op, num_inputs, num_outputs)
 
@@ -866,6 +907,7 @@ class ClusterSpecPartitionTask(ClusterSpecTask):
     def build(self):
         super().build()
 
+    # parse from json
     def from_json(json_obj):
         # check for None
         if (json_obj is None):
@@ -878,6 +920,7 @@ class ClusterSpecPartitionTask(ClusterSpecTask):
             json_obj["num_outputs"]
         )
 
+    # constructor
     def new(num_splits, num_inputs = 1, num_outputs = 1):
         return ClusterSpecPartitionTask(num_splits, num_inputs, num_outputs)
 
@@ -890,6 +933,7 @@ class ClusterSpecHashPartitionTask(ClusterSpecTask):
     def build(self):
         super().build()
 
+    # parse from json
     def from_json(json_obj):
         # check for None
         if (json_obj is None):
@@ -903,6 +947,7 @@ class ClusterSpecHashPartitionTask(ClusterSpecTask):
             json_obj["num_outputs"]
         )
 
+    # constructor
     def new(num_splits, hash_cols, num_inputs = 1, num_outputs = 1):
         return ClusterSpecHashPartitionTask(num_splits, hash_cols, num_inputs, num_outputs)
        
@@ -913,6 +958,7 @@ class ClusterSpecSingletonPartitionTask(ClusterSpecTask):
     def build(self):
         super().build()
 
+    # parse from json
     def from_json(json_obj):
         # check for None
         if (json_obj is None):
@@ -924,6 +970,7 @@ class ClusterSpecSingletonPartitionTask(ClusterSpecTask):
             json_obj["num_outputs"]
         )
 
+    # constructor
     def new(num_inputs = 1, num_outputs = 1):
         return ClusterSpecSingletonPartitionTask(num_inputs, num_outputs)
 
@@ -958,6 +1005,7 @@ class ClusterSpecBatch(ClusterSpecBase):
     def __init__(self, num_inputs, num_outputs):
         super().__init__(EntityType.BATCH, num_inputs, num_outputs)
 
+    # parse from json
     def from_json(json_obj):
         # check for None
         if (json_obj is None):
@@ -969,6 +1017,7 @@ class ClusterSpecBatch(ClusterSpecBase):
             json_obj["num_outputs"]
         )
 
+    # constructor
     def new(num_inputs = 1, num_outputs = 1):
         return ClusterSpecBase(entity_type, num_inputs, num_outputs)
         
@@ -997,6 +1046,7 @@ class ClusterOperation(cluster_data.JsonSer):
         # dictionary is non homogenous types by default
         self.kwargs = cluster_data.cluster_operand_serializer(kwargs)
 
+    # parse from json
     def from_json(json_obj):
         # check for None
         if (json_obj is None):
@@ -1025,6 +1075,7 @@ class ClusterTaskOperation(ClusterOperation):
         super().__init__(name, requirements, *args, **kwargs)
         self.task_type = task_type
 
+    # parse from json
     def from_json(json_obj):
         # check for None
         if (json_obj is None):
@@ -1041,6 +1092,7 @@ class ClusterExtendClassOperation(ClusterTaskOperation):
     def __init__(self, name, requirements, *args, **kwargs):
         super().__init__(ClusterTaskType.EXTEND_CLASS, name, requirements, *args, **kwargs)
 
+    # parse from json
     def from_json(json_obj):
         # check for None
         if (json_obj is None):
@@ -1058,6 +1110,7 @@ class ClusterMapOperation(ClusterTaskOperation):
     def __init__(self, name, requirements, *args, **kwargs):
         super().__init__(ClusterTaskType.MAP, name, requirements, *args, **kwargs)
 
+    # parse from json
     def from_json(json_obj):
         # check for None
         if (json_obj is None):
@@ -1077,6 +1130,7 @@ class ClusterReduceOperation(ClusterTaskOperation):
         self.grouping_cols = grouping_cols 
         self.num_splits = num_splits
 
+    # parse from json
     def from_json(json_obj):
         # check for None
         if (json_obj is None):
@@ -1096,6 +1150,7 @@ class ClusterSingletonOperation(ClusterTaskOperation):
     def __init__(self, name, requirements, *args, **kwargs):
         super().__init__(ClusterTaskType.SINGLETON, name, requirements, *args, **kwargs)
 
+    # parse from json
     def from_json(json_obj):
         # check for None
         if (json_obj is None):
@@ -1135,6 +1190,7 @@ class ClusterInmemoryOperation(ClusterOperation):
     def __init__(self, name, requirements, *args, **kwargs):
         super().__init__(name, requirements, *args, **kwargs)
 
+    # parse from json
     def from_json(json_obj):
         # check for None
         if (json_obj is None):
@@ -1166,6 +1222,7 @@ class ClusterHearbeat(cluster_data.JsonSer):
         else:
             return False
 
+    # parse from json
     def from_json(json_obj):
         # check for None
         if (json_obj is None):
@@ -1176,6 +1233,7 @@ class ClusterHearbeat(cluster_data.JsonSer):
             json_obj["lease"]
         )
 
+    # constructor
     def new(ts, lease):
         return ClusterHearbeat(ts, lease)
 
@@ -1183,6 +1241,7 @@ class ClusterUpdateTime(cluster_data.JsonSer):
     def __init__(self, ts):
         self.ts = ts
 
+    # parse from json
     def from_json(json_obj):
         # check for None
         if (json_obj is None):
@@ -1192,6 +1251,7 @@ class ClusterUpdateTime(cluster_data.JsonSer):
             json_obj["ts"]
         )
 
+    # constructor
     def new(ts):
         return ClusterUpdateTime(ts)
 
@@ -1200,6 +1260,7 @@ class ClusterEntityRef(cluster_data.JsonSer):
         self.entity_type = entity_type
         self.entity_id = entity_id
 
+    # parse from json
     def from_json(json_obj):
         # check for None
         if (json_obj is None):
@@ -1210,6 +1271,7 @@ class ClusterEntityRef(cluster_data.JsonSer):
             json_obj["entity_id"]
         )
 
+    # constructor
     def new(entity_type, entity_id):
         return ClusterEntityRef(entity_type, entity_id)
 
@@ -1679,6 +1741,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
         transient_keys2.append("s3")
         return super().to_json(transient_keys = transient_keys2)
 
+    # parse from json
     def from_json(json_obj):
         # check for None
         if (json_obj is None):
@@ -1689,6 +1752,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
     def get_full_path(self, path):
         return self.__makepath__(path)
     
+    # constructor
     def new(base_path):
         return ClusterFileHandler(base_path)
 
@@ -1976,6 +2040,7 @@ class ClusterExtendClass(cluster_data.JsonSer):
         # dictionary is non homogenous types by default
         self.kwargs = cluster_data.cluster_operand_serializer(kwargs)
 
+    # parse from json
     def from_json(json_obj):
         # check for None
         if (json_obj is None):
@@ -1989,6 +2054,7 @@ class ClusterExtendClass(cluster_data.JsonSer):
         # return
         return ClusterExtendClass.new(name, *args, **kwargs)
 
+    # constructor
     def new(name, *args, **kwargs):
         return ClusterExtendClass(name, *args, **kwargs)
 
@@ -1999,6 +2065,7 @@ class ClusterOperationJob(cluster_data.JsonSer):
         self.singleton_op = singleton_op
         self.extend_class_op = extend_class_op
 
+    # parse from json
     def from_json(json_obj):
         # check for None
         if (json_obj is None):
@@ -2034,6 +2101,7 @@ class ClusterOperationJob(cluster_data.JsonSer):
         # return
         return ClusterOperationJob.new(map_ops, reduce_op, singleton_op, extend_class_op)
 
+    # constructor
     def new(map_ops, reduce_op, singleton_op, extend_class_op):
         # return
         return ClusterOperationJob(map_ops, reduce_op, singleton_op, extend_class_op)
