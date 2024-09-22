@@ -8,7 +8,6 @@ import json
 import threading
 from omigo_core import tsv, utils, tsvutils, etl, funclib
 from omigo_hydra import cluster_data, cluster_class_reflection
-from omigo_hydra import cluster_common as old_cluster_common 
 
 # class that takes the base path in S3, and implement all distributed communication under that.
 # takes care of protocol level things for future
@@ -33,6 +32,10 @@ HYDRA_LOCAL_CLUSTER_HANDLER_LOCK = threading.Lock()
 
 # some constants
 MIN1_SECONDS = 60
+
+# this is repeated in s3io_wrapper. TODO
+DEFAULT_WAIT_SEC = 3
+DEFAULT_ATTEMPTS = 3
 
 def construct_dynamic_value_json():
     return "value.{}.json".format(funclib.get_utctimestamp_sec()) 
@@ -1679,7 +1682,7 @@ class ClusterPaths:
         # use lock for thread safety
         with HYDRA_CLUSTER_HANDLER_LOCK:
             if (HYDRA_CLUSTER_HANDLER is None):
-                HYDRA_CLUSTER_HANDLER = old_cluster_common.ClusterFileHandler.new(ClusterPaths.get_base_path())
+                HYDRA_CLUSTER_HANDLER = ClusterFileHandler.new(ClusterPaths.get_base_path())
 
         # return
         return HYDRA_CLUSTER_HANDLER
@@ -1704,7 +1707,7 @@ class ClusterPaths:
         # use lock for thread safety
         with HYDRA_LOCAL_CLUSTER_HANDLER_LOCK:
             if (HYDRA_LOCAL_CLUSTER_HANDLER is None):
-                HYDRA_LOCAL_CLUSTER_HANDLER = old_cluster_common.ClusterFileHandler.new(ClusterPaths.get_local_base_path())
+                HYDRA_LOCAL_CLUSTER_HANDLER = ClusterFileHandler.new(ClusterPaths.get_local_base_path())
 
         # return
         return HYDRA_LOCAL_CLUSTER_HANDLER
