@@ -1484,6 +1484,12 @@ class ClusterWFProtocol(ClusterEntityProtocol):
                 # only the first operation is under extend class. rest are normal tsv
                 extend_class_op = None
 
+            # add singleton task
+            if (job_spec.singleton_task is not None):
+                operations.append((job_spec.singleton_task.singleton_op, extend_class_op))
+                # only the first operation is under extend class. rest are normal tsv
+                extend_class_op = None
+
         # return
         return operations
 
@@ -1891,6 +1897,7 @@ class ClusterExecutorContext:
         map_task = None
         reduce_partitioner = None
         reduce_task = None
+        singleton_task = None
         extend_class_def = None
 
         # check if map is present
@@ -1909,13 +1916,21 @@ class ClusterExecutorContext:
             # create reduce task
             reduce_task = cluster_common_v2.ClusterSpecReduceTask.new(job_operation.reduce_op)
         
+        # check if reduce is present
+        if (job_operation.singleton_op is not None):
+            # create partitioner task
+            singleton_partitioner = cluster_common_v2.ClusterSpecSingletonPartitionTask.new()
+
+            # create reduce task
+            singleton_task = cluster_common_v2.ClusterSpecSingletonTask.new(job_operation.singleton_op)
+
         # check if extend class is present
         if (job_operation.extend_class_op is not None):
             # create extend class reference
             extend_class_def = cluster_common_v2.ClusterSpecExtendClassDef.new(job_operation.extend_class_op)
 
         # create job_spec 
-        job_spec = cluster_common_v2.ClusterSpecJob.new(map_partitioner, map_task, reduce_partitioner, reduce_task, extend_class_def)
+        job_spec = cluster_common_v2.ClusterSpecJob.new(map_partitioner, map_task, reduce_partitioner, reduce_task, singleton_task, extend_class_def)
 
         # return
         return job_spec

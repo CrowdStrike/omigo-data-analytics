@@ -450,17 +450,26 @@ class ClusterEntityWF(ClusterEntity):
     def collect_requirements(self):
         requirements = []
         for job_spec in self.entity_spec.jobs_specs:
+            # map task requirements
             if (job_spec.map_task is not None):
                 for map_op in job_spec.map_task.map_ops:
                     for r in map_op.requirements:
                         if (r not in requirements):
-                            requirements.append(r)  
+                            requirements.append(r)
 
+            # reduce task requirements
             if (job_spec.reduce_task is not None):
                 for r in job_spec.reduce_task.reduce_op.requirements:
                     if (r not in requirements):
+                        requirements.append(r)
+
+            # singelton task requirements
+            if (job_spec.singleton_task is not None):
+                for r in job_spec.singleton_task.singleton_op.requirements:
+                    if (r not in requirements):
                         requirements.append(r)  
 
+            # extend class task requirements
             if (job_spec.extend_class_def is not None):
                 for r in job_spec.extend_class_def.extend_class_op.requirements:
                     if (r not in requirements):
@@ -695,12 +704,13 @@ class ClusterSpecWF(ClusterSpecBase):
         
 # Job Spec
 class ClusterSpecJob(ClusterSpecBase):
-    def __init__(self, map_partitioner, map_task, reduce_partitioner, reduce_task, extend_class_def, num_inputs, num_outputs):
+    def __init__(self, map_partitioner, map_task, reduce_partitioner, reduce_task, singleton_task, extend_class_def, num_inputs, num_outputs):
         super().__init__(EntityType.JOB, num_inputs, num_outputs)
         self.map_partitioner = map_partitioner
         self.map_task = map_task
         self.reduce_partitioner = reduce_partitioner
         self.reduce_task = reduce_task
+        self.singleton_task = singleton_task
         self.extend_class_def = extend_class_def
         
     def build(self):
@@ -717,13 +727,14 @@ class ClusterSpecJob(ClusterSpecBase):
             ClusterSpecMapTask.from_json(json_obj["map_task"]),        
             ClusterSpecHashPartitionTask.from_json(json_obj["reduce_partitioner"]),        
             ClusterSpecReduceTask.from_json(json_obj["reduce_task"]),
+            ClusterSpecSingletonTask.from_json(json_obj["singleton_task"]),
             ClusterSpecExtendClassDef.from_json(json_obj["extend_class_def"]),
             json_obj["num_inputs"],
             json_obj["num_outputs"]
         )
 
-    def new(map_partitioner, map_task, reduce_partitioner, reduce_task, extend_class_def, num_inputs = 1, num_outputs = 1):
-        return ClusterSpecJob(map_partitioner, map_task, reduce_partitioner, reduce_task, extend_class_def, num_inputs, num_outputs)
+    def new(map_partitioner, map_task, reduce_partitioner, reduce_task, singleton_task, extend_class_def, num_inputs = 1, num_outputs = 1):
+        return ClusterSpecJob(map_partitioner, map_task, reduce_partitioner, reduce_task, singleton_task, extend_class_def, num_inputs, num_outputs)
 
 # Task Spec 
 class ClusterSpecTask(ClusterSpecBase):
@@ -895,6 +906,27 @@ class ClusterSpecHashPartitionTask(ClusterSpecTask):
     def new(num_splits, hash_cols, num_inputs = 1, num_outputs = 1):
         return ClusterSpecHashPartitionTask(num_splits, hash_cols, num_inputs, num_outputs)
        
+class ClusterSpecSingletonPartitionTask(ClusterSpecTask):
+    def __init__(self, num_inputs, num_outputs):
+        super().__init__(ClusterTaskType.SINGLETON_PARTITION, num_inputs, num_outputs)
+
+    def build(self):
+        super().build()
+
+    def from_json(json_obj):
+        # check for None
+        if (json_obj is None):
+            return None
+
+        # return
+        return ClusterSpecSingletonPartitionTask.new(
+            json_obj["num_inputs"],
+            json_obj["num_outputs"]
+        )
+
+    def new(num_inputs = 1, num_outputs = 1):
+        return ClusterSpecSingletonPartitionTask(num_inputs, num_outputs)
+
 def deserialize_cluster_task_spec(json_obj):
     # check for None
     if (json_obj is None):
@@ -916,6 +948,8 @@ def deserialize_cluster_task_spec(json_obj):
         return ClusterSpecPartitionTask.from_json(json_obj)
     elif (task_type == ClusterTaskType.HASH_PARTITION):
         return ClusterSpecHashPartitionTask.from_json(json_obj)
+    elif (task_type == ClusterTaskType.SINGLETON_PARTITION):
+        return ClusterSpecSingletonPartitionTask.from_json(json_obj)
     else:
         raise Exception("Unknown task type: {}".format(task_type))
 
