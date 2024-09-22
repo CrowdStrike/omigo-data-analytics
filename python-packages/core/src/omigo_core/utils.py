@@ -440,7 +440,7 @@ def raise_exception_after_n_warnings(msg, num_warnings = 1000):
     # check the counter
     if (EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg] < num_warnings):
         EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg] = EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg] + 1
-        print("[WARN DEPRECATED]: {}".format(msg))
+        warn_once(msg)
     else:
         del EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg]
         raise Exception(msg)
@@ -455,7 +455,7 @@ def rate_limit_after_n_warnings(msg, num_warnings = 1000, sleep_secs = 10):
     # check the counter
     if (EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg] < num_warnings):
         EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg] = EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg] + 1
-        print("[WARN DEPRECATED]: {}".format(msg))
+        warn_once(msg)
     else:
         time.sleep(sleep_secs)
 

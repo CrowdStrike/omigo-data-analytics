@@ -3,7 +3,7 @@ from omigo_core import utils
 from omigo_hydra import cluster_funcs, cluster_class_reflection
 import base64
 
-# import dill #nosec
+import dill #nosec
 import json
 
 # warn
@@ -191,8 +191,7 @@ class ClusterObject(ClusterOperand):
 # Cluster PyObject class 
 class ClusterPyObject(ClusterOperand):
     def __init__(self, value):
-        raise Exception("Not supported")
-        # super().__init__("pyobject", base64.b64encode(dill.dumps(value)).decode("ascii"))
+        super().__init__("pyobject", base64.b64encode(dill.dumps(value)).decode("ascii"))
 
     def validate(self):
         # check for None
@@ -256,8 +255,7 @@ def load_native_objects(cluster_operand):
         return load_native_objects(value)
     elif (data_type == "pyobject"):
         # This is experimental and not used in production
-        raise Exception("Not supported")
-        # return dill.loads(base64.b64decode(value.encode("ascii"))) #nosec
+        return dill.loads(base64.b64decode(value.encode("ascii"))) #nosec
     # elif (data_type == "array_bool"):
     #     return list([bool(x) for x in value])
     # elif (data_type == "array_str"):
@@ -286,8 +284,7 @@ def load_native_cluster_func(cluster_func):
     if (func_type == "lambda"):
         # decode and call the lambda function
         # This is experimental and not used in production
-        # return dill.loads(base64.b64decode(value.encode("ascii"))) #nosec
-        raise Exception("Not supported")
+        return dill.loads(base64.b64decode(value.encode("ascii"))) #nosec
 
     elif (func_type == "library"):
         # read function name. TODO: this is supposed to be string
@@ -324,8 +321,7 @@ def load_native_cluster_func(cluster_func):
 class ClusterFuncLambda(ClusterFunc):
     def __init__(self, func):
         # This is experimental and not supported in production
-        # super().__init__("", "lambda", base64.b64encode(dill.dumps(func)).decode("ascii")) #nosec
-        raise Exception("Not supported")
+        super().__init__("", "lambda", base64.b64encode(dill.dumps(func)).decode("ascii")) #nosec
 
     def validate(self):
         raise Exception("TBD")
@@ -338,9 +334,8 @@ class ClusterFuncLambda(ClusterFunc):
         value = json_obj["value"]
         try:
             # This is experimental and not used in production
-            # func = dill.loads(base64.b64decode(value.encode("ascii"))) #nosec 
-            # return ClusterFuncLambda(func)
-            raise Exception("Not supported")
+            func = dill.loads(base64.b64decode(value.encode("ascii"))) #nosec 
+            return ClusterFuncLambda(func)
         except Exception as e:
             utils.info("ClusterFuncLambda: from_json: exception in deserializing json: {}".format(json.dumps(json_obj)))
             raise e 
