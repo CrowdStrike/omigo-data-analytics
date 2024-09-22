@@ -31,7 +31,7 @@ HYDRA_CLUSTER_HANDLER_LOCK = threading.Lock()
 HYDRA_LOCAL_CLUSTER_HANDLER_LOCK = threading.Lock()
 
 # some constants
-MIN1_SECONDS = 60
+ONE_MINUTE_IN_SECONDS = 60
 
 # this is repeated in s3io_wrapper. TODO
 DEFAULT_WAIT_SEC = 3
@@ -265,8 +265,8 @@ class ClusterCapabilities:
 
 # primary entity class
 class ClusterEntity(cluster_data.JsonSer):
-    DEFAULT_ACTIVE_ENTITY_LEASE = 1 * MIN1_SECONDS
-    DEFAULT_PASSIVE_ENTITY_LEASE = 2 * MIN1_SECONDS
+    DEFAULT_ACTIVE_ENTITY_LEASE = 1 * ONE_MINUTE_IN_SECONDS
+    DEFAULT_PASSIVE_ENTITY_LEASE = 2 * ONE_MINUTE_IN_SECONDS
 
     # constructor
     # is_alive: is a flag to tell if it is an active or passive entity
