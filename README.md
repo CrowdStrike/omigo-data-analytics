@@ -140,4 +140,5 @@ This extension provides APIS to read data that is stored in some ETL format. Use
 
 ## Notes from the author
 * This library is built for simplicity, functionality and robustness. Good engineering practices are being followed slowly.
-* More examples with real life use cases is currently in progress. Feel free to reach out for any questions. 
+* More examples with real life use cases is currently in progress. Feel free to reach out for any questions.
+* This project is in active research phase and not to be deployed in production.
