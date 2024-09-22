@@ -1,6 +1,5 @@
 from omigo_core import tsv, utils, funclib
-from omigo_core import s3io_wrapper
-from omigo_ext import jira_ext
+from omigo_hydra import s3io_wrapper
 import json
 import time
 import base64

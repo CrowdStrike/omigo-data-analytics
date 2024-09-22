@@ -7,7 +7,7 @@ import math
 import json 
 import threading
 from omigo_core import tsv, utils, tsvutils, etl, funclib
-from omigo_hydra import cluster_data, cluster_class_reflection
+from omigo_hydra import cluster_data, cluster_class_reflection, s3io_wrapper
 
 # class that takes the base path in S3, and implement all distributed communication under that.
 # takes care of protocol level things for future
