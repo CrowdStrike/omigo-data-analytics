@@ -988,6 +988,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
         cluster_handler_ref.update_dynamic_value(ClusterPaths.get_entities_state_by_id(self.get_entity_type(), entity_state, self.get_entity_id()),
             cluster_common_v2.ClusterUpdateTime.new(funclib.get_utctimestamp_sec()))
 
+    # execute wf statically as map reduce task
     def execute_static(self):
         # local reference
         wf_entity = self.entity
@@ -1025,7 +1026,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
                 raise Exception("ClusterWFProtocol: static workflow dont support interval: {}".format(wf_spec.interval))
 
             # parse operations from the wf_spec
-            operations = self.execute_single_round_get_operations(wf_spec)
+            operations = self.execute_live_single_round_get_operations(wf_spec)
 
             # debug
             utils.info("ClusterWFProtocol: {}: execute_static: duration: {}: start_ts: {}, end_ts: {}".format(
@@ -1037,7 +1038,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
             # check if this is external execution or not
             if (wf_spec.is_external == False):
                 # execute and read the output
-                xoutput = self.execute_single_round(operations, xinput_resolved)
+                xoutput = self.execute_live_single_round(operations, xinput_resolved)
 
                 # write the output. TODO: single output only
                 output_id = wf_entity.entity_spec.output_ids[0]
@@ -1074,7 +1075,8 @@ class ClusterWFProtocol(ClusterEntityProtocol):
             # set the final state
             self.__update_wf_state__(self.cluster_handler, EntityState.FAILED)
             raise e
-     
+
+    # execute as live task     
     def execute_live(self):
         # local reference
         wf_entity = self.entity
@@ -1109,7 +1111,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
             num_iter = int(math.ceil(wf_spec.duration / wf_spec.interval))
 
             # parse operations from the wf_spec
-            operations = self.execute_single_round_get_operations(wf_spec)
+            operations = self.execute_live_single_round_get_operations(wf_spec)
 
             # initialize start timestamp
             cur_start_ts = wf_spec_start_ts
@@ -1134,7 +1136,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
                 xinput_resolved = self.resolve_meta(xinput, wf_spec_start_ts, wf_spec_use_full_data, cur_start_ts, cur_end_ts)
 
                 # call a single run. live means that the files are ETL formatted and not based on batchids
-                xoutput = self.execute_single_round(operations, xinput_resolved)
+                xoutput = self.execute_live_single_round(operations, xinput_resolved)
 
                 # etl output are laid out based on timestamp. if the event has the timestamp, then use that to determine output filename
                 cur_file_start_ts, cur_file_end_ts = self.__resolve_etl_file_timestamp__(xoutput, cur_start_ts, cur_end_ts)
@@ -1160,6 +1162,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
             self.__update_wf_state__(self.cluster_handler, EntityState.FAILED)
             raise e
 
+    # execute as task in remote cluster
     def execute_remote(self):
         # local reference
         wf_entity = self.entity
@@ -1256,6 +1259,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
             self.__update_wf_state__(self.cluster_handler, EntityState.FAILED)
             raise e
 
+    # resolve meta parameters
     def resolve_meta(self, xtsv, wf_start_ts, use_full_data, start_ts, end_ts):
         # resolve params first
         xtsv1 = self.__resolve_meta_params__(xtsv, start_ts, end_ts)
@@ -1333,6 +1337,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
         # final fallback
         return xtsv
 
+    # internal method to resolve meta parameters
     def __resolve_meta_params__(self, xtsv, start_ts, end_ts):
         def __resolve_meta_params_inner__(x):
             # column values
@@ -1358,9 +1363,11 @@ class ClusterWFProtocol(ClusterEntityProtocol):
         # return
         return xtsv
 
+    # resolve meta parameters for external task
     def resolve_external_task_meta_params(self, xtsv, input_id, output_id, file_index):
         return self.__resolve_external_task_meta_params__(xtsv, input_id, output_id, file_index)
 
+    # internal method to resolve meta parameters for external task
     def __resolve_external_task_meta_params__(self, xtsv, input_id, output_id, file_index):
         def __resolve_external_task_meta_params_inner__(x):
             # list of columns to replace        
@@ -1383,6 +1390,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
         # return
         return xtsv
 
+    # resolve timestamp for etl file
     def __resolve_etl_file_timestamp__(self, xtsv, start_ts, end_ts):
         # check for no data
         if (xtsv.num_rows() == 0):
@@ -1404,10 +1412,11 @@ class ClusterWFProtocol(ClusterEntityProtocol):
         # return the default
         return (start_ts, end_ts)
 
-    def execute_single_round(self, operations, xinput_resolved):
+    # execute single round of live wf
+    def execute_live_single_round(self, operations, xinput_resolved):
         # if the input is empty, return empty output
         if (xinput_resolved.num_rows() == 0):
-            utils.warn_once("execute_single_round: empty tsv. continuing. The empty tsv can lead to unpredictable behavior")
+            utils.warn_once("execute_live_single_round: empty tsv. continuing. The empty tsv can lead to unpredictable behavior")
 
         # read the input as the base
         otsv = xinput_resolved
@@ -1418,7 +1427,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
             try:
                 # if extend_class_op is defined, then instantiate the object
                 extend_class_obj = cluster_common_v2.load_extend_class_obj(extend_class_op, otsv.get_header(), otsv.get_data()) if (extend_class_op is not None) else None
-                utils.debug("ClusterWFProtocol: {} execute_single_round: extend_class_op: {}, extend_class_obj: {}".format(self.get_entity_id(), extend_class_op, extend_class_obj))
+                utils.debug("ClusterWFProtocol: {} execute_live_single_round: extend_class_op: {}, extend_class_obj: {}".format(self.get_entity_id(), extend_class_op, extend_class_obj))
 
                 # read function parameters
                 args = cluster_data.load_native_objects(operation.args)
@@ -1439,18 +1448,19 @@ class ClusterWFProtocol(ClusterEntityProtocol):
                     class_func = getattr(otsv.extend_class(class_reference), func.__name__)
 
                 # debug
-                utils.debug("ClusterWFProtocol: {} execute_single_round: custom_func: name: {}, args: {}, kwargs: {}, extend_class_obj: {}, func: {}".format(self.get_entity_id(), operation.name, args, kwargs, extend_class_obj, class_func))
+                utils.debug("ClusterWFProtocol: {} execute_live_single_round: custom_func: name: {}, args: {}, kwargs: {}, extend_class_obj: {}, func: {}".format(self.get_entity_id(), operation.name, args, kwargs, extend_class_obj, class_func))
 
                 # note that custom_func is not called as the context is already in the function.
                 otsv = class_func(*args, **kwargs)
             except Exception as e:
-                utils.error("ClusterWFProtocol: {} execute_single_round: Found error while running the method: {}".format(e))
+                utils.error("ClusterWFProtocol: {} execute_live_single_round: Found error while running the method: {}".format(e))
                 raise e
 
         # return output
         return otsv
 
-    def execute_single_round_get_operations(self, wf_spec):
+    # get all operations for single round of live wf
+    def execute_live_single_round_get_operations(self, wf_spec):
         # create tasks
         operations = []
 
@@ -1607,12 +1617,14 @@ class ClusterMasterElectionProtocol:
             # no elected master found
             return None
 
+    # check if there is elected master
     def has_elected_master(self):
         if (self.get_elected_master() is not None):
             return True
         else:
             return False
 
+    # check if its current master
     def is_current_master(self):
         # check if the master is already elected
         if (self.has_elected_master()):
@@ -1634,7 +1646,8 @@ class ClusterMasterElectionProtocol:
             utils.info("ClusterMasterElectionProtocol: {}: is_current_master: no current master found.".format(self.entity_id))
             return False
 
-    def run_election(self):
+    # run master election
+    def run_master_election(self):
         # check if master already exists and is valid
         current_master_id = self.get_elected_master()
         if (current_master_id is not None):

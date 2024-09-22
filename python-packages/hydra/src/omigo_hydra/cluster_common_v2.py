@@ -140,7 +140,7 @@ EntityIsActiveMap[EntityType.BATCH] = False
 EntityIsActiveMap[EntityType.CLIENT] = True
 EntityIsActiveMap[EntityType.SESSION] = True
 
-# Create the map for supervisor 
+# Create the map for supervisor. Note: There is no BATCH_MANAGER 
 EntitySupervisorMap = {}
 EntitySupervisorMap[EntityType.MASTER] = EntityType.MASTER
 EntitySupervisorMap[EntityType.RESOURCE_MANAGER] = EntityType.MASTER
@@ -156,14 +156,32 @@ EntitySupervisorMap[EntityType.SWF] = EntityType.SWF_MANAGER
 EntitySupervisorMap[EntityType.WF] = EntityType.WF_MANAGER
 EntitySupervisorMap[EntityType.JOB] = EntityType.JOB_MANAGER
 EntitySupervisorMap[EntityType.TASK] = EntityType.TASK_MANAGER
-EntitySupervisorMap[EntityType.BATCH] = EntityType.JOB_MANAGER
+EntitySupervisorMap[EntityType.BATCH] = EntityType.TASK_MANAGER # this is JOB_MANAGER here, but in passive children its TASK_MANAGER
 EntitySupervisorMap[EntityType.CLIENT] = EntityType.MASTER
 EntitySupervisorMap[EntityType.SESSION] = EntityType.MASTER
 
 # Create the map for active children
 EntityActiveChildrenMap = {}
-EntityActiveChildrenMap[EntityType.MASTER] = [EntityType.MASTER, EntityType.RESOURCE_MANAGER, EntityType.SESSION, EntityType.CLIENT] # TODO: Master belongs here because of active children entry
-EntityActiveChildrenMap[EntityType.RESOURCE_MANAGER] = [EntityType.SWF_MANAGER, EntityType.WF_MANAGER, EntityType.JOB_MANAGER, EntityType.TASK_MANAGER, EntityType.WORKER, EntityType.AGENT, EntityType.DOUBLE_AGENT, EntityType.INTELI_AGENT]
+# TODO: Master belongs here because of active children entry
+EntityActiveChildrenMap[EntityType.MASTER] = [
+    EntityType.MASTER,
+    EntityType.RESOURCE_MANAGER,
+    EntityType.SESSION,
+    EntityType.CLIENT
+]
+
+# Active Children Map
+EntityActiveChildrenMap[EntityType.RESOURCE_MANAGER] = [
+    EntityType.SWF_MANAGER,
+    EntityType.WF_MANAGER,
+    EntityType.JOB_MANAGER,
+    EntityType.TASK_MANAGER,
+    EntityType.WORKER,
+    EntityType.AGENT,
+    EntityType.DOUBLE_AGENT,
+    EntityType.INTELI_AGENT]
+
+# Empty children for all the other entities
 EntityActiveChildrenMap[EntityType.SWF_MANAGER] = []
 EntityActiveChildrenMap[EntityType.WF_MANAGER] = []
 EntityActiveChildrenMap[EntityType.JOB_MANAGER] = []
@@ -187,7 +205,7 @@ EntityPassiveChildrenMap[EntityType.RESOURCE_MANAGER] = []
 EntityPassiveChildrenMap[EntityType.SWF_MANAGER] = [EntityType.SWF]
 EntityPassiveChildrenMap[EntityType.WF_MANAGER] = [EntityType.WF]
 EntityPassiveChildrenMap[EntityType.JOB_MANAGER] = [EntityType.JOB]
-EntityPassiveChildrenMap[EntityType.TASK_MANAGER] = [EntityType.TASK, EntityType.BATCH]
+EntityPassiveChildrenMap[EntityType.TASK_MANAGER] = [EntityType.TASK, EntityType.BATCH] # Task manager is managing BATCH?
 EntityPassiveChildrenMap[EntityType.WORKER] = []
 EntityPassiveChildrenMap[EntityType.AGENT] = []
 EntityPassiveChildrenMap[EntityType.DOUBLE_AGENT] = []
