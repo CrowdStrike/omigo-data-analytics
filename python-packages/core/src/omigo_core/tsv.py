@@ -1813,19 +1813,18 @@ class TSV:
         return tuple(values)
 
     # TODO: this api needs to remove the auto detection of all_numeric flag
-    def sort(self, cols = None, reverse = False, reorder = False, all_numeric = None, ignore_if_missing = False, dmsg = ""):
+    def sort(self, cols, reverse = False, reorder = False, all_numeric = None, ignore_if_missing = False, dmsg = ""):
         # check empty
         if (self.has_empty_header() and cols is None):
             utils.raise_exception_or_warn("sort: empty header tsv", ignore_if_missing)
             return self
 
-        # if nothing is specified sort on all columns
-        if (cols is None):
-            cols = self.get_header_fields()
-
-        # find the matching cols and indexes
+        # find matching cols just to validate the presence of columns
         matching_cols = self.__get_matching_cols__(cols)
-        indexes = self.__get_col_indexes__(matching_cols)
+
+        # make sure no regexes
+        if (str(matching_cols) != str(cols)):
+            raise Exception("{}: doesnt support wildcards in this api: {}".format(dmsg, cols))
 
         # check if there were any matching cols
         if (len(matching_cols) == 0):
@@ -1857,13 +1856,13 @@ class TSV:
         else:
             return TSV(self.header, new_data)
 
-    def reverse_sort(self, cols = None, reorder = False, all_numeric = None, ignore_if_missing = False, dmsg = ""):
+    def reverse_sort(self, cols, reorder = False, all_numeric = None, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "reverse_sort")
-        return self.sort(cols = cols, reverse = True, reorder = reorder, all_numeric = all_numeric, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
+        return self.sort(cols, reverse = True, reorder = reorder, all_numeric = all_numeric, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def numerical_sort(self, cols = None, reorder = False, ignore_if_missing = False, dmsg = ""):
+    def numerical_sort(self, cols, reorder = False, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "numerical_sort")
-        return self.sort(cols = cols, reorder = reorder, all_numeric = True, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
+        return self.sort(cols, reorder = reorder, all_numeric = True, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
     def reverse_numerical_sort(self, cols = None, reorder = False, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "reverse_numerical_sort")

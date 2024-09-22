@@ -5,7 +5,7 @@ import numpy as np
 from dateutil import parser
 import datetime
 from omigo_core import utils
-from omigo_core import udfs
+from omigo_core import udfs, timefuncs
 
 # TODO: mkstr variants needs to use *args
 

@@ -575,6 +575,12 @@ class ClusterSpecBase(cluster_data.JsonSer):
             json_obj["num_outputs"]
         )
 
+# define constants
+EXTEND_CLASS_OP = "extend_class_op"
+MAP_OPS = "map_ops"
+REDUCE_OP = "reduce_op"
+SINGLETON_OP = "singleton_op"
+
 # method to construct the correct ClusterSpec
 def deserialize_cluster_spec(json_obj):
     # check for None
@@ -756,7 +762,7 @@ class ClusterSpecExtendClassDef(ClusterSpecTask):
 
         # return
         return ClusterSpecExtendClassDef.new(
-            ClusterExtendClassOperation.from_json(json_obj["extend_class_op"]),
+            ClusterExtendClassOperation.from_json(json_obj[EXTEND_CLASS_OP]),
             json_obj["num_inputs"],
             json_obj["num_outputs"]
         )
@@ -779,7 +785,7 @@ class ClusterSpecMapTask(ClusterSpecTask):
 
         # operations
         map_ops = []
-        for op in json_obj["map_ops"]:
+        for op in json_obj[MAP_OPS]:
             map_ops.append(ClusterMapOperation.from_json(op))
 
         # return
@@ -807,13 +813,36 @@ class ClusterSpecReduceTask(ClusterSpecTask):
 
         # return
         return ClusterSpecReduceTask.new(
-            ClusterReduceOperation.from_json(json_obj["reduce_op"]),
+            ClusterReduceOperation.from_json(json_obj[REDUCE_OP]),
             json_obj["num_inputs"],
             json_obj["num_outputs"]
         )
 
     def new(reduce_op, num_inputs = 1, num_outputs = 1):
         return ClusterSpecReduceTask(reduce_op, num_inputs, num_outputs)
+
+class ClusterSpecSingletonTask(ClusterSpecTask):
+    def __init__(self, singleton_op, num_inputs, num_outputs):
+        super().__init__(ClusterTaskType.SINGLETON, num_inputs, num_outputs)
+        self.singleton_op = singleton_op
+
+    def build(self):
+        super().build()
+
+    def from_json(json_obj):
+        # check for None
+        if (json_obj is None):
+            return None
+
+        # return
+        return ClusterSpecSingletonTask.new(
+            ClusterSingletonOperation.from_json(json_obj[SINGLETON_OP]),
+            json_obj["num_inputs"],
+            json_obj["num_outputs"]
+        )
+
+    def new(singleton_op, num_inputs = 1, num_outputs = 1):
+        return ClusterSpecSingletonTask(singleton_op, num_inputs, num_outputs)
 
 class ClusterSpecPartitionTask(ClusterSpecTask):
     def __init__(self, num_splits, num_inputs, num_outputs):
@@ -878,6 +907,8 @@ def deserialize_cluster_task_spec(json_obj):
         return ClusterSpecMapTask.from_json(json_obj)
     elif (task_type == ClusterTaskType.REDUCE):
         return ClusterSpecReduceTask.from_json(json_obj)
+    elif (task_type == ClusterTaskType.SINGLETON):
+        return ClusterSpecSingletonTask.from_json(json_obj)
     elif (task_type == ClusterTaskType.PARTITION):
         return ClusterSpecPartitionTask.from_json(json_obj)
     elif (task_type == ClusterTaskType.HASH_PARTITION):
@@ -948,6 +979,7 @@ class ClusterTaskType:
     EXTEND_CLASS = "extend_class"
     MAP = "map"
     REDUCE = "reduce"
+    SINGLETON = "singleton"
     PARTITION = "partition"
     HASH_PARTITION = "hash_partition"
 
@@ -1022,6 +1054,25 @@ class ClusterReduceOperation(ClusterTaskOperation):
         # return
         return ClusterReduceOperation(json_obj["grouping_cols"], json_obj["num_splits"], name, requirements, *args, **kwargs)
 
+# TODO: follow the same design as ClusterOperand with mulitple derived classes
+class ClusterSingletonOperation(ClusterTaskOperation):
+    def __init__(self, name, requirements, *args, **kwargs):
+        super().__init__(ClusterTaskType.SINGLETON, name, requirements, *args, **kwargs)
+
+    def from_json(json_obj):
+        # check for None
+        if (json_obj is None):
+            return None
+
+        # this parsing is tricky and has to be done inline
+        name = json_obj["name"]
+        requirements = json_obj["requirements"]
+        args = cluster_data.load_native_objects(cluster_data.cluster_operand_deserializer(json_obj["args"]))
+        kwargs = cluster_data.load_native_objects(cluster_data.cluster_operand_deserializer(json_obj["kwargs"]))
+
+        # return
+        return ClusterSingletonOperation(name, requirements, *args, **kwargs)
+
 def deserialize_cluster_task_operation(json_obj):
     # check for None
     if (json_obj is None):
@@ -1037,6 +1088,8 @@ def deserialize_cluster_task_operation(json_obj):
         return ClusterMapOperation.from_json(json_obj)
     elif (task_type == ClusterTaskType.REDUCE):
         return ClusterReduceOperation.from_json(json_obj)
+    elif (task_type == ClusterTaskType.SINGLETON):
+        return ClusterSingletonOperation.from_json(json_obj)
     else:
         raise Exception("deserialize_cluster_task_operation: unknown task_type for ClusterTaskOperation: {}".format(task_type))
  
@@ -1424,9 +1477,10 @@ class ClusterExtendClass(cluster_data.JsonSer):
         return ClusterExtendClass(name, *args, **kwargs)
 
 class ClusterOperationJob(cluster_data.JsonSer):
-    def __init__(self, map_ops, reduce_op, extend_class_op):
+    def __init__(self, map_ops, reduce_op, singleton_op, extend_class_op):
         self.map_ops = map_ops
         self.reduce_op = reduce_op
+        self.singleton_op = singleton_op
         self.extend_class_op = extend_class_op
 
     def from_json(json_obj):
@@ -1440,27 +1494,33 @@ class ClusterOperationJob(cluster_data.JsonSer):
         extend_class_def = None
 
         # add maps
-        for op in json_obj["map_ops"]:
+        for op in json_obj[MAP_OPS]:
             map_ops.append(ClusterMapOperation.from_json(op))
 
         # check for None or empty in reduce_op
-        if ("reduce_op" in json_obj.keys()):
-            value = json_obj["reduce_op"]
+        if (REDUCE_OP in json_obj.keys()):
+            value = json_obj[REDUCE_OP]
             if (value is not None and value != ""):
                 reduce_op = ClusterReduceOperation.from_json(value)
 
+        # check for None or empty in singleton_op
+        if (SINGLETON_OP in json_obj.keys()):
+            value = json_obj[SINGLETON_OP]
+            if (value is not None and value != ""):
+                singleton_op = ClusterSingletonOperation.from_json(value)
+
         # check for None for extend_class_def
-        if ("extend_class_op" in json_obj.keys()):
-            value = json_obj["extend_class_op"]
+        if (EXTEND_CLASS_OP in json_obj.keys()):
+            value = json_obj[EXTEND_CLASS_OP]
             if (value is not None and value != ""):
                 extend_class_op = ClusterExtendClass.from_json(value)
 
         # return
-        return ClusterOperationJob.new(map_ops, reduce_op, extend_class_op)
+        return ClusterOperationJob.new(map_ops, reduce_op, singleton_op, extend_class_op)
 
-    def new(map_ops, reduce_op, extend_class_op):
+    def new(map_ops, reduce_op, singleton_op, extend_class_op):
         # return
-        return ClusterOperationJob(map_ops, reduce_op, extend_class_op)
+        return ClusterOperationJob(map_ops, reduce_op, singleton_op, extend_class_op)
 
 class ClusterIds:
     ID_SUFFIX = 0
