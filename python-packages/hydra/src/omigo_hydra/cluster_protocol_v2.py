@@ -1647,7 +1647,7 @@ class ClusterMasterElectionProtocol:
             return False
 
     # run master election
-    def run_master_election(self):
+    def run_election(self):
         # check if master already exists and is valid
         current_master_id = self.get_elected_master()
         if (current_master_id is not None):
