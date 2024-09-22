@@ -86,7 +86,7 @@ class HydraBaseTSV:
         reduce_indexes = []
         for i in range(len(self.operations)):
             # check for operation type
-            if (isinstance(self.operations[i], (cluster_common_v2.ClusterReduceOperation))):
+            if (isinstance(self.operations[i], (cluster_common_v2.ClusterReduceOperation, cluster_common_v2.ClusterSingletonOperation))):
                 reduce_indexes.append(i)
 
         # debug
@@ -100,40 +100,45 @@ class HydraBaseTSV:
         # if there are no reduce operations, then a single job with only maps
         if (len(reduce_indexes) == 0):
             map_ops = self.operations
-            reduce_op = None 
-            job_mr_splits.append((map_ops, reduce_op))
+            reduce_op = None
+            singleton_op = None
+            job_mr_splits.append((map_ops, reduce_op, singleton_op))
         else:
             # iterate and add jobs
             for i in range(len(reduce_indexes)):
                 # create placeholders
                 map_ops = [] 
-                reduce_op = None 
+                reduce_op = None
+                singleton_op = None
                 cluster_def_op = None 
 
                 # boundary condition
                 index = reduce_indexes[i]
+                reduce_op = self.operations[index] if (isinstance(self.operations[index], (cluster_common_v2.ClusterReduceOperation))) else None
+                singleton_op = self.operations[index] if (isinstance(self.operations[index], (cluster_common_v2.ClusterSingletonOperation))) else None
+
+                # indexes
                 if (i > 0):
                     prev_index = reduce_indexes[i-1] 
                     map_ops = self.operations[prev_index+1:index]
-                    reduce_op = self.operations[index]
                 else:
                     map_ops = self.operations[0:index]
-                    reduce_op = self.operations[index]
 
                 # add to the job
-                job_mr_splits.append((map_ops, reduce_op))
+                job_mr_splits.append((map_ops, reduce_op, singleton_op))
 
             # boundary condition if last sequence of operations was map only. TODO: dont use isinstance
-            if (isinstance(self.operations[-1], (cluster_common_v2.ClusterReduceOperation)) == False):
+            if (isinstance(self.operations[-1], (cluster_common_v2.ClusterReduceOperation), cluster_common_v2.ClusterSingletonOperation) == False):
                 map_ops = self.operations[reduce_indexes[-1]+1:]
                 reduce_op = None
-                job_mr_splits.append((map_ops, reduce_op))
+                singleton_op = None
+                job_mr_splits.append((map_ops, reduce_op, singleton_op))
 
         # create segments of map and reduce operations
         jobs_operations = []
 
         # job mr splits has map-reduce splits. Now split each further based on the ExtendClass
-        for (map_ops, reduce_op) in job_mr_splits:
+        for (map_ops, reduce_op, singleton_op) in job_mr_splits:
             # create indexes
             extend_class_indexes = []
             
@@ -167,7 +172,8 @@ class HydraBaseTSV:
                             if (cur_index > 0):
                                 map_ops2 = map_ops[0:cur_index]
                                 reduce_op2 = None
-                                jobs_operations.append(cluster_common_v2.ClusterOperationJob(map_ops2, reduce_op2, None))
+                                singleton_op2 = None
+                                jobs_operations.append(cluster_common_v2.ClusterOperationJob(map_ops2, reduce_op2, singleton_op2, None))
                             
                         # check if it is the last split or before
                         if (i < len(extend_class_indexes) - 1):
@@ -175,18 +181,20 @@ class HydraBaseTSV:
                             next_index = extend_class_indexes[i+1]
                             map_ops2 = map_ops[cur_index+1:next_index]
                             reduce_op2 = None
-                            jobs_operations.append(cluster_common_v2.ClusterOperationJob(map_ops2, reduce_op2, class_def_op))
+                            singleton_op2 = None
+                            jobs_operations.append(cluster_common_v2.ClusterOperationJob(map_ops2, reduce_op2, singleton_op2, class_def_op))
                         else:
                             # last split gets the reduce
                             map_ops2 = map_ops[cur_index+1:]
                             reduce_op2 = reduce_op
-                            jobs_operations.append(cluster_common_v2.ClusterOperationJob(map_ops2, reduce_op2, class_def_op))
+                            singleton_op2 = singleton_op
+                            jobs_operations.append(cluster_common_v2.ClusterOperationJob(map_ops2, reduce_op2, singleton_op2, class_def_op))
                 else:
                     class_def_op = None
-                    jobs_operations.append(cluster_common_v2.ClusterOperationJob(map_ops, reduce_op, class_def_op))
+                    jobs_operations.append(cluster_common_v2.ClusterOperationJob(map_ops, reduce_op, singleton_op, class_def_op))
             else:
                 class_def_op = None
-                jobs_operations.append(cluster_common_v2.ClusterOperationJob(map_ops, reduce_op, class_def_op))
+                jobs_operations.append(cluster_common_v2.ClusterOperationJob(map_ops, reduce_op, singleton_op, class_def_op))
 
         # return
         return jobs_operations

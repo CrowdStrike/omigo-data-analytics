@@ -4368,7 +4368,7 @@ class TSV:
         dmsg = utils.extend_inherit_message(dmsg, "explode_json")
 
         # resolve parameters
-        merge_list_method = utils.resolve_default_parameter("resolve_default_parameter", resolve_default_parameter, "join", dmsg) 
+        merge_list_method = utils.resolve_default_parameter("merge_list_method", merge_list_method, "join", dmsg) 
         collapse_primitive_list = utils.resolve_default_parameter("collapse_primitive_list", collapse_primitive_list, False, dmsg)
         collapse = utils.resolve_default_parameter("collapse", collapse, False, dmsg)
         ignore_if_missing = utils.resolve_default_parameter("ignore_if_missing", ignore_if_missing, True, dmsg)

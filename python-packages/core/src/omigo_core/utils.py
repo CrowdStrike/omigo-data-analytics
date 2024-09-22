@@ -19,6 +19,7 @@ DEBUG_MSG_CACHE = {}
 TRACE_MSG_CACHE = {}
 EXCEPTION_AFTER_WARNINGS_MSG_CACHE = {}
 RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE = {}
+NOOP_AFTER_WARNINGS_MSG_CACHE= {}
 
 # some env variables
 OMIGO_CRITICAL = "OMIGO_CRITICAL"
@@ -446,18 +447,34 @@ def raise_exception_after_n_warnings(msg, num_warnings = 1000):
         raise Exception(msg)
 
 def rate_limit_after_n_warnings(msg, num_warnings = 1000, sleep_secs = 10):
-    global EXCEPTION_AFTER_WARNINGS_MSG_CACHE
+    global RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE
 
     # check if msg is new
-    if (msg not in EXCEPTION_AFTER_WARNINGS_MSG_CACHE.keys()):
-        EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg] = 1
+    if (msg not in RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE.keys()):
+        RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE[msg] = 1
 
     # check the counter
-    if (EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg] < num_warnings):
-        EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg] = EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg] + 1
+    if (RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE[msg] < num_warnings):
+        RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE[msg] = RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE[msg] + 1
         warn_once(msg)
     else:
         time.sleep(sleep_secs)
+
+def noop_after_n_warnings(msg, func, *args, **kwargs):
+    global NOOP_AFTER_WARNINGS_MSG_CACHE
+    num_warnings = 1000
+
+    # check if msg is new
+    if (msg not in NOOP_AFTER_WARNINGS_MSG_CACHE.keys()):
+        NOOP_AFTER_WARNINGS_MSG_CACHE[msg] = 1
+
+    # check the counter
+    if (NOOP_AFTER_WARNINGS_MSG_CACHE[msg] < num_warnings):
+        NOOP_AFTER_WARNINGS_MSG_CACHE[msg] = NOOP_AFTER_WARNINGS_MSG_CACHE[msg] + 1
+        func(*args, **kwargs)
+        warn_once(msg)
+    else:
+        pass
 
 # Deprecated
 def strip_spl_white_spaces(v):

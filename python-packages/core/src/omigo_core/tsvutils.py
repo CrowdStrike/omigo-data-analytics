@@ -17,6 +17,7 @@ from omigo_core import file_paths_data_reader
 from omigo_core import file_io_wrapper
 from omigo_core import utils
 from requests import exceptions
+from omigo_hydra import hydra
 
 # TODO: find the difference between ascii and utf-8 encoding
 # requests.post doesnt take data properly. Use json parameter.
@@ -469,11 +470,11 @@ def load_from_array_of_map(map_arr):
     return tsv.TSV(header, data).validate()
 
 def save_to_file(*args, **kwargs):
-    utils.noop_after_n_warnings("Deprecated. Use omigo_hydra instead", omigo_hydra.hydra.save_to_file, *args, **kwargs)
+    utils.noop_after_n_warnings("Deprecated. Use omigo_hydra instead", hydra.save_to_file, *args, **kwargs)
 
-def check_exists(xtsv, s3_region = None, aws_profile = None):
+def check_exists(*args, **kwargs):
     utils.rate_limit_after_n_warnings("Deprecated. Use omigo_hydra instead")
-    return omigo_hydra.hydra.check_exists(*args, **kwargs)
+    return hydra.check_exists(*args, **kwargs)
 
 # Deprecated methods. Use wsclient package instead
 def read_url_json(*args, **kwargs):

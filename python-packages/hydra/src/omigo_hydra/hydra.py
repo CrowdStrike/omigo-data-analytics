@@ -1,4 +1,4 @@
-from omigo_core import file_paths_util, file_io_wrapper
+from omigo_core import file_paths_util, file_io_wrapper, utils
 
 def save_to_file(xtsv, output_file_name, s3_region = None, aws_profile = None):
     # do some validation
