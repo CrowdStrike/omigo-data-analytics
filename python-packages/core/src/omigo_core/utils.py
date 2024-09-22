@@ -33,6 +33,8 @@ OMIGO_DEBUG_REPORT_PROGRESS_PERC = "OMIGO_DEBUG_REPORT_PROGRESS_PERC"
 OMIGO_DEBUG_REPORT_PROGRESS_MIN_THRESH = "OMIGO_DEBUG_REPORT_PROGRESS_MIN_THRESH"
 OMIGO_CODE_TODO_WARNING = "OMIGO_CODE_TODO_WARNING"
 OMIGO_BIG_TSV_WARN_SIZE_THRESH = "OMIGO_BIG_TSV_WARN_SIZE_THRESH"
+OMIGO_RATE_LIMIT_N_WARNINGS = "OMIGO_RATE_LIMIT_N_WARNINGS"
+OMIGO_NOOP_N_WARNINGS = "OMIGO_NOOP_N_WARNINGS"
 
 def is_critical():
     return str(os.environ.get(OMIGO_CRITICAL, "1")) == "1"
@@ -446,35 +448,41 @@ def raise_exception_after_n_warnings(msg, num_warnings = 1000):
         del EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg]
         raise Exception(msg)
 
-def rate_limit_after_n_warnings(msg, num_warnings = 1000, sleep_secs = 10):
+def rate_limit_after_n_warnings(msg, sleep_secs = 10):
     global RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE
+
+    # resolve num_warnings
+    num_warnings = int(resolve_default_parameter("num_warnings", os.getenv(OMIGO_RATE_LIMIT_N_WARNINGS), "10000", "rate_limit_after_n_warnings"))
 
     # check if msg is new
     if (msg not in RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE.keys()):
         RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE[msg] = 1
 
     # check the counter
-    if (RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE[msg] < num_warnings):
+    if (num_warnings == -1 or RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE[msg] < num_warnings):
         RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE[msg] = RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE[msg] + 1
         warn_once(msg)
     else:
+        trace("{}: Sleeping for {} seconds".format(msg, sleep_secs))
         time.sleep(sleep_secs)
 
 def noop_after_n_warnings(msg, func, *args, **kwargs):
     global NOOP_AFTER_WARNINGS_MSG_CACHE
-    num_warnings = 1000
+
+    # resolve num_warnings
+    num_warnings = int(resolve_default_parameter("num_warnings", os.getenv(OMIGO_NOOP_N_WARNINGS), "10000", "noop_after_n_warnings"))
 
     # check if msg is new
     if (msg not in NOOP_AFTER_WARNINGS_MSG_CACHE.keys()):
         NOOP_AFTER_WARNINGS_MSG_CACHE[msg] = 1
 
     # check the counter
-    if (NOOP_AFTER_WARNINGS_MSG_CACHE[msg] < num_warnings):
+    if (num_warnings == -1 or NOOP_AFTER_WARNINGS_MSG_CACHE[msg] < num_warnings):
         NOOP_AFTER_WARNINGS_MSG_CACHE[msg] = NOOP_AFTER_WARNINGS_MSG_CACHE[msg] + 1
         func(*args, **kwargs)
         warn_once(msg)
     else:
-        pass
+        trace("{}: noop".format(msg, sleep_secs))
 
 # Deprecated
 def strip_spl_white_spaces(v):

@@ -726,11 +726,9 @@ class ClusterFileHandler(cluster_data.JsonSer):
                 return False
 
     def is_file(self, path):
-        utils.debug("is_file   : {}".format(path))
         return self.fs.is_file(self.__makepath__(path))
 
     def is_directory(self, path):
-        utils.trace("is_directory: {}".format(path))
         return self.fs.is_directory(self.__makepath__(path))
 
     def is_non_empty_dir(self, path):
@@ -785,8 +783,8 @@ class ClusterFileHandler(cluster_data.JsonSer):
 
     # TODO: remove tsvutils dependency
     def read_tsv(self, path_or_paths):
-        paths = tsvutils.__get_argument_as_array__(path_or_paths)
-        full_paths = list([self.__makepath__(self.__normalize_path__(p)) for p in tsvutils.__get_argument_as_array__(path_or_paths)])
+        paths = utils.get_argument_as_array(path_or_paths)
+        full_paths = list([self.__makepath__(self.__normalize_path__(p)) for p in utils.get_argument_as_array(path_or_paths)])
         return tsv.read(full_paths)
 
     # this is a special method that reads all the files in a directory. The format of the filename is <something>.TIMESTAMP.EXTENSION

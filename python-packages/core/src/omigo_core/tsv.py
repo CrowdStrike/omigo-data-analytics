@@ -5187,7 +5187,9 @@ def from_df(df):
     # return
     return tsv.TSV("\t".join(header_fields), data).validate()
 
-def from_maps(mps, accepted_cols = None, excluded_cols = None, url_encoded_cols = None):
+def from_maps(mps, accepted_cols = None, excluded_cols = None, url_encoded_cols = None, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "from_maps")
+
     # validation
     if (len(mps) == 0):
         utils.warn_once("from_maps: empty list")
@@ -5201,9 +5203,9 @@ def from_maps(mps, accepted_cols = None, excluded_cols = None, url_encoded_cols 
 
     # use explode
     result = merge_union(xtsvs) \
-        .explode_json("json", prefix = "json", accepted_cols = accepted_cols, excluded_cols = excluded_cols, url_encoded_cols = url_encoded_cols) \
-        .remove_prefix("json") \
-        .drop_cols_if_exists(["__json_index__", "__explode_json_index__"])
+        .explode_json("json", prefix = "json", accepted_cols = accepted_cols, excluded_cols = excluded_cols, url_encoded_cols = url_encoded_cols, collapse = True, dmsg = dmsg) \
+        .remove_prefix("json", dmsg = dmsg) \
+        .drop_cols_if_exists(["__json_index__", "__explode_json_index__"], dmsg = dmsg)
 
     # return
     return result 
