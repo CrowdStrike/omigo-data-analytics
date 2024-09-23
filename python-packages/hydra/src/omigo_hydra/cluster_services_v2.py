@@ -591,3 +591,11 @@ def run_worker(ident = 1):
     entity_runner.setup()
     entity_runner.run()
 
+import multiprocessing
+
+if __name__ == "__main__":
+    multiprocessing.freeze_support()
+    entity_name = sys.argv[1]
+    if (entity_name == "master"):
+        run_master()
+

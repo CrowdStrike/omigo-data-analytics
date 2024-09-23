@@ -2,7 +2,8 @@ import time
 import os
 import random
 import math
-import threading
+# import threading
+import multiprocessing
 from omigo_core import tsv, utils, timefuncs, etl
 from omigo_hydra import cluster_data, cluster_class_reflection, cluster_tsv, cluster_common_v2, cluster_arjun
 from omigo_hydra.cluster_common_v2 import EntityType, EntityState, ClusterTaskType, ClusterIds, ClusterPaths
@@ -15,7 +16,7 @@ class ClusterHeartbeatProtocol:
     def __init__(self, entity):
         self.entity = entity
         self.last_heartbeat_cache = None
-        self._lock = threading.Lock()
+        # self._lock = threading.Lock()
         self.cluster_handler = ClusterPaths.get_cluster_handler()
 
     def get_entity(self):
@@ -28,21 +29,17 @@ class ClusterHeartbeatProtocol:
         return self.get_entity().entity_type
 
     def update_cache_ts(self, ts):
-        with self._lock:
-            self.last_heartbeat_cache = ts
+        # with self._lock:
+        self.last_heartbeat_cache = ts
 
     def get_cache_ts(self):
-        with self._lock:
-            return self.last_heartbeat_cache
+        # with self._lock:
+        return self.last_heartbeat_cache
 
     def start_heartbeat_thread(self):
-        # sleep for few seconds
-        # utils.info("ClusterHeartbeatProtocol {}: start_heartbeat_thread: sleeping for 5 seconds before starting thread".format(self.get_entity_id()))
-        # time.sleep(5)
-
-        # create the thread to update the heartbeat
-        thread = threading.Thread(target = self.update_heartbeat, daemon = True)
-        thread.start()
+        heartbeat_process = multiprocessing.Process(target = self.update_heartbeat, args = ())
+        heartbeat_process.daemon = True
+        heartbeat_process.start()
 
     def update_heartbeat(self):
         while True:
@@ -108,13 +105,13 @@ class ClusterHeartbeatProtocol:
     def update_heartbeat_inner(self):
         # check if the entity is alive
         if (self.__is_alive__() == False):
-            utils.warn("ClusterHeartbeatProtocol: update_heartbeat: {}, heartbeat missing or too old. Exiting".format(self.get_entity_id()))
+            utils.warn("ClusterHeartbeatProtocol: update_heartbeat_inner: {}, heartbeat missing or too old. Exiting".format(self.get_entity_id()))
             return False
 
         # check if the entity is part of cleanup already. TODO: consider all possible states
         xentity_state_protocol = ClusterEntityStateProtocol(self.get_entity_type(), self.get_entity_id())
         if (xentity_state_protocol.has_cleanup_state() or xentity_state_protocol.has_aborted_state()):
-            utils.info("ClusterHeartbeatProtocol: update_heartbeat: {}, entity in aborted or cleanup. Exiting.".format(self.get_entity_id()))
+            utils.info("ClusterHeartbeatProtocol: update_heartbeat_inner: {}, entity in aborted or cleanup. Exiting.".format(self.get_entity_id()))
             return False
 
         # construct new heartbeat 
@@ -258,7 +255,7 @@ class ClusterEntityProtocol:
         self.entity = entity
         self.cluster_handler = ClusterPaths.get_cluster_handler()
         self.heartbeat_protocol = ClusterHeartbeatProtocol(self.entity)
-        self._lock = threading.Lock()
+        # self._lock = threading.Lock()
         self.local_cluster_handler = ClusterPaths.get_local_cluster_handler() 
 
     def get_entity(self):
@@ -779,7 +776,7 @@ class ClusterMasterProtocol(ClusterEntityProtocol):
         super().__init__(entity)
         self.is_cur_master_cache = False
         self.cur_master_cache_ts = 0
-        self._lock = threading.Lock()
+        # self._lock = threading.Lock()
         self.election_protocol = ClusterMasterElectionProtocol(self.get_entity_id())
 
     # initialize
@@ -797,24 +794,24 @@ class ClusterMasterProtocol(ClusterEntityProtocol):
     # check if this is the current master. TODO: Why there are 2 methods in Election and here
     def is_current_master(self):
        # use lock for avoiding race condition
-       with self._lock:
-            # find time difference
-            cur_time = timefuncs.get_utctimestamp_sec()
-            time_diff = abs(cur_time - self.cur_master_cache_ts)
+       # with self._lock:
+       # find time difference
+       cur_time = timefuncs.get_utctimestamp_sec()
+       time_diff = abs(cur_time - self.cur_master_cache_ts)
 
-            # update cache if needed
-            if (self.cur_master_cache_ts == 0 or time_diff > ClusterMasterProtocol.MAX_CUR_MASTER_CACHE):
-                self.is_cur_master_cache = self.election_protocol.is_current_master()
-                self.cur_master_cache_ts = cur_time
+       # update cache if needed
+       if (self.cur_master_cache_ts == 0 or time_diff > ClusterMasterProtocol.MAX_CUR_MASTER_CACHE):
+           self.is_cur_master_cache = self.election_protocol.is_current_master()
+           self.cur_master_cache_ts = cur_time
 
-            # return
-            return self.is_cur_master_cache
+       # return
+       return self.is_cur_master_cache
 
     def refresh_master_cache(self):
        # use lock for avoiding race condition
-       with self._lock:
-           self.is_cur_master_cache = self.election_protocol.is_current_master()
-           self.cur_master_cache_ts = timefuncs.get_utctimestamp_sec()
+       # with self._lock:
+       self.is_cur_master_cache = self.election_protocol.is_current_master()
+       self.cur_master_cache_ts = timefuncs.get_utctimestamp_sec()
 
     # monitor the incoming entities for assignment to their supervisors
     def monitor_incoming_for_supervisor(self):
@@ -1985,3 +1982,6 @@ class ClusterExecutorContext:
 
     def get_workflow_output_path(self, workflow_id, output_id):
         return cluster_common_v2.ClusterPaths.get_entity_data_output(EntityType.WF, workflow_id, output_id)
+
+if __name__ == "__main__":
+    freeze_support()
