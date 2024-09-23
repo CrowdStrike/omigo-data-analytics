@@ -179,7 +179,8 @@ EntityActiveChildrenMap[EntityType.RESOURCE_MANAGER] = [
     EntityType.WORKER,
     EntityType.AGENT,
     EntityType.DOUBLE_AGENT,
-    EntityType.INTELI_AGENT]
+    EntityType.INTELI_AGENT
+]
 
 # Empty children for all the other entities
 EntityActiveChildrenMap[EntityType.SWF_MANAGER] = []
