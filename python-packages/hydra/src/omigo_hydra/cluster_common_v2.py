@@ -274,12 +274,16 @@ EntityCapacityMap[EntityType.AGENT] = 1
 EntityCapacityMap[EntityType.DOUBLE_AGENT] = 1
 EntityCapacityMap[EntityType.INTELI_AGENT] = 1
 
-# Constants for cluster capabilities
+# Constants for cluster capabilities. These are just suggested constants and in realize plain strings will be used 
 class ClusterCapabilities:
     SPARK       = "spark"
     PRESTO      = "presto"
+    TRINO       = "trino"
     SPLUNK      = "splunk"
     SHELL       = "shell"
+    LOGSCALE    = "logscale"
+    KAFKA       = "kafka"
+    WEBSERVICE  = "webservice"
 
 # primary entity class
 class ClusterEntity(cluster_data.JsonSer):
