@@ -464,6 +464,7 @@ class ClusterEntityProtocol:
     def do_active_child_state_change_aborted_to_cleanup(self, xchild_entity):
         self.__do_child_entity_state_change__(xchild_entity, EntityState.CLEANUP)
 
+    # monitor passive children
     def monitor_passive_children(self):
         # take current time
         cur_ts = timefuncs.get_utctimestamp_sec()
@@ -516,6 +517,7 @@ class ClusterEntityProtocol:
                 else:
                     raise Exception("ClusterEntityProtocol: {} monitor_passive_children: invalid state: {}".format(self.get_entity_id(), cur_registered_state))
 
+    # do_passive_child_state_change
     def do_passive_child_state_change(self, xchild_entity, cur_state, state_update_time, target_state):
         # define the placeholders for all possible state transitions
         if (cur_state == EntityState.CREATED and target_state == EntityState.ALIVE):
@@ -542,6 +544,7 @@ class ClusterEntityProtocol:
         else:
             raise Exception("ClusterEntityProtocol: {}: do_passive_child_state_change: invalid state change: {}, {}, {}".format(self.get_entity_id(), xchild_entity.entity_id, cur_state, target_state))
 
+    # do_passive_child_state_change_created_to_alive
     def do_passive_child_state_change_created_to_alive(self, xchild_entity):
         # check if there are enough resources - workers, agents to assign. if the resources are there, then 
         # assign and move to alive state
@@ -611,6 +614,7 @@ class ClusterEntityProtocol:
     def is_alive_cached(self):
         return self.heartbeat_protocol.is_alive_cached()
 
+    # monitor_execution_tasks
     def monitor_execution_tasks(self):
         # at this point, the current state is as per in the cluster
         for xchild_entity_type in cluster_common_v2.EntityExecutionTaskTypes:
