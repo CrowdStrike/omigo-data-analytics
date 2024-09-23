@@ -1,4 +1,4 @@
-from omigo_core import tsv, utils, funclib
+from omigo_core import tsv, utils, timefuncs
 from omigo_hydra import s3io_wrapper
 import json
 import time
@@ -208,7 +208,7 @@ class JobManager:
             # put the new job id in the worker queue
             if (len(idle_workers) > 0):
                 worker_id = idle_workers[0]
-                job_spec_json["start_ts"] = funclib.utctimestamp_to_datetime_str(funclib.get_utctimestamp_sec())
+                job_spec_json["start_ts"] = timefuncs.utctimestamp_to_datetime_str(timefuncs.get_utctimestamp_sec())
                 self.runner_base.fs.write_text_file(self.runner_base.get_worker_job_id_file(worker_id, new_job_id), "")
                 self.runner_base.fs.write_text_file(self.runner_base.get_job_status_running_job_id_file(new_job_id), json.dumps(job_spec_json))
                 utils.info("Job Assigned: job_id: {}: worker: {}".format(new_job_id, worker_id))
@@ -390,7 +390,7 @@ class Worker:
 
                 # update the status
                 job_spec_json["status"] = status
-                job_spec_json["completion_ts"] = funclib.utctimestamp_to_datetime_str(funclib.get_utctimestamp_sec())
+                job_spec_json["completion_ts"] = timefuncs.utctimestamp_to_datetime_str(timefuncs.get_utctimestamp_sec())
 
                 # write to completed
                 self.runner_base.fs.write_text_file(completed_job_spec_file, json.dumps(job_spec_json))

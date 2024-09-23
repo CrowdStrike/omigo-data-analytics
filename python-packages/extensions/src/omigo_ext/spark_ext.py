@@ -1,4 +1,4 @@
-from omigo_core import tsv, utils, funclib
+from omigo_core import tsv, utils
 from omigo_ext import sql_helper
 import os
 

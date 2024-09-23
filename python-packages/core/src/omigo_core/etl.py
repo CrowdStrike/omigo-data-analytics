@@ -1,5 +1,5 @@
 """EtlDateTimePathFormat class"""
-from omigo_core import tsv, utils, tsvutils, funclib, file_paths_util
+from omigo_core import tsv, utils, tsvutils, timefuncs, file_paths_util
 from dateutil import parser
 import datetime
 import random
@@ -102,30 +102,30 @@ def get_matching_etl_date_time_path(path, new_base_path, new_prefix, new_extensi
 
 # returns date needed in function parameters
 def get_etl_date_str_from_ts(ts):
-    dtime = funclib.utctimestamp_to_datetime(ts)
+    dtime = timefuncs.utctimestamp_to_datetime(ts)
     return dtime.strftime("%Y-%m-%d")
 
 # returns date needed in function parameters
 def get_etl_datetime_str_from_ts(ts):
-    dtime = funclib.utctimestamp_to_datetime(ts)
+    dtime = timefuncs.utctimestamp_to_datetime(ts)
     return dtime.strftime("%Y-%m-%dT%H:%M:%S")
 
 # returns date needed in filenames
 def get_etl_file_date_str_from_ts(ts):
-    dtime = funclib.utctimestamp_to_datetime(ts)
+    dtime = timefuncs.utctimestamp_to_datetime(ts)
     return dtime.strftime("%Y%m%d")
 
 # returns date needed in filenames
 def get_etl_file_datetime_str_from_ts(ts):
-    dtime = funclib.utctimestamp_to_datetime(ts)
+    dtime = timefuncs.utctimestamp_to_datetime(ts)
     return dtime.strftime("%Y%m%d-%H%M%S")
 
 # this method generates the basename minus the extension
 # prefix-startyyyymmdd-HHMMSS-endyyyymmdd-HHMMSS
 def get_etl_file_base_name_by_ts(prefix, start_ts, end_ts):
     # convert to datetime
-    start_datetime = funclib.utctimestamp_to_datetime(start_ts)
-    end_datetime = funclib.utctimestamp_to_datetime(end_ts)
+    start_datetime = timefuncs.utctimestamp_to_datetime(start_ts)
+    end_datetime = timefuncs.utctimestamp_to_datetime(end_ts)
 
     # format
     start_datetime_str = start_datetime.strftime("%Y%m%d-%H%M%S")

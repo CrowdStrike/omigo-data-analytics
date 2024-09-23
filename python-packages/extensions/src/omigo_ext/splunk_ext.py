@@ -1,7 +1,7 @@
 from omigo_core import utils 
 from omigo_core import tsv
 from omigo_core import tsvutils
-from omigo_core import funclib 
+from omigo_core import timefuncs 
 from omigo_ext import multithread_ext
 import datetime
 from dateutil import parser
@@ -179,8 +179,8 @@ class SplunkSearch:
             return self.__execute_blocking_query__(query, start_time, end_time, url_encoded_cols, attempts_remaining, include_internal_fields, limit, num_par_on_limit, dmsg = dmsg)
 
     def __split_time_slots__(self, st, et, num_splits):
-        start_ts = funclib.datetime_to_utctimestamp_sec(st)
-        end_ts = funclib.datetime_to_utctimestamp_sec(et)
+        start_ts = timefuncs.datetime_to_utctimestamp_sec(st)
+        end_ts = timefuncs.datetime_to_utctimestamp_sec(et)
 
         # find time width
         width = int(math.floor((end_ts - start_ts) / num_splits))
@@ -188,11 +188,11 @@ class SplunkSearch:
         # create slots
         slots = []
         for i in range(num_splits):
-            st2 = funclib.utctimestamp_to_datetime_str(start_ts + i * width)
+            st2 = timefuncs.utctimestamp_to_datetime_str(start_ts + i * width)
             if (i == num_splits - 1):
-                et2 = funclib.utctimestamp_to_datetime_str(end_ts)
+                et2 = timefuncs.utctimestamp_to_datetime_str(end_ts)
             else:
-                et2 = funclib.utctimestamp_to_datetime_str(start_ts + (i + 1) * width)
+                et2 = timefuncs.utctimestamp_to_datetime_str(start_ts + (i + 1) * width)
             slots.append((st2, et2))
 
         # return
@@ -223,14 +223,14 @@ class SplunkSearch:
             job_id_trim = self.__get_splunk_job_display_id__(splunk_job)
             utils.info("{}: Splunk Job submitted: {}".format(utils.max_dmsg_str(dmsg), job_id_trim))
 
-            exec_start_time = funclib.get_utctimestamp_sec() 
+            exec_start_time = timefuncs.get_utctimestamp_sec() 
             # A normal search returns the job's SID right away, so we need to poll for completion
             while True:
                 # check for job to be ready. not sure what this does, just following example
                 # https://dev.splunk.com/enterprise/docs/devtools/python/sdk-python/howtousesplunkpython/howtorunsearchespython/
                 while not splunk_job.is_ready():
                     # check for timeout
-                    exec_cur_time = funclib.get_utctimestamp_sec()
+                    exec_cur_time = timefuncs.get_utctimestamp_sec()
                     exec_diff_sec = exec_cur_time - exec_start_time
                     if (exec_diff_sec > self.timeout_sec):
                         utils.error_and_raise_exception("{}: timeout: {} > {} reached, failed to finish query".format(utils.max_dmsg_str(dmsg), exec_diff_sec, self.timeout_sec))
@@ -257,7 +257,7 @@ class SplunkSearch:
                     break
 
                 # check the current time    
-                exec_cur_time = funclib.get_utctimestamp_sec()
+                exec_cur_time = timefuncs.get_utctimestamp_sec()
 
                 # check for timeout
                 if (exec_cur_time - exec_start_time > self.timeout_sec):
@@ -566,9 +566,9 @@ class SplunkSearch:
 
             # return base_time minus diff
             # return datetime.datetime.utcfromtimestamp(int(base_time.timestamp()) - diff_sec).replace(tzinfo = datetime.timezone.utc).isoformat()
-            return funclib.utctimestamp_to_datetime_str(int(base_time.timestamp()) - diff_sec)
+            return timefuncs.utctimestamp_to_datetime_str(int(base_time.timestamp()) - diff_sec)
         else:
-            return funclib.utctimestamp_to_datetime_str(funclib.datetime_to_utctimestamp_sec(x))
+            return timefuncs.utctimestamp_to_datetime_str(timefuncs.datetime_to_utctimestamp_sec(x))
 
 # class to do data manipulation on TSV
 class SplunkTSV(tsv.TSV):

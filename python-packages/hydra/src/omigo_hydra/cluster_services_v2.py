@@ -8,7 +8,7 @@ from omigo_hydra.cluster_common_v2 import EntityType
 from omigo_hydra.cluster_common_v2 import EntityState
 from omigo_hydra.cluster_common_v2 import ClusterCapabilities
 from omigo_hydra.cluster_common_v2 import ClusterPaths
-from omigo_core import utils, funclib, etl
+from omigo_core import utils, timefuncs, etl
 from omigo_ext import splunk_ext
 # utils.enable_debug_mode()
 import time
@@ -101,7 +101,7 @@ def init(value):
     global CLUSTER_ADMIN
     global MASTER_ELECTION_PROTOCOL
  
-    ts = funclib.get_utctimestamp_sec() 
+    ts = timefuncs.get_utctimestamp_sec() 
     cluster_common_v2.ClusterIds.set_id(value)
 
     # Entities
@@ -417,3 +417,176 @@ def print_wf_requirements(local_handler_flag = False):
 
         # print
         utils.info("wf_id: {}, cur_state: {}, requirements: {}".format(wf_id, effective_state, requirements))
+
+
+class EntityRunner:
+    def __init__(self, ident):
+        self.ident = ident
+        self.protocol = None
+        self.wait_sec = 5
+
+    def setup(self):
+        cluster_common_v2.ClusterIds.set_id(self.ident)
+
+    def run_step(self):
+        # run active child supervisors
+        if (self.protocol.entity.entity_type in cluster_common_v2.EntityActiveSupervisorTypes):
+            self.protocol.monitor_active_children()
+
+        # run passive child supervisors
+        if (self.protocol.entity.entity_type in cluster_common_v2.EntityPassiveSupervisorTypes):
+            self.protocol.monitor_passive_children()
+
+        # run tasks
+        if (self.protocol.entity.entity_type in cluster_common_v2.EntityExecutorTypes):
+            self.protocol.monitor_execution_tasks()
+
+    def run(self):
+        while (True):
+            # run step
+            self.run_step()
+
+            # sleep
+            utils.info("Sleeping for {} seconds".format(self.wait_sec))
+            time.sleep(self.wait_sec)
+            
+class EntityMasterRunner(EntityRunner):
+    def __init__(self, ident):
+        super().__init__(ident)
+
+    def setup(self):
+        super().setup()
+
+        # create protocols
+        self.protocol = cluster_protocol_v2.ClusterMasterProtocol(cluster_common_v2.ClusterEntityMaster.new(cluster_common_v2.ClusterIds.get_entity_id(EntityType.MASTER)))
+        self.election_protocol = cluster_protocol_v2.ClusterMasterElectionProtocol(self.protocol.entity.entity_id)
+
+        # initialize
+        self.protocol.initialize()
+
+    def run(self):
+        while (True):
+            # run election
+            if (self.election_protocol.run_election() == True):
+                self.protocol.refresh_master_cache()
+
+                # monitor incoming
+                self.protocol.monitor_incoming_for_supervisor()
+
+            # run base class
+            self.run_step()
+
+            # sleep
+            utils.info("Sleeping for {} seconds".format(self.wait_sec))
+            time.sleep(self.wait_sec)
+
+class EntityResourceManagerRunner(EntityRunner):
+    def __init__(self, ident):
+        super().__init__(ident)
+
+    def setup(self):
+        super().setup()
+        self.protocol = cluster_protocol_v2.ClusterResourceManagerProtocol(cluster_common_v2.ClusterEntityResourceManager.new(
+            cluster_common_v2.ClusterIds.get_entity_id(EntityType.RESOURCE_MANAGER)))
+        self.protocol.initialize()
+
+class EntityJobManagerRunner(EntityRunner):
+    def __init__(self, ident):
+        super().__init__(ident)
+
+    def setup(self):
+        super().setup()
+        self.protocol = cluster_protocol_v2.ClusterJobManagerProtocol(cluster_common_v2.ClusterEntityJobManager.new(
+            cluster_common_v2.ClusterIds.get_entity_id(EntityType.JOB_MANAGER)))
+        self.protocol.initialize()
+
+class EntityTaskManagerRunner(EntityRunner):
+    def __init__(self, ident):
+        super().__init__(ident)
+
+    def setup(self):
+        super().setup()
+        self.protocol = cluster_protocol_v2.ClusterTaskManagerProtocol(cluster_common_v2.ClusterEntityTaskManager.new(
+            cluster_common_v2.ClusterIds.get_entity_id(EntityType.TASK_MANAGER)))
+        self.protocol.initialize()
+
+class EntitySWFManagerRunner(EntityRunner):
+    def __init__(self, ident):
+        super().__init__(ident)
+
+    def setup(self):
+        super().setup()
+        self.protocol = cluster_protocol_v2.ClusterSWFManagerProtocol(cluster_common_v2.ClusterEntitySWFManager.new(
+            cluster_common_v2.ClusterIds.get_entity_id(EntityType.SWF_MANAGER)))
+        self.protocol.initialize()
+
+class EntityWFManagerRunner(EntityRunner):
+    def __init__(self, ident):
+        super().__init__(ident)
+
+    def setup(self):
+        super().setup()
+        self.protocol = cluster_protocol_v2.ClusterWFManagerProtocol(cluster_common_v2.ClusterEntityWFManager.new(
+            cluster_common_v2.ClusterIds.get_entity_id(EntityType.WF_MANAGER)))
+        self.protocol.initialize()
+
+class EntityAgentRunner(EntityRunner):
+    def __init__(self, ident):
+        super().__init__(ident)
+
+    def setup(self):
+        super().setup()
+        self.protocol = cluster_protocol_v2.ClusterAgentProtocol(cluster_common_v2.ClusterEntityAgent.new(
+            cluster_common_v2.ClusterIds.get_entity_id(EntityType.AGENT)))
+        self.protocol.initialize()
+
+class EntityWorkerRunner(EntityRunner):
+    def __init__(self, ident):
+        super().__init__(ident)
+
+    def setup(self):
+        super().setup()
+        self.protocol = cluster_protocol_v2.ClusterWorkerProtocol(cluster_common_v2.ClusterEntityWorker.new(
+            cluster_common_v2.ClusterIds.get_entity_id(EntityType.WORKER)))
+        self.protocol.initialize()
+
+def run_master(ident = 1):
+    entity_runner = EntityMasterRunner(ident)
+    entity_runner.setup()
+    entity_runner.run()
+
+def run_resource_manager(ident = 1):
+    entity_runner = EntityResourceManagerRunner(ident)
+    entity_runner.setup()
+    entity_runner.run()
+
+def run_job_manager(ident = 1):
+    entity_runner = EntityJobManagerRunner(ident)
+    entity_runner.setup()
+    entity_runner.run()
+
+def run_task_manager(ident = 1):
+    entity_runner = EntityTaskManagerRunner(ident)
+    entity_runner.setup()
+    entity_runner.run()
+
+def run_swf_manager(ident = 1):
+    entity_runner = EntitySWFManagerRunner(ident)
+    entity_runner.setup()
+    entity_runner.run()
+
+def run_wf_manager(ident = 1):
+    entity_runner = EntityWFManagerRunner(ident)
+    entity_runner.setup()
+    entity_runner.run()
+
+def run_agent(ident = 1):
+    entity_runner = EntityAgentRunner(ident)
+    entity_runner.setup()
+    entity_runner.run()
+
+def run_worker(ident = 1):
+    entity_runner = EntityWorkerRunner(ident)
+    entity_runner.setup()
+    entity_runner.run()
+

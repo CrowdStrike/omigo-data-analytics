@@ -4,7 +4,7 @@ import math
 import pandas as pd
 import random
 import json
-from omigo_core import utils, tsvutils, funclib
+from omigo_core import utils, tsvutils, udfs 
 import sys
 import time
 import numpy as np
@@ -304,7 +304,7 @@ class TSV:
 
         # call aggregate with collapse=False
         return self \
-            .aggregate(cols, [cols[0]], [funclib.get_len], collapse = collapse, dmsg = dmsg) \
+            .aggregate(cols, [cols[0]], [udfs.get_len], collapse = collapse, dmsg = dmsg) \
             .rename(cols[0] + ":get_len", new_count_col, dmsg = dmsg) \
             .transform([new_count_col], lambda x: str(int(x) / len(self.get_data())), new_ratio_col, dmsg = dmsg) \
             .reverse_sort(new_count_col, dmsg = dmsg) \
@@ -828,7 +828,7 @@ class TSV:
         for agg_func in agg_funcs:
             # raise warning if builtin functions are used
             if (__is_builtin_func__(agg_func)):
-                utils.warn("aggregate: builtin function used that has side effect. Please use funclib.* functions")
+                utils.warn("aggregate: builtin function used that has side effect. Please use udfs.* functions")
 
         # both use_string_datatype and string_datatype_cols are deprecated
         if (use_string_datatype is not None or string_datatype_cols is not None):

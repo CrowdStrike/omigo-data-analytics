@@ -1,4 +1,4 @@
-from omigo_core import tsv, utils, funclib 
+from omigo_core import tsv, utils, timefuncs 
 from omigo_ext import multithread_ext
 import datetime
 from dateutil import parser
@@ -57,8 +57,8 @@ class LogScaleSearch:
         end_time = self.__resolve_time_str__(end_time)
 
         # convert this to millis
-        start_time_millis = funclib.datetime_to_utctimestamp_sec(start_time) * 1000
-        end_time_millis = funclib.datetime_to_utctimestamp_sec(end_time) * 1000
+        start_time_millis = timefuncs.datetime_to_utctimestamp_sec(start_time) * 1000
+        end_time_millis = timefuncs.datetime_to_utctimestamp_sec(end_time) * 1000
 
         # debug
         utils.info("call_search: query: {}, start_time: {}, end_time: {}".format(query, start_time, end_time))
@@ -106,14 +106,14 @@ class LogScaleSearch:
             logscale_job = self.get_logscale_client().create_queryjob(query, start = start_time_millis, end = end_time_millis, is_live = False)
             job_id_trim = self.__get_logscale_job_display_id__(logscale_job)
             utils.info("{}: LogScale Job submitted: {}, start_time: {}, end_time: {}".format(utils.max_dmsg_str(dmsg), job_id_trim,
-                funclib.utctimestamp_to_datetime_str(start_time_millis), funclib.utctimestamp_to_datetime_str(end_time_millis)))
+                timefuncs.utctimestamp_to_datetime_str(start_time_millis), timefuncs.utctimestamp_to_datetime_str(end_time_millis)))
 
             # create result
             events = []
             results_total = 0
 
             # note start time
-            exec_start_time = funclib.get_utctimestamp_sec()
+            exec_start_time = timefuncs.get_utctimestamp_sec()
 
             # check for job to be ready. not sure what this does, just following example
             for poll_result in logscale_job.poll_until_done():
@@ -132,7 +132,7 @@ class LogScaleSearch:
                     events.append(event)
 
             # end time
-            exec_end_time = funclib.get_utctimestamp_sec()
+            exec_end_time = timefuncs.get_utctimestamp_sec()
 
             # debug
             utils.info("{}: job_id: {}, event count: {}, query time taken: {} secs".format(dmsg, job_id_trim, len(events), (exec_end_time - exec_start_time)))
@@ -307,9 +307,9 @@ class LogScaleSearch:
 
             # return base_time minus diff
             # return datetime.datetime.utcfromtimestamp(int(base_time.timestamp()) - diff_sec).replace(tzinfo = datetime.timezone.utc).isoformat()
-            return funclib.utctimestamp_to_datetime_str(int(base_time.timestamp()) - diff_sec)
+            return timefuncs.utctimestamp_to_datetime_str(int(base_time.timestamp()) - diff_sec)
         else:
-            return funclib.utctimestamp_to_datetime_str(funclib.datetime_to_utctimestamp_sec(x))
+            return timefuncs.utctimestamp_to_datetime_str(timefuncs.datetime_to_utctimestamp_sec(x))
 
 # class to do data manipulation on TSV
 class LogScaleTSV(tsv.TSV):

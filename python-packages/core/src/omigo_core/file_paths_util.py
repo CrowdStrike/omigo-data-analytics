@@ -8,7 +8,7 @@ import zipfile
 # local imports
 from omigo_core import s3_wrapper
 from omigo_core import utils
-from omigo_core import funclib 
+from omigo_core import timefuncs 
 from omigo_core import local_fs_wrapper
 # constant
 NUM_HOURS = 24
@@ -234,13 +234,13 @@ def create_date_numeric_representation(date_str, default_suffix):
     if (len(date_str) == 10):
         return str(date_str.replace("-", "") + default_suffix)
     else:
-        return funclib.datestr_to_datetime(date_str).strftime("%Y%m%d%H%M%S")
+        return timefuncs.datestr_to_datetime(date_str).strftime("%Y%m%d%H%M%S")
 
 # this is not a lookup function. This reads directory listing, and then picks the filepaths that match the criteria
 def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix, spillover_window = 1, num_par = 10, wait_sec = 1, s3_region = None, aws_profile = None):
     # parse dates
-    start_date = funclib.datestr_to_datetime(start_date_str)
-    end_date = funclib.datestr_to_datetime(end_date_str)
+    start_date = timefuncs.datestr_to_datetime(start_date_str)
+    end_date = timefuncs.datestr_to_datetime(end_date_str)
 
     # get number of days inclusive start and end and include +/- 1 day buffer for overlap
     num_days = (end_date - start_date).days + 1 + (spillover_window * 2)

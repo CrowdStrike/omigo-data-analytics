@@ -1,5 +1,5 @@
 # central place for all serialized version of the tsvs
-from omigo_core import tsv, utils, funclib
+from omigo_core import tsv, utils, timefuncs
 from omigo_hydra import cluster_common_v2
 from omigo_hydra import cluster_class_reflection
 from omigo_hydra.cluster_common_v2 import ClusterCapabilities
@@ -59,7 +59,7 @@ class HydraBaseTSV:
     def collect(self, input_ids, output_ids, start_ts = None, use_full_data = False):
         # resolve start_ts as timestamp
         if (start_ts is not None):
-            start_ts = funclib.datetime_to_utctimestamp(start_ts)
+            start_ts = timefuncs.datetime_to_utctimestamp(start_ts)
 
         # resolve context
         if (self.ctx is not None):

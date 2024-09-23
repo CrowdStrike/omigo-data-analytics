@@ -1,4 +1,4 @@
-from omigo_core import tsv, utils, funclib
+from omigo_core import tsv, utils, timefuncs, udfs
 import queue
 
 # This is WIP. This detects cycles and ignore assigning them levels
@@ -87,13 +87,13 @@ def get_forward_edges_only(etsv, prefix, sep = ","):
 
     # create a map of children
     children_map = {}
-    for (parent, cstr) in etsv.aggregate("src", ["target"], [funclib.uniq_mkstr]).to_tuples(["src", "target:uniq_mkstr"]):
+    for (parent, cstr) in etsv.aggregate("src", ["target"], [udfs.uniq_mkstr]).to_tuples(["src", "target:uniq_mkstr"]):
         children = cstr.split(sep)
         children_map[parent] = children
 
     # create a map of parents
     parents_map = {}
-    for (child, pstr) in etsv.aggregate("target", ["src"], [funclib.uniq_mkstr]).to_tuples(["target", "src:uniq_mkstr"]):
+    for (child, pstr) in etsv.aggregate("target", ["src"], [udfs.uniq_mkstr]).to_tuples(["target", "src:uniq_mkstr"]):
         parents = pstr.split(sep)
         parents_map[child] = parents
 
@@ -231,10 +231,10 @@ def remove_dangling_edges(etsv, retain_vertex_ids, retain_node_filter_func, max_
         # count edges
         etsv_edge_count = etsv_result \
             .noop(["src", "target", "evports", "users", "ts_min", "ts_max", "count"], n = 1000, title = "etsv_result") \
-            .aggregate(["target"], ["src"], [funclib.uniq_len], collapse = False) \
+            .aggregate(["target"], ["src"], [udfs.uniq_len], collapse = False) \
             .rename("src:uniq_len", "incoming_target") \
             .noop(["src", "target", "incoming_target"], n = 1000, title = "etsv_result incoming_target") \
-            .aggregate(["src"], ["target"], [funclib.uniq_len], collapse = False) \
+            .aggregate(["src"], ["target"], [udfs.uniq_len], collapse = False) \
             .rename("target:uniq_len", "outgoing_target") \
             .noop(["src", "target", "outgoing_target"], n = 1000, title = "etsv_result outgoing_target") \
             .noop(["src", "target", "evports", "incoming_target", "outgoing_target"], n = 1000, title = "etsv_edge_count")
@@ -293,14 +293,14 @@ def remove_cycles(vtsv, etsv, ts_col, retain_node_filter_func = None, dmsg = "")
     # edge count for the edges originating from the same data source 
     etsv_spl = etsv \
         .filter("src", retain_node_filter_func) \
-        .aggregate(["src", "target", ts_col], ["data_source"], [funclib.uniq_mkstr]) \
+        .aggregate(["src", "target", ts_col], ["data_source"], [udfs.uniq_mkstr]) \
         .distinct() \
         .noop(1000, title = "etsv_spl")
 
     # edge count for edges that are associated with vertices that need to be retained
     etsv_non_spl = etsv \
         .exclude_filter("src", retain_node_filter_func) \
-        .aggregate(["src", "target", ts_col], ["data_source"], [funclib.uniq_mkstr]) \
+        .aggregate(["src", "target", ts_col], ["data_source"], [udfs.uniq_mkstr]) \
         .distinct() \
         .noop(1000, title = "etsv_non_spl")
  
@@ -309,7 +309,7 @@ def remove_cycles(vtsv, etsv, ts_col, retain_node_filter_func = None, dmsg = "")
         .sort([ts_col, "target", "src"]) \
         .transform("graph:src_paths", lambda t: ",".join([t1[0:4] for t1 in t.split(",")]) if (t != "") else "", "graph:src_paths2") \
         .transform("graph:all_paths", lambda t: ",".join([t1[0:4] for t1 in t.split(",")]) if (t != "") else "", "graph:all_paths2") \
-        .noop(ts_col, funclib.utctimestamp_to_datetime_str, "graph:ts_min2") \
+        .noop(ts_col, timefuncs.utctimestamp_to_datetime_str, "graph:ts_min2") \
         .transform(["src", "graph:src_paths"], lambda t1, t2: 1 if (t1 in t2.split(",")) else 0, "graph:flag") \
         .noop(1000, "etsv_non_spl2 1", tsv.TSV.select, ["src", "target", ts_col, "graph:src_paths2", "graph:all_paths2", "graph:flag", "data_source:uniq_mkstr"]) \
         .eq_int("graph:flag", 1) \
@@ -357,11 +357,11 @@ def merge_similar_nodes_reference(vtsv, etsv, retain_vertex_ids, ts_col, retain_
 
     # find the number of outgoing edges to mark leaves
     etsv_edge_count = etsv_sel \
-        .aggregate(["target"], ["src"], [funclib.uniq_len], collapse = False) \
+        .aggregate(["target"], ["src"], [udfs.uniq_len], collapse = False) \
         .rename("src:uniq_len", "incoming_target") \
         .transform("target", lambda t: 1 if (t in retain_vertex_ids) else 0, "target_is_retain_vertex") \
         .transform(prop_col, lambda arr: ",".join(arr), "target_level2", use_array_notation = True) \
-        .aggregate("src", ["target", "target_level2", "count"], [funclib.uniq_len, funclib.uniq_mkstr, funclib.sumint], collapse = False) \
+        .aggregate("src", ["target", "target_level2", "count"], [udfs.uniq_len, udfs.uniq_mkstr, udfs.sumint], collapse = False) \
         .rename("target:uniq_len", "outgoing_target") \
         .rename("target_level2:uniq_mkstr", "edge_target_level2") \
         .rename("count:sumint", "count_target_level2") \
@@ -394,14 +394,14 @@ def merge_similar_nodes_reference(vtsv, etsv, retain_vertex_ids, ts_col, retain_
 
     etsv_grouped_leaf1 = etsv_flags \
         .eq_str("is_leaf_target", "1") \
-        .aggregate(["src", "target_is_retain_vertex", "is_leaf_target"], ["target", "target"], [funclib.uniq_mkstr, funclib.get_len]) \
+        .aggregate(["src", "target_is_retain_vertex", "is_leaf_target"], ["target", "target"], [udfs.uniq_mkstr, udfs.get_len]) \
         .rename("target:uniq_mkstr", "target") \
         .rename("target:get_len", "num_nodes") \
         .add_const("etsv_grouped_source", "leaf1")
 
     etsv_grouped_leaf2 = etsv_flags \
         .eq_str("is_leaf_edge_target", "1") \
-        .aggregate(["src", "edge_target_level2", "is_leaf_edge_target"], ["target", "target"], [funclib.uniq_mkstr, funclib.get_len]) \
+        .aggregate(["src", "edge_target_level2", "is_leaf_edge_target"], ["target", "target"], [udfs.uniq_mkstr, udfs.get_len]) \
         .rename("target:uniq_mkstr", "target") \
         .rename("target:get_len", "num_nodes") \
         .add_const("etsv_grouped_source", "leaf2")
@@ -430,7 +430,7 @@ def merge_similar_nodes_reference(vtsv, etsv, retain_vertex_ids, ts_col, retain_
     vtsv_grouped = vtsv \
         .transform_inline("node_id", lambda t: vtsv_target_map[t] if (t in vtsv_target_map.keys()) else t) \
         .aggregate(["node_id"], ["__is_root__", "__is_retain_vertex__"],
-            [funclib.uniq_mkstr, funclib.uniq_mkstr]) \
+            [udfs.uniq_mkstr, udfs.uniq_mkstr]) \
         .remove_suffix("uniq_mkstr", dmsg = dmsg) \
         .transform("node_id", lambda t: vtsv_node_count_map[t] if (t in vtsv_node_count_map.keys()) else "0", "num_nodes")
 
@@ -480,7 +480,7 @@ def split_graph_filter_func(src, tgt, ts, retain_vertex_ids, retain_vertex_annot
 def apply_time_order_based_filter(vtsv, etsv, retain_vertex_ids, retain_node_filter_func, strict_ordering_flag):
     # find the min and max timestamps
     etsv_min_max = etsv \
-        .aggregate(["src", "target"], ["ts", "ts"], [funclib.minint, funclib.maxint]) \
+        .aggregate(["src", "target"], ["ts", "ts"], [udfs.minint, udfs.maxint]) \
         .rename("ts:minint", "ts_min") \
         .rename("ts:maxint", "ts_max")
 
@@ -511,11 +511,11 @@ def apply_time_order_based_filter(vtsv, etsv, retain_vertex_ids, retain_node_fil
     excluded_edges = etsv_left \
         .inner_map_join(etsv_right, ["left:target"], rkeys = ["right:src"]) \
         .transform(["left:ts_min", "right:ts_max"], lambda t1,t2: 1 if (int(t1) <= int(t2)) else 0, "ts:flag") \
-        .transform_inline(["left:ts_min", "right:ts_max"], funclib.utctimestamp_to_datetime_str) \
+        .transform_inline(["left:ts_min", "right:ts_max"], timefuncs.utctimestamp_to_datetime_str) \
         .reorder(["left:src", "left:target", "right:src", "right:target"], use_existing_order = False) \
-        .aggregate(["left:src", "left:target"], ["ts:flag"], [funclib.uniq_mkstr], collapse = False) \
+        .aggregate(["left:src", "left:target"], ["ts:flag"], [udfs.uniq_mkstr], collapse = False) \
         .rename("ts:flag:uniq_mkstr", "left:ts:flag:uniq_mkstr") \
-        .aggregate(["right:src", "right:target"], ["ts:flag"], [funclib.uniq_mkstr], collapse = False) \
+        .aggregate(["right:src", "right:target"], ["ts:flag"], [udfs.uniq_mkstr], collapse = False) \
         .rename("ts:flag:uniq_mkstr", "right:ts:flag:uniq_mkstr") \
         .filter(["left:ts:flag:uniq_mkstr", "right:ts:flag:uniq_mkstr"], lambda t1, t2: t1 == "0" or t2 == "0") \
         .select(["left:src", "left:target", "right:src", "right:target", "left:ts:flag:uniq_mkstr", "right:ts:flag:uniq_mkstr"]) \

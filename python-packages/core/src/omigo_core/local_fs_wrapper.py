@@ -1,6 +1,6 @@
 import os
 import datetime
-from omigo_core import funclib
+from omigo_core import timefuncs 
 from omigo_core import utils
 import zipfile, gzip
 
@@ -62,7 +62,7 @@ def get_file_content_as_text(path):
     return "\n".join(data)
 
 def get_last_modified_timestamp(path):
-    return funclib.datetime_to_utctimestamp_sec(datetime.datetime.utcfromtimestamp(int(os.path.getmtime(path))))
+    return timefuncs.datetime_to_utctimestamp_sec(datetime.datetime.utcfromtimestamp(int(os.path.getmtime(path))))
 
 # TODO: this is not tested
 def put_file_with_text_content(path, text):
