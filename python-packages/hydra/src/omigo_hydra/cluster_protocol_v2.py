@@ -3,7 +3,7 @@ import os
 import random
 import math
 import threading
-from omigo_core import tsv, utils, funclib, etl
+from omigo_core import tsv, utils, timefuncs, etl
 from omigo_hydra import cluster_data, cluster_class_reflection, cluster_tsv, cluster_common_v2, cluster_arjun
 from omigo_hydra.cluster_common_v2 import EntityType, EntityState, ClusterTaskType, ClusterIds, ClusterPaths
 
@@ -55,7 +55,7 @@ class ClusterHeartbeatProtocol:
 
     def is_alive_cached(self):
         # check the heartbeat
-        cur_time = funclib.get_utctimestamp_sec()
+        cur_time = timefuncs.get_utctimestamp_sec()
 
         # update cache if needed
         if (self.get_cache_ts() is None or cur_time - self.get_cache_ts() > ClusterHeartbeatProtocol.MAX_HEARTBEAT_CACHE):
@@ -94,7 +94,7 @@ class ClusterHeartbeatProtocol:
                 self.get_entity_id(), heartbeat.ts, heartbeat_server_timestamp)) 
 
         # check if the timestamp has already expired
-        cur_time = funclib.get_utctimestamp_sec()
+        cur_time = timefuncs.get_utctimestamp_sec()
         time_diff = cur_time - heartbeat_server_timestamp 
 
         # check against max time
@@ -118,7 +118,7 @@ class ClusterHeartbeatProtocol:
             return False
 
         # construct new heartbeat 
-        ts = funclib.get_utctimestamp_sec()
+        ts = timefuncs.get_utctimestamp_sec()
         heartbeat = cluster_common_v2.ClusterHearbeat.new(ts, self.get_entity().lease)
 
         # 1. update on cluster
@@ -276,7 +276,7 @@ class ClusterEntityProtocol:
         self.cluster_handler.create(ClusterPaths.get_entity(self.get_entity_type(), self.get_entity_id()))
         self.cluster_handler.update_dynamic_value(ClusterPaths.get_entity(self.get_entity_type(), self.get_entity_id()), self.entity)
         self.cluster_handler.create(ClusterPaths.get_entities_state_by_id(self.get_entity_type(), EntityState.CREATED, self.get_entity_id()))
-        update_time = cluster_common_v2.ClusterUpdateTime.new(funclib.get_utctimestamp_sec())
+        update_time = cluster_common_v2.ClusterUpdateTime.new(timefuncs.get_utctimestamp_sec())
         self.cluster_handler.update_dynamic_value(ClusterPaths.get_entities_state_by_id(self.get_entity_type(), EntityState.CREATED, self.get_entity_id()), update_time)
 
         # create active children
@@ -298,7 +298,7 @@ class ClusterEntityProtocol:
         self.cluster_handler.create(ClusterPaths.get_entity_heartbeat(self.get_entity_type(), self.get_entity_id()))
 
         # create initial heartbeat
-        heartbeat = cluster_common_v2.ClusterHearbeat.new(funclib.get_utctimestamp_sec(), self.get_entity().lease)
+        heartbeat = cluster_common_v2.ClusterHearbeat.new(timefuncs.get_utctimestamp_sec(), self.get_entity().lease)
         self.cluster_handler.update_dynamic_value(ClusterPaths.get_entity_heartbeat(self.get_entity_type(), self.get_entity_id()), heartbeat)
 
         # if this is active entity, start heartbeat thread
@@ -334,7 +334,7 @@ class ClusterEntityProtocol:
     # completed, failed states are not for active entities
     def monitor_active_children(self):
         # take current time
-        cur_ts = funclib.get_utctimestamp_sec()
+        cur_ts = timefuncs.get_utctimestamp_sec()
 
         # at this point, the current state is as per in the cluster
         for xchild_entity_type in cluster_common_v2.EntityActiveChildrenMap[self.get_entity_type()]:
@@ -421,7 +421,7 @@ class ClusterEntityProtocol:
 
     def __do_child_entity_state_change__(self, xchild_entity, state):
         # create new update time
-        target_state_update_time = cluster_common_v2.ClusterUpdateTime.new(funclib.get_utctimestamp_sec())
+        target_state_update_time = cluster_common_v2.ClusterUpdateTime.new(timefuncs.get_utctimestamp_sec())
 
         # take path
         entity_state_path = ClusterPaths.get_entities_state_by_id(xchild_entity.entity_type, state, xchild_entity.entity_id)
@@ -466,7 +466,7 @@ class ClusterEntityProtocol:
 
     def monitor_passive_children(self):
         # take current time
-        cur_ts = funclib.get_utctimestamp_sec()
+        cur_ts = timefuncs.get_utctimestamp_sec()
 
         # at this point, the current state is as per in the cluster
         for xchild_entity_type in cluster_common_v2.EntityPassiveChildrenMap[self.get_entity_type()]:
@@ -788,14 +788,14 @@ class ClusterMasterProtocol(ClusterEntityProtocol):
             utils.info("ClusterMasterProtocol: {} initialize: Master moved to ALIVE as part of initialization".format(self.get_entity_id()))
             self.cluster_handler.create(ClusterPaths.get_entities_state_by_id(self.get_entity_type(), EntityState.ALIVE, self.get_entity_id()))
             self.cluster_handler.update_dynamic_value(ClusterPaths.get_entities_state_by_id(self.get_entity_type(), EntityState.ALIVE, self.get_entity_id()),
-                cluster_common_v2.ClusterUpdateTime.new(funclib.get_utctimestamp_sec()))
+                cluster_common_v2.ClusterUpdateTime.new(timefuncs.get_utctimestamp_sec()))
 
     # check if this is the current master. TODO: Why there are 2 methods in Election and here
     def is_current_master(self):
        # use lock for avoiding race condition
        with self._lock:
             # find time difference
-            cur_time = funclib.get_utctimestamp_sec()
+            cur_time = timefuncs.get_utctimestamp_sec()
             time_diff = abs(cur_time - self.cur_master_cache_ts)
 
             # update cache if needed
@@ -810,7 +810,7 @@ class ClusterMasterProtocol(ClusterEntityProtocol):
        # use lock for avoiding race condition
        with self._lock:
            self.is_cur_master_cache = self.election_protocol.is_current_master()
-           self.cur_master_cache_ts = funclib.get_utctimestamp_sec()
+           self.cur_master_cache_ts = timefuncs.get_utctimestamp_sec()
 
     # monitor the incoming entities for assignment to their supervisors
     def monitor_incoming_for_supervisor(self):
@@ -893,7 +893,7 @@ class ClusterMasterProtocol(ClusterEntityProtocol):
                 # TODO: workaround to not select master if workers are available
                 if (len(xalive_entity_ids) > 1):
                     xalive_entity_non_master_node_ids = list(filter(lambda t: self.__is_same_entity_node_as_current_master__(t) == False, xalive_entity_ids))
-                    xalive_entity_non_master_node_ids = utils.random_shuffle(xalive_entity_non_master_node_ids, seed = funclib.get_utctimestamp_sec())
+                    xalive_entity_non_master_node_ids = utils.random_shuffle(xalive_entity_non_master_node_ids, seed = timefuncs.get_utctimestamp_sec())
                     return cluster_common_v2.ClusterEntityRef.new(xsupervisor_entity_type, xalive_entity_non_master_node_ids[0])
                 else:
                     return cluster_common_v2.ClusterEntityRef.new(xsupervisor_entity_type, xalive_entity_ids[0])
@@ -986,7 +986,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
         # update the state
         cluster_handler_ref.create(ClusterPaths.get_entities_state_by_id(self.get_entity_type(), entity_state, self.get_entity_id()))
         cluster_handler_ref.update_dynamic_value(ClusterPaths.get_entities_state_by_id(self.get_entity_type(), entity_state, self.get_entity_id()),
-            cluster_common_v2.ClusterUpdateTime.new(funclib.get_utctimestamp_sec()))
+            cluster_common_v2.ClusterUpdateTime.new(timefuncs.get_utctimestamp_sec()))
 
     # execute wf statically as map reduce task
     def execute_static(self):
@@ -1015,7 +1015,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
             utils.info("ClusterWFProtocol: {}: execute_static: num rows: {}, num_cols: {}".format(self.get_entity_id(), xinput.num_rows(), xinput.num_cols()))
 
             # resolve start_ts. TODO: This needs to fall on some boundaries of timestamps
-            wf_spec_start_ts = wf_spec.start_ts if (wf_spec.start_ts is not None and wf_spec.start_ts > 0) else funclib.get_utctimestamp_sec()
+            wf_spec_start_ts = wf_spec.start_ts if (wf_spec.start_ts is not None and wf_spec.start_ts > 0) else timefuncs.get_utctimestamp_sec()
             wf_spec_end_ts = wf_spec_start_ts + wf_spec.duration
 
             # check if entire input is to be used
@@ -1102,7 +1102,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
             xinput = self.cluster_handler.read_tsv(ClusterPaths.get_entity_data_input_file(wf_entity.entity_type, wf_entity.entity_id, input_ids[0], file_index))
 
             # resolve start_ts. TODO: This needs to fall on some boundaries of timestamps
-            wf_spec_start_ts = wf_spec.start_ts if (wf_spec.start_ts is not None and wf_spec.start_ts > 0) else funclib.get_utctimestamp_sec()
+            wf_spec_start_ts = wf_spec.start_ts if (wf_spec.start_ts is not None and wf_spec.start_ts > 0) else timefuncs.get_utctimestamp_sec()
 
             # check if entire input is to be used
             wf_spec_use_full_data = wf_spec.use_full_data
@@ -1120,7 +1120,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
             # iterate
             for iter_count in range(num_iter):
                 # wait until the current timestamp is more than the cur_start_ts
-                cur_ts = funclib.get_utctimestamp_sec()
+                cur_ts = timefuncs.get_utctimestamp_sec()
 
                 # debug
                 utils.info("ClusterWFProtocol: {}: execute_live: duration: {}, interval: {}, iteration: {} / {}: start_ts: {}, end_ts: {}, cur_ts: {}".format(
@@ -1316,7 +1316,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
                     utils.warn("__resolve_reference_paths__: etl input path is empty even after waiting. Possible data loss")
 
                 # resolve the effective start ts. Use the string representation
-                effective_etl_start_ts = funclib.utctimestamp_to_datetime_str(wf_start_ts) if (use_full_data == True) else etl_start_ts
+                effective_etl_start_ts = timefuncs.utctimestamp_to_datetime_str(wf_start_ts) if (use_full_data == True) else etl_start_ts
 
                 # read and append the data
                 etsv = etl.scan_by_datetime_range(etl_full_path, effective_etl_start_ts, etl_end_ts, cluster_arjun.OMIGO_ARJUN_ETL_FILE_PREFIX)
@@ -1341,8 +1341,8 @@ class ClusterWFProtocol(ClusterEntityProtocol):
     def __resolve_meta_params__(self, xtsv, start_ts, end_ts):
         def __resolve_meta_params_inner__(x):
             # column values
-            start_ts_str = funclib.utctimestamp_to_datetime_str(start_ts)
-            end_ts_str = funclib.utctimestamp_to_datetime_str(end_ts)
+            start_ts_str = timefuncs.utctimestamp_to_datetime_str(start_ts)
+            end_ts_str = timefuncs.utctimestamp_to_datetime_str(end_ts)
 
             # list of columns to replace        
             cols = {
@@ -1403,8 +1403,8 @@ class ClusterWFProtocol(ClusterEntityProtocol):
             event_start_ts, event_end_ts = (col_values[0], col_values[-1])
 
             # resolve the value of the timestamp to numeric seconds
-            event_start_ts = funclib.datetime_to_utctimestamp(event_start_ts)
-            event_end_ts = funclib.datetime_to_utctimestamp(event_end_ts)
+            event_start_ts = timefuncs.datetime_to_utctimestamp(event_start_ts)
+            event_end_ts = timefuncs.datetime_to_utctimestamp(event_end_ts)
 
             # return
             return (event_start_ts, event_end_ts)
@@ -1810,7 +1810,7 @@ class ClusterAdmin:
         # iterate over all entity types. TODO ignore this for a while
         # for (xentity_type, xentity_id) in remove_entities:
         #     # move the entities to cleanup. TODO: use ABORTED state here first
-        #     update_time = cluster_common_v2.ClusterUpdateTime.new(funclib.get_utctimestamp_sec())
+        #     update_time = cluster_common_v2.ClusterUpdateTime.new(timefuncs.get_utctimestamp_sec())
         #     self.cluster_handler.create(ClusterPaths.get_entities_state_by_id(xentity_type, EntityState.CLEANUP, xentity_id))
         #     self.cluster_handler.update_dynamic_value(ClusterPaths.get_entities_state_by_id(xentity_type, EntityState.CLEANUP, xentity_id), update_time)
 
@@ -1870,7 +1870,7 @@ class ClusterAdmin:
         utils.info("ClusterAdmin: do_state_change: this is just a tooling method. Dont use. {}, {}, {}".format(xentity_type, xentity_id, target_state))
 
         # create new update time
-        target_state_update_time = cluster_common_v2.ClusterUpdateTime.new(funclib.get_utctimestamp_sec())
+        target_state_update_time = cluster_common_v2.ClusterUpdateTime.new(timefuncs.get_utctimestamp_sec())
 
         # take path
         entity_state_path = ClusterPaths.get_entities_state_by_id(xentity_type, target_state, xentity_id)

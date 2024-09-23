@@ -6,7 +6,7 @@ import time
 import math 
 import json 
 import threading
-from omigo_core import tsv, utils, tsvutils, etl, funclib
+from omigo_core import tsv, utils, tsvutils, etl, timefuncs
 from omigo_hydra import cluster_data, cluster_class_reflection, s3io_wrapper
 
 # class that takes the base path in S3, and implement all distributed communication under that.
@@ -38,7 +38,7 @@ DEFAULT_WAIT_SEC = 3
 DEFAULT_ATTEMPTS = 3
 
 def construct_dynamic_value_json():
-    return "value.{}.json".format(funclib.get_utctimestamp_sec()) 
+    return "value.{}.json".format(timefuncs.get_utctimestamp_sec())
 
 # Note: SHUTDOWN is implemented using?
 # TODO: Why there is no Running state 
@@ -367,7 +367,7 @@ class ClusterEntityMaster(ClusterEntity):
         super().__init__(EntityType.MASTER, entity_id, ts, lease)
 
     # constructor
-    def new(entity_id, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
+    def new(entity_id, ts = timefuncs.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
         return ClusterEntityMaster(entity_id, ts, lease)
 
 # Resource Manager
@@ -376,7 +376,7 @@ class ClusterEntityResourceManager(ClusterEntity):
         super().__init__(EntityType.RESOURCE_MANAGER, entity_id, ts, lease)
 
     # constructor
-    def new(entity_id, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
+    def new(entity_id, ts = timefuncs.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
         return ClusterEntityResourceManager(entity_id, ts, lease)
 
 # SWF Manager
@@ -385,7 +385,7 @@ class ClusterEntitySWFManager(ClusterEntity):
         super().__init__(EntityType.SWF_MANAGER, entity_id, ts, lease)
 
     # constructor
-    def new(entity_id, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
+    def new(entity_id, ts = timefuncs.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
         return ClusterEntitySWFManager(entity_id, ts, lease)
 
 # WF Manager
@@ -394,7 +394,7 @@ class ClusterEntityWFManager(ClusterEntity):
         super().__init__(EntityType.WF_MANAGER, entity_id, ts, lease)
 
     # constructor
-    def new(entity_id, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
+    def new(entity_id, ts = timefuncs.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
         return ClusterEntityWFManager(entity_id, ts, lease)
 
 # Job Manager
@@ -403,7 +403,7 @@ class ClusterEntityJobManager(ClusterEntity):
         super().__init__(EntityType.JOB_MANAGER, entity_id, ts, lease)
 
     # constructor
-    def new(entity_id, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
+    def new(entity_id, ts = timefuncs.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
         return ClusterEntityJobManager(entity_id, ts, lease)
 
 # Task Manager
@@ -412,7 +412,7 @@ class ClusterEntityTaskManager(ClusterEntity):
         super().__init__(EntityType.TASK_MANAGER, entity_id, ts, lease)
 
     # constructor
-    def new(entity_id, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
+    def new(entity_id, ts = timefuncs.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
         return ClusterEntityTaskManager(entity_id, ts, lease)
 
 # Worker
@@ -421,7 +421,7 @@ class ClusterEntityWorker(ClusterEntity):
         super().__init__(EntityType.WORKER, entity_id, ts, lease)
 
     # constructor
-    def new(entity_id, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
+    def new(entity_id, ts = timefuncs.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
         return ClusterEntityWorker(entity_id, ts, lease)
 
 # Agent
@@ -430,7 +430,7 @@ class ClusterEntityAgent(ClusterEntity):
         super().__init__(EntityType.AGENT, entity_id, ts, lease)
 
     # constructor
-    def new(entity_id, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
+    def new(entity_id, ts = timefuncs.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
         return ClusterEntityAgent(entity_id, ts, lease)
 
 # Double Agent
@@ -439,7 +439,7 @@ class ClusterEntityDoubleAgent(ClusterEntity):
         super().__init__(EntityType.DOUBLE_AGENT, entity_id, ts, lease)
 
     # constructor
-    def new(entity_id, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
+    def new(entity_id, ts = timefuncs.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
         return ClusterEntityDoubleAgent(entity_id, ts, lease)
 
 # Inteli Agent
@@ -448,7 +448,7 @@ class ClusterEntityInteliAgent(ClusterEntity):
         super().__init__(EntityType.INTELI_AGENT, entity_id, ts, lease)
 
     # constructor
-    def new(entity_id, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
+    def new(entity_id, ts = timefuncs.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
         return ClusterEntityInteliAgent(entity_id, ts, lease)
 
 # SWF
@@ -476,7 +476,7 @@ class ClusterEntitySWF(ClusterEntity):
         )
 
     # constructor
-    def new(entity_id, client_id, session_id, entity_spec, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_PASSIVE_ENTITY_LEASE):
+    def new(entity_id, client_id, session_id, entity_spec, ts = timefuncs.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_PASSIVE_ENTITY_LEASE):
         return ClusterEntitySWF(entity_id, ts, lease, client_id, session_id, entity_spec)
 
 # WF
@@ -535,7 +535,7 @@ class ClusterEntityWF(ClusterEntity):
         )
 
     # constructor
-    def new(entity_id, client_id, session_id, entity_spec, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_PASSIVE_ENTITY_LEASE):
+    def new(entity_id, client_id, session_id, entity_spec, ts = timefuncs.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_PASSIVE_ENTITY_LEASE):
         return ClusterEntityWF(entity_id, ts, lease, client_id, session_id, entity_spec)
 
 # Job
@@ -546,7 +546,7 @@ class ClusterEntityJob(ClusterEntity):
         self.client_id = client_id
         self.session_id = session_id
 
-    def new(entity_id, client_id, session_id, entity_spec, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_PASSIVE_ENTITY_LEASE):
+    def new(entity_id, client_id, session_id, entity_spec, ts = timefuncs.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_PASSIVE_ENTITY_LEASE):
         return ClusterEntityJob(entity_id, ts, lease, client_id, session_id, entity_spec)
 
 # Task 
@@ -574,7 +574,7 @@ class ClusterEntityTask(ClusterEntity):
         )
 
     # constructor
-    def new(entity_id, client_id, session_id, entity_spec, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_PASSIVE_ENTITY_LEASE):
+    def new(entity_id, client_id, session_id, entity_spec, ts = timefuncs.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_PASSIVE_ENTITY_LEASE):
         return ClusterEntityTask(entity_id, ts, lease, client_id, session_id, entity_spec)
 
 # Batch
@@ -586,7 +586,7 @@ class ClusterEntityBatch(ClusterEntity):
         self.entity_spec = entity_spec
 
     # constructor
-    def new(entity_id, client_id, session_id, entity_spec, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_PASSIVE_ENTITY_LEASE):
+    def new(entity_id, client_id, session_id, entity_spec, ts = timefuncs.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_PASSIVE_ENTITY_LEASE):
         return ClusterEntityBatch(entity_id, ts, lease, client_id, session_id, entity_spec)
 
 # Client
@@ -595,7 +595,7 @@ class ClusterEntityClient(ClusterEntity):
         super().__init__(EntityType.CLIENT, entity_id, ts, lease)
 
     # constructor
-    def new(entity_id, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_PASSIVE_ENTITY_LEASE):
+    def new(entity_id, ts = timefuncs.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_PASSIVE_ENTITY_LEASE):
         return ClusterEntityClient(entity_id, ts, lease)
 
 # Session
@@ -604,7 +604,7 @@ class ClusterEntitySession(ClusterEntity):
         super().__init__(EntityType.SESSION, entity_id, ts, lease)
 
     # constructor
-    def new(entity_id, ts = funclib.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
+    def new(entity_id, ts = timefuncs.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
         return ClusterEntitySession(entity_id, ts, lease)
 
 # define job, workflow and super-workflows as understood by public apis
@@ -1235,7 +1235,7 @@ class ClusterHearbeat(cluster_data.JsonSer):
 
     def is_alive(self):
         # compute time diff from current time
-        cur_ts = funclib.get_utctimestamp_sec()
+        cur_ts = timefuncs.get_utctimestamp_sec()
         time_diff = abs(cur_ts - self.ts)
 
         # check time diff against lease
@@ -2134,7 +2134,7 @@ class ClusterIds:
     WF_COUNTER = 0
     JOB_COUNTER = 0
     TASK_COUNTER = 0
-    TIMESTAMP = funclib.get_utctimestamp_sec()
+    TIMESTAMP = timefuncs.get_utctimestamp_sec()
 
     def set_id(ident):
         ClusterIds.ID_SUFFIX = ident
