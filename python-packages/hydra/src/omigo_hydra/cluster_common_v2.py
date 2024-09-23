@@ -816,6 +816,7 @@ class ClusterSpecTask(ClusterSpecBase):
     def new(task_type, num_inputs = 1, num_outputs = 1):
         return ClusterSpecTask(task_type, num_inputs, num_outputs)
 
+# Extend Class Task
 class ClusterSpecExtendClassDef(ClusterSpecTask):
     def __init__(self, extend_class_op, num_inputs, num_outputs):
         super().__init__(ClusterTaskType.EXTEND_CLASS, num_inputs, num_outputs)
@@ -841,6 +842,7 @@ class ClusterSpecExtendClassDef(ClusterSpecTask):
     def new(extend_class_def, num_inputs = 1, num_outputs = 1):
         return ClusterSpecExtendClassDef(extend_class_def, num_inputs, num_outputs)
 
+# Map Task Spec
 class ClusterSpecMapTask(ClusterSpecTask):
     def __init__(self, map_ops, num_inputs, num_outputs):
         super().__init__(ClusterTaskType.MAP, num_inputs, num_outputs)
@@ -871,6 +873,7 @@ class ClusterSpecMapTask(ClusterSpecTask):
     def new(map_ops, num_inputs = 1, num_outputs = 1):
         return ClusterSpecMapTask(map_ops, num_inputs, num_outputs)
 
+# Reduce Task Spec
 class ClusterSpecReduceTask(ClusterSpecTask):
     def __init__(self, reduce_op, num_inputs, num_outputs):
         super().__init__(ClusterTaskType.REDUCE, num_inputs, num_outputs)
@@ -896,6 +899,7 @@ class ClusterSpecReduceTask(ClusterSpecTask):
     def new(reduce_op, num_inputs = 1, num_outputs = 1):
         return ClusterSpecReduceTask(reduce_op, num_inputs, num_outputs)
 
+# Singleton Task Spec
 class ClusterSpecSingletonTask(ClusterSpecTask):
     def __init__(self, singleton_op, num_inputs, num_outputs):
         super().__init__(ClusterTaskType.SINGLETON, num_inputs, num_outputs)
@@ -921,6 +925,7 @@ class ClusterSpecSingletonTask(ClusterSpecTask):
     def new(singleton_op, num_inputs = 1, num_outputs = 1):
         return ClusterSpecSingletonTask(singleton_op, num_inputs, num_outputs)
 
+# Partition Task Spec
 class ClusterSpecPartitionTask(ClusterSpecTask):
     def __init__(self, num_splits, num_inputs, num_outputs):
         super().__init__(ClusterTaskType.PARTITION, num_inputs, num_outputs)
@@ -946,6 +951,7 @@ class ClusterSpecPartitionTask(ClusterSpecTask):
     def new(num_splits, num_inputs = 1, num_outputs = 1):
         return ClusterSpecPartitionTask(num_splits, num_inputs, num_outputs)
 
+# Hash Partition Task Spec
 class ClusterSpecHashPartitionTask(ClusterSpecTask):
     def __init__(self, num_splits, hash_cols, num_inputs, num_outputs):
         super().__init__(ClusterTaskType.HASH_PARTITION, num_inputs, num_outputs)
@@ -972,7 +978,8 @@ class ClusterSpecHashPartitionTask(ClusterSpecTask):
     # constructor
     def new(num_splits, hash_cols, num_inputs = 1, num_outputs = 1):
         return ClusterSpecHashPartitionTask(num_splits, hash_cols, num_inputs, num_outputs)
-       
+
+# Singleton Partition Task Spec
 class ClusterSpecSingletonPartitionTask(ClusterSpecTask):
     def __init__(self, num_inputs, num_outputs):
         super().__init__(ClusterTaskType.SINGLETON_PARTITION, num_inputs, num_outputs)
@@ -996,6 +1003,7 @@ class ClusterSpecSingletonPartitionTask(ClusterSpecTask):
     def new(num_inputs = 1, num_outputs = 1):
         return ClusterSpecSingletonPartitionTask(num_inputs, num_outputs)
 
+# deserialize cluster task spec
 def deserialize_cluster_task_spec(json_obj):
     # check for None
     if (json_obj is None):
@@ -1092,6 +1100,7 @@ class ClusterTaskType:
     PARTITION = "partition"
     HASH_PARTITION = "hash_partition"
 
+# ClusterTaskOperation
 class ClusterTaskOperation(ClusterOperation):
     def __init__(self, task_type, name, requirements, *args, **kwargs):
         super().__init__(name, requirements, *args, **kwargs)
@@ -1110,6 +1119,7 @@ class ClusterTaskOperation(ClusterOperation):
         kwargs = cluster_data.load_native_objects(cluster_data.cluster_operand_deserializer(json_obj["kwargs"]))
         return ClusterTaskOperation(json_obj["task_type"], name, requirements, *args, **kwargs)
 
+# ClusterExtendClassOperation
 class ClusterExtendClassOperation(ClusterTaskOperation):
     def __init__(self, name, requirements, *args, **kwargs):
         super().__init__(ClusterTaskType.EXTEND_CLASS, name, requirements, *args, **kwargs)
@@ -1187,6 +1197,7 @@ class ClusterSingletonOperation(ClusterTaskOperation):
         # return
         return ClusterSingletonOperation(name, requirements, *args, **kwargs)
 
+# deerialize cluster task operation
 def deserialize_cluster_task_operation(json_obj):
     # check for None
     if (json_obj is None):
@@ -1259,6 +1270,7 @@ class ClusterHearbeat(cluster_data.JsonSer):
     def new(ts, lease):
         return ClusterHearbeat(ts, lease)
 
+# ClusterUpdateTime
 class ClusterUpdateTime(cluster_data.JsonSer):
     def __init__(self, ts):
         self.ts = ts
@@ -1277,6 +1289,7 @@ class ClusterUpdateTime(cluster_data.JsonSer):
     def new(ts):
         return ClusterUpdateTime(ts)
 
+# ClusterEntityRef
 class ClusterEntityRef(cluster_data.JsonSer):
     def __init__(self, entity_type, entity_id):
         self.entity_type = entity_type
@@ -2045,6 +2058,7 @@ class ClusterPaths:
     def get_entity_data_input_batch_hash(entity_type, entity_id, input_id, batch_id, hash_id):
         return "{}/{}".format(ClusterPaths.get_entity_data_input_batch_hashes(entity_type, entity_id, input_id, batch_id), hash_id)
 
+# ClusterExtendClass
 class ClusterExtendClass(cluster_data.JsonSer):
     def __init__(self, name_or_class_ref, *args, **kwargs):
         # take fully qualified name
@@ -2080,6 +2094,7 @@ class ClusterExtendClass(cluster_data.JsonSer):
     def new(name, *args, **kwargs):
         return ClusterExtendClass(name, *args, **kwargs)
 
+# ClusterOperationJob
 class ClusterOperationJob(cluster_data.JsonSer):
     def __init__(self, map_ops, reduce_op, singleton_op, extend_class_op):
         self.map_ops = map_ops
@@ -2128,6 +2143,7 @@ class ClusterOperationJob(cluster_data.JsonSer):
         # return
         return ClusterOperationJob(map_ops, reduce_op, singleton_op, extend_class_op)
 
+# ClusterIds
 class ClusterIds:
     ID_SUFFIX = 0
     SWF_COUNTER = 0
@@ -2180,6 +2196,7 @@ class ClusterIds:
     def get_session_id():
         return ClusterIds.get_entity_id(EntityType.SESSION)
 
+# load extend class object
 def load_extend_class_obj(extend_class_op, header, data):
     # take the parameters
     class_name = extend_class_op.name
@@ -2195,6 +2212,7 @@ def load_extend_class_obj(extend_class_op, header, data):
     # call constructor
     return class_ref(header, data, *args, **kwargs)
 
+# TSVReference
 class TSVReference:
     OMIGO_REFERENCE_PATH = ".omigo.reference.path"
     def __init__(self, xtsv):
