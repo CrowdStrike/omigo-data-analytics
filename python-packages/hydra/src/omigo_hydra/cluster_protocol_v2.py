@@ -827,12 +827,15 @@ class ClusterMasterProtocol(ClusterEntityProtocol):
         for xentity_type in EntityType.get_all():
             # get all incoming entity ids
             xincoming_ids = self.cluster_handler.list_dirs(ClusterPaths.get_entities_incoming(xentity_type))
+            # utils.info("ClusterMasterProtocol: {}, xentity_type: {}, xincoming_ids: {}".format(self.get_entity_id(), xentity_type, xincoming_ids))
 
             # get all assigned supervisor entity ids
             xassigned_ids = self.cluster_handler.list_dirs(ClusterPaths.get_entities_assigned_supervisor(xentity_type))
+            # utils.info("ClusterMasterProtocol: {}, xentity_type: {}, xassigned_ids: {}".format(self.get_entity_id(), xentity_type, xassigned_ids))
 
             # find which ones are not assigned yet
             xnon_assigned_ids = list(set(xincoming_ids).difference(set(xassigned_ids)))
+            # utils.info("ClusterMasterProtocol: {}, xentity_type: {}, xnon_assigned_ids: {}".format(self.get_entity_id(), xentity_type, xnon_assigned_ids))
 
             # sort the entities
             xnon_assigned_ids = sorted(xnon_assigned_ids)
@@ -1660,6 +1663,8 @@ class ClusterMasterElectionProtocol:
                 utils.info("ClusterMasterElectionProtocol: {}: run_election: already the current master".format(self.entity_id))
             else:
                 utils.info("ClusterMasterElectionProtocol: {}: run_election: another master exists: {}".format(self.entity_id, current_master_id))
+
+            # return
             return False
 
         # get the current master id

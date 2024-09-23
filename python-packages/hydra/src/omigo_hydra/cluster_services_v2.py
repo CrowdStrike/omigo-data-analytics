@@ -267,7 +267,7 @@ def read_workflow_file_path(file_path, max_duration = 3*86400, sleep_sec = 3):
     utils.info("Waiting for the file to be present: {} ...".format(file_path))
     while (duration < max_duration):
       if (get_cluster_handler().file_exists(file_path) == True):
-          time.sleep(5)
+          time.sleep(sleep_sec)
           found = True
           break
       else:
@@ -280,7 +280,8 @@ def read_workflow_file_path(file_path, max_duration = 3*86400, sleep_sec = 3):
         try:
             xtsv = read_tsv(file_path)
         except Exception as e:
-            time.sleep(60)
+            utils.warn("Caught exception in reading file. Sleeping for {} seconds".format(sleep_sec))
+            time.sleep(sleep_sec)
             xtsv = read_tsv(file_path)
 
         utils.info("Read file: {}, num_rows: {}".format(file_path, xtsv.num_rows()))
@@ -447,7 +448,7 @@ class EntityRunner:
             self.run_step()
 
             # sleep
-            utils.info("Sleeping for {} seconds".format(self.wait_sec))
+            utils.info("{}: sleeping for {} seconds".format(self.protocol.entity.entity_type, self.wait_sec))
             time.sleep(self.wait_sec)
             
 class EntityMasterRunner(EntityRunner):
@@ -470,14 +471,14 @@ class EntityMasterRunner(EntityRunner):
             if (self.election_protocol.run_election() == True):
                 self.protocol.refresh_master_cache()
 
-                # monitor incoming
-                self.protocol.monitor_incoming_for_supervisor()
+            # monitor incoming
+            self.protocol.monitor_incoming_for_supervisor()
 
             # run base class
             self.run_step()
 
             # sleep
-            utils.info("Sleeping for {} seconds".format(self.wait_sec))
+            utils.info("{}: Sleeping for {} seconds".format(self.protocol.entity.entity_type, self.wait_sec))
             time.sleep(self.wait_sec)
 
 class EntityResourceManagerRunner(EntityRunner):
