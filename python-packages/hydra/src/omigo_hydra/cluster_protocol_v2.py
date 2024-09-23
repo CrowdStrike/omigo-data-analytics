@@ -36,7 +36,7 @@ class ClusterHeartbeatProtocol:
         # with self._lock:
         return self.last_heartbeat_cache
 
-    def start_heartbeat_thread(self):
+    def start_heartbeat_process(self):
         heartbeat_process = multiprocessing.Process(target = self.update_heartbeat, args = ())
         heartbeat_process.daemon = True
         heartbeat_process.start()
@@ -301,7 +301,7 @@ class ClusterEntityProtocol:
         # if this is active entity, start heartbeat thread
         if (cluster_common_v2.EntityIsActiveMap[self.get_entity_type()] == True):
             utils.info("ClusterEntityProtocol: {} initialize: active entity: starting heartbeat thread".format(self.get_entity_id()))
-            self.heartbeat_protocol.start_heartbeat_thread()
+            self.heartbeat_protocol.start_heartbeat_process()
         else:
             utils.debug("ClusterEntityProtocol: {} initialize: passive entity: not starting heartbeat thread".format(self.get_entity_id()))
 
