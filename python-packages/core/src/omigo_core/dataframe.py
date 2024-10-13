@@ -5184,7 +5184,12 @@ def from_maps(mps, accepted_cols = None, excluded_cols = None, url_encoded_cols 
         .drop_cols_if_exists(["__json_index__", "__explode_json_index__"], dmsg = dmsg)
 
     # return
-    return result 
+    return result
+
+def from_tsv(xtsv):
+    header_fields = xtsv.get_header_fields()
+    data_fields = list([t.split("\t") for t in xtsv.get_data()])
+    return DataFrame(header_fields, data_fields)
 
 def enable_debug_mode():
     utils.enable_debug_mode()
