@@ -16,7 +16,6 @@ class ClusterHeartbeatProtocol:
     def __init__(self, entity):
         self.entity = entity
         self.last_heartbeat_cache = None
-        # self._lock = threading.Lock()
         self.cluster_handler = ClusterPaths.get_cluster_handler()
 
     def get_entity(self):
@@ -29,16 +28,13 @@ class ClusterHeartbeatProtocol:
         return self.get_entity().entity_type
 
     def update_cache_ts(self, ts):
-        # with self._lock:
         self.last_heartbeat_cache = ts
 
     def get_cache_ts(self):
-        # with self._lock:
         return self.last_heartbeat_cache
 
     def start_heartbeat_process(self):
-        heartbeat_process = multiprocessing.Process(target = self.update_heartbeat, args = ())
-        heartbeat_process.daemon = True
+        heartbeat_process = multiprocessing.Process(target = self.update_heartbeat, name = "CLUSTER_ENTITY: {}".format(self.entity.entity_type), args = (), daemon = True)
         heartbeat_process.start()
 
     def update_heartbeat(self):
@@ -255,7 +251,6 @@ class ClusterEntityProtocol:
         self.entity = entity
         self.cluster_handler = ClusterPaths.get_cluster_handler()
         self.heartbeat_protocol = ClusterHeartbeatProtocol(self.entity)
-        # self._lock = threading.Lock()
         self.local_cluster_handler = ClusterPaths.get_local_cluster_handler() 
 
     def get_entity(self):
@@ -300,10 +295,10 @@ class ClusterEntityProtocol:
 
         # if this is active entity, start heartbeat thread
         if (cluster_common_v2.EntityIsActiveMap[self.get_entity_type()] == True):
-            utils.info("ClusterEntityProtocol: {} initialize: active entity: starting heartbeat thread".format(self.get_entity_id()))
+            utils.info("ClusterEntityProtocol: {} initialize: active entity: starting heartbeat process".format(self.get_entity_id()))
             self.heartbeat_protocol.start_heartbeat_process()
         else:
-            utils.debug("ClusterEntityProtocol: {} initialize: passive entity: not starting heartbeat thread".format(self.get_entity_id()))
+            utils.debug("ClusterEntityProtocol: {} initialize: passive entity: not starting heartbeat process".format(self.get_entity_id()))
 
         # check if this entity is one of executors
         if (self.get_entity_type() in cluster_common_v2.EntityExecutorTypes):
@@ -776,7 +771,6 @@ class ClusterMasterProtocol(ClusterEntityProtocol):
         super().__init__(entity)
         self.is_cur_master_cache = False
         self.cur_master_cache_ts = 0
-        # self._lock = threading.Lock()
         self.election_protocol = ClusterMasterElectionProtocol(self.get_entity_id())
 
     # initialize
@@ -793,8 +787,6 @@ class ClusterMasterProtocol(ClusterEntityProtocol):
 
     # check if this is the current master. TODO: Why there are 2 methods in Election and here
     def is_current_master(self):
-       # use lock for avoiding race condition
-       # with self._lock:
        # find time difference
        cur_time = timefuncs.get_utctimestamp_sec()
        time_diff = abs(cur_time - self.cur_master_cache_ts)
@@ -808,8 +800,6 @@ class ClusterMasterProtocol(ClusterEntityProtocol):
        return self.is_cur_master_cache
 
     def refresh_master_cache(self):
-       # use lock for avoiding race condition
-       # with self._lock:
        self.is_cur_master_cache = self.election_protocol.is_current_master()
        self.cur_master_cache_ts = timefuncs.get_utctimestamp_sec()
 

@@ -121,6 +121,7 @@ def read_url_json(url, query_params = {}, headers = {}, body = None, username = 
         fields = ["", "0", "Unable to parse the json response: {}".format(utils.url_encode(response_str).replace("\n", " "))]
         data.append("\t".join(fields))
 
+    # return
     return tsv.TSV(header, data).validate()
 
 def read_url_response(url, query_params = {}, headers = {}, body = None, username = None, password = None, api_token = None, timeout_sec = 120, verify = True, method = None,

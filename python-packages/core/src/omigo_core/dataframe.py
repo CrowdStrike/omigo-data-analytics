@@ -1,4 +1,4 @@
-"""TSV Class"""
+"""DataFrame Class"""
 import re
 import math
 import pandas as pd
@@ -10,25 +10,24 @@ import time
 import numpy as np
 from io import StringIO
 
-class TSV:
+class DataFrame:
     """This is the main data processing class to apply different filter and transformation functions
     on tsv data and get the results. The design is more aligned with functional programming where
     each step generates a new copy of the data"""
 
-    header = None
     header_map = None
     header_index_map = None
     header_fields = None
-    data = None
+    data_fields = None
 
     # constructor
-    def __init__(self, header, data):
+    def __init__(self, header_fields, data_fields):
         # initialize header and data
-        self.header = header
-        self.data = data
+        self.header_fields = header_fields
+        self.data_fields = data_fields
 
         # create map of name->index and index->name
-        self.header_fields = list(filter(lambda t: t != "", self.header.split("\t"))) if (self.header != "") else []
+        # self.header_fields = list(filter(lambda t: t != "", self.header.split("\t"))) if (self.header != "") else []
         self.header_map = {}
         self.header_index_map = {}
 
@@ -38,7 +37,7 @@ class TSV:
                 utils.warn("Zero length header fields:" + str(self.header_fields))
 
         # create hashmap
-        for i in range(len(self.header_fields)):
+        for i in range(self.num_rows()):
             h = self.header_fields[i]
 
             # validation
@@ -49,27 +48,26 @@ class TSV:
             self.header_index_map[i] = h
 
         # basic validation
-        if (len(data) > 0 and len(data[0].split("\t")) != len(self.header_fields)):
-            raise Exception("Header length is not matching with data length: len(self.get_header_fields()): {}, len(data[0].fields): {}, header_fields: {}, data[0].fields: {}".format(
-                len(self.header_fields), len(data[0].split("\t")), str(self.header_fields), str(data[0].split("\t"))))
+        if (len(data_fields) > 0 and len(data_fields[0]) != len(self.header_fields)):
+            raise Exception("Header length: {} is not matching with data length: {}".format(
+                len(self.header_fields), len(data_fields[0])))
 
     # debugging
     def to_string(self):
-        return "Header: {}, Data: {}".format(str(self.header_map), str(len(self.get_data())))
+        return "Header: {}, Data: {}".format(str(self.header_fields), str(len(self.data_fields)))
 
     def get_content_as_string(self):
-        return self.get_header() + "\n" + "\n".join(self.get_data())
+        return self.header_fields + "\n" + "\n".join(list(["\t".join(t) for t in self.data_fields]))
 
     # check data format
     def validate(self):
         # data validation
         counter = 0
-        for line in self.get_data():
+        for fields in self.data_fields:
             counter = counter + 1
-            fields = line.split("\t")
-            if (len(fields) != len(self.get_header_fields())):
+            if (len(fields) != len(self.header_fields)):
                 raise Exception("Header length is not matching with data length. position: {}, len(header): {}, header: {}, len(fields): {}, fields: {}".format(
-                    counter, len(self.get_header_fields()), self.header_fields, len(fields), str(fields)))
+                    counter, len(self.header_fields), self.header_fields, len(fields), str(fields)))
 
         # return
         return self
@@ -89,34 +87,35 @@ class TSV:
         indexes = self.__get_col_indexes__(matching_cols)
 
         # create new header
-        new_header = "\t".join(matching_cols)
+        # new_header = "\t".join(matching_cols)
+        new_header_fields = matching_cols
 
         # create new data
         counter = 0
-        new_data = []
-        for line in self.get_data():
+        new_data_fields = []
+        for fields in self.data_fields:
             # report progress
             counter = counter + 1
             utils.report_progress("select: [1/1] selecting columns", dmsg, counter, self.num_rows())
 
             # get fields
-            fields = line.split("\t")
+            # fields = line.split("\t")
             new_fields = []
 
             # validation
             for i in indexes:
                 if (i >= len(fields)):
-                    raise Exception("Invalid index: col_or_cols: {}, matching_cols: {}, indexes: {}, line: {}, fields: {}, len(fields): {}, len(self.get_header_fields()): {}, self.get_header_map(): {}".format(
-                        col_or_cols, matching_cols, indexes, line, fields, len(fields), len(self.get_header_fields()), self.header_map))
+                    raise Exception("Invalid index: col_or_cols: {}, matching_cols: {}, indexes: {}, line: {}, fields: {}, len(fields): {}, len(self.header_fields): {}, self.get_header_map(): {}".format(
+                        col_or_cols, matching_cols, indexes, line, fields, len(fields), len(self.header_fields), self.header_map))
 
                 # append to new_fields
                 new_fields.append(fields[i])
 
             # append to new data
-            new_data.append("\t".join(new_fields))
+            new_data_fields.append(new_fields)
 
         # return
-        return TSV(new_header, new_data)
+        return DataFrame(new_header_fields, new_data_fields)
 
     def values_not_in(self, col, values, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "values_not_in")
@@ -306,7 +305,7 @@ class TSV:
         return self \
             .aggregate(cols, [cols[0]], [udfs.get_len], collapse = collapse, dmsg = dmsg) \
             .rename(cols[0] + ":get_len", new_count_col, dmsg = dmsg) \
-            .transform([new_count_col], lambda x: str(int(x) / len(self.get_data())), new_ratio_col, dmsg = dmsg) \
+            .transform([new_count_col], lambda x: str(int(x) / self.num_rows()), new_ratio_col, dmsg = dmsg) \
             .reverse_sort(new_count_col, dmsg = dmsg) \
             .apply_precision(new_ratio_col, precision, dmsg = dmsg)
 
@@ -332,44 +331,45 @@ class TSV:
         return self.skip(count)
 
     def skip_rows(self, count):
-        return TSV(self.header, self.data[count:])
+        return DataFrame(self.header, self.data[count:])
 
     def last(self, count):
         # check boundary conditions
-        if (count > len(self.get_data())):
-            count = len(self.get_data())
+        if (count > self.num_rows()):
+            count = self.num_rows()
 
         # return
-        return TSV(self.header, self.data[-count:])
+        return DataFrame(self.header_fields, self.data_fields[-count:])
 
     def take(self, count, dmsg = ""):
         # return result
-        if (count > len(self.get_data())):
-            count = len(self.get_data())
+        if (count > self.num_rows()):
+            count = self.num_rows()
 
-        return TSV(self.header, self.data[0:count])
+        return DataFrame(self.header_fields, self.data_fields[0:count])
 
     def distinct(self, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "distinct")
 
         # create variables
-        new_data = []
+        new_data_fields = []
         key_map = {}
 
         # iterate
         counter = 0
-        for line in self.get_data():
+        for fields in self.data_fields:
             # report progress
             counter = counter + 1
             utils.report_progress("[1/1] calling function", dmsg, counter, self.num_rows())
 
             # check if the line doesnt exist already
+            line = "\t".join(fields)
             if (line not in key_map.keys()):
                 key_map[line] = 1
-                new_data.append(line)
+                new_data_fields.append(fields)
 
         # return
-        return TSV(self.header, new_data)
+        return DataFrame(self.header_fields, new_data_fields)
 
     def distinct_cols(self, col_or_cols, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "distinct_cols")
@@ -395,7 +395,7 @@ class TSV:
 
         # find the columns that dont match
         non_matching_cols = []
-        for h in self.get_header_fields():
+        for h in self.header_fields:
             if (h not in matching_cols):
                 non_matching_cols.append(h)
 
@@ -437,13 +437,13 @@ class TSV:
 
         # iterate and add
         counter = 0
-        for line in self.get_data():
+        for fields in self.data_fields:
             # report progress
             counter = counter + 1
             utils.report_progress("[1/1] calling function", dmsg, counter, self.num_rows())
 
             # parse
-            fields = line.split("\t")
+            # fields = line.split("\t")
             for i in range(self.num_cols()):
                 if (fields[i] != ""):
                     fill_flags[i] = 1
@@ -474,15 +474,16 @@ class TSV:
             return self
 
         # create new data
-        data = []
+        new_data_fields = []
 
         # iterate
-        for line in self.get_data():
-            if (line.strip() != ""):
-                data.append(line)
+        for fields in self.data_fields:
+            num_non_empty_cols = len(list(filter(lambda t: t.strip() != "", fields)))
+            if (num_non_empty_cols > 0):
+                new_data_fields.append(fields)
 
         # return
-        return TSV(self.header, data)
+        return DataFrame(self.header_fields, new_data_fields)
  
     # TODO: the select_cols is not implemented properly
     def window_aggregate(self, win_col, agg_cols, agg_funcs, winsize, select_cols = None, sliding = False, collapse = True, suffix = "", precision = 2, dmsg = ""):
@@ -542,17 +543,16 @@ class TSV:
         new_win_col = win_col + ":" + suffix2
         new_header = self.header + "\t" + new_win_col
 
-        new_data = []
+        new_data_fields = []
 
         # iterate over data
         counter = 0
-        for line in self.get_data():
+        for fields in self.data_fields:
             # report progress
             counter = counter + 1
             utils.report_progress("window_aggregate: [1/1] calling function", dmsg, counter, self.num_rows())
 
             # parse data
-            fields = line.split("\t")
             win_value = fields[self.header_map[win_col]]
             win_indexes = win_mapping[win_value]
 
@@ -560,20 +560,20 @@ class TSV:
             for win_index in win_indexes:
                 (namex, namey) = win_names_mapping[win_index]
                 namexy = namex + " - " + namey
-                new_data.append(line + "\t" + str(namexy))
+                new_data_fields.append(fields + [str(namexy)])
 
         # return
         if (collapse == True):
             cols2 = select_cols
             cols2.append(win_col)
-            return TSV(new_header, new_data) \
+            return DataFrame(new_header_fields, new_data_fields) \
                 .drop_cols(win_col) \
                 .rename(new_win_col, win_col) \
                 .aggregate(cols2, agg_cols, agg_funcs, collapse)
         else:
             cols2 = select_cols
             cols2.append(new_win_col)
-            return TSV(new_header, new_data) \
+            return DataFrame(new_header_fields, new_data_fields) \
                 .aggregate(cols2, agg_cols, agg_funcs, collapse, precision)
 
     # The signature for agg_func is func(list_of_maps). Each map will get the agg_cols
@@ -603,13 +603,10 @@ class TSV:
         # group all the values in the key
         grouped = {}
         counter = 0
-        for line in self.get_data():
+        for fields in self.data_fields:
             # report progress
             counter = counter + 1
             utils.report_progress("group_by_key: [1/3] grouping: progress", dmsg, counter, self.num_rows())
-
-            # parse data
-            fields = line.split("\t")
 
             # create grouping key
             keys = []
@@ -656,7 +653,7 @@ class TSV:
         utils.print_code_todo_warning("Removing this condition for checking of duplicate names. They are already given a suffix so there is no clash.")
         for k in agg_out_keys.keys():
             if (k in self.header_map.keys()):
-                utils.print_code_todo_warning("TODO: Old check: Agg func can not output keys that have the same name as original columns: {}, {}".format(k, str(self.get_header_fields())))
+                utils.print_code_todo_warning("TODO: Old check: Agg func can not output keys that have the same name as original columns: {}, {}".format(k, str(self.header_fields)))
 
         # create an ordered list of agg output keys
         new_cols = sorted(list(agg_out_keys.keys()))
@@ -669,28 +666,26 @@ class TSV:
         result = {}
 
         # create header
-        new_header = None
+        new_header_fields = None
         if (collapse == True):
-            new_header = "\t".join(utils.merge_arrays([grouping_cols, new_cols_names]))
+            new_header_fields = utils.merge_arrays([grouping_cols, new_cols_names])
         else:
-            new_header = "\t".join(utils.merge_arrays([self.header_fields, new_cols_names]))
+            new_header_fields = utils.merge_arrays([self.header_fields, new_cols_names])
 
         # create data
-        new_data = []
+        new_data_fields = []
         counter = 0
-        for line in self.get_data():
+        for fields in self.data_fields:
             # report progress
             counter = counter + 1
             utils.report_progress("group_by_key: [3/3] generating data", dmsg, counter, self.num_rows())
-
-            # process data
-            fields = line.split("\t")
 
             # create grouping key
             keys = []
             for g in grouping_cols:
                 keys.append(fields[self.header_map[g]])
 
+            # join keys for hash lookup
             keys_str = "\t".join(keys)
 
             # check output data
@@ -703,21 +698,19 @@ class TSV:
             for c in new_cols:
                 new_col_values.append(str(vs[c]))
 
-            # generate the string for new values
-            v = "\t".join(new_col_values)
-
             # add result according to collapse flag
             if (collapse == True):
                 if (keys_str not in result.keys()):
                     # append to the output data
-                    new_line = keys_str + "\t" + str(v)
-                    new_data.append(new_line)
+                    new_fields = keys + new_col_values
+                    new_data_fields.append(new_fields)
                     result[keys_str] = 1
             else:
-                new_line = line + "\t" + str(v)
-                new_data.append(new_line)
+                new_fields = new_fields + new_col_values 
+                new_data_fields.append(new_fields)
 
-        return TSV(new_header, new_data)
+        # return
+        return DataFrame(new_header_fields, new_data_fields)
 
     # FIXME
     def arg_min(self, grouping_cols, argcols, valcols, suffix = "arg_min", use_string_datatype = False, topk = 1, sep = "|", collapse = True, dmsg = ""):
@@ -728,11 +721,14 @@ class TSV:
         if (use_string_datatype == True):
             raise Exception("arg_min: use_string_datatype = True is not supported")
 
+        # return
         return self.__arg_min_or_max_common__(grouping_cols, argcols, valcols, suffix, topk, sep, -1, collapse = collapse, dmsg = dmsg)
 
     def arg_max(self, grouping_cols, argcols, valcols, suffix = "arg_max", use_string_datatype = False, topk = 1, sep = "|", collapse = True, dmsg = ""):
         utils.warn_once("arg_max is not implemented correctly. Too complicated")
         dmsg = utils.extend_inherit_message(dmsg, "arg_max")
+
+        # return
         return self.__arg_min_or_max_common__(grouping_cols, argcols, valcols, suffix, use_string_datatype, topk, sep, 1, collapse = collapse, dmsg = dmsg)
 
     # grouping_cols are for grouping
@@ -888,18 +884,17 @@ class TSV:
 
         # iterate over the data
         counter = 0
-        for line in self.get_data():
+        for fields in self.data_fields:
             # report progress
             counter = counter + 1
             utils.report_progress("[1/2] building groups", dmsg, counter, self.num_rows())
-
-            # process data
-            fields = line.split("\t")
 
             # new col values
             col_values = []
             for i in indexes:
                 col_values.append(fields[i])
+
+            # generate hash key
             cols_key = "\t".join(col_values)
 
             # for each possible aggregation, do this
@@ -907,6 +902,7 @@ class TSV:
                 if (cols_key not in value_map_arr[j].keys()):
                     value_map_arr[j][cols_key] = []
 
+                # append
                 value_map_arr[j][cols_key].append(str(fields[agg_col_indexes[j]]))
 
         # compute the aggregation
@@ -919,22 +915,23 @@ class TSV:
                 value_func_map_arr[j][k] = agg_value if (agg_value) is not None else ""
 
         # create new header and data
-        new_header = "\t".join(utils.merge_arrays([self.header_fields, new_cols]))
-        new_data = []
+        new_header_fields = utils.merge_arrays([self.header_fields, new_cols])
+        new_data_fields = []
 
         # for each output line, attach the new aggregate value
         counter = 0
         cols_key_map = {}
-        for line in self.get_data():
+        for fields in self.data_fields:
             # report progress
             counter = counter + 1
             utils.report_progress("[2/2] calling function", dmsg, counter, self.num_rows())
 
             # data processing
-            fields = line.split("\t")
             col_values = []
             for i in indexes:
                 col_values.append(fields[i])
+
+            # generate hash keys
             cols_key = "\t".join(col_values)
 
             # append the aggregated values
@@ -944,12 +941,14 @@ class TSV:
 
             # check for different flags
             if (collapse == False or cols_key not in cols_key_map.keys()):
-                new_line = "\t".join(utils.merge_arrays([fields, agg_values]))
-                new_data.append(new_line)
+                new_fields = utils.merge_arrays([fields, agg_values])
+                new_data_fields.append(new_fields)
                 cols_key_map[cols_key] = 1
 
         # create result
-        result_xtsv = TSV(new_header, new_data)
+        result_xtsv = DataFrame(new_header_fields, new_data_fields)
+
+        # check collapse flag
         if (collapse == True):
             # uniq cols
             uniq_cols = []
@@ -957,6 +956,8 @@ class TSV:
                 uniq_cols.append(col)
             for new_col in new_cols:
                 uniq_cols.append(new_col)
+
+            # create result
             result_xtsv = result_xtsv.select(uniq_cols)
 
         # return
@@ -983,14 +984,14 @@ class TSV:
             return self
 
         # new data
-        new_data = []
+        new_data_fields = []
         counter = 0
-        for line in self.get_data():
+        for fields in self.data_fields:
             # report progress
             counter = counter + 1
             utils.report_progress("[1/1] calling function", dmsg, counter, self.num_rows())
 
-            fields = line.split("\t")
+            # create col values
             col_values = []
             for index in indexes:
                 col_values.append(fields[index])
@@ -1033,12 +1034,12 @@ class TSV:
             else:
                 result = func(col_values)
 
-
+            # create result
             if (result == include_cond):
-                new_data.append(line)
+                new_data_fields.append(fields)
 
         # return
-        return TSV(self.header, new_data)
+        return DataFrame(self.header_fields, new_data_fields)
 
     def exclude_filter(self, cols, func, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "exclude_filter")
@@ -1066,11 +1067,8 @@ class TSV:
             utils.debug("{}: list of columns that will be checked: {}".format(dmsg, str(matching_cols)))
 
         # iterate
-        new_data = []
-        for line in self.get_data():
-            # get fields
-            fields = line.split("\t", -1)
-
+        new_data_fields = []
+        for fields in self.data_fields:
             # iterate over matching cols
             flag = False 
             for i in indexes:
@@ -1082,13 +1080,13 @@ class TSV:
             # check if all conditions met. apply exclude filter
             if (flag == True):
                 if (exclude_flag == False):
-                    new_data.append(line)
+                    new_data_fields.append(fields)
             else:
                 if (exclude_flag == True):
-                    new_data.append(line)
+                    new_data_fields.append(fields)
 
         # return
-        return TSV(self.get_header(), new_data)
+        return DataFrame(self.header_fields, new_data_fields)
  
     def __all_cols_with_cond_exists_filter__(self, cols, func, exclude_flag = False, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "__all_cols_with_cond_exists_filter__")
@@ -1112,11 +1110,8 @@ class TSV:
             utils.debug("{}: list of columns that will be checked: {}".format(dmsg, str(matching_cols)))
 
         # iterate
-        new_data = []
-        for line in self.get_data():
-            # get fields
-            fields = line.split("\t", -1)
-
+        new_data_fields = []
+        for fields in self.data_fields:
             # iterate over matching cols
             flag = True
             for i in indexes:
@@ -1128,13 +1123,13 @@ class TSV:
             # check if all conditions met
             if (flag == True):
                 if (exclude_flag == False):
-                    new_data.append(line)
+                    new_data_fields.append(fields)
             else:
                 if (exclude_flag == True):
-                    new_data.append(line)
+                    new_data_fields.append(fields)
 
         # return
-        return TSV(self.get_header(), new_data)
+        return DataFrame(self.header_fields, new_data_fields)
 
     def any_col_with_cond_exists_filter(self, cols, func, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "any_col_with_cond_exists_filter")
@@ -1179,12 +1174,12 @@ class TSV:
         # validation
         for col in matching_cols:
             if (col not in self.header_map.keys()):
-                raise Exception("Column: {} not found in {}".format(str(col), str(self.get_header_fields())))
+                raise Exception("Column: {} not found in {}".format(str(col), str(self.header_fields)))
 
         # new col validation
         for new_col in new_cols:
             if (new_col in self.header_fields):
-                raise Exception("New column: {} already exists in {}".format(new_col, str(self.get_header_fields())))
+                raise Exception("New column: {} already exists in {}".format(new_col, str(self.header_fields)))
 
         # check for no data
         if (self.num_rows() == 0):
@@ -1198,17 +1193,16 @@ class TSV:
             indexes.append(self.header_map[col])
 
         # create new header and data
-        new_header = "\t".join(utils.merge_arrays([self.header_fields, new_cols]))
-        new_data = []
+        new_header_fields = utils.merge_arrays([self.header_fields, new_cols])
+        new_data_fields = []
         counter = 0
 
         # iterate over data
-        for line in self.get_data():
+        for fields in self.data_fields:
             counter = counter + 1
             utils.report_progress("[1/1] calling function", dmsg, counter, self.num_rows())
 
             # get fields
-            fields = line.split("\t")
             col_values = []
 
             # get the fields in cols
@@ -1302,11 +1296,11 @@ class TSV:
                         result_arr.append(r)
 
             # create new line
-            new_line = "\t".join(utils.merge_arrays([fields, result_arr]))
-            new_data.append(new_line)
+            new_fields = utils.merge_arrays([fields, result_arr])
+            new_data_fields.append(new_fields)
 
         # return
-        return TSV(new_header, new_data)
+        return DataFrame(new_header_fields, new_data_fields)
 
     def transform_inline(self, cols, func, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "transform_inline")
@@ -1330,24 +1324,26 @@ class TSV:
             utils.trace("transform_inline: list of columns that will be transformed: {}".format(str(matching_cols)))
 
         # create new data
-        new_data = []
+        new_data_fields = []
         counter = 0
-        for line in self.get_data():
+        for fields in self.data_fields:
             counter = counter + 1
             utils.report_progress("[1/1] calling function", dmsg, counter, self.num_rows())
 
-            fields = line.split("\t")
+            # create new fields
             new_fields = []
+
+            # iterate
             for i in range(len(fields)):
                 if (i in indexes):
                     new_fields.append(str(func(fields[i])))
                 else:
                     new_fields.append(str(fields[i]))
 
-            new_data.append("\t".join(new_fields))
+            new_data_fields.append(new_fields)
 
         # return
-        return TSV(self.header, new_data)
+        return DataFrame(self.header_fields, new_data_fields)
 
     def transform_inline_log(self, col_or_cols, base = None, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "transform_inline_log")
@@ -1394,42 +1390,41 @@ class TSV:
 
         # validation
         if (self.has_col(col) == False):
-            raise Exception("Column: {} not found in {}".format(str(col), str(self.get_header_fields())))
+            raise Exception("Column: {} not found in {}".format(str(col), str(self.header_fields)))
 
         # validation
         if (self.has_col(new_col) == True):
-            raise Exception("New Column: {} already exists in {}".format(str(new_col), str(self.get_header_fields())))
+            raise Exception("New Column: {} already exists in {}".format(str(new_col), str(self.header_fields)))
 
         # new header fields
-        new_header_fields = list([new_col if (h == col) else h for h in self.get_header_fields()])
-        new_header = "\t".join(new_header_fields)
+        new_header_fields = list([new_col if (h == col) else h for h in self.header_fields])
 
         # return 
-        return TSV(new_header, self.get_data())
+        return DataFrame(new_header_fields, self.data_fields)
 
-    def get_header(self):
-        return self.header
+    def get_header_fields(self):
+        return self.header_fields
 
-    def get_data(self):
-        return self.data
+    def get_data_fields(self):
+        return self.data_fields
 
     def get_header_map(self):
         return self.header_map
 
     def num_rows(self):
-        return len(self.get_data())
+        return len(self.data_fields)
 
     def num_cols(self):
-        return len(self.get_header_fields())
+        return len(self.header_fields)
 
     def get_size_in_bytes(self):
         utils.warn("Please use size_in_bytes() instead")
         return self.size_in_bytes()
 
     def size_in_bytes(self):
-        total = len(self.header)
-        for line in self.get_data():
-            total = total + len(line)
+        total = sum(list([len(t) for t in self.header_fields]))
+        for fields in self.data_fields:
+            total = total + sum(list([len(t) for t in fields]))
         return total
 
     def size_in_mb(self):
@@ -1438,11 +1433,8 @@ class TSV:
     def size_in_gb(self):
         return int(self.size_in_bytes() / 1e9)
 
-    def get_header_fields(self):
-        return self.header_fields
-
     def get_columns(self):
-        return self.get_header_fields()
+        return self.header_fields
 
     def get_column(self, index):
         # validation
@@ -1450,8 +1442,9 @@ class TSV:
             raise Exception("get_column: invalid index: {}".format(index))
 
         # return
-        return self.get_header_fields()[index]
+        return self.header_fields[index]
 
+    # Deprecated
     def columns(self):
         utils.warn("Deprecated. Use get_columns() instead")
         return self.get_columns()
@@ -1480,19 +1473,18 @@ class TSV:
         mps = []
 
         # create a map for each row
-        for line in self.get_data():
-            fields = line.split("\t")
+        for fields in self.data_fields:
             mp = {}
-            for i in range(len(self.get_header_fields())):
+
+            # iterate over all header columns
+            for i in range(self.num_rows()):
                 key = self.header_fields[i]
                 value = str(fields[i])
 
                 # check for resolving url encoded cols
                 if (resolve_url_encoded_cols == True):
-                    if (key.endswith(":url_encoded") == True):
-                        key = key[0:-len(":url_encoded")]
+                    if (key.endswith(":uniq_mkstr") == True):
                         value = utils.url_decode(value)
-                    elif (key.endswith(":url_encoded:uniq_mkstr") == True):
                         key = key[0:-len(":url_encoded:uniq_mkstr")] + ":uniq_mkstr"
                         value = ",".join([utils.url_decode(t) for t in value.split(",")])
                     elif (key.endswith(":url_encoded:mkstr") == True):
@@ -1538,18 +1530,18 @@ class TSV:
             raise Exception("Output column name: {} already exists in {}".format(new_col, self.header_fields))
 
         # create new header
-        new_header = new_col + "\t" + self.header
+        new_header_fields = [new_col] + self.header_fields
 
         # create new data
-        new_data = []
+        new_data_fields = []
         counter = start - 1 
-        for line in self.get_data():
+        for fields in self.data_fields:
             counter = counter + 1
             utils.report_progress("add_seq_num: [1/1] adding new column", dmsg, counter, self.num_rows())
-            new_data.append(str(counter) + "\t" + line)
+            new_data.append([str(counter)] + fields)
 
         # return
-        return TSV(new_header, new_data)
+        return DataFrame(new_header_fields, new_data_fields)
 
     def show_transpose(self, n = 1, title = "Show Transpose", max_col_width = None, debug_only = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "show_transpose")
@@ -1657,8 +1649,8 @@ class TSV:
             is_numeric_type_map[k] = True
 
         # determine width
-        for line in self.get_data():
-            fields = line.split("\t")
+        for fields in self.data_fields:
+            # iterate
             for i in range(len(fields)):
                 k = self.header_index_map[i]
                 value = fields[i]
@@ -1669,14 +1661,13 @@ class TSV:
                     is_numeric_type_map[k] = False
 
         # combine header and lines
-        all_data = [self.header]
-        for line in self.get_data():
-            all_data.append(line)
+        all_data_fields = [self.header_fields]
+        for fields in self.data_fields:
+            all_data_fields.append(fields)
 
         # iterate and print. +1 for header
-        for i in range(len(all_data)):
-            line = all_data[i]
-            fields = line.split("\t")
+        for i in range(len(all_data_fields)):
+            fields = all_data_fields[i]
             row = []
             for j in range(len(fields)):
                 col_width = col_widths[self.header_index_map[j]]
@@ -1689,7 +1680,10 @@ class TSV:
                     else:
                         value = value + spaces[0:col_width - len(value)]
 
+                # append
                 row.append(str(value))
+
+            # print
             print("\t".join(row))
 
         # print blank lines
@@ -1705,13 +1699,12 @@ class TSV:
 
         # validation
         if (col not in self.header_map.keys()):
-            raise Exception("Column not found: {}, {}".format(str(col), str(self.get_header_fields())))
+            raise Exception("Column not found: {}, {}".format(str(col), str(self.header_fields)))
 
         # index
         index = self.header_map[col]
         ret_values = []
-        for line in self.get_data():
-            fields = line.split("\t")
+        for fields in self.data_fields:
             value = str(fields[index])
             if (value != ""):
                 ret_values.append(value)
@@ -1776,13 +1769,14 @@ class TSV:
 
         # create map
         mp = {}
-        for line in self.get_data():
-            fields = line.split("\t")
+        for fields in self.data_fields:
             # get the key
             keys = []
             for key_col in key_cols:
                 key = fields[self.header_map[key_col]]
                 keys.append(key)
+
+            # create keys tuple
             keys_tuple = self.__expand_to_tuple__(keys)
 
             # check for non duplicate keys
@@ -1793,6 +1787,8 @@ class TSV:
             for value_col in value_cols:
                 value = fields[self.header_map[value_col]]
                 values.append(str(value))
+
+            # create value tuple
             values_tuple = self.__expand_to_tuple__(values)
 
             # store value in hashmap
@@ -1801,15 +1797,15 @@ class TSV:
         # return
         return mp
 
-    def __sort_helper__(self, line, indexes, all_numeric):
+    def __sort_helper__(self, fields, indexes, all_numeric):
         values = []
-        fields = line.split("\t")
         for i in indexes:
             if (all_numeric == True):
                 values.append(float(fields[i]))
             else:
                 values.append(str(fields[i]))
 
+        # return
         return tuple(values)
 
     # TODO: this api needs to remove the auto detection of all_numeric flag
@@ -1844,14 +1840,15 @@ class TSV:
                 all_numeric = True
 
         # sort
-        new_data = sorted(self.data, key = lambda line: self.__sort_helper__(line, indexes, all_numeric = all_numeric), reverse = reverse)
+        new_data_fields = sorted(self.data_fields, key = lambda fields: self.__sort_helper__(fields, indexes, all_numeric = all_numeric), reverse = reverse)
 
         # check if need to reorder the fields
         dmsg = utils.extend_inherit_message(dmsg, "sort")
         if (reorder == True):
-            return TSV(self.header, new_data).reorder(matching_cols, dmsg = dmsg)
+            return DataFrame(self.header_fields, new_data_fields) \
+                .reorder(matching_cols, dmsg = dmsg)
         else:
-            return TSV(self.header, new_data)
+            return DataFrame(self.header_fields, new_data_fields)
 
     def reverse_sort(self, cols, reorder = False, all_numeric = None, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "reverse_sort")
@@ -1883,7 +1880,7 @@ class TSV:
         if (use_existing_order == False):
             # get the non matching cols
             non_matching_cols = []
-            for c in self.get_header_fields():
+            for c in self.header_fields:
                 if (c not in matching_cols):
                     non_matching_cols.append(c)
 
@@ -1901,12 +1898,12 @@ class TSV:
         new_header_fields = []
 
         # append all the matching columns
-        for h in self.get_header_fields():
+        for h in self.header_fields:
             if (h in matching_cols):
                 new_header_fields.append(h)
 
         # append all the remaining columns
-        for h in self.get_header_fields():
+        for h in self.header_fields:
             if (h not in matching_cols):
                 new_header_fields.append(h)
 
@@ -1929,7 +1926,7 @@ class TSV:
 
         # generate the list of cols that should be brought to front
         rcols = []
-        for h in self.get_header_fields():
+        for h in self.header_fields:
             if (h not in matching_cols):
                 rcols.append(h)
 
@@ -1942,7 +1939,7 @@ class TSV:
 
     def to_df(self, n = None, infer_data_types = True, no_infer_cols = None):
         # find how many rows to select
-        nrows = len(self.get_data()) if (n is None) else n
+        nrows = self.num_rows() if (n is None) else n
 
         # validation
         if (nrows < 0):
@@ -1950,7 +1947,7 @@ class TSV:
 
         # initialize map
         df_map = {}
-        for h in self.get_header_fields():
+        for h in self.header_fields:
             df_map[h] = []
 
         # check if infer data type is true
@@ -1969,9 +1966,7 @@ class TSV:
                     float_cols.append(col)
 
         # iterate over data
-        for line in self.data[0:nrows]:
-            fields = line.split("\t")
-
+        for fields in self.data_fields[0:nrows]:
             # iterate over fields
             for i in range(len(fields)):
                 col = self.get_columns()[i]
@@ -2002,36 +1997,25 @@ class TSV:
         return self.to_df(n)
 
     def to_json_records(self, new_col = "json"):
-        new_header = new_col
-        new_data = []
+        new_header_fields = [new_col]
+        new_data_fields = []
 
         # new col validation
         if (new_col in self.header_map.keys()):
-            raise Exception("New column: {} already exists in {}".format(new_col, str(self.get_header_fields())))
+            raise Exception("New column: {} already exists in {}".format(new_col, str(self.header_fields)))
 
         # iterate
-        for line in self.get_data():
-            fields = line.split("\t")
+        for fields in self.data_fields:
             mp = {}
-            for i in range(len(self.get_header_fields())):
+            for i in range(self.num_rows()):
                 mp[self.header_fields[i]] = fields[i]
-            new_data.append(json.dumps(mp))
+            new_data_fields.append([json.dumps(mp)])
 
-        return TSV(new_header, new_data)
+        # return
+        return DataFrame(new_header_fields, new_data_fields)
 
     def to_csv(self, comma_replacement = ";", dmsg = ""):
-        dmsg = utils.extend_inherit_message(dmsg, "to_csv")
-        utils.warn_once("{}: This is not a standard csv conversion. The commas are just replaced with another character specified in comma_replacement parameter.".format(dmsg))
-
-        # create new data
-        new_header = self.header.replace(",", comma_replacement).replace("\t", ",")
-        new_data = []
-        for line in self.get_data():
-            line = line.replace(",", comma_replacement).replace("\t", ",")
-            new_data.append(line)
-
-        # still return as tsv with single column that is special
-        return TSV(new_header, new_data)
+        raise Exception("to_csv is not supported in this class")
 
     def url_encode_inline(self, col_or_cols, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "url_encode_inline")
@@ -2103,25 +2087,23 @@ class TSV:
 
         # validation
         for that in that_arr:
-            if (self.get_header() != that.get_header()):
+            if (self.header_fields != that.get_header_fields()):
                 raise Exception("Headers are not matching for union: {}, {}".format(self.header_fields, that.get_header_fields()))
 
         # create new data
-        new_data = []
-        for line in self.get_data():
-            fields = line.split("\t")
-            if (len(fields) != len(self.get_header_fields())):
+        new_data_fields = []
+        for fields in self.data_fields:
+            if (len(fields) != len(self.header_fields)):
                 raise Exception("Invalid input data. Fields size are not same as header: header: {}, fields: {}".format(self.header_fields, fields))
-            new_data.append(line)
+            new_data_fields.append(fields)
 
         for that in that_arr:
-            for line in that.get_data():
-                fields = line.split("\t")
-                if (len(fields) != len(self.get_header_fields())):
+            for fields in that.get_data_fields():
+                if (len(fields) != len(self.header_fields)):
                     raise Exception("Invalid input data. Fields size are not same as header: header: {}, fields: {}".format(self.header_fields, fields))
-                new_data.append(line)
+                new_data_fields.append(fields)
 
-        return TSV(self.header, new_data)
+        return DataFrame(self.header_fields, new_data_fields)
 
     # this method finds the set difference between this and that. if cols is None, then all columns are taken
     # TODO: hash collision
@@ -2222,7 +2204,7 @@ class TSV:
         # add only if missing
         missing_cols = []
         for col in cols:
-            if (col not in self.get_header_fields()):
+            if (col not in self.header_fields):
                 missing_cols.append(col)
 
         # check for no missing cols
@@ -2230,30 +2212,29 @@ class TSV:
             return self
 
         # create new header fields
-        new_header_fields = utils.merge_arrays([self.get_header_fields(), missing_cols])
+        new_header_fields = utils.merge_arrays([self.header_fields, missing_cols])
 
         # check no data
         if (self.num_rows() == 0):
             return new_with_cols(new_header_fields)
 
         # create new header and empty row for missing fields
-        new_header = "\t".join(new_header_fields)
-        empty_row = "\t".join(list(["" for c in missing_cols]))
-        new_data = []
+        empty_row_fields = list(["" for c in missing_cols])
+        new_data_fields = []
 
         # iterate and add
         counter = 0
-        for line in self.get_data():
+        for fields in self.data_fields:
             # report progress
             counter = counter + 1
             utils.report_progress("[1/1] calling function", dmsg, counter, self.num_rows())
 
-            # create new line
-            new_line = "\t".join([line, empty_row])
-            new_data.append(new_line)
+            # create new fields 
+            new_fields = fields + empty_row_fields
+            new_data_fields.append(new_fields)
 
         # return
-        return TSV(new_header, new_data)
+        return DataFrame(new_header_fields, new_data_fields)
 
     def add_row(self, row_fields):
         # check empty
@@ -2264,17 +2245,14 @@ class TSV:
         if (len(row_fields) != self.num_cols()):
             raise Exception("{}: Number of fields is not matching with number of columns: {} != {}".format(dmsg, len(row_fields), self.num_cols()))
 
-        # create new row
-        new_line = "\t".join(row_fields)
-
         # remember to do deep copy
-        new_data = []
-        for line in self.get_data():
-            new_data.append(line)
-        new_data.append(new_line)
+        new_data_fields = []
+        for fields in self.data_fields:
+            new_data_fields.append(fields)
+        new_data_fields.append(row_fields)
 
         # return
-        return TSV(self.header, new_data)
+        return DataFrame(self.header_fields, new_data_fields)
 
     def add_map_as_row(self, mp, default_val = None):
         # check empty
@@ -2284,17 +2262,17 @@ class TSV:
         # validation
         for k in mp.keys():
             if (k not in self.header_fields):
-                raise Exception("Column not in existing data: {}, {}".format(k, str(self.get_header_fields())))
+                raise Exception("Column not in existing data: {}, {}".format(k, str(self.header_fields)))
 
         # check for default values
-        for h in self.get_header_fields():
+        for h in self.header_fields:
             if (h not in mp.keys()):
                 if (default_val is None):
                     raise Exception("Column not present in map and default value is not defined: {}. Try using default_val".format(h))
 
         # add the map as new row
         new_fields = []
-        for h in self.get_header_fields():
+        for h in self.header_fields:
             if (h in mp.keys()):
                 # append the value
                 new_fields.append(utils.replace_spl_white_spaces_with_space(mp[h]))
@@ -2326,22 +2304,22 @@ class TSV:
 
         # create new header
         new_header_fields = []
-        for h in self.header.split("\t"):
+        for h in self.header_fields:
             new_header_fields.append(h)
-        for h in that.header.split("\t"):
+        for h in that.header_fields:
             new_header_fields.append(h)
-
-        new_header = "\t".join(new_header_fields)
 
         # create new data
-        new_data = []
-        for i in range(len(self.get_data())):
-            line1 = self.data[i]
-            line2 = that.data[i]
+        new_data_fields = []
+        for i in range(self.num_rows()):
+            fields1 = self.data_fields[i]
+            fields2 = that.data_fields[i]
 
-            new_data.append(line1 + "\t" + line2)
+            # append
+            new_data_fields.append(fields1 + fields2)
 
-        return TSV(new_header, new_data)
+        # return
+        return DataFrame(new_header_fields, new_data_fields)
 
     def add_col_prefix(self, cols, prefix, dmsg = ""):
         utils.warn("Deprecated: Use add_prefix instead")
@@ -2363,7 +2341,7 @@ class TSV:
             suffix = ":" + suffix
 
         # check for matching cols
-        for c in self.get_header_fields():
+        for c in self.header_fields:
             if (c.endswith(suffix)):
                 # check if the prefix is defined and matcing
                 if (prefix is None or c.startswith(prefix + ":") == True):
@@ -2375,11 +2353,11 @@ class TSV:
 
         # validation
         if (len(mp) == 0):
-            utils.raise_exception_or_warn("{}: suffix didnt match any of the columns: {}, {}".format(dmsg, suffix, str(self.get_header_fields())), ignore_if_missing)
+            utils.raise_exception_or_warn("{}: suffix didnt match any of the columns: {}, {}".format(dmsg, suffix, str(self.header_fields)), ignore_if_missing)
 
         # return
-        new_header = "\t".join(list([h if (h not in mp.keys()) else mp[h] for h in self.header_fields]))
-        return TSV(new_header, self.data)
+        new_header_fields = list([h if (h not in mp.keys()) else mp[h] for h in self.header_fields])
+        return DataFrame(new_header_fields, self.data_fields)
 
     def add_prefix(self, prefix, cols = None, ignore_if_missing = False, dmsg = ""):
         # check empty
@@ -2398,14 +2376,14 @@ class TSV:
         new_header_fields = []
 
         # iterate and set the new name
-        for h in self.get_header_fields():
+        for h in self.header_fields:
             if (h in cols):
                 new_header_fields.append(prefix + ":" + h)
             else:
                 new_header_fields.append(h)
 
         # return
-        return TSV("\t".join(new_header_fields), self.data)
+        return DataFrame(new_header_fields, self.data_fields)
 
     def add_suffix(self, suffix, cols = None, ignore_if_missing = False, dmsg = ""):
         # check empty
@@ -2424,14 +2402,14 @@ class TSV:
         new_header_fields = []
 
         # iterate and set the new name
-        for h in self.get_header_fields():
+        for h in self.header_fields:
             if (h in cols):
                 new_header_fields.append(h + ":" + suffix)
             else:
                 new_header_fields.append(h)
 
         # return
-        return TSV("\t".join(new_header_fields), self.data)
+        return DataFrame(new_header_fields, self.data_fields)
 
     def rename_prefix(self, old_prefix, new_prefix, cols = None, ignore_if_missing = False, dmsg = ""):
         # check empty
@@ -2451,14 +2429,14 @@ class TSV:
         new_header_fields = []
 
         # iterate and set the new name
-        for h in self.get_header_fields():
+        for h in self.header_fields:
             if (h in cols):
                 new_header_fields.append(new_prefix + h[len(old_prefix):])
             else:
                 new_header_fields.append(h)
 
         # return
-        return TSV("\t".join(new_header_fields), self.data)
+        return DataFrame(new_header_fields, self.data_fields)
 
     def rename_suffix(self, old_suffix, new_suffix, cols = None, ignore_if_missing = False, dmsg = ""):
         # check empty
@@ -2478,14 +2456,14 @@ class TSV:
         new_header_fields = []
 
         # iterate and set the new name
-        for h in self.get_header_fields():
+        for h in self.header_fields:
             if (h in cols):
                 new_header_fields.append(h[0:-1*len(old_suffix) + new_suffix])
             else:
                 new_header_fields.append(h)
 
         # return
-        return TSV("\t".join(new_header_fields), self.data)
+        return DataFrame(new_header_fields, self.data_fields)
 
     def remove_prefix(self, prefix, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "remove_prefix")
@@ -2503,23 +2481,23 @@ class TSV:
             prefix = prefix + ":"
 
         # check for matching cols
-        for c in self.get_header_fields():
+        for c in self.header_fields:
             if (c.startswith(prefix)):
                 new_col = c[len(prefix):]
                 # validation
-                if (new_col in self.get_header_fields() or len(new_col) == 0):
-                    raise Exception("{}: Duplicate names. Cant do the prefix: {}, {}, {}".format(dmsg, c, new_col, str(self.get_header_fields())))
+                if (new_col in self.header_fields or len(new_col) == 0):
+                    raise Exception("{}: Duplicate names. Cant do the prefix: {}, {}, {}".format(dmsg, c, new_col, str(self.header_fields)))
 
                 # assign new col
                 mp[c] = new_col
 
         # validation
         if (len(mp) == 0):
-            utils.raise_exception_or_warn("{}: prefix didnt match any of the columns: {}, {}".format(dmsg, prefix, str(self.get_header_fields())), ignore_if_missing)
+            utils.raise_exception_or_warn("{}: prefix didnt match any of the columns: {}, {}".format(dmsg, prefix, str(self.header_fields)), ignore_if_missing)
 
         # return
-        new_header = "\t".join(list([h if (h not in mp.keys()) else mp[h] for h in self.get_header_fields()]))
-        return TSV(new_header, self.data)
+        new_header_fields = list([h if (h not in mp.keys()) else mp[h] for h in self.header_fields])
+        return DataFrame(new_header_fields, self.data_fields)
 
     def replace_prefix(self, old_prefix, new_prefix, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "replace_prefix")
@@ -2537,20 +2515,20 @@ class TSV:
             old_prefix = new_prefix + ":"
 
         # check for matching cols
-        for c in self.get_header_fields():
+        for c in self.header_fields:
             if (c.startswith(old_prefix)):
                 new_col = "{}:{}".format(new_prefix, c[len(old_prefix):])
-                if (new_col in self.get_header_fields() or len(new_col) == 0):
-                    raise Exception("{}: Duplicate names. Cant do the new prefix: {}, {}, {}".format(dmsg, c, new_col, str(self.get_header_fields())))
+                if (new_col in self.header_fields or len(new_col) == 0):
+                    raise Exception("{}: Duplicate names. Cant do the new prefix: {}, {}, {}".format(dmsg, c, new_col, str(self.header_fields)))
                 mp[c] = new_col
 
         # validation
         if (len(mp) == 0):
-            utils.raise_exception_or_warn("{}: old prefix didnt match any of the columns: {}, {}".format(dmsg, old_prefix, str(self.get_header_fields())), ignore_if_missing)
+            utils.raise_exception_or_warn("{}: old prefix didnt match any of the columns: {}, {}".format(dmsg, old_prefix, str(self.header_fields)), ignore_if_missing)
 
         # return
-        new_header = "\t".join(list([h if (h not in mp.keys()) else mp[h] for h in self.get_header_fields()]))
-        return TSV(new_header, self.data)
+        new_header_fields = list([h if (h not in mp.keys()) else mp[h] for h in self.header_fields])
+        return DataFrame(new_header_fields, self.data_fields)
 
     def replace_suffix(self, old_suffix, new_suffix, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "replace_suffix")
@@ -2568,20 +2546,20 @@ class TSV:
             old_suffix = ":" + old_suffix
 
         # check for matching cols
-        for c in self.get_header_fields():
+        for c in self.header_fields:
             if (c.endswith(old_suffix)):
                 new_col = "{}:{}".format(c[0:-len(old_suffix)], new_suffix)
-                if (new_col in self.get_header_fields() or len(new_col) == 0):
-                    raise Exception("{}: Duplicate names. Cant do the suffix: {}, {}, {}".format(dmsg, c, new_col, str(self.get_header_fields())))
+                if (new_col in self.header_fields or len(new_col) == 0):
+                    raise Exception("{}: Duplicate names. Cant do the suffix: {}, {}, {}".format(dmsg, c, new_col, str(self.header_fields)))
                 mp[c] = new_col
 
         # validation
         if (len(mp) == 0):
-            utils.raise_exception_or_warn("{}: suffix didnt match any of the columns: {}, {}".format(dmsg, old_suffix, str(self.get_header_fields())), ignore_if_missing)
+            utils.raise_exception_or_warn("{}: suffix didnt match any of the columns: {}, {}".format(dmsg, old_suffix, str(self.header_fields)), ignore_if_missing)
 
         # return
-        new_header = "\t".join(list([h if (h not in mp.keys()) else mp[h] for h in self.get_header_fields()]))
-        return TSV(new_header, self.data)
+        new_header_fields = list([h if (h not in mp.keys()) else mp[h] for h in self.header_fields])
+        return DataFrame(new_header_fields, self.data_fields)
 
     def sample(self, sampling_ratio, seed = 0, with_replacement = False, dmsg = ""):
         # check empty
@@ -2598,18 +2576,19 @@ class TSV:
         random.seed(seed)  # nosec
 
         # create variables for data
-        new_data = []
+        new_data_fields = []
         counter = 0
-        for line in self.get_data():
+        for fields in self.data_fields:
             # report progress
             counter = counter + 1
             utils.report_progress("sample: [1/1] calling function", dmsg, counter, self.num_rows())
 
             # this random number is only for basic sampling and not for doing anything sensitive.
             if (random.random() <= sampling_ratio):  # nosec
-                new_data.append(line)
+                new_data_fields.append(fields)
 
-        return TSV(self.header, new_data)
+        # return
+        return DataFrame(self.header_fields, new_data_fields)
 
     def sample_without_replacement(self, sampling_ratio, seed = 0, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "sample_without_replacement")
@@ -2649,9 +2628,9 @@ class TSV:
         random.seed(seed)
 
         # sample and return. the debug message is not in standard form, but its fine.
-        utils.report_progress("[1/1] calling function", dmsg, len(self.get_data()), len(self.get_data()))
+        utils.report_progress("[1/1] calling function", dmsg, self.num_rows(), self.num_rows())
         if (replace == True):
-            return TSV(self.header, random.choices(self.data, k = n)) # nosec
+            return DataFrame(self.header_fields, random.choices(self.data_fields, k = n)) # nosec
         else:
             # warn if needed
             if (n > self.num_rows()):
@@ -2659,7 +2638,7 @@ class TSV:
 
             # limit n
             n = min(int(n), self.num_rows())
-            return TSV(self.header, random.sample(self.data, n))
+            return DataFrame(self.header_fields, random.sample(self.data_fields, n))
 
     # TODO: WIP
     def sample_n_with_warn(self, limit, msg = None, seed = 0, dmsg = ""):
@@ -2743,7 +2722,7 @@ class TSV:
 
         # Validation
         if (col not in self.header_map.keys()):
-            raise Exception("Column not found: {}, {}".format(str(col), str(self.get_header_fields())))
+            raise Exception("Column not found: {}, {}".format(str(col), str(self.header_fields)))
 
         # cap the sampling ratio to 1
         if (sampling_ratio > 1):
@@ -2753,27 +2732,26 @@ class TSV:
         random.seed(seed)
 
         # resample
-        new_data = []
+        new_data_fields = []
         counter = 0
-        for line in self.get_data():
+        for fields in self.data_fields:
             # report progress
             counter = counter + 1
             utils.report_progress("sample_class: [1/1] calling function", dmsg, counter, self.num_rows())
 
             # get fields
-            fields = line.split("\t")
             cv = fields[self.header_map[col]]
 
             # check if we need to resample this column value
             if (cv == col_value):
                 # this random number is only for basic sampling and not for doing anything sensitive.
                 if (random.random() <= sampling_ratio):  # nosec
-                    new_data.append(line)
+                    new_data_fields.append(fields)
             else:
-                new_data.append(line)
+                new_data_fields.append(fields)
 
         # return
-        return TSV(self.header, new_data)
+        return DataFrame(self.header_fields, new_data_fields)
 
     def __sample_group_by_col_value_agg_func__(self, value, sampling_ratio, seed, use_numeric):
         # set the seed outside
@@ -2815,7 +2793,7 @@ class TSV:
 
         # validation
         if (col not in self.header_map.keys()):
-            raise Exception("Column not found: {}, {}".format(str(col), str(self.get_header_fields())))
+            raise Exception("Column not found: {}, {}".format(str(col), str(self.header_fields)))
 
         # check sampling ratio
         if (sampling_ratio < 0 or sampling_ratio > 1):
@@ -2866,7 +2844,7 @@ class TSV:
 
         # validation
         if (col not in self.header_map.keys()):
-            raise Exception("Column not found: {}, {}".format(str(col), str(self.get_header_fields())))
+            raise Exception("Column not found: {}, {}".format(str(col), str(self.header_fields)))
 
         # check max_uniq_values
         if (max_uniq_values <= 0):
@@ -2904,12 +2882,12 @@ class TSV:
 
         # validation
         if (col not in self.header_map.keys()):
-            raise Exception("Column not found: {}, {}".format(str(col), str(self.get_header_fields())))
+            raise Exception("Column not found: {}, {}".format(str(col), str(self.header_fields)))
 
         # check grouping cols
         for k in grouping_cols:
             if (k not in self.header_map.keys()):
-                raise Exception("Grouping Column not found: {}, {}".format(str(k), str(self.get_header_fields())))
+                raise Exception("Grouping Column not found: {}, {}".format(str(k), str(self.header_fields)))
 
         # check max_uniq_values
         if (max_uniq_values <= 0):
@@ -2956,9 +2934,9 @@ class TSV:
 
         # validation
         if (col not in self.header_map.keys()):
-            raise Exception("Column not found: {}, {}".format(str(col), str(self.get_header_fields())))
+            raise Exception("Column not found: {}, {}".format(str(col), str(self.header_fields)))
         if (class_col not in self.header_map.keys()):
-            raise Exception("Column not found: {}, {}".format(str(class_col), str(self.get_header_fields())))
+            raise Exception("Column not found: {}, {}".format(str(class_col), str(self.header_fields)))
 
         # correctly define def_max_uniq_values
         if (def_max_uniq_values is None):
@@ -3005,25 +2983,26 @@ class TSV:
             raise Exception("Sampling ratio has to be between 0 and 1: {}".format(sampling_ratio))
 
         # create new data
-        new_data = []
+        new_data_fields = []
         counter = 0
-        for line in self.get_data():
+        for fields in self.data_fields:
             # report progress
             counter = counter + 1
             utils.report_progress("sample_group_by_key: [1/1] calling function", dmsg, counter, self.num_rows())
 
+            # generate keys
             keys = []
-            fields = line.split("\t")
             for g in grouping_cols:
                 keys.append(fields[self.header_map[g]])
 
+            # generate keys str
             keys_str = "\t".join(keys)
             sample_key = abs(utils.compute_hash(keys_str, seed)) / sys.maxsize
             if (sample_key <= sampling_ratio):
-                new_data.append(line)
+                new_data_fields.append(fields)
 
         # return
-        return TSV(self.header, new_data)
+        return DataFrame(self.header_fields, new_data_fields)
 
     # sample by taking only n number of unique values for a specific column
     def sample_column_by_max_uniq_values(self, col, max_uniq_values, seed = 0, dmsg = ""):
@@ -3137,10 +3116,10 @@ class TSV:
 
         # relative ordering matters
         for h in lkeys:
-            if (h in self.get_header_fields()):
+            if (h in self.header_fields):
                 lkey_indexes.append(self.get_header_map()[h])
 
-        for h in self.get_header_fields():
+        for h in self.header_fields:
             if (h not in lkeys):
                 lvalue_indexes.append(self.get_header_map()[h])
 
@@ -3189,15 +3168,16 @@ class TSV:
         # create a hashmap of left key values
         lvkeys = {}
         counter = 0
-        for line in self.get_data():
+        for fields in self.data_fields:
             # report progress
             counter = counter + 1
             utils.report_progress("[1/3] building map for left side", dmsg, counter, self.num_rows())
 
             # parse data
-            fields = line.split("\t")
             lvals1 = list([fields[i] for i in lkey_indexes])
             lvals2 = list([fields[i] for i in lvalue_indexes])
+
+            # generate hash key
             lvals1_str = "\t".join(lvals1)
 
             # left side values need to be unique
@@ -3214,15 +3194,16 @@ class TSV:
         # create a hashmap of right key values
         rvkeys = {}
         counter = 0
-        for line in that.get_data():
+        for fields in that.get_data_fields():
             # report progress
             counter = counter + 1
             utils.report_progress("[2/3] building map for right side", dmsg, counter, len(that.get_data()))
 
             # parse data
-            fields = line.split("\t")
             rvals1 = list([fields[i] for i in rkey_indexes])
             rvals2 = list([fields[i] for i in rvalue_indexes])
+
+            # generate hash key
             rvals1_str = "\t".join(rvals1)
 
             # right side values are not unique
@@ -3258,7 +3239,7 @@ class TSV:
                 new_header_copy_fields_map[lkeys[rkey_index]] = rkey
 
         # add the left side columns
-        for i in range(len(self.get_header_fields())):
+        for i in range(self.num_rows()):
             if (self.header_fields[i] not in lkeys):
                 if (lsuffix is not None):
                     new_header_fields.append(self.header_fields[i] + ":" + lsuffix)
@@ -3282,7 +3263,7 @@ class TSV:
 
         # define the default lvalues
         default_lvals = []
-        for h in self.get_header_fields():
+        for h in self.header_fields:
             if (h not in lkeys):
                 if (def_val_map is not None and h in def_val_map.keys()):
                     default_lvals.append(def_val_map[h])
@@ -3299,14 +3280,14 @@ class TSV:
                     default_rvals.append(default_val)
 
         # generate output by doing join
-        new_data = []
+        new_data_fields = []
 
         # iterate over left side
         counter = 0
         for lvkey in lvkeys.keys():
             # report progress
             counter = counter + 1
-            utils.report_progress("[3/3] join the two groups", dmsg, counter, len(self.get_data()))
+            utils.report_progress("[3/3] join the two groups", dmsg, counter, self.num_rows())
 
             # get the values
             lvals2_arr = lvkeys[lvkey]
@@ -3320,19 +3301,19 @@ class TSV:
             for lvals2 in lvals2_arr:
                 for rvals2 in rvals2_arr:
                     # construct the new line
-                    new_line = "\t".join(utils.merge_arrays([[lvkey], lvals2, rvals2, [str(keys_matched)]]))
+                    new_fields = utils.merge_arrays([[lvkey], lvals2, rvals2, [str(keys_matched)]])
 
                     # take care of different join types
                     if (join_type == "inner"):
                         if (lvkey in common_keys.keys()):
-                            new_data.append(new_line)
+                            new_data_fields.append(new_fields)
                     elif (join_type == "left_outer" or join_type == "left"):
-                            new_data.append(new_line)
+                            new_data_fields.append(new_fields)
                     elif (join_type == "right_outer" or join_type == "right"):
                         if (lvkey in common_keys.keys()):
-                            new_data.append(new_line)
+                            new_data_fields.append(new_fields)
                     elif (join_type == "full_outer" or join_type == "outer"):
-                        new_data.append(new_line)
+                        new_data_fields.append(new_fields)
                     else:
                         raise Exception("Unknown join type: {} ".format(join_type))
 
@@ -3357,15 +3338,15 @@ class TSV:
                         pass
                     elif (join_type == "right_outer" or join_type == "right"):
                         if (rvkey not in common_keys.keys()):
-                            new_data.append(new_line)
+                            new_data_fields.append(new_fields)
                     elif (join_type == "full_outer" or join_type == "outer"):
                         if (rvkey not in common_keys.keys()):
-                            new_data.append(new_line)
+                            new_data_fields.append(new_fields)
                     else:
                         raise Exception("Unknown join type: {}".format(join_type))
 
         # return
-        result = TSV(new_header, new_data)
+        result = DataFrame(new_header_fields, new_data_fields)
         for lkey in new_header_copy_fields_map.keys():
             result = result.transform([lkey, "__join_keys_matched__"], lambda t1, t2: t1 if (t2 == "1") else "", new_header_copy_fields_map[lkey], dmsg = dmsg)
             
@@ -3384,12 +3365,11 @@ class TSV:
             return that
 
         # find the list of common cols
-        keys = sorted(list(set(self.get_header_fields()).intersection(set(that.get_header_fields()))))
+        keys = sorted(list(set(self.header_fields).intersection(set(that.get_header_fields()))))
 
         # create hashmap
         rmap = {}
-        for line in that.get_data():
-            fields = line.split("\t")
+        for fields in that.get_data_fields():
             rvalues_k = []
             rvalues_v = []
 
@@ -3416,7 +3396,7 @@ class TSV:
         new_header_fields = []
 
         # create the keys
-        for k in self.get_header_fields():
+        for k in self.header_fields:
             new_header_fields.append(k)
 
         # take only the value part from right side
@@ -3424,19 +3404,13 @@ class TSV:
             if (k not in keys):
                 new_header_fields.append(k)
 
-        # construct new_header
-        new_header = "\t".join(new_header_fields)
-
         # iterate through left side and add new values using the hash_map
-        new_data = []
+        new_data_fields = []
         counter = 0
-        for line in self.get_data():
+        for fields in self.data_fields:
             # report progress
             counter = counter + 1
             utils.report_progress("natural_join: [1/1] adding values from hashmap", dmsg, counter, self.num_rows())
-
-            # split line and get fields
-            fields = line.split("\t")
 
             # get the key and value
             lvalues_k = []
@@ -3447,7 +3421,7 @@ class TSV:
                 lvalues_k.append(fields[self.header_map[k]])
 
             # create the value part
-            for h in self.get_header_fields():
+            for h in self.header_fields:
                 if (h not in keys):
                     lvalues_v.append(fields[self.header_map[h]])
 
@@ -3461,10 +3435,10 @@ class TSV:
                 # get the list of all values from right side
                 vs_list = rmap[lvalue_key_str]
                 for vs in vs_list:
-                    new_data.append("\t".join(utils.merge_arrays([fields, vs])))
+                    new_data_fields.append(utils.merge_arrays([fields, vs]))
 
         # return
-        return TSV(new_header, new_data)
+        return DataFrame(new_header_fields, new_data_fields)
 
     def inner_map_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, num_par = 0, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "inner_map_join")
@@ -3489,13 +3463,14 @@ class TSV:
 
         # relative ordering matters
         for h in lkeys:
-            if (h in self.get_header_fields()):
+            if (h in self.header_fields):
                 lkey_indexes.append(self.get_header_map()[h])
 
-        for h in self.get_header_fields():
+        for h in self.header_fields:
             if (h not in lkeys):
                 lvalue_indexes.append(self.get_header_map()[h])
 
+        # create key and value indexes
         rkey_indexes = []
         rvalue_indexes = []
 
@@ -3541,13 +3516,12 @@ class TSV:
         # create a hashmap of right key values
         rvkeys = {}
         counter = 0
-        for line in that.get_data():
+        for fields in that.get_data_fields():
             # report progress
             counter = counter + 1
             utils.report_progress("__map_join__: building map for right side", dmsg, counter, len(that.get_data()))
 
             # parse data
-            fields = line.split("\t")
             rvals1 = list([fields[i] for i in rkey_indexes]) 
             rvals2 = list([fields[i] for i in rvalue_indexes])
 
@@ -3581,7 +3555,7 @@ class TSV:
                 new_header_copy_fields_map[lkeys[rkey_index]] = rkey
 
         # add the left side columns
-        for i in range(len(self.get_header_fields())):
+        for i in range(self.num_rows()):
             if (self.header_fields[i] not in lkeys):
                 if (lsuffix is not None):
                     new_header_fields.append(self.header_fields[i] + ":" + lsuffix)
@@ -3602,9 +3576,6 @@ class TSV:
         # add a new column to depict if join leys matched
         new_header_fields.append("__map_join_keys_matched__")
 
-        # construct new_header
-        new_header = "\t".join(new_header_fields)
-
         # define the default rvalues
         default_rvals = []
         for h in that.get_header_fields():
@@ -3615,17 +3586,14 @@ class TSV:
                     default_rvals.append(default_val)
 
         # generate output by doing join
-        new_data = []
+        new_data_fields = []
 
         # iterate over left side
         counter = 0
-        for line in self.get_data():
+        for fields in self.data_fields:
             # report progress
             counter = counter + 1
             utils.report_progress("__map_join__: join the two groups", dmsg, counter, self.num_rows())
-
-            # get fields
-            fields = line.split("\t")
 
             # generate left side key and values
             lvals1 = list([fields[i] for i in lkey_indexes])
@@ -3642,19 +3610,19 @@ class TSV:
             # iterate on the right side
             for rvals2 in rvals2_arr:
                 # construct the new line
-                new_line = "\t".join(utils.merge_arrays([[lvkey], lvals2, rvals2, [str(keys_matched)]]))
+                new_fields = utils.merge_arrays([[lvkey], lvals2, rvals2, [str(keys_matched)]])
 
                 # take care of different join types
                 if (join_type == "inner"):
                     if (lvkey in rvkeys):
-                        new_data.append(new_line)
+                        new_data_fields.append(new_fields)
                 elif (join_type == "left_outer" or join_type == "left"):
-                    new_data.append(new_line)
+                    new_data_fields.append(new_fields)
                 else:
                     raise Exception("Unknown join type: {} ".format(join_type))
 
         # create tsv
-        result = TSV(new_header, new_data)
+        result = DataFrame(new_header_fields, new_data_fields)
 
         # create the rkeys columns that had different names
         for lkey in new_header_copy_fields_map.keys():
@@ -3716,7 +3684,7 @@ class TSV:
 
         # iterate to split data
         counter = 0
-        for i in range(len(self.get_data())):
+        for i in range(self.num_rows()):
             # report progress
             counter = counter + 1
             utils.report_progress("__split_batches_randomly__: [1/1] assigning batch index", dmsg, counter, self.num_rows())
@@ -3732,7 +3700,7 @@ class TSV:
 
         # create list of xtsvs
         for i in range(effective_batches):
-            xtsv_list.append(TSV(self.header, data_list[i]))
+            xtsv_list.append(DataFrame(self.header, data_list[i]))
 
         # filter out empty batches
         xtsv_list = list(filter(lambda t: t.num_rows() > 0, xtsv_list))
@@ -3765,26 +3733,25 @@ class TSV:
         hashed_tsv2 = hashed_tsv.transform(temp_col1, lambda t: hash_indexes[t], temp_col2)
 
         # create new tsvs data
-        new_data_list = []
+        new_data_fields_list = []
         new_tsvs = []
         for i in range(num_batches):
-            new_data_list.append([])
+            new_data_fields_list.append([])
 
         # assign each record to its correct place
         batch_index = hashed_tsv2.get_col_index(temp_col2)
         counter = 0
-        for line in hashed_tsv2.get_data():
+        for fields in hashed_tsv2.get_data_fields():
             # report progress
             counter = counter + 1
             utils.report_progress("__split_batches_by_cols__: [1/1] assigning batch index", dmsg, counter, len(hashed_tsv2.get_data()))
 
-            fields = line.split("\t")
             batch_id = int(fields[batch_index])
-            new_data_list[batch_id].append(line)
+            new_data_fields_list[batch_id].append(fields)
 
         # create each tsv
-        for i in range(len(new_data_list)):
-            new_tsv = TSV(hashed_tsv2.get_header(), new_data_list[i]) \
+        for i in range(len(new_data_fields_list)):
+            new_tsv = DataFrame(hashed_tsv2.get_header_fields(), new_data_fields_list[i]) \
                 .drop_cols([temp_col1, temp_col2])
             new_tsvs.append(new_tsv)
 
@@ -3809,12 +3776,11 @@ class TSV:
             raise Exception("new column already exists: {}".format(new_col))
 
         # generate deterministic hash
-        new_header = "\t".join([self.header, new_col])
-        new_data = []
+        new_header_fields = self.header_fields + [new_col]
+        new_data_fields = []
 
         # iterate
-        for line in self.get_data():
-            fields = line.split("\t")
+        for fields in self.data_fields:
             values = []
             for i in indexes:
                 values.append(str(fields[i]))
@@ -3826,10 +3792,10 @@ class TSV:
             hash_value = str(utils.compute_hash(value_str, seed = seed))
 
             # add to new data
-            new_data.append("\t".join([line, hash_value]))
+            new_data_fields.append(fields + [hash_value])
 
         # return
-        return TSV(new_header, new_data)
+        return DataFrame(new_header_fields, new_data_fields)
 
     def cumulative_sum(self, col, new_col, as_int = True):
         # check empty
@@ -3838,37 +3804,38 @@ class TSV:
 
         # check for presence of col
         if (col not in self.header_map.keys()):
-            raise Exception("Column not found: {}, {}".format(str(col), str(self.get_header_fields())))
+            raise Exception("Column not found: {}, {}".format(str(col), str(self.header_fields)))
 
         # check for validity of new col
         if (new_col in self.header_map.keys()):
-            raise Exception("New column already exists: {}, {}".format(str(new_col), str(self.get_header_fields())))
+            raise Exception("New column already exists: {}, {}".format(str(new_col), str(self.header_fields)))
 
         # create new header
-        new_header = self.header + "\t" + new_col
+        new_header_fields = self.header_fields + [new_col]
 
         # create new data
-        new_data = []
+        new_data_fields = []
 
         # cumulative sum
         cumsum = 0
 
+        # create col index
         col_index = self.header_map[col]
 
         # iterate
-        for line in self.get_data():
-            fields = line.split("\t")
+        for fields in self.data_fields:
             col_value = float(fields[col_index])
             cumsum += col_value
             if (as_int == True):
-                new_line = line + "\t" + str(int(cumsum))
+                new_fields = fields + [str(int(cumsum))]
             else:
-                new_line = line + "\t" + str(cumsum)
+                new_fields = fields + [str(cumsum)]
 
-            new_data.append(new_line)
+            # append
+            new_data_fields.append(new_fields)
 
         # return
-        return TSV(new_header, new_data)
+        return DataFrame(new_header_fields, new_data_fields)
 
     def replicate_rows(self, col, new_col = None, max_repl = 0):
         # check empty
@@ -3877,7 +3844,7 @@ class TSV:
 
         # check for presence of col
         if (col not in self.header_map.keys()):
-            raise Exception("Column not found: {}, {}".format(str(col), str(self.get_header_fields())))
+            raise Exception("Column not found: {}, {}".format(str(col), str(self.header_fields)))
 
         # create new column if it is not existing
         if (new_col is None):
@@ -3885,13 +3852,12 @@ class TSV:
 
         # check new col
         if (new_col in self.header_map.keys()):
-            raise Exception("New Column already exists: {}, {}".format(str(new_col), str(self.get_header_fields())))
+            raise Exception("New Column already exists: {}, {}".format(str(new_col), str(self.header_fields)))
 
         # create data
-        new_data = []
-        new_header = self.header + "\t" + new_col
-        for line in self.get_data():
-            fields = line.split("\t")
+        new_data_fields = []
+        new_header_fields = self.header_fields + [new_col]
+        for fields in self.data_fields:
             col_value = int(fields[self.header_map[col]])
             # check for guard conditions
             if (max_repl > 0 and col_value > max_repl):
@@ -3899,9 +3865,10 @@ class TSV:
 
             # replicate
             for i in range(col_value):
-                new_data.append(line + "\t" + "1")
+                new_data_fields.append(fields + ["1"])
 
-        return TSV(new_header, new_data)
+        # return
+        return DataFrame(new_header_fields, new_data_fields)
 
     # TODO: Need better naming. The suffix semantics have been changed.
     # default_val should be empty string
@@ -3926,13 +3893,12 @@ class TSV:
         # iterate
         exploded_values = []
         counter = 0
-        for line in self.get_data():
+        for fields in self.data_fields:
             # report progress
             counter = counter + 1
             utils.report_progress("[1/2] calling explode function", dmsg, counter, self.num_rows())
 
             # process data
-            fields = line.split("\t")
             col_values_map = {}
             for i in indexes:
                 col_values_map[self.header_fields[i]] = fields[i]
@@ -3952,17 +3918,17 @@ class TSV:
         exploded_keys_sorted = sorted(list(exploded_keys.keys()))
 
         # new header and data
-        new_data = []
+        new_data_fields = []
 
         # create header
         new_header_fields = []
         if (collapse == True):
-            for j in range(len(self.get_header_fields())):
+            for j in range(self.num_rows()):
                 if (j not in indexes):
                     new_header_fields.append(self.header_fields[j])
         else:
             # take care of not referencing self.header_fields
-            for h in self.get_header_fields():
+            for h in self.header_fields:
                 new_header_fields.append(h)
 
         # create new names based on suffix
@@ -3974,26 +3940,24 @@ class TSV:
 
         # check if any of new keys clash with old columns
         for k in exploded_keys_new_names:
-            if (k in self.get_header_fields()):
-                raise Exception("Column already exist: {}, {}".format(k, str(self.get_header_fields())))
+            if (k in self.header_fields):
+                raise Exception("Column already exist: {}, {}".format(k, str(self.header_fields)))
 
         # append to the new_header_fields
         for h in exploded_keys_new_names:
             new_header_fields.append(h)
-        new_header = "\t".join(new_header_fields)
 
         # iterate and generate new data
         utils.print_code_todo_warning("explode: Verify this logic is not breaking anything. check TODO")
 
         counter = 0
-        for i in range(len(self.get_data())):
+        for i in range(self.num_rows()):
             # report progress
             counter = counter + 1
             utils.report_progress("[2/2] generating data", dmsg, counter, self.num_rows())
 
             # process data
-            line = self.data[i]
-            fields = line.split("\t")
+            fields = self.data_fields[i]
 
             # get the new list of fields
             new_fields = []
@@ -4005,9 +3969,6 @@ class TSV:
                 # take care of not messing up with old fields
                 for f in fields:
                     new_fields.append(f)
-
-            # take care of this as the new_fields can be empty. TODO
-            #new_line = "\t".join(new_fields) if (len(new_fields) > 0) else ""
 
             # get the exploded list of maps
             exploded_value_list_map = exploded_values[i]
@@ -4028,10 +3989,13 @@ class TSV:
                                 dmsg, evm, exploded_keys_sorted, k))
 
                 # TODO: move this to a proper function
-                new_data.append("\t".join(utils.merge_arrays([new_fields, new_vals])))
+                new_data_fields.append(utils.merge_arrays([new_fields, new_vals]))
+
+        # warn
+        utils.warn_once("{}: calling validate here".format(dmsg))
 
         # result. json expansion needs to be validated because of potential noise in the data.
-        return TSV(new_header, new_data) \
+        return DataFrame(new_header_fields, new_data_fields) \
             .validate()
 
     def __explode_json_transform_func__(self, col, accepted_cols, excluded_cols, single_value_list_cols, transpose_col_groups, merge_list_method, url_encoded_cols,
@@ -4387,7 +4351,7 @@ class TSV:
 
         # validation
         if (col not in self.header_map.keys()):
-            utils.raise_exception_or_warn("{}: Column not found: {}, {}".format(dmsg, str(col), str(self.get_header_fields())), ignore_if_missing)
+            utils.raise_exception_or_warn("{}: Column not found: {}, {}".format(dmsg, str(col), str(self.header_fields)), ignore_if_missing)
             return self
 
         # warn on risky combinations
@@ -4403,6 +4367,9 @@ class TSV:
         exp_func = self.__explode_json_transform_func__(col, accepted_cols = accepted_cols, excluded_cols = excluded_cols, single_value_list_cols = single_value_list_cols,
             transpose_col_groups = transpose_col_groups, merge_list_method = merge_list_method, url_encoded_cols = url_encoded_cols, nested_cols = nested_cols,
             collapse_primitive_list = collapse_primitive_list, max_results = max_results, dmsg = dmsg)
+
+        # warn
+        utils.warn_once("{}: validate is called".format(dmsg))
 
         # use explode to do this parsing
         return self \
@@ -4477,19 +4444,18 @@ class TSV:
         new_header_fields.append("col_name")
         for i in range(self.num_rows()):
             new_header_fields.append("row:" + str(i + 1))
-        new_header = "\t".join(new_header_fields)
 
         # create col arrays and new_data
-        new_data = []
-        for h in self.get_header_fields():
+        new_data_fields = []
+        for h in self.header_fields:
             new_fields = []
             new_fields.append(h)
             for v in self.col_as_array(h):
                 new_fields.append(v)
-            new_data.append("\t".join(new_fields))
+            new_data_fields.append(new_fields)
 
         # return
-        return TSV(new_header, new_data)
+        return DataFrame(new_header_fields, new_data_fields)
 
     # this method converts the rows into columns. very inefficient
     def reverse_transpose(self, grouping_cols, transpose_key, transpose_cols, default_val = ""):
@@ -4528,25 +4494,25 @@ class TSV:
 
         # validation
         if (col not in self.header_map.keys()):
-            raise Exception("Column not found: {}, {}".format(str(col), str(self.get_header_fields())))
+            raise Exception("Column not found: {}, {}".format(str(col), str(self.header_fields)))
 
         # check for new column
         if (new_col in self.header_map.keys()):
-            raise Exception("New Column already exists: {}, {}".format(str(new_col), str(self.get_header_fields())))
+            raise Exception("New Column already exists: {}, {}".format(str(new_col), str(self.header_fields)))
 
         # create new data
-        new_data = []
-        new_header = self.header + "\t" + new_col
+        new_data_fields = []
+        new_header_fields = self.header_fields + [new_col]
 
         # iterate
-        for line in self.get_data():
-            fields = line.split("\t")
+        for fields in self.data_fields:
             col_value = fields[self.header_map[col]]
             new_vals = func(col_value)
             for new_val in new_vals:
-                new_data.append(line + "\t" + new_val)
+                new_data_fields.append(fields + [new_val])
 
-        return TSV(new_header, new_data)
+        # return
+        return DataFrame(new_header_fields, new_data_fields)
 
     def to_tuples(self, cols, dmsg = ""):
         # check empty
@@ -4556,7 +4522,7 @@ class TSV:
         # validate cols
         for col in cols:
             if (self.has_col(col) == False):
-                raise Exception("col doesnt exist: {}, {}".format(col, str(self.get_header_fields())))
+                raise Exception("col doesnt exist: {}, {}".format(col, str(self.header_fields)))
 
         # select the cols
         result = []
@@ -4567,7 +4533,7 @@ class TSV:
         for line in self.select(cols, dmsg = dmsg).get_data():
             # report progress
             counter = counter + 1
-            utils.report_progress("to_tuples: [1/1] converting to tuples", dmsg, counter, len(self.get_data()))
+            utils.report_progress("to_tuples: [1/1] converting to tuples", dmsg, counter, self.num_rows())
 
             fields = line.split("\t")
             result.append(self.__expand_to_tuple__(fields))
@@ -4644,14 +4610,15 @@ class TSV:
 
     def __convert_to_maps__(self):
         result = []
-        for line in self.get_data():
+        for fields in self.data_fields:
             mp = {}
-            fields = line.split("\t")
             for h in self.header_map.keys():
                 mp[h] = fields[self.header_map[h]]
 
+            # append
             result.append(mp)
 
+        # return
         return result
 
     # placeholder for new method to do xpath based filtering for json blobs
@@ -4685,7 +4652,7 @@ class TSV:
         hashes.append("{}".format(utils.compute_hash(self.header)))
 
         # hash of data
-        for line in self.get_data():
+        for fields in self.data_fields:
             hashes.append("{}".format(utils.compute_hash(line)))
 
         # return as string
@@ -4853,7 +4820,7 @@ class TSV:
             col_pattern_found = False
 
             # iterate through header
-            for h in self.get_header_fields():
+            for h in self.header_fields:
                 # check for match
                 if ((col_pattern.find(".*") != -1 and re.match(col_pattern, h) is not None) or (col_pattern == h)):
                     col_pattern_found = True
@@ -4863,7 +4830,7 @@ class TSV:
 
             # raise exception if some col or pattern is not found
             if (col_pattern_found == False):
-                utils.raise_exception_or_warn("Col name or pattern not found: {}, {}".format(col_pattern, str(self.get_header_fields())[0:100] + "..."), ignore_if_missing)
+                utils.raise_exception_or_warn("Col name or pattern not found: {}, {}".format(col_pattern, str(self.header_fields)[0:100] + "..."), ignore_if_missing)
                 # dont return from here 
 
         # return
@@ -4926,12 +4893,10 @@ class TSV:
  
         # data validation
         counter = 0
-        for line in self.get_data():
+        for fields in self.data_fields:
             counter = counter + 1
             utils.report_progress("[1/1] selecting columns", dmsg, counter, self.num_rows())
-            fields = line.split("\t")
-            for i in range(len(fields)):
-                total_sizes[i] = total_sizes[i] + len(fields[i])
+            total_sizes[i] = total_sizes[i] + sum([len(f) for f in fields])
 
         # find the max size
         max_value = max(total_sizes)
@@ -5081,6 +5046,7 @@ class TSV:
             .resolve_template_col(template_col, output_col, col_or_cols = col_or_cols, dmsg = dmsg) \
             .drop_cols(template_col, dmsg = dmsg) \
             .rename(output_col, template_col, dmsg = dmsg)
+
     def enable_info_mode(self):
         utils.enable_info_mode()
         return self
@@ -5195,7 +5161,7 @@ def from_df(df, url_encoded_cols = []):
             data.append("\t".join(fields))
 
     # return
-    return TSV("\t".join(header_fields), data).validate()
+    return DataFrame("\t".join(header_fields), data).validate()
 
 def from_maps(mps, accepted_cols = None, excluded_cols = None, url_encoded_cols = None, dmsg = ""):
     dmsg = utils.extend_inherit_message(dmsg, "from_maps")
@@ -5207,9 +5173,9 @@ def from_maps(mps, accepted_cols = None, excluded_cols = None, url_encoded_cols 
 
     xtsvs = []
     for mp in mps:
-        header = "json"
-        data = [utils.url_encode(json.dumps(mp))]
-        xtsvs.append(TSV(header, data))
+        header_fields = ["json"]
+        fields = [utils.url_encode(json.dumps(mp))]
+        xtsvs.append(DataFrame(header_fields, fields))
 
     # use explode
     result = merge_union(xtsvs) \
@@ -5238,7 +5204,7 @@ def newWithCols(cols, data = []):
     return new_with_cols(cols, data = data)
 
 def new_with_cols(cols, data = []):
-    return TSV("\t".join(cols), data)
+    return DataFrame("\t".join(cols), data)
 
 def create_empty():
     return new_with_cols([])
