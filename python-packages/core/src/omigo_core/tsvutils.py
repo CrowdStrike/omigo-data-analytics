@@ -46,14 +46,14 @@ def merge(tsv_list, def_val_map = None):
             tsv_list[i].show_transpose(1, title = "merge: big tsv")
 
     # check for valid headers
-    header = tsv_list[0].get_header()
+    # header = tsv_list[0].get_header()
     header_fields = tsv_list[0].get_header_fields()
 
     # iterate to check mismatch in header
     index = 0
     for t in tsv_list:
         # Use a different method for merging if the header is different
-        if (header != t.get_header()):
+        if (header_fields != t.get_header_fields()):
             header_diffs = get_diffs_in_headers(tsv_list)
 
             # display warning according to kind of differences found
@@ -79,6 +79,7 @@ def merge(tsv_list, def_val_map = None):
 
 def split_headers_in_common_and_diff(tsv_list):
     common = {}
+
     # get the counts for each header field
     for t in tsv_list:
         for h in t.get_header_fields():
@@ -181,12 +182,15 @@ def merge_intersect(tsv_list, def_val_map = None):
                 for t in tsv_list:
                     new_tsvs.append(t.select(same_cols))
 
+                # return
                 return new_tsvs[0].union(new_tsvs[1:])
     else:
         # probably landed here because of mismatch in headers position
         tsv_list2 = []
         for t in tsv_list:
             tsv_list2.append(t.select(same_cols))
+
+        # return
         return merge(tsv_list2)
 
 def read(input_file_or_files, sep = None, def_val_map = None, username = None, password = None, num_par = 0, s3_region = None, aws_profile = None):

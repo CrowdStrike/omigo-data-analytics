@@ -274,13 +274,13 @@ class TSV:
         return dataframe.from_tsv(self.header, self.data).rename(*args, **kwargs)
 
     def get_header(self, *args, **kwargs):
-        return dataframe.from_tsv(self.header, self.data).get_header(*args, **kwargs)
+        return self.header
 
     def get_data(self, *args, **kwargs):
-        return dataframe.from_tsv(self.header, self.data).get_data(*args, **kwargs)
+        return self.data
 
     def get_header_map(self, *args, **kwargs):
-        return dataframe.from_tsv(self.header, self.data).get_header_map(*args, **kwargs)
+        raise Exception("get_header_map: not supported")
 
     def num_rows(self, *args, **kwargs):
         return dataframe.from_tsv(self.header, self.data).num_rows(*args, **kwargs)

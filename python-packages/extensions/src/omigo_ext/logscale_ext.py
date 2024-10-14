@@ -1,4 +1,4 @@
-from omigo_core import tsv, utils, timefuncs 
+from omigo_core import tsv, utils, timefuncs, dataframe 
 from omigo_ext import multithread_ext
 import datetime
 from dateutil import parser
@@ -101,115 +101,115 @@ class LogScaleSearch:
         dmsg = utils.extend_inherit_message(dmsg, "LogScaleSearch: __execute_normal_query__")
 
         # execute query
-        try:
-            # submit job 
-            logscale_job = self.get_logscale_client().create_queryjob(query, start = start_time_millis, end = end_time_millis, is_live = False)
-            job_id_trim = self.__get_logscale_job_display_id__(logscale_job)
-            utils.info("{}: LogScale Job submitted: {}, start_time: {}, end_time: {}".format(utils.max_dmsg_str(dmsg), job_id_trim,
-                timefuncs.utctimestamp_to_datetime_str(start_time_millis), timefuncs.utctimestamp_to_datetime_str(end_time_millis)))
+        # try:
+        # submit job 
+        logscale_job = self.get_logscale_client().create_queryjob(query, start = start_time_millis, end = end_time_millis, is_live = False)
+        job_id_trim = self.__get_logscale_job_display_id__(logscale_job)
+        utils.info("{}: LogScale Job submitted: {}, start_time: {}, end_time: {}".format(utils.max_dmsg_str(dmsg), job_id_trim,
+            timefuncs.utctimestamp_to_datetime_str(start_time_millis), timefuncs.utctimestamp_to_datetime_str(end_time_millis)))
 
-            # create result
-            events = []
-            results_total = 0
+        # create result
+        events = []
+        results_total = 0
 
-            # note start time
-            exec_start_time = timefuncs.get_utctimestamp_sec()
+        # note start time
+        exec_start_time = timefuncs.get_utctimestamp_sec()
 
-            # check for job to be ready. not sure what this does, just following example
-            for poll_result in logscale_job.poll_until_done():
-                # debug
-                extraData = poll_result.metadata["extraData"] if ("extraData" in poll_result.metadata) else None
-                hasMoreEvents = extraData["hasMoreEvents"] if (extraData is not None and "hasMoreEvents" in extraData) else None
-
-                # debug
-                utils.debug("{}: job: {}, eventCount: {}, hasMoreEvents: {}".format(utils.max_dmsg_str(dmsg), job_id_trim, poll_result.metadata["eventCount"], hasMoreEvents)) 
-
-                # count total results
-                results_total = results_total + poll_result.metadata["eventCount"]
-
-                # append to result
-                for event in poll_result.events:
-                    events.append(event)
-
-            # end time
-            exec_end_time = timefuncs.get_utctimestamp_sec()
+        # check for job to be ready. not sure what this does, just following example
+        for poll_result in logscale_job.poll_until_done():
+            # debug
+            extraData = poll_result.metadata["extraData"] if ("extraData" in poll_result.metadata) else None
+            hasMoreEvents = extraData["hasMoreEvents"] if (extraData is not None and "hasMoreEvents" in extraData) else None
 
             # debug
-            utils.info("{}: job_id: {}, event count: {}, query time taken: {} secs".format(dmsg, job_id_trim, len(events), (exec_end_time - exec_start_time)))
+            utils.debug("{}: job: {}, eventCount: {}, hasMoreEvents: {}".format(utils.max_dmsg_str(dmsg), job_id_trim, poll_result.metadata["eventCount"], hasMoreEvents)) 
 
-            # check if limit is defined
-            result = None
-            if (limit is not None and num_par_on_limit > 1):
-                # compare with limit
-                if (results_total >= limit):
-                    if (num_par_on_limit > 1):
-                        utils.warn("{}: limit: {} reached, splitting the query into {} parts and running again".format(dmsg, results_total, num_par_on_limit))
-                        # dont make furthen than 1 level deep call
-                        limit2 = None
-                        num_par_on_limit2 = 0
+            # count total results
+            results_total = results_total + poll_result.metadata["eventCount"]
 
-                        # split the time range into num_par_on_limit slots
-                        time_slots = self.__split_time_slots_millis__(start_time_millis, end_time_millis, num_par_on_limit)
-                        xtsv_results = []
+            # append to result
+            for event in poll_result.events:
+                events.append(event)
 
-                        # iterate
-                        for (st, et) in time_slots:
-                            xtsv_result = self.__execute_normal_query__(query, st, et, accepted_cols, excluded_cols, url_encoded_cols, attempts_remaining,
-                                limit2, num_par_on_limit2, dmsg = dmsg)
-                            utils.info("{}: Executed query with new time range: start_time: {}, end_time: {}, num_rows: {}".format(dmsg, st, et, xtsv_result.num_rows()))
-                            # check if results are still exceeding limit
-                            if (xtsv_result.num_rows() >= limit):
-                                utils.warn("{}: Split results still exceeded the limit. The results will be partial: {}".format(dmsg, xtsv_result.num_rows()))
-                            xtsv_results.append(xtsv_result)
+        # end time
+        exec_end_time = timefuncs.get_utctimestamp_sec()
 
-                        # merge
-                        result = tsv.merge_union(xtsv_results)
-                    else:
-                        utils.warn("{}: limit: {} reached, but num_par_on_limit = 0. Results would be partial".format(dmsg, results_total))
+        # debug
+        utils.info("{}: job_id: {}, event count: {}, query time taken: {} secs".format(dmsg, job_id_trim, len(events), (exec_end_time - exec_start_time)))
 
-            # get the result if they were not returned by limit calls
-            if (result is None):
-                # get the results
-                result = self.__parse_results__(logscale_job, events, query, start_time_millis, end_time_millis, accepted_cols, excluded_cols, url_encoded_cols)
+        # check if limit is defined
+        result = None
+        if (limit is not None and num_par_on_limit > 1):
+            # compare with limit
+            if (results_total >= limit):
+                if (num_par_on_limit > 1):
+                    utils.warn("{}: limit: {} reached, splitting the query into {} parts and running again".format(dmsg, results_total, num_par_on_limit))
+                    # dont make furthen than 1 level deep call
+                    limit2 = None
+                    num_par_on_limit2 = 0
 
-            # cancel the job
-            # logscale_job.cancel()
+                    # split the time range into num_par_on_limit slots
+                    time_slots = self.__split_time_slots_millis__(start_time_millis, end_time_millis, num_par_on_limit)
+                    xtsv_results = []
 
-            # return
-            return result
-        except Exception as e:
-            # check if multiple attempts are needed
-            if (attempts_remaining > 0):
-                # debug
-                utils.warn("{}: caught exception: {}, attempts remaining: {}".format(utils.max_dmsg_str(dmsg), str(e), attempts_remaining))
-                # utils.error("{}: Stack Trace: {}".format(utils.max_dmsg_str(dmsg), traceback.format_exc()))
+                    # iterate
+                    for (st, et) in time_slots:
+                        xtsv_result = self.__execute_normal_query__(query, st, et, accepted_cols, excluded_cols, url_encoded_cols, attempts_remaining,
+                            limit2, num_par_on_limit2, dmsg = dmsg)
+                        utils.info("{}: Executed query with new time range: start_time: {}, end_time: {}, num_rows: {}".format(dmsg, st, et, xtsv_result.num_rows()))
+                        # check if results are still exceeding limit
+                        if (xtsv_result.num_rows() >= limit):
+                            utils.warn("{}: Split results still exceeded the limit. The results will be partial: {}".format(dmsg, xtsv_result.num_rows()))
+                        xtsv_results.append(xtsv_result)
 
-                # for gateway timeout do a longer wait by default
-                if (str(e).find("HTTP 504 Gateway Time-out") != -1):
-                    # call again with a different timeout
-                    attempt_multiplier = int(math.min(self.attempts - attempts_remaining, 10))
-                    utils.info("{}: Gateway timeout: Sleeping for {} seconds before attempting again".format(dmsg, self.attempt_gateway_timeout_sleep_sec * attempt_multiplier))
-                    time.sleep(self.attempt_gateway_timeout_sleep_sec * attempt_multiplier)
+                    # merge
+                    result = tsv.merge_union(xtsv_results)
                 else:
-                    # call again with lesser attempts_remaining
-                    utils.info("{}: Sleeping for {} seconds before attempting again".format(dmsg, self.attempt_sleep_sec))
-                    time.sleep(self.attempt_sleep_sec)
+                    utils.warn("{}: limit: {} reached, but num_par_on_limit = 0. Results would be partial".format(dmsg, results_total))
 
-                # return    
-                return self.__execute_normal_query__(query, start_time_millis, end_time_millis, accepted_cols, excluded_cols, url_encoded_cols, attempts_remaining - 1, limit,
-                    num_par_on_limit, dmsg = dmsg)
-            else:
-                utils.error("{}: Exception: {}".format(utils.max_dmsg_str(dmsg), str(e)))
-                base_mp = self.__create_empty_results_map__(query, start_time_millis, end_time_millis)
-                base_mp["__count__"] = "0"
-                base_mp["__error_msg__"] = str(e)
-                result = tsv.from_maps([base_mp])
+        # get the result if they were not returned by limit calls
+        if (result is None):
+            # get the results
+            result = self.__parse_results__(logscale_job, events, query, start_time_millis, end_time_millis, accepted_cols, excluded_cols, url_encoded_cols)
 
-                # cancel the job
-                # logscale_job.cancel()
+        # cancel the job
+        # logscale_job.cancel()
 
-                # return
-                return result
+        # return
+        return result
+        # except Exception as e:
+        #     # check if multiple attempts are needed
+        #     if (attempts_remaining > 0):
+        #         # debug
+        #         utils.warn("{}: caught exception: {}, attempts remaining: {}".format(utils.max_dmsg_str(dmsg), str(e), attempts_remaining))
+        #         # utils.error("{}: Stack Trace: {}".format(utils.max_dmsg_str(dmsg), traceback.format_exc()))
+
+        #         # for gateway timeout do a longer wait by default
+        #         if (str(e).find("HTTP 504 Gateway Time-out") != -1):
+        #             # call again with a different timeout
+        #             attempt_multiplier = int(math.min(self.attempts - attempts_remaining, 10))
+        #             utils.info("{}: Gateway timeout: Sleeping for {} seconds before attempting again".format(dmsg, self.attempt_gateway_timeout_sleep_sec * attempt_multiplier))
+        #             time.sleep(self.attempt_gateway_timeout_sleep_sec * attempt_multiplier)
+        #         else:
+        #             # call again with lesser attempts_remaining
+        #             utils.info("{}: Sleeping for {} seconds before attempting again".format(dmsg, self.attempt_sleep_sec))
+        #             time.sleep(self.attempt_sleep_sec)
+
+        #         # return    
+        #         return self.__execute_normal_query__(query, start_time_millis, end_time_millis, accepted_cols, excluded_cols, url_encoded_cols, attempts_remaining - 1, limit,
+        #             num_par_on_limit, dmsg = dmsg)
+        #     else:
+        #         utils.error("{}: Exception: {}".format(utils.max_dmsg_str(dmsg), str(e)))
+        #         base_mp = self.__create_empty_results_map__(query, start_time_millis, end_time_millis)
+        #         base_mp["__count__"] = "0"
+        #         base_mp["__error_msg__"] = str(e)
+        #         result = dataframe.from_maps([base_mp])
+
+        #         # cancel the job
+        #         # logscale_job.cancel()
+
+        #         # return
+        #         return result
     
     def __create_empty_results_map__(self, query, start_time_millis, end_time_millis):
         # create base map
@@ -230,7 +230,7 @@ class LogScaleSearch:
         # check for empty results
         if (results_total == 0):
             # return base tsv
-            return tsv.from_maps([base_mp])
+            return dataframe.from_maps([base_mp])
 
         # define iterator variables
         results_offset = 0
@@ -270,7 +270,7 @@ class LogScaleSearch:
             results.append(result)
 
         # construct tsv from the list of hashmaps
-        return tsv.from_maps(results, accepted_cols = accepted_cols, excluded_cols = excluded_cols, url_encoded_cols = url_encoded_cols)
+        return dataframe.from_maps(results, accepted_cols = accepted_cols, excluded_cols = excluded_cols, url_encoded_cols = url_encoded_cols)
         
     def __resolve_time_str__(self, x):
         # check for specific syntax with now

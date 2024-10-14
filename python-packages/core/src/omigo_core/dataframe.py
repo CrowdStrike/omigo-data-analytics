@@ -37,7 +37,7 @@ class DataFrame:
                 utils.warn("Zero length header fields:" + str(self.header_fields))
 
         # create hashmap
-        for i in range(self.num_rows()):
+        for i in range(len(self.header_fields)):
             h = self.header_fields[i]
 
             # validation
@@ -47,10 +47,20 @@ class DataFrame:
             self.header_map[h] = i
             self.header_index_map[i] = h
 
+        # workaround
+        if (len(self.header_fields) == 1):
+            if (len(data_fields) > 0):
+                if (isinstance(data_fields[0], (str))):
+                    data_fields = list([[t] for t in data_fields])
+
         # basic validation
-        if (len(data_fields) > 0 and len(data_fields[0]) != len(self.header_fields)):
-            raise Exception("Header length: {} is not matching with data length: {}".format(
-                len(self.header_fields), len(data_fields[0])))
+        if (len(self.data_fields) > 0):
+            if (len(self.header_fields) > 1):
+                if (len(data_fields[0]) != len(self.header_fields)):
+                    raise Exception("Header length: {} is not matching with data length: {}".format(len(self.header_fields), len(data_fields[0])))
+            else:
+                if (len(data_fields[0]) != 1):
+                    raise Exception("Header length: {} is not matching with data length: {}".format(len(self.header_fields), len(data_fields[0])))
 
     # debugging
     def to_string(self):
@@ -1477,7 +1487,7 @@ class DataFrame:
             mp = {}
 
             # iterate over all header columns
-            for i in range(self.num_rows()):
+            for i in range(len(self.header_fields)):
                 key = self.header_fields[i]
                 value = str(fields[i])
 
@@ -1538,7 +1548,7 @@ class DataFrame:
         for fields in self.data_fields:
             counter = counter + 1
             utils.report_progress("add_seq_num: [1/1] adding new column", dmsg, counter, self.num_rows())
-            new_data.append([str(counter)] + fields)
+            new_data_fields.append([str(counter)] + fields)
 
         # return
         return DataFrame(new_header_fields, new_data_fields)
@@ -2007,7 +2017,7 @@ class DataFrame:
         # iterate
         for fields in self.data_fields:
             mp = {}
-            for i in range(self.num_rows()):
+            for i in range(len(self.header_fields)):
                 mp[self.header_fields[i]] = fields[i]
             new_data_fields.append([json.dumps(mp)])
 
@@ -2065,7 +2075,7 @@ class DataFrame:
 
     def union(self, tsv_or_that_arr):
         # check if this is a single element TSV or an array
-        if (type(tsv_or_that_arr) == TSV):
+        if (type(tsv_or_that_arr) == DataFrame):
             that_arr = [tsv_or_that_arr]
         else:
             that_arr = tsv_or_that_arr
@@ -2103,6 +2113,7 @@ class DataFrame:
                     raise Exception("Invalid input data. Fields size are not same as header: header: {}, fields: {}".format(self.header_fields, fields))
                 new_data_fields.append(fields)
 
+        # return
         return DataFrame(self.header_fields, new_data_fields)
 
     # this method finds the set difference between this and that. if cols is None, then all columns are taken
@@ -3239,7 +3250,7 @@ class DataFrame:
                 new_header_copy_fields_map[lkeys[rkey_index]] = rkey
 
         # add the left side columns
-        for i in range(self.num_rows()):
+        for i in range(len(self.header_fields)):
             if (self.header_fields[i] not in lkeys):
                 if (lsuffix is not None):
                     new_header_fields.append(self.header_fields[i] + ":" + lsuffix)
@@ -3555,7 +3566,7 @@ class DataFrame:
                 new_header_copy_fields_map[lkeys[rkey_index]] = rkey
 
         # add the left side columns
-        for i in range(self.num_rows()):
+        for i in range(len(self.header_fields)):
             if (self.header_fields[i] not in lkeys):
                 if (lsuffix is not None):
                     new_header_fields.append(self.header_fields[i] + ":" + lsuffix)
@@ -3696,7 +3707,7 @@ class DataFrame:
                 batch_index = (i + seed) % effective_batches
 
             # append to the splits data
-            data_list[batch_index].append(self.data[i])
+            data_list[batch_index].append(self.data_fields[i])
 
         # create list of xtsvs
         for i in range(effective_batches):
@@ -3923,7 +3934,7 @@ class DataFrame:
         # create header
         new_header_fields = []
         if (collapse == True):
-            for j in range(self.num_rows()):
+            for j in range(len(self.header_fields)):
                 if (j not in indexes):
                     new_header_fields.append(self.header_fields[j])
         else:
@@ -5175,7 +5186,7 @@ def from_maps(mps, accepted_cols = None, excluded_cols = None, url_encoded_cols 
     for mp in mps:
         header_fields = ["json"]
         fields = [utils.url_encode(json.dumps(mp))]
-        xtsvs.append(DataFrame(header_fields, fields))
+        xtsvs.append(DataFrame(header_fields, [fields]))
 
     # use explode
     result = merge_union(xtsvs) \
@@ -5188,7 +5199,15 @@ def from_maps(mps, accepted_cols = None, excluded_cols = None, url_encoded_cols 
 
 def from_tsv(xtsv):
     header_fields = xtsv.get_header_fields()
-    data_fields = list([t.split("\t") for t in xtsv.get_data()])
+
+    # special condition where only single column is present
+    data_fields = None
+    if (len(header_fields) == 1):
+        data_fields = list([[t] for t in xtsv.get_data()])
+    else:
+        data_fields = list([list(t.split("\t")) for t in xtsv.get_data()])
+
+    # return
     return DataFrame(header_fields, data_fields)
 
 def enable_debug_mode():
