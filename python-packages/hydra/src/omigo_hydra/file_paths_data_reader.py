@@ -3,8 +3,8 @@
 import sys
 
 # local import
-from omigo_core import file_paths_reader
-from omigo_core import file_paths_util
+from omigo_hydra import file_paths_reader
+from omigo_hydra import file_paths_util
 
 class FilePathsDataReader:
     """A simple class to read filepaths data"""

@@ -15,8 +15,9 @@ DEFAULT_WAIT_SEC = 3
 DEFAULT_ATTEMPTS = 3
 
 class S3FSWrapper:
-    def __init__(self):
-        pass
+    def __init__(self, s3_region = None, aws_profile = None):
+        self.s3_region = s3_region
+        self.aws_profile = aws_profile
 
     def __is_s3__(self, path):
         if (path.startswith("s3://")):
@@ -32,7 +33,7 @@ class S3FSWrapper:
 
     def __s3_file_exists__(self, path):
         path = self.__normalize_path__(path)
-        return s3_wrapper.check_file_exists(path)
+        return s3_wrapper.check_file_exists(path, s3_region = self.s3_region, aws_profile = self.aws_profile)
 
     def __local_file_exists__(self, path):
         return local_fs_wrapper.check_file_exists(path)
@@ -66,7 +67,7 @@ class S3FSWrapper:
 
     def __s3_file_not_exists__(self, path):
         path = self.__normalize_path__(path)
-        return s3_wrapper.check_file_exists(path) == False
+        return s3_wrapper.check_file_exists(path, s3_region = self.s3_region, aws_profile = self.aws_profile) == False
 
     def __local_file_not_exists__(self, path):
         path = self.__normalize_path__(path)
@@ -110,7 +111,7 @@ class S3FSWrapper:
     def __s3_read_file_contents_as_text__(self, path):
         path = self.__normalize_path__(path)
         bucket_name, object_key = utils.split_s3_path(path)
-        return s3_wrapper.get_file_content_as_text(bucket_name, object_key)
+        return s3_wrapper.get_file_content_as_text(bucket_name, object_key, s3_region = self.s3_region, aws_profile = self.aws_profile)
 
     # the path here can be compressed gz file
     def __local_read_file_contents_as_text__(self, path):
@@ -138,41 +139,41 @@ class S3FSWrapper:
         return result2
 
     # TODO: this is a wait method and confusing. FIXME: The aws prefix way of listing is hurting
-    def ls(self, path, include_reserved_files = False, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS, skip_exist_check = False):
+    def ls(self, path, filter_func = None, include_reserved_files = False, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS, skip_exist_check = False):
         path = self.__normalize_path__(path)
 
         # go into a wait loop for s3 to sync if the path is missing
         if (self.dir_exists(path) == False and attempts > 0):
             utils.info("ls: path: {} doesnt exist. waiting for {} seconds. attempts: {}".format(path, wait_sec, attempts))
             time.sleep(wait_sec)
-            return self.ls(path, include_reserved_files = include_reserved_files, wait_sec = wait_sec, attempts = attempts - 1)
+            return self.ls(path, filter_func = filter_func, include_reserved_files = include_reserved_files, wait_sec = wait_sec, attempts = attempts - 1)
 
         # get directory listings
-        listings = self.get_directory_listing(path, skip_exist_check = skip_exist_check)
+        listings = self.get_directory_listing(path, filter_func = filter_func, skip_exist_check = skip_exist_check)
         return self.__simplify_dir_list__(path, listings, include_reserved_files = include_reserved_files)
 
-
-    def get_directory_listing(self, path, skip_exist_check = False):
+    def get_directory_listing(self, path, filter_func = None, ignore_if_missing = False, skip_exist_check = False):
         if (self.__is_s3__(path)):
-            return self.__s3_get_directory_listing__(path, skip_exist_check = skip_exist_check)
+            return self.__s3_get_directory_listing__(path, filter_func = filter_func, ignore_if_missing = ignore_if_missing, skip_exist_check = skip_exist_check)
         else:
-            return self.__local_get_directory_listing__(path, skip_exist_check = skip_exist_check)
+            return self.__local_get_directory_listing__(path, filter_func = filter_func, ignore_if_missing = ignore_if_missing, skip_exist_check = skip_exist_check)
 
-    def __s3_get_directory_listing__(self, path, skip_exist_check = False):
-        return s3_wrapper.get_directory_listing(path, skip_exist_check = skip_exist_check)
+    def __s3_get_directory_listing__(self, path, filter_func = None, ignore_if_missing = False, skip_exist_check = False):
+        return s3_wrapper.get_directory_listing(path, filter_func = filter_func, ignore_if_missing = ignore_if_missing, skip_exist_check = skip_exist_check,
+            s3_region = self.s3_region, aws_profile = self.aws_profile)
 
-    def __local_get_directory_listing__(self, path, skip_exist_check = False):
-        return local_fs_wrapper.get_directory_listing(path, skip_exist_check = skip_exist_check)
+    def __local_get_directory_listing__(self, path, filter_func = None, ignore_if_missing = False, skip_exist_check = False):
+        return local_fs_wrapper.get_directory_listing(path, filter_func = filter_func, ignore_if_missing = ignore_if_missing, skip_exist_check = skip_exist_check)
 
-    def list_dirs(self, path):
+    def list_dirs(self, path, filter_func = None):
         path = self.__normalize_path__(path)
-        result1 = self.ls(path)
+        result1 = self.ls(path, filter_func = filter_func)
         result2 = list(filter(lambda t: self.is_directory(path + "/" + t), result1))
         return result2
 
-    def list_files(self, path, include_reserved_files = False):
+    def list_files(self, path, filter_func = None, include_reserved_files = False):
         path = self.__normalize_path__(path)
-        result1 = self.ls(path, include_reserved_files = include_reserved_files)
+        result1 = self.ls(path, filter_func = filter_func, include_reserved_files = include_reserved_files)
         result2 = list(filter(lambda t: self.is_file(path + "/" + t), result1))
         return result2
 
@@ -212,7 +213,7 @@ class S3FSWrapper:
             return self.__local_delete_file__(path, ignore_if_missing = ignore_if_missing)
 
     def __s3_delete_file__(self, path, ignore_if_missing = False):
-        return s3_wrapper.delete_file(path, ignore_if_missing = ignore_if_missing)
+        return s3_wrapper.delete_file(path, ignore_if_missing = ignore_if_missing, s3_region = self.s3_region, aws_profile = self.aws_profile)
 
     def __local_delete_file__(self, path, ignore_if_missing = False):
         # delete file
@@ -263,7 +264,7 @@ class S3FSWrapper:
     def __s3_write_text_file__(self, path, text):
         path = self.__normalize_path__(path)
         bucket_name, object_key = utils.split_s3_path(path)
-        s3_wrapper.put_file_with_text_content(bucket_name, object_key, text)
+        s3_wrapper.put_file_with_text_content(bucket_name, object_key, text, s3_region = self.s3_region, aws_profile = self.aws_profile)
 
     def __local_write_text_file__(self, path, text):
         path = self.__normalize_path__(path)
@@ -344,7 +345,7 @@ class S3FSWrapper:
     def __s3_get_last_modified_timestamp__(self, path):
         # normalize
         path = self.__normalize_path__(path)
-        dt = s3_wrapper.get_last_modified_time(path)
+        dt = s3_wrapper.get_last_modified_time(path, s3_region = self.s3_region, aws_profile = self.aws_profile)
 
         # return
         return int(dt.replace(tzinfo = timezone.utc).timestamp())

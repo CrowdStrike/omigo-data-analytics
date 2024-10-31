@@ -1,6 +1,7 @@
 from omigo_hydra import s3io_wrapper
 from omigo_core import utils
 
+# Deprecated. Will be removed soon
 class S3FSWrapper:
     def __init__(self):
         self.fs = s3io_wrapper.S3FSWrapper() 

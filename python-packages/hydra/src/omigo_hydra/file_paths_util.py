@@ -6,10 +6,9 @@ import datetime
 import zipfile
 
 # local imports
-from omigo_core import s3_wrapper
 from omigo_core import utils
 from omigo_core import timefuncs 
-from omigo_core import local_fs_wrapper
+from omigo_hydra import s3io_wrapper 
 # constant
 NUM_HOURS = 24
 
@@ -65,36 +64,22 @@ def read_filepaths_hourly(path, start_date_str, end_date_str, fileprefix, s3_reg
             filepath_tsvgz = filepath_tsv + ".gz"
             filepath_tsvzip = filepath_tsv + ".zip"
 
-            # check if this is s3 file
-            if (filepath_tsv.startswith("s3://")):
-                if (s3_wrapper.check_path_exists(filepath_tsv, s3_region = s3_region, aws_profile = aws_profile)):
-                    filepaths.append(filepath_tsv)
-                elif (s3_wrapper.check_path_exists(filepath_tsvgz, s3_region = s3_region, aws_profile = aws_profile)):
-                    filepaths.append(filepath_tsvgz)
-                elif (s3_wrapper.check_path_exists(filepath_tsvzip, s3_region = s3_region, aws_profile = aws_profile)):
-                    filepaths.append(filepath_tsvzip)
-                else:
-                    if (ignore_missing == False):
-                        raise Exception("Input files don't exist. Use ignore_missing if want to continue: ", filepath_tsv, filepath_tsvgz, filepath_tsvzip)
-                    else:
-                        continue
+            if (s3_wrapper.file_exists(filepath_tsv, s3_region = s3_region, aws_profile = aws_profile)):
+                filepaths.append(filepath_tsv)
+            elif (s3_wrapper.file_exists(filepath_tsvgz, s3_region = s3_region, aws_profile = aws_profile)):
+                filepaths.append(filepath_tsvgz)
+            elif (s3_wrapper.file_exists(filepath_tsvzip, s3_region = s3_region, aws_profile = aws_profile)):
+                filepaths.append(filepath_tsvzip)
             else:
-                # check if file exists
-                if (local_fs_wrapper.check_path_exists(filepath_tsv)):
-                    filepaths.append(filepath_tsv)
-                elif (local_fs_wrapper.check_path_exists(filepath_tsvgz)):
-                    filepaths.append(filepath_tsvgz)
-                elif (local_fs_wrapper.check_path_exists(filepath_tsvzip)):
-                    filepaths.append(filepath_tsvzip)
+                if (ignore_missing == False):
+                    raise Exception("Input files don't exist. Use ignore_missing if want to continue: ", filepath_tsv, filepath_tsvgz, filepath_tsvzip)
                 else:
-                    if (ignore_missing == False):
-                        raise Exception("Input files don't exist. Use ignore_missing if want to continue: ", filepath_tsv, filepath_tsvgz, filepath_tsvzip)
-                    else:
-                        continue
+                    continue
 
     # return filepaths
     return filepaths
 
+# Deprecated
 def check_exists(path, s3_region = None, aws_profile = None):
     if (path.startswith("s3://") and s3_wrapper.check_path_exists(path, s3_region = s3_region, aws_profile = aws_profile)):
         return True
@@ -106,6 +91,10 @@ def check_exists(path, s3_region = None, aws_profile = None):
 
 def read_filepaths_daily(path, start_date_str, end_date_str, fileprefix, s3_region = None, aws_profile = None, etl_level = "", ignore_missing = False):
     utils.warn_once("read_filepaths_daily is confusing and may be unsupported")
+
+    # initialize fs
+    fs = s3io_wrapper.S3FSWrapper(s3_region = s3_region, aws_profile = aws_profile)
+
     # parse input dates
     start_date = datetime.datetime.strptime(start_date_str, "%Y-%m-%d")
     end_date = datetime.datetime.strptime(end_date_str, "%Y-%m-%d")
@@ -124,28 +113,15 @@ def read_filepaths_daily(path, start_date_str, end_date_str, fileprefix, s3_regi
         filepath_tsv = path + etl_prefix + fileprefix + "-" + curdate.strftime("%Y%m%d") + "-" + curdate.strftime("%Y%m%d") + ".tsv"
         filepath_tsvgz = filepath_tsv + ".gz"
 
-        # check if this is s3 file
-        if (filepath_tsv.startswith("s3://") or filepath_tsvgz.startswith("s3://")):
-            if (s3_wrapper.check_path_exists(filepath_tsv, s3_region = s3_region, aws_profile = aws_profile)):
-                filepaths.append(filepath_tsv)
-            elif (s3_wrapper.check_path_exists(filepath_tsvgz, s3_region = s3_region, aws_profile = aws_profile)):
-                filepaths.append(filepath_tsvgz)
-            else:
-                if (ignore_missing == False):
-                    raise Exception("Input files don't exist. Use ignore_missing if want to continue: ", filepath_tsv, filepath_tsvgz)
-                else:
-                    continue
+        if (fs.file_exists(filepath_tsv, s3_region = s3_region, aws_profile = aws_profile)):
+            filepaths.append(filepath_tsv)
+        elif (fs.file_exists(filepath_tsvgz, s3_region = s3_region, aws_profile = aws_profile)):
+            filepaths.append(filepath_tsvgz)
         else:
-            # check if file exists
-            if (local_fs_wrapper.check_path_exists(filepath_tsv)):
-                filepaths.append(filepath_tsv)
-            elif (local_fs_wrapper.check_path_exists(filepath_tsvgz)):
-                filepaths.append(filepath_tsvgz)
+            if (ignore_missing == False):
+                raise Exception("Input files don't exist. Use ignore_missing if want to continue: ", filepath_tsv, filepath_tsvgz)
             else:
-                if (ignore_missing == False):
-                    raise Exception("Input files don't exist. Use ignore_missing if want to continue: ", filepath_tsv, filepath_tsvgz)
-                else:
-                    continue
+                continue
 
     # return filepaths
     return filepaths
@@ -238,6 +214,9 @@ def create_date_numeric_representation(date_str, default_suffix):
 
 # this is not a lookup function. This reads directory listing, and then picks the filepaths that match the criteria
 def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix, spillover_window = 1, num_par = 10, wait_sec = 1, s3_region = None, aws_profile = None):
+    # initialize fs
+    fs = s3io_wrapper.S3FSWrapper(s3_region = s3_region, aws_profile = aws_profile)
+
     # parse dates
     start_date = timefuncs.datestr_to_datetime(start_date_str)
     end_date = timefuncs.datestr_to_datetime(end_date_str)
@@ -260,11 +239,8 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
         cur_path = path + "/dt=" + cur_date.strftime("%Y%m%d")
 
         # get the list of files. This needs to be failsafe as not all directories may exist
-        if (path.startswith("s3://")):
-            tasks.append(utils.ThreadPoolTask(s3_wrapper.get_directory_listing, cur_path, filter_func = None, ignore_if_missing = False, skip_exist_check = True,
-                region = s3_region, profile = aws_profile))
-        else:
-            tasks.append(utils.ThreadPoolTask(get_local_directory_listing, cur_path, filter_func = None, ignore_if_missing = True, skip_exist_check = True))
+        tasks.append(utils.ThreadPoolTask(fs.get_directory_listing, cur_path, filter_func = None, ignore_if_missing = False, skip_exist_check = True,
+            region = s3_region, profile = aws_profile))
 
     # execute the tasks
     results = utils.run_with_thread_pool(tasks, num_par = num_par, wait_sec = wait_sec)
@@ -322,11 +298,15 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
     return paths_found
 
 def get_local_directory_listing(path, filter_func = None, ignore_if_missing = False, skip_exist_check = False):
-    return local_fs_wrapper.get_directory_listing(path, filter_func = filter_func, ignore_if_missing = ignore_if_missing, skip_exist_check = skip_exist_check)
+    fs = s3io_wrapper.S3FSWrapper()
+    return fs.get_directory_listing(path, filter_func = filter_func, ignore_if_missing = ignore_if_missing, skip_exist_check = skip_exist_check)
 
 # this method is not robust against complex path creations with dot(.). FIXME. TODO
 def create_local_parent_dir(filepath):
     utils.warn_once("create_local_parent_dir: os.makedirs can create the full path. Why do we need this method")
+
+    # initialize fs
+    fs = s3io_wrapper.S3FSWrapper()
 
     # if it is a local file, create the parent directory
     if (filepath.startswith("s3://") == True):
@@ -340,7 +320,7 @@ def create_local_parent_dir(filepath):
         if (filepath.startswith("/")):
             dir_path = "/" + dir_path
 
-        if (check_exists(dir_path, None, None) == False):
+        if (fs.dir_exists(dir_path, None, None) == False):
             if (utils.is_debug()):
                 print("Creating local directory:", dir_path)
             os.makedirs(dir_path, exist_ok = True)

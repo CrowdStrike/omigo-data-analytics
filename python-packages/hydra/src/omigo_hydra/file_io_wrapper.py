@@ -4,7 +4,7 @@ import gzip
 import zipfile
 import time
 
-from omigo_core import s3_wrapper
+from omigo_hydra import s3_wrapper
 from omigo_core import utils
 
 # TODO: this is very inefficient. Use s3fs or write something better.
@@ -81,41 +81,14 @@ class TSVFileWriter:
     def save(self, xtsv, output_file_name):
         output_zipf = None
         output_file = None
-        if (output_file_name.startswith("s3://")):
-            content = xtsv.get_header() + "\n" + "\n".join(xtsv.get_data()) if (xtsv.num_rows() > 0) else xtsv.get_header()
-            bucket_name, object_key = utils.split_s3_path(output_file_name)
-            s3_wrapper.put_file_with_text_content(bucket_name, object_key, content, self.s3_region, self.aws_profile)
-        else:
-            # construct output file
-            if (output_file_name.endswith(".gz")):
-                output_file = gzip.open(output_file_name, "wt")
-                # write header
-                output_file.write(xtsv.get_header() + "\n")
-                # write all the content
-                for line in xtsv.get_data():
-                    output_file.write(line + "\n")
-            elif (output_file_name.endswith(".zip")):
-                output_zipf = zipfile.ZipFile(output_file_name, "w")
-                output_file = output_zipf.open(output_file_name.split("/")[-1][0:-4], "w")
-                # write header
-                output_file.write(xtsv.get_header() + "\n")
-                # write all the content. TODO: what is str.encode doing here?
-                utils.warn_once("str.encode used. Not sure why") 
-                for line in xtsv.get_data():
-                    output_file.write(str.encode(line + "\n"))
-            else:
-                output_file = open(output_file_name, "w")
-                # write header
-                output_file.write(xtsv.get_header() + "\n")
-                # write all the content
-                for line in xtsv.get_data():
-                    output_file.write(line + "\n")
 
-            # close
-            if (output_file is not None):
-                output_file.close()
-            if (output_zipf is not None):
-                output_zipf.close()
+        # initialize fs
+        fs = s3io_wrapper.S3FSWrapper(s3_region = self.s3_region, aws_profile = self.aws_profile)
+
+        # write
+        content = xtsv.get_header() + "\n" + "\n".join(xtsv.get_data()) if (xtsv.num_rows() > 0) else xtsv.get_header()
+        bucket_name, object_key = utils.split_s3_path(output_file_name)
+        fs.write_text_file(bucket_name, object_key, content)
 
 class FileReader:
     """FileReader class to read data files"""
