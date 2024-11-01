@@ -783,3 +783,8 @@ def get_argument_as_array(arg_or_args):
     else:
         return arg_or_args
 
+def is_url_encoded_col(col):
+    if (col is not None and col.endswith(":url_encoded")):
+        return True
+    else:
+        return False

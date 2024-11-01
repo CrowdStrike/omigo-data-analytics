@@ -49,18 +49,19 @@ class DataFrame:
 
         # workaround
         if (len(self.header_fields) == 1):
-            if (len(data_fields) > 0):
-                if (isinstance(data_fields[0], (str))):
-                    data_fields = list([[t] for t in data_fields])
+            if (len(self.data_fields) > 0):
+                # utils.info("data_fields[0]: {}".format(self.data_fields[0]))
+                if (isinstance(self.data_fields[0], (str))):
+                    self.data_fields = list([[t] for t in self.data_fields])
 
         # basic validation
         if (len(self.data_fields) > 0):
             if (len(self.header_fields) > 1):
-                if (len(data_fields[0]) != len(self.header_fields)):
-                    raise Exception("Header length: {} is not matching with data length: {}".format(len(self.header_fields), len(data_fields[0])))
+                if (len(self.data_fields[0]) != len(self.header_fields)):
+                    raise Exception("Header length: {} is not matching with data length: {}".format(len(self.header_fields), len(self.data_fields[0])))
             else:
                 if (len(data_fields[0]) != 1):
-                    raise Exception("Header length: {} is not matching with data length: {}".format(len(self.header_fields), len(data_fields[0])))
+                    raise Exception("Header length: {} is not matching with data length: {}".format(len(self.header_fields), len(self.data_fields[0])))
 
     # debugging
     def to_string(self):
@@ -3208,7 +3209,7 @@ class DataFrame:
         for fields in that.get_data_fields():
             # report progress
             counter = counter + 1
-            utils.report_progress("[2/3] building map for right side", dmsg, counter, len(that.get_data()))
+            utils.report_progress("[2/3] building map for right side", dmsg, counter, len(that.get_data_fields()))
 
             # parse data
             rvals1 = list([fields[i] for i in rkey_indexes])
@@ -3530,7 +3531,7 @@ class DataFrame:
         for fields in that.get_data_fields():
             # report progress
             counter = counter + 1
-            utils.report_progress("__map_join__: building map for right side", dmsg, counter, len(that.get_data()))
+            utils.report_progress("__map_join__: building map for right side", dmsg, counter, len(that.get_data_fields()))
 
             # parse data
             rvals1 = list([fields[i] for i in rkey_indexes]) 
@@ -3755,7 +3756,7 @@ class DataFrame:
         for fields in hashed_tsv2.get_data_fields():
             # report progress
             counter = counter + 1
-            utils.report_progress("__split_batches_by_cols__: [1/1] assigning batch index", dmsg, counter, len(hashed_tsv2.get_data()))
+            utils.report_progress("__split_batches_by_cols__: [1/1] assigning batch index", dmsg, counter, len(hashed_tsv2.get_data_fields()))
 
             batch_id = int(fields[batch_index])
             new_data_fields_list[batch_id].append(fields)
@@ -4369,11 +4370,6 @@ class DataFrame:
         if (merge_list_method == "cogroup"):
             utils.print_code_todo_warning("{}: merge_list_method = cogroup is only meant for data exploration. Use merge_list_method = join for generating all combinations for multiple list values".format(dmsg))
 
-        # name prefix
-        if (prefix is None):
-            utils.warn("{}: prefix is None. Using col as the name prefix".format(dmsg))
-            prefix = col
-
         # check for explode function
         exp_func = self.__explode_json_transform_func__(col, accepted_cols = accepted_cols, excluded_cols = excluded_cols, single_value_list_cols = single_value_list_cols,
             transpose_col_groups = transpose_col_groups, merge_list_method = merge_list_method, url_encoded_cols = url_encoded_cols, nested_cols = nested_cols,
@@ -4385,17 +4381,21 @@ class DataFrame:
         # use explode to do this parsing
         return self \
             .add_seq_num(prefix + ":__json_index__", dmsg = dmsg) \
-            .explode([col], exp_func, prefix = prefix, default_val = default_val, collapse = collapse, dmsg = dmsg) \
+            .explode([col], exp_func, prefix, default_val = default_val, collapse = collapse, dmsg = dmsg) \
             .validate()
 
     # newer version of explode_json
-    def explode_json_v2(self, col, dmsg = "", **kwargs):
+    def explode_json_v2(self, col, prefix = None, dmsg = "", **kwargs):
         dmsg = utils.extend_inherit_message(dmsg, "explode_json_v2")
 
         # input
         xinput = self \
             .select(col) \
             .is_nonempty_str(col)
+
+        # check for url encoding
+        if (utils.is_url_encoded_col(col)):
+            xinput = xinput.url_decode_inline(col)
 
         # get all original values
         vs = xinput.col_as_array_uniq(col)
@@ -4410,7 +4410,7 @@ class DataFrame:
             hash_value = utils.compute_hash(v)
 
             # TODO: hack
-            if (v.startswith("{'") or v.startswith("\"{'")):
+            if (v.startswith("{'") or v.startswith("\"{'") or v.startswith("[{'") or v.startswith("\"[{'")):
                 utils.trace("{}: Found non standard json with mix of single and double quotes. Transforming: {}".format(dmsg, v))
                 v = v.replace("\"", "")
                 v = v.replace("'", "\"")
@@ -4418,15 +4418,28 @@ class DataFrame:
             # load as json
             mp = json.loads(v) if (v != "") else {}
 
-            # convert to string values
-            for k in mp.keys():
-                mp[k] = str(mp[k])
+            # this could be array or a map
+            if (isinstance(mp, (list))):
+                for m in mp:
+                    # convert to string values
+                    for k in m.keys():
+                        m[k] = str(m[k])
 
-            # append hash
-            mp[temp_col] = hash_value
+                    # assign hash value
+                    m[temp_col] = hash_value
 
-            # append
-            json_arr.append(json.dumps(mp))
+                    # append
+                    json_arr.append(json.dumps(m))
+            else:
+                # convert to string values
+                for k in mp.keys():
+                    mp[k] = str(mp[k])
+
+                # append hash
+                mp[temp_col] = hash_value
+
+                # append
+                json_arr.append(json.dumps(mp))
 
         # create string
         json_str = "[" + ",".join(json_arr) + "]"
@@ -4434,16 +4447,22 @@ class DataFrame:
         # parse
         df = pd.read_json(StringIO(json_str))
 
+        # reassess prefix
+        if (prefix is None):
+            prefix = col
+
         # result
         result = from_df(df) \
-            .add_prefix(col, dmsg = dmsg)
+            .add_prefix(prefix, dmsg = dmsg) \
+            .show_transpose(3, title = "result")
 
         # return
         return self \
-            .transform(col, utils.compute_hash, "{}:{}".format(col, temp_col), dmsg = dmsg) \
+            .transform(col, lambda t: utils.compute_hash(utils.url_decode(t)) if (utils.is_url_encoded_col(col)) else utils.compute_hash(t),
+                "{}:{}".format(prefix, temp_col), dmsg = dmsg) \
             .drop_cols(col, dmsg = dmsg) \
-            .left_map_join(result, "{}:{}".format(col, temp_col), dmsg = dmsg) \
-            .drop_cols("{}:{}".format(col, temp_col), dmsg = dmsg)
+            .left_map_join(result, "{}:{}".format(prefix, temp_col), dmsg = dmsg) \
+            .drop_cols("{}:{}".format(prefix, temp_col), dmsg = dmsg)
 
     def transpose(self, n = 1, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "transpose")
@@ -4541,12 +4560,12 @@ class DataFrame:
         # progress counters
         counter = 0
         dmsg = utils.extend_inherit_message(dmsg, "to_tuples")
-        for line in self.select(cols, dmsg = dmsg).get_data():
+        for fields in self.select(cols, dmsg = dmsg).get_data_fields():
             # report progress
             counter = counter + 1
             utils.report_progress("to_tuples: [1/1] converting to tuples", dmsg, counter, self.num_rows())
 
-            fields = line.split("\t")
+            # append
             result.append(self.__expand_to_tuple__(fields))
 
         # return
@@ -4823,8 +4842,7 @@ class DataFrame:
             # append
             col_patterns_transformed.append(col_pattern)
 
-        # now iterate through all the column names, check if it is a regular expression and find
-        # all matching ones
+        # now iterate through all the column names, check if it is a regular expression and find all matching ones
         matching_cols = []
         for col_pattern in col_patterns_transformed:
             # check for matching columns for the pattern
@@ -5156,6 +5174,7 @@ def from_df(df, url_encoded_cols = []):
         tsv_lines.append(line)
 
     # number of columns to skip with empty column name
+    utils.warn_once("from_df: this skip count logic is hacky")
     skip_count = 0
     for h in header_fields:
         if (h == ""):
@@ -5165,14 +5184,14 @@ def from_df(df, url_encoded_cols = []):
     header_fields = header_fields[skip_count:]
 
     # generate data
-    data = []
+    data_fields = []
     if (len(tsv_lines) > 1):
-        for line in tsv_lines[1:]:
+        for line in tsv_lines[0:]:
             fields = line.split("\t")[skip_count:]
-            data.append("\t".join(fields))
+            data_fields.append(fields)
 
     # return
-    return DataFrame("\t".join(header_fields), data).validate()
+    return DataFrame(header_fields, data_fields).validate()
 
 def from_maps(mps, accepted_cols = None, excluded_cols = None, url_encoded_cols = None, dmsg = ""):
     dmsg = utils.extend_inherit_message(dmsg, "from_maps")
@@ -5210,6 +5229,11 @@ def from_tsv(xtsv):
     # return
     return DataFrame(header_fields, data_fields)
 
+def from_header_data(header, data):
+    header_fields = header.split("\t")
+    data_fields = list([t.split("\t") for t in data])
+    return new_with_cols(header_fields, data = data_fields)
+
 def enable_debug_mode():
     utils.enable_debug_mode()
 
@@ -5222,13 +5246,8 @@ def set_report_progress_perc(perc):
 def set_report_progress_min_thresh(thresh):
     utils.set_report_progress_min_thresh(thresh)
 
-# factory method
-def newWithCols(cols, data = []):
-    utils.warn("newWithCols is deprecated. Use new_with_cols instead")
-    return new_with_cols(cols, data = data)
-
 def new_with_cols(cols, data = []):
-    return DataFrame("\t".join(cols), data)
+    return DataFrame(cols, data)
 
 def create_empty():
     return new_with_cols([])

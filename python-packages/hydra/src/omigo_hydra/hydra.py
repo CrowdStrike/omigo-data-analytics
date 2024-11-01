@@ -1,5 +1,5 @@
-from omigo_core import utils
-from omigo_hydra import file_paths_data_reader, file_paths_util 
+from omigo_core import utils, dataframe
+from omigo_hydra import file_paths_data_reader, file_paths_util, s3io_wrapper
 
 def save_to_file(xtsv, output_file_name, s3_region = None, aws_profile = None):
     # do some validation
@@ -231,4 +231,35 @@ def load_from_files(filepaths, s3_region, aws_profile):
     file_reader.close()
 
     return tsv.TSV(header, data)
+
+def read_json_files_from_directories_as_tsv(paths, s3_region = None, aws_profile = None):
+    # initialize fs
+    fs = s3io_wrapper.S3FSWrapper(s3_region = s3_region, aws_profile = aws_profile)
+
+    # result
+    result = []
+
+    # iterate through each directory
+    for path in paths:
+        # list all files
+        files = fs.list_leaf_dir(path)
+
+        # read file as set of lines
+        for f in files:
+            full_path = "{}/{}".format(path, f)
+            lines = fs.read_file_contents_as_text(full_path).split("\n")
+
+            # append to result
+            result = result + lines
+
+    # remove empty lines
+    result = list(filter(lambda t: t.strip() != "", result))
+
+    # create dataframe
+    header_fields = ["json"]
+    data_fields = list([t.split("\t") for t in result])
+    df = dataframe.new_with_cols(header_fields, data = data_fields)
+
+    # return
+    return df
 
