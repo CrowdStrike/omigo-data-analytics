@@ -4060,8 +4060,8 @@ class DataFrame:
 
             # check if top level is a list
             if (isinstance(json_mp, list)):
-                utils.debug("{}: top level is a list. converting to a map".format(dmsg))
-                return __explode_json_transform_func_inner_helper__({col: json_mp})
+                utils.debug("{}: col: {} top level is a list. converting to a map".format(dmsg, col))
+                return utils.merge_arrays(list([__explode_json_transform_func_inner_helper__(mp) for mp in json_mp]))
 
             # use inner functions to parse the json
             results = __explode_json_transform_func_expand_json__(json_mp)
@@ -4344,7 +4344,7 @@ class DataFrame:
         merge_list_method = utils.resolve_default_parameter("merge_list_method", merge_list_method, "join", dmsg) 
         collapse_primitive_list = utils.resolve_default_parameter("collapse_primitive_list", collapse_primitive_list, False, dmsg)
         collapse = utils.resolve_default_parameter("collapse", collapse, False, dmsg)
-        ignore_if_missing = utils.resolve_default_parameter("ignore_if_missing", ignore_if_missing, True, dmsg)
+        ignore_if_missing = utils.resolve_default_parameter("ignore_if_missing", ignore_if_missing, False, dmsg)
         default_val = utils.resolve_default_parameter("default_val", default_val, "", dmsg)
 
         # validation
@@ -4380,7 +4380,7 @@ class DataFrame:
 
         # use explode to do this parsing
         return self \
-            .add_seq_num(prefix + ":__json_index__", dmsg = dmsg) \
+            .add_seq_num("{}:__json_index__".format(prefix), dmsg = dmsg) \
             .explode([col], exp_func, prefix, default_val = default_val, collapse = collapse, dmsg = dmsg) \
             .validate()
 
