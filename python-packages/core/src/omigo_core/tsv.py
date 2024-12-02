@@ -19,10 +19,11 @@ class TSV:
     data = None
 
     # constructor
-    def __init__(self, *args, **kwargs):
+    def __init__(self, header, data):
         # initialize header and data
         self.header = header
         self.data = data
+        self.header_fields = header.split("\t")
 
     def to_string(self, *args, **kwargs):
         return dataframe.from_tsv(self.header, self.data).to_string(*args, **kwargs)
@@ -301,10 +302,10 @@ class TSV:
         return dataframe.from_tsv(self.header, self.data).size_in_gb(*args, **kwargs)
 
     def get_header_fields(self, *args, **kwargs):
-        return dataframe.from_tsv(self.header, self.data).get_header_fields(*args, **kwargs)
+        return self.header_fields
 
     def get_columns(self, *args, **kwargs):
-        return dataframe.from_tsv(self.header, self.data).get_columns(*args, **kwargs)
+        return self.header_fields
 
     def get_column(self, *args, **kwargs):
         return dataframe.from_tsv(self.header, self.data).get_column(*args, **kwargs)

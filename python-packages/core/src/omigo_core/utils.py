@@ -448,7 +448,7 @@ def raise_exception_after_n_warnings(msg, num_warnings = 1000):
         del EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg]
         raise Exception(msg)
 
-def rate_limit_after_n_warnings(msg, sleep_secs = 10):
+def rate_limit_after_n_warnings(msg, num_warnings = None, sleep_secs = 10):
     global RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE
 
     # resolve num_warnings

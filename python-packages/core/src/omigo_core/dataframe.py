@@ -4010,8 +4010,8 @@ class DataFrame:
         return DataFrame(new_header_fields, new_data_fields) \
             .validate()
 
-    def __explode_json_transform_func__(self, col, accepted_cols, excluded_cols, single_value_list_cols, transpose_col_groups, merge_list_method, url_encoded_cols,
-        nested_cols, collapse_primitive_list, max_results = None, join_col = ",", dmsg = ""):
+    def __explode_json_transform_func__(self, col, accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None, merge_list_method = None,
+        url_encoded_cols = None, nested_cols = None, collapse_primitive_list = None, custom_map_parsing_funcs = None, max_results = None, join_col = ",", dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "__explode_json_transform_func__")
 
         # constant
@@ -4060,7 +4060,7 @@ class DataFrame:
 
             # check if top level is a list
             if (isinstance(json_mp, list)):
-                utils.debug("{}: col: {} top level is a list. converting to a map".format(dmsg, col))
+                utils.debug("{}: col: {} top level is a list. converting to a list of maps".format(dmsg, col))
                 return utils.merge_arrays(list([__explode_json_transform_func_inner_helper__(mp) for mp in json_mp]))
 
             # use inner functions to parse the json
@@ -4098,7 +4098,10 @@ class DataFrame:
                     v = ""
 
                 # handle nested_cols scenario where the entire value is to be set as url encoded json blob
-                if (nested_cols is not None and k in nested_cols):
+                if (custom_map_parsing_funcs is not None and k in custom_map_parsing_funcs):
+                    __custom_map_parsing_func__ = custom_map_parsing_funcs[k]
+                    dict_results.append(__custom_map_parsing_func__(v, parent_prefix = parent_with_child_key))
+                elif (nested_cols is not None and k in nested_cols):
                     single_results[k + ":json:url_encoded"] = utils.url_encode(json.dumps(v))
                 # for each data type, there is a different kind of handling
                 elif (isinstance(v, (str, int, float))):
@@ -4163,7 +4166,7 @@ class DataFrame:
                         elif (isinstance(v[0], list)):
                             # check for non supported case
                             if (len(v) > 1):
-                                raise Exception("Inner lists are not supported. Use accepted_cols or excluded_cols: {}, number of values:{}".format(str(k)), len(v))
+                                raise Exception("Inner lists are not supported. Use accepted_cols or excluded_cols: {}, number of values:{}".format(str(k), len(v)))
 
                             # check if there is flag to use only the first column
                             if (single_value_list_cols is not None and k in single_value_list_cols):
@@ -4190,7 +4193,8 @@ class DataFrame:
 
                         # check if it was a flat hashmap or a nested. if flat, use dict_list else use list_results_arr
                         if (len(mp2_list) > 1):
-                            list_results_arr.append([])
+                            # create new array
+                            new_values = []
 
                             # create a new map with correct key
                             i = 0
@@ -4200,7 +4204,11 @@ class DataFrame:
                                     mp2_new[k + ":" + k1] = mp2[k1]
                                 mp2_new[json_explode_index] = str(i)
                                 i = i + 1
-                                list_results_arr[-1].append(mp2_new)
+                                # list_results_arr[-1].append(mp2_new)
+                                new_values.append(mp2_new)
+
+                            # append
+                            list_results_arr.append(new_values)
                         else:
                            # create a new map with correct key
                            i = 0
@@ -4336,8 +4344,8 @@ class DataFrame:
     # TODO: __explode_json_index__ needs to be tested and confirmed
     # TODO: need proper xpath based exclusion to better handle noise
     def explode_json(self, col, prefix = None, accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None,
-        merge_list_method = None, collapse_primitive_list = None, url_encoded_cols = None, nested_cols = None, collapse = None, max_results = None, ignore_if_missing = None,
-        default_val = None, dmsg = ""):
+        merge_list_method = None, collapse_primitive_list = None, url_encoded_cols = None, nested_cols = None, custom_map_parsing_funcs = {}, collapse = None,
+        max_results = None, ignore_if_missing = None, default_val = None, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "explode_json")
 
         # resolve parameters
@@ -4373,7 +4381,7 @@ class DataFrame:
         # check for explode function
         exp_func = self.__explode_json_transform_func__(col, accepted_cols = accepted_cols, excluded_cols = excluded_cols, single_value_list_cols = single_value_list_cols,
             transpose_col_groups = transpose_col_groups, merge_list_method = merge_list_method, url_encoded_cols = url_encoded_cols, nested_cols = nested_cols,
-            collapse_primitive_list = collapse_primitive_list, max_results = max_results, dmsg = dmsg)
+            collapse_primitive_list = collapse_primitive_list, custom_map_parsing_funcs = custom_map_parsing_funcs, max_results = max_results, dmsg = dmsg)
 
         # warn
         utils.warn_once("{}: validate is called".format(dmsg))
@@ -5106,7 +5114,10 @@ def get_version():
 def get_func_name(f):
     return f.__name__
 
-def read(paths, sep = None, do_union = False, def_val_map = None, username = None, password = None, num_par = 0):
+def read(path_or_paths, sep = None, do_union = False, def_val_map = None, username = None, password = None, num_par = 0):
+    # resolve single or multiple paths
+    paths = utils.get_argument_as_array(path_or_paths)
+
     # TODO: remove this after fixing design
     if (def_val_map is not None and do_union == False):
         raise Exception("Use do_union flag instead of relying on def_val_map to be non None")
@@ -5246,8 +5257,8 @@ def set_report_progress_perc(perc):
 def set_report_progress_min_thresh(thresh):
     utils.set_report_progress_min_thresh(thresh)
 
-def new_with_cols(cols, data = []):
-    return DataFrame(cols, data)
+def new_with_cols(header_fields, data_fields = []):
+    return DataFrame(header_fields, data_fields)
 
 def create_empty():
     return new_with_cols([])

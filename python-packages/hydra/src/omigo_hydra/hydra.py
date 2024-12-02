@@ -1,4 +1,4 @@
-from omigo_core import utils, dataframe
+from omigo_core import utils, dataframe, tsv, tsvutils
 from omigo_hydra import file_paths_data_reader, file_paths_util, s3io_wrapper
 
 def save_to_file(xtsv, output_file_name, s3_region = None, aws_profile = None):
@@ -48,7 +48,7 @@ def read(input_file_or_files, sep = None, def_val_map = None, username = None, p
             data = [x.replace(sep, "\t") for x in data]
 
         # return
-        return tsv.TSV(header, data)
+        return dataframe.from_tsv(tsv.TSV(header, data))
 
     # create tasks
     for input_file in input_files:
@@ -63,7 +63,7 @@ def read(input_file_or_files, sep = None, def_val_map = None, username = None, p
     tsv_list = utils.run_with_thread_pool(tasks, num_par = num_par, wait_sec = 1)
 
     # merge and return
-    return merge(tsv_list, def_val_map = def_val_map)
+    return tsvutils.merge(tsv_list, def_val_map = def_val_map)
 
 def __read_with_filter_transform_select_func__(cols):
     # create a inner function
