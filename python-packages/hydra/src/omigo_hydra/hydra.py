@@ -163,7 +163,7 @@ def read_with_filter_transform(input_file_or_files, sep = None, def_val_map = No
         # Do a final check to see if all tsvs are empty
         if (len(tsv_list) > 0):
             # call merge on tsv_list
-            return merge(tsv_list)
+            return tsvutils.merge(tsv_list)
         else:
             # create an empty data tsv file with common header fields
             header_fields = []

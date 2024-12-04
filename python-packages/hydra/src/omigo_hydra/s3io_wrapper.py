@@ -1,4 +1,4 @@
-from omigo_core import s3_wrapper, local_fs_wrapper
+from omigo_hydra import s3_wrapper, local_fs_wrapper
 from omigo_core import tsv
 from omigo_core import utils
 import time
