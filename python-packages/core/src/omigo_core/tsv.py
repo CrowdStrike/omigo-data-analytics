@@ -21,7 +21,9 @@ class TSV:
 
     # constructor
     def __init__(self, header, data):
-        raise Exception("Deprecated class")
+        self.header = header
+        self.data = data
+        self.header_fields = header.split("\t")
 
     def to_string(self, *args, **kwargs):
         return dataframe.from_header_data(self.header, self.data).to_string(*args, **kwargs)
