@@ -10,6 +10,7 @@ import time
 import numpy as np
 from io import StringIO
 
+# Deprecated
 class TSV:
     """This is the main data processing class to apply different filter and transformation functions
     on tsv data and get the results. The design is more aligned with functional programming where
@@ -20,10 +21,7 @@ class TSV:
 
     # constructor
     def __init__(self, header, data):
-        # initialize header and data
-        self.header = header
-        self.data = data
-        self.header_fields = header.split("\t")
+        raise Exception("Deprecated class")
 
     def to_string(self, *args, **kwargs):
         return dataframe.from_header_data(self.header, self.data).to_string(*args, **kwargs)
