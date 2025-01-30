@@ -4398,7 +4398,7 @@ class DataFrame:
         dmsg = utils.extend_inherit_message(dmsg, "explode_json")
 
         # resolve parameters
-        merge_list_method = utils.resolve_default_parameter("merge_list_method", merge_list_method, "cogroup", dmsg) 
+        merge_list_method = utils.resolve_default_parameter("merge_list_method", merge_list_method, "cogroup", dmsg)
         collapse_primitive_list = utils.resolve_default_parameter("collapse_primitive_list", collapse_primitive_list, True, dmsg)
         collapse = utils.resolve_default_parameter("collapse", collapse, True, dmsg)
         default_val = utils.resolve_default_parameter("default_val", default_val, "", dmsg)
