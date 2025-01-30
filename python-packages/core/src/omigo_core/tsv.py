@@ -749,7 +749,7 @@ def newWithCols(*args, **kwargs):
     return dataframe.newWithCols(*args, **kwargs)
 
 def new_with_cols(*args, **kwargs):
-    return dataframe.new_with_cols(*args, **kwargs)
+    return dataframe.from_tsv_new_with_cols(*args, **kwargs)
 
 def create_empty(*args, **kwargs):
     return dataframe.create_empty(*args, **kwargs)

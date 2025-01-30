@@ -4,6 +4,7 @@ import math
 import pandas as pd
 import random
 import json
+import base64
 from omigo_core import utils, tsvutils, udfs 
 import sys
 import time
@@ -88,18 +89,21 @@ class DataFrame:
         return col in self.header_map.keys()
 
     # cols is array of string
-    def select(self, col_or_cols, add_if_missing = True, dmsg = ""):
+    def __select_inner__(self, col_or_cols, exclude_flag = None, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
             raise Exception("select: empty header tsv")
 
+        # validation
+        if (exclude_flag is None):
+            raise Exception("{}: __select_inner__ needs exclude_flag value".format(dmsg))
+
         # get matching column and indexes
         matching_cols = self.__get_matching_cols__(col_or_cols)
-        indexes = self.__get_col_indexes__(matching_cols)
 
         # create new header
-        # new_header = "\t".join(matching_cols)
-        new_header_fields = matching_cols
+        new_header_fields = matching_cols if (exclude_flag == False) else list(filter(lambda t: t not in matching_cols, self.header_fields))
+        indexes = self.__get_col_indexes__(new_header_fields)
 
         # create new data
         counter = 0
@@ -110,14 +114,13 @@ class DataFrame:
             utils.report_progress("select: [1/1] selecting columns", dmsg, counter, self.num_rows())
 
             # get fields
-            # fields = line.split("\t")
             new_fields = []
 
             # validation
             for i in indexes:
                 if (i >= len(fields)):
-                    raise Exception("Invalid index: col_or_cols: {}, matching_cols: {}, indexes: {}, line: {}, fields: {}, len(fields): {}, len(self.header_fields): {}, self.get_header_map(): {}".format(
-                        col_or_cols, matching_cols, indexes, line, fields, len(fields), len(self.header_fields), self.header_map))
+                    raise Exception("Invalid index: col_or_cols: {}, new_header_fields: {}, indexes: {}, line: {}, fields: {}, len(fields): {}, len(self.header_fields): {}, self.get_header_map(): {}".format(
+                        col_or_cols, new_header_fields, indexes, line, fields, len(fields), len(self.header_fields), self.header_map))
 
                 # append to new_fields
                 new_fields.append(fields[i])
@@ -127,6 +130,12 @@ class DataFrame:
 
         # return
         return DataFrame(new_header_fields, new_data_fields)
+
+    def select(self, col_or_cols, dmsg = ""):
+        return self.__select_inner__(col_or_cols, exclude_flag = False, dmsg = dmsg)
+
+    def not_select(self, col_or_cols, dmsg = ""):
+        return self.__select_inner__(col_or_cols, exclude_flag = True, dmsg = dmsg)
 
     def values_not_in(self, col, values, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "values_not_in")
@@ -342,7 +351,7 @@ class DataFrame:
         return self.skip(count)
 
     def skip_rows(self, count):
-        return DataFrame(self.header, self.data[count:])
+        return DataFrame(self.header_fields, self.data_fields[count:])
 
     def last(self, count):
         # check boundary conditions
@@ -1584,6 +1593,16 @@ class DataFrame:
         # return self
         return self
 
+    def show_transpose_non_empty(self, n = 1, title = "Show Transpose", max_col_width = None, debug_only = False, dmsg = ""):
+        # show
+        self \
+            .take(n) \
+            .drop_empty_cols() \
+            .show_transpose(n = n, title = title, max_col_width = max_col_width, debug_only = debug_only, dmsg = dmsg)
+
+        # return self
+        return self
+
     def show(self, n = 100, title = "Show", max_col_width = 40, debug_only = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "show")
 
@@ -2074,6 +2093,34 @@ class DataFrame:
             .resolve_url_encoded_cols(dmsg = dmsg) \
             .resolve_url_encoded_list_cols(dmsg = dmsg)
 
+    def base64_encode(self, col, new_col, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "base64_encode")
+
+        # return
+        return self \
+            .transform(col, lambda t: base64.b64encode(t.encode("utf8")).decode("utf-8"), new_col, dmsg = dmsg)
+
+    def base64_decode(self, col, new_col, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "base64_decode")
+
+        # return
+        return self \
+            .transform(col, lambda t: base64.b64decode(t.encode("utf8")).decode("utf-8"), new_col, dmsg = dmsg)
+
+    def base64_encode_inline(self, col, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "base64_encode_inline")
+
+        # return
+        return self \
+            .transform_inline(col, lambda t: base64.b64encode(t.encode("utf8")).decode("utf-8"), dmsg = dmsg)
+
+    def base64_decode_inline(self, col, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "base64_decode_inline")
+
+        # return
+        return self \
+            .transform_inline(col, lambda t: base64.b64decode(t.encode("utf8")).decode("utf-8"), dmsg = dmsg)
+
     def union(self, tsv_or_that_arr):
         # check if this is a single element TSV or an array
         if (type(tsv_or_that_arr) == DataFrame):
@@ -2248,7 +2295,9 @@ class DataFrame:
         # return
         return DataFrame(new_header_fields, new_data_fields)
 
-    def add_row(self, row_fields):
+    def add_row(self, row_fields, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "add_row")
+
         # check empty
         if (self.has_empty_header()):
             raise Exception("{}: add_row: empty header tsv".format(dmsg))
@@ -4098,11 +4147,11 @@ class DataFrame:
                     v = ""
 
                 # handle nested_cols scenario where the entire value is to be set as url encoded json blob
-                if (custom_map_parsing_funcs is not None and k in custom_map_parsing_funcs):
+                if (nested_cols is not None and k in nested_cols):
+                    single_results[k + ":json:url_encoded"] = utils.url_encode(json.dumps(v))
+                elif (custom_map_parsing_funcs is not None and k in custom_map_parsing_funcs):
                     __custom_map_parsing_func__ = custom_map_parsing_funcs[k]
                     dict_results.append(__custom_map_parsing_func__(v, parent_prefix = parent_with_child_key))
-                elif (nested_cols is not None and k in nested_cols):
-                    single_results[k + ":json:url_encoded"] = utils.url_encode(json.dumps(v))
                 # for each data type, there is a different kind of handling
                 elif (isinstance(v, (str, int, float))):
                     v1 = utils.replace_spl_white_spaces_with_space(v)
@@ -4345,19 +4394,18 @@ class DataFrame:
     # TODO: need proper xpath based exclusion to better handle noise
     def explode_json(self, col, prefix = None, accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None,
         merge_list_method = None, collapse_primitive_list = None, url_encoded_cols = None, nested_cols = None, custom_map_parsing_funcs = {}, collapse = None,
-        max_results = None, ignore_if_missing = None, default_val = None, dmsg = ""):
+        max_results = None, default_val = None, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "explode_json")
 
         # resolve parameters
-        merge_list_method = utils.resolve_default_parameter("merge_list_method", merge_list_method, "join", dmsg) 
-        collapse_primitive_list = utils.resolve_default_parameter("collapse_primitive_list", collapse_primitive_list, False, dmsg)
-        collapse = utils.resolve_default_parameter("collapse", collapse, False, dmsg)
-        ignore_if_missing = utils.resolve_default_parameter("ignore_if_missing", ignore_if_missing, False, dmsg)
+        merge_list_method = utils.resolve_default_parameter("merge_list_method", merge_list_method, "cogroup", dmsg) 
+        collapse_primitive_list = utils.resolve_default_parameter("collapse_primitive_list", collapse_primitive_list, True, dmsg)
+        collapse = utils.resolve_default_parameter("collapse", collapse, True, dmsg)
         default_val = utils.resolve_default_parameter("default_val", default_val, "", dmsg)
 
         # validation
         if (prefix is None):
-            utils.warn("{}: prefix = None is deprecated. Using the original column name as prefix: {}".format(dmsg, col))
+            utils.warn_once("{}: prefix = None is deprecated. Using the original column name as prefix: {}".format(dmsg, col))
             prefix = col
 
         # check empty
@@ -4368,11 +4416,6 @@ class DataFrame:
         # warn
         if (excluded_cols is not None):
             utils.print_code_todo_warning("{}: excluded_cols is work in progress and may not work in all scenarios".format(dmsg))
-
-        # validation
-        if (col not in self.header_map.keys()):
-            utils.raise_exception_or_warn("{}: Column not found: {}, {}".format(dmsg, str(col), str(self.header_fields)), ignore_if_missing)
-            return self
 
         # warn on risky combinations
         if (merge_list_method == "cogroup"):
@@ -5256,6 +5299,10 @@ def set_report_progress_perc(perc):
 
 def set_report_progress_min_thresh(thresh):
     utils.set_report_progress_min_thresh(thresh)
+
+def from_tsv_new_with_cols(header_fields, data = []):
+    data_fields = list([t.split("\t") for t in data])
+    return new_with_cols(header_fields, data_fields = data_fields)
 
 def new_with_cols(header_fields, data_fields = []):
     return DataFrame(header_fields, data_fields)

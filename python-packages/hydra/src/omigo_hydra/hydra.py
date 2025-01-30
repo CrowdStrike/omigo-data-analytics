@@ -1,5 +1,5 @@
 from omigo_core import utils, dataframe, tsv, tsvutils
-from omigo_hydra import file_paths_data_reader, file_paths_util, s3io_wrapper
+from omigo_hydra import file_paths_data_reader, file_paths_util, file_io_wrapper, s3io_wrapper
 
 def save_to_file(xtsv, output_file_name, s3_region = None, aws_profile = None):
     # do some validation

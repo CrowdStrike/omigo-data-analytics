@@ -353,5 +353,5 @@ def get_utctimestamp_millis(*args, **kwargs):
 
 def datestr_to_datetime(*args, **kwargs):
     utils.rate_limit_after_n_warnings("Deprecated. Use timefuncs package")
-    return datestr_to_datetime(*args, **kwargs)
+    return timefuncs.datestr_to_datetime(*args, **kwargs)
 

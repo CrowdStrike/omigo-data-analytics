@@ -6,7 +6,7 @@ from omigo_ext import sql_helper
 
 # TODO: this needs to be moved to an inner class. the public class needs to return a TSV object
 class PrestoClient(sql_helper.HadoopSqlBase):
-    def __init__(self, host = "127.0.0.1", port = 8889, user = None, catalog = "hive", schema = "default"):
+    def __init__(self, host = "127.0.0.1", port = 8889, user = None, catalog = "iceberg", schema = "default"):
         if (host is None):
             utils.warn("PrestoClient: host is null. Using localhost")
             host = "127.0.0.1"
