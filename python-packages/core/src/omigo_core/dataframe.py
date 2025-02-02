@@ -88,6 +88,12 @@ class DataFrame:
         # validate xcol
         return col in self.header_map.keys()
 
+    def __is_valid_col_pattern__(self, prefix):
+        if (prefix.find("*") != -1):
+            return True
+        else:
+            return False
+
     # cols is array of string
     def __select_inner__(self, col_or_cols, exclude_flag = None, dmsg = ""):
         # check empty
@@ -133,6 +139,20 @@ class DataFrame:
 
     def select(self, col_or_cols, dmsg = ""):
         return self.__select_inner__(col_or_cols, exclude_flag = False, dmsg = dmsg)
+
+    def select_and_add_empty_cols_if_missing(self, col_or_cols, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "select_and_add_empty_cols_if_missing")
+
+        # get cols
+        cols = self.__convert_param_to_array__(col_or_cols)
+
+        # non pattern cols
+        non_pattern_cols = list(filter(lambda t: self.__is_valid_col_pattern__(t) == False, cols)) 
+
+        # add the missing cols and then call select
+        return self \
+            .add_empty_cols_if_missing(non_pattern_cols, dmsg = dmsg) \
+            .select(col_or_cols, dmsg = dmsg) 
 
     def not_select(self, col_or_cols, dmsg = ""):
         return self.__select_inner__(col_or_cols, exclude_flag = True, dmsg = dmsg)
@@ -484,6 +504,27 @@ class DataFrame:
                     .drop_cols(empty_cols, dmsg = dmsg)
         else:
             return self
+
+    # method to drop cols except the given ones
+    def drop_cols_with_prefix_except(self, prefix, except_cols, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "drop_cols_with_prefix_except")
+
+        # validation
+        if (except_cols is None or len(except_cols) == 0):
+            raise Exception("{}: except_cols is None".format(dmsg))
+
+        # resolve the list of except cols
+        except_cols = self.__get_matching_cols__(except_cols, ignore_if_missing = ignore_if_missing)
+
+        # cols
+        cols_to_drop = self.__get_matching_cols__("{}:.*".format(prefix), ignore_if_missing = ignore_if_missing)
+
+        # effective_cols
+        effective_cols_to_drop = list(filter(lambda t: t not in except_cols, cols_to_drop))
+
+        # return
+        return self \
+            .drop_cols(effective_cols_to_drop, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
     # method to remove empty rows
     def drop_empty_rows(self, dmsg = ""):
@@ -4836,6 +4877,20 @@ class DataFrame:
         # return
         return True
 
+    def __convert_param_to_array__(self, col_or_cols):
+        # check if this is a single col name or an array
+        is_array = utils.is_array_of_string_values(col_or_cols)
+
+        # create name
+        col_patterns = []
+        if (is_array == True):
+            col_patterns = col_or_cols
+        else:
+            col_patterns.append(col_or_cols)
+
+        # return
+        return col_patterns
+
     # this is a utility function that takes list of column names that support regular expression.
     # col_or_cols is a special variable that can be either single column name or an array. python
     # treats a string as an array of characters, so little hacky but a more intuitive api wise
@@ -4853,15 +4908,8 @@ class DataFrame:
         if ("," in col_or_cols):
             col_or_cols = col_or_cols.split(",")
 
-        # check if this is a single col name or an array
-        is_array = utils.is_array_of_string_values(col_or_cols)
-
-        # create name
-        col_patterns = []
-        if (is_array == True):
-            col_patterns = col_or_cols
-        else:
-            col_patterns.append(col_or_cols)
+        # get array format
+        col_patterns = self.__convert_param_to_array__(col_or_cols)
 
         # transform col_patterns into a stronger prefix or suffix match wherever applicable
         col_patterns_transformed = []

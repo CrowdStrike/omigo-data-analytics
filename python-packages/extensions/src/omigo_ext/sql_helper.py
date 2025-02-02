@@ -19,7 +19,9 @@ class HadoopSqlBase:
         if ("*" in columns):
             utils.warn_once("HadoopSqlBase: execute_query: select * is not fully supported")
 
-        effective_columns = list([col for col in columns])
+        # create effective_columns
+        effective_columns = []
+
         # for group by queries, add the group by columns to the select columns
         if (group_by_cols is not None):
             for gcol in group_by_cols:
@@ -39,6 +41,10 @@ class HadoopSqlBase:
                 # if col is not found, add to effective_columns
                 if (found == False):
                     effective_columns.append(gcol)
+
+        # add select colummns after group by
+        for col in columns:
+            effective_columns.append(col)
 
         # use empty arrays as defaults
         if (url_encoded_cols is None):
@@ -65,8 +71,9 @@ class HadoopSqlBase:
             query = "{} where {}".format(query, where_clause)
 
         # group by clause
-        if (group_by_cols is not None):
-            query = "{} group by {}".format(query, ", ".join(group_by_cols))
+        if (group_by_cols is not None and len(group_by_cols) > 0):
+            group_by_cols_expr = ",".join(["{}".format(i+1) for i in range(len(group_by_cols))])
+            query = "{} group by {}".format(query, ", ".join(group_by_cols_expr))
 
         # having clause
         if (having_clause != ""):
