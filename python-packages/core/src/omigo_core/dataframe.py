@@ -5264,7 +5264,7 @@ def from_df(df, url_encoded_cols = []):
         # get the col values
         col_values = list([str(v) for v in df[t]])
         if (url_encoded_cols is not None and t in url_encoded_cols):
-            col_values = list([utils.url_encode(v) for v in col_values])
+            col_values = list([utils.url_encode(v) if (v is not None) else "" for v in col_values])
 
         # append
         cols_array.append(col_values)

@@ -6,11 +6,12 @@ import json
 # env variables
 JIRA_API_USER = "JIRA_API_USER"
 JIRA_API_PASS = "JIRA_API_PASS" # nosec
+JIRA_API_AUTH_TOKEN = "JIRA_API_AUTH_TOKEN"
 
 # Create a list of selected columns as JIRA has lot of noise
-SELECTED_COLS = ["assignee", "attachment", "components", "created", "description", "issuetype", "labels", "project", "reporter", "resolution", "resolutiondate", "status", "summary",
-    "updated"]
-URL_ENCODED_COLS = ["assignee", "attachment", "components", "creator", "description", "reporter", "summary", "assignee:name", "assignee:displayName", "project:name",
+SELECTED_COLS = ["assignee", "attachment", "components", "created", "comment", "description", "issuetype", "labels", "project", "reporter", "resolution", "resolutiondate",
+    "status", "summary", "updated"]
+URL_ENCODED_COLS = ["assignee", "attachment", "comment", "components", "creator", "description", "reporter", "summary", "assignee:name", "assignee:displayName", "project:name",
     "reporter:name", "reporter:displayName"]
 
 # Some jira fields are maps, take only relevant cols
@@ -24,14 +25,14 @@ SELECTED_COLS_MAP = {
 }
 
 # expected columns after url encoded mapping
-EXPECTED_COLS = funclib.simple_map_to_url_encoded_col_names(["key", "assignee:name", "assignee:displayName", "attachment", "created", "issuetype:name", "labels", "project:key",
+EXPECTED_COLS = funclib.simple_map_to_url_encoded_col_names(["key", "assignee:name", "assignee:displayName", "attachment", "created", "comment", "issuetype:name", "labels", "project:key",
     "project:name", "reporter:name", "reporter:displayName", "resolution:name", "resolutiondate", "status:name", "summary", "description", "updated"], url_encoded_cols = URL_ENCODED_COLS)
 
-SPECIAL_COLS = ["attachment", "comments", "components"]
+SPECIAL_COLS = ["attachment", "comment", "components"]
 
 # api handler for searching jira
 class JiraSearch:
-    def __init__(self, server = None, username = None, password = None, verify = True):
+    def __init__(self, server = None, username = None, password = None, auth_token = None, verify = True):
         # warn
         utils.warn_once("JiraSearch: This is work in progress in extensions package. Some of the constants need to be decoupled")
 
@@ -39,25 +40,21 @@ class JiraSearch:
         if (server is None):
             raise Exception("JiraSearch: server is None")
 
-        # check for credentials
-        if (username is None or password is None):
-            # check for username
-            if (JIRA_API_USER not in os.environ.keys()):
-                raise Exception("JiraSearch: username is not defined, and env variable JIRA_API_USER is absent")
-
-            # check for password
-            if (JIRA_API_PASS not in os.environ.keys()):
-                raise Exception("JiraSearch: password is not defined, and env variable JIRA_API_PASS is absent")
-
-            # read username and password
-            username = os.environ[JIRA_API_USER]
-            password = os.environ[JIRA_API_PASS]
+        # init
+        self.server = server
+        self.jira_instance = None
 
         # instantiate and return
-        self.server = server
         jira_options = {"server": self.server, "verify": verify, "headers": {'content-type': 'application/json'}}
         utils.info("JiraSearch: instantiating with options: {}".format(jira_options))
-        self.jira_instance = JIRA(jira_options, basic_auth = (username, password))
+
+        # check for credentials
+        if (username is not None and password is not None):
+            self.jira_instance = JIRA(jira_options, basic_auth = (username, password))
+        elif (auth_token is not None):
+            self.jira_instance = JIRA(jira_options, token_auth = auth_token)
+        else:
+            raise Exception("JiraSearch: No valid authentication mechanism found")
 
     def get_server(self):
         return self.server
@@ -93,7 +90,7 @@ class JiraSearch:
             # for k in result_fields.keys():
             #     value = str(result_fields[k]) if (result_fields[k] is not None) else ""
             #     if (value != "" and value != "None" and value != "null"):
-            #         utils.info("JiraSearch: search_issues: key: {}, value: {}".format(k, value))
+            #         utils.trace("JiraSearch: search_issues: key: {}, value: {}".format(k, value.replace("\n", "")[0:50] + "..."))
 
             # iterate and add each available field
             mp = {}
@@ -155,11 +152,11 @@ class JiraSearch:
 
 # TSV for search jira
 class JiraTSV(tsv.TSV):
-    def __init__(self, header, data, jira_search = None, server = None, username = None, password = None, verify = True):
+    def __init__(self, header, data, jira_search = None, server = None, username = None, password = None, auth_token = None, verify = True):
         super().__init__(header, data)
 
         # instantiate
-        self.jira_search = jira_search if (jira_search is not None) else JiraSearch(server = server, username = username, password = password, verify = verify)
+        self.jira_search = jira_search if (jira_search is not None) else JiraSearch(server = server, username = username, password = password, auth_token = auth_token, verify = verify)
 
     def search_issues(self, query_template, prefix, extra_cols = None, url_encoded_cols = URL_ENCODED_COLS, max_results = 10, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "JiraTSV: search_issues")

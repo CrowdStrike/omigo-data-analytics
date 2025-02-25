@@ -1,7 +1,7 @@
 import urllib
 import json
 import requests
-from omigo_core import tsv, utils
+from omigo_core import dataframe, utils
 
 # https://stackoverflow.com/questions/29931671/making-an-api-call-in-python-with-an-api-that-requires-a-bearer-token
 class BearerAuth(requests.auth.AuthBase):
@@ -97,8 +97,8 @@ def read_url_json(url, query_params = {}, headers = {}, body = None, username = 
         timeout_sec = timeout_sec, verify = verify, method = method)
 
     # construct header
-    header = "\t".join(["json_encoded", "status_code", "error_msg"])
-    data = []
+    header_fields = list(["json_encoded", "status_code", "error_msg"])
+    data_fields = []
 
     # look for error conditions
     if (status_code == 200):
@@ -110,19 +110,19 @@ def read_url_json(url, query_params = {}, headers = {}, body = None, username = 
             # iterate and add as row
             for v in json_obj:
                 fields = [utils.url_encode(json.dumps(v).replace("\n", " ")), str(status_code), str(error_msg)]
-                data.append("\t".join(fields))
+                data_fields.append(fields)
         elif (isinstance(json_obj, dict)):
             fields = [utils.url_encode(json.dumps(json_obj).replace("\n", " ")), str(status_code), str(error_msg)]
-            data.append("\t".join(fields))
+            data_fields.append(fields)
         else:
             fields = ["", "0", "Unable to parse the json response: {}".format(response_str)]
-            data.append("\t".join(fields))
+            data_fields.append(fields)
     else:
         fields = ["", "0", "Unable to parse the json response: {}".format(utils.url_encode(response_str).replace("\n", " "))]
-        data.append("\t".join(fields))
+        data_fields.append(fields)
 
     # return
-    return tsv.TSV(header, data).validate()
+    return dataframe.DataFrame(header_fields, data_fields).validate()
 
 def read_url_response(url, query_params = {}, headers = {}, body = None, username = None, password = None, api_token = None, timeout_sec = 120, verify = True, method = None,
     num_retries = 1, retry_sleep_sec = 1):
@@ -249,5 +249,7 @@ def read_url_as_tsv(url, query_params = {}, headers = {}, sep = None, username =
         data = [x.replace(sep, "\t") for x in data]
 
     # return
-    return tsv.TSV(header, data).validate()
+    header_fields = header.split(sep)
+    data_fields = [t.split(sep) for t in data]
+    return dataframe.DataFrame(header_fields, data_fields).validate()
 
