@@ -152,7 +152,7 @@ class DataFrame:
         # add the missing cols and then call select
         return self \
             .add_empty_cols_if_missing(non_pattern_cols, dmsg = dmsg) \
-            .select(col_or_cols, dmsg = dmsg) 
+            .select(col_or_cols, dmsg = dmsg)
 
     def not_select(self, col_or_cols, dmsg = ""):
         return self.__select_inner__(col_or_cols, exclude_flag = True, dmsg = dmsg)
