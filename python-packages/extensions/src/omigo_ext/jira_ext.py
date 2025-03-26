@@ -1,4 +1,4 @@
-from omigo_core import tsv, utils, funclib
+from omigo_core import dataframe, utils, funclib
 from jira import JIRA
 import os
 import json
@@ -59,8 +59,11 @@ class JiraSearch:
     def get_server(self):
         return self.server
 
-    def search_issues(self, query, extra_cols = None, url_encoded_cols = URL_ENCODED_COLS, max_results = 10, dmsg = ""):
+    def search_issues(self, query, extra_cols = None, url_encoded_cols = URL_ENCODED_COLS, max_results = None, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "JiraSearch: search_issues")
+
+        # resolve num_warnings
+        max_results = int(utils.resolve_default_parameter("max_results", max_results, "10", "{}: {}".format(dmsg, query)))
 
         # the query is assumed to be resolved
         search_results = self.jira_instance.search_issues(query, maxResults = max_results)
@@ -77,10 +80,10 @@ class JiraSearch:
 
         # check for empty
         if (search_results is None or len(search_results) == 0):
-            return tsv.new_with_cols(expected_cols)
+            return dataframe.new_with_cols(expected_cols)
 
         # iterate
-        result_xtsvs = []
+        result_xdfs = []
         for search_result in search_results:
             # jira has a special attribute that holds all fields
             key = search_result.raw["key"]
@@ -141,30 +144,30 @@ class JiraSearch:
                     mp_encoded[k] = mp[k]
 
             # append to tsvs
-            result_xtsvs.append(tsv.from_maps([mp_encoded]))
+            result_xdfs.append(dataframe.from_maps([mp_encoded]))
 
         # merge
-        result = tsv.merge_union(result_xtsvs) \
+        result = dataframe.merge_union(result_xdfs) \
             .add_empty_cols_if_missing(expected_cols)
 
         # return
         return result
 
-# TSV for search jira
-class JiraTSV(tsv.TSV):
-    def __init__(self, header, data, jira_search = None, server = None, username = None, password = None, auth_token = None, verify = True):
-        super().__init__(header, data)
+# DF for search jira
+class JiraDF(dataframe.DataFrame):
+    def __init__(self, header, data_fields, jira_search = None, server = None, username = None, password = None, auth_token = None, verify = True):
+        super().__init__(header, data_fields)
 
         # instantiate
         self.jira_search = jira_search if (jira_search is not None) else JiraSearch(server = server, username = username, password = password, auth_token = auth_token, verify = verify)
 
     def search_issues(self, query_template, prefix, extra_cols = None, url_encoded_cols = URL_ENCODED_COLS, max_results = 10, dmsg = ""):
-        dmsg = utils.extend_inherit_message(dmsg, "JiraTSV: search_issues")
+        dmsg = utils.extend_inherit_message(dmsg, "JiraDF: search_issues")
 
         def __search_issues_explode_func__(mp):
             # resolve query
             query = utils.replace_template_props(mp, query_template)
-            utils.info("JiraTSV: search_issues: resolved query: {}".format(query))
+            utils.info("JiraDF: search_issues: resolved query: {}".format(query))
 
             # call jira search
             results = self.jira_search.search_issues(query, extra_cols = extra_cols, max_results = max_results, dmsg = dmsg)
