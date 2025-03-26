@@ -157,6 +157,51 @@ class DataFrame:
     def not_select(self, col_or_cols, dmsg = ""):
         return self.__select_inner__(col_or_cols, exclude_flag = True, dmsg = dmsg)
 
+    def select_cols_with_cond_exists(self, func, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "select_cols_with_cond_exists")
+
+        # found cols
+        found_cols = []
+
+        # iterate and find the matching columns
+        for col in self.get_columns():
+            # apply func
+            vs = list(filter(lambda t: func(t) == True, self.col_as_array_uniq(col)))
+
+            # check if any values matched
+            if (len(vs) > 0):
+                found_cols.append(col)
+
+        # check for empty
+        if (len(found_cols) == 0):
+            return dataframe.create_empty()
+        else:
+            return self \
+                .select(found_cols, dmsg = dmsg)
+
+    def select_rows_with_cond_exists(self, func, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "select_rows_with_cond_exists")
+
+        # found rows
+        new_data_fields = []
+
+        # iterate and find the matching columns
+        for fields in self.get_data_fields():
+            vs = list(filter(lambda t: func(t) == True, fields))
+            if (len(vs) > 0):
+                new_data_fields.append(fields)
+
+        # create a new dataframe
+        return new_with_cols(self.get_columns(), data_fields = new_data_fields)
+
+    def select_rows_and_cols_with_cond_exists(self, func, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "select_rows_and_cols_with_cond_exists")
+
+        # return
+        return self \
+            .select_rows_with_cond_exists(func, dmsg = dmsg) \
+            .select_cols_with_cond_exists(func, dmsg = dmsg)
+
     def values_not_in(self, col, values, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "values_not_in")
         return self.filter([col], lambda x: x not in values, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
