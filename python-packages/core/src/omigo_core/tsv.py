@@ -1,14 +1,5 @@
 """TSV Class"""
-import re
-import math
-import pandas as pd
-import random
-import json
-from omigo_core import utils, tsvutils, udfs, dataframe
-import sys
-import time
-import numpy as np
-from io import StringIO
+from omigo_core import utils
 
 # Deprecated
 class TSV:
@@ -24,255 +15,256 @@ class TSV:
         self.header = header
         self.data = data
         self.header_fields = header.split("\t")
+        utils.warn_once("Deprecated")
 
     def to_string(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).to_string(*args, **kwargs)
+        return self
 
     def get_content_as_string(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).get_content_as_string(*args, **kwargs)
+        return self
 
     def validate(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).validate(*args, **kwargs)
+        return self
 
     def has_col(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).has_col(*args, **kwargs)
+        return self
 
     def select(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).select(*args, **kwargs)
+        return self
 
     def values_not_in(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).values_not_in(*args, **kwargs)
+        return self
 
     def values_in(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).values_in(*args, **kwargs)
+        return self
 
     def not_match(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).not_match(*args, **kwargs)
+        return self
 
     def not_regex_match(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).not_regex_match(*args, **kwargs)
+        return self
 
     def match(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).match(*args, **kwargs)
+        return self
 
     def regex_match(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).regex_match(*args, **kwargs)
+        return self
 
     def not_eq(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).not_eq(*args, **kwargs)
+        return self
 
     def eq(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).eq(*args, **kwargs)
+        return self
 
     def eq_int(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).eq_int(*args, **kwargs)
+        return self
 
     def eq_float(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).eq_float(*args, **kwargs)
+        return self
 
     def eq_str(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).eq_str(*args, **kwargs)
+        return self
 
     def not_eq_int(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).not_eq_int(*args, **kwargs)
+        return self
 
     def not_eq_float(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).not_eq_float(*args, **kwargs)
+        return self
 
     def not_eq_str(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).not_eq_str(*args, **kwargs)
+        return self
 
     def is_nonzero(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).is_nonzero(*args, **kwargs)
+        return self
 
     def is_nonzero_int(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).is_nonzero_int(*args, **kwargs)
+        return self
 
     def is_nonzero_float(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).is_nonzero_float(*args, **kwargs)
+        return self
 
     def lt_str(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).lt_str(*args, **kwargs)
+        return self
 
     def le_str(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).le_str(*args, **kwargs)
+        return self
 
     def gt_str(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).gt_str(*args, **kwargs)
+        return self
 
     def ge_str(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).ge_str(*args, **kwargs)
+        return self
 
     def gt(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).gt(*args, **kwargs)
+        return self
 
     def gt_int(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).gt_int(*args, **kwargs)
+        return self
 
     def gt_float(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).gt_float(*args, **kwargs)
+        return self
 
     def ge(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).ge(*args, **kwargs)
+        return self
 
     def ge_int(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).ge_int(*args, **kwargs)
+        return self
 
     def ge_float(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).ge_float(*args, **kwargs)
+        return self
 
     def lt(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).lt(*args, **kwargs)
+        return self
 
     def lt_int(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).lt_int(*args, **kwargs)
+        return self
 
     def lt_float(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).lt_float(*args, **kwargs)
+        return self
 
     def le(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).le(*args, **kwargs)
+        return self
 
     def le_int(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).le_int(*args, **kwargs)
+        return self
 
     def le_float(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).le_float(*args, **kwargs)
+        return self
 
     def startswith(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).startswith(*args, **kwargs)
+        return self
 
     def not_startswith(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).not_startswith(*args, **kwargs)
+        return self
 
     def endswith(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).endswith(*args, **kwargs)
+        return self
 
     def not_endswith(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).not_endswith(*args, **kwargs)
+        return self
 
     def is_empty_str(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).is_empty_str(*args, **kwargs)
+        return self
 
     def is_nonempty_str(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).is_nonempty_str(*args, **kwargs)
+        return self
 
     def replace_str_inline(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).replace_str_inline(*args, **kwargs)
+        return self
 
     def group_count(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).group_count(*args, **kwargs)
+        return self
 
     def ratio(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).ratio(*args, **kwargs)
+        return self
 
     def ratio_const(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).ratio_const(*args, **kwargs)
+        return self
 
     def apply_precision(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).apply_precision(*args, **kwargs)
+        return self
 
     def skip(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).skip(*args, **kwargs)
+        return self
 
     def skip_rows(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).skip_rows(*args, **kwargs)
+        return self
 
     def last(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).last(*args, **kwargs)
+        return self
 
     def take(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).take(*args, **kwargs)
+        return self
 
     def distinct(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).distinct(*args, **kwargs)
+        return self
 
     def distinct_cols(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).distinct_cols(*args, **kwargs)
+        return self
 
     def drop(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).drop(*args, **kwargs)
+        return self
 
     def drop_cols(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).drop_cols(*args, **kwargs)
+        return self
 
     def drop_cols_with_prefix(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).drop_cols_with_prefix(*args, **kwargs)
+        return self
 
     def drop_cols_with_suffix(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).drop_cols_with_suffix(*args, **kwargs)
+        return self
 
     def drop_if_exists(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).drop_if_exists(*args, **kwargs)
+        return self
 
     def drop_cols_if_exists(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).drop_cols_if_exists(*args, **kwargs)
+        return self
 
     def drop_empty_cols(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).drop_empty_cols(*args, **kwargs)
+        return self
 
     def drop_empty_rows(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).drop_empty_rows(*args, **kwargs)
+        return self
 
     def window_aggregate(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).window_aggregate(*args, **kwargs)
+        return self
 
     def group_by_key(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).group_by_key(*args, **kwargs)
+        return self
 
     def arg_min(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).arg_min(*args, **kwargs)
+        return self
 
     def arg_max(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).arg_max(*args, **kwargs)
+        return self
 
     def aggregate(self, *args, **kwargs):
-        return dataframe.aggregate(*args, **kwargs)
+        return self 
 
     def filter(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).filter(*args, **kwargs)
+        return self
 
     def exclude_filter(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).exclude_filter(*args, **kwargs)
+        return self
 
     def any_col_with_cond_exists_filter(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).any_col_with_cond_exists_filter(*args, **kwargs)
+        return self
 
     def any_col_with_cond_exists_exclude_filter(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).any_col_with_cond_exists_exclude_filter(*args, **kwargs)
+        return self
 
     def all_col_with_cond_exists_filter(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).all_col_with_cond_exists_filter(*args, **kwargs)
+        return self
 
     def all_col_with_cond_exists_exclude_filter(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).all_col_with_cond_exists_exclude_filter(*args, **kwargs)
+        return self
 
     def transform(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).transform(*args, **kwargs)
+        return self
 
     def transform_inline(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).transform_inline(*args, **kwargs)
+        return self
 
     def transform_inline_log(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).transform_inline_log(*args, **kwargs)
+        return self
 
     def transform_inline_log2(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).transform_inline_log2(*args, **kwargs)
+        return self
 
     def transform_inline_log10(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).transform_inline_log10(*args, **kwargs)
+        return self
 
     def transform_inline_log1p(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).transform_inline_log1p(*args, **kwargs)
+        return self
 
     def transform_inline_log1p_base2(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).transform_inline_log1p_base2(*args, **kwargs)
+        return self
 
     def transform_inline_log1p_base10(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).transform_inline_log1p_base10(*args, **kwargs)
+        return self
 
     def rename(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).rename(*args, **kwargs)
+        return self
 
     def get_header(self, *args, **kwargs):
         return self.header
@@ -280,26 +272,23 @@ class TSV:
     def get_data(self, *args, **kwargs):
         return self.data
 
-    def get_header_map(self, *args, **kwargs):
-        raise Exception("get_header_map: not supported")
-
     def num_rows(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).num_rows(*args, **kwargs)
+        return self
 
     def num_cols(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).num_cols(*args, **kwargs)
+        return self
 
     def get_size_in_bytes(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).get_size_in_bytes(*args, **kwargs)
+        return self
 
     def size_in_bytes(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).size_in_bytes(*args, **kwargs)
+        return self
 
     def size_in_mb(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).size_in_mb(*args, **kwargs)
+        return self
 
     def size_in_gb(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).size_in_gb(*args, **kwargs)
+        return self
 
     def get_header_fields(self, *args, **kwargs):
         return self.header_fields
@@ -308,449 +297,379 @@ class TSV:
         return self.header_fields
 
     def get_column(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).get_column(*args, **kwargs)
+        return self
 
     def columns(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).columns(*args, **kwargs)
+        return self
 
     def get_column_index(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).columns(*args, **kwargs)
+        return self
 
     def export_to_maps(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).export_to_maps(*args, **kwargs)
+        return self
 
     def to_maps(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).to_maps(*args, **kwargs)
+        return self
 
     def to_int(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).to_int(*args, **kwargs)
+        return self
 
     def to_numeric(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).to_numeric(*args, **kwargs)
+        return self
 
     def add_seq_num(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).add_seq_num(*args, **kwargs)
+        return self
 
     def show_transpose(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).show_transpose(*args, **kwargs)
+        return self
 
     def show(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).show(*args, **kwargs)
+        return self
 
     def show_sample(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).show_sample(*args, **kwargs)
+        return self
 
     def col_as_array(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).col_as_array(*args, **kwargs)
+        return self
 
     def col_as_float_array(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).col_as_float_array(*args, **kwargs)
+        return self
 
     def col_as_int_array(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).col_as_int_array(*args, **kwargs)
+        return self
 
     def col_as_array_uniq(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).col_as_array_uniq(*args, **kwargs)
+        return self
 
     def col_as_array_uniq_non_empty(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).col_as_array_uniq_non_empty(*args, **kwargs)
+        return self
 
     def cols_as_map(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).cols_as_map(*args, **kwargs)
+        return self
 
     def sort(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).sort(*args, **kwargs)
+        return self
 
     def reverse_sort(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).reverse_sort(*args, **kwargs)
+        return self
 
     def numerical_sort(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).numerical_sort(*args, **kwargs)
+        return self
 
     def reverse_numerical_sort(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).reverse_numerical_sort(*args, **kwargs)
+        return self
 
     def reorder(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).reorder(*args, **kwargs)
+        return self
 
     def reorder_reverse(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).reorder_reverse(*args, **kwargs)
+        return self
 
     def reverse_reorder(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).reverse_reorder(*args, **kwargs)
+        return self
 
     def noop(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).noop(*args, **kwargs)
+        return self
 
     def to_df(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).to_df(*args, **kwargs)
+        return self
 
     def to_simple_df(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).to_simple_df(*args, **kwargs)
+        return self
 
     def export_to_df(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).export_to_df(*args, **kwargs)
+        return self
 
     def to_json_records(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).to_json_records(*args, **kwargs)
+        return self
 
     def to_csv(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).to_csv(*args, **kwargs)
+        return self
 
     def url_encode_inline(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).url_encode_inline(*args, **kwargs)
+        return self
 
     def url_decode_inline(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).url_decode_inline(*args, **kwargs)
+        return self
 
     def url_decode_clean_inline(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).url_decode_clean_inline(*args, **kwargs)
+        return self
 
     def url_encode(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).url_encode(*args, **kwargs)
+        return self
 
     def url_decode(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).url_decode(*args, **kwargs)
+        return self
 
     def resolve_url_encoded_cols(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).resolve_url_encoded_cols(*args, **kwargs)
+        return self
 
     def resolve_url_encoded_list_cols(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).resolve_url_encoded_list_cols(*args, **kwargs)
+        return self
 
     def resolve_all_url_encoded_cols(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).resolve_all_url_encoded_cols(*args, **kwargs)
+        return self
 
     def union(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).union(*args, **kwargs)
+        return self
 
     def difference(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).difference(*args, **kwargs)
+        return self
 
     def add_const(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).add_const(*args, **kwargs)
+        return self
 
     def add_const_if_missing(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).add_const_if_missing(*args, **kwargs)
+        return self
 
     def add_empty_cols_if_missing(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).add_empty_cols_if_missing(*args, **kwargs)
+        return self
 
     def add_row(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).add_row(*args, **kwargs)
+        return self
 
     def add_map_as_row(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).add_map_as_row(*args, **kwargs)
+        return self
 
     def assign_value(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).assign_value(*args, **kwargs)
+        return self
 
     def concat_as_cols(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).concat_as_cols(*args, **kwargs)
+        return self
 
     def add_col_prefix(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).add_col_prefix(*args, **kwargs)
+        return self
 
     def remove_suffix(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).remove_suffix(*args, **kwargs)
+        return self
 
     def add_prefix(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).add_prefix(*args, **kwargs)
+        return self
 
     def add_suffix(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).add_suffix(*args, **kwargs)
+        return self
 
     def rename_prefix(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).rename_prefix(*args, **kwargs)
+        return self
 
     def rename_suffix(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).rename_suffix(*args, **kwargs)
+        return self
 
     def remove_prefix(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).remove_prefix(*args, **kwargs)
+        return self
 
     def replace_prefix(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).replace_prefix(*args, **kwargs)
+        return self
 
     def replace_suffix(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).replace_suffix(*args, **kwargs)
+        return self
 
     def sample(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).sample(*args, **kwargs)
+        return self
 
     def sample_without_replacement(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).sample_without_replacement(*args, **kwargs)
+        return self
 
     def sample_with_replacement(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).sample_with_replacement(*args, **kwargs)
+        return self
 
     def sample_rows(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).sample_rows(*args, **kwargs)
+        return self
 
     def sample_n(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).sample_n(*args, **kwargs)
+        return self
 
     def sample_n_with_warn(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).sample_n_with_warn(*args, **kwargs)
+        return self
 
     def sample_n_with_replacement(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).sample_n_with_replacement(*args, **kwargs)
+        return self
 
     def sample_n_without_replacement(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).sample_n_without_replacement(*args, **kwargs)
+        return self
 
     def sample_group_by_topk_if_reached_limit(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).sample_group_by_topk_if_reached_limit(*args, **kwargs)
+        return self
 
     def warn_if_limit_reached(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).warn_if_limit_reached(*args, **kwargs)
+        return self
 
     def cap_min_inline(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).cap_min_inline(*args, **kwargs)
+        return self
 
     def cap_max_inline(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).cap_max_inline(*args, **kwargs)
+        return self
 
     def cap_min(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).cap_min(*args, **kwargs)
+        return self
 
     def cap_max(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).cap_max(*args, **kwargs)
+        return self
 
     def copy(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).copy(*args, **kwargs)
+        return self
 
     def sample_class(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).sample_class(*args, **kwargs)
+        return self
 
     def sample_group_by_col_value(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).sample_group_by_col_value(*args, **kwargs)
+        return self
 
     def sample_group_by_max_uniq_values_exact(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).sample_group_by_max_uniq_values_exact(*args, **kwargs)
+        return self
 
     def sample_group_by_max_uniq_values_approx(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).sample_group_by_max_uniq_values_approx(*args, **kwargs)
+        return self
 
     def sample_group_by_max_uniq_values(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).sample_group_by_max_uniq_values(*args, **kwargs)
+        return self
 
     def sample_group_by_max_uniq_values_per_class(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).sample_group_by_max_uniq_values_per_class(*args, **kwargs)
+        return self
 
     def sample_group_by_key(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).sample_group_by_key(*args, **kwargs)
+        return self
 
     def sample_column_by_max_uniq_values(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).sample_column_by_max_uniq_values(*args, **kwargs)
+        return self
 
     def sample_class_by_min_class_count(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).sample_class_by_min_class_count(*args, **kwargs)
+        return self
 
     def sample_class_by_max_values(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).sample_class_by_max_values(*args, **kwargs)
+        return self
 
     def left_join(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).left_join(*args, **kwargs)
+        return self
 
     def right_join(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).right_join(*args, **kwargs)
+        return self
 
     def inner_join(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).inner_join(*args, **kwargs)
+        return self
 
     def outer_join(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).outer_join(*args, **kwargs)
+        return self
 
     def join(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).join(*args, **kwargs)
+        return self
 
     def natural_join(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).natural_join(*args, **kwargs)
+        return self
 
     def inner_map_join(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).inner_map_join(*args, **kwargs)
+        return self
 
     def left_map_join(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).left_map_join(*args, **kwargs)
+        return self
 
     def split_batches(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).split_batches(*args, **kwargs)
+        return self
 
     def generate_key_hash(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).generate_key_hash(*args, **kwargs)
+        return self
 
     def cumulative_sum(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).cumulative_sum(*args, **kwargs)
+        return self
 
     def replicate_rows(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).replicate_rows(*args, **kwargs)
+        return self
 
     def explode(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).explode(*args, **kwargs)
+        return self
 
     def explode_json(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).explode_json(*args, **kwargs)
+        return self
 
     def explode_json_v2(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).explode_json_v2(*args, **kwargs)
+        return self
 
     def transpose(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).transpose(*args, **kwargs)
+        return self
 
     def reverse_transpose(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).reverse_transpose(*args, **kwargs)
+        return self
 
     def flatmap(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).flatmap(*args, **kwargs)
+        return self
 
     def to_tuples(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).to_tuples(*args, **kwargs)
+        return self
 
     def set_missing_values(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).set_missing_values(*args, **kwargs)
+        return self
 
     def extend_class(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).extend_class(*args, **kwargs)
+        return self
 
     def extend_external_class(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).extend_external_class(*args, **kwargs)
+        return self
 
     def custom_func(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).custom_func(*args, **kwargs)
+        return self
 
     def to_clipboard(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).to_clipboard(*args, **kwargs)
+        return self
 
     def filter_json_by_xpath(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).filter_json_by_xpath(*args, **kwargs)
+        return self
 
     def get_col_index(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).get_col_index(*args, **kwargs)
+        return self
 
     def get_hash(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).get_hash(*args, **kwargs)
+        return self
 
     def is_empty(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).is_empty(*args, **kwargs)
+        return self
 
     def has_empty_header(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).has_empty_header(*args, **kwargs)
+        return self
 
     def write(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).write(*args, **kwargs)
+        return self
 
     def show_custom_func(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).show_custom_func(*args, **kwargs)
+        return self
 
     def show_group_count(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).show_group_count(*args, **kwargs)
+        return self
 
     def show_select_func(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).show_select_func(*args, **kwargs)
+        return self
 
     def show_transpose_custom_func(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).show_transpose_custom_func(*args, **kwargs)
+        return self
 
     def print(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).print(*args, **kwargs)
+        return self
 
     def print_stats(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).print_stats(*args, **kwargs)
+        return self
 
     def warn(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).warn(*args, **kwargs)
+        return self
 
     def warn_once(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).warn_once(*args, **kwargs)
+        return self
 
     def get_max_size_cols_stats(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).get_max_size_cols_stats(*args, **kwargs)
+        return self
 
     def sleep(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).sleep(*args, **kwargs)
+        return self
 
     def split(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).split(*args, **kwargs)
+        return self
 
     def split_str(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).split_str(*args, **kwargs)
+        return self
 
     def sample_group_by_topk(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).sample_group_by_topk(*args, **kwargs)
+        return self
 
     def resolve_template_col(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).resolve_template_col(*args, **kwargs)
+        return self
 
     def resolve_template_col_inline(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).resolve_template_col_inline(*args, **kwargs)
-
-    def enable_info_mode(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).enable_info_mode(*args, **kwargs)
-
-    def disable_info_mode(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).disable_info_mode(*args, **kwargs)
-
-    def enable_debug_mode(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).enable_debug_mode(*args, **kwargs)
-
-    def disable_debug_mode(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).disable_debug_mode(*args, **kwargs)
-
-    def enable_trace_mode(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).enable_trace_mode(*args, **kwargs)
-
-    def disable_trace_mode(self, *args, **kwargs):
-        return dataframe.from_header_data(self.header, self.data).disable_trace_mode(*args, **kwargs)
-
-def get_version(*args, **kwargs):
-    return dataframe.get_version(*args, **kwargs)
-
-def get_func_name(*args, **kwargs):
-    return dataframe.get_func_name(*args, **kwargs)
-
-def read(*args, **kwargs):
-    return dataframe.read(*args, **kwargs)
-
-def write(*args, **kwargs):
-    return dataframe.write(*args, **kwargs)
-
-def merge(*args, **kwargs):
-    return dataframe.merge(*args, **kwargs)
-
-def merge_union(*args, **kwargs):
-    return dataframe.merge_union(*args, **kwargs)
-
-def merge_intersect(*args, **kwargs):
-    return dataframe.merge_intersect(*args, **kwargs)
-
-def exists(*args, **kwargs):
-    return dataframe.exists(*args, **kwargs)
-
-def from_df(*args, **kwargs):
-    return dataframe.from_df(*args, **kwargs)
-
-def from_maps(*args, **kwargs):
-    return dataframe.from_maps(*args, **kwargs)
-
-def enable_debug_mode(*args, **kwargs):
-    return dataframe.enable_debug_mode(*args, **kwargs)
-
-def disable_debug_mode(*args, **kwargs):
-    return dataframe.disable_debug_mode(*args, **kwargs)
-
-def set_report_progress_perc(*args, **kwargs):
-    return dataframe.set_report_progress_perc(*args, **kwargs)
-
-def set_report_progress_min_thresh(*args, **kwargs):
-    return dataframe.set_report_progress_min_thresh(*args, **kwargs)
-
-def newWithCols(*args, **kwargs):
-    return dataframe.newWithCols(*args, **kwargs)
-
-def new_with_cols(*args, **kwargs):
-    return dataframe.from_tsv_new_with_cols(*args, **kwargs)
-
-def create_empty(*args, **kwargs):
-    return dataframe.create_empty(*args, **kwargs)
-
+        return self
