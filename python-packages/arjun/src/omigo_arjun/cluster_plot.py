@@ -51,27 +51,27 @@ class GraphLayout:
         self.height = height
         self.refresh_sec = refresh_sec
         self.output_path = output_path
-        
+
         # initialize figure
         self.xgraphs = self.__flatten_graphs__(xgraph_refs)
         self.fig = None
-        
+
         # initialize output path
         if (self.output_path is not None):
             get_cluster_handler().create(self.output_path)
             get_cluster_handler().create(self.output_path + "-chat")
-        
+
     def init_source_figure(self):
         # initialize source and figure
         for xgraph in self.xgraphs:
             xgraph.init_source_figure()
-            
+
         # create cols
         xfigs_cols = []
-        
+
         # initialize per graph height
         xheight = int(self.height / len(self.xgraph_refs))
-        
+
         # iterate
         for xgraph_ref in self.xgraph_refs:
             if (isinstance(xgraph_ref, list)):
@@ -79,22 +79,22 @@ class GraphLayout:
                 # store in a proper variable
                 xgraphs_inner = xgraph_ref
                 xwidth = int(self.width / len(xgraphs_inner))
-                
+
                 # adjust the width of the figure
                 for xgraph_inner in xgraphs_inner:
                     xgraph_inner.set_width_height(xwidth, xheight)
                     xfigs.append(xgraph_inner.get_figure())
-                    
+
                 # add row
                 xfigs_cols.append(row(xfigs))
             else:
                 xgraph_inner = xgraph_ref
                 xgraph_inner.set_width_height(self.width, xheight)
                 xfigs_cols.append(xgraph_inner.get_figure())
-                
+
         # create a column layout
         self.fig = column(xfigs_cols)
-        
+
         # persist
         # if (self.output_path is not None):
         #    get_cluster_handler().update_json("{}/{}".format(self.output_path, cluster_common_v2.construct_dynamic_value_json()), json_item(self.fig))
@@ -112,10 +112,10 @@ class GraphLayout:
                     xgraphs.append(xgraph)
             else:
                 xgraphs.append(xgraph_ref)
-                
+
         # return
         return xgraphs
-                
+
     def plot(self):
         def __demo_plot_inner__(doc):
             # iterate through each of the xgraph and call the plot function
@@ -123,35 +123,35 @@ class GraphLayout:
                 # plot_func = xgraph.get_plot_inner_func()
                 # plot_func(doc)
                 xgraph.init_plot()
-                    
+
             def __demo_plot_inner_update__():
                 # iterate through all xgraphs
                 for xgraph in self.xgraphs:
                     plot_update_func = xgraph.get_plot_inner_update_func()
                     plot_update_func()
-                    
+
                 # persist
                 if (self.output_path is not None):
                     get_cluster_handler().update_json("{}/{}".format(self.output_path, cluster_common_v2.construct_dynamic_value_json()), json_item(self.fig))
-                    
+
             # add periodic update
             doc.add_periodic_callback(__plot_inner_update__, self.refresh_sec * 1000)
-            
+
             # add root
             doc.add_root(self.fig)
-        
+
         # main function
         self.init_source_figure()
         output_notebook()
         show(__demo_plot_inner__)
-        
 
-# Base class for each dynamic visualization    
+
+# Base class for each dynamic visualization
 class BaseGraph:
     def __init__(self, input_path_map = None, interval = None, window = None, cols = None, start_ts_col = None, end_ts_col = None,
         rollover = None, width = None, height = None, title = None, refresh_sec = None, start_date_str = None, end_date_str = None, filter_transform_func = None,
         figure_name = None, delta_update_flag = None, output_path = None):
-        
+
         self.input_path_map = input_path_map
         self.interval = interval
         self.window = window
@@ -168,7 +168,7 @@ class BaseGraph:
         self.filter_transform_func = filter_transform_func
         self.delta_update_flag = delta_update_flag
         self.output_path = output_path
-        
+
         # initialize start and end date string correctly
         self.start_date_str, self.end_date_str = self.__infer_start_and_end_dates__(start_date_str, end_date_str)
 
@@ -176,41 +176,41 @@ class BaseGraph:
         self.sources = None
         self.fig = None
         self.local_xtsv_base = None
-        
+
     # TODO: drop the seconds
     def __infer_start_and_end_dates__(self, sdate_str, edate_str):
         if (sdate_str is None and edate_str is None):
             edate_str = funclib.utctimestamp_to_datetime_str(funclib.get_utctimestamp_sec())
-            sdate_str = funclib.utctimestamp_to_datetime_str(funclib.datetime_to_utctimestamp(edate_str) - self.interval * self.rollover)     
+            sdate_str = funclib.utctimestamp_to_datetime_str(funclib.datetime_to_utctimestamp(edate_str) - self.interval * self.rollover)
         elif (sdate_str is None and edate_str is not None):
             sdate_str = funclib.utctimestamp_to_datetime_str(funclib.datetime_to_utctimestamp(edate_str) - self.interval * self.rollover)
         elif (sdate_str is not None and edate_str is None):
             edate_str = funclib.utctimestamp_to_datetime_str(funclib.datetime_to_utctimestamp(sdate_str) + self.interval * self.rollover)
-            
+
         # normalize date strings
         sdate_str = funclib.utctimestamp_to_datetime_str(funclib.datetime_to_utctimestamp(sdate_str))
         edate_str = funclib.utctimestamp_to_datetime_str(funclib.datetime_to_utctimestamp(edate_str))
 
         utils.info("__infer_start_and_end_dates__: start: {}, end: {}".format(sdate_str, edate_str))
         return sdate_str, edate_str
-        
+
     def get_next_data_update(self, local_xtsv_base):
         raise Exception("Derived class should implement")
-        
+
     def refresh_plot_data(self, xtsv):
         raise Exception("Derived class should implement")
-        
+
     def create_sources(self):
         raise Exception("Derived class should implement")
-        
+
     def create_figure(self):
         raise Exception("Derived class should implement")
-        
+
     def init_source_figure(self):
         # create source and figure. the figure needs the source so can only be done after source is created
         self.sources = self.create_sources()
         self.fig = self.create_figure()
-        
+
     def init_plot(self):
         # timestamps
         self.local_end_ts = funclib.datetime_to_utctimestamp(self.start_date_str)
@@ -218,7 +218,7 @@ class BaseGraph:
 
         # read data slice
         self.local_xtsv_base = tsv.new_with_cols(self.cols)
-        
+
     def set_width_height(self, xwidth, xheight):
         if (isinstance(self.fig, Row)):
             for xchild in self.fig.children:
@@ -237,25 +237,25 @@ class BaseGraph:
         else:
             self.fig.width = xwidth
             self.fig.height = xheight
-        
+
     def get_plot_inner_func(self):
         def __demo_plot_inner__(doc):
             # initialize plot
             self.init_plot()
-            
+
             # show(data_table)
             print("calling add_root")
             doc.add_periodic_callback(self.get_plot_inner_update_func(), self.refresh_sec * 1000)
             doc.add_root(self.fig)
 
         return __plot_inner__
-    
+
     def get_plot_inner_update_func(self):
         # periodic callback function
         def __demo_plot_inner_update__():
             # check if local_end_ts is more that current timestamp
             if (self.local_end_ts > self.local_finished_ts - self.window):
-                utils.info("local_end_ts:{} > local_finished_ts:{} - self.window:{}".format(self.local_end_ts, self.local_finished_ts, self.window)) 
+                utils.info("local_end_ts:{} > local_finished_ts:{} - self.window:{}".format(self.local_end_ts, self.local_finished_ts, self.window))
                 # ignore
                 return
 
@@ -271,35 +271,35 @@ class BaseGraph:
 
             # call delta update or replace
             self.refresh_plot_data(xtsv)
-            
+
         return __plot_inner_update__
-    
+
     def plot(self):
         # initialize
         self.init_source_figure()
         self.init_plot()
-        
+
         # main function
         output_notebook()
         show(self.get_plot_inner_func())
-        
+
     def get_figure(self):
         return self.fig
-    
+
     def get_output_path(self):
         return self.output_path
 
-# Static process tree 
+# Static process tree
 class StaticGraphHostProcessTree(BaseGraph):
     def __init__(self, input_path_map = None, interval = None, window = None, cols = None, start_ts_col = None, end_ts_col = None,
         rollover = None, width = None, height = None, title = None, refresh_sec = None, start_date_str = None, end_date_str = None, filter_transform_func = None,
         delta_update_flag = None, output_path = None):
-        
+
         # call base class to store all variables
         super().__init__(input_path_map = input_path_map, interval = interval, window = window, cols = cols, start_ts_col = start_ts_col, end_ts_col = end_ts_col,
-            rollover = rollover, width = width, height = height, title = title, refresh_sec = refresh_sec, start_date_str = start_date_str, end_date_str = end_date_str, 
+            rollover = rollover, width = width, height = height, title = title, refresh_sec = refresh_sec, start_date_str = start_date_str, end_date_str = end_date_str,
             filter_transform_func = filter_transform_func, delta_update_flag = delta_update_flag, output_path = output_path)
-        
+
     # create source
     def create_sources(self):
         # create ColumnDataSource, and define table columns
@@ -309,23 +309,23 @@ class StaticGraphHostProcessTree(BaseGraph):
 
         # create source
         return {"default": ColumnDataSource(mp)}
-    
+
     def get_next_data_update(self, cur_end_ts, local_xtsv_base):
         # return
         return local_xtsv_base, local_xtsv_base
-    
+
     def refresh_plot_data(self, xtsv):
         # Do nothing
         pass
-    
+
     def create_figure(self):
         # construct start and end dates
         sdate_str = self.start_date_str
         edate_str = self.end_date_str
-        
+
         # get the timeestamps
         sdate_ts = funclib.datetime_to_utctimestamp(sdate_str)
-        edate_ts = funclib.datetime_to_utctimestamp(edate_str)            
+        edate_ts = funclib.datetime_to_utctimestamp(edate_str)
 
         # read base input
         xtsv = etl.scan_by_datetime_range(self.input_path_map["default"], sdate_str, edate_str, "output", num_par = 0, def_val_map = {})
@@ -371,7 +371,7 @@ class StaticGraphHostProcessTree(BaseGraph):
         label = Div(text = "<h3>{}</h3>".format(self.title))
         fig = ptree.plot_process_tree_omigo(data = p_tree_win, legend_col = "UserSid", show_table = True, height = 400, pid_fmt = "dec", title = None)
         return column(label, fig)
-    
+
     def set_width_height(self, xwidth, xheight):
         pass
 
@@ -379,12 +379,12 @@ class StaticGraphHorzLine(BaseGraph):
     def __init__(self, input_path_map = None, interval = None, window = None, cols = None, start_ts_col = None, end_ts_col = None,
         rollover = None, width = None, height = None, title = None, refresh_sec = None, start_date_str = None, end_date_str = None, filter_transform_func = None,
         delta_update_flag = None, output_path = None):
-        
+
         # call base class to store all variables
         super().__init__(input_path_map = input_path_map, interval = interval, window = window, cols = cols, start_ts_col = start_ts_col, end_ts_col = end_ts_col,
-            rollover = rollover, width = width, height = height, title = title, refresh_sec = refresh_sec, start_date_str = start_date_str, end_date_str = end_date_str, 
+            rollover = rollover, width = width, height = height, title = title, refresh_sec = refresh_sec, start_date_str = start_date_str, end_date_str = end_date_str,
             filter_transform_func = filter_transform_func, delta_update_flag = delta_update_flag, output_path = output_path)
-        
+
     # create source
     def create_sources(self):
         # create ColumnDataSource, and define table columns
@@ -394,33 +394,33 @@ class StaticGraphHorzLine(BaseGraph):
 
         # create source
         return {"default": ColumnDataSource(mp)}
-    
+
     def get_next_data_update(self, cur_end_ts, local_xtsv_base):
         # return
         return local_xtsv_base, local_xtsv_base
-    
+
     def refresh_plot_data(self, xtsv):
         # Do nothing
         pass
-    
+
     def create_figure(self):
         hr = Div(text = """<hr size="10">""", width = self.width, height = self.height)
         return hr
-    
+
     def set_width_height(self, xwidth, xheight):
-        self.fig.width = xwidth    
+        self.fig.width = xwidth
 
 class ContinuousGraph(BaseGraph):
     def __init__(self, input_path_map = None, interval = None, window = None, cols = None, start_ts_col = None, end_ts_col = None,
         rollover = None, width = None, height = None, title = None, refresh_sec = None, start_date_str = None, end_date_str = None, filter_transform_func = None,
         delta_update_flag = None, output_path = None, include_end_boundary = None):
-        
+
         # call base class to store all variables
         super().__init__(input_path_map = input_path_map, interval = interval, window = window, cols = cols, start_ts_col = start_ts_col, end_ts_col = end_ts_col,
-            rollover = rollover, width = width, height = height, title = title, refresh_sec = refresh_sec, start_date_str = start_date_str, end_date_str = end_date_str, 
+            rollover = rollover, width = width, height = height, title = title, refresh_sec = refresh_sec, start_date_str = start_date_str, end_date_str = end_date_str,
             filter_transform_func = filter_transform_func, delta_update_flag = delta_update_flag, output_path = output_path)
         self.include_end_boundary = include_end_boundary
-        
+
     # create source
     def create_sources(self):
         # create ColumnDataSource, and define table columns
@@ -430,15 +430,15 @@ class ContinuousGraph(BaseGraph):
 
         # create source
         return {"default": ColumnDataSource(mp)}
-    
+
     def get_next_data_update(self, cur_end_ts, local_xtsv_base):
         # construct start and end dates
         sdate_str = etl.get_etl_datetime_str_from_ts(cur_end_ts - self.interval - self.window)
         edate_str = etl.get_etl_datetime_str_from_ts(cur_end_ts)
-        
+
         # get the timeestamps
         sdate_ts = funclib.datetime_to_utctimestamp(sdate_str)
-        edate_ts = funclib.datetime_to_utctimestamp(edate_str)            
+        edate_ts = funclib.datetime_to_utctimestamp(edate_str)
 
         # read base input
         xtsv = etl.scan_by_datetime_range(self.input_path_map["default"], sdate_str, edate_str, "output", num_par = 0, def_val_map = {})
@@ -450,19 +450,19 @@ class ContinuousGraph(BaseGraph):
         # for each missing col, add to the data
         xtsv = xtsv.add_empty_cols_if_missing(self.cols)
         xtsv.add_empty_cols_if_missing([self.start_ts_col])
-        xtsv.add_empty_cols_if_missing([self.end_ts_col])        
+        xtsv.add_empty_cols_if_missing([self.end_ts_col])
 
         # check for empty
         if (xtsv.num_rows() == 0):
             return xtsv, local_xtsv_base
-        
+
         def __get_next_data_update_end_boundary_inner__(t):
             if (self.include_end_boundary == True):
                 return funclib.datetime_to_utctimestamp(t) >= sdate_ts and funclib.datetime_to_utctimestamp(t) <= edate_ts
             else:
                 return funclib.datetime_to_utctimestamp(t) >= sdate_ts and funclib.datetime_to_utctimestamp(t) < edate_ts
 
-        # apply the timestamp col filter. Call datetime conversion as the ts_col can be string or numeric format. TODO: Comparison boundaries are confusing 
+        # apply the timestamp col filter. Call datetime conversion as the ts_col can be string or numeric format. TODO: Comparison boundaries are confusing
         if (self.end_ts_col is not None):
             xtsv = xtsv \
                 .not_eq_str(self.end_ts_col, "") \
@@ -487,7 +487,7 @@ class ContinuousGraph(BaseGraph):
 
         # return
         return xtsv_new, local_xtsv_base
-    
+
     def refresh_plot_data(self, xtsv):
         # check for empty
         if (xtsv.num_rows() > 0):
@@ -507,10 +507,10 @@ class ContinousGraphDataTable(ContinuousGraph):
     def __init__(self, input_path_map = None, interval = None, window = None, cols = None, start_ts_col = None, end_ts_col = None,
         rollover = None, width = None, height = None, title = None, refresh_sec = None, start_date_str = None, end_date_str = None, filter_transform_func = None,
         delta_update_flag = None, output_path = None, include_end_boundary = None):
-        
+
         # call base class to store all variables
         super().__init__(input_path_map = input_path_map, interval = interval, window = window, cols = cols, start_ts_col = start_ts_col, end_ts_col = end_ts_col,
-            rollover = rollover, width = width, height = height, title = title, refresh_sec = refresh_sec, start_date_str = start_date_str, end_date_str = end_date_str, 
+            rollover = rollover, width = width, height = height, title = title, refresh_sec = refresh_sec, start_date_str = start_date_str, end_date_str = end_date_str,
             filter_transform_func = filter_transform_func, delta_update_flag = delta_update_flag, output_path = output_path, include_end_boundary = include_end_boundary)
 
     def create_figure(self):
@@ -519,18 +519,18 @@ class ContinousGraphDataTable(ContinuousGraph):
         table = DataTable(source = self.sources[0], columns = table_columns, width = self.width, height = self.height)
         return column(label, table)
         # return table
-        
+
 class ContinuousGraphSnapshot(BaseGraph):
     def __init__(self, input_path_map = None, interval = None, window = None, cols = None, start_ts_col = None, end_ts_col = None,
         rollover = None, width = None, height = None, title = None, refresh_sec = None, start_date_str = None, end_date_str = None, filter_transform_func = None,
         delta_update_flag = None, output_path = None, include_end_boundary = None):
-        
+
         # call base class to store all variables
         super().__init__(input_path_map = input_path_map, interval = interval, window = window, cols = cols, start_ts_col = start_ts_col, end_ts_col = end_ts_col,
-            rollover = rollover, width = width, height = height, title = title, refresh_sec = refresh_sec, start_date_str = start_date_str, end_date_str = end_date_str, 
+            rollover = rollover, width = width, height = height, title = title, refresh_sec = refresh_sec, start_date_str = start_date_str, end_date_str = end_date_str,
             filter_transform_func = filter_transform_func, delta_update_flag = delta_update_flag, output_path = output_path)
         self.include_end_boundary = include_end_boundary
-        
+
     # create source
     def create_sources(self):
         # create ColumnDataSource, and define table columns
@@ -540,15 +540,15 @@ class ContinuousGraphSnapshot(BaseGraph):
 
         # create source
         return [ColumnDataSource(mp)]
-    
+
     def get_next_data_update(self, cur_end_ts, local_xtsv_base):
         # construct start and end dates
         sdate_str = etl.get_etl_datetime_str_from_ts(cur_end_ts - self.interval - self.window)
         edate_str = etl.get_etl_datetime_str_from_ts(cur_end_ts)
-        
+
         # get the timeestamps
         sdate_ts = funclib.datetime_to_utctimestamp(sdate_str)
-        edate_ts = funclib.datetime_to_utctimestamp(edate_str)            
+        edate_ts = funclib.datetime_to_utctimestamp(edate_str)
 
         # read base input
         xtsv = etl.scan_by_datetime_range(self.input_path_map["default"], sdate_str, edate_str, "output", num_par = 0, def_val_map = {})
@@ -560,19 +560,19 @@ class ContinuousGraphSnapshot(BaseGraph):
         # for each missing col, add to the data
         xtsv = xtsv.add_empty_cols_if_missing(self.cols)
         xtsv.add_empty_cols_if_missing([self.start_ts_col])
-        xtsv.add_empty_cols_if_missing([self.end_ts_col])        
+        xtsv.add_empty_cols_if_missing([self.end_ts_col])
 
         # check for empty
         if (xtsv.num_rows() == 0):
             return xtsv, local_xtsv_base
-        
+
         def __get_next_data_update_end_boundary_inner__(t):
             if (self.include_end_boundary == True):
                 return funclib.datetime_to_utctimestamp(t) >= sdate_ts and funclib.datetime_to_utctimestamp(t) <= edate_ts
             else:
                 return funclib.datetime_to_utctimestamp(t) >= sdate_ts and funclib.datetime_to_utctimestamp(t) < edate_ts
 
-        # apply the timestamp col filter. Call datetime conversion as the ts_col can be string or numeric format. TODO: Comparison boundaries are confusing 
+        # apply the timestamp col filter. Call datetime conversion as the ts_col can be string or numeric format. TODO: Comparison boundaries are confusing
         if (self.end_ts_col is not None):
             xtsv = xtsv \
                 .not_eq_str(self.end_ts_col, "") \
@@ -596,7 +596,7 @@ class ContinuousGraphSnapshot(BaseGraph):
 
         # return
         return xtsv_new, local_xtsv_base
-    
+
     def refresh_plot_data(self, xtsv):
         # check for empty
         if (xtsv.num_rows() > 0):
@@ -611,10 +611,10 @@ class ContinousGraphSnapshotDataTable(ContinuousGraph):
     def __init__(self, input_path_map = None, interval = None, window = None, cols = None, start_ts_col = None, end_ts_col = None,
         rollover = None, width = None, height = None, title = None, refresh_sec = None, start_date_str = None, end_date_str = None, filter_transform_func = None,
         delta_update_flag = None, output_path = None, include_end_boundary = None):
-        
+
         # call base class to store all variables
         super().__init__(input_path_map = input_path_map, interval = interval, window = window, cols = cols, start_ts_col = start_ts_col, end_ts_col = end_ts_col,
-            rollover = rollover, width = width, height = height, title = title, refresh_sec = refresh_sec, start_date_str = start_date_str, end_date_str = end_date_str, 
+            rollover = rollover, width = width, height = height, title = title, refresh_sec = refresh_sec, start_date_str = start_date_str, end_date_str = end_date_str,
             filter_transform_func = filter_transform_func, delta_update_flag = delta_update_flag, output_path = output_path, include_end_boundary = include_end_boundary)
 
     def create_figure(self):
@@ -623,45 +623,45 @@ class ContinousGraphSnapshotDataTable(ContinuousGraph):
         table = DataTable(source = self.sources[0], columns = table_columns, width = self.width, height = self.height)
         return column(label, table)
         # return table
-    
+
 class ContinousGraphLineChart(ContinuousGraph):
-    def __init__(self, input_path_map = None, interval = None, window = None, cols = None, ts_col = None, 
+    def __init__(self, input_path_map = None, interval = None, window = None, cols = None, ts_col = None,
         rollover = None, width = None, height = None, title = None, refresh_sec = None, start_date_str = None, end_date_str = None, filter_transform_func = None,
         delta_update_flag = None, output_path = None):
-        
+
         # call base class to store all variables
         super().__init__(input_path_map = input_path_map, interval = interval, window = window, cols = cols, start_ts_col = start_ts_col, end_ts_col = end_ts_col,
-            rollover = rollover, width = width, height = height, title = title, refresh_sec = refresh_sec, start_date_str = start_date_str, end_date_str = end_date_str, 
+            rollover = rollover, width = width, height = height, title = title, refresh_sec = refresh_sec, start_date_str = start_date_str, end_date_str = end_date_str,
             filter_transform_func = filter_transform_func, delta_update_flag = delta_update_flag, output_path = output_path)
 
     def create_figure(self):
         f = figure(width = self.width, height = self.height, title = self.title)
         f.line(x = "x", y = "y", source = self.sources[0])
         return f
-            
+
 class CategoricalGraph(BaseGraph):
     INTERVAL_DAYS = "INTERVAL_DAYS"
     INTERVAL_HOURS = "INTERVAL_HOURS"
     INTERVAL_MINUTES = "INTERVAL_MINUTES"
-    INTERVAL_SECONDS = "INTERVAL_SECONDS"    
+    INTERVAL_SECONDS = "INTERVAL_SECONDS"
     GROUP_COL = "__assign_time_slot_group_col_index__"
 
     def __init__(self, input_path_map = None, interval = None, window = None, cols = None, start_ts_col = None, end_ts_col = None,
         rollover = None, width = None, height = None, title = None, refresh_sec = None, start_date_str = None, end_date_str = None, filter_transform_func = None, delta_update_flag = None,
         categories = None, xcol = None, ycol = None, color = None, output_path = None):
-        
+
         # call base class to store all variables
-        super().__init__(input_path_map = input_path_map, interval = interval, window = window, cols = cols, start_ts_col = start_ts_col, end_ts_col = end_ts_col, 
-            rollover = rollover, width = width, height = height, title = title, refresh_sec = refresh_sec, start_date_str = start_date_str, end_date_str = end_date_str, 
+        super().__init__(input_path_map = input_path_map, interval = interval, window = window, cols = cols, start_ts_col = start_ts_col, end_ts_col = end_ts_col,
+            rollover = rollover, width = width, height = height, title = title, refresh_sec = refresh_sec, start_date_str = start_date_str, end_date_str = end_date_str,
             filter_transform_func = filter_transform_func, delta_update_flag = delta_update_flag, output_path = output_path)
-        
+
         # store categories for histograms
         self.categories = categories
         self.xcol = xcol
         self.ycol = ycol
         self.color = color
         self.is_live = None
-        
+
         # determine the x_range.
         # For end_date in the past, determine the time slots based on end_date, start_date and interval
         # For live end_date (None), determine the timeslots based on x-N hrs and use rollover
@@ -669,7 +669,7 @@ class CategoricalGraph(BaseGraph):
             self.is_live = True
             self.time_slots = list([self.interval * i for i in range(self.rollover)])
             self.time_slots.reverse()
-            
+
             self.time_slots_labels = []
             for t in self.time_slots:
                 interval_granularity, interval_duration, interval_suffix = CategoricalGraph.__get_interval_granularity__(t)
@@ -681,7 +681,7 @@ class CategoricalGraph(BaseGraph):
             self.time_slots = list([funclib.utctimestamp_to_datetime_str(funclib.datetime_to_utctimestamp(self.start_date_str) + (i * self.interval)) for i in range(num_slots)])
             self.time_slots_labels = list([funclib.datestr_to_datetime(t).strftime("%Y-%m-%dT%H:%M:%S") for t in self.time_slots])
             utils.info("is_live = False: {}, {}".format(self.time_slots, self.time_slots_labels))
-            
+
     # TODO: remove this. use predefined resolution value
     def __get_interval_granularity__(x):
         if (x == 0):
@@ -694,7 +694,7 @@ class CategoricalGraph(BaseGraph):
             return (CategoricalGraph.INTERVAL_MINUTES, str(-int(x / 60)), "m")
         else:
             return (CategoricalGraph.INTERVAL_SECONDS, str(-int(x)), "s")
-            
+
     def create_sources(self):
         # create source with empty values
         mp = {}
@@ -702,12 +702,12 @@ class CategoricalGraph(BaseGraph):
         mp["time_slots_labels"] = self.time_slots_labels
         for category in self.categories:
             mp[category] = list([0 for i in self.time_slots])
-            
+
         utils.info("create_source categorical: {}".format(mp))
-            
+
         # return
         return [ColumnDataSource(mp)]
-        
+
     # TODO: Add waiting window logic
     def get_next_data_update(self, cur_end_ts, local_xtsv_base):
         # construct start and end dates
@@ -717,17 +717,17 @@ class CategoricalGraph(BaseGraph):
         else:
             sdate_str = etl.get_etl_datetime_str_from_ts(cur_end_ts - self.interval)
             edate_str = etl.get_etl_datetime_str_from_ts(cur_end_ts)
-           
+
         # debug
         utils.info("get_next_data_update: cur_end_ts: {}, sdate_str: {}, edate_str: {}".format(funclib.utctimestamp_to_datetime_str(cur_end_ts), sdate_str, edate_str))
-        
+
         # get the timeestamps
         sdate_ts = funclib.datetime_to_utctimestamp(sdate_str)
-        edate_ts = funclib.datetime_to_utctimestamp(edate_str)            
+        edate_ts = funclib.datetime_to_utctimestamp(edate_str)
 
         # read base input
         xtsv = etl.scan_by_datetime_range(self.input_path_map["default"], sdate_str, edate_str, "output", num_par = 0, def_val_map = {})
-        
+
         # debug
         xtsv.noop(10, title = "after etl")
 
@@ -740,16 +740,16 @@ class CategoricalGraph(BaseGraph):
 
         # for each missing col, add to the data
         xtsv = xtsv.add_empty_cols_if_missing(self.cols)
-        
+
         # need a dense representation for live data
         if (self.is_live == True):
             xtsv.noop(4, title = "is live 1")
             # TODO: find concrete minute granularity
             time_values = list([funclib.utctimestamp_to_datetime_str(edate_ts - t) for t in self.time_slots])
-            
+
             # take only the currently applicable time values
             cur_time_values = sorted(xtsv.values_in(self.end_ts_col, time_values).col_as_array_uniq(self.end_ts_col))
-            
+
         # debug
         xtsv.noop(4, title = "after creating is_live version 2")
 
@@ -760,7 +760,7 @@ class CategoricalGraph(BaseGraph):
 
         # select the output cols
         xtsv = xtsv.select(self.cols)
-        
+
         def __assign_time_slot_group_index__(cur_start_str, cur_end_str, slots, slots_resolved):
             cur_start_ts, cur_end_ts = funclib.datetime_to_utctimestamp(cur_start_str), funclib.datetime_to_utctimestamp(cur_end_str)
             for i in range(len(slots_resolved)):
@@ -770,11 +770,11 @@ class CategoricalGraph(BaseGraph):
                 # include both boundaries for categorical
                 if (cur_start_ts >= slot_start_ts and cur_end_ts <= slot_end_ts):
                     return i
-                
+
             # debug
-            utils.info("Failed to assign: cur_start: {}, cur_end: {}, slots: {}, slots_resolved: {}".format(cur_start_str, cur_end_str, slots, slots_resolved))            
+            utils.info("Failed to assign: cur_start: {}, cur_end: {}, slots: {}, slots_resolved: {}".format(cur_start_str, cur_end_str, slots, slots_resolved))
             return None
-        
+
         def __assign_time_slot_group_value__(index, slots):
             return slots
 
@@ -783,16 +783,16 @@ class CategoricalGraph(BaseGraph):
             # do another round of aggregation to make sure the time slots have unique counts
             time_slots_resolved = None
             if (self.is_live == True):
-                time_slots_resolved = list([(funclib.utctimestamp_to_datetime_str(edate_ts - self.time_slots[i] - self.interval), 
+                time_slots_resolved = list([(funclib.utctimestamp_to_datetime_str(edate_ts - self.time_slots[i] - self.interval),
                                              funclib.utctimestamp_to_datetime_str(edate_ts - self.time_slots[i])) for i in range(len(self.time_slots))])
             else:
-                time_slots_resolved = list([(funclib.utctimestamp_to_datetime_str(funclib.datetime_to_utctimestamp(t) - self.interval), 
+                time_slots_resolved = list([(funclib.utctimestamp_to_datetime_str(funclib.datetime_to_utctimestamp(t) - self.interval),
                                              funclib.utctimestamp_to_datetime_str(funclib.datetime_to_utctimestamp(t))) for t in self.time_slots])
-            
+
             # debug
-            # print("get_next_data_update: time_slots_resolved: cur_end_ts: {}, sdate: {}, edate: {}, time_slots_resolved: {}".format(funclib.utctimestamp_to_datetime_str(cur_end_ts), 
+            # print("get_next_data_update: time_slots_resolved: cur_end_ts: {}, sdate: {}, edate: {}, time_slots_resolved: {}".format(funclib.utctimestamp_to_datetime_str(cur_end_ts),
             #                                                                                                                     sdate_str, edate_str, time_slots_resolved))
-                
+
             # remove invalid rows, and sum the columns correctly
             xtsv = xtsv \
                 .noop(10, title = "xtsv ts_col1") \
@@ -810,12 +810,12 @@ class CategoricalGraph(BaseGraph):
                 .rename("{}:sum".format(self.ycol), self.ycol) \
                 .sort(CategoricalGraph.GROUP_COL) \
                 .noop(10, title = "xtsv ts_col6")
-            
+
         xtsv.add_empty_cols_if_missing([CategoricalGraph.GROUP_COL])
-            
+
         # return
-        return xtsv, xtsv 
-        
+        return xtsv, xtsv
+
     def refresh_plot_data(self, xtsv):
         col_maps = xtsv.cols_as_map([self.xcol, CategoricalGraph.GROUP_COL], [self.ycol])
         # check for empty
@@ -825,7 +825,7 @@ class CategoricalGraph(BaseGraph):
             mp = {}
             mp["time_slots"] = self.time_slots
             mp["time_slots_labels"] = self.time_slots_labels # list(["{}:{}".format(t, random.randint(0, 100)) for t in self.time_slots_labels])
-            
+
             # iterate through each category and create a dense representation
             for category in self.categories:
                 col_map = xtsv.eq_str(self.xcol, category).cols_as_map([CategoricalGraph.GROUP_COL], [self.ycol])
@@ -838,22 +838,22 @@ class CategoricalGraph(BaseGraph):
                     else:
                         vs.append(0)
                 mp[category] = vs
-           
+
             # replace entire source
             # print("refresh_plot_data categorical: {}".format(mp))
-            self.sources[0].data = mp                    
-        
+            self.sources[0].data = mp
+
 class CategoricalBarChartTimeSeriesVBarStack(CategoricalGraph):
     def __init__(self, input_path_map = None, interval = None, window = None, cols = None, start_ts_col = None, end_ts_col = None,
         rollover = None, width = None, height = None, title = None, refresh_sec = None, start_date_str = None, end_date_str = None, filter_transform_func = None, delta_update_flag = None,
         categories = None, xcol = None, ycol = None, color = None, output_path = None):
-        
+
         # call base class to store all variables
         super().__init__(input_path_map = input_path_map, interval = interval, window = window, cols = cols, start_ts_col = start_ts_col, end_ts_col = end_ts_col,
-            rollover = rollover, width = width, height = height, title = title, refresh_sec = refresh_sec, start_date_str = start_date_str, end_date_str = end_date_str, 
+            rollover = rollover, width = width, height = height, title = title, refresh_sec = refresh_sec, start_date_str = start_date_str, end_date_str = end_date_str,
             filter_transform_func = filter_transform_func, delta_update_flag = delta_update_flag,
             categories = categories, xcol = xcol, ycol = ycol, color = color, output_path = output_path)
-        
+
     def create_figure(self):
         label = Div(text = "<h3>{}</h3>".format(self.title))
 
@@ -865,7 +865,7 @@ class CategoricalBarChartTimeSeriesVBarStack(CategoricalGraph):
         f.axis.minor_tick_line_color = None
         f.outline_line_color = None
         f.legend.location = "top_left"
-        f.legend.orientation = "vertical"  
+        f.legend.orientation = "vertical"
         f.xaxis.major_label_orientation = math.pi/4
         return column(label, f)
         # return f
@@ -874,13 +874,13 @@ class CategoricalBarChartTimeSeriesVLineStack(CategoricalGraph):
     def __init__(self, input_path_map = None, interval = None, window = None, cols = None, start_ts_col = None, end_ts_col = None,
         rollover = None, width = None, height = None, title = None, refresh_sec = None, start_date_str = None, end_date_str = None, filter_transform_func = None, delta_update_flag = None,
         categories = None, xcol = None, ycol = None, color = None, output_path = None):
-        
+
         # call base class to store all variables
         super().__init__(input_path_map = input_path_map, interval = interval, window = window, cols = cols, start_ts_col = start_ts_col, end_ts_col = end_ts_col,
-            rollover = rollover, width = width, height = height, title = title, refresh_sec = refresh_sec, start_date_str = start_date_str, end_date_str = end_date_str, 
+            rollover = rollover, width = width, height = height, title = title, refresh_sec = refresh_sec, start_date_str = start_date_str, end_date_str = end_date_str,
             filter_transform_func = filter_transform_func, delta_update_flag = delta_update_flag,
             categories = categories, xcol = xcol, ycol = ycol, color = color, output_path = output_path)
-        
+
     def create_figure(self):
         label = Div(text = "<h3>{}</h3>".format(self.title))
 
@@ -892,43 +892,43 @@ class CategoricalBarChartTimeSeriesVLineStack(CategoricalGraph):
         f.axis.minor_tick_line_color = None
         f.outline_line_color = None
         f.legend.location = "top_left"
-        f.legend.orientation = "vertical"  
+        f.legend.orientation = "vertical"
         f.xaxis.major_label_orientation = math.pi/4
         return column(label, f)
         # return f
-        
+
 class Categorical2LevelGraph:
     def __init__(self, cols, categories1, categories2):
         pass
-    
+
 class CategoricalPieChart(CategoricalGraph):
     def __init__(self, input_path_map = None, interval = None, window = None, cols = None, start_ts_col = None, end_ts_col = None,
         rollover = None, width = None, height = None, title = None, refresh_sec = None, start_date_str = None, end_date_str = None, filter_transform_func = None, delta_update_flag = None,
         categories = None, xcol = None, ycol = None, color = None, output_path = None):
-        
+
         # call base class to store all variables
         super().__init__(input_path_map = input_path_map, interval = interval, window = window, cols = cols, start_ts_col = start_ts_col, end_ts_col = end_ts_col,
-            rollover = rollover, width = width, height = height, title = title, refresh_sec = refresh_sec, start_date_str = start_date_str, end_date_str = end_date_str, 
+            rollover = rollover, width = width, height = height, title = title, refresh_sec = refresh_sec, start_date_str = start_date_str, end_date_str = end_date_str,
             filter_transform_func = filter_transform_func, delta_update_flag = delta_update_flag,
             categories = categories, xcol = xcol, ycol = ycol, color = color, output_path = output_path)
-        
+
     def create_sources(self):
         self.categories = sorted(self.categories)
         mp = {}
         mp[self.xcol] = [i for i in self.categories]
         mp["angle"] = [0 for i in self.categories]
         mp["color"] = self.color
-            
+
         # return
         return [ColumnDataSource(mp)]
-    
+
     def create_figure(self):
         label = Div(text = "<h3>{}</h3>".format(self.title))
-        
+
         f = figure(x_range =(-0.5, 1.0), width = self.width, height = self.height)
-        f.wedge(x = 0, y = 1, radius = 0.3, start_angle = cumsum("angle", include_zero = True), end_angle = cumsum("angle"), line_color = "white", fill_color = "color", 
-                legend_field = self.xcol, source = self.sources[0], tooltips="$name @{}: @$name".format(self.xcol)) 
-        
+        f.wedge(x = 0, y = 1, radius = 0.3, start_angle = cumsum("angle", include_zero = True), end_angle = cumsum("angle"), line_color = "white", fill_color = "color",
+                legend_field = self.xcol, source = self.sources[0], tooltips="$name @{}: @$name".format(self.xcol))
+
         # wedge properties
         # f.axis.axis_label = None
         # f.axis.visible = False
@@ -951,38 +951,38 @@ class CategoricalPieChart(CategoricalGraph):
         mp[self.xcol] = [i for i in self.categories]
         mp["angle"] = [0 for i in self.categories]
         mp["color"] = self.color
-        
+
         # take the total of values
         total = sum(xtsv.col_as_float_array(self.ycol))
         # print("Total: {}".format(total))
-        
+
         # update the relevent categories
         cmap = xtsv.cols_as_map([self.xcol], [self.ycol])
         # print("cmap: {}".format(cmap))
-        
+
         # iterate through categories and set the values
         for index in range(len(self.categories)):
             if (self.categories[index] in cmap.keys()):
                 mp["angle"][index] = float(cmap[self.categories[index]]) / float(total) * 2 * pi
-                
+
         # print
         # print("mp: {}".format(mp))
-        
+
         # update
         self.sources[0].data = mp
-                
+
 class StaticGraphGeoIPMap(BaseGraph):
     def __init__(self, input_path_map = None, interval = None, window = None, cols = None, start_ts_col = None, end_ts_col = None,
         rollover = None, width = None, height = None, title = None, refresh_sec = None, start_date_str = None, end_date_str = None, filter_transform_func = None,
         delta_update_flag = None, output_path = None):
-        
+
         # call base class to store all variables
         super().__init__(input_path_map = input_path_map, interval = interval, window = window, cols = cols, start_ts_col = start_ts_col, end_ts_col = end_ts_col,
-            rollover = rollover, width = width, height = height, title = title, refresh_sec = refresh_sec, start_date_str = start_date_str, end_date_str = end_date_str, 
+            rollover = rollover, width = width, height = height, title = title, refresh_sec = refresh_sec, start_date_str = start_date_str, end_date_str = end_date_str,
             filter_transform_func = filter_transform_func, delta_update_flag = delta_update_flag, output_path = output_path)
-        
+
         self.color_index_max = 10
-        
+
     # create source
     def create_sources(self):
         # create ColumnDataSource, and define table columns
@@ -992,27 +992,27 @@ class StaticGraphGeoIPMap(BaseGraph):
 
         # create source
         return [ColumnDataSource(mp)]
-    
+
     def get_next_data_update(self, cur_end_ts, local_xtsv_base):
         print("Calling get_next_data_update: {}".format(funclib.utctimestamp_to_datetime_str(cur_end_ts)))
-        
+
         sdate_str = etl.get_etl_datetime_str_from_ts(cur_end_ts - self.interval * self.rollover)
         edate_str = etl.get_etl_datetime_str_from_ts(cur_end_ts)
-           
+
         # debug
         # utils.info("get_next_data_update: cur_end_ts: {}, sdate_str: {}, edate_str: {}".format(funclib.utctimestamp_to_datetime_str(cur_end_ts), sdate_str, edate_str))
-        
+
         # get the timeestamps
         sdate_ts = funclib.datetime_to_utctimestamp(sdate_str)
-        edate_ts = funclib.datetime_to_utctimestamp(edate_str)            
+        edate_ts = funclib.datetime_to_utctimestamp(edate_str)
 
         # read base input
         xtsv = etl.scan_by_datetime_range(self.input_path_map["default"], sdate_str, edate_str, "output", num_par = 0, def_val_map = {})
-        
+
         # boundary conditions
         if (xtsv.num_rows() == 0):
             return xtsv, xtsv
-        
+
         # add the size. the proxy_ip and proxy_host values need to map from the source data
         xtsv = xtsv \
             .distinct() \
@@ -1026,9 +1026,9 @@ class StaticGraphGeoIPMap(BaseGraph):
             .filter(["proxy_host:latitude", "proxy_host:longitude", "proxy_ip:latitude", "proxy_ip:longitude"], lambda ax,ay,rx,ry: ax != rx or ay != ry) \
             .transform(["most_recent_ts"], lambda x: (funclib.datetime_to_utctimestamp(x) - sdate_ts) / (edate_ts - sdate_ts), "circle_alpha") \
             .cap_max_inline("circle_alpha", "0.5")
-        
+
         # xtsv.sample_n(10).select(["proxy_ip", "proxy_ip:count"]).show()
-        
+
         # max_remote_ip4_count = max(xtsv.col_as_int_array("proxy_ip:count"))
         xtsv = xtsv \
             .transform("proxy_ip:uniq_count", lambda x: self.color_index_max if (int(x) >= self.color_index_max) else x, "color_index") \
@@ -1036,7 +1036,7 @@ class StaticGraphGeoIPMap(BaseGraph):
             .drop_cols("proxy_ip:count") \
             .drop_cols("proxy_ip:latlon:count") \
             .noop(3, title = "circle_size")
-        
+
         # debug
         xtsv.noop(10, title = "after etl")
 
@@ -1049,10 +1049,10 @@ class StaticGraphGeoIPMap(BaseGraph):
 
         # for each missing col, add to the data
         xtsv = xtsv.add_empty_cols_if_missing(self.cols)
-                
+
         # return
         return xtsv, xtsv
-    
+
     def refresh_plot_data(self, xtsv):
         # return if there is no data
         if (xtsv.num_rows() == 0):
@@ -1064,23 +1064,23 @@ class StaticGraphGeoIPMap(BaseGraph):
 
         # debug
         # xtsv.show_transpose(3, title = "calling refresh_plot_data")
-        
+
         # drop the columns that are going to be set again
         xtsv = xtsv \
             .drop_cols(["proxy_ip:coordinates", "proxy_ip:mercator", "proxy_ip:mercator_x", "proxy_ip:mercator_y"]) \
             .drop_cols(["proxy_host:coordinates", "proxy_host:mercator", "proxy_host:mercator_x", "proxy_host:mercator_y"]) \
             .drop_cols(["xs", "ys"])
-        
+
         # create a data frame with floating data types wherever applicable
         df = xtsv.to_df(infer_data_types = True, no_infer_cols = ["node_id"])
-        
+
         # Define coord as tuple (lat,lon)
         df['proxy_ip:coordinates'] = list(zip(df['proxy_ip:latitude'], df['proxy_ip:longitude']))
         df['proxy_host:coordinates'] = list(zip(df['proxy_host:latitude'], df['proxy_host:longitude']))
 
         # Obtain list of mercator coordinates
         mercators1 = [self.__x_coord__(x, y) for x, y in df['proxy_ip:coordinates'] ]
-        mercators2 = [self.__x_coord__(x, y) for x, y in df['proxy_host:coordinates'] ]        
+        mercators2 = [self.__x_coord__(x, y) for x, y in df['proxy_host:coordinates'] ]
 
         # Create mercator column in our df
         df['proxy_ip:mercator'] = mercators1
@@ -1089,41 +1089,41 @@ class StaticGraphGeoIPMap(BaseGraph):
         # Split that column out into two separate cols - mercator_x and mercator_y
         df[['proxy_ip:mercator_x', 'proxy_ip:mercator_y']] = df['proxy_ip:mercator'].apply(pd.Series)
         df[['proxy_host:mercator_x', 'proxy_host:mercator_y']] = df['proxy_host:mercator'].apply(pd.Series)
-        
+
         min_x = min(df["proxy_ip:mercator_x"])
         max_x = max(df["proxy_ip:mercator_x"])
         min_y = min(df["proxy_ip:mercator_y"])
         max_y = max(df["proxy_ip:mercator_y"])
         # print(min_x, max_x, min_y, max_y)
-        
+
         # print("refresh: df: {}".format(df.columns))
         # print(df.head(5))
-        
+
         # line segments for edges
         # xs = []
         # ys = []
         # for i in range(len(df)):
         #     xs.append([df[i]["proxy_host:mercator_x"], df[i]["proxy_ip:mercator_x"]])
         #     ys.append([df[i]["proxy_host:mercator_y"], df[i]["proxy_ip:mercator_y"]])
-        
+
         # df["xs"] = xs
         # df["ys"] = ys
         df["xs"] = list(zip(df["proxy_host:mercator_x"], df["proxy_ip:mercator_x"]))
         df["ys"] = list(zip(df["proxy_host:mercator_y"], df["proxy_ip:mercator_y"]))
-        
+
         # print(df.head(4))
 
         # create a map of series
         mp = {}
         for c in df.columns:
             mp[c] = df[c]
-            
+
         # set source
         self.sources[0].data = mp
-    
+
     def create_figure(self):
         label = Div(text = "<h3>{}</h3>".format(self.title))
-        
+
         # Select tile set to use
         chosentile = get_provider(Vendors.CARTODBPOSITRON)
 
@@ -1142,13 +1142,13 @@ class StaticGraphGeoIPMap(BaseGraph):
 
         # Create figure with boundaries of the entire world
         min_x, max_x, min_y, max_y = -13624971.673499351, 16832321.97793506, -4011071.4166808245, 6895498.946934601
-        
+
         # adjust
         min_x = 0.5 * min_x if (min_x >= 0) else 1.5 * min_x
         max_x = 1.5 * max_x if (max_x >= 0) else 0.5 * max_x
         min_y = 0.5 * min_y if (min_y >= 0) else 1.5 * min_y
         max_y = 1.5 * max_y if (max_y >= 0) else 0.5 * max_y
-        
+
         # create figure
         p = figure(x_axis_type = "mercator", y_axis_type = "mercator",  x_axis_label = 'Longitude', y_axis_label = 'Latitude', tooltips = tooltips,
                    width = self.width, height = self.height, x_range = [min_x, max_x], y_range = [min_y, max_y])
@@ -1171,13 +1171,13 @@ class StaticGraphGeoIPMap(BaseGraph):
 
         # Set color_bar location
         p.add_layout(color_bar, 'right')
-        
+
         return column(label, p)
-    
+
     def set_width_height(self, xwidth, xheight):
         self.fig.width = xwidth
         self.fig.height = xheight
-        
+
     def __x_coord__(self, x, y):
         lat = x
         lon = y
@@ -1186,7 +1186,7 @@ class StaticGraphGeoIPMap(BaseGraph):
         x = r_major * np.radians(lon)
         scale = x / lon
         y = 180.0 / np.pi * np.log(np.tan(np.pi / 4.0 + lat * (np.pi / 180.0) / 2.0)) * scale
-        return (x, y)        
+        return (x, y)
 
 def info(msg):
     # utils.info("utils: " + msg)
@@ -1201,9 +1201,9 @@ def __demo_plot7_create_source__(cols):
 
         # create source
         source = ColumnDataSource(mp)
-        
+
         return source
-    
+
 def __demo_plot7_data_table_get_data__(input_path, cols, ts_col, cur_ts, interval, window, rollover, filter_transform_func, local_xtsv_base):
     print("__plot7_data_table_update__ get data: {}".format(funclib.utctimestamp_to_datetime_str(cur_ts)))
 
@@ -1214,7 +1214,7 @@ def __demo_plot7_data_table_get_data__(input_path, cols, ts_col, cur_ts, interva
     sdate_str = etl.get_etl_datetime_str_from_ts(cur_ts - interval - window)
     edate_str = etl.get_etl_datetime_str_from_ts(cur_ts)
     sdate_ts = funclib.datetime_to_utctimestamp(sdate_str)
-    edate_ts = funclib.datetime_to_utctimestamp(edate_str)            
+    edate_ts = funclib.datetime_to_utctimestamp(edate_str)
 
     # read base input
     xtsv = etl.scan_by_datetime_range(input_path, sdate_str, edate_str, "output", num_par = 0, def_val_map = {})
@@ -1256,17 +1256,17 @@ def __demo_plot7_data_table_get_data__(input_path, cols, ts_col, cur_ts, interva
     return xtsv_new, local_xtsv_base
 
 
-def demo_plot7_data_table(input_path = None, interval = 30, window = 180, cols = None, ts_col = None, 
+def demo_plot7_data_table(input_path = None, interval = 30, window = 180, cols = None, ts_col = None,
     rollover = 100, width = 1400, height = 300, refresh_sec = 10, start_date_str = None, end_date_str = None, filter_transform_func = None,
     fig = None, source = None):
-    
+
     def __demo_plot7_data_table__(doc):
         local_xtsv_base = None
         local_end_ts = funclib.get_utctimestamp_sec() if (start_date_str is None) else funclib.datetime_to_utctimestamp(start_date_str)
         local_finished_ts = None if (end_date_str is None) else funclib.datetime_to_utctimestamp(end_date_str)
 
         # read data slice
-        xtsv = tsv.new_with_cols(cols)    
+        xtsv = tsv.new_with_cols(cols)
 
 
         # define table_columns
@@ -1285,13 +1285,13 @@ def demo_plot7_data_table(input_path = None, interval = 30, window = 180, cols =
             nonlocal local_finished_ts
             nonlocal local_xtsv_base
             print("Calling update: {}".format(funclib.utctimestamp_to_datetime_str(local_end_ts)))
-                  
+
             # check if local_end_ts is more that current timestamp
             if ((local_finished_ts is None and local_end_ts > funclib.get_utctimestamp_sec()) or
                 (local_finished_ts is not None and local_end_ts > local_finished_ts)):
                 # ignore
                 return
-            
+
             # get new data
             xtsv, local_xtsv_base = __plot7_data_table_get_data__(input_path, cols, ts_col, local_end_ts, interval, window, rollover, filter_transform_func, local_xtsv_base)
 
@@ -1322,17 +1322,17 @@ def demo_plot7_data_table(input_path = None, interval = 30, window = 180, cols =
 def demo_plot1_circle():
     # directive for output to notebook
     output_notebook()
-  
+
     # create figure
     p = figure(plot_width = 400, plot_height = 400)
-  
+
     # add a circle renderer with
     # size, color and alpha
-    p.circle([1, 2, 3, 4, 5], [4, 7, 1, 6, 3], 
+    p.circle([1, 2, 3, 4, 5], [4, 7, 1, 6, 3],
          size = 10, color = "navy", alpha = 0.5)
-  
+
     # show the results
-    show(p) 
+    show(p)
 
 def demo_plot2_line():
     # directive for output to notebook
@@ -1340,14 +1340,14 @@ def demo_plot2_line():
 
     # create figure
     p = figure(plot_width = 400, plot_height = 400)
-   
+
     # add a line renderer
-    p.line([1, 2, 3, 4, 5], [3, 1, 2, 6, 5], 
+    p.line([1, 2, 3, 4, 5], [3, 1, 2, 6, 5],
         line_width = 2, color = "green")
-  
+
     # show the results
     show(p)
-    
+
 def __demo_plot3_multiple__(doc):
     # This is a Bokeh server app. To function, it must be run using the
     # Bokeh server ath the command line:
@@ -1358,7 +1358,7 @@ def __demo_plot3_multiple__(doc):
     import numpy as np
 
     # from bokeh.io import curdoc
-    
+
     from bokeh.layouts import gridplot
     from bokeh.models import ColumnDataSource
     from bokeh.plotting import figure
@@ -1414,15 +1414,15 @@ def __demo_plot3_multiple__(doc):
         source2d.patch({ 'img' : [(index, new_data)] })
 
     # curdoc().add_periodic_callback(update, 50)
-    # curdoc().add_root(gridplot([[p, p1d, p2d]]))    
+    # curdoc().add_root(gridplot([[p, p1d, p2d]]))
     doc.add_periodic_callback(__plot3_multiple_update__, 1000)
     doc.add_root(gridplot([[p, p1d, p2d]]))
 
 def demo_plot3_multiple():
     # reset_output()
-    output_notebook()    
+    output_notebook()
     show(__demo_plot3_multiple__)
-    
+
 # num_rows = 0
 def __demo_plot4_data_table__(doc):
     from datetime import date
@@ -1434,7 +1434,7 @@ def __demo_plot4_data_table__(doc):
 
     xtsv = tsv.read("data/iris.tsv").add_seq_num("sno")
     num_rows = 1
-    
+
     # define source data
     xtsv1 = xtsv.take(num_rows)
     source = ColumnDataSource({
@@ -1449,8 +1449,8 @@ def __demo_plot4_data_table__(doc):
         TableColumn(field = "sno", title = "sno"),
         TableColumn(field = "class", title = "class"),
         TableColumn(field = "petal_width", title = "petal_width"),
-        TableColumn(field = "sepal_width", title = "sepal_width")        
-    ]    
+        TableColumn(field = "sepal_width", title = "sepal_width")
+    ]
     data_table = DataTable(source=source, columns=columns, width=400, height=280)
 
     # periodic callback function
@@ -1466,10 +1466,10 @@ def __demo_plot4_data_table__(doc):
         }
         source.stream(new_data, rollover = 5)
 
-    # show(data_table)    
+    # show(data_table)
     doc.add_periodic_callback(__plot4_data_table_update__, 1000)
     doc.add_root(data_table)
-    
+
 def demo_plot4_data_table():
     output_notebook()
     x = show(__demo_plot4_data_table__)
@@ -1504,7 +1504,7 @@ def __demo_plot6_linking_multiple__(doc):
 def demo_plot6_linking_multiple():
     output_notebook()
     show(__demo_plot6_linking_multiple__)
-    
+
 def demo_plot8_graph():
     import math
     from bokeh.plotting import figure
@@ -1519,7 +1519,7 @@ def demo_plot8_graph():
     plot = figure(title="Graph layout demonstration", x_range=(-1.1,1.1),
                   y_range=(-1.1,1.1), toolbar_location="below", tools="pan,lasso_select,box_select", active_drag="lasso_select")
     #plot.add_tools(BoxSelectTool(dimensions="width"))
-    
+
     graph = GraphRenderer()
 
     # replace the node glyph with an ellipse
@@ -1535,8 +1535,8 @@ def demo_plot8_graph():
     # add the rest of the assigned values to the data source
     graph.edge_renderer.data_source.data = dict(
         start=[0]*N,
-        end=node_indices)    
-    
+        end=node_indices)
+
     # generate ellipses based on the ``node_indices`` list
     circ = [i*2*math.pi/8 for i in node_indices]
 
@@ -1558,8 +1558,8 @@ def demo_plot8_graph():
     output_file('graph.html')
 
     # display the plot
-    show(plot)    
-    
+    show(plot)
+
 def demo_plot9_graph():
     import math
 
@@ -1608,8 +1608,8 @@ def demo_plot9_graph():
     plot.renderers.append(graph)
 
     output_file("graph.html")
-    show(plot)   
-    
+    show(plot)
+
 def demo_plot10_graph():
     import networkx as nx
 
@@ -1646,15 +1646,15 @@ def demo_plot10_graph():
     plot.renderers.append(graph_renderer)
 
     output_file("interactive_graphs.html")
-    show(plot)    
-    
+    show(plot)
+
 def demo_plot11_graph_spring():
     import networkx as nx
     import pandas as pd
     from bokeh.models import Plot, ColumnDataSource, Range1d, Circle,MultiLine
     from bokeh.io import show, output_file
     from bokeh.palettes import Viridis
-    from bokeh.plotting import from_networkx    
+    from bokeh.plotting import from_networkx
 
     #define graph
     source = ['A', 'A', 'A','a','B','B','B','b']
@@ -1691,8 +1691,8 @@ def demo_plot11_graph_spring():
     plot.renderers.append(graph_renderer)
     output_file('test.html')
 
-    show(plot)    
-    
+    show(plot)
+
 def demo_plot12_bar_chart():
     def __demo_plot12_bar_chart__(doc):
         from bokeh.io import output_file, show
@@ -1719,18 +1719,18 @@ def demo_plot12_bar_chart():
         def __demo_plot12_bar_chart_update__():
             nonlocal non_local_counter
             non_local_counter = non_local_counter + 1
-            
+
             new_mp = dict(x = fruits, counts = utils.merge_arrays([counts[1:], counts[0:1]]))
-            
+
             source.stream(new_mp, rollover = 10)
 
-        # show(data_table)    
+        # show(data_table)
         doc.add_periodic_callback(__plot12_bar_chart_update__, 2000)
         doc.add_root(p)
-        
+
     output_notebook()
     show(__demo_plot12_bar_chart__)
-    
+
 def demo_plot13_time_series():
     def __demo_plot13_time_series__(doc):
         import numpy as np
@@ -1752,10 +1752,10 @@ def demo_plot13_time_series():
             "y_values": AAPL['adj_close'][0:10]
         }
         source = ColumnDataSource(data = data)
-        
+
         p1.line(x = "x_values", y = "y_values", color='#A6CEE3', legend_label='AAPL', source = source)
         p1.legend.location = "top_left"
-        
+
         non_local_counter = 10
         def __demo_plot13_time_series_update__():
             nonlocal non_local_counter
@@ -1763,21 +1763,21 @@ def demo_plot13_time_series():
             start = non_local_counter
             end = non_local_counter + 10
             non_local_counter = end
-            
+
             new_mp = {
                 "x_values": datetime(AAPL['date'], start, end),
                 "y_values": AAPL['adj_close'][start:end]
             }
-            
+
             print("doing update: {}".format(non_local_counter))
             source.stream(new_mp, rollover = 1000)
-        
+
         doc.add_periodic_callback(__plot13_time_series_update__, 1000)
-        doc.add_root(p1)    
-        
+        doc.add_root(p1)
+
     output_notebook()
     show(__demo_plot13_time_series__)
-    
+
 def demo_plot14_index_filter_box_select():
     def __demo_plot14_index_filter_box_select__(doc):
         from bokeh.layouts import gridplot
@@ -1793,11 +1793,11 @@ def demo_plot14_index_filter_box_select():
 
         p_filtered = figure(height=300, width=300, tools=tools)
         p_filtered.circle(x="x", y="y", size=10, hover_color="red", source=source, view=view)
-        
+
         g = gridplot([[p, p_filtered]])
-        
+
         doc.add_root(g)
-        
+
     output_notebook()
     show(__demo_plot14_index_filter_box_select__)
 
@@ -1832,10 +1832,10 @@ def demo_plot15_customjs_slider():
         layout = column(slider, plot)
 
         doc.add_root(layout)
-        
+
     output_notebook()
     show(__demo_plot_customjs_slider__)
-    
+
 def demo_plot16_customjs_indices():
     def __demo_plot16_customjs_indices__(doc):
         from random import random
@@ -1875,7 +1875,7 @@ def demo_plot16_customjs_indices():
         layout = row(p1, p2)
 
         doc.add_root(layout)
-        
+
     output_notebook()
     show(__demo_plot16_customjs_indices__)
 
@@ -1912,7 +1912,7 @@ def demo_plot30_pie():
     p.grid.grid_line_color = None
 
     output_notebook()
-    show(p)    
+    show(p)
 
 def demo_plot20_ip2location(df):
     def __demo_plot20_ip2location__(doc):
@@ -1925,7 +1925,7 @@ def demo_plot20_ip2location(df):
             r_major = 6378137.000
             x = r_major * np.radians(lon)
             scale = x/lon
-            y = 180.0/np.pi * np.log(np.tan(np.pi/4.0 + 
+            y = 180.0/np.pi * np.log(np.tan(np.pi/4.0 +
                 lat * (np.pi/180.0)/2.0)) * scale
             return (x, y)
 
@@ -1956,7 +1956,7 @@ def demo_plot20_ip2location(df):
             ys.append([df.iloc[xs_id[0]]["mercator_y"], df.iloc[ys_id[0]]["mercator_y"]])
 
         df["xs"] = xs
-        df["ys"] = ys        
+        df["ys"] = ys
 
         # Select tile set to use
         chosentile = get_provider(Vendors.CARTODBPOSITRON)
@@ -1988,8 +1988,8 @@ def demo_plot20_ip2location(df):
 
         # print(min_x, min_y, max_x, max_y)
 
-        p = figure(title = 'Lateral Movement', x_axis_type="mercator", y_axis_type="mercator", 
-                   x_axis_label = 'Longitude', y_axis_label = 'Latitude', tooltips = tooltips, width = 1300, 
+        p = figure(title = 'Lateral Movement', x_axis_type="mercator", y_axis_type="mercator",
+                   x_axis_label = 'Longitude', y_axis_label = 'Latitude', tooltips = tooltips, width = 1300,
                    x_range = [min_x, max_x], y_range = [min_y, max_y])
 
         # Add map tile
@@ -2000,8 +2000,8 @@ def demo_plot20_ip2location(df):
         p.circle(x = 'mercator_x', y = 'mercator_y', color = color_mapper, source=source, size=25, fill_alpha = 0.7)
 
         #Defines color bar
-        color_bar = ColorBar(color_mapper=color_mapper['transform'], 
-                             formatter = NumeralTickFormatter(format='0.0[0000]'), 
+        color_bar = ColorBar(color_mapper=color_mapper['transform'],
+                             formatter = NumeralTickFormatter(format='0.0[0000]'),
                              label_standoff = 13, width=8, location=(0,0))
 
         # Set color_bar location
@@ -2017,14 +2017,14 @@ def demo_plot20_ip2location(df):
             ys_org[0].append(5.980402e+06)
 
             source.data["xs"] = xs_org
-            source.data["ys"] = ys_org 
+            source.data["ys"] = ys_org
 
         # doc.add_periodic_callback(__update__, 5000)
         doc.add_root(p)
 
     output_notebook()
     show(__demo_plot20_ip2location__)
-    
+
 def demo_plot12_xtsv_bar_chart():
     def __demo_plot12_xtsv_bar_chart__(doc):
         from bokeh.io import output_file, show
@@ -2050,7 +2050,7 @@ def demo_plot12_xtsv_bar_chart():
         p.axis.minor_tick_line_color = None
         p.outline_line_color = None
         p.xaxis.axis_label = 'Month'
-        p.yaxis.axis_label = 'Average Crimes'    
+        p.yaxis.axis_label = 'Average Crimes'
         p.select_one(HoverTool).tooltips = [
             ('month', '@fruits'),
             ('Number of crimes', '@counts'),
@@ -2060,15 +2060,15 @@ def demo_plot12_xtsv_bar_chart():
         def __demo_plot12_xtsv_bar_chart_update__():
             nonlocal non_local_counter
             non_local_counter = non_local_counter + 1
-            
+
             new_mp = dict(fruits = fruits, counts = utils.merge_arrays([counts[1:], counts[0:1]]))
-            
+
             source.stream(new_mp, rollover = 10)
 
-        # show(data_table)    
+        # show(data_table)
         # doc.add_periodic_callback(__plot12_xtsv_bar_chart_update__, 2000)
         doc.add_root(p)
-        
+
     output_notebook()
     show(__demo_plot12_xtsv_bar_chart__)
 

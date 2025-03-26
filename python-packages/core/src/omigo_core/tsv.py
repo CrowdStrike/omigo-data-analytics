@@ -4,7 +4,7 @@ import math
 import pandas as pd
 import random
 import json
-from omigo_core import utils, tsvutils, udfs, dataframe 
+from omigo_core import utils, tsvutils, udfs, dataframe
 import sys
 import time
 import numpy as np
@@ -189,7 +189,7 @@ class TSV:
 
     def distinct_cols(self, *args, **kwargs):
         return dataframe.from_header_data(self.header, self.data).distinct_cols(*args, **kwargs)
-       
+
     def drop(self, *args, **kwargs):
         return dataframe.from_header_data(self.header, self.data).drop(*args, **kwargs)
 
@@ -213,7 +213,7 @@ class TSV:
 
     def drop_empty_rows(self, *args, **kwargs):
         return dataframe.from_header_data(self.header, self.data).drop_empty_rows(*args, **kwargs)
- 
+
     def window_aggregate(self, *args, **kwargs):
         return dataframe.from_header_data(self.header, self.data).window_aggregate(*args, **kwargs)
 
@@ -267,10 +267,10 @@ class TSV:
 
     def transform_inline_log1p_base2(self, *args, **kwargs):
         return dataframe.from_header_data(self.header, self.data).transform_inline_log1p_base2(*args, **kwargs)
-        
+
     def transform_inline_log1p_base10(self, *args, **kwargs):
         return dataframe.from_header_data(self.header, self.data).transform_inline_log1p_base10(*args, **kwargs)
-        
+
     def rename(self, *args, **kwargs):
         return dataframe.from_header_data(self.header, self.data).rename(*args, **kwargs)
 
@@ -495,10 +495,10 @@ class TSV:
 
     def sample_n_with_replacement(self, *args, **kwargs):
         return dataframe.from_header_data(self.header, self.data).sample_n_with_replacement(*args, **kwargs)
- 
+
     def sample_n_without_replacement(self, *args, **kwargs):
         return dataframe.from_header_data(self.header, self.data).sample_n_without_replacement(*args, **kwargs)
- 
+
     def sample_group_by_topk_if_reached_limit(self, *args, **kwargs):
         return dataframe.from_header_data(self.header, self.data).sample_group_by_topk_if_reached_limit(*args, **kwargs)
 
@@ -666,13 +666,13 @@ class TSV:
 
     def get_max_size_cols_stats(self, *args, **kwargs):
         return dataframe.from_header_data(self.header, self.data).get_max_size_cols_stats(*args, **kwargs)
-                
+
     def sleep(self, *args, **kwargs):
         return dataframe.from_header_data(self.header, self.data).sleep(*args, **kwargs)
 
     def split(self, *args, **kwargs):
         return dataframe.from_header_data(self.header, self.data).split(*args, **kwargs)
- 
+
     def split_str(self, *args, **kwargs):
         return dataframe.from_header_data(self.header, self.data).split_str(*args, **kwargs)
 
@@ -699,10 +699,10 @@ class TSV:
 
     def enable_trace_mode(self, *args, **kwargs):
         return dataframe.from_header_data(self.header, self.data).enable_trace_mode(*args, **kwargs)
-        
+
     def disable_trace_mode(self, *args, **kwargs):
         return dataframe.from_header_data(self.header, self.data).disable_trace_mode(*args, **kwargs)
-        
+
 def get_version(*args, **kwargs):
     return dataframe.get_version(*args, **kwargs)
 

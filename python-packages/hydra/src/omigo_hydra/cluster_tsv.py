@@ -21,12 +21,12 @@ class HydraBaseTSV:
         self.ctx = None
         self.operations = []
         self.num_splits = 1
-        self.requirements = [] 
+        self.requirements = []
 
     def set_hydra_ctx(self, ctx):
         self.ctx = ctx
         return self
- 
+
     def set_hydra_operations(self, operations):
         self.operations = operations
         return self
@@ -54,7 +54,7 @@ class HydraBaseTSV:
 
         # return
         return new_operations
-        
+
     # TODO: implement inline execution
     def collect(self, input_ids, output_ids, start_ts = None, use_full_data = False):
         # resolve start_ts as timestamp
@@ -73,8 +73,8 @@ class HydraBaseTSV:
         return self.collect(input_ids, output_ids, start_ts = start_ts, use_full_data = use_full_data)
 
     def persist(self, path):
-        raise Exception("TBD") 
-  
+        raise Exception("TBD")
+
     def __get_tsv__(self):
         return tsv.TSV(self.header, self.data)
 
@@ -107,10 +107,10 @@ class HydraBaseTSV:
             # iterate and add jobs
             for i in range(len(reduce_indexes)):
                 # create placeholders
-                map_ops = [] 
+                map_ops = []
                 reduce_op = None
                 singleton_op = None
-                cluster_def_op = None 
+                cluster_def_op = None
 
                 # boundary condition
                 index = reduce_indexes[i]
@@ -119,7 +119,7 @@ class HydraBaseTSV:
 
                 # indexes
                 if (i > 0):
-                    prev_index = reduce_indexes[i-1] 
+                    prev_index = reduce_indexes[i-1]
                     map_ops = self.operations[prev_index+1:index]
                 else:
                     map_ops = self.operations[0:index]
@@ -141,7 +141,7 @@ class HydraBaseTSV:
         for (map_ops, reduce_op, singleton_op) in job_mr_splits:
             # create indexes
             extend_class_indexes = []
-            
+
             # check for None
             if (map_ops is not None and len(map_ops) > 0):
                 # iterate
@@ -174,7 +174,7 @@ class HydraBaseTSV:
                                 reduce_op2 = None
                                 singleton_op2 = None
                                 jobs_operations.append(cluster_common_v2.ClusterOperationJob(map_ops2, reduce_op2, singleton_op2, None))
-                            
+
                         # check if it is the last split or before
                         if (i < len(extend_class_indexes) - 1):
                             # reduce_op is None for all but the last split

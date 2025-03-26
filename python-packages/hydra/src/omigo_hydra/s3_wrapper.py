@@ -25,7 +25,7 @@ def create_session_key(s3_region = None, aws_profile = None):
         return "DEFAULT_KEY"
     else:
         s3_region_str = "" if (s3_region is None) else s3_region
-        aws_profile_str = "" if (aws_profile is None) else aws_profile 
+        aws_profile_str = "" if (aws_profile is None) else aws_profile
         return "{}:{}".format(s3_region_str, aws_profile_str)
 
 def get_s3_session(s3_region = None, aws_profile = None):
@@ -212,7 +212,7 @@ def put_file_with_text_content(bucket_name, object_key, text, s3_region = None, 
 def put_s3_file_with_text_content(bucket_name, object_key, text, s3_region = None, aws_profile = None):
     utils.warn_once("use put_file_with_text_content instead")
     put_file_with_text_content(bucket_name, object_key, text, s3_region = s3_region, aws_profile = aws_profile)
- 
+
 def resolve_region_profile(s3_region = None, aws_profile = None):
     # resolve s3_region
     if ((s3_region is None or s3_region == "") and "S3_REGION" in os.environ.keys()):

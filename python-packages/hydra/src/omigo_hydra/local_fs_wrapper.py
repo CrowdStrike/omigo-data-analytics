@@ -1,6 +1,6 @@
 import os
 import datetime
-from omigo_core import timefuncs 
+from omigo_core import timefuncs
 from omigo_core import utils
 import zipfile, gzip
 
@@ -104,8 +104,8 @@ def delete_file(path, ignore_if_missing = True):
 
     # delete
     os.remove(path)
-  
-# TODO: This api doesnt have s3 counterpart 
+
+# TODO: This api doesnt have s3 counterpart
 def delete_dir(path, ignore_if_missing = True):
     utils.warn_once("delete_dir: this api doesnt have s3 counterpart")
     utils.debug("delete_dir: path: {}, ignore_if_missing: {}".format(path, ignore_if_missing))

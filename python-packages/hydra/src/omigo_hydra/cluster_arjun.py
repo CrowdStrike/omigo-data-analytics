@@ -22,7 +22,7 @@ OMIGO_ARJUN_END_TS_TEMPLATE = "{" + OMIGO_ARJUN_END_TS + "}"
 OMIGO_ARJUN_BASE_PATH_TEMPLATE = "{" + OMIGO_ARJUN_BASE_PATH + "}"
 
 # TODO: these templates dont support multiple inputs
-OMIGO_ARJUN_INPUT_FILE_TEMPLATE = "{" + OMIGO_ARJUN_INPUT_FILE + "}" 
+OMIGO_ARJUN_INPUT_FILE_TEMPLATE = "{" + OMIGO_ARJUN_INPUT_FILE + "}"
 OMIGO_ARJUN_OUTPUT_FILE_TEMPLATE = "{" + OMIGO_ARJUN_OUTPUT_FILE + "}"
 
 # get etl path by id
@@ -34,7 +34,7 @@ def is_etl_path(path):
     # check for none
     if (path is None):
         return False
-  
+
     # return
     return path.startswith(OMIGO_ARJUN_ETL_PATH_PREFIX)
 
@@ -42,8 +42,8 @@ def is_etl_path(path):
 def parse_id_from_etl_path(path):
     # check for none
     if (path is None):
-        return None 
-  
+        return None
+
     # get index
     index = path.find(OMIGO_ARJUN_ETL_PATH_PREFIX)
     if (index != -1):

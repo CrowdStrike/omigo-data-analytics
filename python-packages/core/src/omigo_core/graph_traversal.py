@@ -172,7 +172,7 @@ def get_time_based_forward_edges_only(etsv, ts_col, prefix):
 
     # list of ids found so far in crawl
     paths = {}
-    all_paths = {} 
+    all_paths = {}
 
     # run loop
     sorted_edges = etsv \
@@ -227,7 +227,7 @@ def remove_dangling_edges(etsv, retain_vertex_ids, retain_node_filter_func, max_
     while (dangling_edges_pruned == False and count <= max_iter):
         # increase counter
         count = count + 1
-    
+
         # count edges
         etsv_edge_count = etsv_result \
             .noop(["src", "target", "evports", "users", "ts_min", "ts_max", "count"], n = 1000, title = "etsv_result") \
@@ -238,13 +238,13 @@ def remove_dangling_edges(etsv, retain_vertex_ids, retain_node_filter_func, max_
             .rename("target:uniq_len", "outgoing_target") \
             .noop(["src", "target", "outgoing_target"], n = 1000, title = "etsv_result outgoing_target") \
             .noop(["src", "target", "evports", "incoming_target", "outgoing_target"], n = 1000, title = "etsv_edge_count")
-    
+
         # get outgoing edges
         etsv_num_outgoing_target = etsv_edge_count \
             .select(["src", "outgoing_target"]) \
             .rename("src", "right:src") \
             .distinct()
-        
+
         # ege count flag
         etsv2_edge_flags = etsv_edge_count \
             .print_stats(msg = "etsv_edge_count") \
@@ -274,7 +274,7 @@ def remove_dangling_edges(etsv, retain_vertex_ids, retain_node_filter_func, max_
         else:
             utils.info("etsv: dangling edges found. running the loop again : {} / {}".format(count, max_iter))
 
-        # update the core data structure 
+        # update the core data structure
         etsv_result = etsv2_sync
 
     # return
@@ -290,7 +290,7 @@ def remove_cycles(vtsv, etsv, ts_col, retain_node_filter_func = None, dmsg = "")
     if (vtsv.has_col("node_id") == False or etsv.has_col("src") == False or etsv.has_col("target") == False or etsv.has_col("data_source") == False or etsv.has_col(ts_col) == False):
         raise Exception("{}: predefined column names not found".format(dmsg))
 
-    # edge count for the edges originating from the same data source 
+    # edge count for the edges originating from the same data source
     etsv_spl = etsv \
         .filter("src", retain_node_filter_func) \
         .aggregate(["src", "target", ts_col], ["data_source"], [udfs.uniq_mkstr]) \
@@ -303,8 +303,8 @@ def remove_cycles(vtsv, etsv, ts_col, retain_node_filter_func = None, dmsg = "")
         .aggregate(["src", "target", ts_col], ["data_source"], [udfs.uniq_mkstr]) \
         .distinct() \
         .noop(1000, title = "etsv_non_spl")
- 
-    # get forward edges and do some dedup based on ts_col 
+
+    # get forward edges and do some dedup based on ts_col
     etsv_non_spl2 = get_time_based_forward_edges_only(etsv_non_spl, ts_col, "graph") \
         .sort([ts_col, "target", "src"]) \
         .transform("graph:src_paths", lambda t: ",".join([t1[0:4] for t1 in t.split(",")]) if (t != "") else "", "graph:src_paths2") \
@@ -340,7 +340,7 @@ def merge_similar_nodes_reference(vtsv, etsv, retain_vertex_ids, ts_col, retain_
 
     # check for cycles
     vtsv_nocycle, etsv_nocycle = remove_cycles(vtsv, etsv, ts_col, retain_node_filter_func = retain_node_filter_func)
-        
+
     # warn if cycles were present, and then remove them
     if (etsv.num_rows() != etsv_nocycle.num_rows()):
         utils.warn_once("merge_similar_nodes: this api is unpredictable in presence of cycles. removing them for robustness")
@@ -348,10 +348,10 @@ def merge_similar_nodes_reference(vtsv, etsv, retain_vertex_ids, ts_col, retain_
         etsv \
             .filter(["src", "target"], lambda src, tgt: (src, tgt) not in etsv_nocycle.to_tuples(["src", "target"])) \
             .show_transpose(3, title = "{}: edges removed because of cycle".format(dmsg), max_col_width = 20)
-        
+
         # assign to original variables
         vtsv, etsv = vtsv_nocycle, etsv_nocycle
-        
+
     # remove columns that are created again
     etsv_sel = etsv
 
@@ -417,7 +417,7 @@ def merge_similar_nodes_reference(vtsv, etsv, retain_vertex_ids, ts_col, retain_
         for t1 in t.split(","):
             vtsv_target_map[str(t1)] = str(t)
 
-    # map for count of collapsed nodes         
+    # map for count of collapsed nodes
     vtsv_node_count_map = {}
     for t1, t2 in etsv_grouped.to_tuples(["target", "num_nodes"]):
         vtsv_node_count_map[str(t1)] = str(t2)
@@ -434,7 +434,7 @@ def merge_similar_nodes_reference(vtsv, etsv, retain_vertex_ids, ts_col, retain_
         .remove_suffix("uniq_mkstr", dmsg = dmsg) \
         .transform("node_id", lambda t: vtsv_node_count_map[t] if (t in vtsv_node_count_map.keys()) else "0", "num_nodes")
 
-    # return 
+    # return
     return vtsv_grouped, etsv_grouped2
 
 # retain_vertex_annotations are the start and end timestamps for the retained vertex ids

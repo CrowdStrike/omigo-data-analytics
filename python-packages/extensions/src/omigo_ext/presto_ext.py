@@ -32,9 +32,9 @@ class PrestoClient(sql_helper.HadoopSqlBase):
         rows = cur.fetchall()
 
         # get the list of columns
-        cols = list([desc[0] for desc in cur.description]) 
+        cols = list([desc[0] for desc in cur.description])
 
-        # return tuple 
+        # return tuple
         return cols, rows
 
     def execute_query_in_engine(self, query):

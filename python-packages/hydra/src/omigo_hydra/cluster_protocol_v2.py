@@ -64,7 +64,7 @@ class ClusterHeartbeatProtocol:
         else:
             utils.info("ClusterHeartbeatProtocol: is_alive_cached expired: {}. Time Diff: {} seconds. Returning False".format(self.get_entity_id(), time_diff))
             return False
-            
+
     def __is_alive__(self):
         # check if the directories exists
         if (self.cluster_handler.dir_exists(ClusterPaths.get_entity_heartbeat(self.get_entity_type(), self.get_entity_id())) == False):
@@ -81,14 +81,14 @@ class ClusterHeartbeatProtocol:
             return False
 
         # check the diff
-        clock_skew = heartbeat.ts - heartbeat_server_timestamp 
+        clock_skew = heartbeat.ts - heartbeat_server_timestamp
         if (abs(clock_skew) > ClusterHeartbeatProtocol.MAX_HEARTBEAT_WAIT):
             raise Exception("ClusterHeartbeatProtocol: __is_alive__: {}, clock skew detected. entity ts: {}, server ts: {}, skew: {}. Raising exception for debugging".format(
-                self.get_entity_id(), heartbeat.ts, heartbeat_server_timestamp)) 
+                self.get_entity_id(), heartbeat.ts, heartbeat_server_timestamp))
 
         # check if the timestamp has already expired
         cur_time = timefuncs.get_utctimestamp_sec()
-        time_diff = cur_time - heartbeat_server_timestamp 
+        time_diff = cur_time - heartbeat_server_timestamp
 
         # check against max time
         if (time_diff > ClusterHeartbeatProtocol.MAX_HEARTBEAT_WAIT):
@@ -110,14 +110,14 @@ class ClusterHeartbeatProtocol:
             utils.info("ClusterHeartbeatProtocol: update_heartbeat_inner: {}, entity in aborted or cleanup. Exiting.".format(self.get_entity_id()))
             return False
 
-        # construct new heartbeat 
+        # construct new heartbeat
         ts = timefuncs.get_utctimestamp_sec()
         heartbeat = cluster_common_v2.ClusterHearbeat.new(ts, self.get_entity().lease)
 
         # 1. update on cluster
         self.cluster_handler.update_dynamic_value(ClusterPaths.get_entity_heartbeat(self.get_entity_type(), self.get_entity_id()), heartbeat, ignore_logging = True)
 
-        # 2. update local cache 
+        # 2. update local cache
         self.update_cache_ts(ts)
 
         # return
@@ -137,7 +137,7 @@ class ClusterEntityStateProtocol:
         # get all states
         for state in EntityState.get_all():
             result[state] = self.cluster_handler.dir_exists(ClusterPaths.get_entities_state_by_id(self.entity_type, state, self.entity_id))
-        
+
         # return
         return result
 
@@ -232,13 +232,13 @@ class ClusterEntityStateProtocol:
             return False
 
         # return
-        return True 
+        return True
 
     def get_state_update_time(self, state):
         # get the timestamp at which the state was determined. TODO: add wait
         update_time = cluster_common_v2.ClusterUpdateTime.from_json(self.cluster_handler.read_most_recent_json(ClusterPaths.get_entities_state_by_id(self.entity_type, state, self.entity_id)))
-      
-        # return 
+
+        # return
         return update_time
 
 # main protocol class for entity operations
@@ -251,7 +251,7 @@ class ClusterEntityProtocol:
         self.entity = entity
         self.cluster_handler = ClusterPaths.get_cluster_handler()
         self.heartbeat_protocol = ClusterHeartbeatProtocol(self.entity)
-        self.local_cluster_handler = ClusterPaths.get_local_cluster_handler() 
+        self.local_cluster_handler = ClusterPaths.get_local_cluster_handler()
 
     def get_entity(self):
         return self.entity
@@ -281,7 +281,7 @@ class ClusterEntityProtocol:
         for xchild_type in cluster_common_v2.EntityPassiveChildrenMap[self.get_entity_type()]:
             self.cluster_handler.create(ClusterPaths.get_entity_passive_children_by_child_type(self.get_entity_type(), self.get_entity_id(), xchild_type))
 
-        # create dependents 
+        # create dependents
         self.cluster_handler.create(ClusterPaths.get_entity_dependents(self.get_entity_type(), self.get_entity_id()))
         for xchild_type in cluster_common_v2.EntityDependentsMap[self.get_entity_type()]:
             self.cluster_handler.create(ClusterPaths.get_entity_dependents_by_child_type(self.get_entity_type(), self.get_entity_id(), xchild_type))
@@ -383,31 +383,31 @@ class ClusterEntityProtocol:
         # define the placeholders for all possible state transitions
         if (cur_state == EntityState.CREATED and target_state == EntityState.ALIVE):
             # CREATED to ALIVE
-            self.do_active_child_state_change_created_to_alive(xchild_entity) 
+            self.do_active_child_state_change_created_to_alive(xchild_entity)
         elif (cur_state == EntityState.ALIVE and target_state == EntityState.DEAD):
-            # ALIVE to DEAD 
-            self.do_active_child_state_change_alive_to_dead(xchild_entity) 
+            # ALIVE to DEAD
+            self.do_active_child_state_change_alive_to_dead(xchild_entity)
         elif (cur_state == EntityState.DEAD and target_state == EntityState.REASSIGNED):
-            # DEAD to REASSIGNED 
-            self.do_active_child_state_change_dead_to_reassigned(xchild_entity) 
+            # DEAD to REASSIGNED
+            self.do_active_child_state_change_dead_to_reassigned(xchild_entity)
         elif (cur_state == EntityState.CREATED and target_state == EntityState.ABORTED):
-            # CREATED to ABORTED 
-            self.do_active_child_state_change_created_to_aborted(xchild_entity) 
+            # CREATED to ABORTED
+            self.do_active_child_state_change_created_to_aborted(xchild_entity)
         elif (cur_state == EntityState.ALIVE and target_state == EntityState.ABORTED):
-            # ALIVE to ABORTED 
-            self.do_active_child_state_change_alive_to_aborted(xchild_entity) 
+            # ALIVE to ABORTED
+            self.do_active_child_state_change_alive_to_aborted(xchild_entity)
         elif (cur_state == EntityState.DEAD and target_state == EntityState.ABORTED):
-            # DEAD to ABORTED 
-            self.do_active_child_state_change_dead_to_aborted(xchild_entity) 
+            # DEAD to ABORTED
+            self.do_active_child_state_change_dead_to_aborted(xchild_entity)
         elif (cur_state == EntityState.REASSIGNED and target_state == EntityState.ABORTED):
-            # REASSIGNED to ABORTED 
-            self.do_active_child_state_change_reassigned_to_aborted(xchild_entity) 
+            # REASSIGNED to ABORTED
+            self.do_active_child_state_change_reassigned_to_aborted(xchild_entity)
         elif (cur_state == EntityState.REASSIGNED and target_state == EntityState.CLEANUP):
-            # REASSIGNED to CLEANUP 
-            self.do_active_child_state_change_reassigned_to_cleanup(xchild_entity) 
+            # REASSIGNED to CLEANUP
+            self.do_active_child_state_change_reassigned_to_cleanup(xchild_entity)
         elif (cur_state == EntityState.ABORTED and target_state == EntityState.CLEANUP):
-            # ABORTED to CLEANUP 
-            self.do_active_child_state_change_aborted_to_cleanup(xchild_entity) 
+            # ABORTED to CLEANUP
+            self.do_active_child_state_change_aborted_to_cleanup(xchild_entity)
         else:
             raise Exception("do_active_child_state_change: {}: invalid state change: {}, {}, {}".format(self.entity_id, xchild_entity_id, cur_state, target_state))
 
@@ -519,26 +519,26 @@ class ClusterEntityProtocol:
             # ALIVE to COMPLETED
             self.do_passive_child_state_change_alive_to_completed(xchild_entity)
         elif (cur_state == EntityState.ALIVE and target_state == EntityState.FAILED):
-            # ALIVE to FAILED 
+            # ALIVE to FAILED
             self.do_passive_child_state_change_alive_to_failed(xchild_entity)
         elif (cur_state == EntityState.ALIVE and target_state == EntityState.ABORTED):
-            # ALIVE to ABORTED 
+            # ALIVE to ABORTED
             self.do_passive_child_state_change_alive_to_aborted(xchild_entity)
         elif (cur_state == EntityState.COMPLETED and target_state == EntityState.CLEANUP):
-            # COMPLETED to CLEANUP 
+            # COMPLETED to CLEANUP
             self.do_passive_child_state_change_completed_to_cleanup(xchild_entity)
         elif (cur_state == EntityState.FAILED and target_state == EntityState.CLEANUP):
             # FAILED to CLEANUP
             self.do_passive_child_state_change_failed_to_cleanup(xchild_entity)
         elif (cur_state == EntityState.ABORTED and target_state == EntityState.CLEANUP):
-            # ABORTED to CLEANUP 
+            # ABORTED to CLEANUP
             self.do_passive_child_state_change_aborted_to_cleanup(xchild_entity)
         else:
             raise Exception("ClusterEntityProtocol: {}: do_passive_child_state_change: invalid state change: {}, {}, {}".format(self.get_entity_id(), xchild_entity.entity_id, cur_state, target_state))
 
     # do_passive_child_state_change_created_to_alive
     def do_passive_child_state_change_created_to_alive(self, xchild_entity):
-        # check if there are enough resources - workers, agents to assign. if the resources are there, then 
+        # check if there are enough resources - workers, agents to assign. if the resources are there, then
         # assign and move to alive state
         if (cluster_common_v2.EntityIsActiveMap[xchild_entity.entity_type] == False):
             # check available resources
@@ -562,8 +562,8 @@ class ClusterEntityProtocol:
 
                         # create entry into agent id for this wf
                         self.cluster_handler.create(ClusterPaths.get_entity_assigned_execution_tasks_by_id(EntityType.AGENT, selected_agent_id, xchild_entity.entity_type, xchild_entity.entity_id))
-               
-        # do the state change 
+
+        # do the state change
         self.__do_child_entity_state_change__(xchild_entity, EntityState.ALIVE)
 
     def do_passive_child_state_change_alive_to_completed(self, xchild_entity):
@@ -675,7 +675,7 @@ class ClusterEntityProtocol:
         xentity_ids = self.cluster_handler.list_dirs(ClusterPaths.get_entities_ids(xentity_type))
 
         # iterate
-        for xentity_id in xentity_ids: 
+        for xentity_id in xentity_ids:
             # get the effective state of each entity
             xentity_state_protocol = ClusterEntityStateProtocol(xentity_type, xentity_id)
 
@@ -698,7 +698,7 @@ class ClusterEntityProtocol:
             used_capacity = 0
 
             # create flag
-            is_available = True 
+            is_available = True
 
             # check for each ExectionTask type
             for execution_task_type in cluster_common_v2.EntityExecutionTaskTypes:
@@ -722,7 +722,7 @@ class ClusterEntityProtocol:
 
         # return
         return result
- 
+
 # separate protocol class for cleanup
 class ClusterEntityCleanupProtocol:
     def __init__(self, entity_type, entity_id):
@@ -747,7 +747,7 @@ class ClusterEntityCleanupProtocol:
         self.cluster_handler.remove_dir_recursive(ClusterPaths.get_entity_assigned_executors(self.entity_type, self.entity_id), ignore_if_missing = True)
         self.cluster_handler.remove_dir_recursive(ClusterPaths.get_entity_assigned_execution_tasks(self.entity_type, self.entity_id), ignore_if_missing = True)
 
-        # delete data 
+        # delete data
         self.cluster_handler.remove_dir_recursive(ClusterPaths.get_entity_data(self.entity_type, self.entity_id), ignore_if_missing = True)
 
         # delete entity
@@ -841,7 +841,7 @@ class ClusterMasterProtocol(ClusterEntityProtocol):
         # check if entity is active or passive
         xentity_is_active = cluster_common_v2.EntityIsActiveMap[xentity_type]
 
-        # get supervisor 
+        # get supervisor
         xsupevisor_entity_ref = self.__select_assigned_supervisor_entity__(xentity.entity_type)
 
         # check if there was a valid assigned_id
@@ -903,7 +903,7 @@ class ClusterMasterProtocol(ClusterEntityProtocol):
             return True
         else:
             return False
-# Resource Manager Protocol            
+# Resource Manager Protocol
 class ClusterResourceManagerProtocol(ClusterEntityProtocol):
     def __init__(self, entity):
         super().__init__(entity)
@@ -976,7 +976,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
     def __update_wf_state__(self, cluster_handler_ref, entity_state):
         # TODO
         utils.warn_once("__update_wf_state__: this should be replaced with ClusterEntityStateProtocol")
- 
+
         # update the state
         cluster_handler_ref.create(ClusterPaths.get_entities_state_by_id(self.get_entity_type(), entity_state, self.get_entity_id()))
         cluster_handler_ref.update_dynamic_value(ClusterPaths.get_entities_state_by_id(self.get_entity_type(), entity_state, self.get_entity_id()),
@@ -999,7 +999,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
             # read input
             input_ids = wf_spec.input_ids
             file_index = 0
-            
+
             # validation for multiple inputs or outputs. TODO
             if (len(wf_spec.input_ids) > 1 or len(wf_spec.output_ids) > 1):
                 raise Exception("ClusterWFProtocol: {}: multiple inputs and outputs not supported: {}, {}".format(self.get_entity_id(), input_ids, output_ids))
@@ -1024,7 +1024,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
 
             # debug
             utils.info("ClusterWFProtocol: {}: execute_static: duration: {}: start_ts: {}, end_ts: {}".format(
-                self.get_entity_id(), wf_spec.duration, wf_spec_start_ts, wf_spec_end_ts)) 
+                self.get_entity_id(), wf_spec.duration, wf_spec_start_ts, wf_spec_end_ts))
 
             # resolve the input
             xinput_resolved = self.resolve_meta(xinput, wf_spec_start_ts, wf_spec_use_full_data, wf_spec_start_ts, wf_spec_end_ts)
@@ -1062,7 +1062,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
 
             # set the final state
             self.__update_wf_state__(self.cluster_handler, EntityState.COMPLETED)
-        
+
             # debug
             utils.info("ClusterWFProtocol: {}: execute_static: wf: {}. finished".format(self.get_entity_id(), wf_entity.entity_id))
         except Exception as e:
@@ -1070,7 +1070,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
             self.__update_wf_state__(self.cluster_handler, EntityState.FAILED)
             raise e
 
-    # execute as live task     
+    # execute as live task
     def execute_live(self):
         # local reference
         wf_entity = self.entity
@@ -1080,14 +1080,14 @@ class ClusterWFProtocol(ClusterEntityProtocol):
         utils.info("ClusterWFProtocol: execute_live: {}".format(self.get_entity_id()))
 
         # change state to ALIVE
-        self.__update_wf_state__(self.cluster_handler, EntityState.ALIVE) 
+        self.__update_wf_state__(self.cluster_handler, EntityState.ALIVE)
 
         # run under try-catch block to handle exceptions and set the final state
         try:
             # read input
             input_ids = wf_spec.input_ids
             file_index = 0
-            
+
             # validation for multiple inputs or outputs. TODO
             if (len(wf_spec.input_ids) > 1 or len(wf_spec.output_ids) > 1):
                 raise Exception("ClusterWFProtocol: {}: multiple inputs and outputs not supported: {}, {}".format(self.get_entity_id(), input_ids, output_ids))
@@ -1109,7 +1109,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
 
             # initialize start timestamp
             cur_start_ts = wf_spec_start_ts
-            cur_end_ts = cur_start_ts + wf_spec.interval 
+            cur_end_ts = cur_start_ts + wf_spec.interval
 
             # iterate
             for iter_count in range(num_iter):
@@ -1170,7 +1170,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
             # read input
             input_ids = wf_spec.input_ids
             file_index = 0
-            
+
             # validation for multiple inputs or outputs. TODO
             if (len(wf_spec.input_ids) > 1 or len(wf_spec.output_ids) > 1):
                 raise Exception("ClusterWFProtocol: {}: multiple inputs and outputs not supported: {}, {}".format(self.get_entity_id(), input_ids, output_ids))
@@ -1200,7 +1200,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
 
             # copy the wf spec with new parameters for remote execution
             wf_entity_remote = cluster_common_v2.ClusterEntityWF.from_json(wf_entity.to_json())
-            wf_entity_remote.entity_spec.is_remote = False 
+            wf_entity_remote.entity_spec.is_remote = False
             self.local_cluster_handler.create(ClusterPaths.get_entity_id(self.get_entity_type(), self.get_entity_id()))
             self.local_cluster_handler.create(ClusterPaths.get_entity(self.get_entity_type(), self.get_entity_id()))
             self.local_cluster_handler.update_dynamic_value(ClusterPaths.get_entity(self.get_entity_type(), self.get_entity_id()), wf_entity_remote)
@@ -1244,7 +1244,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
 
             # update the final state
             self.__update_wf_state__(self.cluster_handler, final_state)
-    
+
             # debug
             utils.info("ClusterWFProtocol: {}: execute_remote: wf: {}. finished".format(self.get_entity_id(), wf_entity.entity_id))
         except Exception as e:
@@ -1272,9 +1272,9 @@ class ClusterWFProtocol(ClusterEntityProtocol):
         # check if TSVReference is defined. TODO
         if (xtsv.has_col(cluster_common_v2.TSVReference.OMIGO_REFERENCE_PATH)):
             return self.__resolve_reference_paths__(cluster_common_v2.TSVReference.read(xtsv), wf_start_ts, use_full_data, start_ts, end_ts)
-        
+
         # check if etl path is defined
-        etl_path_col = None 
+        etl_path_col = None
         for c in xtsv.get_columns():
             if (c.startswith(cluster_arjun.OMIGO_ARJUN_ETL_PATH_PREFIX)):
                 utils.info("ClusterWFProtocol: __resolve_reference_paths__: found etl path: {}, {}".format(c, xtsv.get_columns()))
@@ -1323,8 +1323,8 @@ class ClusterWFProtocol(ClusterEntityProtocol):
                             etsv = etsv.add_const(str(k), str(mp[k]))
 
                     # append to the list
-                    etsvs.append(etsv)   
-            
+                    etsvs.append(etsv)
+
             # return after doing merge
             return self.__resolve_reference_paths__(tsv.merge_union(etsvs), wf_start_ts, use_full_data, start_ts, end_ts)
 
@@ -1338,7 +1338,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
             start_ts_str = timefuncs.utctimestamp_to_datetime_str(start_ts)
             end_ts_str = timefuncs.utctimestamp_to_datetime_str(end_ts)
 
-            # list of columns to replace        
+            # list of columns to replace
             cols = {
                 cluster_arjun.OMIGO_ARJUN_START_TS_TEMPLATE: start_ts_str,
                 cluster_arjun.OMIGO_ARJUN_END_TS_TEMPLATE: end_ts_str
@@ -1364,11 +1364,11 @@ class ClusterWFProtocol(ClusterEntityProtocol):
     # internal method to resolve meta parameters for external task
     def __resolve_external_task_meta_params__(self, xtsv, input_id, output_id, file_index):
         def __resolve_external_task_meta_params_inner__(x):
-            # list of columns to replace        
+            # list of columns to replace
             cols = {
                 cluster_arjun.OMIGO_ARJUN_BASE_PATH_TEMPLATE: ClusterPaths.get_base_path(),
                 cluster_arjun.OMIGO_ARJUN_INPUT_FILE_TEMPLATE: ClusterPaths.get_entity_data_input_file(self.get_entity_type(), self.get_entity_id(), input_id, file_index),
-                cluster_arjun.OMIGO_ARJUN_OUTPUT_FILE_TEMPLATE: ClusterPaths.get_entity_data_output_file(self.get_entity_type(), self.get_entity_id(), output_id, file_index) 
+                cluster_arjun.OMIGO_ARJUN_OUTPUT_FILE_TEMPLATE: ClusterPaths.get_entity_data_output_file(self.get_entity_type(), self.get_entity_id(), output_id, file_index)
             }
 
             # resolve
@@ -1429,12 +1429,12 @@ class ClusterWFProtocol(ClusterEntityProtocol):
 
                 # define func, class_reference, class_func accordingly
                 class_func = None
-                
+
                 # check if extend_class_obj is defined
                 if (extend_class_obj is not None):
                     # TODO: this can break
                     func_base_name = operation.name.split(".")[-1]
-                    class_func = getattr(extend_class_obj, func_base_name) 
+                    class_func = getattr(extend_class_obj, func_base_name)
                 else:
                     # lookup the function to call
                     func = cluster_class_reflection.load_fully_qualified_func(operation.name)
@@ -1462,7 +1462,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
         jobs_specs = wf_spec.jobs_specs
         for job_spec in jobs_specs:
             # check if a custom class is called
-            extend_class_op = None 
+            extend_class_op = None
 
             # instantiate the class object
             if (job_spec.extend_class_def is not None):
@@ -1551,17 +1551,17 @@ class ClusterSessionProtocol(ClusterEntityProtocol):
         self.cluster_handler.create(ClusterPaths.get_entity_data(wf_entity.entity_type, wf_entity.entity_id))
         self.cluster_handler.create(ClusterPaths.get_entity_data_inputs(wf_entity.entity_type, wf_entity.entity_id))
 
-        # iterate over all input ids 
+        # iterate over all input ids
         for i in range(len(wf_spec.input_ids)):
             input_id = wf_spec.input_ids[i]
             file_index = 0
             self.cluster_handler.create(ClusterPaths.get_entity_data_input(wf_entity.entity_type, wf_entity.entity_id, input_id))
             self.cluster_handler.write_tsv(ClusterPaths.get_entity_data_input_file(wf_entity.entity_type, wf_entity.entity_id, input_id, file_index), xinputs[i])
 
-        # initialize output directories 
+        # initialize output directories
         self.cluster_handler.create(ClusterPaths.get_entity_data_outputs(wf_entity.entity_type, wf_entity.entity_id))
 
-        # iterate over all output ids and initialize 
+        # iterate over all output ids and initialize
         for i in range(len(wf_spec.output_ids)):
             output_id = wf_spec.output_ids[i]
             self.cluster_handler.create(ClusterPaths.get_entity_data_output(wf_entity.entity_type, wf_entity.entity_id, output_id))
@@ -1594,17 +1594,17 @@ class ClusterMasterElectionProtocol:
             current_master_entity_path = ClusterPaths.get_entity(current_master_ref.entity_type, current_master_ref.entity_id)
             if (self.cluster_handler.dir_exists(current_master_entity_path) == False):
                 utils.warn("ClusterMasterElectionProtocol: {}: has_elected_master: current master entry exists but the entity is missing: {}".format(self.entity_id, current_master_ref.entity_id))
-                return None 
+                return None
 
             # check if the master is alive
             current_master = cluster_common_v2.ClusterEntity.from_json(self.cluster_handler.read_most_recent_json(current_master_entity_path))
 
             # check alive
             xentity_state_protocol = ClusterEntityStateProtocol(current_master.entity_type, current_master.entity_id)
-           
-            # return false if the master exists but is not alive 
+
+            # return false if the master exists but is not alive
             if (xentity_state_protocol.is_alive() == True):
-                return current_master.entity_id 
+                return current_master.entity_id
             else:
                 return None
         else:
@@ -1667,7 +1667,7 @@ class ClusterMasterElectionProtocol:
         # check if there are any candidates
         if (candidate_ids is None or len(candidate_ids) == 0):
             utils.info("ClusterMasterElectionProtocol: {}: run_election: : no candidates found.".format(self.entity_id))
-            return False 
+            return False
 
         # debug
         utils.info("ClusterMasterElectionProtocol: {}: run_election: list of candidates found (before checking alive): {}".format(self.entity_id, candidate_ids))
@@ -1702,7 +1702,7 @@ class ClusterMasterElectionProtocol:
             min_ts_candidate_ref = cluster_common_v2.ClusterEntityRef.new(min_ts_candidate.entity_type, min_ts_candidate.entity_id)
 
             # elected as winner. Create an entry into the /master/current
-            self.cluster_handler.update_dynamic_seq_update(ClusterPaths.get_current_master(), min_ts_candidate_ref) 
+            self.cluster_handler.update_dynamic_seq_update(ClusterPaths.get_current_master(), min_ts_candidate_ref)
             utils.info("ClusterMasterElectionProtocol: {}: run_election: Won".format(self.entity_id))
             return True
         else:
@@ -1802,7 +1802,7 @@ class ClusterAdmin:
                 else:
                     remove_entities.append((xentity_type, xentity_id))
                     utils.info("ClusterAdmin: remove_entities: {}".format(xentity_id))
-       
+
         # iterate over all entity types. TODO ignore this for a while
         # for (xentity_type, xentity_id) in remove_entities:
         #     # move the entities to cleanup. TODO: use ABORTED state here first
@@ -1873,7 +1873,7 @@ class ClusterAdmin:
         self.cluster_handler.create(entity_state_path)
         self.cluster_handler.update_dynamic_value(entity_state_path, target_state_update_time)
 
-# Executor context that can be called either from TSV itself for inline processing, or from outside 
+# Executor context that can be called either from TSV itself for inline processing, or from outside
 # for more asynchronous workflows
 # TODO: the is_remote and is_external is for jobs and not workflows
 class ClusterExecutorContext:
@@ -1924,7 +1924,7 @@ class ClusterExecutorContext:
 
             # create reduce task
             reduce_task = cluster_common_v2.ClusterSpecReduceTask.new(job_operation.reduce_op)
-        
+
         # check if reduce is present
         if (job_operation.singleton_op is not None):
             # create partitioner task
@@ -1938,12 +1938,12 @@ class ClusterExecutorContext:
             # create extend class reference
             extend_class_def = cluster_common_v2.ClusterSpecExtendClassDef.new(job_operation.extend_class_op)
 
-        # create job_spec 
+        # create job_spec
         job_spec = cluster_common_v2.ClusterSpecJob.new(map_partitioner, map_task, reduce_partitioner, reduce_task, singleton_task, extend_class_def)
 
         # return
         return job_spec
-    
+
     # create wf spec
     def __create_wf_spec__(self, jobs_operations, input_ids, output_ids, start_ts, use_full_data, num_splits):
         # jobs_specs

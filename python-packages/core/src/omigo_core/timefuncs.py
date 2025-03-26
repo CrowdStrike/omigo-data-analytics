@@ -94,7 +94,7 @@ def utctimestamp_to_datetime(x):
         return datetime.datetime.utcfromtimestamp(int(x)).replace(tzinfo = datetime.timezone.utc)
     elif (len(x) == 13 and x.isnumeric() == True):
         return datetime.datetime.utcfromtimestamp(int(x)/1000).replace(tzinfo = datetime.timezone.utc)
-    elif (len(x) > 10 and x.find(".") == 10 and utils.is_float(x)): 
+    elif (len(x) > 10 and x.find(".") == 10 and utils.is_float(x)):
         return datetime.datetime.utcfromtimestamp(float(x)).replace(tzinfo = datetime.timezone.utc)
     else:
         raise Exception("Unknown timestamp format: {}".format(x))

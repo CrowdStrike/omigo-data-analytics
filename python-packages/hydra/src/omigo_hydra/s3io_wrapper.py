@@ -42,8 +42,8 @@ class S3FSWrapper:
         # check if exists
         if (self.file_exists(path)):
             return True
-     
-        # wait on false 
+ 
+        # wait on false
         if (attempts > 0):
             utils.info("exists_with_wait: path: {}, attempts: {}, waiting for {} seconds".format(path, attempts, wait_sec))
             time.sleep(wait_sec)
@@ -77,8 +77,8 @@ class S3FSWrapper:
         # check if exists
         if (self.file_not_exists(path)):
             return True
-     
-        # wait on false 
+
+        # wait on false
         if (attempts > 0):
             utils.info("not_exists_with_wait: path: {}, attempts: {}, waiting for {} seconds".format(path, attempts, wait_sec))
             time.sleep(wait_sec)
@@ -229,7 +229,7 @@ class S3FSWrapper:
         path = self.__normalize_path__(path)
         file_path = "{}/{}".format(path, RESERVED_HIDDEN_FILE)
 
-        # check for existence 
+        # check for existence
         if (self.file_exists(file_path) == False):
             if (ignore_if_missing == True):
                 utils.warn("delete_dir: path doesnt exist: {}, ignore_if_missing: {}".format(path, ignore_if_missing))
@@ -242,7 +242,7 @@ class S3FSWrapper:
             utils.warn("delete_dir: directory not empty: {}".format(path))
             return False
 
-        # delete the reserved file 
+        # delete the reserved file
         return self.delete_file_with_wait(file_path, ignore_if_missing = ignore_if_missing, wait_sec = wait_sec, attempts = attempts)
 
     def get_parent_directory(self, path):
@@ -371,7 +371,7 @@ class S3FSWrapper:
         # create dir
         self.create_dir(dest_path)
 
-        # gather the list of files to copy 
+        # gather the list of files to copy
         src_files = self.list_files(src_path)
         dest_files = self.list_files(dest_path)
 

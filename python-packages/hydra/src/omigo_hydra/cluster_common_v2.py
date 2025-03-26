@@ -3,8 +3,8 @@ from datetime import timezone
 import json
 import os
 import time
-import math 
-import json 
+import math
+import json
 import threading
 from omigo_core import tsv, utils, tsvutils, etl, timefuncs
 from omigo_hydra import cluster_data, cluster_class_reflection, s3io_wrapper
@@ -12,7 +12,7 @@ from omigo_hydra import cluster_data, cluster_class_reflection, s3io_wrapper
 # class that takes the base path in S3, and implement all distributed communication under that.
 # takes care of protocol level things for future
 
-# global constants. TODO        
+# global constants. TODO
 if ("HYDRA_PATH" in os.environ.keys()):
     HYDRA_PATH = os.environ["HYDRA_PATH"]
 else:
@@ -41,7 +41,7 @@ def construct_dynamic_value_json():
     return "value.{}.json".format(timefuncs.get_utctimestamp_sec())
 
 # Note: SHUTDOWN is implemented using?
-# TODO: Why there is no Running state 
+# TODO: Why there is no Running state
 # EntityState
 class EntityState:
     CREATED            = "created"
@@ -118,7 +118,7 @@ class EntityType:
             EntityType.CLIENT,
             EntityType.SESSION
         ]
-            
+
 
 # Entity Active or Not
 EntityIsActiveMap = {}
@@ -130,7 +130,7 @@ EntityIsActiveMap[EntityType.JOB_MANAGER] = True
 EntityIsActiveMap[EntityType.TASK_MANAGER] = True
 EntityIsActiveMap[EntityType.WORKER] = True
 EntityIsActiveMap[EntityType.AGENT] = True
-EntityIsActiveMap[EntityType.DOUBLE_AGENT] = True 
+EntityIsActiveMap[EntityType.DOUBLE_AGENT] = True
 EntityIsActiveMap[EntityType.INTELI_AGENT] = True
 EntityIsActiveMap[EntityType.SWF] = False
 EntityIsActiveMap[EntityType.WF] = False
@@ -140,7 +140,7 @@ EntityIsActiveMap[EntityType.BATCH] = False
 EntityIsActiveMap[EntityType.CLIENT] = True
 EntityIsActiveMap[EntityType.SESSION] = True
 
-# Create the map for supervisor. Note: There is no BATCH_MANAGER 
+# Create the map for supervisor. Note: There is no BATCH_MANAGER
 EntitySupervisorMap = {}
 EntitySupervisorMap[EntityType.MASTER] = EntityType.MASTER
 EntitySupervisorMap[EntityType.RESOURCE_MANAGER] = EntityType.MASTER
@@ -264,7 +264,7 @@ EntityPassiveSupervisorTypes = [EntityType.SWF_MANAGER, EntityType.WF_MANAGER, E
 # capacity map
 ENTITY_CAPACITY_DEFAULT = 10
 EntityCapacityMap = {}
-EntityCapacityMap[EntityType.MASTER] = ENTITY_CAPACITY_DEFAULT 
+EntityCapacityMap[EntityType.MASTER] = ENTITY_CAPACITY_DEFAULT
 EntityCapacityMap[EntityType.RESOURCE_MANAGER] = ENTITY_CAPACITY_DEFAULT
 EntityCapacityMap[EntityType.SWF_MANAGER] = ENTITY_CAPACITY_DEFAULT
 EntityCapacityMap[EntityType.WF_MANAGER] = ENTITY_CAPACITY_DEFAULT
@@ -275,7 +275,7 @@ EntityCapacityMap[EntityType.AGENT] = 1
 EntityCapacityMap[EntityType.DOUBLE_AGENT] = 1
 EntityCapacityMap[EntityType.INTELI_AGENT] = 1
 
-# Constants for cluster capabilities. These are just suggested constants and in realize plain strings will be used 
+# Constants for cluster capabilities. These are just suggested constants and in realize plain strings will be used
 class ClusterCapabilities:
     SPARK       = "spark"
     PRESTO      = "presto"
@@ -508,13 +508,13 @@ class ClusterEntityWF(ClusterEntity):
             if (job_spec.singleton_task is not None):
                 for r in job_spec.singleton_task.singleton_op.requirements:
                     if (r not in requirements):
-                        requirements.append(r)  
+                        requirements.append(r)
 
             # extend class task requirements
             if (job_spec.extend_class_def is not None):
                 for r in job_spec.extend_class_def.extend_class_op.requirements:
                     if (r not in requirements):
-                        requirements.append(r)  
+                        requirements.append(r)
 
         # return
         return requirements
@@ -550,7 +550,7 @@ class ClusterEntityJob(ClusterEntity):
     def new(entity_id, client_id, session_id, entity_spec, ts = timefuncs.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_PASSIVE_ENTITY_LEASE):
         return ClusterEntityJob(entity_id, ts, lease, client_id, session_id, entity_spec)
 
-# Task 
+# Task
 class ClusterEntityTask(ClusterEntity):
     def __init__(self, entity_id, ts, lease, client_id, session_id, entity_spec):
         super().__init__(EntityType.TASK, entity_id, ts, lease)
@@ -619,10 +619,10 @@ class ClusterSpecBase(cluster_data.JsonSer):
         # do validation and create a valid compiled representations
         if (self.xinputs is None):
             raise Exception("ClusterSpecBase: build: xinputs is None")
-        
+
         if (self.xoutputs is None):
             raise Exception("ClusterSpecBase: build: xoutputs is None")
-            
+
     # parse from json
     def from_json(json_obj):
         # check for None
@@ -665,14 +665,14 @@ def deserialize_cluster_spec(json_obj):
         return ClusterSpecBatch.from_json(json_obj)
     else:
         raise Exception("deserialize_cluster_spec: unknown entity_type: {}".format(entity_type))
-    
+
 # SWF Spec
 # TODO: this needs redesigning
 class ClusterSpecSWF(ClusterSpecBase):
     def __init__(self, num_inputs, num_outputs, wfs_specs):
         super().__init__(EntityType.SWF, num_inputs, num_outputs)
         self.wfs_specs = wfs_specs
-        
+
     def build(self):
         super().build()
 
@@ -682,7 +682,7 @@ class ClusterSpecSWF(ClusterSpecBase):
         if (json_obj is None):
             return None
 
-        # deserialize wfs 
+        # deserialize wfs
         wfs_specs = []
         for wf_spec_obj in json_obj["wfs_specs"]:
             wfs_specs.append(ClusterSpecWF.from_json(wf_spec_obj))
@@ -712,8 +712,8 @@ class ClusterSpecWF(ClusterSpecBase):
         self.use_full_data = use_full_data
         self.duration = duration
         self.input_ids = input_ids
-        self.output_ids = output_ids 
-        
+        self.output_ids = output_ids
+
     def build(self):
         super().build()
 
@@ -754,7 +754,7 @@ class ClusterSpecWF(ClusterSpecBase):
 
         # return
         return ClusterSpecWF(jobs_specs, is_live, is_remote, is_external, max_job_execution_time, interval, start_ts, use_full_data, duration, input_ids, output_ids)
-        
+
 # Job Spec
 class ClusterSpecJob(ClusterSpecBase):
     def __init__(self, map_partitioner, map_task, reduce_partitioner, reduce_task, singleton_task, extend_class_def, num_inputs, num_outputs):
@@ -765,7 +765,7 @@ class ClusterSpecJob(ClusterSpecBase):
         self.reduce_task = reduce_task
         self.singleton_task = singleton_task
         self.extend_class_def = extend_class_def
-        
+
     def build(self):
         super().build()
 
@@ -777,9 +777,9 @@ class ClusterSpecJob(ClusterSpecBase):
 
         # return
         return ClusterSpecJob.new(
-            ClusterSpecPartitionTask.from_json(json_obj["map_partitioner"]),        
-            ClusterSpecMapTask.from_json(json_obj["map_task"]),        
-            ClusterSpecHashPartitionTask.from_json(json_obj["reduce_partitioner"]),        
+            ClusterSpecPartitionTask.from_json(json_obj["map_partitioner"]),
+            ClusterSpecMapTask.from_json(json_obj["map_task"]),
+            ClusterSpecHashPartitionTask.from_json(json_obj["reduce_partitioner"]),
             ClusterSpecReduceTask.from_json(json_obj["reduce_task"]),
             ClusterSpecSingletonTask.from_json(json_obj["singleton_task"]),
             ClusterSpecExtendClassDef.from_json(json_obj["extend_class_def"]),
@@ -791,12 +791,12 @@ class ClusterSpecJob(ClusterSpecBase):
     def new(map_partitioner, map_task, reduce_partitioner, reduce_task, singleton_task, extend_class_def, num_inputs = 1, num_outputs = 1):
         return ClusterSpecJob(map_partitioner, map_task, reduce_partitioner, reduce_task, singleton_task, extend_class_def, num_inputs, num_outputs)
 
-# Task Spec 
+# Task Spec
 class ClusterSpecTask(ClusterSpecBase):
     def __init__(self, task_type, num_inputs, num_outputs):
         super().__init__(EntityType.TASK, num_inputs, num_outputs)
         self.task_type = task_type
-        
+
     def build(self):
         super().build()
 
@@ -822,7 +822,7 @@ class ClusterSpecExtendClassDef(ClusterSpecTask):
     def __init__(self, extend_class_op, num_inputs, num_outputs):
         super().__init__(ClusterTaskType.EXTEND_CLASS, num_inputs, num_outputs)
         self.extend_class_op = extend_class_op
-        
+
     def build(self):
         super().build()
 
@@ -848,7 +848,7 @@ class ClusterSpecMapTask(ClusterSpecTask):
     def __init__(self, map_ops, num_inputs, num_outputs):
         super().__init__(ClusterTaskType.MAP, num_inputs, num_outputs)
         self.map_ops = map_ops
-        
+
     def build(self):
         super().build()
 
@@ -879,7 +879,7 @@ class ClusterSpecReduceTask(ClusterSpecTask):
     def __init__(self, reduce_op, num_inputs, num_outputs):
         super().__init__(ClusterTaskType.REDUCE, num_inputs, num_outputs)
         self.reduce_op = reduce_op
-        
+
     def build(self):
         super().build()
 
@@ -931,7 +931,7 @@ class ClusterSpecPartitionTask(ClusterSpecTask):
     def __init__(self, num_splits, num_inputs, num_outputs):
         super().__init__(ClusterTaskType.PARTITION, num_inputs, num_outputs)
         self.num_splits = num_splits
- 
+
     def build(self):
         super().build()
 
@@ -958,7 +958,7 @@ class ClusterSpecHashPartitionTask(ClusterSpecTask):
         super().__init__(ClusterTaskType.HASH_PARTITION, num_inputs, num_outputs)
         self.num_splits = num_splits
         self.hash_cols = hash_cols
- 
+
     def build(self):
         super().build()
 
@@ -1012,7 +1012,7 @@ def deserialize_cluster_task_spec(json_obj):
 
     # get task type
     task_type = json_obj["task_type"]
-    
+
     # switch case
     if (task_type == ClusterTaskType.EXTEND_CLASS):
         return ClusterSpecExtendClassDef.from_json(json_obj)
@@ -1051,7 +1051,7 @@ class ClusterSpecBatch(ClusterSpecBase):
     # constructor
     def new(num_inputs = 1, num_outputs = 1):
         return ClusterSpecBase(entity_type, num_inputs, num_outputs)
-        
+
 
 # Copied from cluster_common_v1
 # This is meant to take arbitrary arguments including lambda function or list which dont have standard serialization
@@ -1160,7 +1160,7 @@ class ClusterMapOperation(ClusterTaskOperation):
 class ClusterReduceOperation(ClusterTaskOperation):
     def __init__(self, grouping_cols, num_splits, name, requirements, *args, **kwargs):
         super().__init__(ClusterTaskType.REDUCE, name, requirements, *args, **kwargs)
-        self.grouping_cols = grouping_cols 
+        self.grouping_cols = grouping_cols
         self.num_splits = num_splits
 
     # parse from json
@@ -1218,7 +1218,7 @@ def deserialize_cluster_task_operation(json_obj):
         return ClusterSingletonOperation.from_json(json_obj)
     else:
         raise Exception("deserialize_cluster_task_operation: unknown task_type for ClusterTaskOperation: {}".format(task_type))
- 
+
 # TODO: follow the same design as ClusterOperand with mulitple derived classes
 class ClusterInmemoryOperation(ClusterOperation):
     def __init__(self, name, requirements, *args, **kwargs):
@@ -1323,7 +1323,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
         # assign variables
         self.base_path = base_path
         self.fs = s3io_wrapper.S3FSWrapper()
-        
+
     def __makepath__(self, path):
         # validation
         if (path is None):
@@ -1335,7 +1335,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
 
         # remove any leading '/'
         if (path.startswith("/")):
-            path = path[1:] 
+            path = path[1:]
 
         # check for empty string
         if (path == ""):
@@ -1343,7 +1343,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
 
         # return
         return "{}/{}".format(self.base_path, path)
-    
+
     def __strip_leading_trailing_slashes__(self, path):
         # normalize
         if (path.startswith("/")):
@@ -1365,7 +1365,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
 
         # after creation wait for confirmation
         if (verify == True and self.dir_exists_with_wait(path) == False):
-            raise Exception("create: path: {}, failed to verify".format(path))        
+            raise Exception("create: path: {}, failed to verify".format(path))
 
     def list_files(self, path):
         utils.debug("list_files : {}".format(path))
@@ -1410,7 +1410,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
         # check for commit
         if (verify == True and self.file_not_exists_with_wait(path) == False):
             raise Exception("remove_file: path: {}, verify commit failed".format(path))
-        
+
     def remove_dir(self, path, ignore_if_missing = False, verify = True, ignore_logging = False):
         # debug
         if (ignore_logging == False):
@@ -1478,7 +1478,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
             utils.info("remove_dir_r: dirs: {}".format(dirs))
             for d in dirs:
                 self.remove_dir(d, ignore_if_missing = ignore_if_missing)
-            
+
             # now remove the path
             self.remove_dir(path, ignore_if_missing = ignore_if_missing)
 
@@ -1490,7 +1490,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
         # validation
         if (text is None):
             raise Exception("update: Null text: {}".format(path))
- 
+
         utils.info("write_text  : {}".format(path))
         self.fs.write_text_file(self.__makepath__(path), text)
 
@@ -1499,7 +1499,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
         # validation
         if (xtsv is None):
             raise Exception("update: Null xtsv: {}".format(path))
- 
+
         utils.info("write_tsv   : {}, num_rows: {}, num_cols: {}".format(path, xtsv.num_rows(), xtsv.num_cols()))
         tsv.write(xtsv, self.__makepath__(path))
 
@@ -1507,7 +1507,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
         # validation
         if (msg is None):
             raise Exception("update: Null msg: {}".format(path))
- 
+
         if (ignore_logging == False):
             utils.info("update      : {}".format(path))
         else:
@@ -1520,7 +1520,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
         # validation
         if (json_obj is None):
             raise Exception("update_json: Null json_obj: {}".format(path))
- 
+
         self.fs.write_text_file(self.__makepath__(path), json.dumps(json_obj))
         if (ignore_logging == False):
             utils.info("update_json : {}".format(path))
@@ -1550,17 +1550,17 @@ class ClusterFileHandler(cluster_data.JsonSer):
                 # iterate and delete
                 for f in sorted_files[0:-max_keep]:
                     self.remove_file("{}/{}".format(path, f), ignore_logging = ignore_logging)
-    
+
     def update_dynamic_value(self, path, msg, verify = True, ignore_logging = False, max_keep = 2):
         self.update_dynamic_value_json(path, msg.to_json(), verify = verify, ignore_logging = ignore_logging, max_keep = max_keep)
 
-    # this special api doesnt use timestamp but sequence number to guarantee update and avoid race conditions 
+    # this special api doesnt use timestamp but sequence number to guarantee update and avoid race conditions
     # because of eventual consistency
     def update_dynamic_seq_update(self, path, msg, verify = True, ignore_logging = False, max_keep = 2):
         utils.warn_once("update_dynamic_seq_update: not implemented yet. Using update_dynamic_value")
         self.update_dynamic_value(path, msg, verify = verify, ignore_logging = ignore_logging, max_keep = max_keep)
 
-    # TODO: this api needs rethinking coz of eventual consistency    
+    # TODO: this api needs rethinking coz of eventual consistency
     def file_not_exists(self, path):
         utils.debug("file_not_exists : {}".format(path))
         return self.fs.file_not_exists(self.__makepath__(path))
@@ -1571,7 +1571,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
     def dir_not_exists_with_wait(self, path):
         return self.fs.dir_not_exists_with_wait(self.__makepath__(path))
 
-    # TODO: this api needs rethinking coz of eventual consistency    
+    # TODO: this api needs rethinking coz of eventual consistency
     def file_exists(self, path):
         utils.debug("file_exists    : {}".format(path))
         return self.fs.file_exists(self.__makepath__(path))
@@ -1595,7 +1595,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
         try:
             return self.fs.dir_exists_with_wait(self.__makepath__(path), wait_sec = wait_sec, attempts = attempts)
         except Exception as e:
-            # raise exception if ignore_if_missing is False 
+            # raise exception if ignore_if_missing is False
             if (ignore_if_missing == False):
                 raise e
             else:
@@ -1618,7 +1618,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
             return True
         else:
             return False
-    
+
     def get_parent(self, path):
         # normalize
         path = self.__strip_leading_trailing_slashes__(path)
@@ -1641,7 +1641,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
         path = self.__normalize_path__(path)
         utils.debug("read: {}".format(path))
         return self.fs.read_file_contents_as_text_with_wait(self.__makepath__(path))
-   
+
     # TODO: Race condition . Create method with wait suffix
     def read_json(self, path, retries = 5, wait_sec = 1):
         path = self.__normalize_path__(path)
@@ -1691,7 +1691,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
         sorted_files = sorted(files)
 
         # return
-        return sorted_files[-1] 
+        return sorted_files[-1]
 
     def dynamic_value_exists(self, path):
         return self.get_most_recent_file(path) is not None
@@ -1749,7 +1749,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
 
         # return if valid response
         if (content is not None):
-            return content 
+            return content
 
         # check if attempts are left
         if (attempts > 0):
@@ -1771,7 +1771,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
 
     def is_json(self, path):
         return path.endswith(".json")
- 
+
     def to_json(self, transient_keys = []):
         transient_keys2 = list([x for x in transient_keys])
         transient_keys2.append("s3")
@@ -1787,7 +1787,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
 
     def get_full_path(self, path):
         return self.__makepath__(path)
-    
+
     # constructor
     def new(base_path):
         return ClusterFileHandler(base_path)
@@ -1851,7 +1851,7 @@ class ClusterPaths:
     #########################################################################################
     def __get_entities_ids_base_path__():
         return "/entities-ids"
-    
+
     def __get_entities_base_path__():
         return "/entities-details"
 
@@ -1913,7 +1913,7 @@ class ClusterPaths:
         return "{}/{}".format(ClusterPaths.get_entities_ids(entity_type), entity_id)
 
     def get_entities(entity_type):
-        return "{}/{}s".format(ClusterPaths.__get_entities_base_path__(), entity_type) 
+        return "{}/{}s".format(ClusterPaths.__get_entities_base_path__(), entity_type)
 
     def get_entity(entity_type, entity_id):
         return "{}/{}".format(ClusterPaths.get_entities(entity_type), entity_id)
@@ -2014,10 +2014,10 @@ class ClusterPaths:
         return "{}/{}s".format(ClusterPaths.__get_entities_data__(), entity_type)
 
     def get_entity_data(entity_type, entity_id):
-        return "{}/{}".format(ClusterPaths.get_entities_data(entity_type), entity_id) 
-       
+        return "{}/{}".format(ClusterPaths.get_entities_data(entity_type), entity_id)
+
     def get_entity_data_child_entities(entity_type, entity_id, child_entity_type):
-        return "{}/{}s".format(ClusterPaths.get_entity_data(entity_type, entity_id), child_entity_type) 
+        return "{}/{}s".format(ClusterPaths.get_entity_data(entity_type, entity_id), child_entity_type)
 
     def get_entity_data_child_entity(entity_type, entity_id, child_entity_type, child_entity_id):
         return "{}/{}".format(ClusterPaths.get_entity_data_child_entities(entity_type, entity_id, child_entity_type), child_entity_id)
@@ -2063,7 +2063,7 @@ class ClusterPaths:
 class ClusterExtendClass(cluster_data.JsonSer):
     def __init__(self, name_or_class_ref, *args, **kwargs):
         # take fully qualified name
-        if (isinstance(name_or_class_ref, str)): 
+        if (isinstance(name_or_class_ref, str)):
             self.name = name_or_class_ref
         else:
             self.name = cluster_class_reflection.get_fully_qualified_class_name(name_or_class_ref)
@@ -2178,7 +2178,7 @@ class ClusterIds:
         job_id = "job{:02}-{:04d}-{}".format(ClusterIds.ID_SUFFIX, ClusterIds.JOB_COUNTER, ClusterIds.TIMESTAMP)
 
         # return
-        return job_id 
+        return job_id
 
     def generate_task_id(task_type):
         global ID_SUFFIX

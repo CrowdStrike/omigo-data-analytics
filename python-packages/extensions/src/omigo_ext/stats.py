@@ -6,21 +6,21 @@ def do_ttest(xtsv1, xtsv2, f, n = 10000, alpha = 0.01):
     xtsv1 = xtsv1.select(f)
     xtsv2 = xtsv2.select(f)
 
-    # find the value of n 
+    # find the value of n
     effective_n = min(n, xtsv1.num_rows(), xtsv2.num_rows())
-    
+
     # perform t-test
     x_pos_1 = xtsv1.sample_n(effective_n)
     x_neg_1 = xtsv2.sample_n(effective_n)
 
     f_pos = x_pos_1.col_as_float_array(f)
     f_neg = x_neg_1.col_as_float_array(f)
-    
+
     # sample may not be exact
     effective_n = min(len(f_pos), len(f_neg))
     f_pos = f_pos[0:effective_n]
     f_neg = f_neg[0:effective_n]
-    
+
     # check for alpha
     if (alpha > 0):
         alpha_2_int = int(effective_n * alpha / 2)

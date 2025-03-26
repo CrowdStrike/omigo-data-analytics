@@ -4,7 +4,7 @@ from omigo_core import utils
 # Deprecated. Will be removed soon
 class S3FSWrapper:
     def __init__(self):
-        self.fs = s3io_wrapper.S3FSWrapper() 
+        self.fs = s3io_wrapper.S3FSWrapper()
 
     def file_exists(self, *args, **kwargs):
         utils.rate_limit_after_n_warnings("Deprecated. Use omigo_hydra")

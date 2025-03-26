@@ -7,8 +7,8 @@ import zipfile
 
 # local imports
 from omigo_core import utils
-from omigo_core import timefuncs 
-from omigo_hydra import s3io_wrapper 
+from omigo_core import timefuncs
+from omigo_hydra import s3io_wrapper
 # constant
 NUM_HOURS = 24
 

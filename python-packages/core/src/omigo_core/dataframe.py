@@ -5,7 +5,7 @@ import pandas as pd
 import random
 import json
 import base64
-from omigo_core import utils, tsvutils, udfs 
+from omigo_core import utils, tsvutils, udfs
 import sys
 import time
 import numpy as np
@@ -147,7 +147,7 @@ class DataFrame:
         cols = self.__convert_param_to_array__(col_or_cols)
 
         # non pattern cols
-        non_pattern_cols = list(filter(lambda t: self.__is_valid_col_pattern__(t) == False, cols)) 
+        non_pattern_cols = list(filter(lambda t: self.__is_valid_col_pattern__(t) == False, cols))
 
         # add the missing cols and then call select
         return self \
@@ -461,7 +461,7 @@ class DataFrame:
         return self \
             .select(col_or_cols, dmsg = dmsg) \
             .distinct(dmsg = dmsg)
-       
+
     # TODO: use drop_cols instead coz of better name
     def drop(self, col_or_cols, ignore_if_missing = False, dmsg = ""):
         utils.warn_once("use drop_cols instead coz of better name")
@@ -590,7 +590,7 @@ class DataFrame:
 
         # return
         return DataFrame(self.header_fields, new_data_fields)
- 
+
     # TODO: the select_cols is not implemented properly
     def window_aggregate(self, win_col, agg_cols, agg_funcs, winsize, select_cols = None, sliding = False, collapse = True, suffix = "", precision = 2, dmsg = ""):
         # check empty
@@ -812,7 +812,7 @@ class DataFrame:
                     new_data_fields.append(new_fields)
                     result[keys_str] = 1
             else:
-                new_fields = new_fields + new_col_values 
+                new_fields = new_fields + new_col_values
                 new_data_fields.append(new_fields)
 
         # return
@@ -940,7 +940,7 @@ class DataFrame:
         if (precision is not None):
             raise Exception("aggregate: precision parameter is deprecated")
 
-        # validation on use_rolling 
+        # validation on use_rolling
         if (use_rolling is not None or use_rolling == True):
             raise Exception("aggregate: use_rolling parameter is deprecated")
 
@@ -1176,7 +1176,7 @@ class DataFrame:
         new_data_fields = []
         for fields in self.data_fields:
             # iterate over matching cols
-            flag = False 
+            flag = False
             for i in indexes:
                 # append to new data if any column matched
                 if (func(fields[i]) == True):
@@ -1193,7 +1193,7 @@ class DataFrame:
 
         # return
         return DataFrame(self.header_fields, new_data_fields)
- 
+
     def __all_cols_with_cond_exists_filter__(self, cols, func, exclude_flag = False, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "__all_cols_with_cond_exists_filter__")
 
@@ -1484,11 +1484,11 @@ class DataFrame:
     def transform_inline_log1p_base2(self, col_or_cols, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "transform_inline_log1p_base2")
         return self.transform_inline_log1p(col_or_cols, base = 2, dmsg = dmsg)
-        
+
     def transform_inline_log1p_base10(self, col_or_cols, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "transform_inline_log1p_base10")
         return self.transform_inline_log1p(col_or_cols, base = 10, dmsg = dmsg)
-        
+
     def rename(self, col, new_col, dmsg = ""):
         # check empty
         if (self.has_empty_header()):
@@ -1505,7 +1505,7 @@ class DataFrame:
         # new header fields
         new_header_fields = list([new_col if (h == col) else h for h in self.header_fields])
 
-        # return 
+        # return
         return DataFrame(new_header_fields, self.data_fields)
 
     def get_header_fields(self):
@@ -1597,7 +1597,7 @@ class DataFrame:
                         key = key[0:-len(":url_encoded:mkstr")] + ":mkstr"
                         value = ",".join([utils.url_decode(t) for t in value.split(",")])
 
-                # set new value 
+                # set new value
                 mp[key] = str(value)
 
             # append
@@ -1640,7 +1640,7 @@ class DataFrame:
 
         # create new data
         new_data_fields = []
-        counter = start - 1 
+        counter = start - 1
         for fields in self.data_fields:
             counter = counter + 1
             utils.report_progress("add_seq_num: [1/1] adding new column", dmsg, counter, self.num_rows())
@@ -1878,10 +1878,10 @@ class DataFrame:
 
         # Change in criteria. This api is confusing and for now restrict to single key and value
         if (len(key_cols) > 1):
-            raise Exception("cols_as_map: using key_cols as more than 1 column is deprecated: {}".format(key_cols)) 
+            raise Exception("cols_as_map: using key_cols as more than 1 column is deprecated: {}".format(key_cols))
 
         if (len(value_cols) > 1):
-            raise Exception("cols_as_map: using value_cols as more than 1 column is deprecated: {}".format(value_cols)) 
+            raise Exception("cols_as_map: using value_cols as more than 1 column is deprecated: {}".format(value_cols))
 
         # create map
         mp = {}
@@ -2067,7 +2067,7 @@ class DataFrame:
             df_map[h] = []
 
         # check if infer data type is true
-        float_cols = [] 
+        float_cols = []
         int_cols = []
         if (infer_data_types == True):
             for col in self.get_columns():
@@ -2374,7 +2374,7 @@ class DataFrame:
             counter = counter + 1
             utils.report_progress("[1/1] calling function", dmsg, counter, self.num_rows())
 
-            # create new fields 
+            # create new fields
             new_fields = fields + empty_row_fields
             new_data_fields.append(new_fields)
 
@@ -2809,12 +2809,12 @@ class DataFrame:
         dmsg = utils.extend_inherit_message(dmsg, "sample_n_with_replacement")
         return self \
             .sample_n(n, seed = seed, replace = True, dmsg = dmsg)
- 
+
     def sample_n_without_replacement(self, n, seed = 0, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "sample_n_without_replacement")
         return self \
             .sample_n(n, seed = seed, replace = False, dmsg = dmsg)
- 
+
     def sample_group_by_topk_if_reached_limit(self, limit, *args, **kwargs):
         utils.warn_once("sample_group_by_topk_if_reached_limit: this api name might change")
 
@@ -2823,7 +2823,7 @@ class DataFrame:
             return self \
                 .sample_group_by_topk(*args, **kwargs)
         else:
-            return self 
+            return self
 
     def warn_if_limit_reached(self, limit, msg = None, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "warn_if_limit_reached")
@@ -2962,7 +2962,7 @@ class DataFrame:
             vs = []
             for mp in mps:
                 vs.append(mp[k])
-            
+
             # do a unique and shuffle
             vs_uniq = utils.random_shuffle(list(set(vs)), seed = seed)
             vs_selected = vs_uniq[0:int(min(n, len(vs_uniq)))]
@@ -2970,10 +2970,10 @@ class DataFrame:
             # create result
             result_mp = {}
             result_mp["found"] = ",".join(vs_selected)
-                    
+
             # return
             return result_mp
-        
+
         return __sample_group_by_max_uniq_values_exact_group_by_inner__
 
     def sample_group_by_max_uniq_values_exact(self, grouping_cols, col, max_uniq_values, seed = 0, dmsg = ""):
@@ -3185,7 +3185,7 @@ class DataFrame:
         return self \
             .add_seq_num(temp_col, dmsg = dmsg) \
             .sample_group_by_max_uniq_values_exact(col, temp_col, min_count, dmsg = dmsg) \
-            .drop_cols(temp_col, dmsg = dmsg) 
+            .drop_cols(temp_col, dmsg = dmsg)
 
     def sample_class_by_max_values(self, col, n, seed = 0, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "sample_class_by_max_values")
@@ -3197,7 +3197,7 @@ class DataFrame:
         return self \
             .add_seq_num(temp_col, dmsg = dmsg) \
             .sample_group_by_max_uniq_values_exact(col, temp_col, n, dmsg = dmsg) \
-            .drop_cols(temp_col, dmsg = dmsg) 
+            .drop_cols(temp_col, dmsg = dmsg)
 
     # create descriptive methods for join
     def left_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, num_par = 0, dmsg = ""):
@@ -3372,7 +3372,7 @@ class DataFrame:
 
         # for each type of join, merge the values
         new_header_fields = []
-        new_header_copy_fields_map = {} 
+        new_header_copy_fields_map = {}
 
         # create the keys
         for lkey in lkeys:
@@ -3496,13 +3496,13 @@ class DataFrame:
         result = DataFrame(new_header_fields, new_data_fields)
         for lkey in new_header_copy_fields_map.keys():
             result = result.transform([lkey, "__join_keys_matched__"], lambda t1, t2: t1 if (t2 == "1") else "", new_header_copy_fields_map[lkey], dmsg = dmsg)
-            
+
         # remove the temporary column
         result = result \
             .drop_cols("__join_keys_matched__", dmsg = dmsg)
 
         # return
-        return result 
+        return result
 
     # method to do map join. The right side is stored in a hashmap. only applicable to inner joins
     def natural_join(self, that, dmsg = ""):
@@ -3669,7 +3669,7 @@ class DataFrame:
             utils.report_progress("__map_join__: building map for right side", dmsg, counter, len(that.get_data_fields()))
 
             # parse data
-            rvals1 = list([fields[i] for i in rkey_indexes]) 
+            rvals1 = list([fields[i] for i in rkey_indexes])
             rvals2 = list([fields[i] for i in rvalue_indexes])
 
             # create value string for rkey
@@ -4858,7 +4858,7 @@ class DataFrame:
             result = result \
                 .sort(col_or_cols)
 
-        # add seq num 
+        # add seq num
         if (seq_col is not None):
             result = result \
                 .add_seq_num(seq_col)
@@ -5004,7 +5004,7 @@ class DataFrame:
             # raise exception if some col or pattern is not found
             if (col_pattern_found == False):
                 utils.raise_exception_or_warn("Col name or pattern not found: {}, {}".format(col_pattern, str(self.header_fields)[0:100] + "..."), ignore_if_missing)
-                # dont return from here 
+                # dont return from here
 
         # return
         return matching_cols
@@ -5063,7 +5063,7 @@ class DataFrame:
 
         # create array to hold sizes
         total_sizes = list([0 for c in self.get_columns()])
- 
+
         # data validation
         counter = 0
         for fields in self.data_fields:
@@ -5076,7 +5076,7 @@ class DataFrame:
 
         # find the columns with the max size
         max_value_indexes = list(filter(lambda i: total_sizes[i] == max_value, range(len(total_sizes))))
-        
+
         # create map with the list of indexes and their size, relative size
         mps = []
         for i in max_value_indexes:
@@ -5088,7 +5088,7 @@ class DataFrame:
 
         # return
         return mps
-                
+
     # some methods for effects
     def sleep(self, secs):
         time.sleep(secs)
@@ -5122,11 +5122,11 @@ class DataFrame:
         # return
         return __split_exp_func_inner__
 
- 
+
     def split(self, *args, **kwargs):
         utils.warn_once("split: use split_str method instead")
         return self.split_str(*args, **kwargs)
- 
+
     def split_str(self, col_or_cols, prefix, sep = ",", collapse = True, dmsg = ""):
         # resolve columns
         cols = self.__get_matching_cols__(col_or_cols)
@@ -5239,11 +5239,11 @@ class DataFrame:
     def enable_trace_mode(self):
         utils.enable_trace_mode()
         return self
-        
+
     def disable_trace_mode(self):
         utils.disable_trace_mode()
         return self
-        
+
 def get_version():
     return "v0.6.3"
 
@@ -5346,7 +5346,7 @@ def from_maps(mps, accepted_cols = None, excluded_cols = None, url_encoded_cols 
     # validation
     if (len(mps) == 0):
         utils.warn_once("from_maps: empty list")
-        return create_empty() 
+        return create_empty()
 
     xtsvs = []
     for mp in mps:

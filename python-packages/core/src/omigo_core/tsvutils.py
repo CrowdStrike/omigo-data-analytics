@@ -35,7 +35,7 @@ def merge(tsv_list, def_val_map = None):
         utils.warn("List of tsv is empty. Returning")
         return tsv.create_empty()
 
-    # warn if a huge tsv is found 
+    # warn if a huge tsv is found
     for i in range(len(tsv_list)):
         if (tsv_list[i].size_in_gb() >= 1):
             utils.warn("merge: Found a very big tsv: {} / {}, num_rows: {}, size (GB): {}. max_size_cols_stats: {}".format(
@@ -168,7 +168,7 @@ def merge_intersect(tsv_list, def_val_map = None):
                 new_tsvs.append(t1.select(keys_order))
 
             # return after merging. dont call merge recursively as thats a bad design
-            return new_tsvs[0].union(new_tsvs[1:]) 
+            return new_tsvs[0].union(new_tsvs[1:])
         else:
             # handle boundary condition of no matching cols
             if (len(same_cols) == 0):
@@ -237,7 +237,7 @@ def load_from_array_of_map(map_arr):
             else:
                 v2 = str(v)
 
-            # assign to map 
+            # assign to map
             mp2[k2] = v2
 
         # append

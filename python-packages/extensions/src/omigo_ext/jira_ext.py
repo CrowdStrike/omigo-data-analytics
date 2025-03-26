@@ -66,12 +66,12 @@ class JiraSearch:
         search_results = self.jira_instance.search_issues(query, maxResults = max_results)
 
         # expected cols in result
-        expected_cols = EXPECTED_COLS 
+        expected_cols = EXPECTED_COLS
         if (extra_cols is not None and len(extra_cols) > 0):
             expected_cols = sorted(list(set(expected_cols + funclib.simple_map_to_url_encoded_col_names(extra_cols, url_encoded_cols = extra_cols))))
 
         # selected cols
-        selected_cols = SELECTED_COLS 
+        selected_cols = SELECTED_COLS
         if (extra_cols is not None and len(extra_cols) > 0):
             selected_cols = sorted(list(set(selected_cols + extra_cols)))
 
@@ -124,7 +124,7 @@ class JiraSearch:
                                 mp[k] = str(value)
                         elif (isinstance(value, (list))):
                             list_value = value
-                            mp[k] = ",".join([str(t) for t in list_value]) 
+                            mp[k] = ",".join([str(t) for t in list_value])
                         elif (isinstance(value, (str, int, float))):
                             mp[k] = str(value)
                         else:
@@ -174,4 +174,5 @@ class JiraTSV(tsv.TSV):
 
         # return
         return self \
-            .explode(".*", lambda mp: __search_issues_explode_func__(mp), prefix, collapse = False, dmsg = dmsg) 
+            .explode(".*", lambda mp: __search_issues_explode_func__(mp), prefix, collapse = False, dmsg = dmsg)
+

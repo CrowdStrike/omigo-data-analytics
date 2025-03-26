@@ -11,10 +11,10 @@ def save_to_file(xtsv, output_file_name, s3_region = None, aws_profile = None):
 
     # construct output file
     output_file = file_io_wrapper.TSVFileWriter(s3_region, aws_profile)
-    
+
     # write
     output_file.save(xtsv, output_file_name)
-    
+
     # debug
     utils.debug("save_to_file: file saved to: {}, num_rows: {}, num_cols: {}".format(output_file_name, xtsv.num_rows(), xtsv.num_cols()))
 
@@ -25,17 +25,17 @@ def read(input_file_or_files, sep = None, def_val_map = None, username = None, p
     # convert the input to array
     input_files = utils.get_argument_as_array(input_file_or_files)
 
-    # tasks 
+    # tasks
     tasks = []
 
     def __read_inner__(input_file):
-        # read file content                               
+        # read file content
         lines = file_paths_util.read_file_content_as_lines(input_file, s3_region, aws_profile)
-                                                          
+
         # take header and dat
         header = lines[0]
         data = lines[1:]
-            
+
         # check if a custom separator is defined
         if (sep is not None):
             # check for validation

@@ -88,7 +88,7 @@ def maxint_failsafe(*args, **kwargs):
 def minstr_failsafe(*args, **kwargs):
     utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
     return udfs.minstr_failsafe(*args, **kwargs)
-            
+
 def maxstr_failsafe(*args, **kwargs):
     utils.rate_limit_after_n_warnings("Deprecated. Use udfs package")
     return udfs.maxstr_failsafe(*args, **kwargs)
@@ -257,7 +257,7 @@ def map_to_url_encoded_col_names(cols, prefix = None, url_encoded_cols = None):
     # iterate
     for c in cols:
         col = c
-        # check if there is prefix 
+        # check if there is prefix
         if (col.find(":") != -1):
             col = col.split(":")[-1]
 
@@ -287,7 +287,7 @@ def get_display_relative_time_str(v):
     hours = (v - (days * 86400)) // 3600
     minutes = (v - (days * 86400 + hours * 3600)) // 60
     seconds = v - (days * 86400 + hours * 3600 + minutes * 60)
-            
+
     # compute display string
     results = []
     count = 0

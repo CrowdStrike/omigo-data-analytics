@@ -92,7 +92,7 @@ def init(value):
     global INTELI_AGENT_PROTOCOL
     global CLIENT_PROTOCOL
     global SESSION_PROTOCOL
-    global SWF_PROTOCOL 
+    global SWF_PROTOCOL
     global WF_PROTOCOL
     global JOB_PROTOCOL
     global TASK_PROTOCOL
@@ -100,8 +100,8 @@ def init(value):
     global ALL_PROTOCOLS
     global CLUSTER_ADMIN
     global MASTER_ELECTION_PROTOCOL
- 
-    ts = timefuncs.get_utctimestamp_sec() 
+
+    ts = timefuncs.get_utctimestamp_sec()
     cluster_common_v2.ClusterIds.set_id(value)
 
     # Entities
@@ -136,7 +136,7 @@ def init(value):
     # JOB_PROTOCOL = cluster_protocol_v2.ClusterJobProtocol(JOB)
     # TASK_PROTOCOL = cluster_protocol_v2.ClusterTaskProtocol(TASK)
 
-    ALL_PROTOCOLS = [MASTER_PROTOCOL, RESOURCE_MANAGER_PROTOCOL, SWF_MANAGER_PROTOCOL, WF_MANAGER_PROTOCOL, JOB_MANAGER_PROTOCOL, TASK_MANAGER_PROTOCOL, WORKER_PROTOCOL, AGENT_PROTOCOL, 
+    ALL_PROTOCOLS = [MASTER_PROTOCOL, RESOURCE_MANAGER_PROTOCOL, SWF_MANAGER_PROTOCOL, WF_MANAGER_PROTOCOL, JOB_MANAGER_PROTOCOL, TASK_MANAGER_PROTOCOL, WORKER_PROTOCOL, AGENT_PROTOCOL,
         DOUBLE_AGENT_PROTOCOL, INTELI_AGENT_PROTOCOL, CLIENT_PROTOCOL, SESSION_PROTOCOL]
         # SWF_PROTOCOL, WF_PROTOCOL, JOB_PROTOCOL, TASK_PROTOCOL]
 
@@ -273,7 +273,7 @@ def read_workflow_file_path(file_path, max_duration = 3*86400, sleep_sec = 3):
       else:
           utils.trace("File: {} doesnt exists yet. Sleeping for {} seconds".format(file_path, sleep_sec))
           time.sleep(sleep_sec)
-          duration = duration + sleep_sec 
+          duration = duration + sleep_sec
 
     # check if file was found
     if (found == True):
@@ -343,7 +343,7 @@ def get_created_non_created_wf_ids(local_handler_flag = True, capabilities = [])
     effective_non_created_wf_ids = set(non_created_wf_ids)
 
     # return set difference
-    return effective_created_wf_ids, effective_alive_wf_ids, effective_non_created_wf_ids 
+    return effective_created_wf_ids, effective_alive_wf_ids, effective_non_created_wf_ids
 
 def print_created_wf_ids(capabilities = []):
     created_wf_ids, alive_wf_ids, non_created_wf_ids = get_created_non_created_wf_ids(local_handler_flag = False, capabilities = capabilities)
@@ -450,7 +450,7 @@ class EntityRunner:
             # sleep
             utils.info("{}: sleeping for {} seconds".format(self.protocol.entity.entity_type, self.wait_sec))
             time.sleep(self.wait_sec)
-            
+
 class EntityMasterRunner(EntityRunner):
     def __init__(self, ident):
         super().__init__(ident)

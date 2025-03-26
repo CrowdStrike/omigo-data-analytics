@@ -10,7 +10,7 @@ def terminate_all_children(signum, frame):
 
     # exit
     sys.exit(0)
- 
+
 if __name__ == "__main__":
     multiprocessing.freeze_support()
     entity_type = sys.argv[1]

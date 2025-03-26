@@ -540,7 +540,7 @@ def random_shuffle(xs, seed = 0):
     temp = xs2[0]
     xs2[0] = xs2[index]
     xs2[index] = temp
- 
+
     # return
     return xs2
 
@@ -606,7 +606,7 @@ def is_tsv_file_extension(path):
     else:
         return False
 
-# TODO: Move this to proper package 
+# TODO: Move this to proper package
 class CombGenerator:
     def __init__(self):
         self.comb1_cache = {}
@@ -657,14 +657,14 @@ class CombGenerator:
        for i1 in range(0, n):
            result.append([i1])
        return result
-    
+
     def __gen_comb2__(self, n):
        result = []
        for i2 in range(0, n-1):
            for i1 in range(i2+1, n):
                result.append([i2, i1])
        return result
-    
+
     def __gen_comb3__(self, n):
        result = []
        for i3 in range(0, n-2):
@@ -672,7 +672,7 @@ class CombGenerator:
                for i1 in range(i2+1, n):
                    result.append([i3, i2, i1])
        return result
-    
+
     def __gen_comb4__(self, n):
        result = []
        for i4 in range(0, n-3):
@@ -681,7 +681,7 @@ class CombGenerator:
                    for i1 in range(i2+1, n):
                        result.append([i4, i3, i2, i1])
        return result
-    
+
     def __gen_comb5__(self, n):
        result = []
        for i5 in range(0, n-4):
@@ -691,7 +691,7 @@ class CombGenerator:
                        for i1 in range(i2+1, n):
                            result.append([i5, i4, i3, i2, i1])
        return result
-    
+
     def __gen_comb6__(self, n):
        result = []
        for i6 in range(0, n-5):
@@ -702,7 +702,7 @@ class CombGenerator:
                            for i1 in range(i2+1, n):
                                result.append([i6, i5, i4, i3, i2, i1])
        return result
-    
+
     def __gen_comb7__(self, n):
        result = []
        for i7 in range(0, n-6):

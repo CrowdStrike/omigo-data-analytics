@@ -10,4 +10,4 @@ mkdir -p logs
 ./run-entity.sh "swf_manager" 2>&1 > logs/swf_manager.log &
 ./run-entity.sh "wf_manager" 2>&1 > logs/wf_manager.log &
 ./run-entity.sh "worker" 2>&1 > logs/worker.log &
-./run-entity.sh "agent" 2>&1 > logs/agent.log & 
+./run-entity.sh "agent" 2>&1 > logs/agent.log &

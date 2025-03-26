@@ -16,7 +16,7 @@ def get_class_that_defined_method(method):
     if inspect.isfunction(method):
         return getattr(inspect.getmodule(method), method.__qualname__.split('.<locals>', 1)[0].rsplit('.', 1)[0], None)
 
-    raise Exception("get_class_that_defined_method: not able to find the class: {}".format(method)) 
+    raise Exception("get_class_that_defined_method: not able to find the class: {}".format(method))
 
 # TODO: these methods are hacky version of class loading and referencing
 def get_fully_qualified_class_name(clsref):
@@ -60,10 +60,10 @@ def load_fully_qualified_func(fully_qual_func_name):
     # need fully qualified name
     if (len(parts) < 2):
         raise Exception("Not able to parse the function full qualified name: {}".format(fully_qual_func_name))
-    
+
     # check for package or class based function hierarchy
     if (len(parts) == 2):
-        # this is assumed to be package functions. TODO 
+        # this is assumed to be package functions. TODO
         utils.debug("Global functions may not be supported in future. Use their cluster_funcs counterparts")
 
         # assume its package.func_name
@@ -73,7 +73,7 @@ def load_fully_qualified_func(fully_qual_func_name):
         # load method
         utils.debug("load_fully_qualified_func: {}, func_name: {}, module_name: {}".format(fully_qual_func_name, func_name, module_name))
 
-        # check loading of the class 
+        # check loading of the class
         try:
             # load module
             m = importlib.import_module(module_name)
@@ -82,7 +82,7 @@ def load_fully_qualified_func(fully_qual_func_name):
             return getattr(m, func_name)
         except Exception as e:
             utils.error("function not found: {}".format(fully_qual_func_name))
-            raise e 
+            raise e
     else:
         # split function name from module name
         func_name = parts[-1]
@@ -92,7 +92,7 @@ def load_fully_qualified_func(fully_qual_func_name):
         # load method
         utils.debug("load_fully_qualified_func: {}, func_name: {}, class_name: {}, module_name: {}".format(fully_qual_func_name, func_name, class_name, module_name))
 
-        # check loading of the class 
+        # check loading of the class
         try:
             # load module
             m = importlib.import_module(module_name)
@@ -103,10 +103,10 @@ def load_fully_qualified_func(fully_qual_func_name):
                 # check for function
                 return getattr(class_reference, func_name)
             else:
-                raise Exception("class name not found in the module: {}, class: {}".format(module_name, class_name)) 
+                raise Exception("class name not found in the module: {}, class: {}".format(module_name, class_name))
         except Exception as e:
             utils.error("function not found: {}".format(fully_qual_func_name))
-            raise e 
+            raise e
 
 # TODO: these methods are hacky version of class loading and referencing
 def verify_tsv_subclass_func(fully_qual_func_name):
@@ -122,7 +122,7 @@ def verify_tsv_subclass_func(fully_qual_func_name):
             if (class_reference == tsv.TSV):
                 return True
             else:
-                # check if bases classes 
+                # check if bases classes
                 # check for base classes
                 tsv_base_classes = list(filter(lambda t: t == tsv.TSV, class_reference.__bases__))
                 if (len(tsv_base_classes) > 0):

@@ -26,7 +26,7 @@ class ShellExecutorBase:
         index = script.find("{omigo.prop.")
         if (index != -1):
             raise Exception("ShellExecutorBase: generate_script: failed to replace all properties: {}, {}".format(script[index:], new_props))
-                   
+
         # return
         return script
 

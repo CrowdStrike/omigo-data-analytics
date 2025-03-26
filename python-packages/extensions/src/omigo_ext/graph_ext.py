@@ -71,7 +71,7 @@ def __create_data_frame_with_types__(xtsv, xcol = None, ycols = None, zcol = Non
     return pd.DataFrame(mp)
 
 def __merge_props__(props, default_props):
-    # create new dict 
+    # create new dict
     props2 = dict()
 
     # take new props
@@ -337,7 +337,7 @@ def __sns_boxplot__(xtsv, xcol, ycol, class_col, title, xfigsize, yfigsize, max_
     # take hue order
     hue_order = sorted(xtsv.col_as_array_uniq(class_col)) if (class_col is not None) else None
 
-    # plot 
+    # plot
     plt = sns.boxplot(data = df, x = xcol, y = ycol, hue = class_col, hue_order = hue_order, **props2)
 
     # check for title

@@ -74,10 +74,10 @@ class RunnerBase:
 
     def get_job_tag_combined_dir(self):
         return "{}/{}".format(self.get_job_tags_dir(), "combined")
-            
+
     def get_job_tag_empty_dir_by_job_id(self, job_id):
         return "{}/{}".format(self.get_job_tag_empty_dir(), job_id)
-            
+
     def get_job_tag_combined_dir_by_job_id(self, job_id, key, value):
         value_b16 = base64.b16encode(bytes(str(value), "utf-8")).decode("utf-8")
         return "{}/{}-{}={}".format(self.get_job_tag_combined_dir(), job_id, key, value_b16)
@@ -112,7 +112,7 @@ class BaseJobGenerator:
                     utils.warn("BaseJobGenerator: shutdown mode detected. Stopping")
                     return
 
-                # run 
+                # run
                 self.run()
 
                 # sleep
@@ -124,7 +124,7 @@ class BaseJobGenerator:
         except:
             utils.error("BaseJobGenerator: run_loop: caught interrupt. Returning")
             return
- 
+
     def run(self):
         raise Exception("Not implemented in base class")
 
@@ -149,7 +149,7 @@ class JobManager:
                       utils.warn("JobManager: shutdown mode detected. Stopping")
                       return
 
-                  # run 
+                  # run
                   self.run()
 
                   # sleep
@@ -314,7 +314,7 @@ class ReprocessBatchWorker:
                     for file in self.runner_base.fs.list_files(self.runner_base.get_job_output_dir(job_id)):
                         utils.warn("ReprocessBatchWorker: resubmit_specific_jobs: deleting file: {}".format(file))
                         self.runner_base.fs.delete_file("{}/{}".format(self.runner_base.get_job_output_dir(job_id), file))
-            
+
             # debug
             utils.info("ReprocessBatchWorker: resubmit_specific_jobs: Job Submitted: {}".format(job_id))
 
@@ -334,7 +334,7 @@ class Worker:
         # check worker exists
         if (self.runner_base.fs.dir_exists(self.runner_base.get_worker_dir(self.worker_id)) == False):
             utils.error("Worker is not initialized: {}: {}".format(self.worker_id, self.runner_base.get_worker_dir(self.worker_id)))
-            return 
+            return
 
         # look into assigned jobs directory
         try:
@@ -344,7 +344,7 @@ class Worker:
                     utils.warn("Worker: shutdown mode detected. Stopping")
                     return
 
-                # run 
+                # run
                 self.run()
 
                 # sleep
@@ -352,11 +352,11 @@ class Worker:
                 time.sleep(self.wait_sec)
         except Exception as e:
             utils.error("Worker: run_loop: caught exception or interrupt: {}".format(e))
-            return 
+            return
         except:
             utils.error("Worker: run_loop: caught interrupt. Returning")
             return
- 
+
     def run(self):
         # get job ids
         job_ids = self.runner_base.fs.list_leaf_dir(self.runner_base.get_worker_jobs_dir(self.worker_id))
@@ -425,10 +425,10 @@ class RunAnalysis:
                 time.sleep(self.wait_sec)
         except Exception as e:
             utils.error("RunAnalysis: run_loop: caught exception or interrupt: {}".format(e))
-            return 
+            return
         except:
             utils.error("RunAnalysis: run_loop: caught interrupt. Returning")
-            return 
+            return
 
     def run(self):
         # check the list of running, completed

@@ -1,7 +1,7 @@
-from omigo_core import utils 
+from omigo_core import utils
 from omigo_core import tsv
 from omigo_core import tsvutils
-from omigo_core import timefuncs 
+from omigo_core import timefuncs
 from omigo_ext import multithread_ext
 import datetime
 from dateutil import parser
@@ -13,7 +13,7 @@ import time
 import math
 import traceback
 
-# NOTES: 
+# NOTES:
 # 1. where is tricky. use search if syntax is not well tested
 # 2. Push simple lookup filters in front even though if they sound redundant
 # 3. there is no evidence so far that differentiates between using different steps with | or using just AND
@@ -104,7 +104,7 @@ class SplunkSearch:
 
         # return
         return self
-    
+
     def __get_filter_query__(self):
         # validation
         if (self.start_time is None or self.end_time is None):
@@ -167,7 +167,7 @@ class SplunkSearch:
         else:
             return ""
 
-    # inner method for calling query 
+    # inner method for calling query
     def __execute_query__(self, query, start_time, end_time, attempts_remaining, exec_mode = "normal", url_encoded_cols = None, include_internal_fields = False,
         limit = None, num_par_on_limit = 0, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "SplunkSearch: __execute_query__")
@@ -208,7 +208,7 @@ class SplunkSearch:
             "exec_mode": "normal"
         }
 
-        # debug 
+        # debug
         utils.debug("{}: query: {}, attempts_remaining: {}, search_kwargs: {}".format(utils.max_dmsg_str(dmsg), query, attempts_remaining, str(search_kwargs)))
 
         # check cache
@@ -218,12 +218,12 @@ class SplunkSearch:
             return self.cache[cache_key]
 
         # execute query
-        try: 
+        try:
             splunk_job = self.get_splunk_service().jobs.create(query, **search_kwargs)
             job_id_trim = self.__get_splunk_job_display_id__(splunk_job)
             utils.info("{}: Splunk Job submitted: {}".format(utils.max_dmsg_str(dmsg), job_id_trim))
 
-            exec_start_time = timefuncs.get_utctimestamp_sec() 
+            exec_start_time = timefuncs.get_utctimestamp_sec()
             # A normal search returns the job's SID right away, so we need to poll for completion
             while True:
                 # check for job to be ready. not sure what this does, just following example
@@ -238,7 +238,7 @@ class SplunkSearch:
                     # else pass
                     utils.debug("{}: waiting for is_ready, sleeping for {} seconds".format(utils.max_dmsg_str(dmsg), self.wait_sec))
                     time.sleep(self.wait_sec)
-                
+
                 # check stats
                 stats = {
                     "isDone": splunk_job["isDone"],
@@ -256,7 +256,7 @@ class SplunkSearch:
                     utils.info("Finished: Status: job_id: {}, {}".format(job_id_trim, stats))
                     break
 
-                # check the current time    
+                # check the current time
                 exec_cur_time = timefuncs.get_utctimestamp_sec()
 
                 # check for timeout
@@ -337,7 +337,7 @@ class SplunkSearch:
                     utils.info("{}: Sleeping for {} seconds before attempting again".format(dmsg, self.attempt_sleep_sec))
                     time.sleep(self.attempt_sleep_sec)
 
-                # return    
+                # return
                 return self.__execute_normal_query__(query, start_time, end_time, url_encoded_cols, attempts_remaining - 1, include_internal_fields, limit,
                     num_par_on_limit, dmsg = dmsg)
             else:
@@ -356,7 +356,7 @@ class SplunkSearch:
 
                 # return
                 return result
-    
+
     def __execute_blocking_query__(self, query, start_time, end_time, url_encoded_cols, attempts_remaining, include_internal_fields, limit, num_par_on_limit, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "SplunkSearch: __execute_blocking_query__")
 
@@ -367,7 +367,7 @@ class SplunkSearch:
             "exec_mode": "blocking"
         }
 
-        # debug 
+        # debug
         utils.info("{}: query: {}, attempts_remaining: {}, search_kwargs: {}".format(utils.max_dmsg_str(dmsg), query, attempts_remaining, str(search_kwargs)))
 
         # check cache
@@ -377,7 +377,7 @@ class SplunkSearch:
             return self.cache[cache_key]
 
         # execute query
-        try: 
+        try:
             splunk_job = self.get_splunk_service().jobs.create(query, **search_kwargs)
             result = self.__parse_results__(splunk_job, query, start_time, end_time, url_encoded_cols, include_internal_fields)
             if (self.enable_cache == True):
@@ -413,7 +413,7 @@ class SplunkSearch:
                 # cancel the job
                 splunk_job.cancel()
                 return result
- 
+
     def __create_empty_results_map__(self, query, start_time, end_time):
         # create base map
         return {"__start_time__": start_time, "__end_time__": end_time, "__error_msg__": "", "__count__": "" }
@@ -530,13 +530,13 @@ class SplunkSearch:
 
         # construct tsv from the list of hashmaps
         return tsv.from_maps(results2)
-        
+
     def __resolve_time_str__(self, x):
         # check for specific syntax with now
         if (x.startswith("now")):
             x = x.replace(" ", "")
             base_time = datetime.datetime.utcnow().replace(tzinfo = datetime.timezone.utc)
-            diff_sec = None 
+            diff_sec = None
             # check if there are any diff units
             if (x == "now"):
                 diff_sec = 0
@@ -584,9 +584,9 @@ class SplunkTSV(tsv.TSV):
         self.splunk_search = splunk_search
         self.host = host
         self.app = app
-        self.username = username 
+        self.username = username
         self.password = password
-        self.cookie = cookie 
+        self.cookie = cookie
         self.timeout_sec = timeout_sec
         self.wait_sec = wait_sec
         self.attempts = attempts
@@ -615,7 +615,7 @@ class SplunkTSV(tsv.TSV):
                 limit = limit, num_par_on_limit = num_par_on_limit, dmsg = dmsg) \
             .add_empty_cols_if_missing("{}:json_encoded".format(prefix), dmsg = dmsg) \
             .explode_json("{}:json_encoded".format(prefix), prefix = prefix, url_encoded_cols = url_encoded_cols, dmsg = dmsg)
-             
+
 def __get_events_par__(xtsv, xtsv_splunk_search, query_filter, start_ts_col, end_ts_col, prefix, url_encoded_cols = None, include_internal_fields = False,
     limit = None, num_par_on_limit = 0, dmsg = ""):
 
@@ -648,7 +648,7 @@ def __get_events_par__(xtsv, xtsv_splunk_search, query_filter, start_ts_col, end
                 key2 = k
                 value2 = str(mp[k])
 
-                # assign to the correct map 
+                # assign to the correct map
                 if (__is_special_all_uppercase_field__(k) == False):
                     json_mp[k] = str(value2)
                 else:
@@ -659,13 +659,13 @@ def __get_events_par__(xtsv, xtsv_splunk_search, query_filter, start_ts_col, end
 
             # append
             json_mps.append(json_mp)
- 
+
         # return json_mps
         return json_mps
 
     # TODO: This is not the correct place for this method
     def __is_special_all_uppercase_field__(x):
-        return x[0].isupper() 
+        return x[0].isupper()
 
     # find which all columns are part of query_filter
     sel_cols = [start_ts_col, end_ts_col]
@@ -674,7 +674,7 @@ def __get_events_par__(xtsv, xtsv_splunk_search, query_filter, start_ts_col, end
             # replace if exists
             if (query_filter.find(cstr) != -1 and c not in sel_cols):
                 sel_cols.append(c)
-   
+
     # return
     return xtsv \
         .explode(sel_cols, __get_events_explode__, prefix, collapse = False, default_val = "", dmsg = dmsg)

@@ -1,6 +1,6 @@
 from omigo_core import tsv, utils
 
-# ... 
+# ...
 # .select(["k1", "k2", "k3"]) \
 # .topk("args1", "args2", kwarg1 = 100) \
 # .randn(100) \
@@ -24,13 +24,13 @@ class CustomBlockTSV(tsv.TSV):
         if (base_config_resolved is None):
             raise Exception("{}: base_config_resolved is None".format(dmsg))
 
-        # check for config 
+        # check for config
         if (block_id is None):
             utils.warn("{}: base_config_resolved: {}, block_id is None".format(dmsg, base_config_resolved))
             if (expected_cols is not None and len(expected_cols) > 0):
                 return self.add_empty_cols_if_missing(expected_cols, prefix = prefix, dmsg = dmsg)
             else:
-                return self 
+                return self
 
         # read the config resolution properties
         json_obj = json.loads(tsvutils.read_file_contents_as_text(base_config))
@@ -38,7 +38,7 @@ class CustomBlockTSV(tsv.TSV):
         # read the config resolution class. TODO: reflection
         config_resolver = self.load_custom_config_resolver(json_obj)
 
-        # read the block 
+        # read the block
         block_config = config_resolver.get_block_config(block_id)
 
         # read operations
@@ -78,7 +78,7 @@ class CustomConfigResolver:
         # use hydra to serialize
         ops = list([cluster_common_v2.ClusterInmemoryOperation(op).to_json() for op in op_func_list])
         return ops
-            
+
 
     def __deserialize_operations__(self, op_json_list, dmsg = ""):
         dmsg = utils.extends_inherit_message(dmsg, "CustomConfigResolver: __deserialize_operations__")

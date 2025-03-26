@@ -22,7 +22,7 @@ class GeoMapTSV(tsv.TSV):
         x = r_major * np.radians(lon)
         scale = x / lon
         y = 180.0 / np.pi * np.log(np.tan(np.pi / 4.0 + lat * (np.pi / 180.0) / 2.0)) * scale
-        return (x, y)  
+        return (x, y)
 
     # TODO: this api can change to abstract the bokeh library
     def geomap_plot(self, lat_col, lon_col, display_cols_mp = {}, width = 1200, height = 430, use_fixed_layout = True, dmsg = ""):
@@ -80,40 +80,40 @@ class GeoMapTSV(tsv.TSV):
             max_x = max(df["{}:mercator_x".format(prefix)])
             min_y = min(df["{}:mercator_y".format(prefix)])
             max_y = max(df["{}:mercator_y".format(prefix)])
-        
+
         # debug
         # utils.debug("min_x: {}, max_x: {}, min_y: {}, max_y: {}".format(min_x, max_x, min_y, max_y))
 
         # Choose palette
         color_index_max = 10
         palette = Category20[color_index_max]
-        
+
         # Define color mapper - which column will define the colour of the data points
         low = 0
-        high = color_index_max 
+        high = color_index_max
         color_mapper = linear_cmap(field_name = 'color_index', palette = palette, low = low, high = high)
-        
+
         # Set tooltips - these appear when we hover over a data point in our map, very nifty and very useful
         nan_color = '#d9d9d9'
         tooltips = list([(display_cols_mp[t], "@" + t) for t in display_cols_mp.keys()])
-        
+
         # adjust
         min_x = 0.5 * min_x if (min_x >= 0) else 1.5 * min_x
         max_x = 1.5 * max_x if (max_x >= 0) else 0.5 * max_x
         min_y = 0.5 * min_y if (min_y >= 0) else 1.5 * min_y
         max_y = 1.5 * max_y if (max_y >= 0) else 0.5 * max_y
-        
+
         # create figure
         p = figure(x_axis_type = "mercator", y_axis_type = "mercator",  x_axis_label = 'Longitude', y_axis_label = 'Latitude', tooltips = tooltips,
             width = width, height = height, x_range = [min_x, max_x], y_range = [min_y, max_y])
-        
+
         # Add map tile
         p.add_tile("CartoDB Positron", retina = True)
 
-        # xs and ys 
+        # xs and ys
         df["xs"] = df["{}:mercator_x".format(prefix)]
         df["ys"] = df["{}:mercator_y".format(prefix)]
-        
+
         # Add points using mercator coordinates
         c1 = Circle(x = "{}:mercator_x".format(prefix), y = "{}:mercator_y".format(prefix), fill_color = color_mapper, size = "circle_size", fill_alpha = "circle_alpha")
         m1 = MultiLine(xs = "xs", ys = "ys", line_width = 1, line_dash = "dotted", line_alpha = "circle_alpha")
@@ -126,20 +126,21 @@ class GeoMapTSV(tsv.TSV):
         for c in cols:
             mp[c] = df[c]
 
-        # create column source 
+        # create column source
         sources = {"default": ColumnDataSource(mp)}
         p.add_glyph(sources["default"], m1)
         p.add_glyph(sources["default"], c1)
-        
+
         # Defines color bar
         color_bar = ColorBar(color_mapper=color_mapper['transform'], formatter = NumeralTickFormatter(format='0.0[0000]'), label_standoff = 13, width = 8, location = (0,0))
-        
+
         # Set color_bar location
         p.add_layout(color_bar, 'right')
 
-        # use directive to output to notebook 
+        # use directive to output to notebook
         output_notebook()
         show(p)
-       
+
         # return
-        return self 
+        return self
+

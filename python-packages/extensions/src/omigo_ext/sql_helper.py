@@ -101,7 +101,7 @@ class HadoopSqlBase:
         output_cols = []
         url_encoded_cols_indexes = {}
         map_cols_indexes = {}
- 
+
         # iterate
         for i in range(len(result_cols)):
             # read column name
@@ -162,7 +162,7 @@ class HadoopSqlBase:
 
         # return
         return xtsv
-        
+
     def execute_query_in_engine(self, query):
-        raise Exception("HadoopSqlBase: execute_query: derived class must implement this method")    
+        raise Exception("HadoopSqlBase: execute_query: derived class must implement this method")
 

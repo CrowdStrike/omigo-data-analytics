@@ -29,25 +29,25 @@ def myfunc_noargs():
 class ClusterBuiltinFuncs:
     def builtin_sum(arr):
         return sum(arr)
-    
+
     def builtin_abs(x):
         return abs(x)
-    
+
     def builtin_len(x):
         return len(x)
-    
+
     def builtin_min(x, y):
         return min(x, y)
-    
+
     def builtin_max(x, y):
         return max(x, y)
-    
+
     def builtin_set(x, y):
         return set(x, y)
-    
+
     def builtin_ceil(x):
         return math.ceil(x)
-    
+
     def builtin_floor(x):
         return math.floor(x)
 

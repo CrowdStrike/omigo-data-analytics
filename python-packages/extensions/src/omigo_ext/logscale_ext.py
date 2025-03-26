@@ -1,4 +1,4 @@
-from omigo_core import tsv, utils, timefuncs, dataframe 
+from omigo_core import tsv, utils, timefuncs, dataframe
 from omigo_ext import multithread_ext
 import datetime
 from dateutil import parser
@@ -17,18 +17,18 @@ class LogScaleSearch:
         if (base_url is None):
             raise Exception("Missing parameters: base_url")
 
-        # check for repository 
+        # check for repository
         if (repository is None):
             raise Exception("Missing parameters: repository")
 
-        # check for user_token 
+        # check for user_token
         if (user_token is None):
             raise Exception("Missing parameters: user_token")
 
         # initialize parameters
         self.base_url = base_url
         self.repository = repository
-        self.user_token= user_token 
+        self.user_token= user_token
         self.timeout_sec = timeout_sec
         self.wait_sec = wait_sec
         self.attempts = attempts
@@ -62,7 +62,7 @@ class LogScaleSearch:
 
         # debug
         utils.info("call_search: query: {}, start_time: {}, end_time: {}".format(query, start_time, end_time))
- 
+
         # execute
         return self.__execute_query__(query, start_time_millis, end_time_millis, self.attempts, accepted_cols = accepted_cols, excluded_cols = excluded_cols,
             url_encoded_cols = url_encoded_cols, limit = limit, num_par_on_limit = num_par_on_limit, dmsg = dmsg)
@@ -74,7 +74,7 @@ class LogScaleSearch:
         else:
             return ""
 
-    # inner method for calling query 
+    # inner method for calling query
     def __execute_query__(self, query, start_time_millis, end_time_millis, attempts_remaining, accepted_cols = None, excluded_cols = None,
         url_encoded_cols = None, limit = None, num_par_on_limit = 0, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "LogScaleSearch: __execute_query__")
@@ -102,7 +102,7 @@ class LogScaleSearch:
 
         # execute query
         # try:
-        # submit job 
+        # submit job
         logscale_job = self.get_logscale_client().create_queryjob(query, start = start_time_millis, end = end_time_millis, is_live = False)
         job_id_trim = self.__get_logscale_job_display_id__(logscale_job)
         utils.info("{}: LogScale Job submitted: {}, start_time: {}, end_time: {}".format(utils.max_dmsg_str(dmsg), job_id_trim,
@@ -122,7 +122,7 @@ class LogScaleSearch:
             hasMoreEvents = extraData["hasMoreEvents"] if (extraData is not None and "hasMoreEvents" in extraData) else None
 
             # debug
-            utils.debug("{}: job: {}, eventCount: {}, hasMoreEvents: {}".format(utils.max_dmsg_str(dmsg), job_id_trim, poll_result.metadata["eventCount"], hasMoreEvents)) 
+            utils.debug("{}: job: {}, eventCount: {}, hasMoreEvents: {}".format(utils.max_dmsg_str(dmsg), job_id_trim, poll_result.metadata["eventCount"], hasMoreEvents))
 
             # count total results
             results_total = results_total + poll_result.metadata["eventCount"]
@@ -195,7 +195,7 @@ class LogScaleSearch:
         #             utils.info("{}: Sleeping for {} seconds before attempting again".format(dmsg, self.attempt_sleep_sec))
         #             time.sleep(self.attempt_sleep_sec)
 
-        #         # return    
+        #         # return
         #         return self.__execute_normal_query__(query, start_time_millis, end_time_millis, accepted_cols, excluded_cols, url_encoded_cols, attempts_remaining - 1, limit,
         #             num_par_on_limit, dmsg = dmsg)
         #     else:
@@ -210,7 +210,7 @@ class LogScaleSearch:
 
         #         # return
         #         return result
-    
+
     def __create_empty_results_map__(self, query, start_time_millis, end_time_millis):
         # create base map
         return {"__start_time__": start_time_millis, "__end_time__": end_time_millis, "__error_msg__": "", "__count__": "" }
@@ -271,13 +271,13 @@ class LogScaleSearch:
 
         # construct tsv from the list of hashmaps
         return dataframe.from_maps(results, accepted_cols = accepted_cols, excluded_cols = excluded_cols, url_encoded_cols = url_encoded_cols)
-        
+
     def __resolve_time_str__(self, x):
         # check for specific syntax with now
         if (x.startswith("now")):
             x = x.replace(" ", "")
             base_time = datetime.datetime.utcnow().replace(tzinfo = datetime.timezone.utc)
-            diff_sec = None 
+            diff_sec = None
             # check if there are any diff units
             if (x == "now"):
                 diff_sec = 0
@@ -349,7 +349,7 @@ class LogScaleTSV(tsv.TSV):
             .get_events(query, start_ts_col, end_ts_col, prefix, url_encoded_cols = url_encoded_cols, limit = limit, num_par_on_limit = num_par_on_limit, dmsg = dmsg) \
             .add_empty_cols_if_missing("{}:json_encoded".format(prefix), dmsg = dmsg) \
             .explode_json("{}:json_encoded".format(prefix), prefix = prefix, url_encoded_cols = url_encoded_cols, dmsg = dmsg)
-             
+
 def __get_events_par__(xtsv, xtsv_logscale_search, query_filter, start_ts_col, end_ts_col, prefix, url_encoded_cols = None, limit = None, num_par_on_limit = 0, dmsg = ""):
     dmsg = utils.extend_inherit_message(dmsg, "__get_events_par__")
 
@@ -380,7 +380,7 @@ def __get_events_par__(xtsv, xtsv_logscale_search, query_filter, start_ts_col, e
                 key2 = k
                 value2 = str(mp[k])
 
-                # assign to the correct map 
+                # assign to the correct map
                 if (__is_special_all_uppercase_field__(k) == False):
                     json_mp[k] = str(value2)
                 else:
@@ -391,13 +391,13 @@ def __get_events_par__(xtsv, xtsv_logscale_search, query_filter, start_ts_col, e
 
             # append
             json_mps.append(json_mp)
- 
+
         # return json_mps
         return json_mps
 
     # TODO: This is not the correct place for this method
     def __is_special_all_uppercase_field__(x):
-        return x[0].isupper() 
+        return x[0].isupper()
 
     # find which all columns are part of query_filter
     sel_cols = [start_ts_col, end_ts_col]
@@ -406,7 +406,7 @@ def __get_events_par__(xtsv, xtsv_logscale_search, query_filter, start_ts_col, e
             # replace if exists
             if (query_filter.find(cstr) != -1 and c not in sel_cols):
                 sel_cols.append(c)
-   
+
     # return
     return xtsv \
         .explode(sel_cols, __get_events_explode__, prefix, collapse = False, default_val = "", dmsg = dmsg)
