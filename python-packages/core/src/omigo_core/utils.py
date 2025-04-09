@@ -788,3 +788,9 @@ def is_url_encoded_col(col):
         return True
     else:
         return False
+
+def is_json_encoded_col(col):
+    if (col is not None and col.endswith(":json_encoded")):
+        return True
+    else:
+        return False

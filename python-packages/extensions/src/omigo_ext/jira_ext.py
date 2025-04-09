@@ -1,4 +1,4 @@
-from omigo_core import dataframe, utils, funclib
+from omigo_core import dataframe, utils
 from jira import JIRA
 import os
 import json
@@ -7,28 +7,6 @@ import json
 JIRA_API_USER = "JIRA_API_USER"
 JIRA_API_PASS = "JIRA_API_PASS" # nosec
 JIRA_API_AUTH_TOKEN = "JIRA_API_AUTH_TOKEN"
-
-# Create a list of selected columns as JIRA has lot of noise
-SELECTED_COLS = ["assignee", "attachment", "components", "created", "comment", "description", "issuetype", "labels", "project", "reporter", "resolution", "resolutiondate",
-    "status", "summary", "updated"]
-URL_ENCODED_COLS = ["assignee", "attachment", "comment", "components", "creator", "description", "reporter", "summary", "assignee:name", "assignee:displayName", "project:name",
-    "reporter:name", "reporter:displayName"]
-
-# Some jira fields are maps, take only relevant cols
-SELECTED_COLS_MAP = {
-    "assignee": ["name", "displayName"],
-    "issuetype": ["name"],
-    "project": ["key", "name"],
-    "reporter": ["name", "displayName"],
-    "resolution": ["name"],
-    "status": ["name"]
-}
-
-# expected columns after url encoded mapping
-EXPECTED_COLS = funclib.simple_map_to_url_encoded_col_names(["key", "assignee:name", "assignee:displayName", "attachment", "created", "comment", "issuetype:name", "labels", "project:key",
-    "project:name", "reporter:name", "reporter:displayName", "resolution:name", "resolutiondate", "status:name", "summary", "description", "updated"], url_encoded_cols = URL_ENCODED_COLS)
-
-SPECIAL_COLS = ["attachment", "comment", "components"]
 
 # api handler for searching jira
 class JiraSearch:
@@ -43,6 +21,7 @@ class JiraSearch:
         # init
         self.server = server
         self.jira_instance = None
+        self.fields_mapping = {}
 
         # instantiate and return
         jira_options = {"server": self.server, "verify": verify, "headers": {'content-type': 'application/json'}}
@@ -56,31 +35,31 @@ class JiraSearch:
         else:
             raise Exception("JiraSearch: No valid authentication mechanism found")
 
+        # build fields mapping
+        for field in self.jira_instance.fields():
+            field_name = str(field["name"])
+            field_type = str(field["schema"]["type"]) if ("schema" in field and "type" in field["schema"]) else ""
+            self.fields_mapping[str(field["id"])] = {"name": field_name, "type": field_type, "field": field}
+
     def get_server(self):
         return self.server
 
-    def search_issues(self, query, extra_cols = None, url_encoded_cols = URL_ENCODED_COLS, max_results = None, dmsg = ""):
+    def get_instance(self):
+        return self.jira_instance
+
+    def search_issues(self, query, max_results = None, datatype_map = None, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "JiraSearch: search_issues")
 
         # resolve num_warnings
         max_results = int(utils.resolve_default_parameter("max_results", max_results, "10", "{}: {}".format(dmsg, query)))
+        datatype_map = utils.resolve_default_parameter("datatype_map", datatype_map, {}, "{}: {}".format(dmsg, query))
 
         # the query is assumed to be resolved
         search_results = self.jira_instance.search_issues(query, maxResults = max_results)
 
-        # expected cols in result
-        expected_cols = EXPECTED_COLS
-        if (extra_cols is not None and len(extra_cols) > 0):
-            expected_cols = sorted(list(set(expected_cols + funclib.simple_map_to_url_encoded_col_names(extra_cols, url_encoded_cols = extra_cols))))
-
-        # selected cols
-        selected_cols = SELECTED_COLS
-        if (extra_cols is not None and len(extra_cols) > 0):
-            selected_cols = sorted(list(set(selected_cols + extra_cols)))
-
         # check for empty
         if (search_results is None or len(search_results) == 0):
-            return dataframe.new_with_cols(expected_cols)
+            return dataframe.create_empty()
 
         # iterate
         result_xdfs = []
@@ -90,65 +69,105 @@ class JiraSearch:
             result_fields = search_result.raw["fields"]
 
             # trace
-            # for k in result_fields.keys():
-            #     value = str(result_fields[k]) if (result_fields[k] is not None) else ""
-            #     if (value != "" and value != "None" and value != "null"):
-            #         utils.trace("JiraSearch: search_issues: key: {}, value: {}".format(k, value.replace("\n", "")[0:50] + "..."))
+            for k in result_fields.keys():
+                value = str(result_fields[k]) if (result_fields[k] is not None) else ""
 
             # iterate and add each available field
             mp = {}
-            mp_encoded = {}
 
             # assign key
             mp["key"] = str(key)
 
             # iterate on selected cols
-            for k in selected_cols:
-                # check for presence of key
-                if (k in result_fields.keys() and result_fields[k] is not None):
-                    value = result_fields[k]
+            for k in result_fields.keys():
+                print("Processing: {}".format(k))
+                # take value
+                value = result_fields[k]
 
-                    # check for extra cols first, they are url encoded by default and no parsing here
-                    if ((extra_cols is not None and k in extra_cols) or k in SPECIAL_COLS):
-                        mp[k] = json.dumps({"value": value})
+                # Ignore None as even dictionary can be None
+                if (value is None):
+                    value = ""
+                    continue
+
+                if (isinstance(value, (list)) and len(value) == 0):
+                    value = ""
+                    continue
+
+                if (isinstance(value, (dict)) and len(value) == 0):
+                    value = ""
+                    continue
+
+                # map the key
+                k2 = k
+                field_type = self.fields_mapping[k]["type"] if (k in self.fields_mapping) else ""
+
+                # map the custom fields
+                if (k.startswith("customfield_") and k in self.fields_mapping):
+                    k2 = self.fields_mapping[k]["name"]
+
+
+                # do json encoding if needed
+                if (field_type in ("string")):
+                    value_str = str(value)
+                    if (value_str.startswith("{\"") and value_str.endswith("}")):
+                        mp_value = json.dumps(json.loads(value_str))
+                        mp["{}:json_encoded".format(k2)] = mp_value 
+                    elif (value_str.startswith("[{\"") and value_str.endswith("}]")):
+                        mp_value = json.dumps(json.loads(value_str))
+                        mp["{}:json_encoded".format(k2)] = mp_value 
                     else:
-                        # check for the type of value
-                        if (isinstance(value, (dict))):
-                            mp_value = value
-                            sel_keys = SELECTED_COLS_MAP[k] if (k in SELECTED_COLS_MAP) else None
-
-                            # use selected keys if defined, else the entire blob
-                            if (sel_keys is not None):
-                                for k2 in sel_keys:
-                                    value2 = mp_value[k2] if (k2 in mp_value.keys()) else ""
-                                    mp["{}:{}".format(k, k2)] = str(value2)
-                            else:
-                                utils.warn("JiraSearch: search_issues: map found without specific columns mapping: {}".format(value))
-                                mp[k] = str(value)
-                        elif (isinstance(value, (list))):
-                            list_value = value
-                            mp[k] = ",".join([str(t) for t in list_value])
-                        elif (isinstance(value, (str, int, float))):
-                            mp[k] = str(value)
-                        else:
-                            utils.warn("JiraSearch: search_issues: unknown value data type: {}, {}".format(value, type(value)))
-                            mp[k] = str(value)
-
-            # do the url encoding
-            for k in mp.keys():
-                if (url_encoded_cols is not None and k in url_encoded_cols):
-                    mp_encoded["{}:url_encoded".format(k)] = utils.url_encode(mp[k])
-                elif (extra_cols is not None and k in extra_cols):
-                    mp_encoded["{}:url_encoded".format(k)] = utils.url_encode(mp[k])
+                        mp[k2] = value_str
+                elif (field_type in ("date", "datetime", "group", "number", "resolution")):
+                    mp[k2] = str(value)
+                elif (isinstance(value, (dict))):
+                    mp_value = json.dumps(value)
+                    mp["{}:json_encoded".format(k2)] = mp_value 
+                elif (field_type in ("array") and len(value) > 0):
+                    if (isinstance(value[0], (dict))):
+                        mp_value = json.dumps(value)
+                        mp["{}:json_encoded".format(k2)] = mp_value
+                    else: 
+                        mp[k2] = ",".join(list([str(v) for v in value]))
+                elif (isinstance(value, (str, int, float))):
+                    mp[k2] = str(value)
                 else:
-                    mp_encoded[k] = mp[k]
+                    mp_vars = vars(value)
+                    mp_value = {}
+                    for k in mp_vars:
+                        if (k.startswith("_") == False):
+                            mp_value[str(k)] = str(mp_vars[k])
+                    mp["{}:json_encoded".format(k2)] = json.dumps(mp_value)
+
+                if (k2 in mp):
+                    print("mp: {}: {}".format(k2, mp[k2][0:30]))
+                else:
+                    print("mp: {}:json_encoded: {}".format(k2, mp[k2+":json_encoded"][0:30]))
+
+            # inner transformation function
+            def __raw_json_custom_field_mapping__(raw_json):
+                # base condition
+                if (raw_json is None or isinstance(raw_json, (dict)) == False):
+                    return raw_json
+
+                # transform
+                mp_new = {}
+                for k in raw_json:
+                    if (k.startswith("customfield_") and k in self.fields_mapping):
+                        mp_new[self.fields_mapping[k]["name"]] = __raw_json_custom_field_mapping__(raw_json[k])
+                    else:
+                        mp_new[k] = __raw_json_custom_field_mapping__(raw_json[k])
+
+                # return
+                return mp_new
+
+            # append raw along with custom field transformation
+            mp["raw"] = json.dumps(__raw_json_custom_field_mapping__(search_result.raw))
 
             # append to tsvs
-            result_xdfs.append(dataframe.from_maps([mp_encoded]))
+            result_xdfs.append(dataframe.from_maps([mp]))
 
         # merge
-        result = dataframe.merge_union(result_xdfs) \
-            .add_empty_cols_if_missing(expected_cols)
+        result = dataframe.merge_union(result_xdfs)
 
         # return
         return result
@@ -161,7 +180,7 @@ class JiraDF(dataframe.DataFrame):
         # instantiate
         self.jira_search = jira_search if (jira_search is not None) else JiraSearch(server = server, username = username, password = password, auth_token = auth_token, verify = verify)
 
-    def search_issues(self, query_template, prefix, extra_cols = None, url_encoded_cols = URL_ENCODED_COLS, max_results = 10, dmsg = ""):
+    def search_issues(self, query_template, prefix, extra_cols = None, max_results = 10, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "JiraDF: search_issues")
 
         def __search_issues_explode_func__(mp):

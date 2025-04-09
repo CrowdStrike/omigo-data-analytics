@@ -1797,7 +1797,7 @@ class DataFrame:
                         value = value + spaces[0:col_width - len(value)]
 
                 # append
-                row.append(str(value))
+                row.append(utils.replace_spl_white_spaces_with_space(str(value)))
 
             # print
             print("\t".join(row))
@@ -4240,7 +4240,8 @@ class DataFrame:
                     dict_results.append(__custom_map_parsing_func__(v, parent_prefix = parent_with_child_key))
                 # for each data type, there is a different kind of handling
                 elif (isinstance(v, (str, int, float))):
-                    v1 = utils.replace_spl_white_spaces_with_space(v)
+                    # v1 = utils.replace_spl_white_spaces_with_space(v)
+                    v1 = v
                     # check if encoding needs to be done
                     if (url_encoded_cols is not None and k in url_encoded_cols):
                         v1 = utils.url_encode(v1)
@@ -4262,7 +4263,8 @@ class DataFrame:
                             # treat primitive lists as single value or as yet another list
                             if (collapse_primitive_list == True):
                                 # do the encoding
-                                v1 = join_col.join(sorted(list([utils.replace_spl_white_spaces_with_space(t) for t in v])))
+                                # v1 = join_col.join(sorted(list([utils.replace_spl_white_spaces_with_space(t) for t in v])))
+                                v1 = join_col.join(sorted(list([t for t in v])))
                                 if (url_encoded_cols is not None and k in url_encoded_cols):
                                     v1 = utils.url_encode(v1)
                                     single_results[k + ":url_encoded"] = v1
@@ -4276,7 +4278,8 @@ class DataFrame:
                                     mp2_new = {}
 
                                     # do the encoding
-                                    v1 = utils.replace_spl_white_spaces_with_space(vt)
+                                    # v1 = utils.replace_spl_white_spaces_with_space(vt)
+                                    v1 = vt
                                     if (url_encoded_cols is not None and k in url_encoded_cols):
                                         v1 = utils.url_encode(v1)
                                         mp2_new[k + ":url_encoded"] = v1
@@ -4480,7 +4483,7 @@ class DataFrame:
     # TODO: need proper xpath based exclusion to better handle noise
     def explode_json(self, col, prefix = None, accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None,
         merge_list_method = None, collapse_primitive_list = None, url_encoded_cols = None, nested_cols = None, custom_map_parsing_funcs = {}, collapse = None,
-        max_results = None, default_val = None, dmsg = ""):
+        max_results = None, default_val = None, join_col = None, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "explode_json")
 
         # resolve parameters
@@ -4488,6 +4491,7 @@ class DataFrame:
         collapse_primitive_list = utils.resolve_default_parameter("collapse_primitive_list", collapse_primitive_list, True, dmsg)
         collapse = utils.resolve_default_parameter("collapse", collapse, True, dmsg)
         default_val = utils.resolve_default_parameter("default_val", default_val, "", dmsg)
+        join_col = utils.resolve_default_parameter("join_col", join_col, ",", dmsg)
 
         # validation
         if (prefix is None):
@@ -4510,7 +4514,8 @@ class DataFrame:
         # check for explode function
         exp_func = self.__explode_json_transform_func__(col, accepted_cols = accepted_cols, excluded_cols = excluded_cols, single_value_list_cols = single_value_list_cols,
             transpose_col_groups = transpose_col_groups, merge_list_method = merge_list_method, url_encoded_cols = url_encoded_cols, nested_cols = nested_cols,
-            collapse_primitive_list = collapse_primitive_list, custom_map_parsing_funcs = custom_map_parsing_funcs, max_results = max_results, dmsg = dmsg)
+            collapse_primitive_list = collapse_primitive_list, custom_map_parsing_funcs = custom_map_parsing_funcs, max_results = max_results, join_col = join_col,
+            dmsg = dmsg)
 
         # warn
         utils.warn_once("{}: validate is called".format(dmsg))
