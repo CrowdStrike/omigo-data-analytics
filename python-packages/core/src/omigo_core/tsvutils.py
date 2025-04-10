@@ -11,7 +11,7 @@ import zipfile
 import requests
 
 # local imports
-from omigo_core import tsv
+from omigo_core import dataframe 
 from omigo_core import utils
 from requests import exceptions
 from omigo_hydra import hydra
@@ -21,37 +21,38 @@ from omigo_hydra import hydra
 # TODO: use the local_fs_wrapper to use shared code for reading and writing
 
 # TODO: need to document that a simple union can be achieved by setting def_val_map = {}
-def merge(tsv_list, def_val_map = None):
+# migrated
+def merge(df_list, def_val_map = None):
     # validation
-    if (len(tsv_list) == 0):
+    if (len(df_list) == 0):
         utils.warn("Error in input. List of tsv is empty")
-        return tsv.create_empty()
+        return dataframe.create_empty()
 
     # remove tsvs without any columns
-    tsv_list = list(filter(lambda x: x.num_cols() > 0, tsv_list))
+    df_list = list(filter(lambda x: x.num_cols() > 0, df_list))
 
     # base condition
-    if (len(tsv_list) == 0):
-        utils.warn("List of tsv is empty. Returning")
-        return tsv.create_empty()
+    if (len(df_list) == 0):
+        utils.warn("List of df is empty. Returning")
+        return dataframe.create_empty()
 
     # warn if a huge tsv is found
-    for i in range(len(tsv_list)):
-        if (tsv_list[i].size_in_gb() >= 1):
+    for i in range(len(df_list)):
+        if (df_list[i].size_in_gb() >= 1):
             utils.warn("merge: Found a very big tsv: {} / {}, num_rows: {}, size (GB): {}. max_size_cols_stats: {}".format(
-                i + 1, len(tsv_list), tsv_list[i].num_rows(), tsv_list[i].size_in_gb(), str(tsv_list[i].get_max_size_cols_stats())))
-            tsv_list[i].show_transpose(1, title = "merge: big tsv")
+                i + 1, len(df_list), df_list[i].num_rows(), df_list[i].size_in_gb(), str(df_list[i].get_max_size_cols_stats())))
+            df_list[i].show_transpose(1, title = "merge: big dataframe")
 
     # check for valid headers
     # header = tsv_list[0].get_header()
-    header_fields = tsv_list[0].get_header_fields()
+    header_fields = df_list[0].get_header_fields()
 
     # iterate to check mismatch in header
     index = 0
-    for t in tsv_list:
+    for xdf in df_list:
         # Use a different method for merging if the header is different
-        if (header_fields != t.get_header_fields()):
-            header_diffs = get_diffs_in_headers(tsv_list)
+        if (header_fields != xdf.get_header_fields()):
+            header_diffs = get_diffs_in_headers(df_list)
 
             # display warning according to kind of differences found
             if (len(header_diffs) > 0):
@@ -60,26 +61,28 @@ def merge(tsv_list, def_val_map = None):
                     utils.warn("Mismatch in header at index: {}. Cant merge. Using merge_intersect for common intersection. Some of the differences in header: {}".format(
                         index, str(header_diffs)))
             else:
-                utils.warn("Mismatch in order of header fields: {}, {}. Using merge intersect".format(header.split("\t"), t.get_header().split("\t")))
+                utils.warn("Mismatch in order of header fields: {}, {}. Using merge intersect".format(header_fields, xdf.get_header_fields()))
 
             # return
-            return merge_intersect(tsv_list, def_val_map = def_val_map)
+            return merge_intersect(df_list, def_val_map = def_val_map)
 
         # increment
         index = index + 1
 
     # simple condition
-    if (len(tsv_list) == 1):
-        return tsv_list[0]
+    if (len(df_list) == 1):
+        return df_list[0]
     else:
-        return tsv_list[0].union(tsv_list[1:])
+        return df_list[0].union(df_list[1:])
 
-def split_headers_in_common_and_diff(tsv_list):
+# migrated
+def split_headers_in_common_and_diff(df_list):
+    # common header fields
     common = {}
 
     # get the counts for each header field
-    for t in tsv_list:
-        for h in t.get_header_fields():
+    for xdf in df_list:
+        for h in xdf.get_header_fields():
             if (h not in common.keys()):
                 common[h] = 0
             common[h] = common[h] + 1
@@ -87,33 +90,36 @@ def split_headers_in_common_and_diff(tsv_list):
     # find the columns which are not present everywhere
     non_common = []
     for k, v in common.items():
-        if (v != len(tsv_list)):
+        if (v != len(df_list)):
             non_common.append(k)
 
     # return
     return sorted(common.keys()), sorted(non_common)
 
-def get_diffs_in_headers(tsv_list):
-    common, non_common = split_headers_in_common_and_diff(tsv_list)
+# migrated
+def get_diffs_in_headers(df_list):
+    common, non_common = split_headers_in_common_and_diff(df_list)
     return non_common
 
-def merge_intersect(tsv_list, def_val_map = None):
+# merge intersection
+# migrated
+def merge_intersect(df_list, def_val_map = None):
     # remove zero length tsvs
-    tsv_list = list(filter(lambda x: x.num_cols() > 0, tsv_list))
+    df_list = list(filter(lambda x: x.num_cols() > 0, df_list))
 
     # base condition
-    if (len(tsv_list) == 0):
-        raise Exception("List of tsv is empty")
+    if (len(df_list) == 0):
+        raise Exception("List of df is empty")
 
     # boundary condition
-    if (len(tsv_list) == 1):
-        return tsv_list[0]
+    if (len(df_list) == 1):
+        return df_list[0]
 
     # get the first header
-    header_fields = tsv_list[0].get_header_fields()
+    header_fields = df_list[0].get_header_fields()
 
     # some debugging
-    diff_cols = get_diffs_in_headers(tsv_list)
+    diff_cols = get_diffs_in_headers(df_list)
     same_cols = []
     for h in header_fields:
         if (h not in diff_cols):
@@ -155,40 +161,40 @@ def merge_intersect(tsv_list, def_val_map = None):
                     keys_order.append(h)
 
             # create a list of new tsvs
-            new_tsvs = []
-            for t in tsv_list:
+            new_dfs = []
+            for xdf in df_list:
                 # TODO: use better design
-                t1 = t
+                xdf1 = xdf 
                 if (def_val_map is not None and len(def_val_map) > 0):
                     for d in diff_cols:
-                        t1 = t1.add_const_if_missing(d, effective_def_val_map[d])
+                        xdf1 = xdf1.add_const_if_missing(d, effective_def_val_map[d])
                 else:
-                    t1 = t1.add_empty_cols_if_missing(diff_cols)
+                    xdf1 = xdf1.add_empty_cols_if_missing(diff_cols)
                 # append to tsv list
-                new_tsvs.append(t1.select(keys_order))
+                new_dfs.append(xdf1.select(keys_order))
 
             # return after merging. dont call merge recursively as thats a bad design
-            return new_tsvs[0].union(new_tsvs[1:])
+            return new_dfs[0].union(new_dfs[1:])
         else:
             # handle boundary condition of no matching cols
             if (len(same_cols) == 0):
-                return tsv.create_empty()
+                return dataframe.create_empty()
             else:
                 # create a list of new tsvs
-                new_tsvs = []
-                for t in tsv_list:
-                    new_tsvs.append(t.select(same_cols))
+                new_dfs = []
+                for xdf in df_list:
+                    new_dfs.append(xdf.select(same_cols))
 
                 # return
-                return new_tsvs[0].union(new_tsvs[1:])
+                return new_dfs[0].union(new_dfs[1:])
     else:
         # probably landed here because of mismatch in headers position
-        tsv_list2 = []
-        for t in tsv_list:
-            tsv_list2.append(t.select(same_cols))
+        df_list2 = []
+        for t in df_list:
+            df_list2.append(t.select(same_cols))
 
         # return
-        return merge(tsv_list2)
+        return merge(df_list2)
 
 def read(*args, **kwargs):
     utils.rate_limit_after_n_warnings("Deprecated. Use hydra instead", num_warnings = 100, sleep_secs = 300)
@@ -211,6 +217,7 @@ def load_from_files(*args, **kwargs):
     return hydra.load_from_files(*args, **kwargs)
 
 # TODO: use explode_json
+# migrated
 def load_from_array_of_map(map_arr):
     # take a union of all keys
     keys = {}
@@ -259,8 +266,8 @@ def load_from_array_of_map(map_arr):
         h = header_fields[i]
         header_map[h] = i
 
-    data = []
     # create data
+    data_fields = []
     for mp in map_arr2:
         fields = []
         for k in header_fields:
@@ -273,11 +280,10 @@ def load_from_array_of_map(map_arr):
             fields.append(v)
 
         # create line
-        line = "\t".join(fields)
-        data.append(line)
+        data_fields.append(fields)
 
-    # create tsv
-    return tsv.TSV(header, data).validate()
+    # create dataframe 
+    return dataframe.DataFrame(header_fields, data_fields).validate()
 
 def save_to_file(*args, **kwargs):
     utils.noop_after_n_warnings("Deprecated. Use omigo_hydra instead", hydra.save_to_file, *args, **kwargs)
@@ -302,5 +308,3 @@ def read_url(*args, **kwargs):
 def read_url_as_tsv(*args, **kwargs):
     utils.rate_limit_after_n_warnings("Deprecated. Use wsclient instead", num_warnings = 100, sleep_secs = 300)
     return wsclient.read_url_as_tsv(*args, **kwargs)
-
-

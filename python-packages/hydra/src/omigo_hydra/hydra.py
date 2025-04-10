@@ -1,9 +1,10 @@
 from omigo_core import utils, dataframe, tsv, tsvutils
 from omigo_hydra import file_paths_data_reader, file_paths_util, file_io_wrapper, s3io_wrapper
 
-def save_to_file(xtsv, output_file_name, s3_region = None, aws_profile = None):
+# migrated
+def save_to_file(xdf, output_file_name, s3_region = None, aws_profile = None):
     # do some validation
-    xtsv = xtsv.validate()
+    xdf = xdf.validate()
 
     # check if it is a local file or s3
     if (output_file_name.startswith("s3://") == False):
@@ -13,14 +14,16 @@ def save_to_file(xtsv, output_file_name, s3_region = None, aws_profile = None):
     output_file = file_io_wrapper.TSVFileWriter(s3_region, aws_profile)
 
     # write
-    output_file.save(xtsv, output_file_name)
+    output_file.save(xdf, output_file_name)
 
     # debug
-    utils.debug("save_to_file: file saved to: {}, num_rows: {}, num_cols: {}".format(output_file_name, xtsv.num_rows(), xtsv.num_cols()))
+    utils.debug("save_to_file: file saved to: {}, num_rows: {}, num_cols: {}".format(output_file_name, xdf.num_rows(), xdf.num_cols()))
 
-def check_exists(xtsv, s3_region = None, aws_profile = None):
-    return file_paths_util.check_exists(xtsv, s3_region, aws_profile)
+# check if the path exists
+def check_exists(path, s3_region = None, aws_profile = None):
+    return file_paths_util.check_exists(path, s3_region, aws_profile)
 
+# migrated
 def read(input_file_or_files, sep = None, def_val_map = None, username = None, password = None, num_par = 0, s3_region = None, aws_profile = None):
     # convert the input to array
     input_files = utils.get_argument_as_array(input_file_or_files)
@@ -28,6 +31,7 @@ def read(input_file_or_files, sep = None, def_val_map = None, username = None, p
     # tasks
     tasks = []
 
+    # inner method
     def __read_inner__(input_file):
         # read file content
         lines = file_paths_util.read_file_content_as_lines(input_file, s3_region, aws_profile)
@@ -47,23 +51,30 @@ def read(input_file_or_files, sep = None, def_val_map = None, username = None, p
             header = header.replace(sep, "\t")
             data = [x.replace(sep, "\t") for x in data]
 
+        # create dataframe
+        header_fields = header.split("\t")
+        data_fields = []
+        for line in data:
+            fields = list([utils.url_decode(t) for t in line.split("\t")])
+            data_fields.append(fields)
+
         # return
-        return dataframe.from_tsv(tsv.TSV(header, data))
+        return dataframe.DataFrame(header_fields, data_fields)
 
     # create tasks
     for input_file in input_files:
-        # check if it is a file or url
-        if (input_file.startswith("http")):
-            tsv_list.append(read_url_as_tsv(input_file, username = username, password = password))
-            tasks.append(utils.ThreadPoolTask(read_url_as_tsv, input_file, username = username, password = password))
-        else:
-            tasks.append(utils.ThreadPoolTask(__read_inner__, input_file))
+        # http case is not supported at the moment
+        if (input_file.startswith("http:") or input_file.startswith("https://")):
+            raise Exception("Fetching from web is not supported: {}".format(input_file))
+
+        # append task
+        tasks.append(utils.ThreadPoolTask(__read_inner__, input_file))
 
     # get result
-    tsv_list = utils.run_with_thread_pool(tasks, num_par = num_par, wait_sec = 1)
+    df_list = utils.run_with_thread_pool(tasks, num_par = num_par, wait_sec = 1)
 
     # merge and return
-    return tsvutils.merge(tsv_list, def_val_map = def_val_map)
+    return tsvutils.merge(df_list, def_val_map = def_val_map)
 
 def __read_with_filter_transform_select_func__(cols):
     # create a inner function

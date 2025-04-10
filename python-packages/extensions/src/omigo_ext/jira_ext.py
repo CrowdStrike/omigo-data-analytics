@@ -80,7 +80,6 @@ class JiraSearch:
 
             # iterate on selected cols
             for k in result_fields.keys():
-                print("Processing: {}".format(k))
                 # take value
                 value = result_fields[k]
 
@@ -137,11 +136,6 @@ class JiraSearch:
                         if (k.startswith("_") == False):
                             mp_value[str(k)] = str(mp_vars[k])
                     mp["{}:json_encoded".format(k2)] = json.dumps(mp_value)
-
-                if (k2 in mp):
-                    print("mp: {}: {}".format(k2, mp[k2][0:30]))
-                else:
-                    print("mp: {}:json_encoded: {}".format(k2, mp[k2+":json_encoded"][0:30]))
 
             # inner transformation function
             def __raw_json_custom_field_mapping__(raw_json):

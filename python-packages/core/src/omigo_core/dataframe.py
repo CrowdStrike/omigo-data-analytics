@@ -4588,7 +4588,6 @@ class DataFrame:
 
         # parse
         df = pd.read_json(StringIO(json_str))
-        print(df)
 
         # reassess prefix
         if (prefix is None):
@@ -5307,15 +5306,13 @@ def from_df(df, url_encoded_cols = []):
     utils.warn_once("from_df() api doesnt handle map data type properly")
 
     # create header
-    header_fields = list(["{}:url_encoded".format(t) if (t in url_encoded_cols) else t for t in df.columns])
+    header_fields = df.columns
 
     # get columns
     cols_array = []
-    for t in df.columns:
+    for t in header_fields:
         # get the col values
         col_values = list([str(v) for v in df[t]])
-        if (url_encoded_cols is not None and t in url_encoded_cols):
-            col_values = list([utils.url_encode(v) if (v is not None) else "" for v in col_values])
 
         # append
         cols_array.append(col_values)
@@ -5325,6 +5322,8 @@ def from_df(df, url_encoded_cols = []):
     for i in range(len(df)):
         line = "\t".join(list([cols_array[j][i] for j in range(len(df.columns))]))
         tsv_lines.append(line)
+        print(line)
+
 
     # number of columns to skip with empty column name
     utils.warn_once("from_df: this skip count logic is hacky")

@@ -83,8 +83,10 @@ class TSVFileWriter:
 
         # write
         tsv_header = "\t".join(df.get_header_fields())
-        tsv_data = "\n".join(["\t".join(fields) for fields in df.get_data_fields()])
-        content = tsv_header + "\n" + tsv_data if (df.num_rows() > 0) else tsv_header
+        tsv_data = []
+        for fields in df.get_data_fields():
+            tsv_data.append("\t".join(list([utils.url_encode(t) for t in fields])))
+        content = tsv_header + "\n" + "\n".join(tsv_data) if (df.num_rows() > 0) else tsv_header
         self.fs.write_text_file(output_file_name, content)
 
 class FileReader:
