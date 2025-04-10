@@ -4564,8 +4564,8 @@ class DataFrame:
             if (isinstance(mp, (list))):
                 for m in mp:
                     # convert to string values
-                    for k in m.keys():
-                        m[k] = str(m[k])
+                    # for k in m.keys():
+                    #     m[k] = str(m[k])
 
                     # assign hash value
                     m[temp_col] = hash_value
@@ -4574,8 +4574,8 @@ class DataFrame:
                     json_arr.append(json.dumps(m))
             else:
                 # convert to string values
-                for k in mp.keys():
-                    mp[k] = str(mp[k])
+                # for k in mp.keys():
+                #     mp[k] = str(mp[k])
 
                 # append hash
                 mp[temp_col] = hash_value
@@ -4588,6 +4588,7 @@ class DataFrame:
 
         # parse
         df = pd.read_json(StringIO(json_str))
+        print(df)
 
         # reassess prefix
         if (prefix is None):
