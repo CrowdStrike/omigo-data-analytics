@@ -23,7 +23,7 @@ def write(xdf, output_file_name, s3_region = None, aws_profile = None):
 def check_exists(path, s3_region = None, aws_profile = None):
     return file_paths_util.check_exists(path, s3_region, aws_profile)
 
-def read(path_or_paths, sep = None, do_union = False, def_val_map = None, username = None, password = None, num_par = 0, s3_region = None, aws_profile = None)):
+def read(path_or_paths, sep = None, do_union = False, def_val_map = None, username = None, password = None, num_par = 0, s3_region = None, aws_profile = None):
     # resolve single or multiple paths
     paths = utils.get_argument_as_array(path_or_paths)
 
@@ -40,7 +40,7 @@ def read(path_or_paths, sep = None, do_union = False, def_val_map = None, userna
             def_val_map = {}
 
         # return
-        return __read_inner__(paths, sep = sep, def_val_map = {}, username = username, password = password, num_par = num_par, s3_region = s3_region, aws_profile = aws_profile))
+        return __read_inner__(paths, sep = sep, def_val_map = {}, username = username, password = password, num_par = num_par, s3_region = s3_region, aws_profile = aws_profile)
 
 # migrated
 def __read_inner__(input_file_or_files, sep = None, def_val_map = None, username = None, password = None, num_par = 0, s3_region = None, aws_profile = None):
