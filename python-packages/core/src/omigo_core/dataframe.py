@@ -5,7 +5,7 @@ import pandas as pd
 import random
 import json
 import base64
-from omigo_core import utils, tsvutils, udfs
+from omigo_core import utils, dfutils, udfs
 import sys
 import time
 import numpy as np
@@ -4838,7 +4838,7 @@ class DataFrame:
         return self.num_cols() == 0
 
     def write(self, path):
-        tsvutils.save_to_file(self, path)
+        dfutils.save_to_file(self, path)
         utils.debug("write: {}".format(path))
         return self
 
@@ -5265,14 +5265,14 @@ def read(path_or_paths, sep = None, do_union = False, def_val_map = None, userna
 
     # check if union needs to be done. default is intersect
     if (do_union == False):
-        return tsvutils.read(paths, sep = sep, username = username, password = password, num_par = num_par)
+        return dfutils.read(paths, sep = sep, username = username, password = password, num_par = num_par)
     else:
         # check if default values are checked explicitly
         if (def_val_map is None):
             def_val_map = {}
 
         # return
-        return tsvutils.read(paths, sep = sep, def_val_map = {}, username = username, password = password, num_par = num_par)
+        return dfutils.read(paths, sep = sep, def_val_map = {}, username = username, password = password, num_par = num_par)
 
 def write(xtsv, path):
     return xtsv.write(path)
@@ -5283,7 +5283,7 @@ def merge(xtsvs, def_val_map = None):
         utils.warn("merge: use merge_union or merge_intersect")
 
     # return
-    return tsvutils.merge(xtsvs, def_val_map = def_val_map)
+    return dfutils.merge(xtsvs, def_val_map = def_val_map)
 
 def merge_union(xtsvs, def_val_map = {}):
     # check def_val_map
@@ -5291,13 +5291,13 @@ def merge_union(xtsvs, def_val_map = {}):
         raise Exception("merge_union: def_val_map can not be none for union. Use merge_intersect instead")
 
     # return
-    return tsvutils.merge(xtsvs, def_val_map = def_val_map)
+    return dfutils.merge(xtsvs, def_val_map = def_val_map)
 
 def merge_intersect(xtsvs):
-    return tsvutils.merge(xtsvs, def_val_map = None)
+    return dfutils.merge(xtsvs, def_val_map = None)
 
 def exists(path):
-    return tsvutils.check_exists(path)
+    return dfutils.check_exists(path)
 
 # convert from data frame. TODO: df can have multiple header lines coz of indexes
 # TODO: take care of map data type
