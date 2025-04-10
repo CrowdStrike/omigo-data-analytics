@@ -24,7 +24,7 @@ from datetime import date
 from math import pi
 from msticpy.nbtools import process_tree as ptree
 from msticpy.sectools import proc_tree_schema
-from omigo_core import tsv, utils, funclib, tsvutils, etl
+from omigo_core import tsv, utils, funclib, etl
 from omigo_ext import splunk_ext
 from omigo_hydra import cluster_common_v2
 from omigo_proxy import ip2location_ext

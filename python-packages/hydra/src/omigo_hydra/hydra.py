@@ -1,4 +1,4 @@
-from omigo_core import utils, dataframe, tsv, tsvutils
+from omigo_core import utils, dataframe, dfutils
 from omigo_hydra import file_paths_data_reader, file_paths_util, file_io_wrapper, s3io_wrapper
 
 # migrated
@@ -23,8 +23,27 @@ def save_to_file(xdf, output_file_name, s3_region = None, aws_profile = None):
 def check_exists(path, s3_region = None, aws_profile = None):
     return file_paths_util.check_exists(path, s3_region, aws_profile)
 
+def read(path_or_paths, sep = None, do_union = False, def_val_map = None, username = None, password = None, num_par = 0, s3_region = None, aws_profile = None)):
+    # resolve single or multiple paths
+    paths = utils.get_argument_as_array(path_or_paths)
+
+    # TODO: remove this after fixing design
+    if (def_val_map is not None and do_union == False):
+        raise Exception("Use do_union flag instead of relying on def_val_map to be non None")
+
+    # check if union needs to be done. default is intersect
+    if (do_union == False):
+        return __read_inner__(paths, sep = sep, username = username, password = password, num_par = num_par)
+    else:
+        # check if default values are checked explicitly
+        if (def_val_map is None):
+            def_val_map = {}
+
+        # return
+        return __read_inner__(paths, sep = sep, def_val_map = {}, username = username, password = password, num_par = num_par, s3_region = s3_region, aws_profile = aws_profile))
+
 # migrated
-def read(input_file_or_files, sep = None, def_val_map = None, username = None, password = None, num_par = 0, s3_region = None, aws_profile = None):
+def __read_inner__(input_file_or_files, sep = None, def_val_map = None, username = None, password = None, num_par = 0, s3_region = None, aws_profile = None):
     # convert the input to array
     input_files = utils.get_argument_as_array(input_file_or_files)
 
@@ -74,7 +93,7 @@ def read(input_file_or_files, sep = None, def_val_map = None, username = None, p
     df_list = utils.run_with_thread_pool(tasks, num_par = num_par, wait_sec = 1)
 
     # merge and return
-    return tsvutils.merge(df_list, def_val_map = def_val_map)
+    return dfutils.merge(df_list, def_val_map = def_val_map)
 
 def __read_with_filter_transform_select_func__(cols):
     # create a inner function
@@ -89,10 +108,11 @@ def __read_with_filter_transform_select_func__(cols):
 
     return __read_with_filter_transform_select_func_inner__
 
+# migrated
 def read_with_filter_transform(input_file_or_files, sep = None, def_val_map = None, filter_transform_func = None, cols = None, transform_func = None, s3_region = None, aws_profile = None):
     # check if cols is defined
     if (filter_transform_func is not None and cols is not None):
-        raise Exception("tsvutils: read_with_filter_transform: either of filter_transform_func or cols parameter can be used")
+        raise Exception("dfutils: read_with_filter_transform: either of filter_transform_func or cols parameter can be used")
 
     # use the map function for cols
     if (cols is not None and len(cols) > 0):
@@ -100,19 +120,19 @@ def read_with_filter_transform(input_file_or_files, sep = None, def_val_map = No
 
     # check if filter_transform_func is defined
     if (filter_transform_func is None):
-        xtsv = read(input_file_or_files, sep = sep, def_val_map = def_val_map, s3_region = s3_region, aws_profile = aws_profile)
+        xdf = read(input_file_or_files, sep = sep, def_val_map = def_val_map, s3_region = s3_region, aws_profile = aws_profile)
 
         # apply transform_func if defined
-        xtsv_transform = transform_func(xtsv) if (transform_func is not None) else xtsv
+        xdf_transform = transform_func(xdf) if (transform_func is not None) else xdf
 
         # return
-        return xtsv_transform
+        return xdf_transform
     else:
         # resolve input
         input_files = utils.get_argument_as_array(input_file_or_files)
 
         # initialize result
-        tsv_list = []
+        df_list = []
 
         # common keys
         common_keys = {}
@@ -151,45 +171,47 @@ def read_with_filter_transform(input_file_or_files, sep = None, def_val_map = No
                         keys_sorted.append(h)
 
                 # new header and data
-                header2 = "\t".join(keys_sorted)
-                data2 = []
+                header_fields2 = keys_sorted
+                data_fields2 = []
 
                 # iterate and generate header and data
                 for mp in result_maps:
                     fields = []
                     for k in keys_sorted:
                         fields.append(mp[k])
-                    data2.append("\t".join(fields))
+                    data_fields2.append(fields)
 
                 # debugging
-                utils.trace("tsvutils: read_with_filter_transform: file read: {}, after filter num_rows: {}".format(input_file, len(data2)))
+                utils.trace("dfutils: read_with_filter_transform: file read: {}, after filter num_rows: {}".format(input_file, len(data2)))
 
-                # result tsv
-                xtsv = tsv.TSV(header2, data2)
+                # result df 
+                xdf = dataframe.DataFrame(header_fields2, data_fields2)
 
                 # apply transformation function if defined
-                xtsv_transform = transform_func(xtsv) if (transform_func is not None) else xtsv
-                tsv_list.append(xtsv_transform)
+                xdf_transform = transform_func(xdf) if (transform_func is not None) else xdf
+                df_list.append(xdf_transform)
 
-        # Do a final check to see if all tsvs are empty
-        if (len(tsv_list) > 0):
-            # call merge on tsv_list
-            return tsvutils.merge(tsv_list)
+        # Do a final check to see if all dfs are empty
+        if (len(df_list) > 0):
+            # call merge on df_list
+            return dfutils.merge(df_list)
         else:
-            # create an empty data tsv file with common header fields
+            # create an empty dataframe file with common header fields
             header_fields = []
             first_file = read(input_files[0], sep = sep, def_val_map = def_val_map, s3_region = s3_region, aws_profile = aws_profile)
             for h in first_file.get_header_fields():
                 if (common_keys[h] == len(input_files)):
                     header_fields.append(h)
 
-            new_header = "\t".join(header_fields)
-            new_data = []
+            # create dataframe
+            new_header_fields = header_fields
+            new_data_fields = []
 
             # return
-            return tsv.TSV(new_header, new_data)
+            return dataframe.DataFrame(new_header_fields, new_data_fields)
 
 # TODO: replace this by etl_ext
+# migrated
 def read_by_date_range(path, start_date_str, end_date_str, prefix, s3_region = None, aws_profile = None, granularity = "daily"):
     utils.warn_once("read_by_date_range: probably Deprecated")
     # read filepaths
@@ -200,25 +222,27 @@ def read_by_date_range(path, start_date_str, end_date_str, prefix, s3_region = N
         utils.warn("Mismatch in headers for different days. Choose the right date range: start: {}, end: {}".format(start_date_str, end_date_str))
         return None
 
-    # read individual tsvs
-    tsv_list = []
+    # read individual df 
+    df_list = []
     for filepath in filepaths:
         x = read(filepath)
-        tsv_list.append(x)
+        df_list.append(x)
 
     # combine all together
-    if (len(tsv_list) == 0):
+    if (len(df_list) == 0):
         return None
-    elif (len(tsv_list) == 1):
-        return tsv_list[0]
+    elif (len(df_list) == 1):
+        return df_list[0]
     else:
-        return tsv_list[0].union(tsv_list[1:])
+        return df_list[0].union(df_list[1:])
 
+# migrated
 def load_from_dir(path, start_date_str, end_date_str, prefix, s3_region = None, aws_profile = None, granularity = "daily"):
     # read filepaths
     filepaths = file_paths_util.read_filepaths(path, start_date_str, end_date_str, prefix, s3_region, aws_profile, granularity)
     return load_from_files(filepaths, s3_region, aws_profile)
 
+# migrated
 def load_from_files(filepaths, s3_region, aws_profile):
     # check for headers validity
     if (file_paths_util.has_same_headers(filepaths, s3_region, aws_profile) == False):
@@ -229,21 +253,24 @@ def load_from_files(filepaths, s3_region, aws_profile):
     file_reader = file_paths_data_reader.FilePathsDataReader(filepaths, s3_region, aws_profile)
 
     # get header
-    header = file_reader.get_header()
-    data = []
+    header_fields = file_reader.get_header().split("\t")
+    data_fields = []
 
     # get data
     while file_reader.has_next():
         # read next record
         line = file_reader.next()
-        data.append(line)
+        fields = list([utils.url_decode(t) for t in line.split("\t")])
+        data_fields.append(fields)
 
     # close
     file_reader.close()
 
-    return tsv.TSV(header, data)
+    # return
+    return dataframe.DataFrame(header_fields, data_fields).validate()
 
-def read_json_files_from_directories_as_tsv(paths, s3_region = None, aws_profile = None):
+# migrated
+def read_json_files_from_directories_as_df(paths, s3_region = None, aws_profile = None):
     # initialize fs
     fs = s3io_wrapper.S3FSWrapper(s3_region = s3_region, aws_profile = aws_profile)
 
@@ -269,7 +296,7 @@ def read_json_files_from_directories_as_tsv(paths, s3_region = None, aws_profile
     # create dataframe
     header_fields = ["json"]
     data_fields = list([t.split("\t") for t in result])
-    df = dataframe.new_with_cols(header_fields, data = data_fields)
+    df = dataframe.new_with_cols(header_fields, data_fields = data_fields)
 
     # return
     return df

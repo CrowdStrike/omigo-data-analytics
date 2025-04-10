@@ -180,26 +180,6 @@ def merge_intersect(df_list, def_val_map = None):
         # return
         return merge(df_list2)
 
-def read(*args, **kwargs):
-    utils.rate_limit_after_n_warnings("Deprecated. Use hydra instead", num_warnings = 100, sleep_secs = 300)
-    return hydra.read(*args, **kwargs)
-
-def read_with_filter_transform(*args, **kwargs):
-    utils.rate_limit_after_n_warnings("Deprecated. Use hydra instead", num_warnings = 100, sleep_secs = 300)
-    return hydra.read_with_filter_transform(*args, **kwargs)
-
-def read_by_date_range(*args, **kwargs):
-    utils.rate_limit_after_n_warnings("Deprecated. Use hydra instead", num_warnings = 100, sleep_secs = 300)
-    return hydra.read_by_date_range(*args, **kwargs)
-
-def load_from_dir(*args, **kwargs):
-    utils.rate_limit_after_n_warnings("Deprecated. Use hydra instead", num_warnings = 100, sleep_secs = 300)
-    return hydra.load_from_dir(*args, **kwargs)
-
-def load_from_files(*args, **kwargs):
-    utils.rate_limit_after_n_warnings("Deprecated. Use hydra instead", num_warnings = 100, sleep_secs = 300)
-    return hydra.load_from_files(*args, **kwargs)
-
 # TODO: use explode_json
 # migrated
 def load_from_array_of_map(map_arr):
@@ -268,12 +248,6 @@ def load_from_array_of_map(map_arr):
 
     # create dataframe 
     return dataframe.DataFrame(header_fields, data_fields).validate()
-
-def save_to_file(*args, **kwargs):
-    utils.noop_after_n_warnings("Deprecated. Use omigo_hydra instead", hydra.save_to_file, *args, **kwargs)
-
-def check_exists(*args, **kwargs):
-    raise Exception("Deprecated. Use omigo_hydra instead")
 
 # Deprecated methods. Use wsclient package instead
 def read_url_json(*args, **kwargs):

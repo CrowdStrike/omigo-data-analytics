@@ -1,5 +1,5 @@
 """EtlDateTimePathFormat class"""
-from omigo_core import tsv, utils, tsvutils, timefuncs
+from omigo_core import tsv, utils, dfutils, timefuncs
 from omigo_hydra import file_paths_util
 from dateutil import parser
 import datetime
@@ -152,14 +152,14 @@ def scan_by_datetime_range(path, start_date_str, end_date_str, prefix, filter_tr
     # do some checks on the headers in the filepaths
 
     # debug
-    utils.debug("tsvutils: scan_by_datetime_range: number of files to read: {}".format(len(filepaths)))
+    utils.debug("dfutils: scan_by_datetime_range: number of files to read: {}".format(len(filepaths)))
 
     # read all the files in the filepath applying the filter function
     tasks = []
 
     # iterate over filepaths and submit
     for filepath in filepaths:
-        tasks.append(utils.ThreadPoolTask(tsvutils.read_with_filter_transform, filepath, filter_transform_func = filter_transform_func, cols = cols, transform_func = transform_func,
+        tasks.append(utils.ThreadPoolTask(dfutils.read_with_filter_transform, filepath, filter_transform_func = filter_transform_func, cols = cols, transform_func = transform_func,
             s3_region = s3_region, aws_profile = aws_profile))
 
     # execute and get results
