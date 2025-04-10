@@ -2,7 +2,7 @@ from omigo_core import utils, dataframe, dfutils
 from omigo_hydra import file_paths_data_reader, file_paths_util, file_io_wrapper, s3io_wrapper
 
 # migrated
-def save_to_file(xdf, output_file_name, s3_region = None, aws_profile = None):
+def write(xdf, output_file_name, s3_region = None, aws_profile = None):
     # do some validation
     xdf = xdf.validate()
 
@@ -17,7 +17,7 @@ def save_to_file(xdf, output_file_name, s3_region = None, aws_profile = None):
     output_file.save(xdf, output_file_name)
 
     # debug
-    utils.debug("save_to_file: file saved to: {}, num_rows: {}, num_cols: {}".format(output_file_name, xdf.num_rows(), xdf.num_cols()))
+    utils.debug("write: file saved to: {}, num_rows: {}, num_cols: {}".format(output_file_name, xdf.num_rows(), xdf.num_cols()))
 
 # check if the path exists
 def check_exists(path, s3_region = None, aws_profile = None):
