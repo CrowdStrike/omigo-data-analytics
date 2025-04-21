@@ -3,6 +3,7 @@ import sys
 import multiprocessing
 import signal
 
+# terminate
 def terminate_all_children(signum, frame):
     for child_process in multiprocessing.active_children():
         print("Terminating Child Process: {}, signum: {}, frame: {}".format(child_process, signum, frame))
@@ -11,10 +12,13 @@ def terminate_all_children(signum, frame):
     # exit
     sys.exit(0)
 
+# main
 if __name__ == "__main__":
+    # run as multiprocess
     multiprocessing.freeze_support()
     entity_type = sys.argv[1]
 
+    # register signal
     signal.signal(signal.SIGINT, terminate_all_children)
     signal.signal(signal.SIGTERM, terminate_all_children)
 

@@ -5220,6 +5220,18 @@ class DataFrame:
             .drop_cols(template_col, dmsg = dmsg) \
             .rename(output_col, template_col, dmsg = dmsg)
 
+    def first_value_with_default_if_missing(self, col, default_val = "", dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "first_value_with_default")
+
+        # check if the value exists and there are some values
+        if (self.has_col(col)):
+            vs = self.col_as_array(col)
+            if (len(vs) > 0):
+                return vs[0]
+
+        # fallback
+        return default_val 
+
     def enable_info_mode(self):
         utils.enable_info_mode()
         return self

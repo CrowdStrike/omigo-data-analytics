@@ -2,7 +2,10 @@
 
 set -x
 
+# create log directory
 mkdir -p logs
+
+# run all entities
 ./run-entity.sh "master" 2>&1 > logs/master.log &
 ./run-entity.sh "resource_manager" 2>&1 > logs/resource_manager.log &
 ./run-entity.sh "job_manager" 2>&1 > logs/job_manager.log &
