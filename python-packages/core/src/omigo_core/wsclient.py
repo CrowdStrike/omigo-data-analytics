@@ -127,7 +127,7 @@ def read_url_json(url, query_params = {}, headers = {}, body = None, username = 
 def read_url_response(url, query_params = {}, headers = {}, body = None, username = None, password = None, api_token = None, timeout_sec = 120, verify = True, method = None,
     num_retries = 1, retry_sleep_sec = 1):
     # read response
-    response, resp_exception = __read_base_url__(url, query_params, headers, body = body, username = username, password = password, api_token = api_token,
+    response, resp_exception = __read_base_url__(url, query_params = query_params, headers = headers, body = body, username = username, password = password, api_token = api_token,
         timeout_sec = timeout_sec, verify = verify, method = method)
 
     # check for errors
