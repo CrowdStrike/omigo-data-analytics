@@ -104,6 +104,7 @@ class JiraSearch:
                 if (k.startswith("customfield_") and k in self.fields_mapping):
                     k2 = self.fields_mapping[k]["name"]
 
+                # utils.trace("{}: Key: {}, Field: {}, Value: {}".format(dmsg, k2, field_type, str(value)[0:50].replace("\n", " ").replace("\r", " ")))
                 # do json encoding if needed
                 if (field_type in ("string")):
                     value_str = str(value)
