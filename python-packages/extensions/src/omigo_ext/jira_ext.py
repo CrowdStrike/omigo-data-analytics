@@ -104,7 +104,6 @@ class JiraSearch:
                 if (k.startswith("customfield_") and k in self.fields_mapping):
                     k2 = self.fields_mapping[k]["name"]
 
-
                 # do json encoding if needed
                 if (field_type in ("string")):
                     value_str = str(value)
@@ -113,10 +112,19 @@ class JiraSearch:
                         mp["{}:json_encoded".format(k2)] = mp_value 
                     elif (value_str.startswith("[{\"") and value_str.endswith("}]")):
                         mp_value = json.dumps(json.loads(value_str))
+                        mp["{}:json_encoded".format(k2)] = mp_value
+                    elif (value_str.startswith("{'") and value_str.endswith("}")):
+                        utils.warn_once("{}: JSON encoded string found with single quotes. Doing best effort transformation and parsing", dmsg)
+                        mp_value = json.dumps(json.loads(value_str.replace("'", "\"")))
                         mp["{}:json_encoded".format(k2)] = mp_value 
+                    elif (value_str.startswith("[{'") and value_str.endswith("}]")):
+                        utils.warn_once("{}: JSON encoded string found with single quotes. Doing best effort transformation and parsing", dmsg)
+                        mp_value = json.dumps(json.loads(value_str.replace("'", "\"")))
+                        mp["{}:json_encoded".format(k2)] = mp_value
                     else:
                         mp[k2] = value_str
-                elif (field_type in ("date", "datetime", "group", "number", "resolution")):
+                elif (field_type in ("date", "datetime", "group", "number")):
+                    utils.warn_once("{}: be careful while adding entries here. This can be a complex structure".format(dmsg))
                     mp[k2] = str(value)
                 elif (isinstance(value, (dict))):
                     mp_value = json.dumps(value)

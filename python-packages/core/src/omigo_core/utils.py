@@ -217,6 +217,9 @@ def warn_once(msg):
         if (len(WARN_MSG_CACHE) >= MSG_CACHE_MAX_LEN):
             WARN_MSG_CACHE = {}
 
+def simple_print_without_newline(msg):
+    print(msg, end = "")
+
 def is_code_todo_warning():
     return str(os.environ.get(OMIGO_CODE_TODO_WARNING, "0")) == "1"
 
