@@ -176,34 +176,12 @@ def create_header_index_map(header):
     return header_map
 
 def read_file_content_as_lines(path, s3_region = None, aws_profile = None):
-    # check for s3
-    if (path.startswith("s3://")):
-        bucket_name, object_key = utils.split_s3_path(path)
-        data = s3_wrapper.get_file_content_as_text(bucket_name, object_key, s3_region = s3_region, aws_profile = aws_profile)
-        data = data.split("\n")
-    else:
-        if (path.endswith(".gz")):
-            fin = gzip.open(path, mode = "rt")
-            data = [x.rstrip("\n") for x in fin.readlines()]
-            fin.close()
-        elif (path.endswith(".zip")):
-            zipf = zipfile.ZipFile(path, "r")
-            fin = zipf.open(zipf.infolist()[0], "r")
-            data = fin.read().decode().split("\n")
-            fin.close()
-            zipf.close()
-        else:
-            fin = open(path, "r")
-            data = [x.rstrip("\n") for x in fin.readlines()]
-            fin.close()
+    # initialize fs
+    fs = s3io_wrapper.S3FSWrapper(s3_region = s3_region, aws_profile = aws_profile)
 
-    # simple csv parser
-    if (path.endswith(".csv") or path.endswith("csv.gz") or path.endswith(".csv.zip")):
-        utils.warn("Found a CSV file. Only simple csv format is supported")
-        data = [x.replace(",", "\t") for x in data]
-
-    # return
-    return data
+    # read
+    data = fs.read_file_contents_as_text(path)
+    return data.split("\n")
 
 def create_date_numeric_representation(date_str, default_suffix):
     # check for yyyy-MM-dd
