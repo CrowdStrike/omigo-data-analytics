@@ -301,3 +301,9 @@ def read_json_files_from_directories_as_df(paths, s3_region = None, aws_profile 
     # return
     return df
 
+def read_file_contents_as_text(path, s3_region = None, aws_profile = None):
+    # initialize fs
+    fs = s3io_wrapper.S3FSWrapper(s3_region = s3_region, aws_profile = aws_profile)
+
+    # return
+    return fs.read_file_contents_as_text(path)
