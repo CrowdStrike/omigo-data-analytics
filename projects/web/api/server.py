@@ -134,7 +134,7 @@ async def get_avengers(request: Request, node_props: str = None, edge_props: str
 # main
 if __name__ == "__main__":
     # run the app only on localhost
-    uvicorn.run(app, host = "localhost", port = 9001)
+    uvicorn.run(app, host = "127.0.0.1", port = 9001)
 
     # run the app on all network interfaces
     # uvicorn.run(app, host = "*", port = 9001)
