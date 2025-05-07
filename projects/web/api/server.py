@@ -124,6 +124,14 @@ async def get_avengers(request: Request, node_props: str = None, edge_props: str
     # return 
     return JSONResponse(content = content, headers = standard_headers)
 
+@app.get("/get_timeline")
+async def get_timeline(request: Request, auth: str = Depends(validate_credentials)):
+    # read data
+    mermaid_data = hydra.read_file_contents_as_text("data/avengers/timeline.txt")
+
+    # return 
+    return JSONResponse(content = {"mermaid": mermaid_data}, headers = standard_headers)
+
 # get headers and meta data
 # utils.info("Headers: {}".format(request.headers))
 # utils.info("Method: {}".format(request.method))
