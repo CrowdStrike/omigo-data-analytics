@@ -129,7 +129,7 @@ async def get_timeline(request: Request, auth: str = Depends(validate_credential
     # read data
     mermaid_data = hydra.read_file_contents_as_text("data/avengers/timeline.txt")
 
-    # return 
+    # return
     return JSONResponse(content = {"mermaid": mermaid_data}, headers = standard_headers)
 
 # get headers and meta data
