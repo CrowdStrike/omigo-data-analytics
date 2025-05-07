@@ -1,4 +1,4 @@
-from omigo_core import tsv, utils, timefuncs
+from omigo_core import dataframe, utils, timefuncs
 from omigo_hydra import s3io_wrapper
 import json
 import time
@@ -104,6 +104,7 @@ class BaseJobGenerator:
         # debug
         utils.info("BaseJobGenerator: base_dir: {}, wait_sec: {}, num_iter: {}".format(base_dir, wait_sec, num_iter))
 
+    # run the jobs in a loop
     def run_loop(self):
         try:
             for i in range(self.num_iter):
@@ -125,6 +126,7 @@ class BaseJobGenerator:
             utils.error("BaseJobGenerator: run_loop: caught interrupt. Returning")
             return
 
+    # implement this method
     def run(self):
         raise Exception("Not implemented in base class")
 
@@ -173,16 +175,16 @@ class JobManager:
         new_job_ids_created = list(filter(lambda t: t not in all_running and t not in all_completed, all_created))
 
         # iterate
-        job_xtsvs = [tsv.new_with_cols(["job_id", "submit_ts"])]
+        job_xdfs = [dataframe.new_with_cols(["job_id", "submit_ts"])]
         for new_job_id in new_job_ids_created:
             job_spec_json = json.loads(self.runner_base.fs.read_file_contents_as_text(self.runner_base.get_job_status_created_job_id_file(new_job_id)))
-            job_xtsvs.append(tsv.from_maps([{"job_id": job_spec_json["job_id"], "submit_ts": job_spec_json["submit_ts"]}]))
+            job_xdfs.append(dataframe.from_maps([{"job_id": job_spec_json["job_id"], "submit_ts": job_spec_json["submit_ts"]}]))
 
         # create single tsv
-        job_xtsv = tsv.merge_union(job_xtsvs)
+        job_xdf = dataframe.merge_union(job_xdfs)
 
         # iterate
-        for new_job_id in job_xtsv.sort("submit_ts").col_as_array("job_id"):
+        for new_job_id in job_xdf.sort("submit_ts").col_as_array("job_id"):
             # debug
             utils.info("Looking for worker for job_id: {}".format(new_job_id))
 
@@ -401,6 +403,7 @@ class Worker:
                 # remove from the local jobs directory
                 self.runner_base.fs.delete_file(self.runner_base.get_worker_job_id_file(self.worker_id, job_id))
 
+# class RunAnalysis
 class RunAnalysis:
     def __init__(self, base_dir, run_job_func = None, last_n = 200, wait_sec = DEFAULT_WAIT_60SEC):
         self.runner_base = RunnerBase(base_dir)

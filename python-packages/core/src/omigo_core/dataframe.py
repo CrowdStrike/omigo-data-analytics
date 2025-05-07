@@ -1052,7 +1052,7 @@ class DataFrame:
                 cols_key_map[cols_key] = 1
 
         # create result
-        result_xtsv = DataFrame(new_header_fields, new_data_fields)
+        result_xdf = DataFrame(new_header_fields, new_data_fields)
 
         # check collapse flag
         if (collapse == True):
@@ -1064,10 +1064,10 @@ class DataFrame:
                 uniq_cols.append(new_col)
 
             # create result
-            result_xtsv = result_xtsv.select(uniq_cols)
+            result_xdf = result_xdf.select(uniq_cols)
 
         # return
-        return result_xtsv
+        return result_xdf
 
     def filter(self, cols, func, include_cond = True, use_array_notation = False, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "filter")
@@ -3818,7 +3818,7 @@ class DataFrame:
                 seed = 0
 
         # create array to store result
-        xtsv_list = []
+        xdf_list = []
         data_list = []
 
         # compute effective number of batches
@@ -3845,15 +3845,15 @@ class DataFrame:
             # append to the splits data
             data_list[batch_index].append(self.data_fields[i])
 
-        # create list of xtsvs
+        # create list of xdfs
         for i in range(effective_batches):
-            xtsv_list.append(DataFrame(self.header, data_list[i]))
+            xdf_list.append(DataFrame(self.header, data_list[i]))
 
         # filter out empty batches
-        xtsv_list = list(filter(lambda t: t.num_rows() > 0, xtsv_list))
+        xdf_list = list(filter(lambda t: t.num_rows() > 0, xdf_list))
 
         # return
-        return xtsv_list
+        return xdf_list
 
     # split method to split tsv into batches
     # TODO: add dmsg
@@ -5278,8 +5278,8 @@ def merge_union(xdfs, def_val_map = {}):
     # return
     return dfutils.merge(xdfs, def_val_map = def_val_map)
 
-def merge_intersect(xtsvs):
-    return dfutils.merge(xtsvs, def_val_map = None)
+def merge_intersect(xdfs):
+    return dfutils.merge(xdfs, def_val_map = None)
 
 # convert from data frame. TODO: df can have multiple header lines coz of indexes
 # TODO: take care of map data type
@@ -5335,14 +5335,14 @@ def from_maps(mps, accepted_cols = None, excluded_cols = None, url_encoded_cols 
         utils.warn_once("from_maps: empty list")
         return create_empty()
 
-    xtsvs = []
+    xdfs = []
     for mp in mps:
         header_fields = ["json"]
         fields = [utils.url_encode(json.dumps(mp))]
-        xtsvs.append(DataFrame(header_fields, [fields]))
+        xdfs.append(DataFrame(header_fields, [fields]))
 
     # use explode
-    result = merge_union(xtsvs) \
+    result = merge_union(xdfs) \
         .explode_json("json", prefix = "json", accepted_cols = accepted_cols, excluded_cols = excluded_cols, url_encoded_cols = url_encoded_cols, collapse = True, dmsg = dmsg) \
         .remove_prefix("json", dmsg = dmsg) \
         .drop_cols_if_exists(["__json_index__", "__explode_json_index__"], dmsg = dmsg)
