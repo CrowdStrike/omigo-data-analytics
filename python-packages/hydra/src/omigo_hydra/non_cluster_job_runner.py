@@ -12,11 +12,10 @@ DEFAULT_WAIT_60SEC = 60
 class RunnerBase:
     def __init__(self, base_dir):
         self.base_dir = base_dir
-        self.forward_time_window = 4 * 3600
         self.fs = s3io_wrapper.S3FSWrapper()
 
         # debug
-        utils.info("RunnerBase: init: base_dir: {}, forward_time_window: {}".format(self.base_dir, self.forward_time_window))
+        utils.info("RunnerBase: init: base_dir: {}".format(self.base_dir))
 
     def get_base_dir(self):
         return self.base_dir
@@ -85,14 +84,49 @@ class RunnerBase:
     def get_shutdown_file(self):
         return "{}/shutdown".format(self.base_dir)
 
-    def is_shutdown_mode(self):
-        return self.fs.file_exists(self.get_shutdown_file())
-
     def get_halt_file(self):
         return "{}/halt".format(self.base_dir)
 
-    def is_halt_mode(self):
-        return self.fs.file_exists(self.get_halt_file())
+    def is_shutdown_mode(self):
+        return self.fs.file_exists(self.get_shutdown_file())
+
+# class ClusterAdmin
+class ClusterAdmin:
+    def __init__(self, base_dir, wait_sec = DEFAULT_WAIT_60SEC):
+        self.runner_base = RunnerBase(base_dir)
+        self.wait_sec = wait_sec
+        self.fs = s3io_wrapper.S3FSWrapper()
+
+    # create cluster
+    def create_cluster(self, num_workers = 3):
+        # print the cluster base path
+        utils.info("create_cluster: Using base path: {}".format(self.runner_base.get_base_dir()))
+
+        # create all paths
+        self.fs.create_dir(self.runner_base.get_base_dir())
+        self.fs.create_dir(self.runner_base.get_output_dir())
+        self.fs.create_dir(self.runner_base.get_job_status_dir())
+        self.fs.create_dir(self.runner_base.get_job_tags_dir())
+        self.fs.create_dir(self.runner_base.get_job_status_created())
+        self.fs.create_dir(self.runner_base.get_job_status_running())
+        self.fs.create_dir(self.runner_base.get_job_status_completed())
+        self.fs.create_dir(self.runner_base.get_workers_dir())
+        self.fs.create_dir(self.runner_base.get_job_tag_combined_dir())
+
+        # create workers
+        self.create_workers(num_workers)
+
+    # create workers
+    def create_workers(self, num_workers):
+        # guards
+        if (num_workers >= 100 or num_workers < 0):
+            raise Exception("create_workers: number of workers need to be below 100: {}".format(num_workers))
+
+        # run a loop
+        for i in range(num_workers):
+            worker_id = "worker{:02d}".format(i + 1)
+            self.fs.create_dir(self.runner_base.get_worker_dir(worker_id))
+            self.fs.create_dir(self.runner_base.get_worker_jobs_dir(worker_id))
 
 # Class BaseJobGenerator
 class BaseJobGenerator:

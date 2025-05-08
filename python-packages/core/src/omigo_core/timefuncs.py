@@ -54,7 +54,7 @@ def datetime_to_utctimestamp_sec(x):
         # 2021-11-01
         x = x + "T00:00:00Z"
         return int(parser.parse(x).timestamp())
-    elif (len(x) == 19):
+    elif (len(x) == 19 and (x[10] == "T" or x[10] == " ")):
         # 2021-11-01T00:00:00
         x = x + "Z"
         if (x[10] == " "):
@@ -80,9 +80,9 @@ def datetime_to_utctimestamp_sec(x):
     elif (len(x) == 13 and str(x).isnumeric() == True):
         # this looks like numeric timestamp in millis
         return int(int(x) / 1000)
-    elif (len(x) == 19 and (x[10] == "T" or x[10] == " ")):
-        # 2023-04-18T18:47:45 or 2023-04-18 18:47:45
-        return int(float(parser.parse(x + "+00:00").timestamp() * 1000))
+    elif (len(x) == 28 and x[-5] == "+" and x[-9] == "."):
+        # 2025-05-08T20:03:35.000+0000
+        return int(float(parser.parse(x).timestamp()))
     else:
         raise Exception("Unknown date format. Problem with UTC: '{}'".format(x))
 
