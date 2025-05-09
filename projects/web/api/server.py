@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from omigo_core import s3io_wrapper
-from omigo_core import tsv, utils, funclib
+from omigo_core import dataframe, utils, funclib
 from omigo_ext import graphviz_ext
 import json
 import os
@@ -19,8 +19,6 @@ app = FastAPI()
 
 # set the origins for CORS
 origins = [
-    # "http://127.0.0.1", # These are not needed
-    # "http://127.0.0.1:9001", # These are not needed
     "http://127.0.0.1:9002"
 ]
 
@@ -32,7 +30,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 # list of headers that are returned in response
 standard_headers = {
@@ -79,15 +76,24 @@ async def do_hello(request: Request, auth: str = Depends(validate_credentials)):
 
 @app.get("/get_iris_data")
 async def get_iris_data(request: Request, auth: str = Depends(validate_credentials)):
-    xtsv = tsv.read("https://raw.githubusercontent.com/CrowdStrike/omigo-data-analytics/main/data/iris.tsv")
-    content = { "data": xtsv.add_seq_num("sno").to_maps() }
+    xdf = hydra.read("data/iris.tsv")
+    content = { "data": xdf.add_seq_num("sno").to_maps() }
     return JSONResponse(content = content, headers = standard_headers)
 
+@app.get("/get_timeline")
+@app.get("/get_timeline/")
+async def get_timeline(request: Request, auth: str = Depends(validate_credentials)):
+    mermaid_data = hydra.read_file_contents_as_text("data/timeline.txt")
+    utils.info("mermaid: {}".format(mermaid_data))
+
+    # return
+    return JSONResponse(content = {"mermaid": mermaid_data}, headers = standard_headers)
 @app.get("/get_avengers")
+@app.get("/get_avengers/")
 async def get_avengers(request: Request, node_props: str = None, edge_props: str = None, output_format: str = None, auth: str = Depends(validate_credentials)):
     # read data
-    vtsv = tsv.read("data/avengers/vtsv.tsv")
-    etsv = tsv.read("data/avengers/etsv.tsv")
+    vtsv = hydra.read("data/avengers/vtsv.tsv")
+    etsv = hydra.read("data/avengers/etsv.tsv")
 
     # convert to desired output format and return
     node_props = utils.split_str_to_arr(utils.resolve_default_parameter("node_props", node_props, "", "demo"))
@@ -131,7 +137,6 @@ async def get_timeline(request: Request, auth: str = Depends(validate_credential
 
     # return
     return JSONResponse(content = {"mermaid": mermaid_data}, headers = standard_headers)
-
 # get headers and meta data
 # utils.info("Headers: {}".format(request.headers))
 # utils.info("Method: {}".format(request.method))
