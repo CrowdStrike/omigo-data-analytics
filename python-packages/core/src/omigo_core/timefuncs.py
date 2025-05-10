@@ -128,3 +128,5 @@ def get_utctimestamp_millis():
 def datestr_to_datetime(x):
     return utctimestamp_to_datetime(datetime_to_utctimestamp_sec(x))
 
+def get_datetime_str():
+    return utctimestamp_to_datetime_str(get_utctimestamp_sec())

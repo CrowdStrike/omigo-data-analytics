@@ -4484,6 +4484,8 @@ class DataFrame:
     def explode_json(self, col, prefix = None, accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None,
         merge_list_method = None, collapse_primitive_list = None, url_encoded_cols = None, nested_cols = None, custom_map_parsing_funcs = {}, collapse = None,
         max_results = None, default_val = None, join_col = None, dmsg = ""):
+
+        # dmsg
         dmsg = utils.extend_inherit_message(dmsg, "explode_json")
 
         # resolve parameters
@@ -4524,7 +4526,7 @@ class DataFrame:
         return self \
             .add_seq_num("{}:__json_index__".format(prefix), dmsg = dmsg) \
             .explode([col], exp_func, prefix, default_val = default_val, collapse = collapse, dmsg = dmsg) \
-            .validate()
+            .validate(dmsg = dmsg)
 
     # newer version of explode_json
     def explode_json_v2(self, col, prefix = None, dmsg = "", **kwargs):
@@ -5332,7 +5334,7 @@ def from_maps(mps, accepted_cols = None, excluded_cols = None, url_encoded_cols 
 
     # validation
     if (len(mps) == 0):
-        utils.warn_once("from_maps: empty list")
+        utils.warn_once("{}: empty list".format(dmsg))
         return create_empty()
 
     xdfs = []
