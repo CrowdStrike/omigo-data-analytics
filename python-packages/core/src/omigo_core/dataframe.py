@@ -72,7 +72,9 @@ class DataFrame:
         return self.header_fields + "\n" + "\n".join(list(["\t".join(t) for t in self.data_fields]))
 
     # check data format
-    def validate(self):
+    def validate(self, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "validate")
+
         # data validation
         counter = 0
         for fields in self.data_fields:

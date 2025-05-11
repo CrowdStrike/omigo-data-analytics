@@ -65,6 +65,9 @@ class RunnerBase:
     def get_job_graph_analysis_file(self, job_id):
         return "{}/graph_analysis.tsv.gz".format(self.get_job_output_dir(job_id))
 
+    def get_job_progressive_output_file(self, job_id):
+        return "{}/progressive_output.txt".format(self.get_job_output_dir(job_id))
+
     def get_job_tag_empty_dir(self, job_id):
         return "{}/{}".format(self.get_job_tags_dir(), "empty")
 
@@ -412,30 +415,28 @@ class Worker:
 
             # read json
             job_spec_json = json.loads(job_spec)
-            if ("start_ts" not in job_spec_json):
-                job_spec_json["start_ts"] = job_spec_json["submit_ts"]
 
-                # create the output directory first
-                self.runner_base.fs.create_dir(self.runner_base.get_job_output_dir(job_id))
+            # create the output directory first
+            self.runner_base.fs.create_dir(self.runner_base.get_job_output_dir(job_id))
 
-                # run the job
-                if (self.run_job_func is not None):
-                    status = self.run_job_func(job_spec)
-                else:
-                    utils.warn("Worker: job_id: {}, run_job_func is None".format(job_id))
+            # run the job
+            if (self.run_job_func is not None):
+                status = self.run_job_func(job_spec_json)
+            else:
+                utils.warn("Worker: job_id: {}, run_job_func is None".format(job_id))
 
-                # update the status
-                job_spec_json["status"] = status
-                job_spec_json["completion_ts"] = timefuncs.utctimestamp_to_datetime_str(timefuncs.get_utctimestamp_sec())
+            # update the status
+            job_spec_json["status"] = status
+            job_spec_json["completion_ts"] = timefuncs.utctimestamp_to_datetime_str(timefuncs.get_utctimestamp_sec())
 
-                # write to completed
-                self.runner_base.fs.write_text_file(completed_job_spec_file, json.dumps(job_spec_json))
+            # write to completed
+            self.runner_base.fs.write_text_file(completed_job_spec_file, json.dumps(job_spec_json))
 
-                # debug
-                utils.info("Worker: {}, Job Finished: {}, details: {}".format(self.worker_id, job_id, job_spec_json))
+            # debug
+            utils.info("Worker: {}, Job Finished: {}, details: {}".format(self.worker_id, job_id, job_spec_json))
 
-                # remove from the local jobs directory
-                self.runner_base.fs.delete_file(self.runner_base.get_worker_job_id_file(self.worker_id, job_id))
+            # remove from the local jobs directory
+            self.runner_base.fs.delete_file(self.runner_base.get_worker_job_id_file(self.worker_id, job_id))
 
 # class RunAnalysis
 class RunAnalysis:

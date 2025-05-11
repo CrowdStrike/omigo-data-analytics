@@ -19,6 +19,13 @@ def write(xdf, output_file_name, s3_region = None, aws_profile = None):
     # debug
     utils.debug("write: file saved to: {}, num_rows: {}, num_cols: {}".format(output_file_name, xdf.num_rows(), xdf.num_cols()))
 
+def write_text_file(path, text, s3_region = None, aws_profile = None):
+    # instantiate file handler
+    fs = s3io_wrapper.S3FSWrapper(s3_region = s3_region, aws_profile = aws_profile)
+
+    # write
+    return fs.write_text_file(path, text) 
+
 # check if the path exists
 def check_exists(path, s3_region = None, aws_profile = None):
     return file_paths_util.check_exists(path, s3_region, aws_profile)
