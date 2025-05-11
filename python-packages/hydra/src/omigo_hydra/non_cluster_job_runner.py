@@ -6,6 +6,7 @@ import base64
 
 # Increment this version to rerun analysis
 RUN_VERSION = "version:v01"
+DEFAULT_WAIT_10SEC = 10
 DEFAULT_WAIT_60SEC = 60
 
 # Class RunnerBase
@@ -359,7 +360,7 @@ class ReprocessBatchWorker:
 
 # Class Worker
 class Worker:
-    def __init__(self, base_dir, worker_id, run_job_func = None, wait_sec = DEFAULT_WAIT_60SEC, num_iter = 10):
+    def __init__(self, base_dir, worker_id, run_job_func = None, wait_sec = DEFAULT_WAIT_10SEC, num_iter = 1000):
         self.runner_base = RunnerBase(base_dir)
         self.worker_id = worker_id
         self.run_job_func = run_job_func

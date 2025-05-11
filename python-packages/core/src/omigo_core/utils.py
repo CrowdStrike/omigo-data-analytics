@@ -797,3 +797,55 @@ def is_json_encoded_col(col):
         return True
     else:
         return False
+
+# method to convert markdown table to json (source LLM)
+def markdown_table_to_json(self, markdown_table):
+    # Split the table into lines
+    lines = markdown_table.strip().split('\n')
+
+    # Need at least header, separator, and one data row
+    if len(lines) < 3:
+        return "Invalid markdown table format"
+
+    # Function to parse a row, handling escaped pipes
+    def parse_row(row):
+        # Remove leading/trailing pipes
+        row = row.strip('|')
+
+        # Split by pipes that are not escaped with backslash
+        # This regex looks for pipe characters not preceded by a backslash
+        cells = re.split(r'(?<!\\)\|', row)
+
+        # Clean up each cell and replace escaped pipes with regular pipes
+        return [cell.strip().replace('\\|', '|') for cell in cells]
+    
+    # Extract headers
+    headers = parse_row(lines[0])
+
+    # Verify separator line (should contain only |, -, and :)
+    if not all(c in ['|', '-', ':', ' '] for c in lines[1]):
+        raise Exception("Invalid markdown table format: separator line incorrect")
+    
+    # Parse data rows
+    result = []
+    for i in range(2, len(lines)):
+        # strip whitespace
+        row = lines[i].strip()
+    
+        # boundary condition
+        if not row:
+            continue
+
+        # parse fow
+        values = parse_row(row)
+
+        # Create a dictionary for this row
+        row_dict = {}
+        for j in range(min(len(headers), len(values))):
+            row_dict[headers[j]] = values[j]
+
+        # append
+        result.append(row_dict)
+
+    # return
+    return result
