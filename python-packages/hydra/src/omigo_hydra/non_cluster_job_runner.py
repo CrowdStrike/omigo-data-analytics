@@ -69,6 +69,9 @@ class RunnerBase:
     def get_job_progressive_output_file(self, job_id):
         return "{}/progressive_output.txt".format(self.get_job_output_dir(job_id))
 
+    def get_job_final_output_file(self, job_id):
+        return "{}/final_output.txt".format(self.get_job_output_dir(job_id))
+
     def get_job_tag_empty_dir(self, job_id):
         return "{}/{}".format(self.get_job_tags_dir(), "empty")
 
@@ -170,7 +173,7 @@ class BaseJobGenerator:
 
 # Class JobManager
 class JobManager:
-    def __init__(self, base_dir, wait_sec = DEFAULT_WAIT_60SEC):
+    def __init__(self, base_dir, wait_sec = DEFAULT_WAIT_10SEC):
         self.runner_base = RunnerBase(base_dir)
         self.wait_sec = wait_sec
         self.max_attempts = 3

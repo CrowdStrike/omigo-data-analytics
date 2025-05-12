@@ -298,7 +298,7 @@ def create_local_parent_dir(filepath):
         if (filepath.startswith("/")):
             dir_path = "/" + dir_path
 
-        if (fs.dir_exists(dir_path, None, None) == False):
+        if (fs.dir_exists(dir_path) == False):
             if (utils.is_debug()):
                 print("Creating local directory:", dir_path)
             os.makedirs(dir_path, exist_ok = True)

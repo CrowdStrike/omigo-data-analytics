@@ -308,7 +308,11 @@ def read_json_files_from_directories_as_df(paths, s3_region = None, aws_profile 
     # return
     return df
 
-def read_file_contents_as_text(path, s3_region = None, aws_profile = None):
+def read_file_contents_as_text(*args, **kwargs):
+    utils.warn("read_file_contents_as_text: deprecated. Use read_text_file")
+    return read_text_file(*args, **kwargs)
+
+def read_text_file(path, s3_region = None, aws_profile = None):
     # initialize fs
     fs = s3io_wrapper.S3FSWrapper(s3_region = s3_region, aws_profile = aws_profile)
 

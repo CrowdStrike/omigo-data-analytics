@@ -68,8 +68,23 @@ class DataFrame:
     def to_string(self):
         return "Header: {}, Data: {}".format(str(self.header_fields), str(len(self.data_fields)))
 
-    def get_content_as_string(self):
-        return self.header_fields + "\n" + "\n".join(list(["\t".join(t) for t in self.data_fields]))
+    def get_content_as_string(self, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "get_content_as_string")
+
+        # warn
+        utils.warn("{}: Deprecated. Use serialize_as_string".format(dmsg))
+
+        # return
+        return self.serialize_as_string(dmsg = dmsg)
+
+    def serialize_as_string(self, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "get_content_as_string")
+
+        # url encode each field and serialize
+        header_str = list([utils.url_encode(t) for t in self.header_fields])
+
+        # return
+        return "\n".join([header_str, "\n".join(list(["\t".join(utils.url_encode(t)) for t in self.data_fields]))])
 
     # check data format
     def validate(self, dmsg = ""):
@@ -5401,3 +5416,11 @@ def __is_builtin_func__(func):
     else:
         return False
 
+def from_markdown_table(markdown_text, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "from_markdown_table")
+
+    # parse
+    (header_fields, data_fields) = llm_funcs.from_markdown_table(markdown_text)
+
+    # return
+    return new_with_cols(header_fields, data_fields = data_fields)
