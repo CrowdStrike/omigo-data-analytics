@@ -5,7 +5,7 @@ import pandas as pd
 import random
 import json
 import base64
-from omigo_core import utils, dfutils, udfs
+from omigo_core import utils, dfutils, udfs, llm_funcs
 import sys
 import time
 import numpy as np
