@@ -1,128 +1,119 @@
-import re
 import json
 import os
 import sys
 from omigo_core import utils
 
-# method to parse markdown to dataframe. from LLM
-def from_markdown_table(markdown_text, dmsg = ""):
+# method to parse a markdown table to dataframe
+def from_markdown_table(markdown_text, dmsg=""):
     dmsg = utils.extend_inherit_message(dmsg, "from_markdown_table")
-
-    # warn
     utils.warn_once("{}: this is an LLM generated function, not fully tested".format(dmsg))
 
     # Split the text into lines and remove empty lines
-    lines = list([line.strip() for line in markdown_text.strip().split("\n") if line.strip()])
-
-    # header and separator is mandatory 
-    if (len(lines) < 2):
+    lines = [line.strip() for line in markdown_text.strip().split("\n") if line.strip()]
+    if len(lines) < 2:
         raise Exception("Not enough lines for a valid markdown table")
 
-    # Extract header line and separator line
+    # variables
     header_line = lines[0]
     separator_line = lines[1]
     data_lines = lines[2:] if (len(lines) > 2) else []
 
-    # Function to parse a line considering quoted content and escaped pipes
-    def parse_line(line):
-        result = []
-        current = ""
-        in_quotes = False
-        escape_next = False
-
-        # Remove leading and trailing pipes and any extra spaces
+    # Function to extract pipe-separated values, respecting quoted content
+    def extract_fields(line):
+        # Remove leading/trailing spaces and pipes
         line = line.strip()
-        if (line.startswith("|") == True):
+        if line.startswith('|'):
             line = line[1:]
-        if (line.endswith("|") == True):
+        if line.endswith('|'):
             line = line[:-1]
+
+        # create fields
+        fields = []
+        current_field = ""
+        in_quotes = False
 
         # iterate
         i = 0
         while (i < len(line)):
             char = line[i]
             
-            # Handle escape character
-            if (char == '\\' and not escape_next):
-                escape_next = True
-                i += 1
-                continue
-                
-            # Handle escaped character
-            if (escape_next):
-                current += char  # Add the character as-is (including escaped pipes)
-                escape_next = False
-            # Handle quotes
-            elif (char == '"'):
-                if (in_quotes):
-                    # Check if it's an escaped quote (i.e., "")
-                    if (i + 1 < len(line) and line[i + 1] == '"'):
-                        current += '"'
-                        i += 1  # Skip the next quote
-                    else:
-                        in_quotes = False
-                else:
-                    in_quotes = True
-            # Handle pipe separators
-            elif (char == '|' and not in_quotes):
-                result.append(current.strip())
-                current = ""
+            # Handle quotes - they toggle the "in quotes" state
+            if (char == '"'):
+                in_quotes = not in_quotes
+                current_field += char
+            # Only treat pipes as separators when not in quotes
+            elif char == '|' and not in_quotes:
+                fields.append(current_field.strip())
+                current_field = ""
             else:
-                current += char
+                current_field = current_field + char
 
             # increment
-            i += 1
+            i = i + 1
             
         # Add the last field
-        if (current):
-            result.append(current.strip())
+        fields.append(current_field.strip())
 
-        # return 
-        return result
-    
-    # Parse headers
-    header_fields = parse_line(header_line)
+        # Clean up quotes from fields if they fully wrap the field
+        for i in range(len(fields)):
+            field = fields[i]
+            if field.startswith('"') and field.endswith('"') and len(field) > 1:
+                # This handles the case of a quote that isn't escaped
+                if not (field.endswith('\\"') and not field.endswith('\\\\"')):
+                    fields[i] = field[1:-1]
+
+        # return
+        return fields
+
+    # Parse the header to determine expected column count
+    header_fields = extract_fields(header_line)
+    expected_columns = len(header_fields)
 
     # Parse data rows
     data_fields = []
+
+    # iterate
     for line in data_lines:
-        # parse data
-        row_values = parse_line(line)
+        # Special case for lines with Windows paths in quotes
+        if ('\\' in line and '"' in line):
+            # Use string splitting to get the initial fields that are unambiguous
+            parts = line.split('|')
+            parts = [p.strip() for p in parts if p.strip()]
 
-        # Create a row
-        fields = []
-        for i, value in enumerate(row_values):
-            # valid index
-            if (i < len(header_fields)):
-                # Process the value - unescape any escaped characters
-                processed_value = ""
+            # Check if we have fewer fields than expected
+            if len(parts) < expected_columns:
+                fields = extract_fields(line)
 
-                # iterate
-                j = 0
-                while (j < len(value)):
-                    if (value[j] == '\\' and j + 1 < len(value)):
-                        processed_value += value[j+1]  # Add the escaped character
-                        j += 2
+                # If we're still not matching, try to identify the problematic field
+                if (len(fields) != expected_columns):
+                    utils.warn("{}: Column count mismatch: found {} fields but expected {} for line: {}".format(
+                        dmsg, len(fields), expected_columns, line))
+
+                    # Pad or truncate as needed
+                    if (len(fields) < expected_columns):
+                        fields.extend([""] * (expected_columns - len(fields)))
                     else:
-                        processed_value += value[j]
-                        j += 1
-                
-                # Remove surrounding quotes if present
-                if (processed_value.startswith('"') and processed_value.endswith('"')):
-                    processed_value = processed_value[1:-1]
-
-                # append
-                fields.append(processed_value)
+                        fields = fields[:expected_columns]
             else:
-                # Handle case where there are more values than headers
-                fields.append(value)
-
-        # validation
-        if (len(fields) != len(header_fields)):
-            utils.error("{}: mismatch: fields: {}, header_fields: {}, line: {}".format(dmsg, len(fields), len(header_fields), line))
+                fields = parts
         else:
-            # append
-            data_fields.append(fields)
+            # Regular parsing for normal lines
+            fields = extract_fields(line)
 
-    # return    
+            # Handle column count mismatch
+            if (len(fields) != expected_columns):
+                utils.warn("{}: Column count mismatch: found {} fields but expected {} for line: {}".format(
+                    dmsg, len(fields), expected_columns, line))
+
+                # Pad or truncate as needed
+                if (len(fields) < expected_columns):
+                    fields.extend([""] * (expected_columns - len(fields)))
+                else:
+                    fields = fields[:expected_columns]
+
+        # append
+        data_fields.append(fields)
+
+    # return
     return (header_fields, data_fields)
+

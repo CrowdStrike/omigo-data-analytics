@@ -1623,6 +1623,21 @@ class DataFrame:
         # return
         return mps
 
+    def to_maps_with_empty_data(self, resolve_url_encoded_cols = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "to_maps_with_empty_data")
+
+        # check for empty rows
+        if (self.num_rows() == 0):
+            mp = {}
+            # create empty map
+            for h in self.header_fields:
+                mp[str(h)] = ""
+
+            # return
+            return [mp]
+        else:
+            return self.to_maps(resolve_url_encoded_cols = resolve_url_encoded_cols, dmsg = dmsg) 
+
     def __convert_to_numeric__(self, x, precision = 6):
         try:
             if (int(float(x)) == float(x)):

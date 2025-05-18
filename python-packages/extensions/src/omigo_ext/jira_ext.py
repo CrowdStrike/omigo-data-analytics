@@ -115,11 +115,11 @@ class JiraSearch:
                         mp_value = json.dumps(json.loads(value_str))
                         mp["{}:json_encoded".format(k2)] = mp_value
                     elif (value_str.startswith("{'") and value_str.endswith("}")):
-                        utils.warn_once("{}: JSON encoded string found with single quotes. Doing best effort transformation and parsing", dmsg)
+                        utils.warn_once("{}: JSON encoded string found with single quotes. Doing best effort transformation and parsing".format(dmsg))
                         mp_value = json.dumps(json.loads(value_str.replace("'", "\"")))
                         mp["{}:json_encoded".format(k2)] = mp_value 
                     elif (value_str.startswith("[{'") and value_str.endswith("}]")):
-                        utils.warn_once("{}: JSON encoded string found with single quotes. Doing best effort transformation and parsing", dmsg)
+                        utils.warn_once("{}: JSON encoded string found with single quotes. Doing best effort transformation and parsing".format(dmsg))
                         mp_value = json.dumps(json.loads(value_str.replace("'", "\"")))
                         mp["{}:json_encoded".format(k2)] = mp_value
                     else:

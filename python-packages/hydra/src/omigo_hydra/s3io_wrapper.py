@@ -90,7 +90,11 @@ class S3FSWrapper:
         dir_file_path = "{}/{}".format(path, RESERVED_HIDDEN_FILE)
         return self.file_not_exists_with_wait(dir_file_path, wait_sec = wait_sec, attempts = attempts)
 
-    def read_file_contents_as_text_with_wait(self, path, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS):
+    def read_file_contents_as_text_with_wait(self, *args, **kwargs):
+        utils.warn_once("read_file_contents_as_text_with_wait is Deprecated. Use read_text_file_with_wait")
+        return self.read_text_file_with_wait(*args, **kwargs)
+
+    def read_text_file_with_wait(self, path, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS):
         path = self.__normalize_path__(path)
 
         # go into a wait loop for s3 to sync if the path is missing
@@ -100,21 +104,25 @@ class S3FSWrapper:
             return self.read_file_contents_as_text_with_wait(path, wait_sec = wait_sec, attempts = attempts - 1)
 
         # return
-        return self.read_file_contents_as_text(path)
+        return self.read_text_file(path)
 
-    def read_file_contents_as_text(self, path):
+    def read_file_contents_as_text(self, *args, **kwargs):
+        utils.warn_once("read_file_contents_as_textis Deprecated. Use read_text_file")
+        return self.read_text_file(*args, **kwargs)
+
+    def read_text_file(self, path):
         if (self.__is_s3__(path)):
-            return self.__s3_read_file_contents_as_text__(path)
+            return self.__s3_read_text_file__(path)
         else:
-            return self.__local_read_file_contents_as_text__(path)
+            return self.__local_read_text_file__(path)
 
-    def __s3_read_file_contents_as_text__(self, path):
+    def __s3_read_text_file__(self, path):
         path = self.__normalize_path__(path)
         bucket_name, object_key = utils.split_s3_path(path)
         return s3_wrapper.get_file_content_as_text(bucket_name, object_key, s3_region = self.s3_region, aws_profile = self.aws_profile)
 
     # the path here can be compressed gz file
-    def __local_read_file_contents_as_text__(self, path):
+    def __local_read_text_file__(self, path):
         path = self.__normalize_path__(path)
         return local_fs_wrapper.get_file_content_as_text(path)
 

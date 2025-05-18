@@ -7,6 +7,7 @@ import base64
 # Increment this version to rerun analysis
 RUN_VERSION = "version:v01"
 DEFAULT_WAIT_10SEC = 10
+DEFAULT_WAIT_30SEC = 30
 DEFAULT_WAIT_60SEC = 60
 
 # Class RunnerBase
@@ -102,7 +103,6 @@ class ClusterAdmin:
     def __init__(self, base_dir, wait_sec = DEFAULT_WAIT_60SEC):
         self.runner_base = RunnerBase(base_dir)
         self.wait_sec = wait_sec
-        self.fs = s3io_wrapper.S3FSWrapper()
 
     # create cluster
     def create_cluster(self, num_workers = 3):
@@ -110,15 +110,15 @@ class ClusterAdmin:
         utils.info("create_cluster: Using base path: {}".format(self.runner_base.get_base_dir()))
 
         # create all paths
-        self.fs.create_dir(self.runner_base.get_base_dir())
-        self.fs.create_dir(self.runner_base.get_output_dir())
-        self.fs.create_dir(self.runner_base.get_job_status_dir())
-        self.fs.create_dir(self.runner_base.get_job_tags_dir())
-        self.fs.create_dir(self.runner_base.get_job_status_created())
-        self.fs.create_dir(self.runner_base.get_job_status_running())
-        self.fs.create_dir(self.runner_base.get_job_status_completed())
-        self.fs.create_dir(self.runner_base.get_workers_dir())
-        self.fs.create_dir(self.runner_base.get_job_tag_combined_dir())
+        self.runner_base.fs.create_dir(self.runner_base.get_base_dir())
+        self.runner_base.fs.create_dir(self.runner_base.get_output_dir())
+        self.runner_base.fs.create_dir(self.runner_base.get_job_status_dir())
+        self.runner_base.fs.create_dir(self.runner_base.get_job_tags_dir())
+        self.runner_base.fs.create_dir(self.runner_base.get_job_status_created())
+        self.runner_base.fs.create_dir(self.runner_base.get_job_status_running())
+        self.runner_base.fs.create_dir(self.runner_base.get_job_status_completed())
+        self.runner_base.fs.create_dir(self.runner_base.get_workers_dir())
+        self.runner_base.fs.create_dir(self.runner_base.get_job_tag_combined_dir())
 
         # create workers
         self.create_workers(num_workers)
@@ -132,8 +132,40 @@ class ClusterAdmin:
         # run a loop
         for i in range(num_workers):
             worker_id = "worker{:02d}".format(i + 1)
-            self.fs.create_dir(self.runner_base.get_worker_dir(worker_id))
-            self.fs.create_dir(self.runner_base.get_worker_jobs_dir(worker_id))
+            self.runner_base.fs.create_dir(self.runner_base.get_worker_dir(worker_id))
+            self.runner_base.fs.create_dir(self.runner_base.get_worker_jobs_dir(worker_id))
+
+    # delete job
+    def delete_job(self, job_id, ignore_if_missing = True):
+        # delete job tags
+        for filename in self.runner_base.fs.list_leaf_dir(self.runner_base.get_job_tag_combined_dir()):
+            if (filename.startswith("{}-".format(job_id)) == True):
+                self.runner_base.fs.delete_file("{}/{}".format(self.runner_base.get_job_tag_combined_dir(), filename), ignore_if_missing = ignore_if_missing)
+
+        # delete job output dir
+        if (self.runner_base.fs.dir_exists(self.runner_base.get_job_output_dir(job_id))):
+            for filename in self.runner_base.fs.list_leaf_dir(self.runner_base.get_job_output_dir(job_id)):
+                self.runner_base.fs.delete_file("{}/{}".format(self.runner_base.get_job_output_dir(job_id), filename), ignore_if_missing = ignore_if_missing)
+
+            # delete directory
+            self.runner_base.fs.delete_dir_with_wait(self.runner_base.get_job_output_dir(job_id), ignore_if_missing = ignore_if_missing)
+
+        # delete job-status
+        self.runner_base.fs.delete_file(self.runner_base.get_job_status_completed_job_id_file(job_id), ignore_if_missing = ignore_if_missing)
+        self.runner_base.fs.delete_file(self.runner_base.get_job_status_running_job_id_file(job_id), ignore_if_missing = ignore_if_missing)
+        self.runner_base.fs.delete_file(self.runner_base.get_job_status_created_job_id_file(job_id), ignore_if_missing = ignore_if_missing)
+
+        # goto each worker and delete the entry for job if exists
+        for worker_id in self.runner_base.fs.list_dirs(self.runner_base.get_workers_dir()):
+            if (self.runner_base.fs.file_exists(self.runner_base.get_worker_job_id_file(worker_id, job_id)) == True):
+                utils.warn("Found job meant for deletion: {} running under worker: {}".format(job_id, worker_id))
+                self.runner_base.fs.delete_file(self.runner_base.get_worker_job_id_file(worker_id, job_id), ignore_if_missing = ignore_if_missing)
+
+    def resubmit(self, job_id, ignore_if_missing = True):
+        # delete job-status
+        self.runner_base.fs.delete_file(self.runner_base.get_job_status_completed_job_id_file(job_id), ignore_if_missing = ignore_if_missing)
+        self.runner_base.fs.delete_file(self.runner_base.get_job_status_running_job_id_file(job_id), ignore_if_missing = ignore_if_missing)
+        self.runner_base.fs.delete_file(self.runner_base.get_job_status_created_job_id_file(job_id), ignore_if_missing = ignore_if_missing)
 
 # Class BaseJobGenerator
 class BaseJobGenerator:
@@ -173,7 +205,7 @@ class BaseJobGenerator:
 
 # Class JobManager
 class JobManager:
-    def __init__(self, base_dir, wait_sec = DEFAULT_WAIT_10SEC):
+    def __init__(self, base_dir, wait_sec = DEFAULT_WAIT_30SEC):
         self.runner_base = RunnerBase(base_dir)
         self.wait_sec = wait_sec
         self.max_attempts = 3
@@ -200,11 +232,11 @@ class JobManager:
                   time.sleep(self.wait_sec)
             except Exception as e:
                 utils.error("JobManager: run_loop: caught exception: {}. attemps: {} / {}".format(e, num_attempts, self.max_attempts))
+                # increase
+                num_attempts = num_attempts + 1
             except:
-                utils.error("JobManager: run_loop: caught Interrupt: {}. attemps: {} / {}".format(e, num_attempts, self.max_attempts))
-
-            # increase
-            num_attempts = num_attempts + 1
+                utils.error("JobManager: run_loop: caught Interrupt: returning")
+                return
 
     def run(self):
         # check the list of created, running, completed
@@ -363,7 +395,7 @@ class ReprocessBatchWorker:
 
 # Class Worker
 class Worker:
-    def __init__(self, base_dir, worker_id, run_job_func = None, wait_sec = DEFAULT_WAIT_10SEC, num_iter = 1000):
+    def __init__(self, base_dir, worker_id, run_job_func = None, wait_sec = DEFAULT_WAIT_30SEC, num_iter = 1000):
         self.runner_base = RunnerBase(base_dir)
         self.worker_id = worker_id
         self.run_job_func = run_job_func
@@ -379,26 +411,37 @@ class Worker:
             utils.error("Worker is not initialized: {}: {}".format(self.worker_id, self.runner_base.get_worker_dir(self.worker_id)))
             return
 
-        # look into assigned jobs directory
-        try:
-            for i in range(self.num_iter):
-                # check for shutdown mode
-                if (self.runner_base.is_shutdown_mode() == True):
-                    utils.warn("Worker: shutdown mode detected. Stopping")
+        # retry
+        retry_attempts = 3
+
+        # loop
+        while (retry_attempts > 0):
+            # decrement counter
+            retry_attempts = retry_attempts - 1
+
+            # look into assigned jobs directory
+            try:
+                for i in range(self.num_iter):
+                    # check for shutdown mode
+                    if (self.runner_base.is_shutdown_mode() == True):
+                        utils.warn("Worker: shutdown mode detected. Stopping")
+                        return
+
+                    # run
+                    self.run()
+
+                    # sleep
+                    utils.info("Worker: iteration: {}, Sleeping for {} seconds".format(i, self.wait_sec))
+                    time.sleep(self.wait_sec)
+            except Exception as e:
+                utils.error("Worker: run_loop: caught exception or interrupt: {}, retry_attempts: {}".format(e, retry_attempts))
+                if (retry_attempts > 0):
+                    continue
+                else:
                     return
-
-                # run
-                self.run()
-
-                # sleep
-                utils.info("Worker: iteration: {}, Sleeping for {} seconds".format(i, self.wait_sec))
-                time.sleep(self.wait_sec)
-        except Exception as e:
-            utils.error("Worker: run_loop: caught exception or interrupt: {}".format(e))
-            return
-        except:
-            utils.error("Worker: run_loop: caught interrupt. Returning")
-            return
+            except:
+                utils.error("Worker: run_loop: caught interrupt. retry_attempts left: {}".format(retry_attempts))
+                return
 
     def run(self):
         # get job ids
