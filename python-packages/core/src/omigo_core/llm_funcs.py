@@ -54,18 +54,18 @@ def from_markdown_table(markdown_text, dmsg = ""):
                 verbatim_buffer = None
                 current = ""
                 i = i + 11  # Skip past the closing tag
-                
+
                 # Skip any trailing spaces until the next pipe
                 while (i < len(line) and line[i] != '|' and line[i].isspace()):
                     i = i + 1
-                
+
                 # Skip the pipe separator if present
                 if i < len(line) and line[i] == '|':
                     i = i + 1
 
                 # continue
                 continue
-                
+
             # If we're in verbatim mode, add everything to verbatim buffer
             if (verbatim_buffer is not None):
                 verbatim_buffer = verbatim_buffer + line[i]
