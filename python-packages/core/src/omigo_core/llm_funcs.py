@@ -33,66 +33,68 @@ def from_markdown_table(markdown_text, dmsg = ""):
 
         # Remove leading and trailing pipes
         line = line.strip()
-        if line.startswith("|"):
+        if (line.startswith("|") == True):
             line = line[1:]
-        if line.endswith("|"):
+        if (line.endswith("|") == True):
             line = line[:-1]
 
+        # iterate
         i = 0
-        while i < len(line):
+        while (i < len(line)):
             # Check for verbatim start if not already in verbatim mode
             if verbatim_buffer is None and line[i:].startswith("<custom>"):
                 verbatim_buffer = "<custom>"
-                i += 10  # Skip past the opening tag
+                i = i + 10  # Skip past the opening tag
                 continue
-                
+
             # Check for verbatim end if in verbatim mode
             if verbatim_buffer is not None and line[i:].startswith("</custom>"):
                 verbatim_buffer += "</custom>"
                 result.append(verbatim_buffer.strip())
                 verbatim_buffer = None
                 current = ""
-                i += 11  # Skip past the closing tag
+                i = i + 11  # Skip past the closing tag
                 
                 # Skip any trailing spaces until the next pipe
-                while i < len(line) and line[i] != '|' and line[i].isspace():
-                    i += 1
+                while (i < len(line) and line[i] != '|' and line[i].isspace()):
+                    i = i + 1
                 
                 # Skip the pipe separator if present
                 if i < len(line) and line[i] == '|':
-                    i += 1
-                
+                    i = i + 1
+
+                # continue
                 continue
                 
             # If we're in verbatim mode, add everything to verbatim buffer
-            if verbatim_buffer is not None:
-                verbatim_buffer += line[i]
-                i += 1
+            if (verbatim_buffer is not None):
+                verbatim_buffer = verbatim_buffer + line[i]
+                i = i + 1
                 continue
 
             # Normal parsing (non-verbatim mode)
             char = line[i]
 
             # Handle escape character
-            if char == '\\' and not escape_next:
+            if (char == '\\' and not escape_next):
                 escape_next = True
             # Handle escaped character
-            elif escape_next:
-                current += char  # Add the character as-is (including escaped pipes)
+            elif (escape_next):
+                current = current + char  # Add the character as-is (including escaped pipes)
                 escape_next = False
             # Handle quotes
-            elif char == '"':
-                if in_quotes:
+            elif (char == '"'):
+                if (in_quotes):
                     # Check if it's an escaped quote (i.e., "")
-                    if i + 1 < len(line) and line[i + 1] == '"':
-                        current += '"'
-                        i += 1  # Skip the next quote
+                    if (i + 1 < len(line) and line[i + 1] == '"'):
+                        current = current + '"'
+                        i = i + 1  # Skip the next quote
                     else:
                         in_quotes = False
                 else:
                     in_quotes = True
             # Handle pipe separators
-            elif char == '|' and not in_quotes:
+            elif (char == '|' and not in_quotes):
                 result.append(current.strip())
                 current = ""
             else:
@@ -101,11 +103,12 @@ def from_markdown_table(markdown_text, dmsg = ""):
             i += 1
 
         # Add the last field if we're not in verbatim mode
-        if verbatim_buffer is not None:
+        if (verbatim_buffer is not None):
             result.append(verbatim_buffer.strip())
-        elif current:
+        elif (current):
             result.append(current.strip())
 
+        # return
         return result
 
     # Parse headers
@@ -121,33 +124,34 @@ def from_markdown_table(markdown_text, dmsg = ""):
         fields = []
         for i, value in enumerate(row_values):
             # valid index
-            if i < len(header_fields):
+            if (i < len(header_fields)):
                 # Preserve verbatim content as-is
-                if value.startswith("<custom>") and value.endswith("</custom>"):
+                if (value.startswith("<custom>") and value.endswith("</custom>")):
                     fields.append(value)
                 else:
                     # Process the value - unescape any escaped characters
                     processed_value = ""
                     j = 0
-                    while j < len(value):
-                        if value[j] == '\\' and j + 1 < len(value):
-                            processed_value += value[j+1]  # Add the escaped character
-                            j += 2
+                    while (j < len(value)):
+                        if (value[j] == '\\' and j + 1 < len(value)):
+                            processed_value = processed_value + value[j+1]  # Add the escaped character
+                            j = j + 2
                         else:
-                            processed_value += value[j]
-                            j += 1
+                            processed_value = processed_value + value[j]
+                            j = j + 1
 
                     # Remove surrounding quotes if present
-                    if processed_value.startswith('"') and processed_value.endswith('"'):
+                    if (processed_value.startswith('"') and processed_value.endswith('"')):
                         processed_value = processed_value[1:-1]
 
+                    # append
                     fields.append(processed_value)
             else:
                 # Handle case where there are more values than headers
                 fields.append(value)
 
         # validation
-        if len(fields) != len(header_fields):
+        if (len(fields) != len(header_fields)):
             utils.error("{}: mismatch: fields: {}, header_fields: {}, line: {}".format(dmsg, len(fields), len(header_fields), line))
         else:
             # append
