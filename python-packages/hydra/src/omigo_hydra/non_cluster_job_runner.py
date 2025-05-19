@@ -440,7 +440,7 @@ class Worker:
                 else:
                     return
             except:
-                utils.error("Worker: run_loop: caught interrupt. retry_attempts left: {}".format(retry_attempts))
+                utils.error("Worker: run_loop: caught interrupt. Returning")
                 return
 
     def run(self):
