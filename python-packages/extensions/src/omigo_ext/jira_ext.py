@@ -10,7 +10,7 @@ JIRA_API_AUTH_TOKEN = "JIRA_API_AUTH_TOKEN"
 
 # api handler for searching jira
 class JiraSearch:
-    def __init__(self, server = None, username = None, password = None, auth_token = None, verify = True):
+    def __init__(self, server = None, username = None, password = None, auth_token = None, proxies = None, verify = True):
         # warn
         utils.warn_once("JiraSearch: This is work in progress in extensions package. Some of the constants need to be decoupled")
 
@@ -27,11 +27,15 @@ class JiraSearch:
         jira_options = {"server": self.server, "verify": verify, "headers": {'content-type': 'application/json'}}
         utils.info("JiraSearch: instantiating with options: {}".format(jira_options))
 
+        # debug
+        if (proxies is not None):
+            utils.info("Using proxy: {}".format(proxies))
+
         # check for credentials
         if (username is not None and password is not None):
-            self.jira_instance = JIRA(jira_options, basic_auth = (username, password))
+            self.jira_instance = JIRA(jira_options, basic_auth = (username, password), proxies = proxies)
         elif (auth_token is not None):
-            self.jira_instance = JIRA(jira_options, token_auth = auth_token)
+            self.jira_instance = JIRA(jira_options, token_auth = auth_token, proxies = proxies)
         else:
             raise Exception("JiraSearch: No valid authentication mechanism found")
 

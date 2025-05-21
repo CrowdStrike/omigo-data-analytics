@@ -3,6 +3,8 @@ from omigo_hydra import s3io_wrapper
 import json
 import time
 import base64
+import traceback
+import sys
 
 # Increment this version to rerun analysis
 RUN_VERSION = "version:v01"
@@ -435,6 +437,7 @@ class Worker:
                     time.sleep(self.wait_sec)
             except Exception as e:
                 utils.error("Worker: run_loop: caught exception or interrupt: {}, retry_attempts: {}".format(e, retry_attempts))
+                traceback.print_exc(file = sys.stdout)
                 if (retry_attempts > 0):
                     continue
                 else:

@@ -392,9 +392,6 @@ class TSV:
     def url_decode_inline(self, *args, **kwargs):
         return self
 
-    def url_decode_clean_inline(self, *args, **kwargs):
-        return self
-
     def url_encode(self, *args, **kwargs):
         return self
 

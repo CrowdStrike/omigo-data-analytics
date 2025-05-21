@@ -264,7 +264,7 @@ class LogScaleSearch:
                 key2 = key2.replace("@", "").replace("#", "")
 
                 # assign to new map
-                result[key2] = utils.replace_spl_white_spaces_with_space(str(value2))
+                result[key2] = utils.replace_spl_white_spaces_with_space_noop(str(value2))
 
             # append to array
             results.append(result)

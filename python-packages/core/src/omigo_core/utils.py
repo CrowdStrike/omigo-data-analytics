@@ -9,6 +9,8 @@ import math
 import mmh3
 import time
 from concurrent.futures import ThreadPoolExecutor
+import traceback
+import sys
 
 # TODO: these caches dont work in multithreaded env.
 MSG_CACHE_MAX_LEN = 10000
@@ -231,6 +233,7 @@ def url_encode(s):
     if (s is None):
         return ""
 
+    # return
     return urllib.parse.quote_plus(s)
 
 # TODO: this replaces TAB character
@@ -238,9 +241,10 @@ def url_decode(s):
     if (s is None):
         return ""
 
-    return urllib.parse.unquote_plus(s).replace("\n", " ").replace("\t", " ").replace("\v", " ").replace("\r", " ")
+    # return
+    return urllib.parse.unquote_plus(s)
 
-def url_decode_clean(s):
+def url_decode_replace_white_spaces(s):
     return url_decode(s).replace("\n", " ").replace("\v", " ").replace("\r", " ").replace("\t", " ")
 
 # move this to utils
@@ -492,7 +496,21 @@ def strip_spl_white_spaces(v):
     warn_once("Deprecated: Instead of strip_spl_white_spaces use replace_spl_white_spaces_with_space")
     return replace_spl_white_spaces_with_space(v)
 
+def replace_spl_white_spaces_with_space_noop(v):
+    warn_once("replace_spl_white_spaces_with_space_noop: called. Check code")
+    return v
+
+def replace_tab_with_space(v):
+    # check None
+    if (v is None):
+        return None
+
+    # return
+    return str(v).replace("\t", " ")
+
 def replace_spl_white_spaces_with_space(v):
+    utils.warn_once("replace_spl_white_spaces_with_space is Deprecated")
+
     # check None
     if (v is None):
         return None
@@ -798,3 +816,14 @@ def is_json_encoded_col(col):
     else:
         return False
 
+def run_func_with_retry(max_attempts, func, *args, **kwargs):
+    while (max_attempts > 0):
+        try:
+            max_attempts = max_attempts - 1
+            func(*args, **kwargs)
+        except Exception as e:
+            if (max_attempts > 0):
+                error("run_func_with_retry: Caught Exception: {}, max_attempts: {}, Retrying".format(e, max_attempts))
+                traceback.print_exc(file = sys.stdout)
+            else:
+               raise e

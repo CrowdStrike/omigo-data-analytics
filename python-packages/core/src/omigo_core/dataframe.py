@@ -1829,7 +1829,7 @@ class DataFrame:
                         value = value + spaces[0:col_width - len(value)]
 
                 # append
-                row.append(utils.replace_spl_white_spaces_with_space(str(value)))
+                row.append(utils.replace_spl_white_spaces_with_space_noop(str(value)))
 
             # print
             print("\t".join(row))
@@ -2173,10 +2173,6 @@ class DataFrame:
         dmsg = utils.extend_inherit_message(dmsg, "url_decode_inline")
         return self.transform_inline(col_or_cols, lambda x: utils.url_decode(x), ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def url_decode_clean_inline(self, col_or_cols, ignore_if_missing = False, dmsg = ""):
-        dmsg = utils.extend_inherit_message(dmsg, "url_decode_clean_inline")
-        return self.transform_inline(col_or_cols, lambda x: utils.url_decode_clean(x), ignore_if_missing = ignore_if_missing, dmsg = dmsg)
-
     def url_encode(self, col, newcol, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "url_encode")
         return self.transform([col], lambda x: utils.url_encode(x), newcol, dmsg = dmsg)
@@ -2454,7 +2450,7 @@ class DataFrame:
         for h in self.header_fields:
             if (h in mp.keys()):
                 # append the value
-                new_fields.append(utils.replace_spl_white_spaces_with_space(mp[h]))
+                new_fields.append(utils.replace_spl_white_spaces_with_space_noop(mp[h]))
             else:
                 # append default value
                 new_fields.append(default_val)
@@ -4272,7 +4268,7 @@ class DataFrame:
                     dict_results.append(__custom_map_parsing_func__(v, parent_prefix = parent_with_child_key))
                 # for each data type, there is a different kind of handling
                 elif (isinstance(v, (str, int, float))):
-                    # v1 = utils.replace_spl_white_spaces_with_space(v)
+                    # v1 = utils.replace_spl_white_spaces_with_space_noop(v)
                     v1 = v
                     # check if encoding needs to be done
                     if (url_encoded_cols is not None and k in url_encoded_cols):
@@ -4295,7 +4291,7 @@ class DataFrame:
                             # treat primitive lists as single value or as yet another list
                             if (collapse_primitive_list == True):
                                 # do the encoding
-                                # v1 = join_col.join(sorted(list([utils.replace_spl_white_spaces_with_space(t) for t in v])))
+                                # v1 = join_col.join(sorted(list([utils.replace_spl_white_spaces_with_space_noop(t) for t in v])))
                                 v1 = join_col.join(sorted(list([t for t in v])))
                                 if (url_encoded_cols is not None and k in url_encoded_cols):
                                     v1 = utils.url_encode(v1)
@@ -4310,7 +4306,7 @@ class DataFrame:
                                     mp2_new = {}
 
                                     # do the encoding
-                                    # v1 = utils.replace_spl_white_spaces_with_space(vt)
+                                    # v1 = utils.replace_spl_white_spaces_with_space_noop(vt)
                                     v1 = vt
                                     if (url_encoded_cols is not None and k in url_encoded_cols):
                                         v1 = utils.url_encode(v1)
@@ -5361,6 +5357,10 @@ def from_df(df, url_encoded_cols = []):
     # return
     return DataFrame(header_fields, data_fields).validate()
 
+def from_json(json_arr, accepted_cols = None, excluded_cols = None, url_encoded_cols = None, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "from_json")
+    return from_maps(json_arr, accepted_cols = accepted_cols, excluded_cols = excluded_cols, url_encoded_cols = url_encoded_cols, dmsg = dmsg)
+
 def from_maps(mps, accepted_cols = None, excluded_cols = None, url_encoded_cols = None, dmsg = ""):
     dmsg = utils.extend_inherit_message(dmsg, "from_maps")
 
@@ -5380,6 +5380,11 @@ def from_maps(mps, accepted_cols = None, excluded_cols = None, url_encoded_cols 
         .explode_json("json", prefix = "json", accepted_cols = accepted_cols, excluded_cols = excluded_cols, url_encoded_cols = url_encoded_cols, collapse = True, dmsg = dmsg) \
         .remove_prefix("json", dmsg = dmsg) \
         .drop_cols_if_exists(["__json_index__", "__explode_json_index__"], dmsg = dmsg)
+
+    # use the original order of the keys if possible
+    if (len(mps) > 0):
+        effective_keys = list(filter(lambda t: result.has_col(t), mps[0].keys()))
+        result = result.select(effective_keys)
 
     # return
     return result
@@ -5435,7 +5440,8 @@ def from_markdown_table(markdown_text, dmsg = ""):
     dmsg = utils.extend_inherit_message(dmsg, "from_markdown_table")
 
     # parse
-    (header_fields, data_fields) = llm_funcs.from_markdown_table(markdown_text)
+    (header_fields, data_fields) = llm_funcs.from_markdown_table(markdown_text, dmsg = dmsg)
 
     # return
     return new_with_cols(header_fields, data_fields = data_fields)
+

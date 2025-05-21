@@ -612,9 +612,6 @@ class HydraTSV(HydraBaseTSV):
     def url_decode_inline(self, *args, **kwargs):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.url_decode_inline, self.requirements, *args, **kwargs))
 
-    def url_decode_clean_inline(self, *args, **kwargs):
-        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.url_decode_clean_inline, self.requirements, *args, **kwargs))
-
     def url_encode(self, *args, **kwargs):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.url_encode, self.requirements, *args, **kwargs))
 

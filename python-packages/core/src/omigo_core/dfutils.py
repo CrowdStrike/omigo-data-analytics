@@ -192,14 +192,14 @@ def load_from_array_of_map(map_arr):
         mp2 = {}
         for k in mp.keys():
             # for robustness remove any special white space characters
-            k2 = utils.replace_spl_white_spaces_with_space(k)
+            k2 = utils.replace_spl_white_spaces_with_space_noop(k)
             v = mp[k]
 
             # check for the type of value
             if (isinstance(v, (str))):
-                v2 = utils.replace_spl_white_spaces_with_space(v)
+                v2 = utils.replace_spl_white_spaces_with_space_noop(v)
             elif (isinstance(v, (list))):
-                v2 = ",".join(list([utils.replace_spl_white_spaces_with_space(t1) for t1 in v]))
+                v2 = ",".join(list([utils.replace_spl_white_spaces_with_space_noop(t1) for t1 in v]))
             elif (isinstance(v, (dict))):
                 v2 = utils.url_encode(json.dumps(v))
                 k2 = "{}:json_encoded".format(k2)
@@ -238,7 +238,7 @@ def load_from_array_of_map(map_arr):
             v = ""
             if (k in mp.keys()):
                 # read as string and replace any newline or tab characters
-                v = utils.replace_spl_white_spaces_with_space(mp[k])
+                v = utils.replace_spl_white_spaces_with_space_noop(mp[k])
 
             # append
             fields.append(v)

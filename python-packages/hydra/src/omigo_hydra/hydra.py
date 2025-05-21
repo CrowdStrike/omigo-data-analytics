@@ -85,7 +85,7 @@ def __read_inner__(input_file_or_files, sep = None, def_val_map = None, username
             data_fields.append(fields)
 
         # return
-        return dataframe.DataFrame(header_fields, data_fields)
+        return dataframe.new_with_cols(header_fields, data_fields = data_fields)
 
     # create tasks
     for input_file in input_files:
