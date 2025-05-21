@@ -816,14 +816,31 @@ def is_json_encoded_col(col):
     else:
         return False
 
-def run_func_with_retry(max_attempts, func, *args, **kwargs):
-    while (max_attempts > 0):
+def run_return_func_with_retry(retry_attempts, retry_wait_seconds, func, *args, **kwargs):
+    while (retry_attempts > 0):
         try:
-            max_attempts = max_attempts - 1
-            func(*args, **kwargs)
+            return func(*args, **kwargs)
         except Exception as e:
-            if (max_attempts > 0):
-                error("run_func_with_retry: Caught Exception: {}, max_attempts: {}, Retrying".format(e, max_attempts))
+            if (retry_attempts > 0):
+                error("run_return_func_with_retry: Caught Exception: {}, retry_attempts: {}, Retrying after sleeping for {} seconds".format(e,
+                    retry_attempts, retry_wait_seconds))
                 traceback.print_exc(file = sys.stdout)
+                time.sleep(retry_wait_seconds)
+                retry_attempts = retry_attempts - 1
             else:
                raise e
+
+def run_noreturn_func_with_retry(retry_attempts, retry_wait_seconds, func, *args, **kwargs):
+    while (retry_attempts > 0):
+        try:
+            func(*args, **kwargs)
+        except Exception as e:
+            if (retry_attempts > 0):
+                error("run_noreturn_func_with_retry: Caught Exception: {}, retry_attempts: {}, Retrying after sleeping for {} seconds".format(e,
+                    retry_attempts, retry_wait_seconds))
+                traceback.print_exc(file = sys.stdout)
+                time.sleep(retry_wait_seconds)
+                retry_attempts = retry_attempts - 1
+            else:
+               raise e
+

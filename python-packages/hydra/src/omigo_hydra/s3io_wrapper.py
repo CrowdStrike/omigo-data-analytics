@@ -264,6 +264,14 @@ class S3FSWrapper:
         return path[0:index]
 
     def write_text_file(self, path, text):
+        # validation
+        if (text is None):
+            raise Exception("write_text_file: text is None. Returning")
+
+        if (path is None):
+            raise Exception("write_text_file: path is None. Returning")
+
+        # write
         if (self.__is_s3__(path)):
             return self.__s3_write_text_file__(path, text)
         else:
