@@ -3,14 +3,15 @@ from omigo_hydra import s3io_wrapper
 import json
 import time
 import base64
-import traceback
 import sys
+import traceback
 
 # Increment this version to rerun analysis
 RUN_VERSION = "version:v01"
 DEFAULT_WAIT_10SEC = 10
 DEFAULT_WAIT_30SEC = 30
 DEFAULT_WAIT_60SEC = 60
+DEFAULT_RETRY_ATTEMPTS = 3
 
 # Class RunnerBase
 class RunnerBase:
@@ -397,10 +398,11 @@ class ReprocessBatchWorker:
 
 # Class Worker
 class Worker:
-    def __init__(self, base_dir, worker_id, run_job_func = None, wait_sec = DEFAULT_WAIT_30SEC, num_iter = 1000):
+    def __init__(self, base_dir, worker_id, run_job_func = None, retry_attempts = DEFAULT_RETRY_ATTEMPTS, wait_sec = DEFAULT_WAIT_30SEC, num_iter = 1000):
         self.runner_base = RunnerBase(base_dir)
         self.worker_id = worker_id
         self.run_job_func = run_job_func
+        self.retry_attempts = retry_attempts
         self.wait_sec = wait_sec
         self.num_iter = num_iter
 
@@ -413,38 +415,26 @@ class Worker:
             utils.error("Worker is not initialized: {}: {}".format(self.worker_id, self.runner_base.get_worker_dir(self.worker_id)))
             return
 
-        # retry
-        retry_attempts = 3
-
-        # loop
-        while (retry_attempts > 0):
-            # decrement counter
-            retry_attempts = retry_attempts - 1
-
-            # look into assigned jobs directory
-            try:
-                for i in range(self.num_iter):
-                    # check for shutdown mode
-                    if (self.runner_base.is_shutdown_mode() == True):
-                        utils.warn("Worker: shutdown mode detected. Stopping")
-                        return
-
-                    # run
-                    self.run()
-
-                    # sleep
-                    utils.info("Worker: iteration: {}, Sleeping for {} seconds".format(i, self.wait_sec))
-                    time.sleep(self.wait_sec)
-            except Exception as e:
-                utils.error("Worker: run_loop: caught exception or interrupt: {}, retry_attempts: {}".format(e, retry_attempts))
-                traceback.print_exc(file = sys.stdout)
-                if (retry_attempts > 0):
-                    continue
-                else:
-                    return
-            except:
-                utils.error("Worker: run_loop: caught interrupt. Returning")
+        # run iterations
+        for i in range(self.num_iter):
+            # check for shutdown mode
+            if (self.runner_base.is_shutdown_mode() == True):
+                utils.warn("Worker: shutdown mode detected. Stopping")
                 return
+
+            # run
+            try:
+                utils.run_noreturn_func_with_retry(self.retry_attempts, self.wait_sec, self.run)
+            except Exception as  e:
+                utils.warn("Worker: Caught Exception: {}, Ignoring".format(e))
+                traceback.print_exc(file = sys.stdout)
+            except:
+                utils.warn("Worker: Caught Interrupt. Returning")
+                return
+
+            # sleep
+            utils.info("Worker: iteration: {}, Sleeping for {} seconds".format(i, self.wait_sec))
+            time.sleep(self.wait_sec)
 
     def run(self):
         # get job ids

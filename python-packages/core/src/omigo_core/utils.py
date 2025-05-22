@@ -834,6 +834,7 @@ def run_noreturn_func_with_retry(retry_attempts, retry_wait_seconds, func, *args
     while (retry_attempts > 0):
         try:
             func(*args, **kwargs)
+            return
         except Exception as e:
             if (retry_attempts > 0):
                 error("run_noreturn_func_with_retry: Caught Exception: {}, retry_attempts: {}, Retrying after sleeping for {} seconds".format(e,
