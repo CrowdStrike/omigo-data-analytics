@@ -1,5 +1,5 @@
-from omigo_core import tsv, utils
-
+from omigo_core import dataframe, utils
+import hydra
 # ...
 # .select(["k1", "k2", "k3"]) \
 # .topk("args1", "args2", kwarg1 = 100) \
@@ -7,9 +7,9 @@ from omigo_core import tsv, utils
 # .select_group_by_topk(["k1"], ["k2"], 13)
 #
 # .select(["k1", "k2", "k3"]) \
-# .extend_class(CustomBlockTSV).custom_block("block_id1")
+# .extend_class(CustomBlockDF).custom_block("block_id1")
 
-class CustomBlockTSV(tsv.TSV):
+class CustomBlockDF(dataframe.DataFrame):
     OMIGO_CONFIG_RESOLUTION_PROPS = "OMIGO_CONFIG_RESOLUTION_PROPS"
 
     def __init__(self, header, data, base_config = None, config = None):
@@ -33,7 +33,7 @@ class CustomBlockTSV(tsv.TSV):
                 return self
 
         # read the config resolution properties
-        json_obj = json.loads(tsvutils.read_file_contents_as_text(base_config))
+        json_obj = json.loads(hydra.read_file_contents_as_text(base_config))
 
         # read the config resolution class. TODO: reflection
         config_resolver = self.load_custom_config_resolver(json_obj)

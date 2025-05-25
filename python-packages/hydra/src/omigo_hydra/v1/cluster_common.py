@@ -3,7 +3,7 @@ from datetime import timezone
 import json
 import os
 import time
-from omigo_core import tsv, utils, tsvutils, funclib, s3io_wrapper
+from omigo_core import dataframe, utils, funclib, s3io_wrapper
 from omigo_hydra import cluster_data
 from omigo_hydra import cluster_class_reflection
 
@@ -726,11 +726,11 @@ class ClusterManagerJobStatus(cluster_data.JsonSer):
     def new(job_id, status, ts):
         return ClusterManagerJobStatus(job_id, status, ts)
 
-class TSVReference:
-    def __init__(self, xtsv):
+class DataFrameReference:
+    def __init__(self, xdf):
         raise Exception("This class has been moved to cluster_common_v2")
 
-class ClusterTSV:
+class ClusterDF:
     def __init__(self, input_path, output_path, operations):
         self.input_path = input_path
         self.output_path = output_path
@@ -744,30 +744,30 @@ class ClusterTSV:
     def call(self):
         # check if the output already exists. If yes, then return
         if (self.cluster_handler.file_exists(self.output_path)):
-            utils.info("ClusterTSV: output already exists: {}".format(self.output_path))
+            utils.info("ClusterDF: output already exists: {}".format(self.output_path))
             self.status = ClusterJobStatus.COMPLETED
             return
 
         # read data 
-        xtsv = self.cluster_handler.read_tsv(self.input_path)
-        utils.debug("ClusterTSV: call: xtsv: {}".format(xtsv.get_columns()))
+        xdf = self.cluster_handler.read_tsv(self.input_path)
+        utils.debug("ClusterDF: call: xdf: {}".format(xdf.get_columns()))
 
         # move the status to running
         self.status = ClusterJobStatus.RUNNING
 
         # intiialize
-        otsvs = []
+        odfs = []
 
         # TODO: wrap this around in a fake reference file as short term solution
-        if (TSVReference.OMIGO_REFERENCE_PATH not in xtsv.get_columns()):
-            utils.warn("ClusterTSV: temporary work around to read non reference file. Fix this. TODO")
-            xtsv = tsv.new_with_cols([TSVReference.OMIGO_REFERENCE_PATH], data = [self.cluster_handler.get_full_path(self.input_path)])
+        if (DataFrameReference.OMIGO_REFERENCE_PATH not in xdf.get_columns()):
+            utils.warn("ClusterDF: temporary work around to read non reference file. Fix this. TODO")
+            xdf = dataframe.new_with_cols([DataFrameReference.OMIGO_REFERENCE_PATH], data_fields = [[self.cluster_handler.get_full_path(self.input_path)]])
 
         # get all paths
-        for path in xtsv.col_as_array_uniq(TSVReference.OMIGO_REFERENCE_PATH):
+        for path in xdf.col_as_array_uniq(DataFrameReference.OMIGO_REFERENCE_PATH):
             # run through all the operations. the output is initialized with input itself
-            xtsv_output = tsv.read(path)
-            utils.debug("ClusterTSV: call: initial input path: {}, num_rows: {}, num_cols: {}".format(path, xtsv_output.num_rows(), xtsv_output.num_cols()))
+            xdf_output = tsv.read(path)
+            utils.debug("ClusterDF: call: initial input path: {}, num_rows: {}, num_cols: {}".format(path, xdf_output.num_rows(), xdf_output.num_cols()))
 
             # iterate through operations
             for operation in self.operations:
@@ -776,26 +776,26 @@ class ClusterTSV:
                 class_reference = cluster_class_reflection.get_class_that_defined_method(func)
                 args = cluster_data.load_native_objects(operation.args)
                 kwargs = cluster_data.load_native_objects(operation.kwargs) 
-                utils.debug("ClusterTSV: call: custom_func: name: {}, args: {}, kwargs: {}, func: {}".format(operation.name, args, kwargs, func))
+                utils.debug("ClusterDF: call: custom_func: name: {}, args: {}, kwargs: {}, func: {}".format(operation.name, args, kwargs, func))
 
                 # call the function. and set the job status correctly
                 try:
                     # note that custom_func is not called as the context is already in the function.
-                    utils.debug("ClusterTSV: call: function name: {}, args: {}, kwargs: {}".format(func.__name__, args, kwargs))
-                    class_func = getattr(xtsv_output.extend_class(class_reference), func.__name__)
-                    xtsv_output = class_func(*args, **kwargs)
+                    utils.debug("ClusterDF: call: function name: {}, args: {}, kwargs: {}".format(func.__name__, args, kwargs))
+                    class_func = getattr(xdf_output.extend_class(class_reference), func.__name__)
+                    xdf_output = class_func(*args, **kwargs)
                 except Exception as e:
-                    utils.error("ClusterTSV: call: Found error while running the method: {}".format(e))
+                    utils.error("ClusterDF: call: Found error while running the method: {}".format(e))
                     self.status = ClusterJobStatus.FAILED
                     raise e
 
             # append to the list of outputs
-            otsvs.append(xtsv_output)
-            utils.info("ClusterTSV: call: xtsv_output path: {}, num_rows: {}, num_cols: {}".format(path, xtsv_output.num_rows(), xtsv_output.num_cols()))
+            odfs.append(xdf_output)
+            utils.info("ClusterDF: call: xdf_output path: {}, num_rows: {}, num_cols: {}".format(path, xdf_output.num_rows(), xdf_output.num_cols()))
 
         # persist the final output. TODO: Dont know what to do here. Need error handling
-        otsv = tsv.new_with_cols([".omigo.empty"]) if (len(otsvs) == 0) else tsvutils.merge(otsvs, def_val_map = {})
-        self.cluster_handler.write_tsv(self.output_path, otsv)
+        odf = dataframe.new_with_cols([".omigo.empty"]) if (len(odfs) == 0) else dataframe.merge(odfs, def_val_map = {})
+        self.cluster_handler.write_tsv(self.output_path, odf)
         self.status = ClusterJobStatus.COMPLETED
-        utils.info("ClusterTSV: call: Output written to: {}".format(self.output_path))
+        utils.info("ClusterDF: call: Output written to: {}".format(self.output_path))
 

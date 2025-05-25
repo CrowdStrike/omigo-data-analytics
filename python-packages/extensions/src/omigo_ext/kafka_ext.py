@@ -1,4 +1,4 @@
-from omigo_core import tsv
+from omigo_core import dataframe
 from omigo_core import utils
 import random
 import time
@@ -50,12 +50,12 @@ class KafkaClient:
 
         # iterate
         internal_prefix = "__KafkaClient_read__"
-        new_header = internal_prefix
-        new_data = []
+        new_header_fields = [internal_prefix]
+        new_data_fields = []
         for message in self.consumer:
             # apply sampling
             if (sampling_rate > 1 or random.random() <= sampling_rate):  # nosec
-                new_data.append(utils.url_encode(message.value))
+                new_data_fields.append([message.value])
 
             # check if all messages have been received, or time interval has been reached
             if (n > 0 and len(new_data) >= n):
@@ -67,6 +67,6 @@ class KafkaClient:
                 break
 
         # convert json to tsv
-        return tsv.TSV(new_header, new_data) \
+        return dataframe.DataFrame(new_header_fields, new_data_fields) \
             .explode_json(internal_prefix, internal_prefix, excluded_cols = self.excluded_cols, url_encoded_cols = self.url_encoded_cols, nested_cols = self.nested_cols) \
             .remove_prefix(internal_prefix)

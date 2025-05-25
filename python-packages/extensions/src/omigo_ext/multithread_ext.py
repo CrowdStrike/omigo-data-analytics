@@ -1,20 +1,19 @@
 # package for doing multi threading on specific apis
 
 from concurrent.futures import ThreadPoolExecutor
-from omigo_core import tsv
-from omigo_core import tsvutils
+from omigo_core import dataframe 
 from omigo_core import utils
 
 import math
 import time
 
-class MultiThreadTSV(tsv.TSV):
-    def __init__(self, header, data, num_par = 0, status_check_interval_sec = 10, sleep_interval_sec = 0.11, num_batches = 10, dmsg = ""):
-        super().__init__(header, data)
+class MultiThreadDF(dataframe.DataFrame):
+    def __init__(self, header_fields, data_fields, num_par = 0, status_check_interval_sec = 10, sleep_interval_sec = 0.11, num_batches = 10, dmsg = ""):
+        super().__init__(header_fields, data_fields)
         self.num_par = num_par
         self.status_check_interval_sec = status_check_interval_sec
         self.sleep_interval_sec = sleep_interval_sec
-        self.dmsg = utils.extend_inherit_message(dmsg, "MultiThreadTSV")
+        self.dmsg = utils.extend_inherit_message(dmsg, "MultiThreadDF")
 
         # check if num_par is more than number of rows
         if (self.num_rows() < self.num_par):
@@ -77,7 +76,7 @@ class MultiThreadTSV(tsv.TSV):
             # combine the results
             results = []
             for f in future_results:
-                utils.trace("MultiThreadTSV: parallelize: xtsv num_rows: {}".format(f.result().num_rows()))
+                utils.trace("MultiThreadDF: parallelize: xdf num_rows: {}".format(f.result().num_rows()))
                 results.append(f.result())
 
             # merge the tsvs using a common union.
@@ -89,6 +88,6 @@ class MultiThreadTSV(tsv.TSV):
         utils.debug("{}: parallelize: time taken: {} sec, num_rows: {}".format(self.dmsg, int(ts_end - ts_start), combined_result.num_rows()))
         return combined_result
 
-def __parallelize__(xtsv, func, *args, **kwargs):
-    return func(xtsv, *args, **kwargs)
+def __parallelize__(xdf, func, *args, **kwargs):
+    return func(xdf, *args, **kwargs)
 

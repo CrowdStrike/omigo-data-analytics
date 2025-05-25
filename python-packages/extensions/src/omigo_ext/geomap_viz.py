@@ -1,4 +1,4 @@
-from omigo_core import tsv, utils
+from omigo_core import dataframe, utils
 
 import pandas as pd
 from bokeh.io import output_notebook, show
@@ -9,9 +9,9 @@ from bokeh.models import ColorBar, NumeralTickFormatter, MultiLine, Div, Circle
 from bokeh.models import ColumnDataSource
 
 # Define class
-class GeoMapTSV(tsv.TSV):
-    def __init__(self, header, data):
-        super().__init__(header, data)
+class GeoMapDF(dataframe.DataFrame):
+    def __init__(self, header_fields, data_fields):
+        super().__init__(header_fields, data_fields)
 
     # helper method to map lat long to mercators
     def __x_coord__(self, x, y):
@@ -26,7 +26,7 @@ class GeoMapTSV(tsv.TSV):
 
     # TODO: this api can change to abstract the bokeh library
     def geomap_plot(self, lat_col, lon_col, display_cols_mp = {}, width = 1200, height = 430, use_fixed_layout = True, dmsg = ""):
-        dmsg = utils.extend_inherit_message(dmsg, "GeoMapTSV: geomap_plot")
+        dmsg = utils.extend_inherit_message(dmsg, "GeoMapDF: geomap_plot")
 
         # prefix
         prefix = "__geomap__"

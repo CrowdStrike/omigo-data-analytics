@@ -1,4 +1,4 @@
-from omigo_core import tsv, utils
+from omigo_core import dataframe, utils
 import json
 
 class HadoopSqlBase:
@@ -6,7 +6,7 @@ class HadoopSqlBase:
         pass
 
     def execute_query(self, columns = ["*"], table = None, where_clause = "", group_by_cols = None, having_clause = "",
-        order_by_cols = None, sort_order = None, distinct_flag = None, limit = None, url_encoded_cols = None, map_cols = None):
+        order_by_cols = None, sort_order = None, distinct_flag = None, limit = None, map_cols = None):
 
         # warn
         utils.warn_once("HadoopSqlBase: execute_query: this is provided as reference implementation and should be used carefully in prod to avoid issues with sql")
@@ -47,18 +47,11 @@ class HadoopSqlBase:
             effective_columns.append(col)
 
         # use empty arrays as defaults
-        if (url_encoded_cols is None):
-            url_encoded_cols = []
         if (map_cols is None):
             map_cols = []
 
-        # do a lowercase on url_encoded_cols
+        # do a lowercase on mapcols
         map_cols = list([v.lower() for v in map_cols])
-
-        # ensure that map_cols is part of url_encoded_cols
-        for col in map_cols:
-            if (col not in url_encoded_cols):
-                utils.warn("map col is not in url_encoded_cols: {}. Adding".format(col))
 
         # base query
         if (distinct_flag is None or distinct_flag == False):
@@ -99,7 +92,6 @@ class HadoopSqlBase:
 
         # create the column aliases
         output_cols = []
-        url_encoded_cols_indexes = {}
         map_cols_indexes = {}
 
         # iterate
@@ -111,11 +103,6 @@ class HadoopSqlBase:
             if (c.lower() in map_cols):
                 map_cols_indexes[i] = 1
 
-            # check for url encoding
-            if (c in url_encoded_cols):
-                c = "{}:url_encoded".format(c)
-                url_encoded_cols_indexes[i] = 1
-
             # add column
             output_cols.append(c)
 
@@ -123,7 +110,7 @@ class HadoopSqlBase:
         utils.info("HadoopSqlBase: execute_query: num rows: {}".format(len(result_rows)))
 
         # create data
-        data = []
+        data_fields = []
         for row in result_rows:
             # create result
             result_row = []
@@ -142,26 +129,22 @@ class HadoopSqlBase:
                     value = json.dumps(value)
 
                 # replace any Ctrl-M characters
-                value = "{}".format(value).replace("\t", " ").replace("\v", " ").replace("\r", " ").replace("\n", " ")
-
-                # check if value needs to be url encoded
-                if (i in url_encoded_cols_indexes.keys() or i in map_cols_indexes.keys()):
-                    value = utils.url_encode(value)
+                # value = "{}".format(value).replace("\t", " ").replace("\v", " ").replace("\r", " ").replace("\n", " ")
 
                 # append to result
                 result_row.append(value)
 
             # TODO: there can be tabs in the data that can affect serialization
-            cols_str = ["{}".format(t) for t in result_row]
-            data.append("\t".join(cols_str))
+            # cols_str = ["{}".format(t) for t in result_row]
+            data_fields.append(result_row)
 
         # create tsv. Do a validation as this is an external source
-        xtsv = tsv \
-            .new_with_cols(output_cols, data = data) \
+        xdf = dataframe \
+            .new_with_cols(output_cols, data_fields = data_fields) \
             .validate()
 
         # return
-        return xtsv
+        return xdf
 
     def execute_query_in_engine(self, query):
         raise Exception("HadoopSqlBase: execute_query: derived class must implement this method")

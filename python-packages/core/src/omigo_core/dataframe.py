@@ -1829,7 +1829,7 @@ class DataFrame:
                         value = value + spaces[0:col_width - len(value)]
 
                 # append
-                row.append(utils.replace_spl_white_spaces_with_space_noop(str(value)))
+                row.append(utils.replace_spl_white_spaces_with_space(str(value)))
 
             # print
             print("\t".join(row))

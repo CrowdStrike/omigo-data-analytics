@@ -1,4 +1,4 @@
-from omigo_core import tsv
+from omigo_core import dataframe
 from omigo_core import utils
 import graphviz
 
@@ -39,10 +39,6 @@ def __get_graphviz_data__(vertex_map, edges_maps, node_props, edge_props, vertex
         # set the display id
         vertex_id_val = str(mp[vertex_id_col])
         vertex_display_id_val = str(mp[vertex_display_id_col])
-
-        # TODO: temporary workaround to handle multi line display
-        if (vertex_display_id_col.endswith(":url_encoded")):
-            vertex_display_id_val = utils.url_decode(vertex_display_id_val)
 
         # sometimes the value is empty. fallback to id
         if (vertex_display_id_val == ""):
@@ -141,7 +137,7 @@ def __get_graphviz_data__(vertex_map, edges_maps, node_props, edge_props, vertex
     # return
     return digraph_str
 
-def get_graphviz_data(vtsv, etsv, vertex_id_col, src_edge_col, dest_edge_col, vertex_display_id_col = None, node_props = None, edge_props = None, style_func = None,
+def get_graphviz_data(vdf, edf, vertex_id_col, src_edge_col, dest_edge_col, vertex_display_id_col = None, node_props = None, edge_props = None, style_func = None,
     max_len = None, create_missing_vertices = False, display_vertex_keys = None, display_edge_keys = None):
 
     # default for vertex display
@@ -149,15 +145,15 @@ def get_graphviz_data(vtsv, etsv, vertex_id_col, src_edge_col, dest_edge_col, ve
         vertex_display_id_col = vertex_id_col
 
     # do some validation on vertices and edges
-    vertex_ids = set(vtsv.col_as_array_uniq(vertex_id_col))
-    src_edge_ids = set(etsv.col_as_array_uniq(src_edge_col))
-    dest_edge_ids = set(etsv.col_as_array_uniq(dest_edge_col))
+    vertex_ids = set(vdf.col_as_array_uniq(vertex_id_col))
+    src_edge_ids = set(edf.col_as_array_uniq(src_edge_col))
+    dest_edge_ids = set(edf.col_as_array_uniq(dest_edge_col))
     edge_ids = src_edge_ids.union(dest_edge_ids)
 
-    # the vertex tsv must be distinct
-    if (len(vertex_ids) != vtsv.num_rows()):
-        utils.warn("Vertex TSV is not unique")
-        vtsv \
+    # the vertex df must be distinct
+    if (len(vertex_ids) != vdf.num_rows()):
+        utils.warn("Vertex DataFrame is not unique")
+        vdf \
             .group_count(vertex_id_col, "group") \
             .gt_int("group:count", 1) \
             .reverse_numerical_sort("group:count") \
@@ -178,32 +174,32 @@ def get_graphviz_data(vtsv, etsv, vertex_id_col, src_edge_col, dest_edge_col, ve
     # check if need to create proxy vertices for which there are edges but no vertex properties
     if (len(missing_edge_ids) > 0):
         if (create_missing_vertices == True):
-            mtsv = tsv.TSV(vertex_id_col, [str(t) for t in missing_edge_ids])
+            mdf = dataframe.DataFrame(vertex_id_col, [str(t) for t in missing_edge_ids])
             utils.info("Creating a fallback vertex map with the vertex id")
-            vtsv = tsv.merge([vtsv, mtsv], def_val_map = {})
+            vdf = dataframe.merge([vdf, mdf], def_val_map = {})
         else:
-           etsv = etsv \
+           edf = edf \
                .values_not_in(src_edge_col, missing_edge_ids) \
                .values_not_in(dest_edge_col, missing_edge_ids)
 
     # create map holding vertex_id and its properties
     vertex_map = {}
-    for mp in vtsv.to_maps():
+    for mp in vdf.to_maps():
         vertex_map[mp[vertex_id_col]] = mp
 
     # create edges map
     edges_maps = {}
-    for mp in etsv.to_maps():
+    for mp in edf.to_maps():
         edges_maps[(mp[src_edge_col], mp[dest_edge_col])] = mp
 
     # get the graphviz output
     return __get_graphviz_data__(vertex_map, edges_maps, node_props, edge_props, vertex_id_col, src_edge_col, dest_edge_col, vertex_display_id_col, style_func, max_len,
         display_vertex_keys, display_edge_keys)
 
-def plot_graph(vtsv, etsv, vertex_id_col, src_edge_col, dest_edge_col, vertex_display_id_col = None, node_props = None, edge_props = None, style_func = None,
+def plot_graph(vdf, edf, vertex_id_col, src_edge_col, dest_edge_col, vertex_display_id_col = None, node_props = None, edge_props = None, style_func = None,
     max_len = None, create_missing_vertices = False, display_vertex_keys = None, display_edge_keys = None):
 
-    digraph_str = get_graphviz_data(vtsv, etsv, vertex_id_col, src_edge_col, dest_edge_col, vertex_display_id_col = vertex_display_id_col, node_props = node_props,
+    digraph_str = get_graphviz_data(vdf, edf, vertex_id_col, src_edge_col, dest_edge_col, vertex_display_id_col = vertex_display_id_col, node_props = node_props,
         edge_props = edge_props, style_func = style_func, max_len = max_len, create_missing_vertices = create_missing_vertices, display_vertex_keys = display_vertex_keys,
         display_edge_keys = display_edge_keys)
 

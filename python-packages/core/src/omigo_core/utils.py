@@ -34,7 +34,7 @@ OMIGO_WARN_ONCE_ONLY = "OMIGO_WARN_ONCE_ONLY"
 OMIGO_DEBUG_REPORT_PROGRESS_PERC = "OMIGO_DEBUG_REPORT_PROGRESS_PERC"
 OMIGO_DEBUG_REPORT_PROGRESS_MIN_THRESH = "OMIGO_DEBUG_REPORT_PROGRESS_MIN_THRESH"
 OMIGO_CODE_TODO_WARNING = "OMIGO_CODE_TODO_WARNING"
-OMIGO_BIG_TSV_WARN_SIZE_THRESH = "OMIGO_BIG_TSV_WARN_SIZE_THRESH"
+OMIGO_BIG_DF_WARN_SIZE_THRESH = "OMIGO_BIG_DF_WARN_SIZE_THRESH"
 OMIGO_RATE_LIMIT_N_WARNINGS = "OMIGO_RATE_LIMIT_N_WARNINGS"
 OMIGO_NOOP_N_WARNINGS = "OMIGO_NOOP_N_WARNINGS"
 
@@ -72,10 +72,10 @@ def set_report_progress_min_thresh(thresh):
     os.environ[OMIGO_DEBUG_REPORT_PROGRESS_MIN_THRESH] = str(thresh)
 
 def get_big_tsv_warn_size_thresh():
-    return float(os.environ.get(OMIGO_BIG_TSV_WARN_SIZE_THRESH, "1000000000"))
+    return float(os.environ.get(OMIGO_BIG_DF_WARN_SIZE_THRESH, "1000000000"))
 
 def set_big_tsv_warn_size_thresh(thresh):
-    os.environ[OMIGO_BIG_TSV_WARN_SIZE_THRESH] = str(thresh)
+    os.environ[OMIGO_BIG_DF_WARN_SIZE_THRESH] = str(thresh)
 
 def trace(msg):
     if (is_trace()):
@@ -509,8 +509,6 @@ def replace_tab_with_space(v):
     return str(v).replace("\t", " ")
 
 def replace_spl_white_spaces_with_space(v):
-    utils.warn_once("replace_spl_white_spaces_with_space is Deprecated")
-
     # check None
     if (v is None):
         return None

@@ -1,4 +1,4 @@
-from omigo_core import tsv, utils, timefuncs, dataframe
+from omigo_core import dataframe, utils, timefuncs, dataframe
 from omigo_ext import multithread_ext
 import datetime
 from dateutil import parser
@@ -45,7 +45,7 @@ class LogScaleSearch:
         # create client once
         return HumioClient(base_url = self.base_url, repository = self.repository, user_token = self.user_token)
 
-    def call_search(self, query, start_time, end_time = None, accepted_cols = None, excluded_cols = None, url_encoded_cols = None, limit = None, num_par_on_limit = 0, dmsg = ""):
+    def call_search(self, query, start_time, end_time = None, accepted_cols = None, excluded_cols = None, limit = None, num_par_on_limit = 0, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "LogScaleSearch: call_search")
 
         # set default
@@ -65,7 +65,7 @@ class LogScaleSearch:
 
         # execute
         return self.__execute_query__(query, start_time_millis, end_time_millis, self.attempts, accepted_cols = accepted_cols, excluded_cols = excluded_cols,
-            url_encoded_cols = url_encoded_cols, limit = limit, num_par_on_limit = num_par_on_limit, dmsg = dmsg)
+            limit = limit, num_par_on_limit = num_par_on_limit, dmsg = dmsg)
 
     # get splunk job id for display
     def __get_logscale_job_display_id__(self, logscale_job):
@@ -76,11 +76,11 @@ class LogScaleSearch:
 
     # inner method for calling query
     def __execute_query__(self, query, start_time_millis, end_time_millis, attempts_remaining, accepted_cols = None, excluded_cols = None,
-        url_encoded_cols = None, limit = None, num_par_on_limit = 0, dmsg = ""):
+        limit = None, num_par_on_limit = 0, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "LogScaleSearch: __execute_query__")
 
         # call and return
-        return self.__execute_normal_query__(query, start_time_millis, end_time_millis, accepted_cols, excluded_cols, url_encoded_cols, attempts_remaining,
+        return self.__execute_normal_query__(query, start_time_millis, end_time_millis, accepted_cols, excluded_cols, attempts_remaining,
             limit, num_par_on_limit, dmsg = dmsg)
 
     def __split_time_slots_millis__(self, st_millis, et_millis, num_splits):
@@ -97,7 +97,7 @@ class LogScaleSearch:
         # return
         return slots
 
-    def __execute_normal_query__(self, query, start_time_millis, end_time_millis, accepted_cols, excluded_cols, url_encoded_cols, attempts_remaining, limit, num_par_on_limit, dmsg = ""):
+    def __execute_normal_query__(self, query, start_time_millis, end_time_millis, accepted_cols, excluded_cols, attempts_remaining, limit, num_par_on_limit, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "LogScaleSearch: __execute_normal_query__")
 
         # execute query
@@ -150,27 +150,27 @@ class LogScaleSearch:
 
                     # split the time range into num_par_on_limit slots
                     time_slots = self.__split_time_slots_millis__(start_time_millis, end_time_millis, num_par_on_limit)
-                    xtsv_results = []
+                    xdf_results = []
 
                     # iterate
                     for (st, et) in time_slots:
-                        xtsv_result = self.__execute_normal_query__(query, st, et, accepted_cols, excluded_cols, url_encoded_cols, attempts_remaining,
+                        xdf_result = self.__execute_normal_query__(query, st, et, accepted_cols, excluded_cols, attempts_remaining,
                             limit2, num_par_on_limit2, dmsg = dmsg)
-                        utils.info("{}: Executed query with new time range: start_time: {}, end_time: {}, num_rows: {}".format(dmsg, st, et, xtsv_result.num_rows()))
+                        utils.info("{}: Executed query with new time range: start_time: {}, end_time: {}, num_rows: {}".format(dmsg, st, et, xdf_result.num_rows()))
                         # check if results are still exceeding limit
-                        if (xtsv_result.num_rows() >= limit):
-                            utils.warn("{}: Split results still exceeded the limit. The results will be partial: {}".format(dmsg, xtsv_result.num_rows()))
-                        xtsv_results.append(xtsv_result)
+                        if (xdf_result.num_rows() >= limit):
+                            utils.warn("{}: Split results still exceeded the limit. The results will be partial: {}".format(dmsg, xdf_result.num_rows()))
+                        xdf_results.append(xdf_result)
 
                     # merge
-                    result = tsv.merge_union(xtsv_results)
+                    result = dataframe.merge_union(xdf_results)
                 else:
                     utils.warn("{}: limit: {} reached, but num_par_on_limit = 0. Results would be partial".format(dmsg, results_total))
 
         # get the result if they were not returned by limit calls
         if (result is None):
             # get the results
-            result = self.__parse_results__(logscale_job, events, query, start_time_millis, end_time_millis, accepted_cols, excluded_cols, url_encoded_cols)
+            result = self.__parse_results__(logscale_job, events, query, start_time_millis, end_time_millis, accepted_cols, excluded_cols)
 
         # cancel the job
         # logscale_job.cancel()
@@ -196,7 +196,7 @@ class LogScaleSearch:
         #             time.sleep(self.attempt_sleep_sec)
 
         #         # return
-        #         return self.__execute_normal_query__(query, start_time_millis, end_time_millis, accepted_cols, excluded_cols, url_encoded_cols, attempts_remaining - 1, limit,
+        #         return self.__execute_normal_query__(query, start_time_millis, end_time_millis, accepted_cols, excluded_cols, attempts_remaining - 1, limit,
         #             num_par_on_limit, dmsg = dmsg)
         #     else:
         #         utils.error("{}: Exception: {}".format(utils.max_dmsg_str(dmsg), str(e)))
@@ -216,7 +216,7 @@ class LogScaleSearch:
         return {"__start_time__": start_time_millis, "__end_time__": end_time_millis, "__error_msg__": "", "__count__": "" }
 
     # splunk returns lot of things. One of them is tag::eventtype which is excluded
-    def __parse_results__(self, logscale_job, events, query, start_time_millis, end_time_millis, accepted_cols, excluded_cols, url_encoded_cols):
+    def __parse_results__(self, logscale_job, events, query, start_time_millis, end_time_millis, accepted_cols, excluded_cols):
         # create base map
         base_mp = self.__create_empty_results_map__(query, start_time_millis, end_time_millis)
 
@@ -229,7 +229,7 @@ class LogScaleSearch:
 
         # check for empty results
         if (results_total == 0):
-            # return base tsv
+            # return base dataframe
             return dataframe.from_maps([base_mp])
 
         # define iterator variables
@@ -269,8 +269,8 @@ class LogScaleSearch:
             # append to array
             results.append(result)
 
-        # construct tsv from the list of hashmaps
-        return dataframe.from_maps(results, accepted_cols = accepted_cols, excluded_cols = excluded_cols, url_encoded_cols = url_encoded_cols)
+        # construct dataframe from the list of hashmaps
+        return dataframe.from_maps(results, accepted_cols = accepted_cols, excluded_cols = excluded_cols)
 
     def __resolve_time_str__(self, x):
         # check for specific syntax with now
@@ -311,8 +311,8 @@ class LogScaleSearch:
         else:
             return timefuncs.utctimestamp_to_datetime_str(timefuncs.datetime_to_utctimestamp_sec(x))
 
-# class to do data manipulation on TSV
-class LogScaleTSV(tsv.TSV):
+# class to do data manipulation on DataFrame
+class LogScaleDF(dataframe.DataFrame):
     def __init__(self, header, data, logscale_client = None, base_url = None, repository = None, user_token = None, timeout_sec = 600, wait_sec = 10, attempts = 3,
         num_par = 0, attempt_sleep_sec = 30):
         super().__init__(header, data)
@@ -331,26 +331,26 @@ class LogScaleTSV(tsv.TSV):
         self.num_par = num_par
         self.attempt_sleep_sec = attempt_sleep_sec
 
-    def get_events(self, query_filter, start_ts_col, end_ts_col, prefix, url_encoded_cols = None, limit = None, num_par_on_limit = 0, dmsg = ""):
-        dmsg = utils.extend_inherit_message(dmsg, "LogScaleTSV: get_events")
+    def get_events(self, query_filter, start_ts_col, end_ts_col, prefix, limit = None, num_par_on_limit = 0, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "LogScaleDF: get_events")
 
         # create args and kwargs for multithreaded functional call
         args = (query_filter, start_ts_col, end_ts_col, prefix)
-        kwargs = dict(url_encoded_cols = url_encoded_cols, limit = limit, num_par_on_limit = num_par_on_limit, dmsg = dmsg)
+        kwargs = dict(limit = limit, num_par_on_limit = num_par_on_limit, dmsg = dmsg)
 
         # return
         return self \
-            .extend_class(multithread_ext.MultiThreadTSV, num_par = self.num_par) \
+            .extend_class(multithread_ext.MultiThreadDF, num_par = self.num_par) \
                 .parallelize(__get_events_par__, self.logscale_client, *args, **kwargs)
 
-    def get_events_parsed(self, query, start_ts_col, end_ts_col, prefix, url_encoded_cols = None, limit = None, num_par_on_limit = 0, dmsg = ""):
-        dmsg = utils.extend_inherit_message(dmsg, "LogScaleTSV: get_events_parsed")
+    def get_events_parsed(self, query, start_ts_col, end_ts_col, prefix, limit = None, num_par_on_limit = 0, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "LogScaleDF: get_events_parsed")
         return self \
-            .get_events(query, start_ts_col, end_ts_col, prefix, url_encoded_cols = url_encoded_cols, limit = limit, num_par_on_limit = num_par_on_limit, dmsg = dmsg) \
+            .get_events(query, start_ts_col, end_ts_col, prefix, limit = limit, num_par_on_limit = num_par_on_limit, dmsg = dmsg) \
             .add_empty_cols_if_missing("{}:json_encoded".format(prefix), dmsg = dmsg) \
-            .explode_json("{}:json_encoded".format(prefix), prefix = prefix, url_encoded_cols = url_encoded_cols, dmsg = dmsg)
+            .explode_json("{}:json_encoded".format(prefix), prefix = prefix, dmsg = dmsg)
 
-def __get_events_par__(xtsv, xtsv_logscale_search, query_filter, start_ts_col, end_ts_col, prefix, url_encoded_cols = None, limit = None, num_par_on_limit = 0, dmsg = ""):
+def __get_events_par__(xdf, xdf_logscale_search, query_filter, start_ts_col, end_ts_col, prefix, limit = None, num_par_on_limit = 0, dmsg = ""):
     dmsg = utils.extend_inherit_message(dmsg, "__get_events_par__")
 
     def __get_events_explode__(mp):
@@ -360,14 +360,14 @@ def __get_events_par__(xtsv, xtsv_logscale_search, query_filter, start_ts_col, e
 
         # resolve query_filter
         query_filter_resolved = query_filter
-        for c in xtsv.get_header_fields():
+        for c in xdf.get_header_fields():
             cstr = "{" + c + "}"
             # replace if exists
             if (query_filter_resolved.find(cstr) != -1):
                 query_filter_resolved = query_filter_resolved.replace(cstr, mp[c])
 
         # return
-        mps = xtsv_logscale_search.call_search(query_filter_resolved, start_time, end_time = end_time, url_encoded_cols = url_encoded_cols,
+        mps = xdf_logscale_search.call_search(query_filter_resolved, start_time, end_time = end_time,
             limit = limit, num_par_on_limit = num_par_on_limit, dmsg = dmsg).to_maps()
         json_mps = []
         for mp in mps:
@@ -387,7 +387,7 @@ def __get_events_par__(xtsv, xtsv_logscale_search, query_filter, start_ts_col, e
                     fields_mp[k] = str(value2)
 
             # add the blob of the event
-            json_mp["json_encoded"] = utils.url_encode(json.dumps(fields_mp))
+            json_mp["json_encoded"] = json.dumps(fields_mp)
 
             # append
             json_mps.append(json_mp)
@@ -401,13 +401,13 @@ def __get_events_par__(xtsv, xtsv_logscale_search, query_filter, start_ts_col, e
 
     # find which all columns are part of query_filter
     sel_cols = [start_ts_col, end_ts_col]
-    for c in xtsv.get_header_fields():
+    for c in xdf.get_header_fields():
             cstr = "{" + c + "}"
             # replace if exists
             if (query_filter.find(cstr) != -1 and c not in sel_cols):
                 sel_cols.append(c)
 
     # return
-    return xtsv \
+    return xdf \
         .explode(sel_cols, __get_events_explode__, prefix, collapse = False, default_val = "", dmsg = dmsg)
 

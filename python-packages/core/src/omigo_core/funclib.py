@@ -1,4 +1,4 @@
-"""library of function to be used in general purpose data processing for TSV class"""
+"""library of function to be used in general purpose data processing for DataFrame class"""
 
 import statistics
 import numpy as np

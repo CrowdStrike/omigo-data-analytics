@@ -1,4 +1,4 @@
-from omigo_core import tsv, utils
+from omigo_core import dataframe, utils
 from omigo_ext import sql_helper
 import os
 
@@ -42,21 +42,16 @@ class SparkClient(sql_helper.HadoopSqlBase):
     # Override
     def execute_query_in_engine(self, query):
         # Execute the query
-        df = self.sql_context.sql(query)
+        pandas_df = self.sql_context.sql(query)
 
         # convert to tsv
-        xtsv = tsv.from_df(df.toPandas())
-
-        # split the columns and data
-        new_data = []
-        for line in xtsv.get_data():
-            new_data.append(line.split("\t"))
+        xdf = dataframe.from_df(pandas_df.toPandas())
 
         # call stop
         self.__stop__()
 
         # return
-        return xtsv.get_columns(), new_data
+        return xtsv.get_columns(), xdf.get_data_fields() 
 
     # stop
     def __stop__(self):

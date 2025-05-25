@@ -1,35 +1,35 @@
 # package to do web service REST calls in an efficient way
-from omigo_core import tsv
-from omigo_core import tsvutils
+from omigo_core import dataframe 
 from omigo_core import utils
 from omigo_ext import multithread_ext
 
 # TODO: selective_execution doesnt feel like a good design pattern.
-class WebServiceTSV(tsv.TSV):
-    def __init__(self, header, data, num_par = 0, timeout_sec = 5, num_batches = 10, status_check_interval_sec = 10, verify = True, enable_opt_exec = True, dmsg = ""):
-        super().__init__(header, data)
+class WebServiceDF(dataframe.DataFrame):
+    def __init__(self, header_fields, data_fields, num_par = 0, timeout_sec = 5, num_batches = 10, status_check_interval_sec = 10, verify = True, enable_opt_exec = True, dmsg = ""):
+        super().__init__(header_fields, data_fields)
         self.num_par = num_par
         self.timeout_sec = timeout_sec
         self.num_batches = num_batches
         self.status_check_interval_sec = status_check_interval_sec
         self.verify = verify
         self.enable_opt_exec = enable_opt_exec
-        self.dmsg = utils.extend_inherit_message(dmsg, "WebServiceTSV")
+        self.dmsg = utils.extend_inherit_message(dmsg, "WebServiceDF")
 
     def call_web_service(self, *args, **kwargs):
         # get response
-        xtsv = self \
-            .extend_class(multithread_ext.MultiThreadTSV, num_par = self.num_par, num_batches = self.num_batches, status_check_interval_sec = self.status_check_interval_sec, dmsg = self.dmsg) \
+        xdf = self \
+            .extend_class(multithread_ext.MultiThreadDF, num_par = self.num_par, num_batches = self.num_batches,
+                status_check_interval_sec = self.status_check_interval_sec, dmsg = self.dmsg) \
             .parallelize(__call_web_service__, self.timeout_sec, self.verify, self.enable_opt_exec, self.dmsg, *args, **kwargs)
 
         # trace
-        utils.trace("{}: num_rows: {}, size in bytes (MB): {}".format(self.dmsg, xtsv.num_rows(), xtsv.size_in_gb()))
+        utils.trace("{}: num_rows: {}, size in bytes (MB): {}".format(self.dmsg, xdf.num_rows(), xdf.size_in_gb()))
 
         # return
-        return xtsv
+        return xdf
 
 # call web service function.
-def __call_web_service__(xtsv, xtsv_timeout_sec, xtsv_verify, xtsv_enable_opt_exec, xtsv_dmsg, url, prefix, query_params = None, header_params = None,
+def __call_web_service__(xdf, xdf_timeout_sec, xdf_verify, xdf_enable_opt_exec, xdf_dmsg, url, prefix, query_params = None, header_params = None,
     body_params = None, username = None, password = None, include_resolved_values = False, selective_execution_func = None):
 
     # initialize variables
@@ -46,11 +46,8 @@ def __call_web_service__(xtsv, xtsv_timeout_sec, xtsv_verify, xtsv_enable_opt_ex
     body_params_cols = []
     all_sel_cols = []
 
-    # debug
-    # utils.trace("__call_web_service__: url: {}, query_params: {}, header_params: {}, body_params: {}".format(url, query_params, header_params, body_params))
-
     # iterate over all the columns and find where all they exist
-    for c in xtsv.get_header_fields():
+    for c in xdf.get_header_fields():
         cstr = "{" + c + "}"
         # check url
         if (url.find(cstr) != -1 and c not in url_cols):
@@ -87,42 +84,42 @@ def __call_web_service__(xtsv, xtsv_timeout_sec, xtsv_verify, xtsv_enable_opt_ex
     all_sel_cols = list(set(all_sel_cols))
 
     # print
-    utils.trace("{}: call_web_service: url: {}, query_params: {}".format(xtsv_dmsg, str(url), str(query_params)))
-    utils.trace("{}: call_web_service: url_cols: {}, query_params_cols: {}, header_params_cols: {}, body_params_cols: {}".format(xtsv_dmsg, str(url_cols), str(query_params_cols),
+    utils.trace("{}: call_web_service: url: {}, query_params: {}".format(xdf_dmsg, str(url), str(query_params)))
+    utils.trace("{}: call_web_service: url_cols: {}, query_params_cols: {}, header_params_cols: {}, body_params_cols: {}".format(xdf_dmsg, str(url_cols), str(query_params_cols),
         str(header_params_cols), str(body_params_cols)))
 
     # use the same dmsg
-    xtsv_dmsg = xtsv_dmsg + ": call_web_service" if (xtsv_dmsg != "") else "call_web_service"
+    xdf_dmsg = xdf_dmsg + ": call_web_service" if (xdf_dmsg != "") else "call_web_service"
 
     # take only distinct all_sel_cols
-    hash_tsv = xtsv \
-        .select(all_sel_cols, dmsg = xtsv_dmsg) \
+    hash_df = xdf \
+        .select(all_sel_cols, dmsg = xdf_dmsg) \
         .distinct()
 
     # if the number of rows are different, print some stats
-    if (hash_tsv.num_rows() < xtsv.num_rows()):
-        utils.debug("{}: call_web_service: Number of rows: {}, Number of distinct rows for web service: {}, enable_opt_exec: {}".format(xtsv_dmsg,
-            xtsv.num_rows(), hash_tsv.num_rows(), xtsv_enable_opt_exec))
+    if (hash_df.num_rows() < xdf.num_rows()):
+        utils.debug("{}: call_web_service: Number of rows: {}, Number of distinct rows for web service: {}, enable_opt_exec: {}".format(xdf_dmsg,
+            xdf.num_rows(), hash_df.num_rows(), xdf_enable_opt_exec))
 
     # avoid making duplicate calls to the web service by hashing the all_sel_cols
-    if (xtsv_enable_opt_exec == True):
+    if (xdf_enable_opt_exec == True):
         # optimize the calls
-        hash_explode_tsv = hash_tsv \
-            .explode(all_sel_cols, __call_web_service_exp_func__(xtsv_timeout_sec, xtsv_verify, url, query_params, header_params, body_params, username, password, url_cols,
+        hash_explode_df = hash_df \
+            .explode(all_sel_cols, __call_web_service_exp_func__(xdf_timeout_sec, xdf_verify, url, query_params, header_params, body_params, username, password, url_cols,
                 query_params_cols, header_params_cols, body_params_cols, include_resolved_values, selective_execution_func),
-                prefix = prefix, collapse = False, dmsg = xtsv_dmsg)
+                prefix = prefix, collapse = False, dmsg = xdf_dmsg)
 
         # merge the results back to the original using map_join
-        return xtsv.natural_join(hash_explode_tsv, dmsg = xtsv_dmsg)
+        return xdf.natural_join(hash_explode_df, dmsg = xdf_dmsg)
     else:
         # run transforms multiple times to generate resolved state of each variable
-        return xtsv \
-            .explode(all_sel_cols, __call_web_service_exp_func__(xtsv_timeout_sec, xtsv_verify, url, query_params, header_params, body_params, username, password, url_cols,
+        return xdf \
+            .explode(all_sel_cols, __call_web_service_exp_func__(xdf_timeout_sec, xdf_verify, url, query_params, header_params, body_params, username, password, url_cols,
                 query_params_cols, header_params_cols, body_params_cols, include_resolved_values, selective_execution_func),
-                prefix = prefix, collapse = False, dmsg = xtsv_dmsg)
+                prefix = prefix, collapse = False, dmsg = xdf_dmsg)
 
 # the explode func for web service
-def __call_web_service_exp_func__(xtsv_timeout_sec, xtsv_verify, url, query_params, header_params, body_params, username, password, url_cols, query_params_cols,
+def __call_web_service_exp_func__(xdf_timeout_sec, xdf_verify, url, query_params, header_params, body_params, username, password, url_cols, query_params_cols,
     header_params_cols, body_params_cols, include_resolved_values, selective_execution_func):
 
     def __call_web_service_exp_func_inner__(mp):
@@ -188,7 +185,7 @@ def __call_web_service_exp_func__(xtsv_timeout_sec, xtsv_verify, url, query_para
         if (do_execute == True):
             # call web service. TODO: Need HTTP Response codes for better error handling, back pressure etc
             resp_str, resp_status_code, resp_err = tsvutils.read_url_response(url_resolved, query_params_resolved, header_params_resolved, body = body_params_resolved,
-                username = username, password = password, timeout_sec = xtsv_timeout_sec, verify = xtsv_verify)
+                username = username, password = password, timeout_sec = xdf_timeout_sec, verify = xdf_verify)
             result_mp["response:success"] = "1" if (str(resp_status_code).startswith("2")) else "0"
             result_mp["response:selective_execution"] = "1"
 
@@ -202,7 +199,7 @@ def __call_web_service_exp_func__(xtsv_timeout_sec, xtsv_verify, url, query_para
             result_mp["response:selective_execution"] = "0"
 
         # fill rest of the result map.
-        result_mp["response:url_encoded"] = str(utils.url_encode(resp_str))
+        result_mp["response"] = str(resp_str)
         result_mp["response:status_code"] = str(resp_status_code)
         result_mp["response:error"] = str(resp_err)
 

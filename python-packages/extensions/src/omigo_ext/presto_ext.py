@@ -1,10 +1,9 @@
 import prestodb
 import os
-from omigo_core import tsv
 from omigo_core import utils
 from omigo_ext import sql_helper
 
-# TODO: this needs to be moved to an inner class. the public class needs to return a TSV object
+# TODO: this needs to be moved to an inner class. the public class needs to return a DataFrame object
 class PrestoClient(sql_helper.HadoopSqlBase):
     def __init__(self, host = "127.0.0.1", port = 8889, user = None, catalog = "iceberg", schema = "default"):
         if (host is None):

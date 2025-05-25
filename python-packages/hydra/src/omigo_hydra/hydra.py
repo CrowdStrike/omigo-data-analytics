@@ -30,7 +30,7 @@ def write_text_file(path, text, s3_region = None, aws_profile = None):
 def check_exists(path, s3_region = None, aws_profile = None):
     return file_paths_util.check_exists(path, s3_region, aws_profile)
 
-def read(path_or_paths, sep = None, do_union = False, def_val_map = None, username = None, password = None, num_par = 0, s3_region = None, aws_profile = None):
+def read(path_or_paths, sep = None, do_union = False, def_val_map = None, username = None, password = None, num_par = 0, wait_sec = 0.2, s3_region = None, aws_profile = None):
     # resolve single or multiple paths
     paths = utils.get_argument_as_array(path_or_paths)
 
@@ -40,17 +40,17 @@ def read(path_or_paths, sep = None, do_union = False, def_val_map = None, userna
 
     # check if union needs to be done. default is intersect
     if (do_union == False):
-        return __read_inner__(paths, sep = sep, username = username, password = password, num_par = num_par)
+        return __read_inner__(paths, sep = sep, username = username, password = password, num_par = num_par, wait_sec = wait_sec)
     else:
         # check if default values are checked explicitly
         if (def_val_map is None):
             def_val_map = {}
 
         # return
-        return __read_inner__(paths, sep = sep, def_val_map = {}, username = username, password = password, num_par = num_par, s3_region = s3_region, aws_profile = aws_profile)
+        return __read_inner__(paths, sep = sep, def_val_map = {}, username = username, password = password, num_par = num_par, wait_sec = wait_sec, s3_region = s3_region, aws_profile = aws_profile)
 
 # migrated
-def __read_inner__(input_file_or_files, sep = None, def_val_map = None, username = None, password = None, num_par = 0, s3_region = None, aws_profile = None):
+def __read_inner__(input_file_or_files, sep = None, def_val_map = None, username = None, password = None, num_par = 0, wait_sec = 0.2, s3_region = None, aws_profile = None):
     # convert the input to array
     input_files = utils.get_argument_as_array(input_file_or_files)
 
@@ -97,7 +97,7 @@ def __read_inner__(input_file_or_files, sep = None, def_val_map = None, username
         tasks.append(utils.ThreadPoolTask(__read_inner__, input_file))
 
     # get result
-    df_list = utils.run_with_thread_pool(tasks, num_par = num_par, wait_sec = 1)
+    df_list = utils.run_with_thread_pool(tasks, num_par = num_par, wait_sec = wait_sec)
 
     # merge and return
     return dfutils.merge(df_list, def_val_map = def_val_map)

@@ -1,6 +1,5 @@
 from omigo_core import utils
-from omigo_core import tsv
-from omigo_core import tsvutils
+from omigo_core import dataframe
 from omigo_core import timefuncs
 from omigo_ext import multithread_ext
 import datetime
@@ -137,7 +136,7 @@ class SplunkSearch:
         query = self.__get_filter_query__()
         return self.__execute_query__(query, self.start_time, self.end_time, self.cols, self.attempts, include_internal_fields = include_internal_fields)
 
-    def call_search(self, query, start_time, end_time = None, url_encoded_cols = None, include_internal_fields = False, limit = None, num_par_on_limit = 0, dmsg = ""):
+    def call_search(self, query, start_time, end_time = None, include_internal_fields = False, limit = None, num_par_on_limit = 0, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "SplunkSearch: call_search")
 
         # warn
@@ -157,7 +156,7 @@ class SplunkSearch:
         end_time = self.__resolve_time_str__(end_time)
 
         # execute
-        return self.__execute_query__(query, start_time, end_time, self.attempts, exec_mode = "normal", url_encoded_cols = url_encoded_cols,
+        return self.__execute_query__(query, start_time, end_time, self.attempts, exec_mode = "normal",
             include_internal_fields = include_internal_fields, limit = limit, num_par_on_limit = num_par_on_limit, dmsg = dmsg)
 
     # get splunk job id for display
@@ -168,15 +167,15 @@ class SplunkSearch:
             return ""
 
     # inner method for calling query
-    def __execute_query__(self, query, start_time, end_time, attempts_remaining, exec_mode = "normal", url_encoded_cols = None, include_internal_fields = False,
+    def __execute_query__(self, query, start_time, end_time, attempts_remaining, exec_mode = "normal", include_internal_fields = False,
         limit = None, num_par_on_limit = 0, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "SplunkSearch: __execute_query__")
 
         # check for blocking or non-blocking execution
         if (exec_mode == "normal"):
-            return self.__execute_normal_query__(query, start_time, end_time, url_encoded_cols, attempts_remaining, include_internal_fields, limit, num_par_on_limit, dmsg = dmsg)
+            return self.__execute_normal_query__(query, start_time, end_time, attempts_remaining, include_internal_fields, limit, num_par_on_limit, dmsg = dmsg)
         else:
-            return self.__execute_blocking_query__(query, start_time, end_time, url_encoded_cols, attempts_remaining, include_internal_fields, limit, num_par_on_limit, dmsg = dmsg)
+            return self.__execute_blocking_query__(query, start_time, end_time, attempts_remaining, include_internal_fields, limit, num_par_on_limit, dmsg = dmsg)
 
     def __split_time_slots__(self, st, et, num_splits):
         start_ts = timefuncs.datetime_to_utctimestamp_sec(st)
@@ -198,7 +197,7 @@ class SplunkSearch:
         # return
         return slots
 
-    def __execute_normal_query__(self, query, start_time, end_time, url_encoded_cols, attempts_remaining, include_internal_fields, limit, num_par_on_limit, dmsg = ""):
+    def __execute_normal_query__(self, query, start_time, end_time, attempts_remaining, include_internal_fields, limit, num_par_on_limit, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "SplunkSearch: __execute_normal_query__")
 
         # set default parameters
@@ -288,27 +287,27 @@ class SplunkSearch:
 
                         # split the time range into num_par_on_limit slots
                         time_slots = self.__split_time_slots__(start_time, end_time, num_par_on_limit)
-                        xtsv_results = []
+                        xdf_results = []
 
                         # iterate
                         for (st, et) in time_slots:
-                            xtsv_result = self.__execute_normal_query__(query, st, et, url_encoded_cols, attempts_remaining, include_internal_fields,
+                            xdf_result = self.__execute_normal_query__(query, st, et, attempts_remaining, include_internal_fields,
                                 limit2, num_par_on_limit2, dmsg = dmsg)
-                            utils.info("{}: Executed query with new time range: start_time: {}, end_time: {}, num_rows: {}".format(dmsg, st, et, xtsv_result.num_rows()))
+                            utils.info("{}: Executed query with new time range: start_time: {}, end_time: {}, num_rows: {}".format(dmsg, st, et, xdf_result.num_rows()))
                             # check if results are still exceeding limit
-                            if (xtsv_result.num_rows() >= limit):
-                                utils.warn("{}: Split results still exceeded the limit. The results will be partial: {}".format(dmsg, xtsv_result.num_rows()))
-                            xtsv_results.append(xtsv_result)
+                            if (xdf_result.num_rows() >= limit):
+                                utils.warn("{}: Split results still exceeded the limit. The results will be partial: {}".format(dmsg, xdf_result.num_rows()))
+                            xdf_results.append(xdf_result)
 
                         # merge
-                        result = tsv.merge_union(xtsv_results)
+                        result = tsv.merge_union(xdf_results)
                     else:
                         utils.warn("{}: limit: {} reached, but num_par_on_limit = 0. Results would be partial".format(dmsg, results_total))
 
             # get the result if they were not returned by limit calls
             if (result is None):
                 # get the results
-                result = self.__parse_results__(splunk_job, query, start_time, end_time, url_encoded_cols, include_internal_fields)
+                result = self.__parse_results__(splunk_job, query, start_time, end_time, include_internal_fields)
 
             # cache the results if needed
             if (self.enable_cache == True):
@@ -338,7 +337,7 @@ class SplunkSearch:
                     time.sleep(self.attempt_sleep_sec)
 
                 # return
-                return self.__execute_normal_query__(query, start_time, end_time, url_encoded_cols, attempts_remaining - 1, include_internal_fields, limit,
+                return self.__execute_normal_query__(query, start_time, end_time, attempts_remaining - 1, include_internal_fields, limit,
                     num_par_on_limit, dmsg = dmsg)
             else:
                 utils.error("{}: Exception: {}".format(utils.max_dmsg_str(dmsg), str(e)))
@@ -357,7 +356,7 @@ class SplunkSearch:
                 # return
                 return result
 
-    def __execute_blocking_query__(self, query, start_time, end_time, url_encoded_cols, attempts_remaining, include_internal_fields, limit, num_par_on_limit, dmsg = ""):
+    def __execute_blocking_query__(self, query, start_time, end_time, attempts_remaining, include_internal_fields, limit, num_par_on_limit, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "SplunkSearch: __execute_blocking_query__")
 
         # set default parameters
@@ -379,7 +378,7 @@ class SplunkSearch:
         # execute query
         try:
             splunk_job = self.get_splunk_service().jobs.create(query, **search_kwargs)
-            result = self.__parse_results__(splunk_job, query, start_time, end_time, url_encoded_cols, include_internal_fields)
+            result = self.__parse_results__(splunk_job, query, start_time, end_time, include_internal_fields)
             if (self.enable_cache == True):
                 self.cache[cache_key] = result
             # cancel the job
@@ -400,7 +399,7 @@ class SplunkSearch:
                     time.sleep(self.attempt_sleep_sec)
 
                 # call again with lesser attempts_remaining
-                return self.__execute_blocking_query__(query, start_time, end_time, url_encoded_cols, attempts_remaining - 1, include_internal_fields, limit, num_par_on_limit)
+                return self.__execute_blocking_query__(query, start_time, end_time, attempts_remaining - 1, include_internal_fields, limit, num_par_on_limit)
             else:
                 # error
                 utils.error(str(e))
@@ -419,7 +418,7 @@ class SplunkSearch:
         return {"__start_time__": start_time, "__end_time__": end_time, "__error_msg__": "", "__count__": "" }
 
     # splunk returns lot of things. One of them is tag::eventtype which is excluded
-    def __parse_results__(self, splunk_job, query, start_time, end_time, url_encoded_cols, include_internal_fields):
+    def __parse_results__(self, splunk_job, query, start_time, end_time, include_internal_fields):
         # create base map
         base_mp = self.__create_empty_results_map__(query, start_time, end_time)
 
@@ -517,11 +516,6 @@ class SplunkSearch:
                 key2 = k
                 value2 = result[k]
 
-                # check if the key-values are to be url encoded
-                if (url_encoded_cols is not None and key2 in url_encoded_cols):
-                    key2 = "{}:url_encoded".format(key2)
-                    value2 = utils.url_encode(value2)
-
                 # assign to new map
                 result2[key2] = utils.replace_spl_white_spaces_with_space_noop(str(value2))
 
@@ -570,11 +564,11 @@ class SplunkSearch:
         else:
             return timefuncs.utctimestamp_to_datetime_str(timefuncs.datetime_to_utctimestamp_sec(x))
 
-# class to do data manipulation on TSV
-class SplunkTSV(tsv.TSV):
-    def __init__(self, header, data, splunk_search = None, host = None, app = None, username = None, password = None, cookie = None, timeout_sec = 600, wait_sec = 10, attempts = 3,
+# class to do data manipulation on DataFrame
+class SplunkDF(tsv.DataFrame):
+    def __init__(self, header_fields, data_fields, splunk_search = None, host = None, app = None, username = None, password = None, cookie = None, timeout_sec = 600, wait_sec = 10, attempts = 3,
         enable_cache = False, use_partial_results = False, num_par = 0, attempt_sleep_sec = 30, attempt_gateway_timeout_sleep_sec = 120):
-        super().__init__(header, data)
+        super().__init__(header_fields, data_fields)
 
         # check if new splunk search instance is needed
         if (splunk_search is None):
@@ -596,27 +590,27 @@ class SplunkTSV(tsv.TSV):
         self.attempt_sleep_sec = attempt_sleep_sec
         self.attempt_gateway_timeout_sleep_sec = attempt_gateway_timeout_sleep_sec
 
-    def get_events(self, query_filter, start_ts_col, end_ts_col, prefix, url_encoded_cols = None, include_internal_fields = False, limit = None, num_par_on_limit = 0, dmsg = ""):
-        dmsg = utils.extend_inherit_message(dmsg, "SplunkTSV: get_events")
+    def get_events(self, query_filter, start_ts_col, end_ts_col, prefix, include_internal_fields = False, limit = None, num_par_on_limit = 0, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "SplunkDF: get_events")
 
         # create args and kwargs for multithreaded functional call
         args = (query_filter, start_ts_col, end_ts_col, prefix)
-        kwargs = dict(url_encoded_cols = url_encoded_cols, include_internal_fields = include_internal_fields, limit = limit, num_par_on_limit = num_par_on_limit, dmsg = dmsg)
+        kwargs = dict(include_internal_fields = include_internal_fields, limit = limit, num_par_on_limit = num_par_on_limit, dmsg = dmsg)
 
         # return
         return self \
-            .extend_class(multithread_ext.MultiThreadTSV, num_par = self.num_par) \
+            .extend_class(multithread_ext.MultiThreadDF, num_par = self.num_par) \
                 .parallelize(__get_events_par__, self.splunk_search, *args, **kwargs)
 
-    def get_events_parsed(self, query, start_ts_col, end_ts_col, prefix, url_encoded_cols = None, include_internal_fields = False, limit = None, num_par_on_limit = 0, dmsg = ""):
-        dmsg = utils.extend_inherit_message(dmsg, "SplunkTSV: get_events_parsed")
+    def get_events_parsed(self, query, start_ts_col, end_ts_col, prefix, include_internal_fields = False, limit = None, num_par_on_limit = 0, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "SplunkDF: get_events_parsed")
         return self \
-            .get_events(query, start_ts_col, end_ts_col, prefix, url_encoded_cols = url_encoded_cols, include_internal_fields = include_internal_fields,
+            .get_events(query, start_ts_col, end_ts_col, prefix, include_internal_fields = include_internal_fields,
                 limit = limit, num_par_on_limit = num_par_on_limit, dmsg = dmsg) \
             .add_empty_cols_if_missing("{}:json_encoded".format(prefix), dmsg = dmsg) \
-            .explode_json("{}:json_encoded".format(prefix), prefix = prefix, url_encoded_cols = url_encoded_cols, dmsg = dmsg)
+            .explode_json("{}:json_encoded".format(prefix), prefix = prefix, dmsg = dmsg)
 
-def __get_events_par__(xtsv, xtsv_splunk_search, query_filter, start_ts_col, end_ts_col, prefix, url_encoded_cols = None, include_internal_fields = False,
+def __get_events_par__(xdf, xdf_splunk_search, query_filter, start_ts_col, end_ts_col, prefix, include_internal_fields = False,
     limit = None, num_par_on_limit = 0, dmsg = ""):
 
     dmsg = utils.extend_inherit_message(dmsg, "__get_events_par__")
@@ -628,14 +622,14 @@ def __get_events_par__(xtsv, xtsv_splunk_search, query_filter, start_ts_col, end
 
         # resolve query_filter
         query_filter_resolved = query_filter
-        for c in xtsv.get_header_fields():
+        for c in xdf.get_header_fields():
             cstr = "{" + c + "}"
             # replace if exists
             if (query_filter_resolved.find(cstr) != -1):
                 query_filter_resolved = query_filter_resolved.replace(cstr, mp[c])
 
         # return
-        mps = xtsv_splunk_search.call_search(query_filter_resolved, start_time, end_time = end_time, url_encoded_cols = url_encoded_cols,
+        mps = xdf_splunk_search.call_search(query_filter_resolved, start_time, end_time = end_time,
             include_internal_fields = include_internal_fields, limit = limit, num_par_on_limit = num_par_on_limit, dmsg = dmsg).to_maps()
         json_mps = []
         for mp in mps:
@@ -655,7 +649,7 @@ def __get_events_par__(xtsv, xtsv_splunk_search, query_filter, start_ts_col, end
                     fields_mp[k] = str(value2)
 
             # add the blob of the event
-            json_mp["json_encoded"] = utils.url_encode(json.dumps(fields_mp))
+            json_mp["json_encoded"] = json.dumps(fields_mp)
 
             # append
             json_mps.append(json_mp)
@@ -669,13 +663,13 @@ def __get_events_par__(xtsv, xtsv_splunk_search, query_filter, start_ts_col, end
 
     # find which all columns are part of query_filter
     sel_cols = [start_ts_col, end_ts_col]
-    for c in xtsv.get_header_fields():
+    for c in xdf.get_header_fields():
             cstr = "{" + c + "}"
             # replace if exists
             if (query_filter.find(cstr) != -1 and c not in sel_cols):
                 sel_cols.append(c)
 
     # return
-    return xtsv \
+    return xdf \
         .explode(sel_cols, __get_events_explode__, prefix, collapse = False, default_val = "", dmsg = dmsg)
 

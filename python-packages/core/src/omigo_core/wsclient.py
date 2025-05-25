@@ -240,7 +240,7 @@ def read_url_as_df(url, query_params = {}, headers = {}, sep = None, username = 
     if (sep is not None and sep != "\t"):
         # do a better version of separator detection
         if ("\t" in response_str):
-            utils.warn("Non TSV input file has tabs. Converting tabs to spaces")
+            utils.warn("Non DF input file has tabs. Converting tabs to spaces")
             header = header.replace("\t", " ")
             data = [x.replace("\t", " ") for x in data]
 
