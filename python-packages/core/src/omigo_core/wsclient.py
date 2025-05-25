@@ -1,7 +1,7 @@
 import urllib
 import json
 import requests
-from omigo_core import dataframe, utils
+from omigo_core import dataframe, dfutils, utils
 
 # https://stackoverflow.com/questions/29931671/making-an-api-call-in-python-with-an-api-that-requires-a-bearer-token
 class BearerAuth(requests.auth.AuthBase):
@@ -93,7 +93,7 @@ def read_url_json(url, query_params = {}, headers = {}, body = None, username = 
     utils.warn("read_url_json will flatten json that comes out as list. This api is still under development")
 
     # read response
-    response_str, status_code, error_msg = read_url_response(url, query_params, headers, body = body, username = username, password = password, api_token = api_token,
+    response_str, status_code, error_msg = dfutils.read_url_response(url, query_params, headers, body = body, username = username, password = password, api_token = api_token,
         timeout_sec = timeout_sec, verify = verify, method = method)
 
     # construct header

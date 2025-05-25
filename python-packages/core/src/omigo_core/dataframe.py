@@ -4785,7 +4785,7 @@ class DataFrame:
 
     # calls class that inherits TSV
     def extend_class(self, newclass, *args, **kwargs):
-        return newclass(self.header, self.data, *args, **kwargs)
+        return newclass(self.get_header_fields(), self.get_data_fields(), *args, **kwargs)
 
     # calls class that inherits TSV. TODO: forgot the purpose
     def extend_external_class(self, newclass, *args, **kwargs):
