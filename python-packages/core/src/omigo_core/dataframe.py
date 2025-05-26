@@ -664,8 +664,9 @@ class DataFrame:
         # transform and normalize the value of win_col
         suffix2 = suffix if (suffix != "") else "window_aggregate"
         new_win_col = win_col + ":" + suffix2
-        new_header = self.header + "\t" + new_win_col
+        new_header_fields = self.get_header_fields() + [new_win_col]
 
+        # new data fields
         new_data_fields = []
 
         # iterate over data
@@ -3773,13 +3774,13 @@ class DataFrame:
             # generate left side key and values
             lvals1 = list([fields[i] for i in lkey_indexes])
             lvals2 = list([fields[i] for i in lvalue_indexes])
-            lvkey = "\t".join(utils.replace_spl_white_spaces_with_space(lvals1))
+            lvkey_str = "\t".join(lvals1)
 
             # get ride side values
             rvals2_arr = [default_rvals]
             keys_matched = 0
-            if (lvkey in rvkeys.keys()):
-                  rvals2_arr = rvkeys[lvkey]
+            if (lvkey_str in rvkeys.keys()):
+                  rvals2_arr = rvkeys[lvkey_str]
                   keys_matched = 1
 
             # iterate on the right side
@@ -3796,9 +3797,7 @@ class DataFrame:
                 else:
                     raise Exception("Unknown join type: {} ".format(join_type))
 
-        # create tsv
-        utils.info("new_header_fields: {}".format(new_header_fields))
-        utils.info("new_data_fields: {}".format(new_data_fields))
+        # create df 
         result = new_df(new_header_fields, new_data_fields)
 
         # create the rkeys columns that had different names
