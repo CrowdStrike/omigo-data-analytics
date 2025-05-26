@@ -152,7 +152,7 @@ class DataFrame:
             new_data_fields.append(new_fields)
 
         # return
-        return new_with_cols(new_header_fields, data_fields = new_data_fields)
+        return new_df(new_header_fields, new_data_fields)
 
     def select(self, col_or_cols, dmsg = ""):
         return self.__select_inner__(col_or_cols, exclude_flag = False, dmsg = dmsg)
@@ -209,7 +209,7 @@ class DataFrame:
                 new_data_fields.append(fields)
 
         # create a new dataframe
-        return new_with_cols(self.get_columns(), data_fields = new_data_fields)
+        return new_df(self.get_columns(), new_data_fields)
 
     def select_rows_and_cols_with_cond_exists(self, func, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "select_rows_and_cols_with_cond_exists")
@@ -433,7 +433,7 @@ class DataFrame:
         return self.skip(count)
 
     def skip_rows(self, count):
-        return new_with_cols(self.get_header_fields(), data_fields = self.get_data_fields()[count:])
+        return new_df(self.get_header_fields(), self.get_data_fields()[count:])
 
     def last(self, count):
         # check boundary conditions
@@ -3773,7 +3773,7 @@ class DataFrame:
             # generate left side key and values
             lvals1 = list([fields[i] for i in lkey_indexes])
             lvals2 = list([fields[i] for i in lvalue_indexes])
-            lvkey = "\t".join(lvals1)
+            lvkey = "\t".join(utils.replace_spl_white_spaces_with_space(lvals1))
 
             # get ride side values
             rvals2_arr = [default_rvals]
@@ -3785,7 +3785,7 @@ class DataFrame:
             # iterate on the right side
             for rvals2 in rvals2_arr:
                 # construct the new line
-                new_fields = utils.merge_arrays([[lvkey], lvals2, rvals2, [str(keys_matched)]])
+                new_fields = utils.merge_arrays([[lvals1], lvals2, rvals2, [str(keys_matched)]])
 
                 # take care of different join types
                 if (join_type == "inner"):
@@ -3963,7 +3963,7 @@ class DataFrame:
                 values.append(str(fields[i]))
 
             # generate a single value
-            value_str = "\t".join(values)
+            value_str = "\t".join(utils.replace_spl_white_spaces_with_space(values))
 
             # apply hash
             hash_value = str(utils.compute_hash(value_str, seed = seed))
@@ -4172,7 +4172,7 @@ class DataFrame:
         utils.warn_once("{}: calling validate here".format(dmsg))
 
         # result. json expansion needs to be validated because of potential noise in the data.
-        return new_with_cols(new_header_fields, data_fields = new_data_fields) \
+        return new_df(new_header_fields, new_data_fields) \
             .validate()
 
     def __explode_json_transform_func__(self, col, accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None, merge_list_method = None,
@@ -4626,7 +4626,7 @@ class DataFrame:
             prefix = col
 
         # result
-        result = from_df(df) \
+        result = from_pandas_df(df) \
             .add_prefix(prefix, dmsg = dmsg) \
             .show_transpose(3, title = "result")
 
@@ -4659,7 +4659,7 @@ class DataFrame:
             new_data_fields.append(new_fields)
 
         # return
-        return new_with_cols(new_header_fields, data_fields = new_data_fields)
+        return new_df(new_header_fields, new_data_fields)
 
     # this method converts the rows into columns. very inefficient
     def reverse_transpose(self, grouping_cols, transpose_key, transpose_cols, default_val = ""):
@@ -4716,7 +4716,7 @@ class DataFrame:
                 new_data_fields.append(fields + [new_val])
 
         # return
-        return new_with_cols(new_header_fields, data_fields = new_data_fields)
+        return new_df(new_header_fields, new_data_fields)
 
     def to_tuples(self, cols, dmsg = ""):
         # check empty
@@ -5315,9 +5315,14 @@ def merge_intersect(xdfs):
 
 # convert from data frame. TODO: df can have multiple header lines coz of indexes
 # TODO: take care of map data type
-def from_df(df, url_encoded_cols = []):
-    utils.warn_once("from_df() api doesnt support reading indexed columns in pandas dataframes yet.")
-    utils.warn_once("from_df() api doesnt handle map data type properly")
+
+def from_df(df):
+    utils.warn_once("from_df: Deprecated. Use from_pandas_df instead")
+    return from_pandas_df(df)
+
+def from_pandas_df(df):
+    utils.warn_once("from_pandas_df() api doesnt support reading indexed columns in pandas dataframes yet.")
+    utils.warn_once("from_pandas_df() api doesnt handle map data type properly")
 
     # create header
     header_fields = df.columns
@@ -5334,13 +5339,13 @@ def from_df(df, url_encoded_cols = []):
     # populate data
     tsv_lines = []
     for i in range(len(df)):
-        line = "\t".join(list([cols_array[j][i] for j in range(len(df.columns))]))
+        line = "\t".join(list([utils.replace_tab_with_space(cols_array[j][i]) for j in range(len(df.columns))]))
         tsv_lines.append(line)
         print(line)
 
 
     # number of columns to skip with empty column name
-    utils.warn_once("from_df: this skip count logic is hacky")
+    utils.warn_once("from_pandas_df: this skip count logic is hacky")
     skip_count = 0
     for h in header_fields:
         if (h == ""):
@@ -5357,7 +5362,7 @@ def from_df(df, url_encoded_cols = []):
             data_fields.append(fields)
 
     # return
-    return new_with_cols(header_fields, data_fields = data_fields).validate()
+    return new_df(header_fields, data_fields).validate()
 
 def from_json(json_arr, accepted_cols = None, excluded_cols = None, url_encoded_cols = None, dmsg = ""):
     dmsg = utils.extend_inherit_message(dmsg, "from_json")
@@ -5375,7 +5380,7 @@ def from_maps(mps, accepted_cols = None, excluded_cols = None, url_encoded_cols 
     for mp in mps:
         header_fields = ["json"]
         fields = [utils.url_encode(json.dumps(mp))]
-        xdfs.append(new_with_cols(header_fields, data_fields = [fields]))
+        xdfs.append(new_df(header_fields, [fields]))
 
     # use explode
     result = merge_union(xdfs) \
@@ -5402,12 +5407,12 @@ def from_tsv(xtsv):
         data_fields = list([list(t.split("\t")) for t in xtsv.get_data()])
 
     # return
-    return new_with_cols(header_fields, data_fields = data_fields)
+    return new_df(header_fields, data_fields)
 
 def from_header_data(header, data):
     header_fields = header.split("\t")
     data_fields = list([t.split("\t") for t in data])
-    return new_with_cols(header_fields, data = data_fields)
+    return new_df(header_fields, data_fields)
 
 def enable_debug_mode():
     utils.enable_debug_mode()
@@ -5423,7 +5428,7 @@ def set_report_progress_min_thresh(thresh):
 
 def from_tsv_new_with_cols(header_fields, data = []):
     data_fields = list([t.split("\t") for t in data])
-    return new_with_cols(header_fields, data_fields = data_fields)
+    return new_df(header_fields, data_fields)
 
 def new_df(header_fields, data_fields):
     return DataFrame(header_fields, data_fields)
@@ -5448,5 +5453,5 @@ def from_markdown_table(markdown_text, dmsg = ""):
     (header_fields, data_fields) = llm_funcs.from_markdown_table(markdown_text, dmsg = dmsg)
 
     # return
-    return new_with_cols(header_fields, data_fields = data_fields)
+    return new_df(header_fields, data_fields)
 
