@@ -12,7 +12,7 @@ from kafka import KafkaConsumer
 # Work In Progress
 class KafkaClient:
     # constructor. group_id is created uniquely if not specified.
-    def __init__(self, topic, bootstrap_servers, group_id, auto_offset_reset = "latest", value_deserializer = None, excluded_cols = None, url_encoded_cols = None,
+    def __init__(self, topic, bootstrap_servers, group_id, auto_offset_reset = "latest", value_deserializer = None, excluded_cols = None,
         nested_cols = None):
 
         # check for value_deserializer
@@ -30,7 +30,6 @@ class KafkaClient:
 
         # json parsing need some tuning parameters
         self.excluded_cols = excluded_cols
-        self.url_encoded_cols = url_encoded_cols
         self.nested_cols = nested_cols
 
         # utils.warn("This KafkaConsumer is Work in Progress.")
@@ -48,10 +47,12 @@ class KafkaClient:
         # initialize start time. this will need better implementation to prevent infinite waiting. TODO
         ts_start = time.time()
 
-        # iterate
+        # create header and data fields
         internal_prefix = "__KafkaClient_read__"
         new_header_fields = [internal_prefix]
         new_data_fields = []
+
+        # iterate
         for message in self.consumer:
             # apply sampling
             if (sampling_rate > 1 or random.random() <= sampling_rate):  # nosec
@@ -68,5 +69,5 @@ class KafkaClient:
 
         # convert json to tsv
         return dataframe.DataFrame(new_header_fields, new_data_fields) \
-            .explode_json(internal_prefix, internal_prefix, excluded_cols = self.excluded_cols, url_encoded_cols = self.url_encoded_cols, nested_cols = self.nested_cols) \
+            .explode_json(internal_prefix, internal_prefix, excluded_cols = self.excluded_cols, nested_cols = self.nested_cols) \
             .remove_prefix(internal_prefix)
