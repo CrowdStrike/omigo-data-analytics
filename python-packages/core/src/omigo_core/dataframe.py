@@ -66,7 +66,7 @@ class DataFrame:
 
     # debugging
     def to_string(self):
-        return "Header: {}, Data: {}".format(str(self.header_fields), str(len(self.data_fields)))
+        return "Header: {}, Data: {}".format(str(self.get_header_fields()), str(len(self.get_data_fields())))
 
     def get_content_as_string(self, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "get_content_as_string")
@@ -81,10 +81,10 @@ class DataFrame:
         dmsg = utils.extend_inherit_message(dmsg, "get_content_as_string")
 
         # url encode each field and serialize
-        header_str = list([utils.url_encode(t) for t in self.header_fields])
+        header_str = list([utils.url_encode(t) for t in self.get_header_fields()])
 
         # return
-        return "\n".join([header_str, "\n".join(list(["\t".join(utils.url_encode(t)) for t in self.data_fields]))])
+        return "\n".join([header_str, "\n".join(list(["\t".join(utils.url_encode(t)) for t in self.get_data_fields()]))])
 
     # check data format
     def validate(self, dmsg = ""):
@@ -92,11 +92,11 @@ class DataFrame:
 
         # data validation
         counter = 0
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             counter = counter + 1
-            if (len(fields) != len(self.header_fields)):
+            if (len(fields) != len(self.get_header_fields())):
                 raise Exception("Header length is not matching with data length. position: {}, len(header): {}, header: {}, len(fields): {}, fields: {}".format(
-                    counter, len(self.header_fields), self.header_fields, len(fields), str(fields)))
+                    counter, len(self.get_header_fields()), self.get_header_fields(), len(fields), str(fields)))
 
         # return
         return self
@@ -125,13 +125,13 @@ class DataFrame:
         matching_cols = self.__get_matching_cols__(col_or_cols)
 
         # create new header
-        new_header_fields = matching_cols if (exclude_flag == False) else list(filter(lambda t: t not in matching_cols, self.header_fields))
+        new_header_fields = matching_cols if (exclude_flag == False) else list(filter(lambda t: t not in matching_cols, self.get_header_fields()))
         indexes = self.__get_col_indexes__(new_header_fields)
 
         # create new data
         counter = 0
         new_data_fields = []
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             # report progress
             counter = counter + 1
             utils.report_progress("select: [1/1] selecting columns", dmsg, counter, self.num_rows())
@@ -142,8 +142,8 @@ class DataFrame:
             # validation
             for i in indexes:
                 if (i >= len(fields)):
-                    raise Exception("Invalid index: col_or_cols: {}, new_header_fields: {}, indexes: {}, line: {}, fields: {}, len(fields): {}, len(self.header_fields): {}, self.get_header_map(): {}".format(
-                        col_or_cols, new_header_fields, indexes, line, fields, len(fields), len(self.header_fields), self.header_map))
+                    raise Exception("Invalid index: col_or_cols: {}, new_header_fields: {}, indexes: {}, line: {}, fields: {}, len(fields): {}, len(self.get_header_fields()): {}, self.get_header_map(): {}".format(
+                        col_or_cols, new_header_fields, indexes, line, fields, len(fields), len(self.get_header_fields()), self.header_map))
 
                 # append to new_fields
                 new_fields.append(fields[i])
@@ -152,7 +152,7 @@ class DataFrame:
             new_data_fields.append(new_fields)
 
         # return
-        return DataFrame(new_header_fields, new_data_fields)
+        return new_with_cols(new_header_fields, data_fields = new_data_fields)
 
     def select(self, col_or_cols, dmsg = ""):
         return self.__select_inner__(col_or_cols, exclude_flag = False, dmsg = dmsg)
@@ -433,7 +433,7 @@ class DataFrame:
         return self.skip(count)
 
     def skip_rows(self, count):
-        return DataFrame(self.header_fields, self.data_fields[count:])
+        return new_with_cols(self.get_header_fields(), data_fields = self.get_data_fields()[count:])
 
     def last(self, count):
         # check boundary conditions
@@ -441,14 +441,14 @@ class DataFrame:
             count = self.num_rows()
 
         # return
-        return DataFrame(self.header_fields, self.data_fields[-count:])
+        return new_df(self.get_header_fields(), self.get_data_fields()[-count:])
 
     def take(self, count, dmsg = ""):
         # return result
         if (count > self.num_rows()):
             count = self.num_rows()
 
-        return DataFrame(self.header_fields, self.data_fields[0:count])
+        return new_df(self.get_header_fields(), self.get_data_fields()[0:count])
 
     def distinct(self, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "distinct")
@@ -459,7 +459,7 @@ class DataFrame:
 
         # iterate
         counter = 0
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             # report progress
             counter = counter + 1
             utils.report_progress("[1/1] calling function", dmsg, counter, self.num_rows())
@@ -471,7 +471,7 @@ class DataFrame:
                 new_data_fields.append(fields)
 
         # return
-        return DataFrame(self.header_fields, new_data_fields)
+        return new_df(self.get_header_fields(), new_data_fields)
 
     def distinct_cols(self, col_or_cols, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "distinct_cols")
@@ -497,7 +497,7 @@ class DataFrame:
 
         # find the columns that dont match
         non_matching_cols = []
-        for h in self.header_fields:
+        for h in self.get_header_fields():
             if (h not in matching_cols):
                 non_matching_cols.append(h)
 
@@ -539,7 +539,7 @@ class DataFrame:
 
         # iterate and add
         counter = 0
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             # report progress
             counter = counter + 1
             utils.report_progress("[1/1] calling function", dmsg, counter, self.num_rows())
@@ -600,13 +600,13 @@ class DataFrame:
         new_data_fields = []
 
         # iterate
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             num_non_empty_cols = len(list(filter(lambda t: t.strip() != "", fields)))
             if (num_non_empty_cols > 0):
                 new_data_fields.append(fields)
 
         # return
-        return DataFrame(self.header_fields, new_data_fields)
+        return new_df(self.get_header_fields(), new_data_fields)
 
     # TODO: the select_cols is not implemented properly
     def window_aggregate(self, win_col, agg_cols, agg_funcs, winsize, select_cols = None, sliding = False, collapse = True, suffix = "", precision = 2, dmsg = ""):
@@ -670,7 +670,7 @@ class DataFrame:
 
         # iterate over data
         counter = 0
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             # report progress
             counter = counter + 1
             utils.report_progress("window_aggregate: [1/1] calling function", dmsg, counter, self.num_rows())
@@ -689,14 +689,14 @@ class DataFrame:
         if (collapse == True):
             cols2 = select_cols
             cols2.append(win_col)
-            return DataFrame(new_header_fields, new_data_fields) \
+            return new_df(new_header_fields, new_data_fields) \
                 .drop_cols(win_col) \
                 .rename(new_win_col, win_col) \
                 .aggregate(cols2, agg_cols, agg_funcs, collapse)
         else:
             cols2 = select_cols
             cols2.append(new_win_col)
-            return DataFrame(new_header_fields, new_data_fields) \
+            return new_df(new_header_fields, new_data_fields) \
                 .aggregate(cols2, agg_cols, agg_funcs, collapse, precision)
 
     # The signature for agg_func is func(list_of_maps). Each map will get the agg_cols
@@ -716,17 +716,17 @@ class DataFrame:
         # validate grouping cols
         for c in grouping_cols:
             if (c not in self.header_map.keys()):
-                raise Exception("grouping col not found: {}, columns: {}".format(c, self.header_fields))
+                raise Exception("grouping col not found: {}, columns: {}".format(c, self.get_header_fields()))
 
         # validate agg cols
         for c in agg_cols:
             if (c not in self.header_map.keys()):
-                raise Exception("agg col not found: {}, columns: {}".format(c, self.header_fields))
+                raise Exception("agg col not found: {}, columns: {}".format(c, self.get_header_fields()))
 
         # group all the values in the key
         grouped = {}
         counter = 0
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             # report progress
             counter = counter + 1
             utils.report_progress("group_by_key: [1/3] grouping: progress", dmsg, counter, self.num_rows())
@@ -776,7 +776,7 @@ class DataFrame:
         utils.print_code_todo_warning("Removing this condition for checking of duplicate names. They are already given a suffix so there is no clash.")
         for k in agg_out_keys.keys():
             if (k in self.header_map.keys()):
-                utils.print_code_todo_warning("TODO: Old check: Agg func can not output keys that have the same name as original columns: {}, {}".format(k, str(self.header_fields)))
+                utils.print_code_todo_warning("TODO: Old check: Agg func can not output keys that have the same name as original columns: {}, {}".format(k, str(self.get_header_fields())))
 
         # create an ordered list of agg output keys
         new_cols = sorted(list(agg_out_keys.keys()))
@@ -793,12 +793,12 @@ class DataFrame:
         if (collapse == True):
             new_header_fields = utils.merge_arrays([grouping_cols, new_cols_names])
         else:
-            new_header_fields = utils.merge_arrays([self.header_fields, new_cols_names])
+            new_header_fields = utils.merge_arrays([self.get_header_fields(), new_cols_names])
 
         # create data
         new_data_fields = []
         counter = 0
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             # report progress
             counter = counter + 1
             utils.report_progress("group_by_key: [3/3] generating data", dmsg, counter, self.num_rows())
@@ -833,7 +833,7 @@ class DataFrame:
                 new_data_fields.append(new_fields)
 
         # return
-        return DataFrame(new_header_fields, new_data_fields)
+        return new_df(new_header_fields, new_data_fields)
 
     # FIXME
     def arg_min(self, grouping_cols, argcols, valcols, suffix = "arg_min", use_string_datatype = False, topk = 1, sep = "|", collapse = True, dmsg = ""):
@@ -980,7 +980,7 @@ class DataFrame:
         for i in range(len(agg_cols)):
             agg_col = agg_cols[i]
             if (agg_col not in self.header_map.keys()):
-                raise Exception("Column not found: {}, header: {}".format(agg_col, self.header_fields))
+                raise Exception("Column not found: {}, header: {}".format(agg_col, self.get_header_fields()))
 
             new_cols.append(agg_col + ":" + get_func_name(agg_funcs[i]))
 
@@ -1007,7 +1007,7 @@ class DataFrame:
 
         # iterate over the data
         counter = 0
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             # report progress
             counter = counter + 1
             utils.report_progress("[1/2] building groups", dmsg, counter, self.num_rows())
@@ -1038,13 +1038,13 @@ class DataFrame:
                 value_func_map_arr[j][k] = agg_value if (agg_value) is not None else ""
 
         # create new header and data
-        new_header_fields = utils.merge_arrays([self.header_fields, new_cols])
+        new_header_fields = utils.merge_arrays([self.get_header_fields(), new_cols])
         new_data_fields = []
 
         # for each output line, attach the new aggregate value
         counter = 0
         cols_key_map = {}
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             # report progress
             counter = counter + 1
             utils.report_progress("[2/2] calling function", dmsg, counter, self.num_rows())
@@ -1069,7 +1069,7 @@ class DataFrame:
                 cols_key_map[cols_key] = 1
 
         # create result
-        result_xdf = DataFrame(new_header_fields, new_data_fields)
+        result_xdf = new_df(new_header_fields, new_data_fields)
 
         # check collapse flag
         if (collapse == True):
@@ -1109,7 +1109,7 @@ class DataFrame:
         # new data
         new_data_fields = []
         counter = 0
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             # report progress
             counter = counter + 1
             utils.report_progress("[1/1] calling function", dmsg, counter, self.num_rows())
@@ -1162,7 +1162,7 @@ class DataFrame:
                 new_data_fields.append(fields)
 
         # return
-        return DataFrame(self.header_fields, new_data_fields)
+        return new_df(self.get_header_fields(), new_data_fields)
 
     def exclude_filter(self, cols, func, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "exclude_filter")
@@ -1191,7 +1191,7 @@ class DataFrame:
 
         # iterate
         new_data_fields = []
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             # iterate over matching cols
             flag = False
             for i in indexes:
@@ -1209,7 +1209,7 @@ class DataFrame:
                     new_data_fields.append(fields)
 
         # return
-        return DataFrame(self.header_fields, new_data_fields)
+        return new_df(self.get_header_fields(), new_data_fields)
 
     def __all_cols_with_cond_exists_filter__(self, cols, func, exclude_flag = False, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "__all_cols_with_cond_exists_filter__")
@@ -1234,7 +1234,7 @@ class DataFrame:
 
         # iterate
         new_data_fields = []
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             # iterate over matching cols
             flag = True
             for i in indexes:
@@ -1252,7 +1252,7 @@ class DataFrame:
                     new_data_fields.append(fields)
 
         # return
-        return DataFrame(self.header_fields, new_data_fields)
+        return new_df(self.get_header_fields(), new_data_fields)
 
     def any_col_with_cond_exists_filter(self, cols, func, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "any_col_with_cond_exists_filter")
@@ -1297,12 +1297,12 @@ class DataFrame:
         # validation
         for col in matching_cols:
             if (col not in self.header_map.keys()):
-                raise Exception("Column: {} not found in {}".format(str(col), str(self.header_fields)))
+                raise Exception("Column: {} not found in {}".format(str(col), str(self.get_header_fields())))
 
         # new col validation
         for new_col in new_cols:
-            if (new_col in self.header_fields):
-                raise Exception("New column: {} already exists in {}".format(new_col, str(self.header_fields)))
+            if (new_col in self.get_header_fields()):
+                raise Exception("New column: {} already exists in {}".format(new_col, str(self.get_header_fields())))
 
         # check for no data
         if (self.num_rows() == 0):
@@ -1316,12 +1316,12 @@ class DataFrame:
             indexes.append(self.header_map[col])
 
         # create new header and data
-        new_header_fields = utils.merge_arrays([self.header_fields, new_cols])
+        new_header_fields = utils.merge_arrays([self.get_header_fields(), new_cols])
         new_data_fields = []
         counter = 0
 
         # iterate over data
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             counter = counter + 1
             utils.report_progress("[1/1] calling function", dmsg, counter, self.num_rows())
 
@@ -1423,7 +1423,7 @@ class DataFrame:
             new_data_fields.append(new_fields)
 
         # return
-        return DataFrame(new_header_fields, new_data_fields)
+        return new_df(new_header_fields, new_data_fields)
 
     def transform_inline(self, cols, func, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "transform_inline")
@@ -1449,7 +1449,7 @@ class DataFrame:
         # create new data
         new_data_fields = []
         counter = 0
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             counter = counter + 1
             utils.report_progress("[1/1] calling function", dmsg, counter, self.num_rows())
 
@@ -1466,7 +1466,7 @@ class DataFrame:
             new_data_fields.append(new_fields)
 
         # return
-        return DataFrame(self.header_fields, new_data_fields)
+        return new_df(self.get_header_fields(), new_data_fields)
 
     def transform_inline_log(self, col_or_cols, base = None, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "transform_inline_log")
@@ -1513,40 +1513,40 @@ class DataFrame:
 
         # validation
         if (self.has_col(col) == False):
-            raise Exception("Column: {} not found in {}".format(str(col), str(self.header_fields)))
+            raise Exception("Column: {} not found in {}".format(str(col), str(self.get_header_fields())))
 
         # validation
         if (self.has_col(new_col) == True):
-            raise Exception("New Column: {} already exists in {}".format(str(new_col), str(self.header_fields)))
+            raise Exception("New Column: {} already exists in {}".format(str(new_col), str(self.get_header_fields())))
 
         # new header fields
-        new_header_fields = list([new_col if (h == col) else h for h in self.header_fields])
+        new_header_fields = list([new_col if (h == col) else h for h in self.get_header_fields()])
 
         # return
-        return DataFrame(new_header_fields, self.data_fields)
+        return new_df(new_header_fields, self.get_data_fields())
 
     def get_header_fields(self):
-        return self.header_fields
+        return self.get_header_fields()
 
     def get_data_fields(self):
-        return self.data_fields
+        return self.get_data_fields()
 
     def get_header_map(self):
         return self.header_map
 
     def num_rows(self):
-        return len(self.data_fields)
+        return len(self.get_data_fields())
 
     def num_cols(self):
-        return len(self.header_fields)
+        return len(self.get_header_fields())
 
     def get_size_in_bytes(self):
         utils.warn("Please use size_in_bytes() instead")
         return self.size_in_bytes()
 
     def size_in_bytes(self):
-        total = sum(list([len(t) for t in self.header_fields]))
-        for fields in self.data_fields:
+        total = sum(list([len(t) for t in self.get_header_fields()]))
+        for fields in self.get_data_fields():
             total = total + sum(list([len(t) for t in fields]))
         return total
 
@@ -1557,7 +1557,7 @@ class DataFrame:
         return int(self.size_in_bytes() / 1e9)
 
     def get_columns(self):
-        return self.header_fields
+        return self.get_header_fields()
 
     def get_column(self, index):
         # validation
@@ -1565,7 +1565,7 @@ class DataFrame:
             raise Exception("get_column: invalid index: {}".format(index))
 
         # return
-        return self.header_fields[index]
+        return self.get_header_fields()[index]
 
     # Deprecated
     def columns(self):
@@ -1596,12 +1596,12 @@ class DataFrame:
         mps = []
 
         # create a map for each row
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             mp = {}
 
             # iterate over all header columns
-            for i in range(len(self.header_fields)):
-                key = self.header_fields[i]
+            for i in range(len(self.get_header_fields())):
+                key = self.get_header_fields()[i]
                 value = str(fields[i])
 
                 # check for resolving url encoded cols
@@ -1630,7 +1630,7 @@ class DataFrame:
         if (self.num_rows() == 0):
             mp = {}
             # create empty map
-            for h in self.header_fields:
+            for h in self.get_header_fields():
                 mp[str(h)] = ""
 
             # return
@@ -1665,21 +1665,21 @@ class DataFrame:
 
         # validation
         if (new_col in self.header_map.keys()):
-            raise Exception("Output column name: {} already exists in {}".format(new_col, self.header_fields))
+            raise Exception("Output column name: {} already exists in {}".format(new_col, self.get_header_fields()))
 
         # create new header
-        new_header_fields = [new_col] + self.header_fields
+        new_header_fields = [new_col] + self.get_header_fields()
 
         # create new data
         new_data_fields = []
         counter = start - 1
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             counter = counter + 1
             utils.report_progress("add_seq_num: [1/1] adding new column", dmsg, counter, self.num_rows())
             new_data_fields.append([str(counter)] + fields)
 
         # return
-        return DataFrame(new_header_fields, new_data_fields)
+        return new_df(new_header_fields, new_data_fields)
 
     def show_transpose(self, n = 1, title = "Show Transpose", max_col_width = None, debug_only = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "show_transpose")
@@ -1797,7 +1797,7 @@ class DataFrame:
             is_numeric_type_map[k] = True
 
         # determine width
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             # iterate
             for i in range(len(fields)):
                 k = self.header_index_map[i]
@@ -1809,8 +1809,8 @@ class DataFrame:
                     is_numeric_type_map[k] = False
 
         # combine header and lines
-        all_data_fields = [self.header_fields]
-        for fields in self.data_fields:
+        all_data_fields = [self.get_header_fields()]
+        for fields in self.get_data_fields():
             all_data_fields.append(fields)
 
         # iterate and print. +1 for header
@@ -1847,12 +1847,12 @@ class DataFrame:
 
         # validation
         if (col not in self.header_map.keys()):
-            raise Exception("Column not found: {}, {}".format(str(col), str(self.header_fields)))
+            raise Exception("Column not found: {}, {}".format(str(col), str(self.get_header_fields())))
 
         # index
         index = self.header_map[col]
         ret_values = []
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             value = str(fields[index])
             if (value != ""):
                 ret_values.append(value)
@@ -1917,7 +1917,7 @@ class DataFrame:
 
         # create map
         mp = {}
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             # get the key
             keys = []
             for key_col in key_cols:
@@ -1988,15 +1988,15 @@ class DataFrame:
                 all_numeric = True
 
         # sort
-        new_data_fields = sorted(self.data_fields, key = lambda fields: self.__sort_helper__(fields, indexes, all_numeric = all_numeric), reverse = reverse)
+        new_data_fields = sorted(self.get_data_fields(), key = lambda fields: self.__sort_helper__(fields, indexes, all_numeric = all_numeric), reverse = reverse)
 
         # check if need to reorder the fields
         dmsg = utils.extend_inherit_message(dmsg, "sort")
         if (reorder == True):
-            return DataFrame(self.header_fields, new_data_fields) \
+            return new_df(self.get_header_fields(), new_data_fields) \
                 .reorder(matching_cols, dmsg = dmsg)
         else:
-            return DataFrame(self.header_fields, new_data_fields)
+            return new_df(self.get_header_fields(), new_data_fields)
 
     def reverse_sort(self, cols, reorder = False, all_numeric = None, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "reverse_sort")
@@ -2028,7 +2028,7 @@ class DataFrame:
         if (use_existing_order == False):
             # get the non matching cols
             non_matching_cols = []
-            for c in self.header_fields:
+            for c in self.get_header_fields():
                 if (c not in matching_cols):
                     non_matching_cols.append(c)
 
@@ -2046,12 +2046,12 @@ class DataFrame:
         new_header_fields = []
 
         # append all the matching columns
-        for h in self.header_fields:
+        for h in self.get_header_fields():
             if (h in matching_cols):
                 new_header_fields.append(h)
 
         # append all the remaining columns
-        for h in self.header_fields:
+        for h in self.get_header_fields():
             if (h not in matching_cols):
                 new_header_fields.append(h)
 
@@ -2074,7 +2074,7 @@ class DataFrame:
 
         # generate the list of cols that should be brought to front
         rcols = []
-        for h in self.header_fields:
+        for h in self.get_header_fields():
             if (h not in matching_cols):
                 rcols.append(h)
 
@@ -2095,7 +2095,7 @@ class DataFrame:
 
         # initialize map
         df_map = {}
-        for h in self.header_fields:
+        for h in self.get_header_fields():
             df_map[h] = []
 
         # check if infer data type is true
@@ -2114,7 +2114,7 @@ class DataFrame:
                     float_cols.append(col)
 
         # iterate over data
-        for fields in self.data_fields[0:nrows]:
+        for fields in self.get_data_fields()[0:nrows]:
             # iterate over fields
             for i in range(len(fields)):
                 col = self.get_columns()[i]
@@ -2150,17 +2150,17 @@ class DataFrame:
 
         # new col validation
         if (new_col in self.header_map.keys()):
-            raise Exception("New column: {} already exists in {}".format(new_col, str(self.header_fields)))
+            raise Exception("New column: {} already exists in {}".format(new_col, str(self.get_header_fields())))
 
         # iterate
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             mp = {}
-            for i in range(len(self.header_fields)):
-                mp[self.header_fields[i]] = fields[i]
+            for i in range(len(self.get_header_fields())):
+                mp[self.get_header_fields()[i]] = fields[i]
             new_data_fields.append([json.dumps(mp)])
 
         # return
-        return DataFrame(new_header_fields, new_data_fields)
+        return new_df(new_header_fields, new_data_fields)
 
     def to_csv(self, comma_replacement = ";", dmsg = ""):
         raise Exception("to_csv is not supported in this class")
@@ -2259,24 +2259,24 @@ class DataFrame:
 
         # validation
         for that in that_arr:
-            if (self.header_fields != that.get_header_fields()):
-                raise Exception("Headers are not matching for union: {}, {}".format(self.header_fields, that.get_header_fields()))
+            if (self.get_header_fields() != that.get_header_fields()):
+                raise Exception("Headers are not matching for union: {}, {}".format(self.get_header_fields(), that.get_header_fields()))
 
         # create new data
         new_data_fields = []
-        for fields in self.data_fields:
-            if (len(fields) != len(self.header_fields)):
-                raise Exception("Invalid input data. Fields size are not same as header: header: {}, fields: {}".format(self.header_fields, fields))
+        for fields in self.get_data_fields():
+            if (len(fields) != len(self.get_header_fields())):
+                raise Exception("Invalid input data. Fields size are not same as header: header: {}, fields: {}".format(self.get_header_fields(), fields))
             new_data_fields.append(fields)
 
         for that in that_arr:
             for fields in that.get_data_fields():
-                if (len(fields) != len(self.header_fields)):
-                    raise Exception("Invalid input data. Fields size are not same as header: header: {}, fields: {}".format(self.header_fields, fields))
+                if (len(fields) != len(self.get_header_fields())):
+                    raise Exception("Invalid input data. Fields size are not same as header: header: {}, fields: {}".format(self.get_header_fields(), fields))
                 new_data_fields.append(fields)
 
         # return
-        return DataFrame(self.header_fields, new_data_fields)
+        return new_df(self.get_header_fields(), new_data_fields)
 
     # this method finds the set difference between this and that. if cols is None, then all columns are taken
     # TODO: hash collision
@@ -2327,7 +2327,7 @@ class DataFrame:
 
         # return
         dmsg = utils.extend_inherit_message(dmsg, "add_const")
-        return self.transform([self.header_fields[0]], lambda x: str(value), col, dmsg = dmsg)
+        return self.transform([self.get_header_fields()[0]], lambda x: str(value), col, dmsg = dmsg)
 
     def add_const_if_missing(self, col, value, dmsg = ""):
         # check empty
@@ -2340,7 +2340,7 @@ class DataFrame:
                 raise Exception("add_const_if_missing: empty header tsv but non empty value")
 
         # check for presence
-        if (col in self.header_fields):
+        if (col in self.get_header_fields()):
             return self
         else:
             dmsg = utils.extend_inherit_message(dmsg, "add_const_if_missing")
@@ -2377,7 +2377,7 @@ class DataFrame:
         # add only if missing
         missing_cols = []
         for col in cols:
-            if (col not in self.header_fields):
+            if (col not in self.get_header_fields()):
                 missing_cols.append(col)
 
         # check for no missing cols
@@ -2385,7 +2385,7 @@ class DataFrame:
             return self
 
         # create new header fields
-        new_header_fields = utils.merge_arrays([self.header_fields, missing_cols])
+        new_header_fields = utils.merge_arrays([self.get_header_fields(), missing_cols])
 
         # check no data
         if (self.num_rows() == 0):
@@ -2397,7 +2397,7 @@ class DataFrame:
 
         # iterate and add
         counter = 0
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             # report progress
             counter = counter + 1
             utils.report_progress("[1/1] calling function", dmsg, counter, self.num_rows())
@@ -2407,7 +2407,7 @@ class DataFrame:
             new_data_fields.append(new_fields)
 
         # return
-        return DataFrame(new_header_fields, new_data_fields)
+        return new_df(new_header_fields, new_data_fields)
 
     def add_row(self, row_fields, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "add_row")
@@ -2422,12 +2422,12 @@ class DataFrame:
 
         # remember to do deep copy
         new_data_fields = []
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             new_data_fields.append(fields)
         new_data_fields.append(row_fields)
 
         # return
-        return DataFrame(self.header_fields, new_data_fields)
+        return new_df(self.get_header_fields(), new_data_fields)
 
     def add_map_as_row(self, mp, default_val = None):
         # check empty
@@ -2436,18 +2436,18 @@ class DataFrame:
 
         # validation
         for k in mp.keys():
-            if (k not in self.header_fields):
-                raise Exception("Column not in existing data: {}, {}".format(k, str(self.header_fields)))
+            if (k not in self.get_header_fields()):
+                raise Exception("Column not in existing data: {}, {}".format(k, str(self.get_header_fields())))
 
         # check for default values
-        for h in self.header_fields:
+        for h in self.get_header_fields():
             if (h not in mp.keys()):
                 if (default_val is None):
                     raise Exception("Column not present in map and default value is not defined: {}. Try using default_val".format(h))
 
         # add the map as new row
         new_fields = []
-        for h in self.header_fields:
+        for h in self.get_header_fields():
             if (h in mp.keys()):
                 # append the value
                 new_fields.append(utils.replace_spl_white_spaces_with_space_noop(mp[h]))
@@ -2475,11 +2475,11 @@ class DataFrame:
         # check for complete disjoint set of columns
         for h in self.header_map.keys():
             if (h in that.header_map.keys()):
-                raise Exception("The columns for doing concat need to be completely separate: {}, {}".format(h, self.header_fields))
+                raise Exception("The columns for doing concat need to be completely separate: {}, {}".format(h, self.get_header_fields()))
 
         # create new header
         new_header_fields = []
-        for h in self.header_fields:
+        for h in self.get_header_fields():
             new_header_fields.append(h)
         for h in that.header_fields:
             new_header_fields.append(h)
@@ -2487,14 +2487,14 @@ class DataFrame:
         # create new data
         new_data_fields = []
         for i in range(self.num_rows()):
-            fields1 = self.data_fields[i]
+            fields1 = self.get_data_fields()[i]
             fields2 = that.data_fields[i]
 
             # append
             new_data_fields.append(fields1 + fields2)
 
         # return
-        return DataFrame(new_header_fields, new_data_fields)
+        return new_df(new_header_fields, new_data_fields)
 
     def add_col_prefix(self, cols, prefix, dmsg = ""):
         utils.warn("Deprecated: Use add_prefix instead")
@@ -2516,23 +2516,23 @@ class DataFrame:
             suffix = ":" + suffix
 
         # check for matching cols
-        for c in self.header_fields:
+        for c in self.get_header_fields():
             if (c.endswith(suffix)):
                 # check if the prefix is defined and matcing
                 if (prefix is None or c.startswith(prefix + ":") == True):
                     new_col =  c[0:-len(suffix)]
-                    if (new_col in self.header_fields or len(new_col) == 0):
+                    if (new_col in self.get_header_fields() or len(new_col) == 0):
                         utils.warn("{}: Duplicate names found. Ignoring removal of suffix for col: {} to new_col: {}".format(dmsg, c, new_col))
                     else:
                         mp[c] = new_col
 
         # validation
         if (len(mp) == 0):
-            utils.raise_exception_or_warn("{}: suffix didnt match any of the columns: {}, {}".format(dmsg, suffix, str(self.header_fields)), ignore_if_missing)
+            utils.raise_exception_or_warn("{}: suffix didnt match any of the columns: {}, {}".format(dmsg, suffix, str(self.get_header_fields())), ignore_if_missing)
 
         # return
-        new_header_fields = list([h if (h not in mp.keys()) else mp[h] for h in self.header_fields])
-        return DataFrame(new_header_fields, self.data_fields)
+        new_header_fields = list([h if (h not in mp.keys()) else mp[h] for h in self.get_header_fields()])
+        return new_df(new_header_fields, self.get_data_fields())
 
     def add_prefix(self, prefix, cols = None, ignore_if_missing = False, dmsg = ""):
         # check empty
@@ -2542,7 +2542,7 @@ class DataFrame:
 
         # by default all columns are renamed
         if (cols is None):
-            cols = self.header_fields
+            cols = self.get_header_fields()
 
         # resolve columns
         cols = self.__get_matching_cols__(cols, ignore_if_missing = ignore_if_missing)
@@ -2551,14 +2551,14 @@ class DataFrame:
         new_header_fields = []
 
         # iterate and set the new name
-        for h in self.header_fields:
+        for h in self.get_header_fields():
             if (h in cols):
                 new_header_fields.append(prefix + ":" + h)
             else:
                 new_header_fields.append(h)
 
         # return
-        return DataFrame(new_header_fields, self.data_fields)
+        return new_df(new_header_fields, self.get_data_fields())
 
     def add_suffix(self, suffix, cols = None, ignore_if_missing = False, dmsg = ""):
         # check empty
@@ -2568,7 +2568,7 @@ class DataFrame:
 
         # by default all columns are renamed
         if (cols is None):
-            cols = self.header_fields
+            cols = self.get_header_fields()
 
         # resolve columns
         cols = self.__get_matching_cols__(cols, ignore_if_missing = ignore_if_missing)
@@ -2577,14 +2577,14 @@ class DataFrame:
         new_header_fields = []
 
         # iterate and set the new name
-        for h in self.header_fields:
+        for h in self.get_header_fields():
             if (h in cols):
                 new_header_fields.append(h + ":" + suffix)
             else:
                 new_header_fields.append(h)
 
         # return
-        return DataFrame(new_header_fields, self.data_fields)
+        return new_df(new_header_fields, self.get_data_fields())
 
     def rename_prefix(self, old_prefix, new_prefix, cols = None, ignore_if_missing = False, dmsg = ""):
         # check empty
@@ -2604,14 +2604,14 @@ class DataFrame:
         new_header_fields = []
 
         # iterate and set the new name
-        for h in self.header_fields:
+        for h in self.get_header_fields():
             if (h in cols):
                 new_header_fields.append(new_prefix + h[len(old_prefix):])
             else:
                 new_header_fields.append(h)
 
         # return
-        return DataFrame(new_header_fields, self.data_fields)
+        return new_df(new_header_fields, self.get_data_fields())
 
     def rename_suffix(self, old_suffix, new_suffix, cols = None, ignore_if_missing = False, dmsg = ""):
         # check empty
@@ -2631,14 +2631,14 @@ class DataFrame:
         new_header_fields = []
 
         # iterate and set the new name
-        for h in self.header_fields:
+        for h in self.get_header_fields():
             if (h in cols):
                 new_header_fields.append(h[0:-1*len(old_suffix) + new_suffix])
             else:
                 new_header_fields.append(h)
 
         # return
-        return DataFrame(new_header_fields, self.data_fields)
+        return new_df(new_header_fields, self.get_data_fields())
 
     def remove_prefix(self, prefix, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "remove_prefix")
@@ -2656,23 +2656,23 @@ class DataFrame:
             prefix = prefix + ":"
 
         # check for matching cols
-        for c in self.header_fields:
+        for c in self.get_header_fields():
             if (c.startswith(prefix)):
                 new_col = c[len(prefix):]
                 # validation
-                if (new_col in self.header_fields or len(new_col) == 0):
-                    raise Exception("{}: Duplicate names. Cant do the prefix: {}, {}, {}".format(dmsg, c, new_col, str(self.header_fields)))
+                if (new_col in self.get_header_fields() or len(new_col) == 0):
+                    raise Exception("{}: Duplicate names. Cant do the prefix: {}, {}, {}".format(dmsg, c, new_col, str(self.get_header_fields())))
 
                 # assign new col
                 mp[c] = new_col
 
         # validation
         if (len(mp) == 0):
-            utils.raise_exception_or_warn("{}: prefix didnt match any of the columns: {}, {}".format(dmsg, prefix, str(self.header_fields)), ignore_if_missing)
+            utils.raise_exception_or_warn("{}: prefix didnt match any of the columns: {}, {}".format(dmsg, prefix, str(self.get_header_fields())), ignore_if_missing)
 
         # return
-        new_header_fields = list([h if (h not in mp.keys()) else mp[h] for h in self.header_fields])
-        return DataFrame(new_header_fields, self.data_fields)
+        new_header_fields = list([h if (h not in mp.keys()) else mp[h] for h in self.get_header_fields()])
+        return new_df(new_header_fields, self.get_data_fields())
 
     def replace_prefix(self, old_prefix, new_prefix, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "replace_prefix")
@@ -2690,20 +2690,20 @@ class DataFrame:
             old_prefix = new_prefix + ":"
 
         # check for matching cols
-        for c in self.header_fields:
+        for c in self.get_header_fields():
             if (c.startswith(old_prefix)):
                 new_col = "{}:{}".format(new_prefix, c[len(old_prefix):])
-                if (new_col in self.header_fields or len(new_col) == 0):
-                    raise Exception("{}: Duplicate names. Cant do the new prefix: {}, {}, {}".format(dmsg, c, new_col, str(self.header_fields)))
+                if (new_col in self.get_header_fields() or len(new_col) == 0):
+                    raise Exception("{}: Duplicate names. Cant do the new prefix: {}, {}, {}".format(dmsg, c, new_col, str(self.get_header_fields())))
                 mp[c] = new_col
 
         # validation
         if (len(mp) == 0):
-            utils.raise_exception_or_warn("{}: old prefix didnt match any of the columns: {}, {}".format(dmsg, old_prefix, str(self.header_fields)), ignore_if_missing)
+            utils.raise_exception_or_warn("{}: old prefix didnt match any of the columns: {}, {}".format(dmsg, old_prefix, str(self.get_header_fields())), ignore_if_missing)
 
         # return
-        new_header_fields = list([h if (h not in mp.keys()) else mp[h] for h in self.header_fields])
-        return DataFrame(new_header_fields, self.data_fields)
+        new_header_fields = list([h if (h not in mp.keys()) else mp[h] for h in self.get_header_fields()])
+        return new_df(new_header_fields, self.get_data_fields())
 
     def replace_suffix(self, old_suffix, new_suffix, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "replace_suffix")
@@ -2721,20 +2721,20 @@ class DataFrame:
             old_suffix = ":" + old_suffix
 
         # check for matching cols
-        for c in self.header_fields:
+        for c in self.get_header_fields():
             if (c.endswith(old_suffix)):
                 new_col = "{}:{}".format(c[0:-len(old_suffix)], new_suffix)
-                if (new_col in self.header_fields or len(new_col) == 0):
-                    raise Exception("{}: Duplicate names. Cant do the suffix: {}, {}, {}".format(dmsg, c, new_col, str(self.header_fields)))
+                if (new_col in self.get_header_fields() or len(new_col) == 0):
+                    raise Exception("{}: Duplicate names. Cant do the suffix: {}, {}, {}".format(dmsg, c, new_col, str(self.get_header_fields())))
                 mp[c] = new_col
 
         # validation
         if (len(mp) == 0):
-            utils.raise_exception_or_warn("{}: suffix didnt match any of the columns: {}, {}".format(dmsg, old_suffix, str(self.header_fields)), ignore_if_missing)
+            utils.raise_exception_or_warn("{}: suffix didnt match any of the columns: {}, {}".format(dmsg, old_suffix, str(self.get_header_fields())), ignore_if_missing)
 
         # return
-        new_header_fields = list([h if (h not in mp.keys()) else mp[h] for h in self.header_fields])
-        return DataFrame(new_header_fields, self.data_fields)
+        new_header_fields = list([h if (h not in mp.keys()) else mp[h] for h in self.get_header_fields()])
+        return new_df(new_header_fields, self.get_data_fields())
 
     def sample(self, sampling_ratio, seed = 0, with_replacement = False, dmsg = ""):
         # check empty
@@ -2753,7 +2753,7 @@ class DataFrame:
         # create variables for data
         new_data_fields = []
         counter = 0
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             # report progress
             counter = counter + 1
             utils.report_progress("sample: [1/1] calling function", dmsg, counter, self.num_rows())
@@ -2763,7 +2763,7 @@ class DataFrame:
                 new_data_fields.append(fields)
 
         # return
-        return DataFrame(self.header_fields, new_data_fields)
+        return new_df(self.get_header_fields(), new_data_fields)
 
     def sample_without_replacement(self, sampling_ratio, seed = 0, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "sample_without_replacement")
@@ -2805,7 +2805,7 @@ class DataFrame:
         # sample and return. the debug message is not in standard form, but its fine.
         utils.report_progress("[1/1] calling function", dmsg, self.num_rows(), self.num_rows())
         if (replace == True):
-            return DataFrame(self.header_fields, random.choices(self.data_fields, k = n)) # nosec
+            return new_df(self.get_header_fields(), random.choices(self.get_data_fields(), k = n)) # nosec
         else:
             # warn if needed
             if (n > self.num_rows()):
@@ -2813,7 +2813,7 @@ class DataFrame:
 
             # limit n
             n = min(int(n), self.num_rows())
-            return DataFrame(self.header_fields, random.sample(self.data_fields, n))
+            return new_df(self.get_header_fields(), random.sample(self.get_data_fields(), n))
 
     # TODO: WIP
     def sample_n_with_warn(self, limit, msg = None, seed = 0, dmsg = ""):
@@ -2897,7 +2897,7 @@ class DataFrame:
 
         # Validation
         if (col not in self.header_map.keys()):
-            raise Exception("Column not found: {}, {}".format(str(col), str(self.header_fields)))
+            raise Exception("Column not found: {}, {}".format(str(col), str(self.get_header_fields())))
 
         # cap the sampling ratio to 1
         if (sampling_ratio > 1):
@@ -2909,7 +2909,7 @@ class DataFrame:
         # resample
         new_data_fields = []
         counter = 0
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             # report progress
             counter = counter + 1
             utils.report_progress("sample_class: [1/1] calling function", dmsg, counter, self.num_rows())
@@ -2926,7 +2926,7 @@ class DataFrame:
                 new_data_fields.append(fields)
 
         # return
-        return DataFrame(self.header_fields, new_data_fields)
+        return new_df(self.get_header_fields(), new_data_fields)
 
     def __sample_group_by_col_value_agg_func__(self, value, sampling_ratio, seed, use_numeric):
         # set the seed outside
@@ -2968,7 +2968,7 @@ class DataFrame:
 
         # validation
         if (col not in self.header_map.keys()):
-            raise Exception("Column not found: {}, {}".format(str(col), str(self.header_fields)))
+            raise Exception("Column not found: {}, {}".format(str(col), str(self.get_header_fields())))
 
         # check sampling ratio
         if (sampling_ratio < 0 or sampling_ratio > 1):
@@ -3019,7 +3019,7 @@ class DataFrame:
 
         # validation
         if (col not in self.header_map.keys()):
-            raise Exception("Column not found: {}, {}".format(str(col), str(self.header_fields)))
+            raise Exception("Column not found: {}, {}".format(str(col), str(self.get_header_fields())))
 
         # check max_uniq_values
         if (max_uniq_values <= 0):
@@ -3057,12 +3057,12 @@ class DataFrame:
 
         # validation
         if (col not in self.header_map.keys()):
-            raise Exception("Column not found: {}, {}".format(str(col), str(self.header_fields)))
+            raise Exception("Column not found: {}, {}".format(str(col), str(self.get_header_fields())))
 
         # check grouping cols
         for k in grouping_cols:
             if (k not in self.header_map.keys()):
-                raise Exception("Grouping Column not found: {}, {}".format(str(k), str(self.header_fields)))
+                raise Exception("Grouping Column not found: {}, {}".format(str(k), str(self.get_header_fields())))
 
         # check max_uniq_values
         if (max_uniq_values <= 0):
@@ -3109,9 +3109,9 @@ class DataFrame:
 
         # validation
         if (col not in self.header_map.keys()):
-            raise Exception("Column not found: {}, {}".format(str(col), str(self.header_fields)))
+            raise Exception("Column not found: {}, {}".format(str(col), str(self.get_header_fields())))
         if (class_col not in self.header_map.keys()):
-            raise Exception("Column not found: {}, {}".format(str(class_col), str(self.header_fields)))
+            raise Exception("Column not found: {}, {}".format(str(class_col), str(self.get_header_fields())))
 
         # correctly define def_max_uniq_values
         if (def_max_uniq_values is None):
@@ -3160,7 +3160,7 @@ class DataFrame:
         # create new data
         new_data_fields = []
         counter = 0
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             # report progress
             counter = counter + 1
             utils.report_progress("sample_group_by_key: [1/1] calling function", dmsg, counter, self.num_rows())
@@ -3177,7 +3177,7 @@ class DataFrame:
                 new_data_fields.append(fields)
 
         # return
-        return DataFrame(self.header_fields, new_data_fields)
+        return new_df(self.get_header_fields(), new_data_fields)
 
     # sample by taking only n number of unique values for a specific column
     def sample_column_by_max_uniq_values(self, col, max_uniq_values, seed = 0, dmsg = ""):
@@ -3291,10 +3291,10 @@ class DataFrame:
 
         # relative ordering matters
         for h in lkeys:
-            if (h in self.header_fields):
+            if (h in self.get_header_fields()):
                 lkey_indexes.append(self.get_header_map()[h])
 
-        for h in self.header_fields:
+        for h in self.get_header_fields():
             if (h not in lkeys):
                 lvalue_indexes.append(self.get_header_map()[h])
 
@@ -3343,7 +3343,7 @@ class DataFrame:
         # create a hashmap of left key values
         lvkeys = {}
         counter = 0
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             # report progress
             counter = counter + 1
             utils.report_progress("[1/3] building map for left side", dmsg, counter, self.num_rows())
@@ -3414,12 +3414,12 @@ class DataFrame:
                 new_header_copy_fields_map[lkeys[rkey_index]] = rkey
 
         # add the left side columns
-        for i in range(len(self.header_fields)):
-            if (self.header_fields[i] not in lkeys):
+        for i in range(len(self.get_header_fields())):
+            if (self.get_header_fields()[i] not in lkeys):
                 if (lsuffix is not None):
-                    new_header_fields.append(self.header_fields[i] + ":" + lsuffix)
+                    new_header_fields.append(self.get_header_fields()[i] + ":" + lsuffix)
                 else:
-                    new_header_fields.append(self.header_fields[i])
+                    new_header_fields.append(self.get_header_fields()[i])
 
         # add the right side columns
         for i in range(len(that.get_header_fields())):
@@ -3438,7 +3438,7 @@ class DataFrame:
 
         # define the default lvalues
         default_lvals = []
-        for h in self.header_fields:
+        for h in self.get_header_fields():
             if (h not in lkeys):
                 if (def_val_map is not None and h in def_val_map.keys()):
                     default_lvals.append(def_val_map[h])
@@ -3521,7 +3521,7 @@ class DataFrame:
                         raise Exception("Unknown join type: {}".format(join_type))
 
         # return
-        result = DataFrame(new_header_fields, new_data_fields)
+        result = new_df(new_header_fields, new_data_fields)
         for lkey in new_header_copy_fields_map.keys():
             result = result.transform([lkey, "__join_keys_matched__"], lambda t1, t2: t1 if (t2 == "1") else "", new_header_copy_fields_map[lkey], dmsg = dmsg)
 
@@ -3540,7 +3540,7 @@ class DataFrame:
             return that
 
         # find the list of common cols
-        keys = sorted(list(set(self.header_fields).intersection(set(that.get_header_fields()))))
+        keys = sorted(list(set(self.get_header_fields()).intersection(set(that.get_header_fields()))))
 
         # create hashmap
         rmap = {}
@@ -3571,7 +3571,7 @@ class DataFrame:
         new_header_fields = []
 
         # create the keys
-        for k in self.header_fields:
+        for k in self.get_header_fields():
             new_header_fields.append(k)
 
         # take only the value part from right side
@@ -3582,7 +3582,7 @@ class DataFrame:
         # iterate through left side and add new values using the hash_map
         new_data_fields = []
         counter = 0
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             # report progress
             counter = counter + 1
             utils.report_progress("natural_join: [1/1] adding values from hashmap", dmsg, counter, self.num_rows())
@@ -3596,7 +3596,7 @@ class DataFrame:
                 lvalues_k.append(fields[self.header_map[k]])
 
             # create the value part
-            for h in self.header_fields:
+            for h in self.get_header_fields():
                 if (h not in keys):
                     lvalues_v.append(fields[self.header_map[h]])
 
@@ -3613,7 +3613,7 @@ class DataFrame:
                     new_data_fields.append(utils.merge_arrays([fields, vs]))
 
         # return
-        return DataFrame(new_header_fields, new_data_fields)
+        return new_df(new_header_fields, new_data_fields)
 
     def inner_map_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, num_par = 0, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "inner_map_join")
@@ -3638,10 +3638,10 @@ class DataFrame:
 
         # relative ordering matters
         for h in lkeys:
-            if (h in self.header_fields):
+            if (h in self.get_header_fields()):
                 lkey_indexes.append(self.get_header_map()[h])
 
-        for h in self.header_fields:
+        for h in self.get_header_fields():
             if (h not in lkeys):
                 lvalue_indexes.append(self.get_header_map()[h])
 
@@ -3730,12 +3730,12 @@ class DataFrame:
                 new_header_copy_fields_map[lkeys[rkey_index]] = rkey
 
         # add the left side columns
-        for i in range(len(self.header_fields)):
-            if (self.header_fields[i] not in lkeys):
+        for i in range(len(self.get_header_fields())):
+            if (self.get_header_fields()[i] not in lkeys):
                 if (lsuffix is not None):
-                    new_header_fields.append(self.header_fields[i] + ":" + lsuffix)
+                    new_header_fields.append(self.get_header_fields()[i] + ":" + lsuffix)
                 else:
-                    new_header_fields.append(self.header_fields[i])
+                    new_header_fields.append(self.get_header_fields()[i])
 
         # add the right side columns
         for i in range(len(that.get_header_fields())):
@@ -3748,7 +3748,7 @@ class DataFrame:
                     else:
                         raise Exception("Duplicate key names found. Use lsuffix or rsuffix: {}".format(that.get_header_fields()[i]))
 
-        # add a new column to depict if join leys matched
+        # add a new column to depict if join lkeys matched
         new_header_fields.append("__map_join_keys_matched__")
 
         # define the default rvalues
@@ -3765,7 +3765,7 @@ class DataFrame:
 
         # iterate over left side
         counter = 0
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             # report progress
             counter = counter + 1
             utils.report_progress("__map_join__: join the two groups", dmsg, counter, self.num_rows())
@@ -3797,7 +3797,9 @@ class DataFrame:
                     raise Exception("Unknown join type: {} ".format(join_type))
 
         # create tsv
-        result = DataFrame(new_header_fields, new_data_fields)
+        utils.info("new_header_fields: {}".format(new_header_fields))
+        utils.info("new_data_fields: {}".format(new_data_fields))
+        result = new_df(new_header_fields, new_data_fields)
 
         # create the rkeys columns that had different names
         for lkey in new_header_copy_fields_map.keys():
@@ -3871,11 +3873,11 @@ class DataFrame:
                 batch_index = (i + seed) % effective_batches
 
             # append to the splits data
-            data_list[batch_index].append(self.data_fields[i])
+            data_list[batch_index].append(self.get_data_fields()[i])
 
         # create list of xdfs
         for i in range(effective_batches):
-            xdf_list.append(DataFrame(self.header, data_list[i]))
+            xdf_list.append(new_df(self.header, data_list[i]))
 
         # filter out empty batches
         xdf_list = list(filter(lambda t: t.num_rows() > 0, xdf_list))
@@ -3926,7 +3928,7 @@ class DataFrame:
 
         # create each tsv
         for i in range(len(new_data_fields_list)):
-            new_tsv = DataFrame(hashed_tsv2.get_header_fields(), new_data_fields_list[i]) \
+            new_tsv = new_df(hashed_tsv2.get_header_fields(), new_data_fields_list[i]) \
                 .drop_cols([temp_col1, temp_col2])
             new_tsvs.append(new_tsv)
 
@@ -3951,11 +3953,11 @@ class DataFrame:
             raise Exception("new column already exists: {}".format(new_col))
 
         # generate deterministic hash
-        new_header_fields = self.header_fields + [new_col]
+        new_header_fields = self.get_header_fields() + [new_col]
         new_data_fields = []
 
         # iterate
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             values = []
             for i in indexes:
                 values.append(str(fields[i]))
@@ -3970,7 +3972,7 @@ class DataFrame:
             new_data_fields.append(fields + [hash_value])
 
         # return
-        return DataFrame(new_header_fields, new_data_fields)
+        return new_df(new_header_fields, new_data_fields)
 
     def cumulative_sum(self, col, new_col, as_int = True):
         # check empty
@@ -3979,14 +3981,14 @@ class DataFrame:
 
         # check for presence of col
         if (col not in self.header_map.keys()):
-            raise Exception("Column not found: {}, {}".format(str(col), str(self.header_fields)))
+            raise Exception("Column not found: {}, {}".format(str(col), str(self.get_header_fields())))
 
         # check for validity of new col
         if (new_col in self.header_map.keys()):
-            raise Exception("New column already exists: {}, {}".format(str(new_col), str(self.header_fields)))
+            raise Exception("New column already exists: {}, {}".format(str(new_col), str(self.get_header_fields())))
 
         # create new header
-        new_header_fields = self.header_fields + [new_col]
+        new_header_fields = self.get_header_fields() + [new_col]
 
         # create new data
         new_data_fields = []
@@ -3998,7 +4000,7 @@ class DataFrame:
         col_index = self.header_map[col]
 
         # iterate
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             col_value = float(fields[col_index])
             cumsum += col_value
             if (as_int == True):
@@ -4010,7 +4012,7 @@ class DataFrame:
             new_data_fields.append(new_fields)
 
         # return
-        return DataFrame(new_header_fields, new_data_fields)
+        return new_df(new_header_fields, new_data_fields)
 
     def replicate_rows(self, col, new_col = None, max_repl = 0):
         # check empty
@@ -4019,7 +4021,7 @@ class DataFrame:
 
         # check for presence of col
         if (col not in self.header_map.keys()):
-            raise Exception("Column not found: {}, {}".format(str(col), str(self.header_fields)))
+            raise Exception("Column not found: {}, {}".format(str(col), str(self.get_header_fields())))
 
         # create new column if it is not existing
         if (new_col is None):
@@ -4027,12 +4029,12 @@ class DataFrame:
 
         # check new col
         if (new_col in self.header_map.keys()):
-            raise Exception("New Column already exists: {}, {}".format(str(new_col), str(self.header_fields)))
+            raise Exception("New Column already exists: {}, {}".format(str(new_col), str(self.get_header_fields())))
 
         # create data
         new_data_fields = []
-        new_header_fields = self.header_fields + [new_col]
-        for fields in self.data_fields:
+        new_header_fields = self.get_header_fields() + [new_col]
+        for fields in self.get_data_fields():
             col_value = int(fields[self.header_map[col]])
             # check for guard conditions
             if (max_repl > 0 and col_value > max_repl):
@@ -4043,7 +4045,7 @@ class DataFrame:
                 new_data_fields.append(fields + ["1"])
 
         # return
-        return DataFrame(new_header_fields, new_data_fields)
+        return new_df(new_header_fields, new_data_fields)
 
     # TODO: Need better naming. The suffix semantics have been changed.
     # default_val should be empty string
@@ -4068,7 +4070,7 @@ class DataFrame:
         # iterate
         exploded_values = []
         counter = 0
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             # report progress
             counter = counter + 1
             utils.report_progress("[1/2] calling explode function", dmsg, counter, self.num_rows())
@@ -4076,7 +4078,7 @@ class DataFrame:
             # process data
             col_values_map = {}
             for i in indexes:
-                col_values_map[self.header_fields[i]] = fields[i]
+                col_values_map[self.get_header_fields()[i]] = fields[i]
             exploded_values.append(exp_func(col_values_map))
 
         # get the list of keys
@@ -4098,12 +4100,12 @@ class DataFrame:
         # create header
         new_header_fields = []
         if (collapse == True):
-            for j in range(len(self.header_fields)):
+            for j in range(len(self.get_header_fields())):
                 if (j not in indexes):
-                    new_header_fields.append(self.header_fields[j])
+                    new_header_fields.append(self.get_header_fields()[j])
         else:
-            # take care of not referencing self.header_fields
-            for h in self.header_fields:
+            # take care of not referencing self.get_header_fields()
+            for h in self.get_header_fields():
                 new_header_fields.append(h)
 
         # create new names based on suffix
@@ -4115,8 +4117,8 @@ class DataFrame:
 
         # check if any of new keys clash with old columns
         for k in exploded_keys_new_names:
-            if (k in self.header_fields):
-                raise Exception("Column already exist: {}, {}".format(k, str(self.header_fields)))
+            if (k in self.get_header_fields()):
+                raise Exception("Column already exist: {}, {}".format(k, str(self.get_header_fields())))
 
         # append to the new_header_fields
         for h in exploded_keys_new_names:
@@ -4132,7 +4134,7 @@ class DataFrame:
             utils.report_progress("[2/2] generating data", dmsg, counter, self.num_rows())
 
             # process data
-            fields = self.data_fields[i]
+            fields = self.get_data_fields()[i]
 
             # get the new list of fields
             new_fields = []
@@ -4170,7 +4172,7 @@ class DataFrame:
         utils.warn_once("{}: calling validate here".format(dmsg))
 
         # result. json expansion needs to be validated because of potential noise in the data.
-        return DataFrame(new_header_fields, new_data_fields) \
+        return new_with_cols(new_header_fields, data_fields = new_data_fields) \
             .validate()
 
     def __explode_json_transform_func__(self, col, accepted_cols = None, excluded_cols = None, single_value_list_cols = None, transpose_col_groups = None, merge_list_method = None,
@@ -4649,7 +4651,7 @@ class DataFrame:
 
         # create col arrays and new_data
         new_data_fields = []
-        for h in self.header_fields:
+        for h in self.get_header_fields():
             new_fields = []
             new_fields.append(h)
             for v in self.col_as_array(h):
@@ -4657,7 +4659,7 @@ class DataFrame:
             new_data_fields.append(new_fields)
 
         # return
-        return DataFrame(new_header_fields, new_data_fields)
+        return new_with_cols(new_header_fields, data_fields = new_data_fields)
 
     # this method converts the rows into columns. very inefficient
     def reverse_transpose(self, grouping_cols, transpose_key, transpose_cols, default_val = ""):
@@ -4696,25 +4698,25 @@ class DataFrame:
 
         # validation
         if (col not in self.header_map.keys()):
-            raise Exception("Column not found: {}, {}".format(str(col), str(self.header_fields)))
+            raise Exception("Column not found: {}, {}".format(str(col), str(self.get_header_fields())))
 
         # check for new column
         if (new_col in self.header_map.keys()):
-            raise Exception("New Column already exists: {}, {}".format(str(new_col), str(self.header_fields)))
+            raise Exception("New Column already exists: {}, {}".format(str(new_col), str(self.get_header_fields())))
 
         # create new data
         new_data_fields = []
-        new_header_fields = self.header_fields + [new_col]
+        new_header_fields = self.get_header_fields() + [new_col]
 
         # iterate
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             col_value = fields[self.header_map[col]]
             new_vals = func(col_value)
             for new_val in new_vals:
                 new_data_fields.append(fields + [new_val])
 
         # return
-        return DataFrame(new_header_fields, new_data_fields)
+        return new_with_cols(new_header_fields, data_fields = new_data_fields)
 
     def to_tuples(self, cols, dmsg = ""):
         # check empty
@@ -4724,7 +4726,7 @@ class DataFrame:
         # validate cols
         for col in cols:
             if (self.has_col(col) == False):
-                raise Exception("col doesnt exist: {}, {}".format(col, str(self.header_fields)))
+                raise Exception("col doesnt exist: {}, {}".format(col, str(self.get_header_fields())))
 
         # select the cols
         result = []
@@ -4812,7 +4814,7 @@ class DataFrame:
 
     def __convert_to_maps__(self):
         result = []
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             mp = {}
             for h in self.header_map.keys():
                 mp[h] = fields[self.header_map[h]]
@@ -4854,7 +4856,7 @@ class DataFrame:
         hashes.append("{}".format(utils.compute_hash(self.header)))
 
         # hash of data
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             hashes.append("{}".format(utils.compute_hash(line)))
 
         # return as string
@@ -5023,7 +5025,7 @@ class DataFrame:
             col_pattern_found = False
 
             # iterate through header
-            for h in self.header_fields:
+            for h in self.get_header_fields():
                 # check for match
                 if ((col_pattern.find(".*") != -1 and re.match(col_pattern, h) is not None) or (col_pattern == h)):
                     col_pattern_found = True
@@ -5033,7 +5035,7 @@ class DataFrame:
 
             # raise exception if some col or pattern is not found
             if (col_pattern_found == False):
-                utils.raise_exception_or_warn("Col name or pattern not found: {}, {}".format(col_pattern, str(self.header_fields)[0:100] + "..."), ignore_if_missing)
+                utils.raise_exception_or_warn("Col name or pattern not found: {}, {}".format(col_pattern, str(self.get_header_fields())[0:100] + "..."), ignore_if_missing)
                 # dont return from here
 
         # return
@@ -5096,7 +5098,7 @@ class DataFrame:
 
         # data validation
         counter = 0
-        for fields in self.data_fields:
+        for fields in self.get_data_fields():
             counter = counter + 1
             utils.report_progress("[1/1] selecting columns", dmsg, counter, self.num_rows())
             total_sizes[i] = total_sizes[i] + sum([len(f) for f in fields])
@@ -5355,7 +5357,7 @@ def from_df(df, url_encoded_cols = []):
             data_fields.append(fields)
 
     # return
-    return DataFrame(header_fields, data_fields).validate()
+    return new_with_cols(header_fields, data_fields = data_fields).validate()
 
 def from_json(json_arr, accepted_cols = None, excluded_cols = None, url_encoded_cols = None, dmsg = ""):
     dmsg = utils.extend_inherit_message(dmsg, "from_json")
@@ -5373,7 +5375,7 @@ def from_maps(mps, accepted_cols = None, excluded_cols = None, url_encoded_cols 
     for mp in mps:
         header_fields = ["json"]
         fields = [utils.url_encode(json.dumps(mp))]
-        xdfs.append(DataFrame(header_fields, [fields]))
+        xdfs.append(new_with_cols(header_fields, data_fields = [fields]))
 
     # use explode
     result = merge_union(xdfs) \
@@ -5400,7 +5402,7 @@ def from_tsv(xtsv):
         data_fields = list([list(t.split("\t")) for t in xtsv.get_data()])
 
     # return
-    return DataFrame(header_fields, data_fields)
+    return new_with_cols(header_fields, data_fields = data_fields)
 
 def from_header_data(header, data):
     header_fields = header.split("\t")
@@ -5422,6 +5424,9 @@ def set_report_progress_min_thresh(thresh):
 def from_tsv_new_with_cols(header_fields, data = []):
     data_fields = list([t.split("\t") for t in data])
     return new_with_cols(header_fields, data_fields = data_fields)
+
+def new_df(header_fields, data_fields):
+    return DataFrame(header_fields, data_fields)
 
 def new_with_cols(header_fields, data_fields = []):
     return DataFrame(header_fields, data_fields)
