@@ -1526,10 +1526,10 @@ class DataFrame:
         return new_df(new_header_fields, self.get_data_fields())
 
     def get_header_fields(self):
-        return self.get_header_fields()
+        return self.header_fields
 
     def get_data_fields(self):
-        return self.get_data_fields()
+        return self.data_fields
 
     def get_header_map(self):
         return self.header_map
@@ -3785,7 +3785,7 @@ class DataFrame:
             # iterate on the right side
             for rvals2 in rvals2_arr:
                 # construct the new line
-                new_fields = utils.merge_arrays([[lvals1], lvals2, rvals2, [str(keys_matched)]])
+                new_fields = utils.merge_arrays([lvals1, lvals2, rvals2, [str(keys_matched)]])
 
                 # take care of different join types
                 if (join_type == "inner"):
