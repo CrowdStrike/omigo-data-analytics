@@ -5293,7 +5293,7 @@ def get_version():
 def get_func_name(f):
     return f.__name__
 
-def merge(xdfdssvs, def_val_map = None):
+def merge(xdfs, def_val_map = None):
     # warn if def_val_map is not defined
     if (def_val_map is None):
         utils.warn("merge: use merge_union or merge_intersect")

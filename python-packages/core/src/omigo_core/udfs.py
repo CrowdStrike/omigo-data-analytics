@@ -6,7 +6,7 @@ from dateutil import parser
 import datetime
 from omigo_core import utils
 
-def file_base_name(x):
+def parse_file_base_name(x):
     if (len(x) <= 1):
         return x
 

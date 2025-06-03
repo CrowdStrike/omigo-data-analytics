@@ -8,7 +8,7 @@ import math
 import time
 
 class MultiThreadDF(dataframe.DataFrame):
-    def __init__(self, header_fields, data_fields, num_par = 0, status_check_interval_sec = 10, sleep_interval_sec = 0.11, num_batches = 10, dmsg = ""):
+    def __init__(self, header_fields, data_fields, num_par = 0, status_check_interval_sec = 0.1, sleep_interval_sec = 0.11, num_batches = 10, dmsg = ""):
         super().__init__(header_fields, data_fields)
         self.num_par = num_par
         self.status_check_interval_sec = status_check_interval_sec
@@ -79,8 +79,8 @@ class MultiThreadDF(dataframe.DataFrame):
                 utils.trace("MultiThreadDF: parallelize: xdf num_rows: {}".format(f.result().num_rows()))
                 results.append(f.result())
 
-            # merge the tsvs using a common union.
-            combined_result = tsv.merge(results, def_val_map = {})
+            # merge the dfs using a common union.
+            combined_result = dataframe.merge(results, def_val_map = {})
 
         # take end_time
         ts_end = time.time()

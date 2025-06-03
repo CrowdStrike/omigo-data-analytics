@@ -395,10 +395,10 @@ abstract class QueryNode(val tableName: String, val defaultSelect: Seq[String], 
   }
 
   def isSuccessFileExists(path: String): Boolean = {
-    CIDUtils.checkIfExists(spark, path)
+    checkIfExists(spark, path)
   }
 
-  // TODO: this fs creation is not same as CIDUtils
+  // TODO: this fs creation is not same
   def createSuccessFile(path: String): Unit = {
     val fs = FileSystem.get(spark.sparkContext.hadoopConfiguration)
     fs.mkdirs(new Path(path))
