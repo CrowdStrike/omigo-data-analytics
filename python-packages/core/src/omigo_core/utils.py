@@ -620,7 +620,7 @@ def max_dmsg_str(dmsg, max_len = 300):
 
 def is_tsv_file_extension(path):
     # check extensions
-    if (path.endswith(".tsv") or path.endswith(".tsv.gz") or path.endswith(".csv") or path.endswith(".csv.gz")):
+    if (path.endswith(".tsv") == True or path.endswith(".tsv.gz") == True):
         return True
     else:
         return False
