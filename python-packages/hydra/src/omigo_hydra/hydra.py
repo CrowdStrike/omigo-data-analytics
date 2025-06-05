@@ -1,5 +1,7 @@
 from omigo_core import utils, dataframe, dfutils
 from omigo_hydra import file_paths_data_reader, file_paths_util, file_io_wrapper, s3io_wrapper
+import io
+import pandas as pd
 
 # migrated
 def write(xdf, output_file_name, s3_region = None, aws_profile = None):
@@ -101,6 +103,19 @@ def __read_inner__(input_file_or_files, sep = None, def_val_map = None, username
 
     # merge and return
     return dfutils.merge(df_list, def_val_map = def_val_map)
+
+def read_csv(path, s3_region = None, aws_profile = None):
+    # read text
+    text_content = read_text_file(path, s3_region = s3_region, aws_profile = aws_profile)
+
+    # string bugger
+    csv_file = io.StringIO(text_content)
+
+    # use pandas
+    df = pd.read_csv(csv_file)
+
+    # convert to dataframe
+    return dataframe.from_pandas_df(df)
 
 def __read_with_filter_transform_select_func__(cols):
     # create a inner function

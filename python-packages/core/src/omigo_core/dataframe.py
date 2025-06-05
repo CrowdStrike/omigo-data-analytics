@@ -4977,7 +4977,7 @@ class DataFrame:
             return []
 
         # check for wild card
-        if (col_or_cols == ".*" or col_or_cols[0] == ".*"):
+        if ((isinstance(col_or_cols, (str)) and col_or_cols == ".*") or (isinstance(col_or_cols, (list)) and col_or_cols[0] == ".*")):
             return self.get_columns()
 
         # check if there is comma. If yes, then map it to array
@@ -5323,25 +5323,26 @@ def from_pandas_df(df):
     utils.warn_once("from_pandas_df() api doesnt support reading indexed columns in pandas dataframes yet.")
     utils.warn_once("from_pandas_df() api doesnt handle map data type properly")
 
+    # fillna
+    df2 = df.fillna('')
+
     # create header
-    header_fields = df.columns
+    header_fields = df2.columns
 
     # get columns
     cols_array = []
     for t in header_fields:
         # get the col values
-        col_values = list([str(v) for v in df[t]])
+        col_values = list([str(v) for v in df2[t]])
 
         # append
         cols_array.append(col_values)
 
     # populate data
-    tsv_lines = []
+    data_fields = []
     for i in range(len(df)):
-        line = "\t".join(list([utils.replace_tab_with_space(cols_array[j][i]) for j in range(len(df.columns))]))
-        tsv_lines.append(line)
-        print(line)
-
+        fields = [utils.replace_tab_with_space(cols_array[j][i]) for j in range(len(df.columns))]
+        data_fields.append(fields)
 
     # number of columns to skip with empty column name
     utils.warn_once("from_pandas_df: this skip count logic is hacky")
@@ -5353,15 +5354,8 @@ def from_pandas_df(df):
     # remove the skip_count columns
     header_fields = header_fields[skip_count:]
 
-    # generate data
-    data_fields = []
-    if (len(tsv_lines) > 1):
-        for line in tsv_lines[0:]:
-            fields = line.split("\t")[skip_count:]
-            data_fields.append(fields)
-
-    # return
-    return new_df(header_fields, data_fields).validate()
+    # return 
+    return new_df(header_fields, data_fields)
 
 def from_json(json_arr, accepted_cols = None, excluded_cols = None, url_encoded_cols = None, dmsg = ""):
     dmsg = utils.extend_inherit_message(dmsg, "from_json")

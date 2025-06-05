@@ -814,7 +814,7 @@ def is_json_encoded_col(col):
     else:
         return False
 
-def run_return_func_with_retry(retry_attempts, retry_wait_seconds, func, *args, **kwargs):
+def __run_return_func_with_retry_inner__(retry_attempts, retry_wait_seconds, exp_backoff, func, *args, **kwargs):
     while (retry_attempts > 0):
         try:
             return func(*args, **kwargs)
@@ -825,10 +825,14 @@ def run_return_func_with_retry(retry_attempts, retry_wait_seconds, func, *args, 
                 traceback.print_exc(file = sys.stdout)
                 time.sleep(retry_wait_seconds)
                 retry_attempts = retry_attempts - 1
+
+                # change wait time based on backoff
+                if (exp_backoff == True):
+                    retry_wait_seconds = 2 * retry_wait_seconds
             else:
                raise e
 
-def run_noreturn_func_with_retry(retry_attempts, retry_wait_seconds, func, *args, **kwargs):
+def __run_noreturn_func_with_retry_inner__(retry_attempts, retry_wait_seconds, exp_backoff, func, *args, **kwargs):
     while (retry_attempts > 0):
         try:
             func(*args, **kwargs)
@@ -840,6 +844,25 @@ def run_noreturn_func_with_retry(retry_attempts, retry_wait_seconds, func, *args
                 traceback.print_exc(file = sys.stdout)
                 time.sleep(retry_wait_seconds)
                 retry_attempts = retry_attempts - 1
+
+                # change wait time based on backoff
+                if (exp_backoff == True):
+                    retry_wait_seconds = 2 * retry_wait_seconds
             else:
                raise e
 
+def run_return_func_with_backoff(retry_attempts, retry_wait_seconds, func, *args, **kwargs):
+    exp_backoff = True 
+    return __run_return_func_with_retry_inner__(retry_attempts, retry_wait_seconds, exp_backoff, func, *args, **kwargs)
+
+def run_return_func_with_retry(retry_attempts, retry_wait_seconds, func, *args, **kwargs):
+    exp_backoff = False
+    return __run_return_func_with_retry_inner__(retry_attempts, retry_wait_seconds, exp_backoff, func, *args, **kwargs)
+
+def run_noreturn_func_with_backoff(retry_attempts, retry_wait_seconds, func, *args, **kwargs):
+    exp_backoff = True
+    __run_noreturn_func_with_retry_inner__(retry_attempts, retry_wait_seconds, exp_backoff, func, *args, **kwargs)
+
+def run_noreturn_func_with_retry(retry_attempts, retry_wait_seconds, func, *args, **kwargs):
+    exp_backoff = False
+    __run_noreturn_func_with_retry_inner__(retry_attempts, retry_wait_seconds, exp_backoff, func, *args, **kwargs)

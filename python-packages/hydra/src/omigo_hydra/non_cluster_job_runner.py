@@ -12,6 +12,7 @@ DEFAULT_WAIT_10SEC = 10
 DEFAULT_WAIT_30SEC = 30
 DEFAULT_WAIT_60SEC = 60
 DEFAULT_RETRY_ATTEMPTS = 3
+DEFAULT_RETRY_WAIT_SEC = 60
 
 # Class RunnerBase
 class RunnerBase:
@@ -234,7 +235,7 @@ class JobManager:
                   utils.info("JobManager: Sleeping for {} seconds".format(self.wait_sec))
                   time.sleep(self.wait_sec)
             except Exception as e:
-                utils.error("JobManager: run_loop: caught exception: {}. attemps: {} / {}".format(e, num_attempts, self.max_attempts))
+                utils.error("JobManager: run_loop: caught exception: {}. attempts: {} / {}".format(e, num_attempts, self.max_attempts))
                 # increase
                 num_attempts = num_attempts + 1
             except:
@@ -398,16 +399,19 @@ class ReprocessBatchWorker:
 
 # Class Worker
 class Worker:
-    def __init__(self, base_dir, worker_id, run_job_func = None, retry_attempts = DEFAULT_RETRY_ATTEMPTS, wait_sec = DEFAULT_WAIT_30SEC, num_iter = 1000):
+    def __init__(self, base_dir, worker_id, run_job_func = None, retry_attempts = DEFAULT_RETRY_ATTEMPTS, retry_wait_sec = DEFAULT_RETRY_WAIT_SEC,
+        wait_sec = DEFAULT_WAIT_30SEC, num_iter = 1000):
         self.runner_base = RunnerBase(base_dir)
         self.worker_id = worker_id
         self.run_job_func = run_job_func
         self.retry_attempts = retry_attempts
+        self.retry_wait_seconds = retry_wait_seconds
         self.wait_sec = wait_sec
         self.num_iter = num_iter
 
         # debug
-        utils.info("Worker: base_dir: {}, worker_id: {}, wait_sec: {}, num_iter: {}".format(base_dir, worker_id, wait_sec, num_iter))
+        utils.info("Worker: base_dir: {}, worker_id: {}, retry_attempts: {}, retry_wait_seconds: {}, wait_sec: {}, num_iter: {}".format(base_dir,
+            retry_attempts, retry_wait_seconds, worker_id, wait_sec, num_iter))
 
     def run_loop(self):
         # check worker exists
@@ -423,14 +427,7 @@ class Worker:
                 return
 
             # run
-            try:
-                utils.run_noreturn_func_with_retry(self.retry_attempts, self.wait_sec, self.run)
-            except Exception as  e:
-                utils.warn("Worker: Caught Exception: {}, Ignoring".format(e))
-                traceback.print_exc(file = sys.stdout)
-            except:
-                utils.warn("Worker: Caught Interrupt. Returning")
-                return
+            utils.run_noreturn_func_with_retry(self.retry_attempts, self.retry_wait_sec, self.run)
 
             # sleep
             utils.info("Worker: iteration: {}, Sleeping for {} seconds".format(i, self.wait_sec))
