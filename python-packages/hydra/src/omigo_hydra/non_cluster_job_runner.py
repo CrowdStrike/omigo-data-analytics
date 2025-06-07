@@ -399,7 +399,7 @@ class ReprocessBatchWorker:
 
 # Class Worker
 class Worker:
-    def __init__(self, base_dir, worker_id, run_job_func = None, retry_attempts = DEFAULT_RETRY_ATTEMPTS, retry_wait_sec = DEFAULT_RETRY_WAIT_SEC,
+    def __init__(self, base_dir, worker_id, run_job_func = None, retry_attempts = DEFAULT_RETRY_ATTEMPTS, retry_wait_seconds = DEFAULT_RETRY_WAIT_SEC,
         wait_sec = DEFAULT_WAIT_30SEC, num_iter = 1000):
         self.runner_base = RunnerBase(base_dir)
         self.worker_id = worker_id
@@ -427,7 +427,7 @@ class Worker:
                 return
 
             # run
-            utils.run_noreturn_func_with_retry(self.retry_attempts, self.retry_wait_sec, self.run)
+            utils.run_noreturn_func_with_retry(self.retry_attempts, self.retry_wait_seconds, self.run)
 
             # sleep
             utils.info("Worker: iteration: {}, Sleeping for {} seconds".format(i, self.wait_sec))

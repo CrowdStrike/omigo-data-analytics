@@ -11,6 +11,8 @@ import time
 import numpy as np
 from io import StringIO
 
+DEFAULT_MAX_COL_WIDTH = 40
+
 class DataFrame:
     """This is the main data processing class to apply different filter and transformation functions
     on tsv data and get the results. The design is more aligned with functional programming where
@@ -1169,12 +1171,12 @@ class DataFrame:
         dmsg = utils.extend_inherit_message(dmsg, "exclude_filter")
         return self.filter(cols, func, include_cond = False, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def __any_col_with_cond_exists_filter__(self, cols, func, exclude_flag = False, ignore_if_missing = False, dmsg = ""):
-        dmsg = utils.extend_inherit_message(dmsg, "__any_col_with_cond_exists_filter__")
+    def __select_any_cols_with_cond_exists_filter__(self, cols, func, exclude_flag = False, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "__select_any_cols_with_cond_exists_filter__")
 
         # check empty
         if (self.has_empty_header()):
-            utils.raise_exception_or_warn("__any_col_with_cond_exists_filter__: empty header tsv", ignore_if_missing)
+            utils.raise_exception_or_warn("__select_any_cols_with_cond_exists_filter__: empty header tsv", ignore_if_missing)
             return self
 
         # find the matching cols and indexes
@@ -1212,12 +1214,12 @@ class DataFrame:
         # return
         return new_df(self.get_header_fields(), new_data_fields)
 
-    def __all_cols_with_cond_exists_filter__(self, cols, func, exclude_flag = False, ignore_if_missing = False, dmsg = ""):
-        dmsg = utils.extend_inherit_message(dmsg, "__all_cols_with_cond_exists_filter__")
+    def __select_all_cols_with_cond_exists_filter__(self, cols, func, exclude_flag = False, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "__select_all_cols_with_cond_exists_filter__")
 
         # check empty
         if (self.has_empty_header()):
-            utils.raise_exception_or_warn("__all_cols_with_cond_exists_filter__: empty header tsv", ignore_if_missing)
+            utils.raise_exception_or_warn("__select_all_cols_with_cond_exists_filter__: empty header tsv", ignore_if_missing)
             return self
 
         # find the matching cols and indexes
@@ -1255,21 +1257,21 @@ class DataFrame:
         # return
         return new_df(self.get_header_fields(), new_data_fields)
 
-    def any_col_with_cond_exists_filter(self, cols, func, ignore_if_missing = False, dmsg = ""):
-        dmsg = utils.extend_inherit_message(dmsg, "any_col_with_cond_exists_filter")
-        return self.__any_col_with_cond_exists_filter__(cols, func, exclude_flag = False, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
+    def select_any_cols_with_cond_exists_filter(self, cols, func, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "select_any_cols_with_cond_exists_filter")
+        return self.__select_any_cols_with_cond_exists_filter__(cols, func, exclude_flag = False, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def any_col_with_cond_exists_exclude_filter(self, cols, func, ignore_if_missing = False, dmsg = ""):
-        dmsg = utils.extend_inherit_message(dmsg, "any_col_with_cond_exists_exclude_filter")
-        return self.__any_col_with_cond_exists_filter__(cols, func, exclude_flag = True, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
+    def select_any_cols_with_cond_exists_exclude_filter(self, cols, func, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "select_any_cols_with_cond_exists_exclude_filter")
+        return self.__select_any_cols_with_cond_exists_filter__(cols, func, exclude_flag = True, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def all_col_with_cond_exists_filter(self, cols, func, ignore_if_missing = False, dmsg = ""):
-        dmsg = utils.extend_inherit_message(dmsg, "all_col_with_cond_exists_filter")
-        return self.__all_col_with_cond_exists_filter__(cols, func, exclude_flag = False, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
+    def select_all_cols_with_cond_exists_filter(self, cols, func, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "select_all_cols_with_cond_exists_filter")
+        return self.__select_all_cols_with_cond_exists_filter__(cols, func, exclude_flag = False, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def all_col_with_cond_exists_exclude_filter(self, cols, func, ignore_if_missing = False, dmsg = ""):
-        dmsg = utils.extend_inherit_message(dmsg, "all_col_with_cond_exists_exclude_filter")
-        return self.__all_col_with_cond_exists_filter__(cols, func, exclude_flag = True, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
+    def select_all_cols_with_cond_exists_exclude_filter(self, cols, func, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "select_all_cols_with_cond_exists_exclude_filter")
+        return self.__select_all_cols_with_cond_exists_filter__(cols, func, exclude_flag = True, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
     def transform(self, cols, func, new_col_or_cols, use_array_notation = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "transform")
@@ -1590,6 +1592,7 @@ class DataFrame:
         utils.warn("Please use to_maps()")
         return self.to_maps()
 
+    # resolve_url_encoded_cols is needed for serializing complex data structures as comma separated list
     def to_maps(self, resolve_url_encoded_cols = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "to_maps")
 
@@ -1682,7 +1685,7 @@ class DataFrame:
         # return
         return new_df(new_header_fields, new_data_fields)
 
-    def show_transpose(self, n = 1, title = "Show Transpose", max_col_width = None, debug_only = False, dmsg = ""):
+    def show_transpose(self, n = 1, title = "Show Transpose", max_col_width = DEFAULT_MAX_COL_WIDTH, debug_only = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "show_transpose")
 
         # check empty
@@ -1712,7 +1715,7 @@ class DataFrame:
         # return self
         return self
 
-    def show_transpose_non_empty(self, n = 1, title = "Show Transpose", max_col_width = None, debug_only = False, dmsg = ""):
+    def show_transpose_non_empty(self, n = 1, title = "Show Transpose Non Empty", max_col_width = DEFAULT_MAX_COL_WIDTH, debug_only = False, dmsg = ""):
         # show
         self \
             .take(n) \
@@ -1722,7 +1725,29 @@ class DataFrame:
         # return self
         return self
 
-    def show(self, n = 100, title = "Show", max_col_width = 40, debug_only = False, dmsg = ""):
+    def show_transpose_sort_cols(self, n = 1, title = "Show Transpose Sort Cols", max_col_width = DEFAULT_MAX_COL_WIDTH, debug_only = False, dmsg = ""):
+        # show
+        self \
+            .transpose(n) \
+            .sort("col_name") \
+            .show(n = 100000, title = title, max_col_width = max_col_width, debug_only = debug_only, dmsg = dmsg)
+
+        # return self
+        return self
+
+    def show_transpose_non_empty_sort_cols(self, n = 1, title = "Show Transpose Non Empty Sort Cols", max_col_width = DEFAULT_MAX_COL_WIDTH, debug_only = False, dmsg = ""):
+        # show
+        self \
+            .take(n) \
+            .drop_empty_cols() \
+            .transpose(n) \
+            .sort("col_name") \
+            .show(n = 100000, title = title, max_col_width = max_col_width, debug_only = debug_only, dmsg = dmsg)
+
+        # return self
+        return self
+
+    def show(self, n = 100, title = "Show", max_col_width = DEFAULT_MAX_COL_WIDTH, debug_only = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "show")
 
         # check empty
@@ -1743,7 +1768,7 @@ class DataFrame:
         # return the original tsv
         return self
 
-    def show_sample(self, n = 100, title = None, max_col_width = 40, debug_only = False, dmsg = ""):
+    def show_sample(self, n = 100, title = None, max_col_width = DEFAULT_MAX_COL_WIDTH, debug_only = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "show_sample")
 
         # check empty
@@ -4263,7 +4288,11 @@ class DataFrame:
 
                 # handle nested_cols scenario where the entire value is to be set as url encoded json blob
                 if (nested_cols is not None and k in nested_cols):
-                    single_results[k + ":json:url_encoded"] = utils.url_encode(json.dumps(v))
+                    # value must be of type dict or list
+                    if (isinstance(v, (dict, list)) == True):
+                        single_results[k + ":json_encoded"] = utils.url_encode(json.dumps(v))
+                    else:
+                        raise Exception("{}: nested_cols: {} is non dict / list object, v: {}".format(dmsg, k, v))
                 elif (custom_map_parsing_funcs is not None and k in custom_map_parsing_funcs):
                     __custom_map_parsing_func__ = custom_map_parsing_funcs[k]
                     dict_results.append(__custom_map_parsing_func__(v, parent_prefix = parent_with_child_key))
@@ -4524,6 +4553,10 @@ class DataFrame:
         default_val = utils.resolve_default_parameter("default_val", default_val, "", dmsg)
         join_col = utils.resolve_default_parameter("join_col", join_col, ",", dmsg)
 
+        # url_encoded_cols is deprecated
+        if (url_encoded_cols is not None):
+            utils.warn("{}: url_encoded_cols: {} is not None. Deprecated".format(dmsg, url_encoded_cols))
+
         # validation
         if (prefix is None):
             utils.warn_once("{}: prefix = None is deprecated. Using the original column name as prefix: {}".format(dmsg, col))
@@ -4626,8 +4659,7 @@ class DataFrame:
 
         # result
         result = from_pandas_df(df) \
-            .add_prefix(prefix, dmsg = dmsg) \
-            .show_transpose(3, title = "result")
+            .add_prefix(prefix, dmsg = dmsg)
 
         # return
         return self \
@@ -4877,7 +4909,7 @@ class DataFrame:
         # return self
         return self
 
-    def show_group_count(self, col_or_cols, n = 20, title = "Group Count", max_col_width = 40, sort_by_key = False, seq_col = "sno", dmsg = ""):
+    def show_group_count(self, col_or_cols, n = 20, title = "Group Count", max_col_width = DEFAULT_MAX_COL_WIDTH, sort_by_key = False, seq_col = "sno", dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "show_group_count")
 
         # call show transpose after custom func
@@ -4901,7 +4933,7 @@ class DataFrame:
         # return self
         return self
 
-    def show_select_func(self, col_or_cols, n = 20, title = "Show", max_col_width = 40, dmsg = ""):
+    def show_select_func(self, col_or_cols, n = 20, title = "Show", max_col_width = DEFAULT_MAX_COL_WIDTH, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "show_select_func")
 
         # show
