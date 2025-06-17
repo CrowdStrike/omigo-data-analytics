@@ -820,7 +820,7 @@ def __run_return_func_with_retry_inner__(retry_attempts, retry_wait_seconds, exp
             return func(*args, **kwargs)
         except Exception as e:
             if (retry_attempts > 0):
-                error("run_return_func_with_retry: Caught Exception: {}, retry_attempts: {}, Retrying after sleeping for {} seconds".format(e,
+                error("__run_return_func_with_retry_inner__: Caught Exception: {}, retry_attempts: {}, Retrying after sleeping for {} seconds".format(e,
                     retry_attempts, retry_wait_seconds))
                 traceback.print_exc(file = sys.stdout)
                 time.sleep(retry_wait_seconds)
@@ -839,7 +839,7 @@ def __run_noreturn_func_with_retry_inner__(retry_attempts, retry_wait_seconds, e
             return
         except Exception as e:
             if (retry_attempts > 0):
-                error("run_noreturn_func_with_retry: Caught Exception: {}, retry_attempts: {}, Retrying after sleeping for {} seconds".format(e,
+                error("__run_noreturn_func_with_retry_inner__: Caught Exception: {}, retry_attempts: {}, Retrying after sleeping for {} seconds".format(e,
                     retry_attempts, retry_wait_seconds))
                 traceback.print_exc(file = sys.stdout)
                 time.sleep(retry_wait_seconds)

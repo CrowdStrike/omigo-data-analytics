@@ -1171,8 +1171,11 @@ class DataFrame:
         dmsg = utils.extend_inherit_message(dmsg, "exclude_filter")
         return self.filter(cols, func, include_cond = False, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def __select_any_cols_with_cond_exists_filter__(self, cols, func, exclude_flag = False, ignore_if_missing = False, dmsg = ""):
+    def __select_any_cols_with_cond_exists_filter__(self, func, cols = None, exclude_flag = False, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "__select_any_cols_with_cond_exists_filter__")
+
+        # resolve cols
+        cols = utils.resolve_default_parameter("cols", cols, ".*", dmsg)
 
         # check empty
         if (self.has_empty_header()):
@@ -1214,13 +1217,16 @@ class DataFrame:
         # return
         return new_df(self.get_header_fields(), new_data_fields)
 
-    def __select_all_cols_with_cond_exists_filter__(self, cols, func, exclude_flag = False, ignore_if_missing = False, dmsg = ""):
+    def __select_all_cols_with_cond_exists_filter__(self, func, cols = None, exclude_flag = False, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "__select_all_cols_with_cond_exists_filter__")
 
         # check empty
         if (self.has_empty_header()):
             utils.raise_exception_or_warn("__select_all_cols_with_cond_exists_filter__: empty header tsv", ignore_if_missing)
             return self
+
+        # resolve cols
+        cols = utils.resolve_default_parameter("cols", cols, ".*", dmsg)
 
         # find the matching cols and indexes
         matching_cols = self.__get_matching_cols__(cols, ignore_if_missing = ignore_if_missing)
@@ -1257,21 +1263,21 @@ class DataFrame:
         # return
         return new_df(self.get_header_fields(), new_data_fields)
 
-    def select_any_cols_with_cond_exists_filter(self, cols, func, ignore_if_missing = False, dmsg = ""):
+    def select_any_cols_with_cond_exists_filter(self, func, cols = None, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "select_any_cols_with_cond_exists_filter")
-        return self.__select_any_cols_with_cond_exists_filter__(cols, func, exclude_flag = False, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
+        return self.__select_any_cols_with_cond_exists_filter__(func, cols = cols, exclude_flag = False, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def select_any_cols_with_cond_exists_exclude_filter(self, cols, func, ignore_if_missing = False, dmsg = ""):
+    def select_any_cols_with_cond_exists_exclude_filter(self, func, cols = None, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "select_any_cols_with_cond_exists_exclude_filter")
-        return self.__select_any_cols_with_cond_exists_filter__(cols, func, exclude_flag = True, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
+        return self.__select_any_cols_with_cond_exists_filter__(func, cols = cols, exclude_flag = True, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def select_all_cols_with_cond_exists_filter(self, cols, func, ignore_if_missing = False, dmsg = ""):
+    def select_all_cols_with_cond_exists_filter(self, func, cols = None, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "select_all_cols_with_cond_exists_filter")
-        return self.__select_all_cols_with_cond_exists_filter__(cols, func, exclude_flag = False, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
+        return self.__select_all_cols_with_cond_exists_filter__(func, cols = None, exclude_flag = False, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def select_all_cols_with_cond_exists_exclude_filter(self, cols, func, ignore_if_missing = False, dmsg = ""):
+    def select_all_cols_with_cond_exists_exclude_filter(self, func, cols = None, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "select_all_cols_with_cond_exists_exclude_filter")
-        return self.__select_all_cols_with_cond_exists_filter__(cols, func, exclude_flag = True, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
+        return self.__select_all_cols_with_cond_exists_filter__(func, cols = cols, exclude_flag = True, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
     def transform(self, cols, func, new_col_or_cols, use_array_notation = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "transform")
