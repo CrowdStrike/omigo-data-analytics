@@ -2194,8 +2194,12 @@ class DataFrame:
         # return
         return new_df(new_header_fields, new_data_fields)
 
-    def to_csv(self, comma_replacement = ";", dmsg = ""):
-        raise Exception("to_csv is not supported in this class")
+    def to_csv_text(self, comma_replacement = ";", dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "to_csv")
+        header_line = ",".join(self.get_header_fields())
+        data = "\n".join([",".join(fields) for fields in self.get_data_fields()])
+        combined = "\n".join([header_line, data])
+        return combined  
 
     def url_encode_inline(self, col_or_cols, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "url_encode_inline")
