@@ -39,7 +39,7 @@ class LogScaleSearch:
             self.base_url, self.repository, self.timeout_sec, self.wait_sec, self.attempts, self.attempt_sleep_sec))
 
         # warn
-        utils.warn_once("LogScaleSearch: This is an initial version inspired from splunk_ext. Need to be optimized further.")
+        utils.warn_once("LogScaleSearch: This is an initial version inspired from logscale_ext. Need to be optimized further.")
 
     def get_logscale_client(self):
         # create client once
@@ -64,10 +64,41 @@ class LogScaleSearch:
         utils.info("call_search: query: {}, start_time: {}, end_time: {}".format(query, start_time, end_time))
 
         # execute
-        return self.__execute_query__(query, start_time_millis, end_time_millis, self.attempts, accepted_cols = accepted_cols, excluded_cols = excluded_cols,
+        result = self.__execute_query__(query, start_time_millis, end_time_millis, self.attempts, accepted_cols = accepted_cols, excluded_cols = excluded_cols,
             limit = limit, num_par_on_limit = num_par_on_limit, dmsg = dmsg)
 
-    # get splunk job id for display
+        # check for replace_col_prefix
+        new_header_fields = []
+        for h in result.get_header_fields():
+            # check if there is replace_col_prefix
+            if (h.find(dataframe.DEFAULT_ARRAY_PREFIX) != -1):
+                # split
+                parts = h.split(dataframe.DEFAULT_ARRAY_PREFIX)
+                new_h = parts[0]
+
+                # loop
+                i = 0
+                while (i < len(parts) - 1):
+                    if (parts[i].endswith("]") == True):
+                        new_h = new_h + dataframe.DEFAULT_ARRAY_PREFIX + parts[i+1]
+                    else:
+                        new_h = new_h + dataframe.DEFAULT_COL_PREFIX + parts[i+1]
+
+                    # increment 
+                    i = i + 1
+            else:
+                new_h = h
+
+            # append
+            new_header_fields.append(new_h) 
+
+        # create result
+        result = dataframe.new_with_cols(new_header_fields, data_fields = result.get_data_fields())
+
+        # return
+        return result
+
+    # get logscale job id for display
     def __get_logscale_job_display_id__(self, logscale_job):
         if (logscale_job is not None):
             return logscale_job.query_id
@@ -99,6 +130,9 @@ class LogScaleSearch:
 
     def __execute_normal_query__(self, query, start_time_millis, end_time_millis, accepted_cols, excluded_cols, attempts_remaining, limit, num_par_on_limit, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "LogScaleSearch: __execute_normal_query__")
+
+        # warn
+        utils.warn_once("{}: retries with backoff commented".format(dmsg))
 
         # execute query
         # try:
@@ -170,7 +204,7 @@ class LogScaleSearch:
         # get the result if they were not returned by limit calls
         if (result is None):
             # get the results
-            result = self.__parse_results__(logscale_job, events, query, start_time_millis, end_time_millis, accepted_cols, excluded_cols)
+            result = self.__parse_results__(logscale_job, events, query, start_time_millis, end_time_millis, accepted_cols, excluded_cols, dmsg = dmsg)
 
         # cancel the job
         # logscale_job.cancel()
@@ -215,8 +249,10 @@ class LogScaleSearch:
         # create base map
         return {"__start_time__": start_time_millis, "__end_time__": end_time_millis, "__error_msg__": "", "__count__": "" }
 
-    # splunk returns lot of things. One of them is tag::eventtype which is excluded
-    def __parse_results__(self, logscale_job, events, query, start_time_millis, end_time_millis, accepted_cols, excluded_cols):
+    # logscale returns lot of things. One of them is tag::eventtype which is excluded
+    def __parse_results__(self, logscale_job, events, query, start_time_millis, end_time_millis, accepted_cols, excluded_cols, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "__parse_results__")
+
         # create base map
         base_mp = self.__create_empty_results_map__(query, start_time_millis, end_time_millis)
 
@@ -225,7 +261,10 @@ class LogScaleSearch:
         job_id_trim = self.__get_logscale_job_display_id__(logscale_job)
         base_mp["__count__"] = str(results_total)
         base_mp["__error_msg__"] = ""
-        utils.debug("LogScaleSearch: __parse_results__: job_id: {}, query: {}, results_total: {}".format(job_id_trim, query, results_total))
+
+        # debug
+        utils.debug("{}: job_id: {}, query: {}, results_total: {}".format(dmsg, job_id_trim, query, results_total))
+        utils.warn_once("{}: not replacing @ and # from header".format(dmsg))
 
         # check for empty results
         if (results_total == 0):
@@ -245,7 +284,7 @@ class LogScaleSearch:
             # debugging
             counter = counter + 1
             if (counter % 1000 == 0):
-                utils.debug("__parse_results__: converting to sensor format counter: {}".format(counter))
+                utils.debug("{}: converting to sensor format counter: {}".format(dmsg, counter))
 
             # initialize
             result = {}
@@ -261,7 +300,7 @@ class LogScaleSearch:
                 value2 = event[k]
 
                 # some of the keys have @ and # as prefix. Remove those prefixes
-                key2 = key2.replace("@", "").replace("#", "")
+                # key2 = key2.replace("@", "").replace("#", "")
 
                 # assign to new map
                 result[key2] = utils.replace_spl_white_spaces_with_space_noop(str(value2))
@@ -270,7 +309,7 @@ class LogScaleSearch:
             results.append(result)
 
         # construct dataframe from the list of hashmaps
-        return dataframe.from_maps(results, accepted_cols = accepted_cols, excluded_cols = excluded_cols)
+        return dataframe.convert_maps_first_level(results, accepted_cols = accepted_cols, excluded_cols = excluded_cols, dmsg = dmsg)
 
     def __resolve_time_str__(self, x):
         # check for specific syntax with now
@@ -317,7 +356,7 @@ class LogScaleDF(dataframe.DataFrame):
         num_par = 0, attempt_sleep_sec = 30):
         super().__init__(header, data)
 
-        # check if new splunk search instance is needed
+        # check if new logscale search instance is needed
         if (logscale_client is None):
             logscale_client = LogScaleSearch(base_url, repository = repository, user_token = user_token, timeout_sec = timeout_sec, wait_sec = wait_sec, attempts = attempts)
 

@@ -12,6 +12,8 @@ import numpy as np
 from io import StringIO
 
 DEFAULT_MAX_COL_WIDTH = 40
+DEFAULT_COL_PREFIX = ":"
+DEFAULT_ARRAY_PREFIX = "."
 
 class DataFrame:
     """This is the main data processing class to apply different filter and transformation functions
@@ -198,6 +200,25 @@ class DataFrame:
             return self \
                 .select(found_cols, dmsg = dmsg)
 
+    def select_rows_with_cols_cond_exists(self, col_or_cols, func, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "select_rows_with_cols_cond_exists")
+
+        # matching cols
+        col_or_cols = self.__get_matching_cols__(col_or_cols)
+        indexes = self.__get_col_indexes__(col_or_cols)
+            
+        # found rows 
+        new_data_fields = []
+                    
+        # iterate and find the matching columns
+        for fields in self.get_data_fields():
+            vs = list(filter(lambda t: func(fields[t]) == True, indexes))
+            if (len(vs) > 0):
+                new_data_fields.append(fields)
+        
+        # create a new dataframe
+        return new_df(self.get_header_fields(), new_data_fields)
+        
     def select_rows_with_cond_exists(self, func, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "select_rows_with_cond_exists")
 
@@ -5303,7 +5324,80 @@ class DataFrame:
                 return vs[0]
 
         # fallback
-        return default_val 
+        return default_val
+
+    def array_matches(self, col, func, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "array_matches")
+
+        # find all matching cols
+        matching_cols = list(filter(lambda t: t.startswith(col + "[") and t.endswith("]"), self.get_header_fields()))
+
+        # validation
+        if (len(matching_cols) == 0):
+            raise Exception("{}: no matching cols found: {}".format(dmsg, col))
+
+        # for each row, if any of the column matches, return
+        return self.select_rows_with_cols_cond_exists(matching_cols, func, dmsg = dmsg)
+
+    def array_value_exists(self, col, value, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "array_value_exists")
+
+        # validation
+        if (value is None):
+            raise Exception("{}: value is None".format(dmsg))
+
+        # return
+        return self.array_matches(col, lambda t: t == str(value), dmsg = dmsg)
+
+    def array_value_find(self, col, value, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "array_value_find")
+    
+        # validation
+        if (value is None):
+            raise Exception("{}: value is None".format(dmsg))
+    
+        # return
+        return self.array_matches(col, lambda t: t.find(str(value)) != -1, dmsg = dmsg)
+
+    def nested_array_matches(self, col, func, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "nested_array_matches")
+
+        # split
+        index = col.rfind(DEFAULT_ARRAY_PREFIX)
+
+        # array col
+        array_col = col[0:index]
+        elt_col = col[index+1:]
+
+        # find all matching cols
+        matching_cols = list(filter(lambda t: t.startswith("{}[".format(array_col)) and t.endswith("{}{}".format(DEFAULT_ARRAY_PREFIX, elt_col)), self.get_header_fields())) 
+
+        # validation
+        if (len(matching_cols) == 0):
+            raise Exception("{}: no matching cols found: {}".format(dmsg, col))
+
+        # for each row, if any of the column matches, return
+        return self.select_rows_with_cols_cond_exists(matching_cols, func, dmsg = dmsg)
+
+    def nested_array_value_exists(self, col, value, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "nested_array_value_exists")
+
+        # validation
+        if (value is None):
+            raise Exception("{}: value is None".format(dmsg))
+
+        # return
+        return self.nested_array_matches(col, lambda t: t == str(value), dmsg = dmsg)
+
+    def nested_array_value_find(self, col, value, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "nested_array_value_find")
+
+        # validation
+        if (value is None):
+            raise Exception("{}: value is None".format(dmsg))
+
+        # return
+        return self.nested_array_matches(col, lambda t: t.find(str(value)) != -1, dmsg = dmsg)
 
     def enable_info_mode(self):
         utils.enable_info_mode()
@@ -5431,6 +5525,89 @@ def from_maps(mps, accepted_cols = None, excluded_cols = None, url_encoded_cols 
     # return
     return result
 
+# method to convert a list of maps to dataframe. Non primitive fields are encoded as json
+def convert_maps_first_level(mps, accepted_cols = None, excluded_cols = None, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "convert_maps_first_level")
+
+    # validation
+    if (len(mps) == 0):
+        utils.warn_once("{}: empty list".format(dmsg))
+        return create_empty()
+
+    # datatype map
+    data_types = {}
+
+    # create result
+    xdfs = []
+
+    # iterate and determine data type
+    for mp in mps:
+        for k in mp.keys():
+            # apply inclusions
+            if (accepted_cols is not None and k not in accepted_cols):
+                continue
+
+            # apply exclusions
+            if (excluded_cols is not None and k in excluded_cols):
+                continue
+
+            # read value
+            v = mp[k]
+
+            # check for none
+            if (v is not None):
+                # primitive data type
+                if (isinstance(v, (str, int, float)) == True and k not in data_types):
+                    data_types[k] = "primitive" 
+                if (isinstance(v, (list, dict)) == True):
+                    # defensive check
+                    if (k in data_types and data_types[k] == "primitive"):
+                        utils.warn_once("{}: remapping primitive to non primitive: {}: {}".format(dmsg, k, v))
+
+                    # assign
+                    data_types[k] = "non_primitive"
+
+    # create header
+    header_fields = sorted(data_types.keys())
+
+    # create data
+    data_fields = []
+
+    # iterate again
+    for mp in mps:
+        # new map
+        mp2 = {}
+
+        # iterate keys
+        for k in mp.keys():
+            # read values
+            v = mp[k]
+
+            # new key value
+            v2 = v
+            k2 = k
+
+            # validation
+            if (k not in data_types):
+                raise Exception("{}: missing key in mapping: {}: {}".format(dmsg, k, sorted(data_types.keys())))
+
+            # read data type
+            if (data_types[k] == "non_primitive"):
+                k2 = "{}:json_encoded".format(k)
+                v2 = json.dumps(v)
+
+            # assign
+            mp2[k2] = str(v2)
+
+        # create fields
+        fields = list([mp2[k] if (k in mp2.keys()) else "" for k in header_fields])
+
+        # append
+        data_fields.append(fields)
+
+    # return 
+    return new_df(header_fields, data_fields)
+ 
 def from_tsv(xtsv):
     header_fields = xtsv.get_header_fields()
 
