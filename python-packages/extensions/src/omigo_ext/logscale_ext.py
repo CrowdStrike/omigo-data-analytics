@@ -178,6 +178,7 @@ class LogScaleSearch:
             if (results_total >= limit):
                 if (num_par_on_limit > 1):
                     utils.warn("{}: limit: {} reached, splitting the query into {} parts and running again".format(dmsg, results_total, num_par_on_limit))
+
                     # dont make furthen than 1 level deep call
                     limit2 = None
                     num_par_on_limit2 = 0
@@ -269,7 +270,7 @@ class LogScaleSearch:
         # check for empty results
         if (results_total == 0):
             # return base dataframe
-            return dataframe.from_maps([base_mp])
+            return dataframe.new_with_cols(list(base_mp.keys()), data_fields = [])
 
         # define iterator variables
         results_offset = 0

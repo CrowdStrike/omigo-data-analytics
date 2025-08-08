@@ -66,7 +66,7 @@ class HadoopSqlBase:
         # group by clause
         if (group_by_cols is not None and len(group_by_cols) > 0):
             group_by_cols_expr = ",".join(["{}".format(i+1) for i in range(len(group_by_cols))])
-            query = "{} group by {}".format(query, ", ".join(group_by_cols_expr))
+            query = "{} group by {}".format(query, group_by_cols_expr)
 
         # having clause
         if (having_clause != ""):
