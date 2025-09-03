@@ -1,4 +1,4 @@
-from omigo_core import dataframe, utils
+from omigo_core import dataframe, utils, timefuncs, funclib
 import json
 
 class HadoopSqlBase:
@@ -88,7 +88,9 @@ class HadoopSqlBase:
         utils.info("HadoopSqlBase: execute_query: {}".format(query))
 
         # execute query
+        start_ts = timefuncs.get_utctimestamp_sec()
         result_cols, result_rows = self.execute_query_in_engine(query)
+        end_ts = timefuncs.get_utctimestamp_sec()
 
         # create the column aliases
         output_cols = []
@@ -106,8 +108,11 @@ class HadoopSqlBase:
             # add column
             output_cols.append(c)
 
+        # time taken
+        time_taken = funclib.get_display_relative_time_str(end_ts - start_ts)
+
         # debug
-        utils.info("HadoopSqlBase: execute_query: num rows: {}".format(len(result_rows)))
+        utils.info("HadoopSqlBase: execute_query: num rows: {}, time taken: {}".format(len(result_rows), time_taken))
 
         # create data
         data_fields = []

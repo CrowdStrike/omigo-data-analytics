@@ -311,6 +311,47 @@ def get_display_relative_time_str(v):
     # return
     return result
 
+def resolve_reference_time(ts):
+    # base condition
+    if (ts is None or str(ts) == "" or self.get_detect_ts() == None or self.get_detect_ts() == ""):
+        return ts
+
+    # use string
+    ts_str = str(ts)
+
+    # format check
+    if (ts_str.endswith("d") == False and ts_str.endswith("h") == False and ts_str.endswith("m") == False and ts_str.endswith("s") == False):
+        return ts
+
+    # params
+    days = 0
+    hours = 0
+    minutes = 0
+    seconds = 0
+
+    # days
+    if (ts_str.endswith("d")):
+        days = int(ts_str[0:-1])
+
+    # days + hours
+    if (ts_str.endswith("h")):
+        if (ts_str.find("d") != -1):
+            days = int(ts_str[0: ts_str.find("d")])
+            hours = int(ts_str[ts_str.find("d") + 1:-1])
+        else:
+            hours = int(ts_str[0:-1])
+
+    # hours and minutes
+    if (ts_str.endswith("m")):
+        if (ts_str.find("h") != -1):
+            hours = int(ts_str[0: ts_str.find("h")])
+            minutes = int(ts_str[ts_str.find("h") + 1:-1])
+        else:
+            minutes = int(ts_str[0:-1])
+
+    # return
+    return timefuncs.datetime_to_utctimestamp_sec(self.get_detect_ts()) + (days * 86400 + hours * 3600 + minutes * 60 + seconds)
+
 def datetime_to_utctimestamp_millis(*args, **kwargs):
     utils.rate_limit_after_n_warnings("Deprecated. Use timefuncs package")
     return timefuncs.datetime_to_utctimestamp_millis(*args, **kwargs)

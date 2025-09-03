@@ -4859,7 +4859,7 @@ class DataFrame:
     # custom function to call user defined apis
     def custom_func(self, func, *args, **kwargs):
         # boundary condition
-        if (self.is_empty()):
+        if (self.has_empty_header()):
             utils.warn_once("custom_func: header is empty. Make sure the custom_func handles empty data scenario and change this")
 
         # there can be scenarios of adding new columns
@@ -4926,7 +4926,7 @@ class DataFrame:
 
     # TODO: confusing name. is_empty can also imply no data
     def is_empty(self):
-        return self.get_header() == ""
+        return self.has_empty_header() == True and self.num_rows() == 0
 
     def has_empty_header(self):
         return self.num_cols() == 0
