@@ -14,10 +14,6 @@
  * Wide datasets with 100s or 1000s of columns.
  * Complex business logic is involved. 
 
-## Internal Data Format
- * TSV is used as the in-memory data format for simplicity.
- * Input data can be of different formats and read either locally or from external sources like S3 or web.
-
 ## Run through Docker
 #### Build image (first time only)
 ```
@@ -48,15 +44,13 @@ There are APIs provided to create new extension packages for custom needs and pl
 #### Read data from local filesystem. Can also use s3 or web url.
 ```
 python3
->>> from omigo_core import tsv
->>> x = tsv.read("data/iris.tsv.gz")
+>>> from omigo_core import dataframe
+>>> from omigo_hydra import hydra
+>>> x = hydra.read("data/iris.tsv.gz")
 #
 # other possible options
 #
-# x = tsv.read("data/iris.tsv")
-# x = tsv.read("data/iris.tsv.zip")
-# x = tsv.read("s3://bucket/path_to_file/data.tsv.gz")
-# x = tsv.read("https://github.com/CrowdStrike/omigo-data-analytics/raw/main/data/iris.tsv")
+# x = hydra.read("s3://bucket/path_to_file/data.tsv.gz")
 ```
 #### Print basic stats like the number of rows
 ```
@@ -66,7 +60,7 @@ python3
 
 #### Export to pandas data frame for nice display, or use any of pandas apis. 
 ```
->>> x.to_df(10)
+>>> x.to_pandas_df(10)
   sepal_length sepal_width petal_length petal_width        class
 0          5.1         3.5          1.4         0.2  Iris-setosa
 1          4.9         3.0          1.4         0.2  Iris-setosa
@@ -97,19 +91,19 @@ sepal_width	sepal_length
 #### Import the graph extension package for creating charts
 ```
 >>> from omigo_ext import graph_ext
->>> x.extend_class(graph_ext.VisualTSV).histogram("sepal_length", "class", yfigsize = 8)
+>>> x.extend_class(graph_ext.VisualDF).histogram("sepal_length", "class", yfigsize = 8)
 ```
 ![iris sepal_width histogram](images/iris-hist.png)
 
 #### Some of the more advanced graphs are also available
 ```
->>> x.extend_class(graph_ext.VisualTSV).pairplot(["sepal_length", "sepal_width"], kind = "kde", diag_kind = "auto")
+>>> x.extend_class(graph_ext.VisualDF).pairplot(["sepal_length", "sepal_width"], kind = "kde", diag_kind = "auto")
 ```
 ![iris sepal_width pairplot](images/iris-pairplot.png)
 
 #### The tsv file can be saved to local file system or s3
 ```
->>> tsv.write(y, "output.tsv.gz")
+>>> hydra.write(y, "output.tsv.gz")
 ```
 
 ## Extensions
