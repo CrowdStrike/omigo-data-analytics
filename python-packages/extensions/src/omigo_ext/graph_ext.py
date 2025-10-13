@@ -10,31 +10,31 @@ class VisualDF(dataframe.DataFrame):
     def __init__(self, header_fields, data_fields):
         super().__init__(header_fields, data_fields)
 
-    def linechart(self, xcol, ycols, ylabel = None, title = None, subplots = False, xfigsize = 25, yfigsize = 5, props = None):
+    def linechart(self, xcol, ycols, ylabel = None, title = None, subplots = False, xfigsize = 25, yfigsize = 5, props = {}):
         return __pd_linechart__(self, xcol, ycols, ylabel, title, subplots, xfigsize, yfigsize, props)
 
-    def scatterplot(self, xcol, ycol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10, props = None):
+    def scatterplot(self, xcol, ycol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10, props = {}):
         return __sns_scatterplot__(self, xcol, ycol, class_col, title, xfigsize, yfigsize, max_rows, max_class_col, props)
 
-    def histogram(self, xcol, class_col = None, bins = 10, title = None, binwidth = None, xfigsize = 25, yfigsize = 5, max_class_col = 10, props = None):
+    def histogram(self, xcol, class_col = None, bins = 10, title = None, binwidth = None, xfigsize = 25, yfigsize = 5, max_class_col = 10, props = {}):
         return __sns_histogram__(self, xcol, class_col, bins, title, binwidth, xfigsize, yfigsize, max_class_col, props)
 
-    def ecdf(self, xcol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_class_col = 10, props = None):
+    def ecdf(self, xcol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_class_col = 10, props = {}):
         return __sns_ecdf__(self, xcol, class_col, title, xfigsize, yfigsize, max_class_col, props)
 
-    def density(self, ycols, class_col = None, title = None, xfigsize = 25, yfigsize = 5, props = None):
+    def density(self, ycols, class_col = None, title = None, xfigsize = 25, yfigsize = 5, props = {}):
         return __sns_density__(self, ycols, class_col, title, xfigsize, yfigsize, props)
 
-    def barchart(self, xcol, ycol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10, props = None):
+    def barchart(self, xcol, ycol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10, props = {}):
         return __sns_barplot__(self, xcol, ycol, class_col, title, xfigsize, yfigsize, max_rows, max_class_col, props)
 
-    def boxplot(self, xcol, ycol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10, props = None):
+    def boxplot(self, xcol, ycol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10, props = {}):
         return __sns_boxplot__(self, xcol, ycol, class_col, title, xfigsize, yfigsize, max_rows, max_class_col, props)
 
-    def corr_heatmap(self, cols, title = None, xfigsize = 25, yfigsize = 5, max_rows = 6, props = None):
+    def corr_heatmap(self, cols, title = None, xfigsize = 25, yfigsize = 5, max_rows = 6, props = {}):
         return __sns_corr_heatmp__(self, cols, title, xfigsize, yfigsize, max_rows, props)
 
-    def pairplot(self, cols, class_col = None, title = None, xfigsize = 5, yfigsize = 5, max_rows = 6, max_class_col = 6, props = None):
+    def pairplot(self, cols, class_col = None, title = None, xfigsize = 5, yfigsize = 5, max_rows = 6, max_class_col = 6, props = {}):
         return __sns_pairplot__(self, cols, class_col, title, xfigsize, yfigsize, max_rows, max_class_col, props)
 
 def __create_data_frame_with_types__(xdf, xcol = None, ycols = None, zcol = None):
@@ -410,7 +410,7 @@ def __sns_pairplot__(xdf, cols, class_col, title, xfigsize, yfigsize, max_rows, 
 
     # define aspect and plot
     aspect = xfigsize / yfigsize
-    plt = sns.pairplot(df, hue = class_col, hue_order = hue_order, kind = kind, diag_kind = diag_kind, aspect = aspect, height = yfigsize, **props2)
+    plt = sns.pairplot(df, hue = class_col, hue_order = hue_order, aspect = aspect, height = yfigsize, **props2)
 
     # check for title
     if (title is not None and title != ""):

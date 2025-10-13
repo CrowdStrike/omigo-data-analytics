@@ -2138,7 +2138,11 @@ class DataFrame:
     def noop(self, *args, **kwargs):
         return self
 
-    def to_df(self, n = None, infer_data_types = True, no_infer_cols = None):
+    def to_df(*args, **kwargs):
+        utils.warn_once("to_df: Deprecated. Use to_pandas_df instead")
+        return self.to_pandas_df(*args, **kwargs)
+
+    def to_pandas_df(self, n = None, infer_data_types = True, no_infer_cols = None):
         # find how many rows to select
         nrows = self.num_rows() if (n is None) else n
 
@@ -2191,11 +2195,12 @@ class DataFrame:
         return pd.DataFrame(df_map)
 
     def to_simple_df(self, n = None):
-        return self.to_df(n = n, infer_data_types = False)
+        utils.warn("Deprecated. api not clear")
+        return self.to_pandas_df(n = n, infer_data_types = False)
 
     def export_to_df(self, n = -1):
-        utils.warn("Deprecated. Use to_df()")
-        return self.to_df(n)
+        utils.warn("Deprecated. Use to_pandas_df()")
+        return self.to_pandas_df(n)
 
     def to_json_records(self, new_col = "json"):
         new_header_fields = [new_col]

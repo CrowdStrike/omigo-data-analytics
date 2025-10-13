@@ -334,17 +334,19 @@ def is_float(v):
     except:
         return False
 
-def is_int_col(xtsv, col):
-    raise Exception("Deprecated. The to_df() method supports inferring data types")
+def is_int_col(xdf, col):
+    warn_once("Deprecated is_int_col")
+    return xdf.__has_all_int_values__(col)
 
-def is_float_col(xtsv, col):
-    raise Exception("Deprecated. The to_df() method supports inferring data types")
+def is_float_col(xdf, col):
+    warn_once("Deprecated is_float_col")
+    return xdf.__has_all_float_values__(col)
 
-def is_pure_float_col(xtsv, col):
-    raise Exception("Deprecated. The to_df() method supports inferring data types")
+def is_pure_float_col(xdf, col):
+    raise Exception("Deprecated")
 
-def is_float_with_fraction(xtsv, col):
-    raise Exception("Deprecated. The to_df() method supports inferring data types")
+def is_float_with_fraction(xdf, col):
+    raise Exception("Deprecated")
 
 def compute_hash(x, seed = 0):
     return abs(mmh3.hash64(str(x) + str(seed))[0])
