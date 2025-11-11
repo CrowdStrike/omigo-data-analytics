@@ -1640,7 +1640,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
     def read(self, path):
         path = self.__normalize_path__(path)
         utils.debug("read: {}".format(path))
-        return self.fs.read_file_contents_as_text_with_wait(self.__makepath__(path))
+        return self.fs.read_text_file_with_wait(self.__makepath__(path))
 
     # TODO: Race condition . Create method with wait suffix
     def read_json(self, path, retries = 5, wait_sec = 1):

@@ -33,7 +33,7 @@ class CustomBlockDF(dataframe.DataFrame):
                 return self
 
         # read the config resolution properties
-        json_obj = json.loads(hydra.read_file_contents_as_text(base_config))
+        json_obj = json.loads(hydra.read_text_file(base_config))
 
         # read the config resolution class. TODO: reflection
         config_resolver = self.load_custom_config_resolver(json_obj)

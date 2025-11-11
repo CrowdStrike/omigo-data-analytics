@@ -307,7 +307,7 @@ def read_json_files_from_directories_as_df(paths, s3_region = None, aws_profile 
         # read file as set of lines
         for f in files:
             full_path = "{}/{}".format(path, f)
-            lines = fs.read_file_contents_as_text(full_path).split("\n")
+            lines = fs.read_text_file(full_path).split("\n")
 
             # append to result
             result = result + lines

@@ -254,7 +254,7 @@ class JobManager:
         # iterate
         job_xdfs = [dataframe.new_with_cols(["job_id", "submit_ts"])]
         for new_job_id in new_job_ids_created:
-            job_spec_json = json.loads(self.runner_base.fs.read_file_contents_as_text(self.runner_base.get_job_status_created_job_id_file(new_job_id)))
+            job_spec_json = json.loads(self.runner_base.fs.read_text_file(self.runner_base.get_job_status_created_job_id_file(new_job_id)))
             job_xdfs.append(dataframe.from_maps([{"job_id": job_spec_json["job_id"], "submit_ts": job_spec_json["submit_ts"]}]))
 
         # create single tsv
@@ -266,7 +266,7 @@ class JobManager:
             utils.info("Looking for worker for job_id: {}".format(new_job_id))
 
             # read job spec
-            job_spec_json = json.loads(self.runner_base.fs.read_file_contents_as_text(self.runner_base.get_job_status_created_job_id_file(new_job_id)))
+            job_spec_json = json.loads(self.runner_base.fs.read_text_file(self.runner_base.get_job_status_created_job_id_file(new_job_id)))
 
             # find the worker that is not running anything
             worker_ids = self.runner_base.fs.list_leaf_dir(self.runner_base.get_workers_dir())
@@ -365,7 +365,7 @@ class ReprocessBatchWorker:
 
         for job_id in job_ids:
             # read job spec
-            job_spec_json = json.loads(self.runner_base.fs.read_file_contents_as_text(self.runner_base.get_job_status_completed_job_id_file(job_id)))
+            job_spec_json = json.loads(self.runner_base.fs.read_text_file(self.runner_base.get_job_status_completed_job_id_file(job_id)))
 
             # check if the status=FAILED
             if (job_spec_json["status"] == "FAILED"):
@@ -376,7 +376,7 @@ class ReprocessBatchWorker:
         # iterate
         for job_id in job_ids:
             # read job spec
-            job_spec_json = json.loads(self.runner_base.fs.read_file_contents_as_text(self.runner_base.get_job_status_created_job_id_file(job_id)))
+            job_spec_json = json.loads(self.runner_base.fs.read_text_file(self.runner_base.get_job_status_created_job_id_file(job_id)))
 
             # change the status
             utils.info("ReprocessBatchWorker: resubmit_specific_jobs: job_id: {}".format(job_id))
@@ -444,11 +444,11 @@ class Worker:
             created_job_spec_file = self.runner_base.get_job_status_created_job_id_file(job_id)
             running_job_spec_file = self.runner_base.get_job_status_running_job_id_file(job_id)
             completed_job_spec_file = self.runner_base.get_job_status_completed_job_id_file(job_id)
-            job_spec = self.runner_base.fs.read_file_contents_as_text(running_job_spec_file)
+            job_spec = self.runner_base.fs.read_text_file(running_job_spec_file)
 
             # empty file
             if (len(job_spec) == 0):
-                job_spec = self.runner_base.fs.read_file_contents_as_text(created_job_spec_file)
+                job_spec = self.runner_base.fs.read_text_file(created_job_spec_file)
 
             # read json
             job_spec_json = json.loads(job_spec)
@@ -527,7 +527,7 @@ class RunAnalysis:
 
             # run
             running_job_spec_file = self.runner_base.get_job_status_running_job_id_file(job_id)
-            job_spec = self.runner_base.fs.read_file_contents_as_text(running_job_spec_file)
+            job_spec = self.runner_base.fs.read_text_file(running_job_spec_file)
 
             # failsafe
             if (self.run_job_func is not None):

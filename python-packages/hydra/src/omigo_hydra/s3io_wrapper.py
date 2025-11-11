@@ -107,7 +107,7 @@ class S3FSWrapper:
         return self.read_text_file(path)
 
     def read_file_contents_as_text(self, *args, **kwargs):
-        utils.warn_once("read_file_contents_as_textis Deprecated. Use read_text_file")
+        utils.warn_once("read_file_contents_as_text is Deprecated. Use read_text_file")
         return self.read_text_file(*args, **kwargs)
 
     def read_text_file(self, path):

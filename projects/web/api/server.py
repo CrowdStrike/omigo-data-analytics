@@ -83,7 +83,7 @@ async def get_iris_data(request: Request, auth: str = Depends(validate_credentia
 @app.get("/get_timeline")
 @app.get("/get_timeline/")
 async def get_timeline(request: Request, auth: str = Depends(validate_credentials)):
-    mermaid_data = hydra.read_file_contents_as_text("data/timeline.txt")
+    mermaid_data = hydra.read_text_file("data/timeline.txt")
     utils.info("mermaid: {}".format(mermaid_data))
 
     # return
@@ -133,7 +133,7 @@ async def get_avengers(request: Request, node_props: str = None, edge_props: str
 @app.get("/get_timeline")
 async def get_timeline(request: Request, auth: str = Depends(validate_credentials)):
     # read data
-    mermaid_data = hydra.read_file_contents_as_text("data/avengers/timeline.txt")
+    mermaid_data = hydra.read_text_file("data/avengers/timeline.txt")
 
     # return
     return JSONResponse(content = {"mermaid": mermaid_data}, headers = standard_headers)

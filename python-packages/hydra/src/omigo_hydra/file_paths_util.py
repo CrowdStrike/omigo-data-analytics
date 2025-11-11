@@ -180,7 +180,7 @@ def read_file_content_as_lines(path, s3_region = None, aws_profile = None):
     fs = s3io_wrapper.S3FSWrapper(s3_region = s3_region, aws_profile = aws_profile)
 
     # read
-    data = fs.read_file_contents_as_text(path)
+    data = fs.read_text_file(path)
     return data.split("\n")
 
 def create_date_numeric_representation(date_str, default_suffix):
