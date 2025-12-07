@@ -4336,7 +4336,7 @@ class DataFrame:
                 # for each data type, there is a different kind of handling
                 elif (isinstance(v, (str, int, float))):
                     # v1 = utils.replace_spl_white_spaces_with_space_noop(v)
-                    v1 = v
+                    v1 = str(v)
                     # check if encoding needs to be done
                     if (url_encoded_cols is not None and k in url_encoded_cols):
                         v1 = utils.url_encode(v1)
@@ -4359,7 +4359,7 @@ class DataFrame:
                             if (collapse_primitive_list == True):
                                 # do the encoding
                                 # v1 = join_col.join(sorted(list([utils.replace_spl_white_spaces_with_space_noop(t) for t in v])))
-                                v1 = join_col.join(sorted(list([t for t in v])))
+                                v1 = join_col.join(sorted(list([str(t) for t in v])))
                                 if (url_encoded_cols is not None and k in url_encoded_cols):
                                     v1 = utils.url_encode(v1)
                                     single_results[k + ":url_encoded"] = v1
