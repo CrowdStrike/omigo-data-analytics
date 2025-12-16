@@ -6,7 +6,7 @@ class HadoopSqlBase:
         pass
 
     def execute_query(self, columns = ["*"], table = None, where_clause = "", group_by_cols = None, having_clause = "",
-        order_by_cols = None, sort_order = None, distinct_flag = None, limit = None, map_cols = None):
+        order_by_cols = None, sort_order = None, distinct_flag = None, limit = None, map_col = None):
 
         # warn
         utils.warn_once("HadoopSqlBase: execute_query: this is provided as reference implementation and should be used carefully in prod to avoid issues with sql")
@@ -47,10 +47,12 @@ class HadoopSqlBase:
             effective_columns.append(col)
 
         # use empty arrays as defaults
-        if (map_cols is None):
-            map_cols = []
+        map_cols = []
+        if (map_col is not None):
+            map_cols.append(map_col)
 
         # do a lowercase on mapcols
+        utils.warn_once("sql_helper: doing lowercase on map_col: {}".format(map_col))
         map_cols = list([v.lower() for v in map_cols])
 
         # base query
@@ -101,8 +103,8 @@ class HadoopSqlBase:
             # read column name
             c = result_cols[i]
 
-            # check for map cols
-            if (c.lower() in map_cols):
+            # check for map cols. case insensitive match
+            if (c in map_cols or c.lower() in map_cols):
                 map_cols_indexes[i] = 1
 
             # add column
@@ -133,6 +135,7 @@ class HadoopSqlBase:
                 if (i in map_cols_indexes.keys()):
                     value = json.dumps(value)
 
+                # utils.info("row: {}".format(value))
                 # replace any Ctrl-M characters
                 # value = "{}".format(value).replace("\t", " ").replace("\v", " ").replace("\r", " ").replace("\n", " ")
 
