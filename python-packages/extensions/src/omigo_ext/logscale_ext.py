@@ -1,5 +1,5 @@
 from omigo_core import dataframe, utils, timefuncs, dataframe
-from omigo_ext import multithread_ext
+from omigo_ext import multithread_ext, splunk_common
 import datetime
 from dateutil import parser
 import os
@@ -53,8 +53,8 @@ class LogScaleSearch:
             end_time = "now"
 
         # resolve time (probably again)
-        start_time = self.__resolve_time_str__(start_time)
-        end_time = self.__resolve_time_str__(end_time)
+        start_time = splunk_common.resolve_time_str(start_time)
+        end_time = splunk_common.resolve_time_str(end_time)
 
         # convert this to millis
         start_time_millis = timefuncs.datetime_to_utctimestamp_sec(start_time) * 1000
@@ -311,45 +311,6 @@ class LogScaleSearch:
 
         # construct dataframe from the list of hashmaps
         return dataframe.convert_maps_first_level(results, accepted_cols = accepted_cols, excluded_cols = excluded_cols, dmsg = dmsg)
-
-    def __resolve_time_str__(self, x):
-        # check for specific syntax with now
-        if (x.startswith("now")):
-            x = x.replace(" ", "")
-            base_time = datetime.datetime.utcnow().replace(tzinfo = datetime.timezone.utc)
-            diff_sec = None
-            # check if there are any diff units
-            if (x == "now"):
-                diff_sec = 0
-            else:
-                # validation for parsing logic
-                if (x.startswith("now-") == False):
-                    raise Exception("Unknown operator against now: ", x)
-
-                # take the diff part
-                diffstr = x[len("now-"):]
-
-                # unit is single letter, 'd', 'h', 'm', 's'
-                unit = diffstr[-1]
-
-                # how many of units to apply
-                count = int(diffstr[0:-1])
-                if (unit == "d"):
-                    diff_sec = count * 86400
-                elif (unit == "h"):
-                    diff_sec = count * 3600
-                elif (unit == "m"):
-                    diff_sec = count * 60
-                elif (unit == "s"):
-                    diff_sec = count * 1
-                else:
-                    raise Exception("Unknown time unit:", parts[1])
-
-            # return base_time minus diff
-            # return datetime.datetime.utcfromtimestamp(int(base_time.timestamp()) - diff_sec).replace(tzinfo = datetime.timezone.utc).isoformat()
-            return timefuncs.utctimestamp_to_datetime_str(int(base_time.timestamp()) - diff_sec)
-        else:
-            return timefuncs.utctimestamp_to_datetime_str(timefuncs.datetime_to_utctimestamp_sec(x))
 
 # class to do data manipulation on DataFrame
 class LogScaleDF(dataframe.DataFrame):

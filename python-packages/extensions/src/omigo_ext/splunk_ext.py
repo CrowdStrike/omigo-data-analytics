@@ -2,6 +2,7 @@ from omigo_core import utils
 from omigo_core import dataframe
 from omigo_core import timefuncs
 from omigo_ext import multithread_ext
+from omigo_ext import splunk_common
 import datetime
 from dateutil import parser
 import splunklib.client as splunk_client
@@ -98,8 +99,8 @@ class SplunkSearch:
             end_time = "now"
 
         # resolve time strings
-        self.start_time = self.__resolve_time_str__(start_time)
-        self.end_time = self.__resolve_time_str__(end_time)
+        self.start_time = splunk_common.resolve_time_str(start_time)
+        self.end_time = splunk_common.resolve_time_str(end_time)
 
         # return
         return self
@@ -152,8 +153,8 @@ class SplunkSearch:
             end_time = "now"
 
         # resolve time (probably again)
-        start_time = self.__resolve_time_str__(start_time)
-        end_time = self.__resolve_time_str__(end_time)
+        start_time = splunk_common.resolve_time_str(start_time)
+        end_time = splunk_common.resolve_time_str(end_time)
 
         # execute
         return self.__execute_query__(query, start_time, end_time, self.attempts, exec_mode = "normal",
@@ -300,7 +301,7 @@ class SplunkSearch:
                             xdf_results.append(xdf_result)
 
                         # merge
-                        result = tsv.merge_union(xdf_results)
+                        result = dataframe.merge_union(xdf_results)
                     else:
                         utils.warn("{}: limit: {} reached, but num_par_on_limit = 0. Results would be partial".format(dmsg, results_total))
 
@@ -344,7 +345,7 @@ class SplunkSearch:
                 base_mp = self.__create_empty_results_map__(query, start_time, end_time)
                 base_mp["__count__"] = "0"
                 base_mp["__error_msg__"] = str(e)
-                result = tsv.from_maps([base_mp])
+                result = dataframe.from_maps([base_mp])
 
                 # cache if needed
                 if (self.enable_cache == True):
@@ -406,7 +407,7 @@ class SplunkSearch:
                 base_mp = self.__create_empty_results_map__(query, start_time, end_time)
                 base_mp["__count__"] = "0"
                 base_mp["__error_msg__"] = str(e)
-                result = tsv.from_maps([base_mp])
+                result = dataframe.from_maps([base_mp])
                 if (self.enable_cache == True):
                     self.cache[cache_key] = result
                 # cancel the job
@@ -431,8 +432,8 @@ class SplunkSearch:
 
         # check for empty results
         if (results_total == 0):
-            # return base tsv
-            return tsv.from_maps([base_mp])
+            # return base dataframe
+            return dataframe.from_maps([base_mp])
 
         # define iterator variables
         results_offset = 0
@@ -522,50 +523,11 @@ class SplunkSearch:
             # append to array
             results2.append(result2)
 
-        # construct tsv from the list of hashmaps
-        return tsv.from_maps(results2)
-
-    def __resolve_time_str__(self, x):
-        # check for specific syntax with now
-        if (x.startswith("now")):
-            x = x.replace(" ", "")
-            base_time = datetime.datetime.utcnow().replace(tzinfo = datetime.timezone.utc)
-            diff_sec = None
-            # check if there are any diff units
-            if (x == "now"):
-                diff_sec = 0
-            else:
-                # validation for parsing logic
-                if (x.startswith("now-") == False):
-                    raise Exception("Unknown operator against now: ", x)
-
-                # take the diff part
-                diffstr = x[len("now-"):]
-
-                # unit is single letter, 'd', 'h', 'm', 's'
-                unit = diffstr[-1]
-
-                # how many of units to apply
-                count = int(diffstr[0:-1])
-                if (unit == "d"):
-                    diff_sec = count * 86400
-                elif (unit == "h"):
-                    diff_sec = count * 3600
-                elif (unit == "m"):
-                    diff_sec = count * 60
-                elif (unit == "s"):
-                    diff_sec = count * 1
-                else:
-                    raise Exception("Unknown time unit:", parts[1])
-
-            # return base_time minus diff
-            # return datetime.datetime.utcfromtimestamp(int(base_time.timestamp()) - diff_sec).replace(tzinfo = datetime.timezone.utc).isoformat()
-            return timefuncs.utctimestamp_to_datetime_str(int(base_time.timestamp()) - diff_sec)
-        else:
-            return timefuncs.utctimestamp_to_datetime_str(timefuncs.datetime_to_utctimestamp_sec(x))
+        # construct dataframe from the list of hashmaps
+        return dataframe.from_maps(results2)
 
 # class to do data manipulation on DataFrame
-class SplunkDF(tsv.DataFrame):
+class SplunkDF(dataframe.DataFrame):
     def __init__(self, header_fields, data_fields, splunk_search = None, host = None, app = None, username = None, password = None, cookie = None, timeout_sec = 600, wait_sec = 10, attempts = 3,
         enable_cache = False, use_partial_results = False, num_par = 0, attempt_sleep_sec = 30, attempt_gateway_timeout_sleep_sec = 120):
         super().__init__(header_fields, data_fields)
