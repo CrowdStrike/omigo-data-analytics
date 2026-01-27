@@ -24,7 +24,8 @@ def merge(df_list, def_val_map = None):
     for i in range(len(df_list)):
         if (df_list[i].size_in_gb() >= 1):
             utils.warn("merge: Found a very big tsv: {} / {}, num_rows: {}, size (GB): {}. max_size_cols_stats: {}".format(
-                i + 1, len(df_list), df_list[i].num_rows(), df_list[i].size_in_gb(), str(df_list[i].get_max_size_cols_stats())))
+                i + 1, len(df_list), df_list[i].num_rows(), df_list[i].size_in_gb(),
+                str(df_list[i].get_max_size_cols_stats())))
             df_list[i].show_transpose(1, title = "merge: big dataframe")
 
     # check for valid headers

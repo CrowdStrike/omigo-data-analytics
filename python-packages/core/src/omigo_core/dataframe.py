@@ -853,7 +853,7 @@ class DataFrame:
                     new_data_fields.append(new_fields)
                     result[keys_str] = 1
             else:
-                new_fields = new_fields + new_col_values
+                new_fields = fields + new_col_values
                 new_data_fields.append(new_fields)
 
         # return
@@ -3938,7 +3938,7 @@ class DataFrame:
 
         # create list of xdfs
         for i in range(effective_batches):
-            xdf_list.append(new_df(self.header, data_list[i]))
+            xdf_list.append(new_df(self.header_fields, data_list[i]))
 
         # filter out empty batches
         xdf_list = list(filter(lambda t: t.num_rows() > 0, xdf_list))
@@ -4628,8 +4628,11 @@ class DataFrame:
             .validate(dmsg = dmsg)
 
     # newer version of explode_json
-    def explode_json_v2(self, col, prefix = None, dmsg = "", **kwargs):
+    def explode_json_v2(self, col, prefix = None, fix_json_arr = None, dmsg = "", **kwargs):
         dmsg = utils.extend_inherit_message(dmsg, "explode_json_v2")
+
+        # fix json array with single quotes
+        fix_json_arr = utils.resolve_default_parameter("fix_json_arr", fix_json_arr, False, dmsg)
 
         # input
         xinput = self \
@@ -4641,7 +4644,7 @@ class DataFrame:
             xinput = xinput.url_decode_inline(col)
 
         # get all original values
-        vs = xinput.col_as_array_uniq(col)
+        vs = xinput.col_as_array(col)
 
         # variable to store values
         json_arr = []
@@ -4653,10 +4656,11 @@ class DataFrame:
             hash_value = utils.compute_hash(v)
 
             # TODO: hack
-            if (v.startswith("{'") or v.startswith("\"{'") or v.startswith("[{'") or v.startswith("\"[{'")):
-                utils.trace("{}: Found non standard json with mix of single and double quotes. Transforming: {}".format(dmsg, v))
-                v = v.replace("\"", "")
-                v = v.replace("'", "\"")
+            if (fix_json_arr is not None and fix_json_arr == True):
+                if (v.startswith("{'") or v.startswith("\"{'") or v.startswith("[{'") or v.startswith("\"[{'")):
+                    utils.trace("{}: Found non standard json with mix of single and double quotes. Transforming: {}".format(dmsg, v))
+                    v = v.replace("\"", "")
+                    v = v.replace("'", "\"")
 
             # load as json
             mp = json.loads(v) if (v != "") else {}
