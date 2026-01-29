@@ -21,16 +21,26 @@ def write(xdf, output_file_name, s3_region = None, aws_profile = None):
     # debug
     utils.debug("write: file saved to: {}, num_rows: {}, num_cols: {}".format(output_file_name, xdf.num_rows(), xdf.num_cols()))
 
+    # return
+    return xdf
+
 def write_text_file(path, text, s3_region = None, aws_profile = None):
     # instantiate file handler
     fs = s3io_wrapper.S3FSWrapper(s3_region = s3_region, aws_profile = aws_profile)
 
     # write
-    return fs.write_text_file(path, text) 
+    return fs.write_text_file(path, text)
+
+def check_exists(path):
+    raise Exception("Deprecated: Use file_exists")
 
 # check if the path exists
-def check_exists(path, s3_region = None, aws_profile = None):
-    return file_paths_util.check_exists(path, s3_region, aws_profile)
+def file_exists(path, s3_region = None, aws_profile = None):
+    # instantiate file handler
+    fs = s3io_wrapper.S3FSWrapper(s3_region = s3_region, aws_profile = aws_profile)
+
+    # write
+    return fs.file_exists(path) 
 
 def read(path_or_paths, sep = None, do_union = False, def_val_map = None, username = None, password = None, num_par = 0, wait_sec = 0.2, s3_region = None, aws_profile = None):
     # resolve single or multiple paths

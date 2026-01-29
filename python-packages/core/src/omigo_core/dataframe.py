@@ -10,6 +10,7 @@ import sys
 import time
 import numpy as np
 from io import StringIO
+from omigo_hydra import hydra
 
 DEFAULT_MAX_COL_WIDTH = 40
 DEFAULT_COL_PREFIX = ":"
@@ -2491,7 +2492,9 @@ class DataFrame:
         # return
         return new_df(self.get_header_fields(), new_data_fields)
 
-    def add_map_as_row(self, mp, default_val = None):
+    def add_map_as_row(self, mp, default_val = None, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "add_map_as_row")
+
         # check empty
         if (self.has_empty_header()):
             raise Exception("add_map_as_row: empty header tsv")
@@ -5439,6 +5442,12 @@ class DataFrame:
     def disable_trace_mode(self):
         utils.disable_trace_mode()
         return self
+
+    def write(self, output_file):
+        return hydra.write(self, output_file)
+
+def read(path):
+    return hydra.read(path)
 
 def get_version():
     return "v0.6.3"
