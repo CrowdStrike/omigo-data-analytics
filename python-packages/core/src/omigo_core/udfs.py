@@ -33,6 +33,7 @@ def uniq_len(vs):
     return str(len(vs2))
 
 def uniq_mkstr(vs):
+    warn_once("uniq_mkstr: this will not work with non url encoded data. need reserved words")
     vs2 = set()
     for t in vs:
         for k in str(t).split(","):
