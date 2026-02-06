@@ -8,11 +8,10 @@ import math
 import time
 
 class MultiThreadDF(dataframe.DataFrame):
-    def __init__(self, header_fields, data_fields, num_par = 0, status_check_interval_sec = 0.1, sleep_interval_sec = 0.11, num_batches = 10, dmsg = ""):
+    def __init__(self, header_fields, data_fields, num_par = 0, status_check_interval_sec = 0.1, num_batches = 10, dmsg = ""):
         super().__init__(header_fields, data_fields)
         self.num_par = num_par
         self.status_check_interval_sec = status_check_interval_sec
-        self.sleep_interval_sec = sleep_interval_sec
         self.dmsg = utils.extend_inherit_message(dmsg, "MultiThreadDF")
 
         # check if num_par is more than number of rows

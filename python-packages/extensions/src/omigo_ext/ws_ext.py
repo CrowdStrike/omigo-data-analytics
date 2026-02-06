@@ -185,7 +185,7 @@ def __call_web_service_exp_func__(xdf_timeout_sec, xdf_verify, url, query_params
         # check whether to execute or not
         if (do_execute == True):
             # call web service. TODO: Need HTTP Response codes for better error handling, back pressure etc
-            resp_str, resp_status_code, resp_err = dfutils.read_url_response(url_resolved, query_params_resolved, header_params_resolved, body = body_params_resolved,
+            resp_str, resp_status_code, resp_err = wsclient.read_url_response(url_resolved, query_params_resolved, header_params_resolved, body = body_params_resolved,
                 username = username, password = password, timeout_sec = xdf_timeout_sec, verify = xdf_verify)
             result_mp["response:success"] = "1" if (str(resp_status_code).startswith("2")) else "0"
             result_mp["response:selective_execution"] = "1"

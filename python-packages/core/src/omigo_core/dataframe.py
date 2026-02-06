@@ -3689,7 +3689,7 @@ class DataFrame:
         dmsg = utils.extend_inherit_message(dmsg, "left_map_join")
         return self.__map_join__(that, lkeys, rkeys = rkeys, join_type = "left", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, num_par = num_par, dmsg = dmsg)
 
-    def __map_join__(self, that, lkeys, rkeys = None, join_type = "inner", lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, num_par = 0, dmsg = ""):
+    def __map_join__(self, that, lkeys, rkeys = None, join_type = "inner", lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, num_par = 0, seed = 0, dmsg = ""):
         # validation
         if (join_type not in ["inner", "left", "left_outer"]):
             raise Exception("__map_join__: join_type: {} is not supported".format(join_type))
@@ -3841,7 +3841,7 @@ class DataFrame:
             lvals2 = list([fields[i] for i in lvalue_indexes])
             lvkey_str = "\t".join(lvals1)
 
-            # get ride side values
+            # get right side values
             rvals2_arr = [default_rvals]
             keys_matched = 0
             if (lvkey_str in rvkeys.keys()):
@@ -3855,7 +3855,7 @@ class DataFrame:
 
                 # take care of different join types
                 if (join_type == "inner"):
-                    if (lvkey in rvkeys):
+                    if (lvkey_str in rvkeys):
                         new_data_fields.append(new_fields)
                 elif (join_type == "left_outer" or join_type == "left"):
                     new_data_fields.append(new_fields)
