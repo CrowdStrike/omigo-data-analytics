@@ -18,7 +18,19 @@ def parse_file_base_name(x):
     return str(x[index+1:])
 
 def get_len(vs):
+    utils.warn_once("get_len: Deprecated. Use get_array_len")
     return str(len(vs))
+
+def get_array_len(vs):
+    # check data type
+    if (vs is None or type(vs) != list):
+        raise Exception("get_array_len: list expected: {}: {}".format(vs, type(vs)))
+
+    #return
+    return str(len(vs))
+
+def get_string_len(v):
+    return str(len(str(v)))
 
 def get_non_empty_len(vs):
     vs = list(filter(lambda t: len(t.strip()) > 0, vs))
@@ -392,4 +404,11 @@ def if_else_non_zero_int(*args):
         return v1
     else:
         return v2
+
+def get_range_int(vs):
+    if (vs is None or len(vs) == 0):
+        raise Exception("maxstr: empty vs")
+
+    # return range
+    return str(int(int(maxint(vs)) - int(minint(vs))))
 
