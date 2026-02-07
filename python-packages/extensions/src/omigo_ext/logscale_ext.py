@@ -8,7 +8,7 @@ import time
 import math
 import traceback
 # !{sys.executable} -m pip install --upgrade humiolib
-from humiolib.HumioClient import HumioClient
+import humiolib
 
 # Basic search class
 class LogScaleSearch:
@@ -34,6 +34,9 @@ class LogScaleSearch:
         self.attempts = attempts
         self.attempt_sleep_sec = attempt_sleep_sec
 
+        # warn
+        utils.warn("LogScaleSearch: This code needs refactoring")
+
         # message at creating a new instance
         utils.debug("LogScaleSearch: new instance created: base_url: {}, repository: {}, timeout_sec: {}, wait_sec: {}, attempts: {}, attempt_sleep_sec: {}".format(
             self.base_url, self.repository, self.timeout_sec, self.wait_sec, self.attempts, self.attempt_sleep_sec))
@@ -41,9 +44,9 @@ class LogScaleSearch:
         # warn
         utils.warn_once("LogScaleSearch: This is an initial version inspired from logscale_ext. Need to be optimized further.")
 
-    def get_logscale_client(self):
+    def __get_logscale_client__(self):
         # create client once
-        return HumioClient(base_url = self.base_url, repository = self.repository, user_token = self.user_token)
+        return humiolib.HumioClient(base_url = self.base_url, repository = self.repository, user_token = self.user_token)
 
     def call_search(self, query, start_time, end_time = None, accepted_cols = None, excluded_cols = None, limit = None, num_par_on_limit = 0, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "LogScaleSearch: call_search")
@@ -110,6 +113,9 @@ class LogScaleSearch:
         limit = None, num_par_on_limit = 0, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "LogScaleSearch: __execute_query__")
 
+        # warn
+        utils.warn("{}: this code needs refactoring. limit is not enforced".format(dmsg))
+
         # call and return
         return self.__execute_normal_query__(query, start_time_millis, end_time_millis, accepted_cols, excluded_cols, attempts_remaining,
             limit, num_par_on_limit, dmsg = dmsg)
@@ -137,7 +143,7 @@ class LogScaleSearch:
         # execute query
         # try:
         # submit job
-        logscale_job = self.get_logscale_client().create_queryjob(query, start = start_time_millis, end = end_time_millis, is_live = False)
+        logscale_job = self.__get_logscale_client__().create_queryjob(query, start = start_time_millis, end = end_time_millis, is_live = False)
         job_id_trim = self.__get_logscale_job_display_id__(logscale_job)
         utils.info("{}: LogScale Job submitted: {}, start_time: {}, end_time: {}".format(utils.max_dmsg_str(dmsg), job_id_trim,
             timefuncs.utctimestamp_to_datetime_str(start_time_millis), timefuncs.utctimestamp_to_datetime_str(end_time_millis)))

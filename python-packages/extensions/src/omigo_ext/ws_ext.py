@@ -1,7 +1,7 @@
 # package to do web service REST calls in an efficient way
 from omigo_core import dataframe 
 from omigo_core import utils
-from omigo_core import dfutils
+from omigo_core import wsclient 
 from omigo_ext import multithread_ext
 
 # TODO: selective_execution doesnt feel like a good design pattern.
