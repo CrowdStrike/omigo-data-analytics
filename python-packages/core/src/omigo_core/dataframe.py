@@ -118,6 +118,8 @@ class DataFrame:
 
     # cols is array of string
     def __select_inner__(self, col_or_cols, exclude_flag = None, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "__select_inner__")
+
         # check empty
         if (self.has_empty_header()):
             raise Exception("select: empty header tsv")
@@ -1820,9 +1822,9 @@ class DataFrame:
     def __show_title_header__(self, title):
         # print label
         if (title is not None):
-            print("=============================================================================================================================================")
-            print("Title: {}, Num Rows: {}, Num Cols: {}".format(title, self.num_rows(), self.num_cols()))
-            print("=============================================================================================================================================")
+            utils.info_without_header("=============================================================================================================================================")
+            utils.info_without_header("Title: {}, Num Rows: {}, Num Cols: {}".format(title, self.num_rows(), self.num_cols()))
+            utils.info_without_header("=============================================================================================================================================")
 
         # return
         return self
@@ -1830,10 +1832,10 @@ class DataFrame:
     def __show_title_footer__(self, title):
         # check for title
         if (title is not None):
-            print("=============================================================================================================================================")
+            utils.info_without_header("=============================================================================================================================================")
 
         # print blank
-        print("")
+        utils.info_without_header("")
 
         # return
         return self
@@ -1886,10 +1888,10 @@ class DataFrame:
                 row.append(utils.replace_spl_white_spaces_with_space(str(value)))
 
             # print
-            print("\t".join(row))
+            utils.info_without_header("\t".join(row))
 
         # print blank lines
-        print("")
+        utils.info_without_header("")
 
         # return self
         return self
@@ -4264,7 +4266,7 @@ class DataFrame:
                     utils.warn_once("{}: called with column that is not url encoded json. Assuming plain json string".format(dmsg))
                     json_mp = json.loads(json_str)
                 else:
-                    json_str10 = json_str[0:10] + "..." if (len(json_str) > 10) else json_str
+                    json_str10 = json_str[0:100] + "..." if (len(json_str) > 10) else json_str
                     utils.warn("{}: called with invalid value in the string. Ignoring parsing: {}".format(dmsg, json_str10))
                     mp = {"__explode_json_len__": "0"}
                     return [mp]
@@ -5047,7 +5049,9 @@ class DataFrame:
     # col_or_cols is a special variable that can be either single column name or an array. python
     # treats a string as an array of characters, so little hacky but a more intuitive api wise
     # TODO: mp.keys() doesnt return a list and can break the string matching
-    def __get_matching_cols__(self, col_or_cols, ignore_if_missing = False):
+    def __get_matching_cols__(self, col_or_cols, ignore_if_missing = False, dmsg = dmsg):
+        dmsg = utils.extend_inherit_message(dmsg, "__get_matching_cols__")
+
         # handle boundary conditions
         if (col_or_cols is None or len(col_or_cols) == 0):
             return []
@@ -5075,20 +5079,20 @@ class DataFrame:
                     # check for prefix
                     if (col_pattern.startswith(".*") == True):
                         if (col_pattern != ".*" and col_pattern.endswith("$") == False):
-                            utils.debug_once("__get_matching_cols__: rewriting pattern: {}".format(col_pattern))
+                            utils.debug_once("{}: __get_matching_cols__: rewriting pattern: {}".format(dmsg, col_pattern))
                             col_pattern = str(col_pattern) + "$"
 
                     # check for suffix
                     if (col_pattern.endswith(".*") == True):
                         if (col_pattern != ".*" and col_pattern.startswith("^") == False):
-                            utils.debug_once("__get_matching_cols__: rewriting pattern: {}".format(col_pattern))
+                            utils.debug_once("{}: __get_matching_cols__: rewriting pattern: {}".format(dmsg, col_pattern))
                             col_pattern = "^" + str(col_pattern)
                 elif (num_wild_cards == 2):
                     # check if wild cards are anywhere except as prefix or suffix
                     if (col_pattern.startswith(".*") == False or col_pattern.endswith(".*") == False):
-                        utils.warn_once("__get_matching_cols__: multiple wildcards in col patterns can be confusing: {}".format(col_pattern))
+                        utils.warn_once("{}: __get_matching_cols__: multiple wildcards in col patterns can be confusing: {}".format(dmsg, col_pattern))
                 else:
-                    utils.warn_once("__get_matching_cols__: multiple wildcards in col patterns can be confusing: {}".format(col_pattern))
+                    utils.warn_once("{}: __get_matching_cols__: multiple wildcards in col patterns can be confusing: {}".format(dmsg, col_pattern))
 
             # append
             col_patterns_transformed.append(col_pattern)

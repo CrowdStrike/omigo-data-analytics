@@ -137,6 +137,14 @@ def info_once(msg):
         if (len(INFO_MSG_CACHE) >= MSG_CACHE_MAX_LEN):
             INFO_MSG_CACHE = {}
 
+def info_without_header(msg):
+    # check if enabled
+    if (is_info() == False):
+        return
+
+    # print
+    print(msg)
+
 def error(msg):
     if (is_error()):
         print("[ERROR]: {}".format(msg))
@@ -583,12 +591,14 @@ def is_text_content_col(col, text_columns):
 
     return False
 
-def resolve_default_parameter(name, value, default_value, msg):
+def resolve_default_parameter(name, value, default_value, dmsg = ""):
+    dmsg = extend_inherit_message(dmsg, "resolve_default_parameter")
+
     # check if prefix parameter is None
     if (value is None):
         default_value_display = str(default_value)
         default_value_display = default_value_display if (len(default_value_display) < 30) else default_value_display[0:30] + "..."
-        warn_once("{}: {} value is None. Using default value: {}".format(msg, name, default_value_display))
+        warn_once("{}: {} value is None. Using default value: {}".format(dmsg, name, default_value_display))
         value = default_value
 
     # return
