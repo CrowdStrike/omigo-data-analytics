@@ -196,7 +196,7 @@ class DataFrame:
 
         # check for empty
         if (len(found_cols) == 0):
-            return dataframe.create_empty()
+            return create_empty()
         else:
             return self \
                 .select(found_cols, dmsg = dmsg)
