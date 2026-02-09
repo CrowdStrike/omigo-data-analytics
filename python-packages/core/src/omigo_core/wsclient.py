@@ -7,6 +7,7 @@ from omigo_core import dataframe, dfutils, utils
 class BearerAuth(requests.auth.AuthBase):
     def __init__(self, token):
         self.token = token
+
     def __call__(self, r):
         r.headers["Authorization"] = "Bearer " + self.token
         return r
@@ -89,7 +90,8 @@ def __read_base_url__(url, query_params = {}, headers = {}, body = None, usernam
         return None, e
 
 # TODO: the semantics of this api are not clear
-def read_url_json(url, query_params = {}, headers = {}, body = None, username = None, password = None, api_token = None, timeout_sec = 120, verify = True, method = None):
+def read_url_json(url, query_params = {}, headers = {}, body = None, username = None, password = None, api_token = None, timeout_sec = 120, verify = True, method = None, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "read_url_json")
     utils.warn("read_url_json will flatten json that comes out as list. This api is still under development")
 
     # read response
@@ -125,10 +127,12 @@ def read_url_json(url, query_params = {}, headers = {}, body = None, username = 
     return dataframe.DataFrame(header_fields, data_fields).validate()
 
 def read_url_response(url, query_params = {}, headers = {}, body = None, username = None, password = None, api_token = None, timeout_sec = 120, verify = True, method = None,
-    num_retries = 1, retry_sleep_sec = 1):
+    num_retries = 1, retry_sleep_sec = 1, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "read_url_response")
+
     # read response
     response, resp_exception = __read_base_url__(url, query_params = query_params, headers = headers, body = body, username = username, password = password, api_token = api_token,
-        timeout_sec = timeout_sec, verify = verify, method = method)
+        timeout_sec = timeout_sec, verify = verify, method = method, dmsg = dmsg)
 
     # check for errors
     if (response is None):
@@ -144,7 +148,7 @@ def read_url_response(url, query_params = {}, headers = {}, body = None, usernam
                     response.status_code, num_retries, retry_sleep_sec))
                 time.sleep(retry_sleep_sec)
                 return read_url_response(url, query_params = query_params, headers = headers, body = body, username = username, password = password, api_token = api_token,
-                    timeout_sec = timeout_sec, verify = verify, method = method, num_retries = num_retries - 1, retry_sleep_sec = retry_sleep_sec * 2)
+                    timeout_sec = timeout_sec, verify = verify, method = method, num_retries = num_retries - 1, retry_sleep_sec = retry_sleep_sec * 2, dmsg = dmsg)
             else:
                 utils.debug("read_url_response: url: {}, getting 429 too many requests or 5XX error. Use num_retries parameter to for backoff and retry.".format(url))
                 return "", response.status_code, response.reason
@@ -191,13 +195,17 @@ def read_url_response(url, query_params = {}, headers = {}, body = None, usernam
     return response_str, response.status_code, ""
 
 # TODO: Deprecated
-def read_url(url, query_params = {}, headers = {}, sep = None, username = None, password = None, api_token = None, timeout_sec = 120, verify = True, method = None):
+def read_url(url, query_params = {}, headers = {}, sep = None, username = None, password = None, api_token = None, timeout_sec = 120, verify = True, method = None, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "read_url")
+
     utils.warn("This method name is deprecated. Use read_url_as_df instead")
     return read_url_as_df(url, query_params = query_params, headers = headers, sep = sep, username = username, password = password, api_token = api_token,
-        timeout_sec = timeout_sec, verify = verify, method = method)
+        timeout_sec = timeout_sec, verify = verify, method = method, dmsg = dmsg)
 
 # TODO: the compressed file handling should be done separately in a function
-def read_url_as_df(url, query_params = {}, headers = {}, sep = None, username = None, password = None, api_token = None, timeout_sec = 120, verify = True, method = None):
+def read_url_as_df(url, query_params = {}, headers = {}, sep = None, username = None, password = None, api_token = None, timeout_sec = 120, verify = True, method = None, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "read_url_as_df")
+
     # use the file extension as alternate way of detecting type of file
     # TODO: move the file type and extension detection to separate function
     file_type = None
