@@ -5049,7 +5049,7 @@ class DataFrame:
     # col_or_cols is a special variable that can be either single column name or an array. python
     # treats a string as an array of characters, so little hacky but a more intuitive api wise
     # TODO: mp.keys() doesnt return a list and can break the string matching
-    def __get_matching_cols__(self, col_or_cols, ignore_if_missing = False, dmsg = dmsg):
+    def __get_matching_cols__(self, col_or_cols, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "__get_matching_cols__")
 
         # handle boundary conditions
