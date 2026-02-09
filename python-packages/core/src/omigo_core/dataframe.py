@@ -5079,7 +5079,7 @@ class DataFrame:
                     # check for prefix
                     if (col_pattern.startswith(".*") == True):
                         if (col_pattern != ".*" and col_pattern.endswith("$") == False):
-                            utils.debug_once("{}: __get_matching_cols__: rewriting pattern: {}".format(dmsg, col_pattern))
+                            utils.debug_once("{}: rewriting pattern: {}".format(dmsg, col_pattern))
                             col_pattern = str(col_pattern) + "$"
 
                     # check for suffix
