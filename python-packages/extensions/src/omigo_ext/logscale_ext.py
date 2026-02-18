@@ -114,7 +114,7 @@ class LogScaleSearch:
         dmsg = utils.extend_inherit_message(dmsg, "LogScaleSearch: __execute_query__")
 
         # warn
-        utils.warn("{}: this code needs refactoring. limit is not enforced".format(dmsg))
+        utils.warn_once("{}: this code needs refactoring. limit is not enforced".format(dmsg))
 
         # call and return
         return self.__execute_normal_query__(query, start_time_millis, end_time_millis, accepted_cols, excluded_cols, attempts_remaining,
