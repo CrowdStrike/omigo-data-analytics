@@ -5,37 +5,41 @@ import pandas as pd
 
 from omigo_core import dataframe
 from omigo_core import utils
+from omigo_core import udfs 
 
 class VisualDF(dataframe.DataFrame):
     def __init__(self, header_fields, data_fields):
         super().__init__(header_fields, data_fields)
 
-    def linechart(self, xcol, ycols, ylabel = None, title = None, subplots = False, xfigsize = 25, yfigsize = 5, props = {}):
-        return __pd_linechart__(self, xcol, ycols, ylabel, title, subplots, xfigsize, yfigsize, props)
+    def linechart(self, xcol, ycols, ylabel = None, title = None, subplots = False, xfigsize = 25, yfigsize = 5, props = {}, dmsg = ""):
+        return __pd_linechart__(self, xcol, ycols, ylabel, title, subplots, xfigsize, yfigsize, props, dmsg)
 
-    def scatterplot(self, xcol, ycol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10, props = {}):
-        return __sns_scatterplot__(self, xcol, ycol, class_col, title, xfigsize, yfigsize, max_rows, max_class_col, props)
+    def linechart_multi_class(self, xcol, ycol, class_col, ylabel = None, title = None, subplots = False, xfigsize = 25, yfigsize = 5, props = {}, dmsg = ""):
+        return __pd_linechart_multi_class__(self, xcol, ycol, class_col, ylabel, title, subplots, xfigsize, yfigsize, props, dmsg)
 
-    def histogram(self, xcol, class_col = None, bins = 10, title = None, binwidth = None, xfigsize = 25, yfigsize = 5, max_class_col = 10, props = {}):
-        return __sns_histogram__(self, xcol, class_col, bins, title, binwidth, xfigsize, yfigsize, max_class_col, props)
+    def scatterplot(self, xcol, ycol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10, props = {}, dmsg = ""):
+        return __sns_scatterplot__(self, xcol, ycol, class_col, title, xfigsize, yfigsize, max_rows, max_class_col, props, dmsg)
 
-    def ecdf(self, xcol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_class_col = 10, props = {}):
-        return __sns_ecdf__(self, xcol, class_col, title, xfigsize, yfigsize, max_class_col, props)
+    def histogram(self, xcol, class_col = None, bins = 10, title = None, binwidth = None, xfigsize = 25, yfigsize = 5, max_class_col = 10, props = {}, dmsg = ""):
+        return __sns_histogram__(self, xcol, class_col, bins, title, binwidth, xfigsize, yfigsize, max_class_col, props, dmsg)
 
-    def density(self, ycols, class_col = None, title = None, xfigsize = 25, yfigsize = 5, props = {}):
-        return __sns_density__(self, ycols, class_col, title, xfigsize, yfigsize, props)
+    def ecdf(self, xcol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_class_col = 10, props = {}, dmsg = ""):
+        return __sns_ecdf__(self, xcol, class_col, title, xfigsize, yfigsize, max_class_col, props, dmsg)
 
-    def barchart(self, xcol, ycol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10, props = {}):
-        return __sns_barplot__(self, xcol, ycol, class_col, title, xfigsize, yfigsize, max_rows, max_class_col, props)
+    def density(self, ycols, class_col = None, title = None, xfigsize = 25, yfigsize = 5, props = {}, dmsg = ""):
+        return __sns_density__(self, ycols, class_col, title, xfigsize, yfigsize, props, dmsg)
 
-    def boxplot(self, xcol, ycol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10, props = {}):
-        return __sns_boxplot__(self, xcol, ycol, class_col, title, xfigsize, yfigsize, max_rows, max_class_col, props)
+    def barchart(self, xcol, ycol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10, props = {}, dmsg = ""):
+        return __sns_barplot__(self, xcol, ycol, class_col, title, xfigsize, yfigsize, max_rows, max_class_col, props, dmsg)
 
-    def corr_heatmap(self, cols, title = None, xfigsize = 25, yfigsize = 5, max_rows = 6, props = {}):
-        return __sns_corr_heatmp__(self, cols, title, xfigsize, yfigsize, max_rows, props)
+    def boxplot(self, xcol, ycol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10, props = {}, dmsg = ""):
+        return __sns_boxplot__(self, xcol, ycol, class_col, title, xfigsize, yfigsize, max_rows, max_class_col, props, dmsg)
 
-    def pairplot(self, cols, class_col = None, title = None, xfigsize = 5, yfigsize = 5, max_rows = 6, max_class_col = 6, props = {}):
-        return __sns_pairplot__(self, cols, class_col, title, xfigsize, yfigsize, max_rows, max_class_col, props)
+    def corr_heatmap(self, cols, title = None, xfigsize = 25, yfigsize = 5, max_rows = 6, props = {}, dmsg = ""):
+        return __sns_corr_heatmp__(self, cols, title, xfigsize, yfigsize, max_rows, props, dmsg)
+
+    def pairplot(self, cols, class_col = None, title = None, xfigsize = 5, yfigsize = 5, max_rows = 6, max_class_col = 6, props = {}, dmsg = ""):
+        return __sns_pairplot__(self, cols, class_col, title, xfigsize, yfigsize, max_rows, max_class_col, props, dmsg)
 
 def __create_data_frame_with_types__(xdf, xcol = None, ycols = None, zcol = None):
     # convert to array
@@ -88,7 +92,7 @@ def __merge_props__(props, default_props):
     # return
     return props2
 
-def __pd_linechart__(xdf, xcol, ycols, ylabel, title, subplots, xfigsize, yfigsize, props):
+def __pd_linechart__(xdf, xcol, ycols, ylabel, title, subplots, xfigsize, yfigsize, props, dmsg = ""):
     # default props
     default_props = dict()
     props2 = __merge_props__(props, default_props)
@@ -108,7 +112,7 @@ def __pd_linechart__(xdf, xcol, ycols, ylabel, title, subplots, xfigsize, yfigsi
     xdf = xdf.sort(xcol)
 
     # create dataframe
-    df = __create_data_frame_with_types__(xdf, xcol, ycols, None)
+    df = __create_data_frame_with_types__(xdf, xcol = xcol, ycols = ycols, zcol = None)
 
     # plot
     df.plot.line(subplots = subplots, x = xcol, ylabel = ylabel, figsize = (xfigsize, yfigsize), title = title, **props2)
@@ -116,7 +120,73 @@ def __pd_linechart__(xdf, xcol, ycols, ylabel, title, subplots, xfigsize, yfigsi
     # return
     return VisualDF(xdf.get_header_fields(), xdf.get_data_fields())
 
-def __sns_scatterplot__(xdf, xcol, ycol, class_col, title, xfigsize, yfigsize, max_rows, max_class_col, props):
+def __pd_linechart_multi_class__(xdf, xcol, ycol, class_col, ylabel, title, subplots, xfigsize, yfigsize, props, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "__pd_linechart_multi_class__")
+
+    # default props
+    default_props = dict()
+    props2 = __merge_props__(props, default_props)
+
+    # validate ycol
+    if (ycol is None):
+        raise Exception("{}: ycol is None".format(dmsg))
+
+    # validate class_col
+    if (class_col is None):
+        raise Exception("{}: class_col is None".format(dmsg))
+
+    # ylabel
+    if (ylabel is None):
+        ylabel = ycol
+
+    # title
+    if (title is None):
+        title = ylabel
+
+    # select
+    xdf = xdf.select([xcol, ycol, class_col])
+
+    # check if there are duplicate rows
+    if (xdf.num_rows() != xdf.select([xcol, class_col]).distinct().num_rows()):
+        utils.warn("{}: Duplicate data found. Doing aggregation".format(dmsg))
+        xdf = xdf \
+            .aggregate([xcol, class_col], [ycol], [udfs.sumfloat], dmsg = dmsg) \
+            .transform("{}:sumfloat".format(ycol), lambda t: int(float(t)), ycol) \
+            .drop_cols("{}:sumfloat".format(ycol))
+
+    # sort based on xcol
+    xdf = xdf.sort(xcol)
+
+    # split into multiple dataframes based on class
+    class_values = xdf.col_as_array_uniq(class_col)
+    xdf_classes = []
+    xcol_df = xdf.select(xcol).add_const("__pd_linechart_multi_class_temp_col__", "")
+
+    # iterate
+    for i in range(len(class_values)):
+        class_value = str(class_values[i])
+        xdf_classes.append(xdf.eq_str(class_col, class_value))
+
+    # merge
+    xdf_merged = xcol_df
+    for i in range(len(class_values)):
+        xdf_merged = xdf_merged \
+            .left_map_join(xdf_classes[i], [xcol], rsuffix = class_values[i], default_val = "0", dmsg = dmsg) \
+            .rename("{}:{}".format(ycol, class_values[i]), class_values[i])
+
+    # drop temp col
+    xdf_merged = xdf_merged.drop_cols("__pd_linechart_multi_class_temp_col__")
+
+    # create dataframe
+    df = __create_data_frame_with_types__(xdf_merged, xcol = xcol, ycols = class_values, zcol = None)
+
+    # plot
+    df.plot.line(subplots = subplots, x = xcol, ylabel = ylabel, figsize = (xfigsize, yfigsize), title = title, **props2)
+
+    # return
+    return VisualDF(xdf.get_header_fields(), xdf.get_data_fields())
+
+def __sns_scatterplot__(xdf, xcol, ycol, class_col, title, xfigsize, yfigsize, max_rows, max_class_col, props, dmsg = ""):
     # default props
     default_props = dict()
     props2 = __merge_props__(props, default_props)
@@ -135,7 +205,7 @@ def __sns_scatterplot__(xdf, xcol, ycol, class_col, title, xfigsize, yfigsize, m
     xdf = xdf.sort(xcol)
 
     # get dataframe
-    df = __create_data_frame_with_types__(xdf, xcol, [ycol], class_col)
+    df = __create_data_frame_with_types__(xdf, xcol = xcol, ycols =[ycol], zcol = class_col)
 
     # plot
     figsize = (xfigsize, yfigsize)
@@ -159,7 +229,7 @@ def __sns_scatterplot__(xdf, xcol, ycol, class_col, title, xfigsize, yfigsize, m
     # return
     return VisualDF(xdf.get_header_fields(), xdf.get_data_fields())
 
-def __sns_histogram__(xdf, xcol, class_col, bins, title, binwidth, xfigsize, yfigsize, max_class_col, props):
+def __sns_histogram__(xdf, xcol, class_col, bins, title, binwidth, xfigsize, yfigsize, max_class_col, props, dmsg = ""):
     # default props
     default_props = dict(multiple = "dodge", shrink = 0.8, kde = False)
     props2 = __merge_props__(props, default_props)
@@ -175,7 +245,7 @@ def __sns_histogram__(xdf, xcol, class_col, bins, title, binwidth, xfigsize, yfi
         xdf = xdf.sort(xcol)
 
     # create dataframe
-    df = __create_data_frame_with_types__(xdf, xcol, None, class_col)
+    df = __create_data_frame_with_types__(xdf, xcol = xcol, ycols = None, zcol = class_col)
 
     # create figure
     figsize = (xfigsize, yfigsize)
@@ -198,7 +268,7 @@ def __sns_histogram__(xdf, xcol, class_col, bins, title, binwidth, xfigsize, yfi
     # return
     return VisualDF(xdf.get_header_fields(), xdf.get_data_fields())
 
-def __sns_ecdf__(xdf, xcol, class_col, title, xfigsize, yfigsize, max_class_col, props):
+def __sns_ecdf__(xdf, xcol, class_col, title, xfigsize, yfigsize, max_class_col, props, dmsg = ""):
     # default props
     default_props = dict()
     props2 = __merge_props__(props, default_props)
@@ -214,7 +284,7 @@ def __sns_ecdf__(xdf, xcol, class_col, title, xfigsize, yfigsize, max_class_col,
         xdf = xdf.sort(xcol)
 
     # create dataframe
-    df = __create_data_frame_with_types__(xdf, xcol, None, class_col)
+    df = __create_data_frame_with_types__(xdf, xcol = xcol, ycols = None, zcol = class_col)
 
     # create figure
     figsize = (xfigsize, yfigsize)
@@ -234,14 +304,14 @@ def __sns_ecdf__(xdf, xcol, class_col, title, xfigsize, yfigsize, max_class_col,
     return VisualDF(xdf.get_header_fields(), xdf.get_data_fields())
 
 # the syntax is non intuitive. need to follow row major or column major. splitting by class_col is not possible
-def __sns_density__(xdf, ycols, class_col, title, xfigsize, yfigsize, props):
+def __sns_density__(xdf, ycols, class_col, title, xfigsize, yfigsize, props, dmsg = ""):
     # default props
     default_props = dict(multiple = "layer")
     props2 = __merge_props__(props, default_props)
 
     # create df
     ycols = xdf.__get_matching_cols__(ycols)
-    df = __create_data_frame_with_types__(xdf, None, ycols, class_col)
+    df = __create_data_frame_with_types__(xdf, xcol = None, ycols = ycols, zcol = class_col)
 
     # create figure
     figsize = (xfigsize, yfigsize)
@@ -270,7 +340,7 @@ def __sns_density__(xdf, ycols, class_col, title, xfigsize, yfigsize, props):
     # return
     return VisualDF(xdf.get_header_fields(), xdf.get_data_fields())
 
-def __sns_barplot__(xdf, xcol, ycol, class_col, title, xfigsize, yfigsize, max_rows, max_class_col, props):
+def __sns_barplot__(xdf, xcol, ycol, class_col, title, xfigsize, yfigsize, max_rows, max_class_col, props, dmsg = ""):
     # default props
     default_props = dict()
     props2 = __merge_props__(props, default_props)
@@ -291,7 +361,7 @@ def __sns_barplot__(xdf, xcol, ycol, class_col, title, xfigsize, yfigsize, max_r
         xdf = xdf.sort(xcol)
 
     # create df
-    df = __create_data_frame_with_types__(xdf, xcol, ycol, class_col)
+    df = __create_data_frame_with_types__(xdf, xcol = xcol, ycols = [ycol], zcol = class_col)
 
     # create figure
     figsize = (xfigsize, yfigsize)
@@ -310,7 +380,7 @@ def __sns_barplot__(xdf, xcol, ycol, class_col, title, xfigsize, yfigsize, max_r
     # return
     return VisualDF(xdf.get_header_fields(), xdf.get_data_fields())
 
-def __sns_boxplot__(xdf, xcol, ycol, class_col, title, xfigsize, yfigsize, max_rows, max_class_col, props):
+def __sns_boxplot__(xdf, xcol, ycol, class_col, title, xfigsize, yfigsize, max_rows, max_class_col, props, dmsg = ""):
     # default props
     default_props = dict()
     props2 = __merge_props__(props, default_props)
@@ -328,7 +398,7 @@ def __sns_boxplot__(xdf, xcol, ycol, class_col, title, xfigsize, yfigsize, max_r
     xdf = xdf.sort(xcol)
 
     # create df
-    df = __create_data_frame_with_types__(xdf, xcol, ycol, class_col)
+    df = __create_data_frame_with_types__(xdf, xcol = xcol, ycols = [ycol], zcol = class_col)
 
     # create figure
     figsize = (xfigsize, yfigsize)
@@ -347,7 +417,7 @@ def __sns_boxplot__(xdf, xcol, ycol, class_col, title, xfigsize, yfigsize, max_r
     # return
     return VisualDF(xdf.get_header_fields(), xdf.get_data_fields())
 
-def __sns_corr_heatmp__(xdf, cols, title, xfigsize, yfigsize, max_rows, props):
+def __sns_corr_heatmp__(xdf, cols, title, xfigsize, yfigsize, max_rows, props, dmsg = ""):
     # default props
     default_props = dict(annot = True)
     props2 = __merge_props__(props, default_props)
@@ -365,7 +435,7 @@ def __sns_corr_heatmp__(xdf, cols, title, xfigsize, yfigsize, max_rows, props):
             raise Exception("Non numeric column found for correlation: {}".format(col))
 
     # create df
-    df = __create_data_frame_with_types__(xdf, None, cols, None)
+    df = __create_data_frame_with_types__(xdf, xcol = None, ycols = cols, zcol = None)
 
     # create figure
     figsize = (xfigsize, yfigsize)
@@ -381,7 +451,7 @@ def __sns_corr_heatmp__(xdf, cols, title, xfigsize, yfigsize, max_rows, props):
     # return
     return VisualDF(xdf.get_header_fields(), xdf.get_data_fields())
 
-def __sns_pairplot__(xdf, cols, class_col, title, xfigsize, yfigsize, max_rows, max_class_col, props):
+def __sns_pairplot__(xdf, cols, class_col, title, xfigsize, yfigsize, max_rows, max_class_col, props, dmsg = ""):
     # default props
     default_props = dict(kind = None, diag_kind = None)
     props2 = __merge_props__(props, default_props)
@@ -403,7 +473,7 @@ def __sns_pairplot__(xdf, cols, class_col, title, xfigsize, yfigsize, max_rows, 
             raise Exception("Non numeric column found for correlation: {}".format(col))
 
     # create df
-    df = __create_data_frame_with_types__(xdf, None, cols, class_col)
+    df = __create_data_frame_with_types__(xdf, xcol = None, ycols = cols, zcol = class_col)
 
     # take hue order
     hue_order = sorted(xdf.col_as_array_uniq(class_col)) if (class_col is not None) else None

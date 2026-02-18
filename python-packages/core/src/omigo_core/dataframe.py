@@ -431,8 +431,8 @@ class DataFrame:
 
         # call aggregate with collapse=False
         return self \
-            .aggregate(cols, [cols[0]], [udfs.get_len], collapse = collapse, dmsg = dmsg) \
-            .rename(cols[0] + ":get_len", new_count_col, dmsg = dmsg) \
+            .aggregate(cols, [cols[0]], [udfs.get_array_len], collapse = collapse, dmsg = dmsg) \
+            .rename(cols[0] + ":get_array_len", new_count_col, dmsg = dmsg) \
             .transform([new_count_col], lambda x: str(int(x) / self.num_rows()), new_ratio_col, dmsg = dmsg) \
             .reverse_sort(new_count_col, dmsg = dmsg) \
             .apply_precision(new_ratio_col, precision, dmsg = dmsg)
