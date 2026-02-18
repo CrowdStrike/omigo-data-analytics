@@ -64,7 +64,7 @@ class LogScaleSearch:
         end_time_millis = timefuncs.datetime_to_utctimestamp_sec(end_time) * 1000
 
         # debug
-        utils.info("call_search: query: {}, start_time: {}, end_time: {}".format(query, start_time, end_time))
+        utils.debug("call_search: query: {}, start_time: {}, end_time: {}".format(query, start_time, end_time))
 
         # execute
         result = self.__execute_query__(query, start_time_millis, end_time_millis, self.attempts, accepted_cols = accepted_cols, excluded_cols = excluded_cols,
