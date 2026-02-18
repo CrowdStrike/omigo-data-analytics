@@ -145,7 +145,7 @@ class LogScaleSearch:
         # submit job
         logscale_job = self.__get_logscale_client__().create_queryjob(query, start = start_time_millis, end = end_time_millis, is_live = False)
         job_id_trim = self.__get_logscale_job_display_id__(logscale_job)
-        utils.info("{}: LogScale Job submitted: {}, start_time: {}, end_time: {}".format(utils.max_dmsg_str(dmsg), job_id_trim,
+        utils.debug("{}: LogScale Job submitted: {}, start_time: {}, end_time: {}".format(utils.max_dmsg_str(dmsg), job_id_trim,
             timefuncs.utctimestamp_to_datetime_str(start_time_millis), timefuncs.utctimestamp_to_datetime_str(end_time_millis)))
 
         # create result
