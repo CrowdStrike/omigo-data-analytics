@@ -750,6 +750,11 @@ class DataFrame:
             if (c not in self.header_map.keys()):
                 raise Exception("agg col not found: {}, columns: {}".format(c, self.get_header_fields()))
 
+        # validation
+        common_cols = set(grouping_cols).intersect(set(agg_cols))
+        if (len(common_cols) > 0):
+            raise Exception("{}: agg_cols found in grouping_cols: {}".format(dmsg, list(common_cols)))
+
         # group all the values in the key
         grouped = {}
         counter = 0
@@ -872,7 +877,7 @@ class DataFrame:
             raise Exception("arg_min: use_string_datatype = True is not supported")
 
         # return
-        return self.__arg_min_or_max_common__(grouping_cols, argcols, valcols, suffix, topk, sep, -1, collapse = collapse, dmsg = dmsg)
+        return self.__arg_min_or_max_common__(grouping_cols, argcols, valcols, suffix, use_string_datatype, topk, sep, -1, collapse = collapse, dmsg = dmsg)
 
     def arg_max(self, grouping_cols, argcols, valcols, suffix = "arg_max", use_string_datatype = False, topk = 1, sep = "|", collapse = True, dmsg = ""):
         utils.warn_once("arg_max is not implemented correctly. Too complicated")

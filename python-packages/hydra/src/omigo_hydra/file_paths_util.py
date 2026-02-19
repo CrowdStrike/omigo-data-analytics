@@ -263,8 +263,12 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
                 # the number of parts must be 3
                 if (len(parts) == 4):
                     # get the individual parts in the filename
-                    cur_start_ts = str(parts[0]) + str(parts[1])
-                    cur_end_ts = str(parts[2]) + str(parts[3])
+                    cur_start_ts = str(parts[0]) + str(parts[2])
+                    cur_end_ts = str(parts[1]) + str(parts[3])
+
+                    # debug
+                    utils.trace("file_paths_util: get_file_paths_by_datetime_range: filename: {}, cur_start_ts: {}, cur_end_ts: {}, start_date_numstr: {}, end_date_numstr: {}".format(
+                        filename, cur_start_ts, cur_end_ts, start_date_numstr, end_date_numstr))
 
                     # apply the filter condition
                     if (not (str(end_date_numstr) < cur_start_ts or str(start_date_numstr) > cur_end_ts)):

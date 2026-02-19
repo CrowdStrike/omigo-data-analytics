@@ -1,6 +1,6 @@
 """EtlDateTimePathFormat class"""
 from omigo_core import dataframe, utils, dfutils, timefuncs
-from omigo_hydra import file_paths_util
+from omigo_hydra import file_paths_util, hydra
 from dateutil import parser
 import datetime
 import random
@@ -129,11 +129,17 @@ def get_etl_file_base_name_by_ts(prefix, start_ts, end_ts):
     end_datetime = timefuncs.utctimestamp_to_datetime(end_ts)
 
     # format
-    start_datetime_str = start_datetime.strftime("%Y%m%d-%H%M%S")
-    end_datetime_str = end_datetime.strftime("%Y%m%d-%H%M%S")
+    start_date_str = start_datetime.strftime("%Y%m%d")
+    start_time_str = start_datetime.strftime("%H%M%S")
+    end_date_str = end_datetime.strftime("%Y%m%d")
+    end_time_str = end_datetime.strftime("%H%M%S")
 
     # return
-    return "{}-{}-{}".format(prefix, start_datetime_str, end_datetime_str)
+    return "{}-{}-{}-{}-{}".format(prefix, start_date_str, end_date_str, start_time_str, end_time_str)
+
+def get_etl_file_path_by_ts(base_dir, prefix, start_ts, end_ts):
+    start_dt = timefuncs.utctimestamp_to_datetime_str(start_ts)[0:10].replace("-", "")
+    return "{}/dt={}/{}".format(base_dir, start_dt, get_etl_file_base_name_by_ts(prefix, start_ts, end_ts))
 
 def scan_by_datetime_range(path, start_date_str, end_date_str, prefix, filter_transform_func = None, cols = None, transform_func = None, spillover_window = 1, num_par = 5,
     wait_sec = 5, timeout_seconds = 600, def_val_map = {}, sampling_rate = None, s3_region = None, aws_profile = None):
@@ -159,7 +165,7 @@ def scan_by_datetime_range(path, start_date_str, end_date_str, prefix, filter_tr
 
     # iterate over filepaths and submit
     for filepath in filepaths:
-        tasks.append(utils.ThreadPoolTask(dfutils.read_with_filter_transform, filepath, filter_transform_func = filter_transform_func, cols = cols, transform_func = transform_func,
+        tasks.append(utils.ThreadPoolTask(hydra.read_with_filter_transform, filepath, filter_transform_func = filter_transform_func, cols = cols, transform_func = transform_func,
             s3_region = s3_region, aws_profile = aws_profile))
 
     # execute and get results
