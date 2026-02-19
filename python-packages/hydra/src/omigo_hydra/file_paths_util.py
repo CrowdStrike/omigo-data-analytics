@@ -218,8 +218,7 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
         cur_path = path + "/dt=" + cur_date.strftime("%Y%m%d")
 
         # get the list of files. This needs to be failsafe as not all directories may exist
-        tasks.append(utils.ThreadPoolTask(fs.get_directory_listing, cur_path, filter_func = None, ignore_if_missing = False, skip_exist_check = True,
-            region = s3_region, profile = aws_profile))
+        tasks.append(utils.ThreadPoolTask(fs.get_directory_listing, cur_path, filter_func = None, ignore_if_missing = False, skip_exist_check = True))
 
     # execute the tasks
     results = utils.run_with_thread_pool(tasks, num_par = num_par, wait_sec = wait_sec)

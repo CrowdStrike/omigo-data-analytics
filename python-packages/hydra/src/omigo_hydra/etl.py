@@ -1,5 +1,5 @@
 """EtlDateTimePathFormat class"""
-from omigo_core import tsv, utils, dfutils, timefuncs
+from omigo_core import dataframe, utils, dfutils, timefuncs
 from omigo_hydra import file_paths_util
 from dateutil import parser
 import datetime
@@ -163,19 +163,19 @@ def scan_by_datetime_range(path, start_date_str, end_date_str, prefix, filter_tr
             s3_region = s3_region, aws_profile = aws_profile))
 
     # execute and get results
-    tsv_list = utils.run_with_thread_pool(tasks, num_par = num_par, wait_sec = wait_sec)
+    xdf_list = utils.run_with_thread_pool(tasks, num_par = num_par, wait_sec = wait_sec)
 
     # combine all together
-    tsv_combined = tsv.merge(tsv_list, def_val_map = def_val_map)
-    utils.info("scan_by_datetime_range: Number of records: {}".format(tsv_combined.num_rows()))
+    xdf_combined = dataframe.merge(xdf_list, def_val_map = def_val_map)
+    utils.info("scan_by_datetime_range: Number of records: {}".format(xdf_combined.num_rows()))
 
     # return
-    return tsv_combined
+    return xdf_combined
 
 # this method is needed so that users dont have to interact with file_paths_util
 def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix, spillover_window = 1, sampling_rate = None, num_par = 10, wait_sec = 1, s3_region = None, aws_profile = None):
     # get all the filepaths
-    filepaths = file_paths_util.get_file_paths_by_datetime_range(path,  start_date_str, end_date_str, prefix, spillover_window = spillover_window, num_par = num_par, wait_sec = wait_sec,
+    filepaths = file_paths_util.get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix, spillover_window = spillover_window, num_par = num_par, wait_sec = wait_sec,
         s3_region = s3_region, aws_profile = aws_profile)
 
     # check for sampling rate
