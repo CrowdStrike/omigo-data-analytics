@@ -71,32 +71,32 @@ class LogScaleSearch:
             limit = limit, num_par_on_limit = num_par_on_limit, dmsg = dmsg)
 
         # check for replace_col_prefix
-        new_header_fields = []
-        for h in result.get_header_fields():
-            # check if there is replace_col_prefix
-            if (h.find(dataframe.DEFAULT_ARRAY_PREFIX) != -1):
-                # split
-                parts = h.split(dataframe.DEFAULT_ARRAY_PREFIX)
-                new_h = parts[0]
+        # new_header_fields = []
+        # for h in result.get_header_fields():
+        #     # check if there is replace_col_prefix
+        #     if (h.find(dataframe.DEFAULT_ARRAY_PREFIX) != -1):
+        #         # split
+        #         parts = h.split(dataframe.DEFAULT_ARRAY_PREFIX)
+        #         new_h = parts[0]
 
-                # loop
-                i = 0
-                while (i < len(parts) - 1):
-                    if (parts[i].endswith("]") == True):
-                        new_h = new_h + dataframe.DEFAULT_ARRAY_PREFIX + parts[i+1]
-                    else:
-                        new_h = new_h + dataframe.DEFAULT_COL_PREFIX + parts[i+1]
+        #         # loop
+        #         i = 0
+        #         while (i < len(parts) - 1):
+        #             if (parts[i].endswith("]") == True):
+        #                 new_h = new_h + dataframe.DEFAULT_ARRAY_PREFIX + parts[i+1]
+        #             else:
+        #                 new_h = new_h + dataframe.DEFAULT_COL_PREFIX + parts[i+1]
 
-                    # increment 
-                    i = i + 1
-            else:
-                new_h = h
+        #             # increment 
+        #             i = i + 1
+        #     else:
+        #         new_h = h
 
-            # append
-            new_header_fields.append(new_h) 
+        #     # append
+        #     new_header_fields.append(new_h) 
 
         # create result
-        result = dataframe.new_with_cols(new_header_fields, data_fields = result.get_data_fields())
+        # result = dataframe.new_with_cols(new_header_fields, data_fields = result.get_data_fields())
 
         # return
         return result
