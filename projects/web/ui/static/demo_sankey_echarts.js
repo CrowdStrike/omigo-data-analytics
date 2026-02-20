@@ -21,7 +21,11 @@ window.onload = function() {
     myChart.hideLoading();
     console.log(graph)
     myChart.setOption(
-    (option = {
+      title: {
+        text: 'My Chat',
+        left: 'center',
+        top: 10
+      },
       series: {
         type: "sankey",
         layout: "none",
@@ -31,7 +35,7 @@ window.onload = function() {
         data: graph.nodes,
         links: graph.links
       }
-   }));
+   );
  });
 
  if (option && typeof option === "object") {
