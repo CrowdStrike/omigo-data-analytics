@@ -93,6 +93,9 @@ class RunnerBase:
         value_b16 = base64.b16encode(bytes(str(value), "utf-8")).decode("utf-8")
         return "{}/{}-{}={}".format(self.get_job_tag_combined_dir(), job_id, key, value_b16)
 
+    def get_job_analysis_completion_status_file(self, job_id):
+        return "{}/analysis_completion_status.tsv.gz".format(self.get_job_output_dir(job_id))
+
     def get_shutdown_file(self):
         return "{}/shutdown".format(self.base_dir)
 

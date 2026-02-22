@@ -22,6 +22,7 @@ TRACE_MSG_CACHE = {}
 EXCEPTION_AFTER_WARNINGS_MSG_CACHE = {}
 RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE = {}
 NOOP_AFTER_WARNINGS_MSG_CACHE= {}
+DEFAULT_RATE_LIMIT_WAIT_SLEEP_SECS = 0
 
 # some env variables
 OMIGO_CRITICAL = "OMIGO_CRITICAL"
@@ -465,7 +466,7 @@ def raise_exception_after_n_warnings(msg, num_warnings = 1000):
         del EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg]
         raise Exception(msg)
 
-def rate_limit_after_n_warnings(msg, num_warnings = None, sleep_secs = 10):
+def rate_limit_after_n_warnings(msg, num_warnings = None, sleep_secs = DEFAULT_RATE_LIMIT_WAIT_SLEEP_SECS):
     global RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE
 
     # resolve num_warnings

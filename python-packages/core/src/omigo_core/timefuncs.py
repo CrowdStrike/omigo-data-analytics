@@ -37,12 +37,6 @@ def datetime_to_utctimestamp_millis(x):
     # this seems to be a timestamp with second precision.
     return int(datetime_to_utctimestamp_sec(x) * 1000)
 
-# TODO. better naming
-def datetime_to_utctimestamp(x):
-    # use datetime_to_utctimestamp_sec
-    utils.warn_once("datetime_to_utctimestamp: Deprecated. Use datetime_to_utctimestamp_sec instead")
-    return datetime_to_utctimestamp_sec(x)
-
 def datetime_to_utctimestamp_sec(x):
     # convert this to string first for failsafe
     x = str(x)
@@ -85,6 +79,12 @@ def datetime_to_utctimestamp_sec(x):
         return int(float(parser.parse(x).timestamp()))
     else:
         raise Exception("Unknown date format. Problem with UTC: '{}'".format(x))
+
+# TODO. better naming
+def datetime_to_utctimestamp(x):
+    # use datetime_to_utctimestamp_sec
+    utils.warn_once("datetime_to_utctimestamp: Deprecated. Use datetime_to_utctimestamp_sec instead")
+    return datetime_to_utctimestamp_sec(x)
 
 # TODO: Converts seconds format only. Even the original time in milliseconds will return seconds format
 def utctimestamp_to_datetime(x):
