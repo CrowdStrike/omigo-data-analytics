@@ -40,7 +40,7 @@ class DataFrame:
         # validation
         for h in self.header_fields:
             if (len(h) == 0):
-                utils.warn("Zero length header fields:" + str(self.header_fields))
+                raise Exception("Zero length header fields:" + str(self.header_fields))
 
         # create hashmap
         for i in range(len(self.header_fields)):

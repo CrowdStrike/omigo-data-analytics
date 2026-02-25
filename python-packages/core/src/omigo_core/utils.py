@@ -378,7 +378,7 @@ def run_with_thread_pool(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0, d
 
     # check if this is to be run in multi threaded mode or not
     if (num_par == 0):
-        debug("{}: running in single threaded mode".format(dmsg))
+        trace("{}: running in single threaded mode".format(dmsg))
 
         # iterate
         for task in tasks:
@@ -470,7 +470,7 @@ def rate_limit_after_n_warnings(msg, num_warnings = None, sleep_secs = DEFAULT_R
     global RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE
 
     # resolve num_warnings
-    num_warnings = int(resolve_default_parameter("num_warnings", os.getenv(OMIGO_RATE_LIMIT_N_WARNINGS), "10000", "rate_limit_after_n_warnings"))
+    num_warnings = resolve_default_integer_parameter("num_warnings", os.getenv(OMIGO_RATE_LIMIT_N_WARNINGS), "10000", "rate_limit_after_n_warnings")
 
     # check if msg is new
     if (msg not in RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE.keys()):
@@ -488,7 +488,7 @@ def noop_after_n_warnings(msg, func, *args, **kwargs):
     global NOOP_AFTER_WARNINGS_MSG_CACHE
 
     # resolve num_warnings
-    num_warnings = int(resolve_default_parameter("num_warnings", os.getenv(OMIGO_NOOP_N_WARNINGS), "10000", "noop_after_n_warnings"))
+    num_warnings = resolve_default_integer_parameter("num_warnings", os.getenv(OMIGO_NOOP_N_WARNINGS), "10000", "noop_after_n_warnings")
 
     # check if msg is new
     if (msg not in NOOP_AFTER_WARNINGS_MSG_CACHE.keys()):
@@ -595,15 +595,48 @@ def is_text_content_col(col, text_columns):
 def resolve_default_parameter(name, value, default_value, dmsg = ""):
     dmsg = extend_inherit_message(dmsg, "resolve_default_parameter")
 
+    # trace
+    if (value is None):
+        trace("{}: {} value is None. Using default value: {}".format(dmsg, name, default_value))
+    else:
+        trace("{}: resolving parameter {}: value: {}".format(dmsg, name, value))
+        
     # check if prefix parameter is None
     if (value is None):
         default_value_display = str(default_value)
         default_value_display = default_value_display if (len(default_value_display) < 30) else default_value_display[0:30] + "..."
-        warn_once("{}: {} value is None. Using default value: {}".format(dmsg, name, default_value_display))
+        warn("{}: {} value is None. Using default value: {}".format(dmsg, name, default_value_display))
         value = default_value
 
     # return
     return value
+
+def resolve_default_boolean_parameter(name, value, default_value, dmsg = ""):
+    value = resolve_default_parameter(name, value, default_value, dmsg = dmsg)
+    if (isinstance(value, bool)):
+        return value
+    elif (isinstance(value, str)):
+        return value.lower() == "true"
+    else:
+        raise Exception("{}: invalid boolean type: {}: {}".format(dmsg, name, value))
+
+def resolve_default_integer_parameter(name, value, default_value, dmsg = ""):
+    value = resolve_default_parameter(name, value, default_value, dmsg = dmsg)
+    if (isinstance(value, int)):
+        return value
+    elif (isinstance(value, str)):
+        return int(value)
+    else:
+        raise Exception("{}: invalid boolean type: {}: {}".format(dmsg, name, value))
+
+def resolve_default_float_parameter(name, value, default_value, dmsg = ""):
+    value = resolve_default_parameter(name, value, default_value, dmsg = dmsg)
+    if (isinstance(value, (float, int))):
+        return value
+    elif (isinstance(value, str)):
+        return float(value)
+    else:
+        raise Exception("{}: invalid boolean type: {}: {}".format(dmsg, name, value))
 
 def extend_inherit_message(old_msg, new_msg):
      # check if both msgs are defined
