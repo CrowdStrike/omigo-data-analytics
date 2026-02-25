@@ -596,16 +596,16 @@ def resolve_default_parameter(name, value, default_value, dmsg = ""):
     dmsg = extend_inherit_message(dmsg, "resolve_default_parameter")
 
     # trace
-    if (value is None):
-        trace("{}: {} value is None. Using default value: {}".format(dmsg, name, default_value))
-    else:
-        trace("{}: resolving parameter {}: value: {}".format(dmsg, name, value))
+    # if (value is None):
+    #     trace("{}: {} value is None. Using default value: {}".format(dmsg, name, default_value))
+    # else:
+    #     trace("{}: resolving parameter {}: value: {}".format(dmsg, name, value))
         
     # check if prefix parameter is None
     if (value is None):
         default_value_display = str(default_value)
         default_value_display = default_value_display if (len(default_value_display) < 30) else default_value_display[0:30] + "..."
-        warn("{}: {} value is None. Using default value: {}".format(dmsg, name, default_value_display))
+        warn_once("{}: {} value is None. Using default value: {}".format(dmsg, name, default_value_display))
         value = default_value
 
     # return
