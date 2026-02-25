@@ -3387,8 +3387,15 @@ class DataFrame:
         if (len(lkeys) != len(rkeys)):
             raise Exception("Length mismatch in lkeys and rkeys: {}, {}".format(lkeys, rkeys))
 
-        # print stats for left and right side
+       # debug
         utils.debug("{}: left num_rows: {}, right num_rows: {}".format(dmsg, self.num_rows(), that.num_rows()))
+
+        # guards
+        if (self.num_rows() > 100000):
+            utils.warn("{}: Too big data on left: {}".format(dmsg, self.num_rows()))
+
+        if (that.num_rows() > 100000):
+            utils.warn("{}: Too big data on right: {}".format(dmsg, that.num_rows()))
 
         # Check for num_par. TODO: Experimental
         if (num_par > 0):
@@ -3408,7 +3415,7 @@ class DataFrame:
                     default_val = default_val, def_val_map = def_val_map, num_par = 0, dmsg = dmsg2))
 
             # call thread executor
-            results = utils.run_with_thread_pool(tasks, num_par = num_par)
+            results = utils.run_with_thread_pool(tasks, num_par = num_par, dmsg = dmsg)
 
             # merge
             return merge(results)
@@ -3738,6 +3745,13 @@ class DataFrame:
         # print stats for left and right side
         utils.trace("__map_join__: left num_rows: {}, right num_rows: {}".format(self.num_rows(), that.num_rows()))
 
+        # guards
+        if (self.num_rows() > 100000):
+            utils.warn("{}: Too big data on left: {}".format(dmsg, self.num_rows()))
+
+        if (that.num_rows() > 100000):
+            utils.warn("{}: Too big data on right: {}".format(dmsg, that.num_rows()))
+
         # Check for num_par. TODO: Experimental
         if (num_par > 0):
             # split left and right sides
@@ -3756,7 +3770,7 @@ class DataFrame:
                     default_val = default_val, def_val_map = def_val_map, num_par = 0, dmsg = dmsg))
 
             # call thread executor
-            results = utils.run_with_thread_pool(tasks, num_par = num_par)
+            results = utils.run_with_thread_pool(tasks, num_par = num_par, dmsg = dmsg)
 
             # merge
             return merge(results)
