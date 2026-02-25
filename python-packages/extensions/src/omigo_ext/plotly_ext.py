@@ -8,7 +8,7 @@ def __get_sankey_colors__(n, palette = "Vivid"):
     base_colors = getattr(px.colors.qualitative, palette)
     # Repeat palette if needed
     return [base_colors[i % len(base_colors)] for i in range(n)]
-    
+
 
 def get_sankey_figure(mp, pad = 15, thickness = 20, line_color = "black", line_width = 0.5, title_text = "Basic Sankey", font_size = 10):
     # Define nodes and links

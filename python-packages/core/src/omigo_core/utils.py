@@ -600,7 +600,7 @@ def resolve_default_parameter(name, value, default_value, dmsg = ""):
     #     trace("{}: {} value is None. Using default value: {}".format(dmsg, name, default_value))
     # else:
     #     trace("{}: resolving parameter {}: value: {}".format(dmsg, name, value))
-        
+
     # check if prefix parameter is None
     if (value is None):
         default_value_display = str(default_value)

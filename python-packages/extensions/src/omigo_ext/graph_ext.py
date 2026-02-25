@@ -5,7 +5,7 @@ import pandas as pd
 
 from omigo_core import dataframe
 from omigo_core import utils
-from omigo_core import udfs 
+from omigo_core import udfs
 
 class VisualDF(dataframe.DataFrame):
     def __init__(self, header_fields, data_fields):

@@ -209,19 +209,19 @@ class DataFrame:
         # matching cols
         col_or_cols = self.__get_matching_cols__(col_or_cols)
         indexes = self.__get_col_indexes__(col_or_cols)
-            
-        # found rows 
+
+        # found rows
         new_data_fields = []
-                    
+
         # iterate and find the matching columns
         for fields in self.get_data_fields():
             vs = list(filter(lambda t: func(fields[t]) == True, indexes))
             if (len(vs) > 0):
                 new_data_fields.append(fields)
-        
+
         # create a new dataframe
         return new_df(self.get_header_fields(), new_data_fields)
-        
+
     def select_rows_with_cond_exists(self, func, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "select_rows_with_cond_exists")
 
@@ -1675,7 +1675,7 @@ class DataFrame:
             # return
             return [mp]
         else:
-            return self.to_maps(resolve_url_encoded_cols = resolve_url_encoded_cols, dmsg = dmsg) 
+            return self.to_maps(resolve_url_encoded_cols = resolve_url_encoded_cols, dmsg = dmsg)
 
     def __convert_to_numeric__(self, x, precision = 6):
         try:
@@ -2233,7 +2233,7 @@ class DataFrame:
         header_line = ",".join(self.get_header_fields())
         data = "\n".join([",".join(fields) for fields in self.get_data_fields()])
         combined = "\n".join([header_line, data])
-        return combined  
+        return combined
 
     def url_encode_inline(self, col_or_cols, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "url_encode_inline")
@@ -3883,7 +3883,7 @@ class DataFrame:
                 else:
                     raise Exception("Unknown join type: {} ".format(join_type))
 
-        # create df 
+        # create df
         result = new_df(new_header_fields, new_data_fields)
 
         # create the rkeys columns that had different names
@@ -5388,11 +5388,11 @@ class DataFrame:
 
     def array_value_find(self, col, value, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "array_value_find")
-    
+
         # validation
         if (value is None):
             raise Exception("{}: value is None".format(dmsg))
-    
+
         # return
         return self.array_matches(col, lambda t: t.find(str(value)) != -1, dmsg = dmsg)
 
@@ -5414,7 +5414,7 @@ class DataFrame:
         array_col = array_col[0:-2]
 
         # find all matching cols
-        matching_cols = list(filter(lambda t: t.startswith("{}[".format(array_col)) and t.endswith("{}{}".format(DEFAULT_ARRAY_PREFIX, elt_col)), self.get_header_fields())) 
+        matching_cols = list(filter(lambda t: t.startswith("{}[".format(array_col)) and t.endswith("{}{}".format(DEFAULT_ARRAY_PREFIX, elt_col)), self.get_header_fields())
 
         # validation
         if (len(matching_cols) == 0):
@@ -5540,7 +5540,7 @@ def from_pandas_df(df):
     # remove the skip_count columns
     header_fields = header_fields[skip_count:]
 
-    # return 
+    # return
     return new_df(header_fields, data_fields)
 
 def from_json(json_arr, accepted_cols = None, excluded_cols = None, url_encoded_cols = None, dmsg = ""):
@@ -5608,7 +5608,7 @@ def convert_maps_first_level(mps, accepted_cols = None, excluded_cols = None, dm
             if (v is not None):
                 # primitive data type
                 if (isinstance(v, (str, int, float)) == True and k not in data_types):
-                    data_types[k] = "primitive" 
+                    data_types[k] = "primitive"
                 if (isinstance(v, (list, dict)) == True):
                     # defensive check
                     if (k in data_types and data_types[k] == "primitive"):
@@ -5655,9 +5655,9 @@ def convert_maps_first_level(mps, accepted_cols = None, excluded_cols = None, dm
         # append
         data_fields.append(fields)
 
-    # return 
+    # return
     return new_df(header_fields, data_fields)
- 
+
 def from_tsv(xtsv):
     header_fields = xtsv.get_header_fields()
 

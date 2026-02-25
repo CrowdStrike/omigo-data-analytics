@@ -87,13 +87,13 @@ class LogScaleSearch:
         #             else:
         #                 new_h = new_h + dataframe.DEFAULT_COL_PREFIX + parts[i+1]
 
-        #             # increment 
+        #             # increment
         #             i = i + 1
         #     else:
         #         new_h = h
 
         #     # append
-        #     new_header_fields.append(new_h) 
+        #     new_header_fields.append(new_h)
 
         # create result
         # result = dataframe.new_with_cols(new_header_fields, data_fields = result.get_data_fields())

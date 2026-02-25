@@ -40,7 +40,7 @@ def file_exists(path, s3_region = None, aws_profile = None):
     fs = s3io_wrapper.S3FSWrapper(s3_region = s3_region, aws_profile = aws_profile)
 
     # write
-    return fs.file_exists(path) 
+    return fs.file_exists(path)
 
 def read(path_or_paths, sep = None, do_union = False, def_val_map = None, username = None, password = None, num_par = 0, wait_sec = 0.2, s3_region = None, aws_profile = None):
     # resolve single or multiple paths
