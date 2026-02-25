@@ -411,36 +411,3 @@ def get_range_int(vs):
 
     # return range
     return str(int(int(maxint(vs)) - int(minint(vs))))
-
-def get_time_diffs(vs):
-    utils.warn_once("get_time_diffs: bad naming. Fix")
-
-    # sort the input
-    vs = sorted(list([datetime_to_utctimestamp_sec(t) for t in vs]))
-
-    # boundary condition
-    if (len(vs) <= 1):
-        return ""
-
-    # get parirs
-    pairs = list(zip(vs[0:len(vs)-1], vs[1:]))
-
-    # result
-    result = []
-    for pair in pairs:
-        v1, v2 = pair
-        diff = int(v2 - v1)
-        if (diff < 60):
-            result.append("{}s".format(diff))
-        elif (diff < 60 * 60):
-            result.append("{}m".format(int(diff / 60)))
-        elif (diff < 24 * 60 * 60):
-            result.append("{}h".format(int(diff / (60 * 60))))
-        elif (diff < 30 * 24 * 60 * 60):
-            result.append("{}d".format(int(diff / (24 * 60 * 60))))
-        else:
-            result.append("{}:s".format(diff))
-
-    # return
-    return ",".join(result)
-

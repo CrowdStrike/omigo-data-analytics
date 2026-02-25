@@ -4463,7 +4463,8 @@ class DataFrame:
                                i = i + 1
                                dict_results.append(mp2_new)
                     elif (len(v) == 0):
-                        pass
+                        utils.warn_once("explode_json: This logic of empty values is not tested")
+                        single_results[k] = ""
                     else:
                         raise Exception("Unknown data type: {}, {}".format(k, type(v)))
 
