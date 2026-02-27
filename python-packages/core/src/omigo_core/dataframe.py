@@ -1118,6 +1118,7 @@ class DataFrame:
         # return
         return result_xdf
 
+    # TODO: include_cond is a hack. Change
     def filter(self, cols, func, include_cond = True, use_array_notation = False, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "filter")
 
