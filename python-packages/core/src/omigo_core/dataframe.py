@@ -5414,7 +5414,7 @@ class DataFrame:
         array_col = array_col[0:-2]
 
         # find all matching cols
-        matching_cols = list(filter(lambda t: t.startswith("{}[".format(array_col)) and t.endswith("{}{}".format(DEFAULT_ARRAY_PREFIX, elt_col)), self.get_header_fields())
+        matching_cols = list(filter(lambda t: t.startswith("{}[".format(array_col)) and t.endswith("{}{}".format(DEFAULT_ARRAY_PREFIX, elt_col)), self.get_header_fields()))
 
         # validation
         if (len(matching_cols) == 0):
