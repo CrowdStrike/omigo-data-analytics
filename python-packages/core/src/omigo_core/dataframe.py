@@ -1196,9 +1196,9 @@ class DataFrame:
         # return
         return new_df(self.get_header_fields(), new_data_fields)
 
-    def exclude_filter(self, cols, func, ignore_if_missing = False, dmsg = ""):
+    def exclude_filter(self, cols, func, use_array_notation = False, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "exclude_filter")
-        return self.filter(cols, func, include_cond = False, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
+        return self.filter(cols, func, include_cond = False, use_array_notation = use_array_notation, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
     def __select_any_cols_with_cond_exists_filter__(self, func, cols = None, exclude_flag = False, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "__select_any_cols_with_cond_exists_filter__")
