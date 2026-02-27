@@ -1223,7 +1223,7 @@ class DataFrame:
 
         # print which columns are going to be transformed
         if (len(matching_cols) != len(cols) and len(matching_cols) != 1):
-            utils.debug("{}: list of columns that will be checked: {}".format(dmsg, str(matching_cols)))
+            utils.trace("{}: list of columns that will be checked: {}".format(dmsg, str(matching_cols)))
 
         # iterate
         new_data_fields = []
