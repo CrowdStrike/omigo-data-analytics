@@ -106,7 +106,7 @@ def __call_web_service__(xdf, xdf_timeout_sec, xdf_verify, xdf_enable_opt_exec, 
     if (xdf_enable_opt_exec == True):
         # optimize the calls
         hash_explode_df = hash_df \
-            .explode(all_sel_cols, __call_web_service_exp_func__(xdf_timeout_sec, xdf_verify, url, query_params, header_params, body_params, username, password, url_cols,
+            .explode(all_sel_cols, __call_web_service_exp_func__(xdf_timeout_sec, xdf_verify, xdf_dmsg, url, query_params, header_params, body_params, username, password, url_cols,
                 query_params_cols, header_params_cols, body_params_cols, include_resolved_values, selective_execution_func),
                 prefix = prefix, collapse = False, dmsg = xdf_dmsg)
 
