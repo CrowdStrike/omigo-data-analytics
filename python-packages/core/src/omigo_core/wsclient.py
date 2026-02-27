@@ -2,6 +2,7 @@ import urllib
 import json
 import requests
 from omigo_core import dataframe, dfutils, utils
+import time
 
 # https://stackoverflow.com/questions/29931671/making-an-api-call-in-python-with-an-api-that-requires-a-bearer-token
 class BearerAuth(requests.auth.AuthBase):
