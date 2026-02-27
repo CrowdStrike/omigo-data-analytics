@@ -2,6 +2,7 @@ import urllib
 import json
 import requests
 from omigo_core import dataframe, dfutils, utils
+import time
 
 # https://stackoverflow.com/questions/29931671/making-an-api-call-in-python-with-an-api-that-requires-a-bearer-token
 class BearerAuth(requests.auth.AuthBase):
@@ -127,7 +128,7 @@ def read_url_json(url, query_params = {}, headers = {}, body = None, username = 
     return dataframe.DataFrame(header_fields, data_fields).validate()
 
 def read_url_response(url, query_params = {}, headers = {}, body = None, username = None, password = None, api_token = None, timeout_sec = 120, verify = True, method = None,
-    num_retries = 1, retry_sleep_sec = 1, dmsg = ""):
+    num_retries = 3, retry_sleep_sec = 1, dmsg = ""):
     dmsg = utils.extend_inherit_message(dmsg, "read_url_response")
 
     # read response
@@ -228,7 +229,7 @@ def read_url_as_df(url, query_params = {}, headers = {}, sep = None, username = 
 
     # read response
     response_str, status_code, error_msg, = read_url_response(url, query_params, headers, body = None, username = username, password = password, api_token = api_token,
-        timeout_sec = timeout_sec, verify = verify, method = method)
+        timeout_sec = timeout_sec, verify = verify, method = method, dmsg = dmsg)
 
     # check for status code
     if (status_code != 200):

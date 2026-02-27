@@ -2872,7 +2872,7 @@ class DataFrame:
             return self.take(0)
 
         # set seed
-        random.seed(seed)
+        random.seed(seed) # nosec
 
         # sample and return. the debug message is not in standard form, but its fine.
         utils.report_progress("[1/1] calling function", dmsg, self.num_rows(), self.num_rows())
@@ -2885,7 +2885,7 @@ class DataFrame:
 
             # limit n
             n = min(int(n), self.num_rows())
-            return new_df(self.get_header_fields(), random.sample(self.get_data_fields(), n))
+            return new_df(self.get_header_fields(), random.sample(self.get_data_fields(), n)) #nosec
 
     # TODO: WIP
     def sample_n_with_warn(self, limit, msg = None, seed = 0, dmsg = ""):
@@ -2976,7 +2976,7 @@ class DataFrame:
             sampling_ratio = 1.0
 
         # set the seed
-        random.seed(seed)
+        random.seed(seed) #nosec
 
         # resample
         new_data_fields = []
@@ -3002,7 +3002,7 @@ class DataFrame:
 
     def __sample_group_by_col_value_agg_func__(self, value, sampling_ratio, seed, use_numeric):
         # set the seed outside
-        random.seed(seed)
+        random.seed(seed) #nosec
 
         def __sample_group_by_col_value_agg_func_inner__(vs):
             # validation. all vs values should be same
@@ -3265,7 +3265,7 @@ class DataFrame:
         random.seed(seed)  # nosec
         if (len(uniq_values) > max_uniq_values):
             # this random number is only for basic sampling and not for doing anything sensitive.
-            selected_values = random.sample(uniq_values, max_uniq_values)  # nosec`
+            selected_values = random.sample(uniq_values, max_uniq_values)  # nosec
             dmsg = utils.extend_inherit_message(dmsg, "sample_column_by_max_uniq_values")
             return self.values_in(col, selected_values, dmsg = dmsg)
         else:
@@ -5414,7 +5414,7 @@ class DataFrame:
         array_col = array_col[0:-2]
 
         # find all matching cols
-        matching_cols = list(filter(lambda t: t.startswith("{}[".format(array_col)) and t.endswith("{}{}".format(DEFAULT_ARRAY_PREFIX, elt_col)), self.get_header_fields())
+        matching_cols = list(filter(lambda t: t.startswith("{}[".format(array_col)) and t.endswith("{}{}".format(DEFAULT_ARRAY_PREFIX, elt_col)), self.get_header_fields()))
 
         # validation
         if (len(matching_cols) == 0):

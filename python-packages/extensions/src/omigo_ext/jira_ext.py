@@ -6,7 +6,7 @@ import json
 # env variables
 JIRA_API_USER = "JIRA_API_USER"
 JIRA_API_PASS = "JIRA_API_PASS" # nosec
-JIRA_API_AUTH_TOKEN = "JIRA_API_AUTH_TOKEN"
+JIRA_API_AUTH_TOKEN = "JIRA_API_AUTH_TOKEN" #nosec
 
 # api handler for searching jira
 class JiraSearch:
