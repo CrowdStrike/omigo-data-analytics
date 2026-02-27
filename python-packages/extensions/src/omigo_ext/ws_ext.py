@@ -115,13 +115,14 @@ def __call_web_service__(xdf, xdf_timeout_sec, xdf_verify, xdf_enable_opt_exec, 
     else:
         # run transforms multiple times to generate resolved state of each variable
         return xdf \
-            .explode(all_sel_cols, __call_web_service_exp_func__(xdf_timeout_sec, xdf_verify, url, query_params, header_params, body_params, username, password, url_cols,
+            .explode(all_sel_cols, __call_web_service_exp_func__(xdf_timeout_sec, xdf_verify, xdf_dmsg, url, query_params, header_params, body_params, username, password, url_cols,
                 query_params_cols, header_params_cols, body_params_cols, include_resolved_values, selective_execution_func),
                 prefix = prefix, collapse = False, dmsg = xdf_dmsg)
 
 # the explode func for web service
-def __call_web_service_exp_func__(xdf_timeout_sec, xdf_verify, url, query_params, header_params, body_params, username, password, url_cols, query_params_cols,
+def __call_web_service_exp_func__(xdf_timeout_sec, xdf_verify, xdf_dmsg, url, query_params, header_params, body_params, username, password, url_cols, query_params_cols,
     header_params_cols, body_params_cols, include_resolved_values, selective_execution_func):
+    xdf_dmsg = utils.extend_inherit_message(xdf_dmsg, "__call_web_service_exp_func__")
 
     def __call_web_service_exp_func_inner__(mp):
         # resolve url
@@ -186,7 +187,7 @@ def __call_web_service_exp_func__(xdf_timeout_sec, xdf_verify, url, query_params
         if (do_execute == True):
             # call web service. TODO: Need HTTP Response codes for better error handling, back pressure etc
             resp_str, resp_status_code, resp_err = wsclient.read_url_response(url_resolved, query_params_resolved, header_params_resolved, body = body_params_resolved,
-                username = username, password = password, timeout_sec = xdf_timeout_sec, verify = xdf_verify)
+                username = username, password = password, timeout_sec = xdf_timeout_sec, verify = xdf_verify, dmsg = xdf_dmsg)
             result_mp["response:success"] = "1" if (str(resp_status_code).startswith("2")) else "0"
             result_mp["response:selective_execution"] = "1"
 
