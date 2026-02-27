@@ -128,7 +128,7 @@ def read_url_json(url, query_params = {}, headers = {}, body = None, username = 
     return dataframe.DataFrame(header_fields, data_fields).validate()
 
 def read_url_response(url, query_params = {}, headers = {}, body = None, username = None, password = None, api_token = None, timeout_sec = 120, verify = True, method = None,
-    num_retries = 1, retry_sleep_sec = 1, dmsg = ""):
+    num_retries = 3, retry_sleep_sec = 1, dmsg = ""):
     dmsg = utils.extend_inherit_message(dmsg, "read_url_response")
 
     # read response
