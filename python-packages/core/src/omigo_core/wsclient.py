@@ -229,7 +229,7 @@ def read_url_as_df(url, query_params = {}, headers = {}, sep = None, username = 
 
     # read response
     response_str, status_code, error_msg, = read_url_response(url, query_params, headers, body = None, username = username, password = password, api_token = api_token,
-        timeout_sec = timeout_sec, verify = verify, method = method)
+        timeout_sec = timeout_sec, verify = verify, method = method, dmsg = dmsg)
 
     # check for status code
     if (status_code != 200):
