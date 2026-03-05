@@ -129,7 +129,7 @@ class DataFrame:
             raise Exception("{}: __select_inner__ needs exclude_flag value".format(dmsg))
 
         # get matching column and indexes
-        matching_cols = self.__get_matching_cols__(col_or_cols)
+        matching_cols = self.__get_matching_cols__(col_or_cols, dmsg = dmsg)
 
         # create new header
         new_header_fields = matching_cols if (exclude_flag == False) else list(filter(lambda t: t not in matching_cols, self.get_header_fields()))
@@ -207,7 +207,7 @@ class DataFrame:
         dmsg = utils.extend_inherit_message(dmsg, "select_rows_with_cols_cond_exists")
 
         # matching cols
-        col_or_cols = self.__get_matching_cols__(col_or_cols)
+        col_or_cols = self.__get_matching_cols__(col_or_cols, dmsg = dmsg)
         indexes = self.__get_col_indexes__(col_or_cols)
 
         # found rows
@@ -419,7 +419,7 @@ class DataFrame:
             raise Exception("group_count: empty header tsv")
 
         # find the matching cols and indexes
-        cols = self.__get_matching_cols__(cols)
+        cols = self.__get_matching_cols__(cols, dmsg = dmsg)
 
         # define new columns
         new_count_col = prefix + ":count"
@@ -519,7 +519,7 @@ class DataFrame:
             return self
 
         # get matching column and indexes
-        matching_cols = self.__get_matching_cols__(col_or_cols, ignore_if_missing = ignore_if_missing)
+        matching_cols = self.__get_matching_cols__(col_or_cols, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
         # find the columns that dont match
         non_matching_cols = []
@@ -602,10 +602,10 @@ class DataFrame:
             raise Exception("{}: except_cols is None".format(dmsg))
 
         # resolve the list of except cols
-        except_cols = self.__get_matching_cols__(except_cols, ignore_if_missing = ignore_if_missing)
+        except_cols = self.__get_matching_cols__(except_cols, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
         # cols
-        cols_to_drop = self.__get_matching_cols__("{}:.*".format(prefix), ignore_if_missing = ignore_if_missing)
+        cols_to_drop = self.__get_matching_cols__("{}:.*".format(prefix), ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
         # effective_cols
         effective_cols_to_drop = list(filter(lambda t: t not in except_cols, cols_to_drop))
@@ -636,6 +636,8 @@ class DataFrame:
 
     # TODO: the select_cols is not implemented properly
     def window_aggregate(self, win_col, agg_cols, agg_funcs, winsize, select_cols = None, sliding = False, collapse = True, suffix = "", precision = 2, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "window_aggregate")
+
         # check empty
         if (self.has_empty_header()):
             raise Exception("window_aggregate: empty header tsv")
@@ -643,7 +645,7 @@ class DataFrame:
         # get the matching cols
         if (select_cols is None):
             select_cols = []
-        select_cols = self.__get_matching_cols__(select_cols)
+        select_cols = self.__get_matching_cols__(select_cols, dmsg = dmsg)
 
         # do validation on window column. All values should be unique
         if (len(self.col_as_array(win_col)) != len(self.col_as_array_uniq(win_col))):
@@ -728,13 +730,15 @@ class DataFrame:
 
     # The signature for agg_func is func(list_of_maps). Each map will get the agg_cols
     def group_by_key(self, grouping_cols, agg_cols, agg_func, suffix = "", collapse = True, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "group_by_key")
+
         # check empty
         if (self.has_empty_header()):
             raise Exception("group_by_key: empty header tsv")
 
         # resolve grouping and agg_cols
-        grouping_cols = self.__get_matching_cols__(grouping_cols)
-        agg_cols = self.__get_matching_cols__(agg_cols)
+        grouping_cols = self.__get_matching_cols__(grouping_cols, dmsg = dmsg)
+        agg_cols = self.__get_matching_cols__(agg_cols, dmsg = dmsg)
 
         # check for validity
         if (len(grouping_cols) == 0):
@@ -890,9 +894,12 @@ class DataFrame:
     # argcols which are returned where valcols values are max or min
     # suffix is added to both arg and val. arg are suffixed as :arg, values are suffixed as val1, val2 upto topk
     def __arg_min_or_max_common__(self, grouping_cols, argcols, valcols, suffix, use_string_datatype, topk, sep, sign, collapse = False, dmsg = ""):
-        grouping_cols = self.__get_matching_cols__(grouping_cols)
-        argcols = self.__get_matching_cols__(argcols)
-        valcols = self.__get_matching_cols__(valcols)
+        dmsg = utils.extend_inherit_message(dmsg, "__arg_min_or_max_common__")
+
+        # read cols
+        grouping_cols = self.__get_matching_cols__(grouping_cols, dmsg = dmsg)
+        argcols = self.__get_matching_cols__(argcols, dmsg = dmsg)
+        valcols = self.__get_matching_cols__(valcols, dmsg = dmsg)
 
         def __arg_max_grouping_func__(mps):
             # initialize
@@ -973,28 +980,28 @@ class DataFrame:
 
         # check empty
         if (self.has_empty_header()):
-            raise Exception("aggregate: empty header tsv")
+            raise Exception("{}: empty header tsv".format(dmsg))
 
         # check for usage of builtin functions
         for agg_func in agg_funcs:
             # raise warning if builtin functions are used
             if (__is_builtin_func__(agg_func)):
-                utils.warn("aggregate: builtin function used that has side effect. Please use udfs.* functions")
+                utils.warn("{}: builtin function used that has side effect. Please use udfs.* functions".format(dmsg))
 
         # both use_string_datatype and string_datatype_cols are deprecated
         if (use_string_datatype is not None or string_datatype_cols is not None):
-            utils.warn("aggregate: use_string_datatype and string_datatype_cols are deprecated")
+            utils.warn("{}: use_string_datatype and string_datatype_cols are deprecated".format(dmsg))
 
         # validation on precision
         if (precision is not None):
-            raise Exception("aggregate: precision parameter is deprecated")
+            raise Exception("{}: precision parameter is deprecated".format(dmsg))
 
         # validation on use_rolling
         if (use_rolling is not None or use_rolling == True):
-            raise Exception("aggregate: use_rolling parameter is deprecated")
+            raise Exception("{}: use_rolling parameter is deprecated".format(dmsg))
 
         # get matching columns
-        grouping_cols = self.__get_matching_cols__(grouping_col_or_cols)
+        grouping_cols = self.__get_matching_cols__(grouping_col_or_cols, dmsg = dmsg)
 
         # validation on number of grouping cols
         if (len(grouping_cols) == 0 or len(agg_cols) == 0):
@@ -1128,7 +1135,7 @@ class DataFrame:
             return self
 
         # TODO: Filter should not use regex. Need to add warning as the order of fields matter
-        cols = self.__get_matching_cols__(cols, ignore_if_missing = ignore_if_missing)
+        cols = self.__get_matching_cols__(cols, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
         indexes = self.__get_col_indexes__(cols)
 
         # count the number of columns
@@ -1213,7 +1220,7 @@ class DataFrame:
             return self
 
         # find the matching cols and indexes
-        matching_cols = self.__get_matching_cols__(cols, ignore_if_missing = ignore_if_missing)
+        matching_cols = self.__get_matching_cols__(cols, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
         indexes = self.__get_col_indexes__(matching_cols)
 
         # check if there were any matching columns
@@ -1259,7 +1266,7 @@ class DataFrame:
         cols = utils.resolve_default_parameter("cols", cols, ".*", dmsg)
 
         # find the matching cols and indexes
-        matching_cols = self.__get_matching_cols__(cols, ignore_if_missing = ignore_if_missing)
+        matching_cols = self.__get_matching_cols__(cols, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
         indexes = self.__get_col_indexes__(matching_cols)
 
         # check if there were any matching columns
@@ -1314,10 +1321,10 @@ class DataFrame:
 
         # check empty
         if (self.has_empty_header()):
-            raise Exception("transform: empty header tsv")
+            raise Exception("{}: empty header tsv".format(dmsg))
 
         # resolve to matching_cols
-        matching_cols = self.__get_matching_cols__(cols)
+        matching_cols = self.__get_matching_cols__(cols, dmsg = dmsg)
 
         # find if the new cols is a single value or array
         new_cols = None
@@ -1473,7 +1480,7 @@ class DataFrame:
             return self
 
         # find the matching cols and indexes
-        matching_cols = self.__get_matching_cols__(cols, ignore_if_missing = ignore_if_missing)
+        matching_cols = self.__get_matching_cols__(cols, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
         indexes = self.__get_col_indexes__(matching_cols)
 
         # check if there were any matching columns
@@ -1956,19 +1963,21 @@ class DataFrame:
 
     # this method returns hashmap of key->map[k:v]
     # TODO: keys should be changed to single column
-    def cols_as_map(self, key_cols, value_cols):
+    def cols_as_map(self, key_cols, value_cols, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "cols_as_map")
+
         # check empty
         if (self.has_empty_header()):
-            raise Exception("cols_as_map: empty header tsv")
+            raise Exception("{}: empty header tsv".format(dmsg))
 
         # warn
-        utils.debug_once("[OLD_WARN]: cols_as_map: This api has changed from prev implementation")
+        utils.debug_once("[OLD_WARN]: {}: This api has changed from prev implementation".format(dmsg))
 
         # validation
-        key_cols = self.__get_matching_cols__(key_cols)
+        key_cols = self.__get_matching_cols__(key_cols, dmsg = dmsg)
 
         # check for all columns in the value part
-        value_cols = self.__get_matching_cols__(value_cols)
+        value_cols = self.__get_matching_cols__(value_cols, dmsg = dmsg)
 
         # Change in criteria. This api is confusing and for now restrict to single key and value
         if (len(key_cols) > 1):
@@ -2020,14 +2029,16 @@ class DataFrame:
 
     # TODO: this api needs to remove the auto detection of all_numeric flag
     def sort(self, cols, reverse = False, reorder = False, all_numeric = None, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "sort")
+
         # check empty
         if (self.has_empty_header() and cols is None):
             utils.raise_exception_or_warn("sort: empty header tsv", ignore_if_missing)
             return self
 
         # find matching cols just to validate the presence of columns
-        matching_cols = self.__get_matching_cols__(cols)
-        indexes = self.__get_col_indexes__(matching_cols)
+        matching_cols = self.__get_matching_cols__(cols, dmsg = dmsg)
+        indexes = self.__get_col_indexes__(matching_cols, dmsg = dmsg)
 
         # check if there were any matching cols
         if (len(matching_cols) == 0):
@@ -2074,17 +2085,19 @@ class DataFrame:
 
     # reorder the specific columns
     def reorder(self, cols, use_existing_order = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "reorder")
+
         # check empty
         if (self.has_empty_header()):
             if (cols is None):
-                utils.warn("reorder: empty header tsv")
+                utils.warn("{}: empty header tsv".format(dmsg))
                 return self
             else:
-                raise Exception("reorder: empty header tsv")
+                raise Exception("{}: empty header tsv".format(dmsg))
 
         # get matching column and indexes
-        matching_cols = self.__get_matching_cols__(cols)
-        indexes = self.__get_col_indexes__(matching_cols)
+        matching_cols = self.__get_matching_cols__(cols, dmsg = dmsg)
+        indexes = self.__get_col_indexes__(matching_cols, dmsg = dmsg)
 
         # do a full reorder if asked
         if (use_existing_order == False):
@@ -2118,21 +2131,22 @@ class DataFrame:
                 new_header_fields.append(h)
 
         # pass on the message
-        dmsg = utils.extend_inherit_message(dmsg, "reorder")
         return self.select(new_header_fields, dmsg = dmsg)
 
     def reorder_reverse(self, cols, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "reorder_reverse")
         utils.warn("Please use reverse_reorder instead")
         return self.reverse_reorder(cols, dmsg)
 
     # reorder for pushing the columns to the end
     def reverse_reorder(self, cols, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "reverse_reorder")
         # check empty
         if (self.has_empty_header()):
             raise Exception("reorder: empty header tsv")
 
         # get matching column and indexes
-        matching_cols = self.__get_matching_cols__(cols)
+        matching_cols = self.__get_matching_cols__(cols, dmsg = dmsg)
 
         # generate the list of cols that should be brought to front
         rcols = []
@@ -2141,7 +2155,6 @@ class DataFrame:
                 rcols.append(h)
 
         # pass on the message
-        dmsg = utils.extend_inherit_message(dmsg, "reorder_reverse")
         return self.reorder(rcols, dmsg = dmsg)
 
     def noop(self, *args, **kwargs):
@@ -2351,7 +2364,9 @@ class DataFrame:
 
     # this method finds the set difference between this and that. if cols is None, then all columns are taken
     # TODO: hash collision
-    def difference(self, that, cols = None, seed = 0):
+    def difference(self, that, cols = None, seed = 0, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "difference")
+
         # print some warning for api that is still under development
         utils.warn("difference: to be used where duplicate rows will be removed")
         utils.warn("difference method uses hash that is not handling hash collisions")
@@ -2373,8 +2388,8 @@ class DataFrame:
             cols1 = self.get_columns()
             cols2 = that.get_columns()
         else:
-            cols1 = self.__get_matching_cols__(cols)
-            cols2 = that.__get_matching_cols__(cols)
+            cols1 = self.__get_matching_cols__(cols, dmsg = dmsg)
+            cols2 = that.__get_matching_cols__(cols, dmsg = dmsg)
 
         # generate key hash
         temp_col = "__difference_col__"
@@ -2387,6 +2402,7 @@ class DataFrame:
             .drop_cols(temp_col)
 
     def add_const(self, col, value, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "add_const")
         # check empty
         if (self.has_empty_header()):
             # checking empty value
@@ -2608,6 +2624,7 @@ class DataFrame:
         return new_df(new_header_fields, self.get_data_fields())
 
     def add_prefix(self, prefix, cols = None, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "add_prefix")
         # check empty
         if (self.has_empty_header()):
             utils.raise_exception_or_warn("add_prefix: empty header tsv", ignore_if_missing)
@@ -2618,7 +2635,7 @@ class DataFrame:
             cols = self.get_header_fields()
 
         # resolve columns
-        cols = self.__get_matching_cols__(cols, ignore_if_missing = ignore_if_missing)
+        cols = self.__get_matching_cols__(cols, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
         # create new header_fields
         new_header_fields = []
@@ -2634,6 +2651,7 @@ class DataFrame:
         return new_df(new_header_fields, self.get_data_fields())
 
     def add_suffix(self, suffix, cols = None, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "add_suffix")
         # check empty
         if (self.has_empty_header()):
             utils.raise_exception_or_warn("add_suffix: empty header tsv", ignore_if_missing)
@@ -2644,7 +2662,7 @@ class DataFrame:
             cols = self.get_header_fields()
 
         # resolve columns
-        cols = self.__get_matching_cols__(cols, ignore_if_missing = ignore_if_missing)
+        cols = self.__get_matching_cols__(cols, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
         # create new header_fields
         new_header_fields = []
@@ -2660,6 +2678,7 @@ class DataFrame:
         return new_df(new_header_fields, self.get_data_fields())
 
     def rename_prefix(self, old_prefix, new_prefix, cols = None, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "remove_suffix")
         # check empty
         if (self.has_empty_header()):
             utils.raise_exception_or_warn("rename_prefix: empty header tsv", ignore_if_missing)
@@ -2671,7 +2690,7 @@ class DataFrame:
             cols = "{}:.*".format(old_prefix)
 
         # resolve
-        cols = self.__get_matching_cols__(cols, ignore_if_missing = ignore_if_missing)
+        cols = self.__get_matching_cols__(cols, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
         # create new header_fields
         new_header_fields = []
@@ -2698,7 +2717,7 @@ class DataFrame:
             cols = ".*:{}".format(old_suffix)
 
         # resolve
-        cols = self.__get_matching_cols__(cols, ignore_if_missing = ignore_if_missing)
+        cols = self.__get_matching_cols__(cols, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
         # create new header_fields
         new_header_fields = []
@@ -3031,13 +3050,15 @@ class DataFrame:
 
     # sampling method where each sample group is restricted by the max values for a specific col-value. Useful for reducing skewness in dataset
     def sample_group_by_col_value(self, grouping_cols, col, col_value, sampling_ratio, seed = 0, use_numeric = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "sample_group_by_col_value")
+
         # check empty
         if (self.has_empty_header()):
             utils.warn("sample_group_by_col_value: empty header tsv")
             return self
 
         # resolve grouping_cols
-        grouping_cols = self.__get_matching_cols__(grouping_cols)
+        grouping_cols = self.__get_matching_cols__(grouping_cols, dmsg = dmsg)
 
         # validation
         if (col not in self.header_map.keys()):
@@ -3048,7 +3069,6 @@ class DataFrame:
             raise Exception("Sampling ratio has to be between 0 and 1: {}".format(sampling_ratio))
 
         # group by and apply the sampling on the value. The assumption is that all rows in the same group should have the same col_value
-        dmsg = utils.extend_inherit_message(dmsg, "sample_group_by_col_value")
         agg_result = self \
             .aggregate(grouping_cols, [col], [self.__sample_group_by_col_value_agg_func__(col_value, sampling_ratio, seed, use_numeric)], collapse = False, dmsg = utils.extend_inherit_message(dmsg, "[1/3]")) \
             .values_in("{}:__sample_group_by_col_value_agg_func_inner__".format(col), ["1"], dmsg = utils.extend_inherit_message(dmsg, "[2/3]")) \
@@ -3058,7 +3078,9 @@ class DataFrame:
         return agg_result
 
     # TODO: this is using comma as join. can get buggy
-    def __sample_group_by_max_uniq_values_exact_group_by__(self, k, n, seed):
+    def __sample_group_by_max_uniq_values_exact_group_by__(self, k, n, seed, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "__sample_group_by_max_uniq_values_exact_group_by__")
+
         def __sample_group_by_max_uniq_values_exact_group_by_inner__(mps):
             vs = []
             for mp in mps:
@@ -3078,6 +3100,8 @@ class DataFrame:
         return __sample_group_by_max_uniq_values_exact_group_by_inner__
 
     def sample_group_by_max_uniq_values_exact(self, grouping_cols, col, max_uniq_values, seed = 0, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "sample_group_by_max_uniq_values_exact")
+
         # check empty
         if (self.has_empty_header()):
             utils.warn("sample_group_by_max_uniq_values_exact: empty header tsv")
@@ -3098,9 +3122,6 @@ class DataFrame:
         if (max_uniq_values <= 0):
             raise Exception("max_uniq_values has to be more than 0: {}".format(max_uniq_values))
 
-        # agg result
-        dmsg = utils.extend_inherit_message(dmsg, "sample_group_by_max_uniq_values_exact")
-
         # compute
         agg_result = self \
             .group_by_key(grouping_cols, col, self.__sample_group_by_max_uniq_values_exact_group_by__(col, max_uniq_values, seed), suffix = "__sample_group_by_max_uniq_values_exact_group_by__",
@@ -3116,6 +3137,7 @@ class DataFrame:
 
     # sampling method to take a grouping key, and a column where the number of unique values for column are capped. this uses approximate sampling technique
     def sample_group_by_max_uniq_values_approx(self, grouping_cols, col, max_uniq_values, seed = 0, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "sample_group_by_max_uniq_values_approx")
         # check empty
         if (self.has_empty_header()):
             utils.warn("sample_group_by_max_uniq_values_approx: empty header tsv")
@@ -3146,7 +3168,6 @@ class DataFrame:
         sample_grouping_cols.append(col)
 
         # agg result
-        dmsg = utils.extend_inherit_message(dmsg, "sample_group_by_max_uniq_values_approx")
         agg_result = self \
             .aggregate(grouping_cols, [col], [self.__sample_group_by_max_uniq_values_approx_uniq_count__], collapse = False, dmsg = utils.extend_inherit_message(dmsg, "[1/5]")) \
             .transform(["{}:__sample_group_by_max_uniq_values_approx_uniq_count__".format(col)], lambda c: max_uniq_values / float(c) if (float(c) > max_uniq_values) else 1, "{}:__sample_group_by_max_uniq_values_approx_sampling_ratio__".format(col), dmsg = utils.extend_inherit_message(dmsg, "[2/5]")) \
@@ -3172,13 +3193,14 @@ class DataFrame:
 
     # sampling method to take a grouping key, and a column where the number of unique values for column are capped.
     def sample_group_by_max_uniq_values_per_class(self, grouping_cols, class_col, col, max_uniq_values_map, def_max_uniq_values = None , seed = 0, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "sample_group_by_max_uniq_values_per_class")
         # check empty
         if (self.has_empty_header()):
             utils.warn("sample_group_by_max_uniq_values_per_class: empty header tsv")
             return self
 
         # resolve grouping_cols
-        grouping_cols = self.__get_matching_cols__(grouping_cols)
+        grouping_cols = self.__get_matching_cols__(grouping_cols, dmsg = dmsg)
 
         # validation
         if (col not in self.header_map.keys()):
@@ -3204,7 +3226,6 @@ class DataFrame:
         sample_grouping_cols.append(col)
 
         # aggregate result
-        dmsg = utils.extend_inherit_message(dmsg, "sample_group_by_max_uniq_values_per_class")
         agg_result = self \
             .aggregate(grouping_cols, [col], "", [self.__sample_group_by_max_uniq_values_per_class_uniq_count__], collapse = False, dmsg = utils.extend_inherit_message(dmsg, "[1/6]")) \
             .transform([class_col], lambda c: str(max_uniq_values_map[c]) if (c in max_uniq_values_map.keys()) else str(def_max_uniq_values), "{}:__sample_group_by_max_uniq_values_per_class_max_uniq_values__".format(col), dmsg = utils.extend_inherit_message(dmsg, "[2/6]")) \
@@ -3218,13 +3239,14 @@ class DataFrame:
 
     # random sampling within a group
     def sample_group_by_key(self, grouping_cols, sampling_ratio, seed = 0, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "sample_group_by_key")
         # check empty
         if (self.has_empty_header()):
             utils.warn("sample_group_by_key: empty header tsv")
             return self
 
         # resolve grouping_cols
-        grouping_cols = self.__get_matching_cols__(grouping_cols)
+        grouping_cols = self.__get_matching_cols__(grouping_cols, dmsg = dmsg)
 
         # check sampling ratio
         if (sampling_ratio < 0 or sampling_ratio > 1):
@@ -3254,6 +3276,8 @@ class DataFrame:
 
     # sample by taking only n number of unique values for a specific column
     def sample_column_by_max_uniq_values(self, col, max_uniq_values, seed = 0, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "sample_column_by_max_uniq_values")
+
         # check empty
         if (self.has_empty_header()):
             utils.warn("sample_column_by_max_uniq_values: empty header tsv")
@@ -3267,7 +3291,6 @@ class DataFrame:
         if (len(uniq_values) > max_uniq_values):
             # this random number is only for basic sampling and not for doing anything sensitive.
             selected_values = random.sample(uniq_values, max_uniq_values)  # nosec
-            dmsg = utils.extend_inherit_message(dmsg, "sample_column_by_max_uniq_values")
             return self.values_in(col, selected_values, dmsg = dmsg)
         else:
             utils.warn("sample_column_by_max_uniq_values: max sample size: {} more than number of uniq values: {}".format(max_uniq_values, len(uniq_values)))
@@ -3303,6 +3326,7 @@ class DataFrame:
     # create descriptive methods for join
     def left_join(self, that, lkeys, rkeys = None, lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, num_par = 0, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "left_join")
+
         # check for empty
         if (self.has_empty_header()):
             utils.warn("left_join: empty this tsv")
@@ -5166,7 +5190,7 @@ class DataFrame:
         return self
 
     # print some status
-    def print_stats(self, msg = None):
+    def print_stats(self, msg = None, dmsg = ""):
         prefix = msg + ": " if (msg is not None) else ""
 
         # get display size
@@ -5180,7 +5204,7 @@ class DataFrame:
             size_str = "{} bytes".format(bsize)
 
         msg2 = "{}num_rows: {}, num_cols: {}, size: {}".format(prefix, self.num_rows(), self.num_cols(), size_str)
-        utils.info(msg2)
+        utils.info("{}: {}".format(dmsg, msg2))
         return self
 
     def warn(self, msg):
@@ -5490,7 +5514,9 @@ def merge(xdfs, def_val_map = None):
     # return
     return dfutils.merge(xdfs, def_val_map = def_val_map)
 
-def merge_union(xdfs, def_val_map = {}):
+def merge_union(xdfs, def_val_map = {}, dmsg =""):
+    dmsg = utils.extend_inherit_message(dmsg, "merge_union")
+
     # check def_val_map
     if (def_val_map is None):
         raise Exception("merge_union: def_val_map can not be none for union. Use merge_intersect instead")
@@ -5498,8 +5524,9 @@ def merge_union(xdfs, def_val_map = {}):
     # return
     return dfutils.merge(xdfs, def_val_map = def_val_map)
 
-def merge_intersect(xdfs):
-    return dfutils.merge(xdfs, def_val_map = None)
+def merge_intersect(xdfs, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "merge_intersect")
+    return dfutils.merge(xdfs, def_val_map = None, dmsg = dmsg)
 
 # convert from data frame. TODO: df can have multiple header lines coz of indexes
 # TODO: take care of map data type
@@ -5565,7 +5592,7 @@ def from_maps(mps, accepted_cols = None, excluded_cols = None, url_encoded_cols 
         xdfs.append(new_df(header_fields, [fields]))
 
     # use explode
-    result = merge_union(xdfs) \
+    result = merge_union(xdfs, dmsg = dmsg) \
         .explode_json("json", prefix = "json", accepted_cols = accepted_cols, excluded_cols = excluded_cols, url_encoded_cols = url_encoded_cols, collapse = True, dmsg = dmsg) \
         .remove_prefix("json", dmsg = dmsg) \
         .drop_cols_if_exists(["__json_index__", "__explode_json_index__"], dmsg = dmsg)
