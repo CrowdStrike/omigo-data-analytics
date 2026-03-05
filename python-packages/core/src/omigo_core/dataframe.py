@@ -3491,7 +3491,7 @@ class DataFrame:
         for rkey_index in range(len(rkeys)):
             rkey = rkeys[rkey_index]
             if (rkey not in new_header_fields):
-                utils.debug_once("rkey has a different name: {}".format(rkey))
+                utils.debug_once("{}: rkey has a different name: {}".format(dmsg, rkey))
                 new_header_copy_fields_map[lkeys[rkey_index]] = rkey
 
         # add the left side columns
@@ -3705,6 +3705,8 @@ class DataFrame:
         return self.__map_join__(that, lkeys, rkeys = rkeys, join_type = "left", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, num_par = num_par, dmsg = dmsg)
 
     def __map_join__(self, that, lkeys, rkeys = None, join_type = "inner", lsuffix = None, rsuffix = None, default_val = "", def_val_map = None, num_par = 0, seed = 0, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "__map_join__")
+
         # validation
         if (join_type not in ["inner", "left", "left_outer"]):
             raise Exception("__map_join__: join_type: {} is not supported".format(join_type))
@@ -3814,7 +3816,7 @@ class DataFrame:
         for rkey_index in range(len(rkeys)):
             rkey = rkeys[rkey_index]
             if (rkey not in new_header_fields):
-                utils.debug_once("rkey has a different name: {}".format(rkey))
+                utils.debug_once("{}: rkey has a different name: {}".format(dmsg, rkey))
                 new_header_copy_fields_map[lkeys[rkey_index]] = rkey
 
         # add the left side columns
