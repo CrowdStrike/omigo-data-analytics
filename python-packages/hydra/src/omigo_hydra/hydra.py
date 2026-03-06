@@ -4,7 +4,9 @@ import io
 import pandas as pd
 
 # migrated
-def write(xdf, output_file_name, s3_region = None, aws_profile = None):
+def write(xdf, output_file_name, s3_region = None, aws_profile = None, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "write")
+
     # do some validation
     xdf = xdf.validate()
 
@@ -19,12 +21,14 @@ def write(xdf, output_file_name, s3_region = None, aws_profile = None):
     output_file.save(xdf, output_file_name)
 
     # debug
-    utils.debug("write: file saved to: {}, num_rows: {}, num_cols: {}".format(output_file_name, xdf.num_rows(), xdf.num_cols()))
+    utils.debug("{}: file saved to: {}, num_rows: {}, num_cols: {}".format(dmsg, output_file_name, xdf.num_rows(), xdf.num_cols()))
 
     # return
     return xdf
 
-def write_text_file(path, text, s3_region = None, aws_profile = None):
+def write_text_file(path, text, s3_region = None, aws_profile = None, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "write_text_file")
+
     # instantiate file handler
     fs = s3io_wrapper.S3FSWrapper(s3_region = s3_region, aws_profile = aws_profile)
 
@@ -42,7 +46,9 @@ def file_exists(path, s3_region = None, aws_profile = None):
     # write
     return fs.file_exists(path)
 
-def read(path_or_paths, sep = None, do_union = False, def_val_map = None, username = None, password = None, num_par = 0, wait_sec = 0.2, s3_region = None, aws_profile = None):
+def read(path_or_paths, sep = None, do_union = False, def_val_map = None, username = None, password = None, num_par = 0, wait_sec = 0.2, s3_region = None, aws_profile = None, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "read")
+
     # resolve single or multiple paths
     paths = utils.get_argument_as_array(path_or_paths)
 
@@ -62,7 +68,9 @@ def read(path_or_paths, sep = None, do_union = False, def_val_map = None, userna
         return __read_inner__(paths, sep = sep, def_val_map = {}, username = username, password = password, num_par = num_par, wait_sec = wait_sec, s3_region = s3_region, aws_profile = aws_profile)
 
 # migrated
-def __read_inner__(input_file_or_files, sep = None, def_val_map = None, username = None, password = None, num_par = 0, wait_sec = 0.2, s3_region = None, aws_profile = None):
+def __read_inner__(input_file_or_files, sep = None, def_val_map = None, username = None, password = None, num_par = 0, wait_sec = 0.2, s3_region = None, aws_profile = None, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "__read_inner__")
+
     # convert the input to array
     input_files = utils.get_argument_as_array(input_file_or_files)
 
@@ -70,9 +78,11 @@ def __read_inner__(input_file_or_files, sep = None, def_val_map = None, username
     tasks = []
 
     # inner method
-    def __read_inner__(input_file):
+    def __read_inner__(input_file, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "__read_inner__")
+
         # read file content
-        lines = file_paths_util.read_file_content_as_lines(input_file, s3_region, aws_profile)
+        lines = file_paths_util.read_file_content_as_lines(input_file, s3_region, aws_profile, dmsg = dmsg)
 
         # take header and dat
         header = lines[0]
@@ -106,17 +116,19 @@ def __read_inner__(input_file_or_files, sep = None, def_val_map = None, username
             raise Exception("Fetching from web is not supported: {}".format(input_file))
 
         # append task
-        tasks.append(utils.ThreadPoolTask(__read_inner__, input_file))
+        tasks.append(utils.ThreadPoolTask(__read_inner__, input_file, dmsg = dmsg))
 
     # get result
     df_list = utils.run_with_thread_pool(tasks, num_par = num_par, wait_sec = wait_sec)
 
     # merge and return
-    return dfutils.merge(df_list, def_val_map = def_val_map)
+    return dfutils.merge(df_list, def_val_map = def_val_map, dmsg = dmsg)
 
-def read_csv(path, s3_region = None, aws_profile = None):
+def read_csv(path, s3_region = None, aws_profile = None, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "read_csv")
+
     # read text
-    text_content = read_text_file(path, s3_region = s3_region, aws_profile = aws_profile)
+    text_content = read_text_file(path, s3_region = s3_region, aws_profile = aws_profile, dmsg = dmsg)
 
     # string bugger
     csv_file = io.StringIO(text_content)
@@ -141,7 +153,9 @@ def __read_with_filter_transform_select_func__(cols):
     return __read_with_filter_transform_select_func_inner__
 
 # migrated
-def read_with_filter_transform(input_file_or_files, sep = None, def_val_map = None, filter_transform_func = None, cols = None, transform_func = None, s3_region = None, aws_profile = None):
+def read_with_filter_transform(input_file_or_files, sep = None, def_val_map = None, filter_transform_func = None, cols = None, transform_func = None, s3_region = None, aws_profile = None, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "read_with_filter_transform")
+
     # check if cols is defined
     if (filter_transform_func is not None and cols is not None):
         raise Exception("dfutils: read_with_filter_transform: either of filter_transform_func or cols parameter can be used")
@@ -152,7 +166,7 @@ def read_with_filter_transform(input_file_or_files, sep = None, def_val_map = No
 
     # check if filter_transform_func is defined
     if (filter_transform_func is None):
-        xdf = read(input_file_or_files, sep = sep, def_val_map = def_val_map, s3_region = s3_region, aws_profile = aws_profile)
+        xdf = read(input_file_or_files, sep = sep, def_val_map = def_val_map, s3_region = s3_region, aws_profile = aws_profile, dmsg = dmsg)
 
         # apply transform_func if defined
         xdf_transform = transform_func(xdf) if (transform_func is not None) else xdf
@@ -172,7 +186,7 @@ def read_with_filter_transform(input_file_or_files, sep = None, def_val_map = No
         # iterate over all input files
         for input_file in input_files:
             # read the file
-            x = read(input_file, sep = sep, def_val_map = def_val_map, s3_region = s3_region, aws_profile = aws_profile)
+            x = read(input_file, sep = sep, def_val_map = def_val_map, s3_region = s3_region, aws_profile = aws_profile, dmsg = dmsg)
 
             # update the common
             for h in x.get_header_fields():
@@ -197,7 +211,7 @@ def read_with_filter_transform(input_file_or_files, sep = None, def_val_map = No
             if (len(keys) > 0):
                 # output keys
                 keys_sorted = []
-                first_file = read(input_files[0], sep = sep, def_val_map = def_val_map, s3_region = s3_region, aws_profile = aws_profile)
+                first_file = read(input_files[0], sep = sep, def_val_map = def_val_map, s3_region = s3_region, aws_profile = aws_profile, dmsg = dmsg)
                 for h in first_file.get_header_fields():
                     if (h in keys.keys()):
                         keys_sorted.append(h)
@@ -214,7 +228,7 @@ def read_with_filter_transform(input_file_or_files, sep = None, def_val_map = No
                     data_fields2.append(fields)
 
                 # debugging
-                utils.trace("dfutils: read_with_filter_transform: file read: {}, after filter num_rows: {}".format(input_file, len(data2)))
+                utils.trace("{}: file read: {}, after filter num_rows: {}".format(dmsg, input_file, len(data2)))
 
                 # result df 
                 xdf = dataframe.DataFrame(header_fields2, data_fields2)
@@ -230,7 +244,7 @@ def read_with_filter_transform(input_file_or_files, sep = None, def_val_map = No
         else:
             # create an empty dataframe file with common header fields
             header_fields = []
-            first_file = read(input_files[0], sep = sep, def_val_map = def_val_map, s3_region = s3_region, aws_profile = aws_profile)
+            first_file = read(input_files[0], sep = sep, def_val_map = def_val_map, s3_region = s3_region, aws_profile = aws_profile, dmsg = dmsg)
             for h in first_file.get_header_fields():
                 if (common_keys[h] == len(input_files)):
                     header_fields.append(h)
@@ -244,14 +258,16 @@ def read_with_filter_transform(input_file_or_files, sep = None, def_val_map = No
 
 # TODO: replace this by etl_ext
 # migrated
-def read_by_date_range(path, start_date_str, end_date_str, prefix, s3_region = None, aws_profile = None, granularity = "daily"):
-    utils.warn_once("read_by_date_range: probably Deprecated")
+def read_by_date_range(path, start_date_str, end_date_str, prefix, s3_region = None, aws_profile = None, granularity = "daily", dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "read_by_date_range")
+
+    utils.warn_once("{}: probably Deprecated".format(dmsg))
     # read filepaths
-    filepaths = file_paths_util.read_filepaths(path, start_date_str, end_date_str, prefix, s3_region, aws_profile, granularity)
+    filepaths = file_paths_util.read_filepaths(path, start_date_str, end_date_str, prefix, s3_region, aws_profile, granularity, dmsg = dmsg)
 
     # check for headers validity
-    if (file_paths_util.has_same_headers(filepaths, s3_region, aws_profile) == False):
-        utils.warn("Mismatch in headers for different days. Choose the right date range: start: {}, end: {}".format(start_date_str, end_date_str))
+    if (file_paths_util.has_same_headers(filepaths, s3_region, aws_profile, dmsg = dmsg) == False):
+        utils.warn("{}: Mismatch in headers for different days. Choose the right date range: start: {}, end: {}".format(dmsg, start_date_str, end_date_str))
         return None
 
     # read individual df 
@@ -269,15 +285,19 @@ def read_by_date_range(path, start_date_str, end_date_str, prefix, s3_region = N
         return df_list[0].union(df_list[1:])
 
 # migrated
-def load_from_dir(path, start_date_str, end_date_str, prefix, s3_region = None, aws_profile = None, granularity = "daily"):
+def load_from_dir(path, start_date_str, end_date_str, prefix, s3_region = None, aws_profile = None, granularity = "daily", dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "load_from_dir")
+
     # read filepaths
-    filepaths = file_paths_util.read_filepaths(path, start_date_str, end_date_str, prefix, s3_region, aws_profile, granularity)
-    return load_from_files(filepaths, s3_region, aws_profile)
+    filepaths = file_paths_util.read_filepaths(path, start_date_str, end_date_str, prefix, s3_region, aws_profile, granularity, dmsg = dmsg)
+    return load_from_files(filepaths, s3_region, aws_profile, dmsg = dmsg)
 
 # migrated
-def load_from_files(filepaths, s3_region, aws_profile):
+def load_from_files(filepaths, s3_region, aws_profile, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "load_from_files")
+
     # check for headers validity
-    if (file_paths_util.has_same_headers(filepaths, s3_region, aws_profile) == False):
+    if (file_paths_util.has_same_headers(filepaths, s3_region, aws_profile, dmsg = dmsg) == False):
         print("Invalid headers.")
         return None
 
@@ -302,7 +322,9 @@ def load_from_files(filepaths, s3_region, aws_profile):
     return dataframe.DataFrame(header_fields, data_fields).validate()
 
 # migrated
-def read_json_files_from_directories_as_df(paths, s3_region = None, aws_profile = None):
+def read_json_files_from_directories_as_df(paths, s3_region = None, aws_profile = None, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "read_json_files_from_directories_as_df")
+
     # initialize fs
     fs = s3io_wrapper.S3FSWrapper(s3_region = s3_region, aws_profile = aws_profile)
 
@@ -337,7 +359,9 @@ def read_file_contents_as_text(*args, **kwargs):
     utils.warn("read_file_contents_as_text: deprecated. Use read_text_file")
     return read_text_file(*args, **kwargs)
 
-def read_text_file(path, s3_region = None, aws_profile = None):
+def read_text_file(path, s3_region = None, aws_profile = None, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "read_text_file")
+
     # initialize fs
     fs = s3io_wrapper.S3FSWrapper(s3_region = s3_region, aws_profile = aws_profile)
 

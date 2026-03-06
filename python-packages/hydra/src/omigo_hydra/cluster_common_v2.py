@@ -6,7 +6,7 @@ import time
 import math
 import json
 import threading
-from omigo_core import tsv, utils, tsvutils, timefuncs
+from omigo_core import dataframe, utils, timefuncs
 from omigo_hydra import cluster_data, cluster_class_reflection, s3io_wrapper, etl
 
 # class that takes the base path in S3, and implement all distributed communication under that.
@@ -1486,27 +1486,33 @@ class ClusterFileHandler(cluster_data.JsonSer):
         if (verify == True and self.file_not_exists_with_wait(path) == False):
             raise Exception("remove_dir_r: path: {}, verify commit failed".format(path))
 
-    def write_text(self, path, text):
+    def write_text(self, path, text, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "write_text")
+
         # validation
         if (text is None):
-            raise Exception("update: Null text: {}".format(path))
+            raise Exception("{}: Null text: {}".format(dmsg, path))
 
-        utils.info("write_text  : {}".format(path))
+        utils.info("{}: {}".format(dmsg, path))
         self.fs.write_text_file(self.__makepath__(path), text)
 
     # TODO: Change the order of input parameters
-    def write_tsv(self, path, xtsv):
+    def write_df(self, path, xdf, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "write_df")
+
         # validation
-        if (xtsv is None):
-            raise Exception("update: Null xtsv: {}".format(path))
+        if (xdf is None):
+            raise Exception("{}: Null xdf: {}".format(dmsg, path))
 
-        utils.info("write_tsv   : {}, num_rows: {}, num_cols: {}".format(path, xtsv.num_rows(), xtsv.num_cols()))
-        tsv.write(xtsv, self.__makepath__(path))
+        utils.info("{}: {}, num_rows: {}, num_cols: {}".format(dmsg, path, xdf.num_rows(), xdf.num_cols()))
+        tsv.write(xdf, self.__makepath__(path))
 
-    def update(self, path, msg, verify = True, ignore_logging = False):
+    def update(self, path, msg, verify = True, ignore_logging = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "update")
+
         # validation
         if (msg is None):
-            raise Exception("update: Null msg: {}".format(path))
+            raise Exception("{}: Null msg: {}".format(dmsg, path))
 
         if (ignore_logging == False):
             utils.info("update      : {}".format(path))
@@ -1516,22 +1522,26 @@ class ClusterFileHandler(cluster_data.JsonSer):
         # write
         self.update_json(path, msg.to_json(), verify = verify, ignore_logging = ignore_logging)
 
-    def update_json(self, path, json_obj, verify = True, ignore_logging = False):
+    def update_json(self, path, json_obj, verify = True, ignore_logging = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "update_json")
+
         # validation
         if (json_obj is None):
-            raise Exception("update_json: Null json_obj: {}".format(path))
+            raise Exception("{}: Null json_obj: {}".format(dmsg, path))
 
         self.fs.write_text_file(self.__makepath__(path), json.dumps(json_obj))
         if (ignore_logging == False):
-            utils.info("update_json : {}".format(path))
+            utils.info("{}: {}".format(dmsg, path))
         else:
-            utils.debug("update_json : {}".format(path))
+            utils.debug("{}: {}".format(dmsg, path))
 
         # check for commit
         if (verify == True and self.file_exists_with_wait(path) == False):
-            raise Exception("update_json: path: {}, verify commit failed".format(path))
+            raise Exception("{}: path: {}, verify commit failed".format(dmsg, path))
 
-    def update_dynamic_value_json(self, path, json_obj, verify = True, ignore_logging = False, max_keep = 2):
+    def update_dynamic_value_json(self, path, json_obj, verify = True, ignore_logging = False, max_keep = 2, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "update_dynamic_value_json")
+
         # create path
         dynamic_value_path = "{}/{}".format(path, construct_dynamic_value_json())
 
@@ -1539,7 +1549,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
         files = self.get_recent_files(path)
 
         # write the value
-        self.update_json(dynamic_value_path, json_obj, verify = verify, ignore_logging = ignore_logging)
+        self.update_json(dynamic_value_path, json_obj, verify = verify, ignore_logging = ignore_logging, dmsg = dmsg)
 
         # sort the files
         if (files is not None):
@@ -1551,14 +1561,18 @@ class ClusterFileHandler(cluster_data.JsonSer):
                 for f in sorted_files[0:-max_keep]:
                     self.remove_file("{}/{}".format(path, f), ignore_logging = ignore_logging)
 
-    def update_dynamic_value(self, path, msg, verify = True, ignore_logging = False, max_keep = 2):
-        self.update_dynamic_value_json(path, msg.to_json(), verify = verify, ignore_logging = ignore_logging, max_keep = max_keep)
+    def update_dynamic_value(self, path, msg, verify = True, ignore_logging = False, max_keep = 2, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "update_dynamic_value")
+
+        self.update_dynamic_value_json(path, msg.to_json(), verify = verify, ignore_logging = ignore_logging, max_keep = max_keep, dmsg = dmsg)
 
     # this special api doesnt use timestamp but sequence number to guarantee update and avoid race conditions
     # because of eventual consistency
-    def update_dynamic_seq_update(self, path, msg, verify = True, ignore_logging = False, max_keep = 2):
-        utils.warn_once("update_dynamic_seq_update: not implemented yet. Using update_dynamic_value")
-        self.update_dynamic_value(path, msg, verify = verify, ignore_logging = ignore_logging, max_keep = max_keep)
+    def update_dynamic_seq_update(self, path, msg, verify = True, ignore_logging = False, max_keep = 2, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "update_dynamic_seq_update")
+
+        utils.warn_once("{}: not implemented yet. Using update_dynamic_value".format(dmsg))
+        self.update_dynamic_value(path, msg, verify = verify, ignore_logging = ignore_logging, max_keep = max_keep, dmsg = dmsg)
 
     # TODO: this api needs rethinking coz of eventual consistency
     def file_not_exists(self, path):
@@ -2213,30 +2227,32 @@ def load_extend_class_obj(extend_class_op, header, data):
     # call constructor
     return class_ref(header, data, *args, **kwargs)
 
-# TSVReference
-class TSVReference:
+# DFReference
+class DFReference:
     OMIGO_REFERENCE_PATH = ".omigo.reference.path"
-    def __init__(self, xtsv):
-        self.xtsv = xtsv
+    def __init__(self, xdf):
+        self.xdf = xdf
 
-    def read(self, num_par = 0):
+    def read(self, num_par = 0, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "read")
+
         # check if this is a reference file
-        if (TSVReference.OMIGO_REFERENCE_PATH in self.xtsv.get_columns()):
+        if (DFReference.OMIGO_REFERENCE_PATH in self.xdf.get_columns()):
             # get the index of path
-            index = self.xtsv.get_column_index(TSVReference.OMIGO_REFERENCE_PATH)
+            index = self.xdf.get_column_index(DFReference.OMIGO_REFERENCE_PATH)
 
             # create paths
             tasks = []
 
             # iterate through each reference path
-            for line in self.xtsv.get_data():
+            for line in self.xdf.get_data():
                 fields = line.split("\t", -1)
                 tasks.append(utils.ThreadPoolTask(tsv.read, fields[index]))
 
             # read the paths. merge with union
             results = utils.run_with_thread_pool(tasks, num_par = num_par)
-            return tsvutils.merge_union(results)
+            return dataframe.merge_union(results, dmsg = dmsg)
         else:
-            return self.xtsv
+            return self.xdf
 
-# ClusterTSV Spec
+# ClusterDF Spec

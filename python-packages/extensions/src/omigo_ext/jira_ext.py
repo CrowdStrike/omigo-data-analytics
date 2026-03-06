@@ -174,7 +174,7 @@ class JiraSearch:
             result_xdfs.append(dataframe.from_maps([mp]))
 
         # merge
-        result = dataframe.merge_union(result_xdfs)
+        result = dataframe.merge_union(result_xdfs, dmsg = dmsg)
 
         # return
         return result

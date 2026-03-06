@@ -6,6 +6,7 @@ import queue
 # forward or reverse only
 def get_bfs_levels(edf, vertex_ids, reverse_first = True, dmsg = ""):
     dmsg = utils.extend_inherit_message(dmsg, "get_bfs_levels")
+
     # create map of levels
     fwd_levels = {}
     found_ids = []
@@ -321,7 +322,7 @@ def remove_cycles(vdf, edf, ts_col, retain_node_filter_func = None, dmsg = ""):
         .drop_cols_with_prefix("graph") \
         .noop(1000, "edf_non_spl2 2", dataframe.DataFrame.select, ["src", "target", ts_col, "data_source:uniq_mkstr"])
 
-    edf2_included = dataframe.merge_union([edf_spl, edf_non_spl2]) \
+    edf2_included = dataframe.merge_union([edf_spl, edf_non_spl2], dmsg = dmsg) \
         .select(["src", "target", ts_col]) \
         .distinct() \
         .noop(1000, title = "edf2_included") \
@@ -348,7 +349,7 @@ def merge_similar_nodes_reference(vdf, edf, retain_vertex_ids, ts_col, retain_no
 
     # warn if cycles were present, and then remove them
     if (edf.num_rows() != edf_nocycle.num_rows()):
-        utils.warn_once("merge_similar_nodes: this api is unpredictable in presence of cycles. removing them for robustness")
+        utils.warn_once("{}: this api is unpredictable in presence of cycles. removing them for robustness".format(dmsg))
         # debug
         edf \
             .filter(["src", "target"], lambda src, tgt: (src, tgt) not in edf_nocycle.to_tuples(["src", "target"])) \
@@ -411,7 +412,7 @@ def merge_similar_nodes_reference(vdf, edf, retain_vertex_ids, ts_col, retain_no
         .rename("target:get_len", "num_nodes") \
         .add_const("edf_grouped_source", "leaf2")
 
-    edf_grouped = dataframe.merge_union([edf_grouped_leaf0, edf_grouped_leaf1, edf_grouped_leaf2]) \
+    edf_grouped = dataframe.merge_union([edf_grouped_leaf0, edf_grouped_leaf1, edf_grouped_leaf2], dmsg = dmsg) \
         .drop_cols(["incoming_target", "outgoing_target", "edge_target_level2", "count_target_level2", "is_leaf_target", "is_leaf_edge_target"]) \
         .reorder(["src", "target", "num_nodes"]) \
         .reverse_sort(["num_nodes"])

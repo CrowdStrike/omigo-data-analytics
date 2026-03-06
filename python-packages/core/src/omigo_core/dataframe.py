@@ -1025,7 +1025,7 @@ class DataFrame:
 
         # check for empty data
         if (self.num_rows() == 0):
-            utils.trace("aggregate: no data. Returning new header only")
+            utils.trace("{}: no data. Returning new header only".format(dmsg))
 
         # take the indexes
         agg_col_indexes = []
@@ -5176,7 +5176,7 @@ class DataFrame:
         except:
             return False
 
-    def __get_col_indexes__(self, cols):
+    def __get_col_indexes__(self, cols, dmsg = ""):
         indexes = []
         for c in cols:
             indexes.append(self.header_map[c])

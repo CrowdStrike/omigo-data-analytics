@@ -14,20 +14,26 @@ from omigo_hydra import local_fs_wrapper
 NUM_HOURS = 24
 
 # method to read the data
-def read_filepaths(path, start_date_str, end_date_str, fileprefix, s3_region = None, aws_profile = None, granularity = "hourly", ignore_missing = False):
+def read_filepaths(path, start_date_str, end_date_str, fileprefix, s3_region = None, aws_profile = None, granularity = "hourly", ignore_missing = False, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "read_filepaths")
+
     if (granularity == "hourly"):
-        return read_filepaths_hourly(path, start_date_str, end_date_str, fileprefix, s3_region = s3_region, aws_profile = aws_profile, etl_level = "", ignore_missing = ignore_missing)
+        return read_filepaths_hourly(path, start_date_str, end_date_str, fileprefix, s3_region = s3_region, aws_profile = aws_profile, etl_level = "", ignore_missing = ignore_missing, dmsg = dmsg)
     elif (granularity == "daily"):
-        return read_filepaths_daily(path, start_date_str, end_date_str, fileprefix, s3_region = s3_region, aws_profile = aws_profile, etl_level = "", ignore_missing = ignore_missing)
+        return read_filepaths_daily(path, start_date_str, end_date_str, fileprefix, s3_region = s3_region, aws_profile = aws_profile, etl_level = "", ignore_missing = ignore_missing, dmsg = dmsg)
     else:
         raise Exception("Unknown granularity value", granularity)
 
 # this returns the etl prefix for creating directory depth
-def get_etl_level_prefix(curdate, etl_level):
+def get_etl_level_prefix(curdate, etl_level, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "get_etl_level_prefix")
+
+    # prefix
     prefix = "/"
     if (etl_level == ""):
         return prefix
 
+    # split
     parts = etl_level.split(",")
     for part in parts:
         if (part == "year"):
@@ -43,8 +49,12 @@ def get_etl_level_prefix(curdate, etl_level):
 
     return prefix
 
-def read_filepaths_hourly(path, start_date_str, end_date_str, fileprefix, s3_region = None, aws_profile = None, etl_level = "", ignore_missing = False):
-    utils.warn_once("read_filepaths_hourly is confusing and may be unsupported")
+def read_filepaths_hourly(path, start_date_str, end_date_str, fileprefix, s3_region = None, aws_profile = None, etl_level = "", ignore_missing = False, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "read_filepaths_hourly")
+
+    # warn
+    utils.warn_once("{}: is confusing and may be unsupported".format(dmsg))
+
     # parse input dates
     start_date = datetime.datetime.strptime(start_date_str,"%Y-%m-%d")
     end_date = datetime.datetime.strptime(end_date_str,"%Y-%m-%d")
@@ -90,8 +100,10 @@ def check_exists(path, s3_region = None, aws_profile = None):
 
     return False
 
-def read_filepaths_daily(path, start_date_str, end_date_str, fileprefix, s3_region = None, aws_profile = None, etl_level = "", ignore_missing = False):
-    utils.warn_once("read_filepaths_daily is confusing and may be unsupported")
+def read_filepaths_daily(path, start_date_str, end_date_str, fileprefix, s3_region = None, aws_profile = None, etl_level = "", ignore_missing = False, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "read_filepaths_daily")
+
+    utils.warn_once("{}: is confusing and may be unsupported".format(dmsg))
 
     # initialize fs
     fs = s3io_wrapper.S3FSWrapper(s3_region = s3_region, aws_profile = aws_profile)
@@ -128,7 +140,9 @@ def read_filepaths_daily(path, start_date_str, end_date_str, fileprefix, s3_regi
     return filepaths
 
 # check if the files in the filepaths have the same header
-def has_same_headers(filepaths, s3_region = None, aws_profile = None):
+def has_same_headers(filepaths, s3_region = None, aws_profile = None, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "has_same_headers") 
+
     # headers set
     header_set = {}
 
@@ -137,7 +151,7 @@ def has_same_headers(filepaths, s3_region = None, aws_profile = None):
         # print(filepath)
 
         # read content
-        lines = read_file_content_as_lines(filepath, s3_region = s3_region, aws_profile = aws_profile)
+        lines = read_file_content_as_lines(filepath, s3_region = s3_region, aws_profile = aws_profile, dmsg = dmsg)
 
         # read header
         headerline = lines[0].rstrip("\n")
@@ -176,7 +190,9 @@ def create_header_index_map(header):
 
     return header_map
 
-def read_file_content_as_lines(path, s3_region = None, aws_profile = None):
+def read_file_content_as_lines(path, s3_region = None, aws_profile = None, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "read_file_content_as_lines")
+
     # initialize fs
     fs = s3io_wrapper.S3FSWrapper(s3_region = s3_region, aws_profile = aws_profile)
 
@@ -192,7 +208,9 @@ def create_date_numeric_representation(date_str, default_suffix):
         return timefuncs.datestr_to_datetime(date_str).strftime("%Y%m%d%H%M%S")
 
 # this is not a lookup function. This reads directory listing, and then picks the filepaths that match the criteria
-def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix, spillover_window = 1, num_par = 10, wait_sec = 1, s3_region = None, aws_profile = None):
+def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix, spillover_window = 1, num_par = 10, wait_sec = 1, s3_region = None, aws_profile = None, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "get_file_paths_by_datetime_range")
+
     # initialize fs
     fs = s3io_wrapper.S3FSWrapper(s3_region = s3_region, aws_profile = aws_profile)
 
@@ -229,7 +247,7 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
     # iterate over results
     for files_list in results:
         # debug
-        utils.trace("file_paths_util: get_file_paths_by_datetime_range: number of candidate files to read: cur_date: {}, count: {}".format(cur_date, len(files_list)))
+        utils.trace("{}: get_file_paths_by_datetime_range: number of candidate files to read: cur_date: {}, count: {}".format(dmsg, cur_date, len(files_list)))
 
         # apply filter on the name and the timestamp
         for filename in files_list:
@@ -242,7 +260,7 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
 
             # ignore any hidden files that start with dot(.)
             if (base_filename.startswith(".")):
-                utils.trace("file_paths_util: get_file_paths_by_datetime_range: found hidden file. ignoring: {}".format(filename))
+                utils.trace("{}: get_file_paths_by_datetime_range: found hidden file. ignoring: {}".format(dmsg, filename))
                 continue
 
             # get extension
@@ -251,7 +269,7 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
             elif (base_filename.endswith(".tsv")):
                 ext_index = base_filename.rindex(".tsv")
             else:
-                raise Exception("file_paths_util: get_file_paths_by_datetime_range: extension parsing failed: {}".format(filename))
+                raise Exception("{}: get_file_paths_by_datetime_range: extension parsing failed: {}".format(dmsg, filename))
 
             # proceed only if valid filename
             if (ext_index != -1):
@@ -267,14 +285,14 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
                     cur_end_ts = str(parts[1]) + str(parts[3])
 
                     # debug
-                    utils.trace("file_paths_util: get_file_paths_by_datetime_range: filename: {}, cur_start_ts: {}, cur_end_ts: {}, start_date_numstr: {}, end_date_numstr: {}".format(
-                        filename, cur_start_ts, cur_end_ts, start_date_numstr, end_date_numstr))
+                    utils.trace("{}: get_file_paths_by_datetime_range: filename: {}, cur_start_ts: {}, cur_end_ts: {}, start_date_numstr: {}, end_date_numstr: {}".format(
+                        dmsg, filename, cur_start_ts, cur_end_ts, start_date_numstr, end_date_numstr))
 
                     # apply the filter condition
                     if (not (str(end_date_numstr) < cur_start_ts or str(start_date_numstr) > cur_end_ts)):
                         # note filename1
                         paths_found.append(filename)
-                        utils.trace("file_paths_util: get_file_paths_by_datetime_range: found file: {}".format(filename))
+                        utils.trace("{}: get_file_paths_by_datetime_range: found file: {}".format(dmsg, filename))
 
     # return
     return paths_found
@@ -305,5 +323,4 @@ def create_local_parent_dir(filepath):
         if (fs.dir_exists(dir_path) == False):
             utils.debug("Creating local directory: {}".format(dir_path))
             os.makedirs(dir_path, exist_ok = True)
-
 
