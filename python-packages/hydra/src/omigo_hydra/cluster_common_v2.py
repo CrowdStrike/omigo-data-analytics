@@ -1672,7 +1672,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
                 raise e
 
     # TODO: remove tsvutils dependency
-    def read_tsv(self, path_or_paths):
+    def read_df(self, path_or_paths):
         paths = utils.get_argument_as_array(path_or_paths)
         full_paths = list([self.__makepath__(self.__normalize_path__(p)) for p in utils.get_argument_as_array(path_or_paths)])
         return tsv.read(full_paths)
