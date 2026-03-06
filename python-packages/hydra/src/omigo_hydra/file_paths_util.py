@@ -141,7 +141,7 @@ def read_filepaths_daily(path, start_date_str, end_date_str, fileprefix, s3_regi
 
 # check if the files in the filepaths have the same header
 def has_same_headers(filepaths, s3_region = None, aws_profile = None, dmsg = ""):
-    dmsg = utils.extend_inherit_message(dmsg, "has_same_headers") 
+    dmsg = utils.extend_inherit_message(dmsg, "has_same_headers")
 
     # headers set
     header_set = {}
