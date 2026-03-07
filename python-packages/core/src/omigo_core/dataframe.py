@@ -122,7 +122,7 @@ class DataFrame:
 
         # check empty
         if (self.has_empty_header()):
-            raise Exception("select: empty header tsv")
+            raise Exception("{}: empty header tsv".format(dmsg))
 
         # validation
         if (exclude_flag is None):
@@ -149,8 +149,8 @@ class DataFrame:
             # validation
             for i in indexes:
                 if (i >= len(fields)):
-                    raise Exception("Invalid index: col_or_cols: {}, new_header_fields: {}, indexes: {}, fields: {}, len(fields): {}, len(self.get_header_fields()): {}, self.get_header_map(): {}".format(
-                        col_or_cols, new_header_fields, indexes, fields, len(fields), len(self.get_header_fields()), self.header_map))
+                    raise Exception("{}: Invalid index: col_or_cols: {}, new_header_fields: {}, indexes: {}, fields: {}, len(fields): {}, len(self.get_header_fields()): {}, self.get_header_map(): {}".format(
+                        dmsg, col_or_cols, new_header_fields, indexes, fields, len(fields), len(self.get_header_fields()), self.header_map))
 
                 # append to new_fields
                 new_fields.append(fields[i])
@@ -5161,7 +5161,7 @@ class DataFrame:
 
             # raise exception if some col or pattern is not found
             if (col_pattern_found == False):
-                utils.raise_exception_or_warn("Col name or pattern not found: {}, {}".format(col_pattern, str(self.get_header_fields())[0:100] + "..."), ignore_if_missing)
+                utils.raise_exception_or_warn("{}: Col name or pattern not found: {}, {}".format(dmsg, col_pattern, str(self.get_header_fields())[0:100] + "..."), ignore_if_missing)
                 # dont return from here
 
         # return
@@ -5506,23 +5506,25 @@ def get_version():
 def get_func_name(f):
     return f.__name__
 
-def merge(xdfs, def_val_map = None):
+def merge(xdfs, def_val_map = None, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "merge")
+
     # warn if def_val_map is not defined
     if (def_val_map is None):
-        utils.warn("merge: use merge_union or merge_intersect")
+        utils.warn("{}: use merge_union or merge_intersect".format(dmsg))
 
     # return
-    return dfutils.merge(xdfs, def_val_map = def_val_map)
+    return dfutils.merge(xdfs, def_val_map = def_val_map, dmsg = dmsg)
 
 def merge_union(xdfs, def_val_map = {}, dmsg =""):
     dmsg = utils.extend_inherit_message(dmsg, "merge_union")
 
     # check def_val_map
     if (def_val_map is None):
-        raise Exception("merge_union: def_val_map can not be none for union. Use merge_intersect instead")
+        raise Exception("{}: def_val_map can not be none for union. Use merge_intersect instead".format(dmsg))
 
     # return
-    return dfutils.merge(xdfs, def_val_map = def_val_map)
+    return dfutils.merge(xdfs, def_val_map = def_val_map, dmsg = dmsg)
 
 def merge_intersect(xdfs, dmsg = ""):
     dmsg = utils.extend_inherit_message(dmsg, "merge_intersect")
