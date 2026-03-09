@@ -3361,11 +3361,12 @@ class DataFrame:
 
         # check for empty
         if (self.has_empty_header()):
-            utils.warn("outer_join: empty this tsv")
+            utils.warn("{}: empty this tsv".format(dmsg))
             return that
 
         # return
-        return self.__join__(that, lkeys, rkeys, join_type = "outer", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map, num_par = num_par, dmsg = dmsg)
+        return self.__join__(that, lkeys, rkeys, join_type = "outer", lsuffix = lsuffix, rsuffix = rsuffix, default_val = default_val, def_val_map = def_val_map,
+            num_par = num_par, dmsg = dmsg)
 
     def join(self, *args, **kwargs):
         utils.warn("Use the other methods: inner_join, left_join, right_join, outer_join versions of this api and not this one directly")

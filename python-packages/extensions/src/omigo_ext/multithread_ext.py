@@ -75,7 +75,7 @@ class MultiThreadDF(dataframe.DataFrame):
             # combine the results
             results = []
             for f in future_results:
-                utils.trace("MultiThreadDF: parallelize: xdf num_rows: {}".format(f.result().num_rows()))
+                utils.trace("{}: parallelize: xdf num_rows: {}".format(self.dmsg, f.result().num_rows()))
                 results.append(f.result())
 
             # merge the dfs using a common union.
