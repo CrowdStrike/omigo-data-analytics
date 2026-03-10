@@ -229,7 +229,7 @@ class S3FSWrapper:
 
         return s3_wrapper.delete_file(path, ignore_if_missing = ignore_if_missing, s3_region = self.s3_region, aws_profile = self.aws_profile, dmsg = dmsg)
 
-    def __local_delete_file__(self, path, ignore_if_missing = False):
+    def __local_delete_file__(self, path, ignore_if_missing = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "S3FSWrapper: __local_delete_file__")
 
         # delete file
