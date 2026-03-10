@@ -197,7 +197,7 @@ def put_s3_file_content(bucket_name, object_key, barr, s3_region = None, aws_pro
     utils.warn_once("use put_file_content instead")
     return put_file_content(bucket_name, object_key, barr, s3_region = None, aws_profile = None, dmsg = dmsg)
 
-def put_file_with_text_content(bucket_name, object_key, text, s3_region = None, aws_profile = None):
+def put_file_with_text_content(bucket_name, object_key, text, s3_region = None, aws_profile = None, dmsg = ""):
     dmsg = utils.extend_inherit_message(dmsg, "put_file_with_text_content")
 
     s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)

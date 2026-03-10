@@ -119,7 +119,7 @@ def __read_inner__(input_file_or_files, sep = None, def_val_map = None, username
         tasks.append(utils.ThreadPoolTask(__read_inner__, input_file, dmsg = dmsg))
 
     # get result
-    df_list = utils.run_with_thread_pool(tasks, num_par = num_par, wait_sec = wait_sec)
+    df_list = utils.run_with_thread_pool(tasks, num_par = num_par, wait_sec = wait_sec, dmsg = dmsg)
 
     # merge and return
     return dfutils.merge(df_list, def_val_map = def_val_map, dmsg = dmsg)

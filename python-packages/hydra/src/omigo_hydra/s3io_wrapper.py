@@ -300,7 +300,7 @@ class S3FSWrapper:
         dmsg = utils.extend_inherit_message(dmsg, "S3FSWrapper: __local_write_text_file__")
 
         path = self.__normalize_path__(path)
-        local_fs_wrapper.put_file_with_text_content(path, text)
+        local_fs_wrapper.put_file_with_text_content(path, text, dmsg = dmsg)
 
     def create_dir(self, path, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "S3FSWrapper: create_dir")

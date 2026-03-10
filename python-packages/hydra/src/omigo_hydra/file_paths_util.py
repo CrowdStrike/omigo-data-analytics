@@ -239,7 +239,7 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
         tasks.append(utils.ThreadPoolTask(fs.get_directory_listing, cur_path, filter_func = None, ignore_if_missing = False, skip_exist_check = True))
 
     # execute the tasks
-    results = utils.run_with_thread_pool(tasks, num_par = num_par, wait_sec = wait_sec)
+    results = utils.run_with_thread_pool(tasks, num_par = num_par, wait_sec = wait_sec, dmsg = dmsg)
 
     # final result
     paths_found = []

@@ -174,7 +174,7 @@ def scan_by_datetime_range(path, start_date_str, end_date_str, prefix, filter_tr
             s3_region = s3_region, aws_profile = aws_profile, dmsg = dmsg))
 
     # execute and get results
-    xdf_list = utils.run_with_thread_pool(tasks, num_par = num_par, wait_sec = wait_sec)
+    xdf_list = utils.run_with_thread_pool(tasks, num_par = num_par, wait_sec = wait_sec, dmsg = dmsg)
 
     # combine all together
     xdf_combined = dataframe.merge_union(xdf_list, def_val_map = def_val_map, dmsg  = dmsg)

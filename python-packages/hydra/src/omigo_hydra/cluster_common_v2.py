@@ -2250,7 +2250,7 @@ class DFReference:
                 tasks.append(utils.ThreadPoolTask(tsv.read, fields[index]))
 
             # read the paths. merge with union
-            results = utils.run_with_thread_pool(tasks, num_par = num_par)
+            results = utils.run_with_thread_pool(tasks, num_par = num_par, dmsg = dmsg)
             return dataframe.merge_union(results, dmsg = dmsg)
         else:
             return self.xdf
