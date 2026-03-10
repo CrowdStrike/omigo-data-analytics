@@ -12,7 +12,7 @@ def write(xdf, output_file_name, s3_region = None, aws_profile = None, dmsg = ""
 
     # check if it is a local file or s3
     if (output_file_name.startswith("s3://") == False):
-        file_paths_util.create_local_parent_dir(output_file_name)
+        file_paths_util.create_local_parent_dir(output_file_name, dmsg = dmsg)
 
     # construct output file
     output_file = file_io_wrapper.TSVFileWriter(s3_region, aws_profile)

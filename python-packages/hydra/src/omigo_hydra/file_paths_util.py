@@ -302,8 +302,9 @@ def get_local_directory_listing(path, filter_func = None, ignore_if_missing = Fa
     return fs.get_directory_listing(path, filter_func = filter_func, ignore_if_missing = ignore_if_missing, skip_exist_check = skip_exist_check)
 
 # this method is not robust against complex path creations with dot(.). FIXME. TODO
-def create_local_parent_dir(filepath):
-    utils.warn_once("create_local_parent_dir: os.makedirs can create the full path. Why do we need this method")
+def create_local_parent_dir(filepath, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "create_local_parent_dir")
+    utils.warn_once("{}: os.makedirs can create the full path. Why do we need this method".format(dmsg))
 
     # initialize fs
     fs = s3io_wrapper.S3FSWrapper()
@@ -321,6 +322,6 @@ def create_local_parent_dir(filepath):
             dir_path = "/" + dir_path
 
         if (fs.dir_exists(dir_path) == False):
-            utils.debug("Creating local directory: {}".format(dir_path))
+            utils.debug("{}: Creating local directory: {}".format(dmsg, dir_path))
             os.makedirs(dir_path, exist_ok = True)
 
