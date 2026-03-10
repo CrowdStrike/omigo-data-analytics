@@ -51,6 +51,9 @@ class LogScaleSearch:
         return humiolib.HumioClient(base_url = self.base_url, repository = self.repository, user_token = self.user_token)
 
     def call_search(self, query, start_time, end_time = None, accepted_cols = None, excluded_cols = None, limit = None, num_par_on_limit = 0, dmsg = ""):
+        if (dmsg == ""):
+            raise Exception("whre")
+
         dmsg = utils.extend_inherit_message(dmsg, "LogScaleSearch: call_search")
 
         # set default
