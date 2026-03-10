@@ -123,7 +123,9 @@ def get_etl_file_datetime_str_from_ts(ts):
 
 # this method generates the basename minus the extension
 # prefix-startyyyymmdd-HHMMSS-endyyyymmdd-HHMMSS
-def get_etl_file_base_name_by_ts(prefix, start_ts, end_ts):
+def get_etl_file_base_name_by_ts(prefix, start_ts, end_ts, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "get_etl_file_base_name_by_ts")
+
     # convert to datetime
     start_datetime = timefuncs.utctimestamp_to_datetime(start_ts)
     end_datetime = timefuncs.utctimestamp_to_datetime(end_ts)
@@ -137,9 +139,11 @@ def get_etl_file_base_name_by_ts(prefix, start_ts, end_ts):
     # return
     return "{}-{}-{}-{}-{}".format(prefix, start_date_str, end_date_str, start_time_str, end_time_str)
 
-def get_etl_file_path_by_ts(base_dir, prefix, start_ts, end_ts):
+def get_etl_file_path_by_ts(base_dir, prefix, start_ts, end_ts, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "get_etl_file_path_by_ts")
+
     start_dt = timefuncs.utctimestamp_to_datetime_str(start_ts)[0:10].replace("-", "")
-    return "{}/dt={}/{}".format(base_dir, start_dt, get_etl_file_base_name_by_ts(prefix, start_ts, end_ts))
+    return "{}/dt={}/{}".format(base_dir, start_dt, get_etl_file_base_name_by_ts(prefix, start_ts, end_ts, dmsg = dmsg))
 
 def scan_by_datetime_range(path, start_date_str, end_date_str, prefix, filter_transform_func = None, cols = None, transform_func = None, spillover_window = 1, num_par = 5,
     wait_sec = 5, timeout_seconds = 600, def_val_map = {}, sampling_rate = None, s3_region = None, aws_profile = None, dmsg = ""):
@@ -180,7 +184,8 @@ def scan_by_datetime_range(path, start_date_str, end_date_str, prefix, filter_tr
     return xdf_combined
 
 # this method is needed so that users dont have to interact with file_paths_util
-def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix, spillover_window = 1, sampling_rate = None, num_par = 10, wait_sec = 1, s3_region = None, aws_profile = None, dmsg = ""):
+def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix, spillover_window = 1, sampling_rate = None, num_par = 10, wait_sec = 1,
+    s3_region = None, aws_profile = None, dmsg = ""):
     dmsg = utils.extend_inherit_message(dmsg, "get_file_paths_by_datetime_range")
 
     # get all the filepaths

@@ -5495,8 +5495,9 @@ class DataFrame:
         utils.disable_trace_mode()
         return self
 
-    def write(self, output_file):
-        return hydra.write(self, output_file)
+    def write(self, output_file, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "DataFrame: write")
+        return hydra.write(self, output_file, dmsg = dmsg)
 
 def read(path):
     return hydra.read(path)

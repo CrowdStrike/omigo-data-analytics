@@ -39,6 +39,7 @@ OMIGO_BIG_DF_WARN_SIZE_THRESH = "OMIGO_BIG_DF_WARN_SIZE_THRESH"
 OMIGO_RATE_LIMIT_N_WARNINGS = "OMIGO_RATE_LIMIT_N_WARNINGS"
 OMIGO_NOOP_N_WARNINGS = "OMIGO_NOOP_N_WARNINGS"
 OMIGO_MAX_DEBUG_MSG_LEN = 160
+OMIGO_MAX_DEBUG_MSG_MULT = 0.8
 
 def is_critical():
     return str(os.environ.get(OMIGO_CRITICAL, "1")) == "1"
@@ -82,7 +83,7 @@ def set_big_tsv_warn_size_thresh(thresh):
 def trace(msg):
     if (is_trace()):
         if (len(msg) > OMIGO_MAX_DEBUG_MSG_LEN):
-            msg = msg[0:int(0.2 * OMIGO_MAX_DEBUG_MSG_LEN)] + " ... " + msg[-int(0.8 * OMIGO_MAX_DEBUG_MSG_LEN):]
+            msg = msg[0:int(0.2 * OMIGO_MAX_DEBUG_MSG_LEN)] + " ... " + msg[-int(OMIGO_MAX_DEBUG_MSG_MULT * OMIGO_MAX_DEBUG_MSG_LEN):]
         print("[TRACE]: {}".format(msg))
 
 def trace_once(msg):
@@ -104,7 +105,7 @@ def trace_once(msg):
 def debug(msg):
     if (is_debug()):
         if (len(msg) > OMIGO_MAX_DEBUG_MSG_LEN):
-            msg = msg[0:int(0.2 * OMIGO_MAX_DEBUG_MSG_LEN)] + " ... " + msg[-int(0.8 * OMIGO_MAX_DEBUG_MSG_LEN):]
+            msg = msg[0:int(0.2 * OMIGO_MAX_DEBUG_MSG_LEN)] + " ... " + msg[-int(OMIGO_MAX_DEBUG_MSG_MULT * OMIGO_MAX_DEBUG_MSG_LEN):]
         print("[DEBUG]: {}".format(msg))
 
 def debug_once(msg):
@@ -116,6 +117,8 @@ def debug_once(msg):
     global DEBUG_MSG_CACHE
     # check if msg is already displayed
     if (msg not in DEBUG_MSG_CACHE.keys()):
+        if (len(msg) > OMIGO_MAX_DEBUG_MSG_LEN):
+            msg = msg[0:int(0.2 * OMIGO_MAX_DEBUG_MSG_LEN)] + " ... " + msg[-int(OMIGO_MAX_DEBUG_MSG_MULT * OMIGO_MAX_DEBUG_MSG_LEN):]
         print("[DEBUG ONCE ONLY]: " + msg)
         DEBUG_MSG_CACHE[msg] = 1
 
@@ -126,7 +129,7 @@ def debug_once(msg):
 def info(msg):
     if (is_info()):
         if (len(msg) > OMIGO_MAX_DEBUG_MSG_LEN):
-            msg = msg[0:int(0.2 * OMIGO_MAX_DEBUG_MSG_LEN)] + " ... " + msg[-int(0.8 * OMIGO_MAX_DEBUG_MSG_LEN):]
+            msg = msg[0:int(0.2 * OMIGO_MAX_DEBUG_MSG_LEN)] + " ... " + msg[-int(OMIGO_MAX_DEBUG_MSG_MULT * OMIGO_MAX_DEBUG_MSG_LEN):]
         print("[INFO]: {}".format(msg))
 
 def info_once(msg):
@@ -156,7 +159,7 @@ def info_without_header(msg):
 def error(msg):
     if (is_error()):
         if (len(msg) > OMIGO_MAX_DEBUG_MSG_LEN):
-            msg = msg[0:int(0.2 * OMIGO_MAX_DEBUG_MSG_LEN)] + " ... " + msg[-int(0.8 * OMIGO_MAX_DEBUG_MSG_LEN):]
+            msg = msg[0:int(0.2 * OMIGO_MAX_DEBUG_MSG_LEN)] + " ... " + msg[-int(OMIGO_MAX_DEBUG_MSG_MULT * OMIGO_MAX_DEBUG_MSG_LEN):]
         print("[ERROR]: {}".format(msg))
 
 def error_once(msg):
@@ -230,6 +233,8 @@ def warn_once(msg):
     global WARN_MSG_CACHE
     # check if msg is already displayed
     if (msg not in WARN_MSG_CACHE.keys()):
+        if (len(msg) > OMIGO_MAX_DEBUG_MSG_LEN):
+            msg = msg[0:int(0.2 * OMIGO_MAX_DEBUG_MSG_LEN)] + " ... " + msg[-int(OMIGO_MAX_DEBUG_MSG_MULT * OMIGO_MAX_DEBUG_MSG_LEN):]
         print("[WARN ONCE ONLY]: " + msg)
         WARN_MSG_CACHE[msg] = 1
 

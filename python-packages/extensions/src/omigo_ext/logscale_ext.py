@@ -12,18 +12,20 @@ import humiolib
 
 # Basic search class
 class LogScaleSearch:
-    def __init__(self, base_url = None, repository = None, user_token = None, timeout_sec = 600, wait_sec = 10, attempts = 3, attempt_sleep_sec = 30):
+    def __init__(self, base_url = None, repository = None, user_token = None, timeout_sec = 600, wait_sec = 10, attempts = 3, attempt_sleep_sec = 30, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "LogScaleSearch: __init__")
+
         # Validation
         if (base_url is None):
-            raise Exception("Missing parameters: base_url")
+            raise Exception("{}: Missing parameters: base_url".format(dmsg))
 
         # check for repository
         if (repository is None):
-            raise Exception("Missing parameters: repository")
+            raise Exception("{}: Missing parameters: repository".format(dmsg))
 
         # check for user_token
         if (user_token is None):
-            raise Exception("Missing parameters: user_token")
+            raise Exception("{}: Missing parameters: user_token".format(dmsg))
 
         # initialize parameters
         self.base_url = base_url
@@ -35,14 +37,14 @@ class LogScaleSearch:
         self.attempt_sleep_sec = attempt_sleep_sec
 
         # warn
-        utils.warn("LogScaleSearch: This code needs refactoring")
+        utils.warn("{}: This code needs refactoring".format(dmsg))
 
         # message at creating a new instance
-        utils.debug("LogScaleSearch: new instance created: base_url: {}, repository: {}, timeout_sec: {}, wait_sec: {}, attempts: {}, attempt_sleep_sec: {}".format(
-            self.base_url, self.repository, self.timeout_sec, self.wait_sec, self.attempts, self.attempt_sleep_sec))
+        utils.debug("{}: new instance created: base_url: {}, repository: {}, timeout_sec: {}, wait_sec: {}, attempts: {}, attempt_sleep_sec: {}".format(
+            dmsg, self.base_url, self.repository, self.timeout_sec, self.wait_sec, self.attempts, self.attempt_sleep_sec))
 
         # warn
-        utils.warn_once("LogScaleSearch: This is an initial version inspired from logscale_ext. Need to be optimized further.")
+        utils.warn_once("{}: This is an initial version inspired from logscale_ext. Need to be optimized further.".format(dmsg))
 
     def __get_logscale_client__(self):
         # create client once
@@ -64,7 +66,7 @@ class LogScaleSearch:
         end_time_millis = timefuncs.datetime_to_utctimestamp_sec(end_time) * 1000
 
         # debug
-        utils.debug("call_search: query: {}, start_time: {}, end_time: {}".format(query, start_time, end_time))
+        utils.debug("{}: query: {}, start_time: {}, end_time: {}".format(dmsg, query, start_time, end_time))
 
         # execute
         result = self.__execute_query__(query, start_time_millis, end_time_millis, self.attempts, accepted_cols = accepted_cols, excluded_cols = excluded_cols,
@@ -323,12 +325,14 @@ class LogScaleSearch:
 # class to do data manipulation on DataFrame
 class LogScaleDF(dataframe.DataFrame):
     def __init__(self, header, data, logscale_client = None, base_url = None, repository = None, user_token = None, timeout_sec = 600, wait_sec = 10, attempts = 3,
-        num_par = 0, attempt_sleep_sec = 30):
+        num_par = 0, attempt_sleep_sec = 30, dmsg = ""):
         super().__init__(header, data)
+
+        dmsg = utils.extend_inherit_message(dmsg, "LogScaleDF: __init__")
 
         # check if new logscale search instance is needed
         if (logscale_client is None):
-            logscale_client = LogScaleSearch(base_url, repository = repository, user_token = user_token, timeout_sec = timeout_sec, wait_sec = wait_sec, attempts = attempts)
+            logscale_client = LogScaleSearch(base_url, repository = repository, user_token = user_token, timeout_sec = timeout_sec, wait_sec = wait_sec, attempts = attempts, dmsg = dmsg)
 
         self.logscale_client = logscale_client
         self.base_url = base_url
