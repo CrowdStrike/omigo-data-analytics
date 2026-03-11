@@ -5,7 +5,7 @@ import pandas as pd
 import random
 import json
 import base64
-from omigo_core import utils, dfutils, udfs, llm_funcs
+from omigo_core import utils, dfutils, udfs
 import sys
 import time
 import numpy as np
@@ -5741,13 +5741,4 @@ def __is_builtin_func__(func):
         return True
     else:
         return False
-
-def from_markdown_table(markdown_text, dmsg = ""):
-    dmsg = utils.extend_inherit_message(dmsg, "from_markdown_table")
-
-    # parse
-    (header_fields, data_fields) = llm_funcs.from_markdown_table(markdown_text, dmsg = dmsg)
-
-    # return
-    return new_df(header_fields, data_fields)
 
