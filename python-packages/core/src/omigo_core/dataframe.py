@@ -3927,22 +3927,23 @@ class DataFrame:
 
     # public method handling both random and cols based splitting
     def split_batches(self, num_batches, cols = None, preserve_order = False, seed = None, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "split_batches")
+
         # check for empty
         if (self.has_empty_header()):
             # check for cols
             if (cols is None):
-                utils.warn("split_batches: empty header tsv")
+                utils.warn("{}: empty header tsv".format(dmsg))
                 return [self]
             else:
-                raise Exception("split_batches: empty header tsv")
+                raise Exception("{}: empty header tsv".format(dmsg))
 
         # check for empty rows
         if (self.num_rows() == 0):
-            utils.warn("split_batches: empty data tsv")
+            utils.warn("{}: empty data tsv".format(dmsg))
             return [self]
 
         # check if cols are defined or not
-        dmsg = utils.extend_inherit_message(dmsg, "split_batches")
         if (cols is None):
             return self.__split_batches_randomly__(num_batches, preserve_order = preserve_order, seed = seed, dmsg = dmsg)
         else:
@@ -3955,7 +3956,7 @@ class DataFrame:
         # validation
         if (preserve_order == True ):
             if (seed is not None):
-                raise Exception("__split_batches_randomly__: seed is only valid when preserve_order is False")
+                raise Exception("{}: seed is only valid when preserve_order is False".format(dmsg))
         else:
             if (seed is None):
                 seed = 0
@@ -3977,7 +3978,7 @@ class DataFrame:
         for i in range(self.num_rows()):
             # report progress
             counter = counter + 1
-            utils.report_progress("__split_batches_randomly__: [1/1] assigning batch index", dmsg, counter, self.num_rows())
+            utils.report_progress("[1/1] assigning batch index", dmsg, counter, self.num_rows())
 
             # check if original order of data needs to be preserved
             if (preserve_order == True):
@@ -4034,7 +4035,7 @@ class DataFrame:
         for fields in hashed_tsv2.get_data_fields():
             # report progress
             counter = counter + 1
-            utils.report_progress("__split_batches_by_cols__: [1/1] assigning batch index", dmsg, counter, len(hashed_tsv2.get_data_fields()))
+            utils.report_progress("[1/1] assigning batch index", dmsg, counter, len(hashed_tsv2.get_data_fields()))
 
             batch_id = int(fields[batch_index])
             new_data_fields_list[batch_id].append(fields)
