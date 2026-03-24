@@ -394,12 +394,24 @@ def run_with_thread_pool(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0, d
     if (num_par == 0):
         trace("{}: running in single threaded mode".format(dmsg))
 
-        # iterate
-        for task in tasks:
+        # iterate and collect exceptions
+        exceptions = []
+        for i, task in enumerate(tasks):
             func = task.func
             args = task.args
             kwargs = task.kwargs
-            results.append(func(*args, **kwargs))
+            try:
+                results.append(func(*args, **kwargs))
+            except Exception as e:
+                error("{}: Task {} failed with exception: {}".format(dmsg, i, e))
+                exceptions.append((i, e))
+                results.append(None)
+
+        # if any tasks failed, log summary and re-raise the first exception
+        if len(exceptions) > 0:
+            error("{}: {} task(s) failed out of {}".format(dmsg, len(exceptions), len(tasks)))
+            # re-raise the first exception to preserve original type and traceback
+            raise exceptions[0][1]
 
         # return
         return results
@@ -431,17 +443,34 @@ def run_with_thread_pool(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0, d
                     info("{}: run_with_thread_pool: finished".format(dmsg))
                     break
 
-            # combine the results
-            for f in future_results:
-                results.append(f.result())
+            # combine the results, collecting all exceptions
+            exceptions = []
+            for i, f in enumerate(future_results):
+                try:
+                    results.append(f.result())
+                except Exception as e:
+                    error("{}: Task {} failed with exception: {}".format(dmsg, i, e))
+                    exceptions.append((i, e))
+                    results.append(None)
 
             # wait for post_wait_sec for mitigating eventual consistency
             if (post_wait_sec > 0):
                 info("{}: sleeping for post_wait_sec: {}".format(dmsg, post_wait_sec))
                 time.sleep(post_wait_sec)
 
+            # if any tasks failed, log summary and re-raise the first exception
+            if len(exceptions) > 0:
+                error("{}: {} task(s) failed out of {}".format(dmsg, len(exceptions), len(future_results)))
+                # re-raise the first exception to preserve original type and traceback
+                raise exceptions[0][1]
+
             # return
             return results
+
+def run_with_thread_pool_failsafe(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0, dmsg = ""):
+    results = run_with_thread_pool(tasks, num_par = num_par, wait_sec = wait_sec, post_wait_sec = post_wait_sec, dmsg = dmsg)
+    # filter out None values (defensive programming)
+    return [r for r in results if r is not None]
 
 def raise_exception_or_warn(msg, ignore_if_missing, max_len = 2000):
     # strip the message to max_len
@@ -879,12 +908,12 @@ def __run_return_func_with_retry_inner__(retry_attempts, retry_wait_seconds, exp
         try:
             return func(*args, **kwargs)
         except Exception as e:
+            retry_attempts = retry_attempts - 1
             if (retry_attempts > 0):
                 error("__run_return_func_with_retry_inner__: Caught Exception: {}, retry_attempts: {}, Retrying after sleeping for {} seconds".format(e,
                     retry_attempts, retry_wait_seconds))
                 traceback.print_exc(file = sys.stdout)
                 time.sleep(retry_wait_seconds)
-                retry_attempts = retry_attempts - 1
 
                 # change wait time based on backoff
                 if (exp_backoff == True):
@@ -898,12 +927,12 @@ def __run_noreturn_func_with_retry_inner__(retry_attempts, retry_wait_seconds, e
             func(*args, **kwargs)
             return
         except Exception as e:
+            retry_attempts = retry_attempts - 1
             if (retry_attempts > 0):
                 error("__run_noreturn_func_with_retry_inner__: Caught Exception: {}, retry_attempts: {}, Retrying after sleeping for {} seconds".format(e,
                     retry_attempts, retry_wait_seconds))
                 traceback.print_exc(file = sys.stdout)
                 time.sleep(retry_wait_seconds)
-                retry_attempts = retry_attempts - 1
 
                 # change wait time based on backoff
                 if (exp_backoff == True):
