@@ -107,10 +107,17 @@ class FilePathsDataReader:
             else:
                 found = False
                 while (found == False):
+                    # TODO: This check is redundant on first iteration (already verified previously)
+                    # but needed for subsequent iterations after calling next()
                     if (self.file_paths_readers.has_next()):
                         # read the next block and reinitialize the cur_index
                         filepath = self.file_paths_readers.next()
                         self.cur_data = file_paths_util.read_file_content_as_lines(filepath, self.s3_region, self.aws_profile)
+
+                        # check for validity
+                        if (len(self.cur_data) == 0):
+                            raise Exception("FilePathsDataReader: Invalid file found. No header: {}".format(filepath))
+
                         self.cur_index = 1
 
                         # check if found a valid file
