@@ -9,6 +9,7 @@ import zipfile
 from omigo_core import utils
 from omigo_core import timefuncs
 from omigo_hydra import s3io_wrapper
+from omigo_hydra import s3_wrapper
 from omigo_hydra import local_fs_wrapper
 # constant
 NUM_HOURS = 24
@@ -126,9 +127,9 @@ def read_filepaths_daily(path, start_date_str, end_date_str, fileprefix, s3_regi
         filepath_tsv = path + etl_prefix + fileprefix + "-" + curdate.strftime("%Y%m%d") + "-" + curdate.strftime("%Y%m%d") + ".tsv"
         filepath_tsvgz = filepath_tsv + ".gz"
 
-        if (fs.file_exists(filepath_tsv, s3_region = s3_region, aws_profile = aws_profile)):
+        if (fs.file_exists(filepath_tsv)):
             filepaths.append(filepath_tsv)
-        elif (fs.file_exists(filepath_tsvgz, s3_region = s3_region, aws_profile = aws_profile)):
+        elif (fs.file_exists(filepath_tsvgz)):
             filepaths.append(filepath_tsvgz)
         else:
             if (ignore_missing == False):
