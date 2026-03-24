@@ -195,7 +195,7 @@ class JiraDF(dataframe.DataFrame):
         def __search_issues_explode_func__(mp):
             # resolve query
             query = utils.replace_template_props(mp, query_template)
-            utils.info("JiraDF: search_issues: resolved query: {}".format(query))
+            utils.info("{}: resolved query: {}".format(dmsg, query))
 
             # call jira search
             results = self.jira_search.search_issues(query, extra_cols = extra_cols, max_results = max_results, dmsg = dmsg)

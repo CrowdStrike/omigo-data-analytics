@@ -4030,7 +4030,7 @@ class DataFrame:
             new_data_fields_list.append([])
 
         # assign each record to its correct place
-        batch_index = hashed_tsv2.get_col_index(temp_col2)
+        batch_index = hashed_tsv2.get_column_index(temp_col2)
         counter = 0
         for fields in hashed_tsv2.get_data_fields():
             # report progress
@@ -4506,7 +4506,7 @@ class DataFrame:
                                i = i + 1
                                dict_results.append(mp2_new)
                     elif (len(v) == 0):
-                        utils.warn_once("explode_json: This logic of empty values is not tested")
+                        utils.warn_once("{}: This logic of empty values is not tested".format(dmsg))
                         single_results[k] = ""
                     else:
                         raise Exception("Unknown data type: {}, {}".format(k, type(v)))

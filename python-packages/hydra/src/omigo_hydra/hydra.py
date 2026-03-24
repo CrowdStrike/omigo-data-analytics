@@ -366,4 +366,13 @@ def read_text_file(path, s3_region = None, aws_profile = None, dmsg = ""):
     fs = s3io_wrapper.S3FSWrapper(s3_region = s3_region, aws_profile = aws_profile)
 
     # return
-    return fs.read_file_contents_as_text(path)
+    return fs.read_text_file(path)
+
+def create_dir(path, s3_region = None, aws_profile = None, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "create_dir")
+
+    # initialize fs
+    fs = s3io_wrapper.S3FSWrapper(s3_region = s3_region, aws_profile = aws_profile)
+
+    # return
+    return fs.create_dir(path, dmsg = dmsg)
