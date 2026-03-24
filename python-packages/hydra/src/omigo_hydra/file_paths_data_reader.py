@@ -43,8 +43,7 @@ class FilePathsDataReader:
 
                 # check for validity
                 if (len(self.cur_data) == 0):
-                    print("FilePathsDataReader: Invalid file found. No header.", filepath)
-                    sys.exit(0)
+                    raise Exception("FilePathsDataReader: Invalid file found. No header: {}".format(filepath))
 
                 # read header
                 self.header = self.cur_data[0].rstrip("\n")
@@ -97,7 +96,7 @@ class FilePathsDataReader:
             result = self.cur_data[self.cur_index].rstrip("\n")
             self.cur_index = self.cur_index + 1
         else:
-            print("FilePathsDataReader: next() this should not happen")
+            raise Exception("FilePathsDataReader: next() called with invalid cur_index state")
 
         # Check if cur_index has reached the end of data block
         if (self.cur_index >= len(self.cur_data)):
