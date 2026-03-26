@@ -1688,7 +1688,7 @@ class ClusterMasterElectionProtocol:
                 min_ts = candidate.ts
                 min_ts_candidate = candidate
             elif (min_ts == candidate.ts):
-                if (candidate.entity_id < self.get_entity_id()):
+                if (candidate.entity_id < min_ts_candidate.entity_id):
                     min_ts_candidate = candidate
 
         # check if there was any valid candidate
