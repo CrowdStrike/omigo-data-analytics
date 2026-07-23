@@ -245,7 +245,9 @@ class JobManager:
                 utils.error("JobManager: run_loop: caught Interrupt: returning")
                 return
 
-    def run(self):
+    def run(self, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "run")
+
         # check the list of created, running, completed
         all_created = self.runner_base.fs.list_leaf_dir(self.runner_base.get_job_status_created())
         all_running = self.runner_base.fs.list_leaf_dir(self.runner_base.get_job_status_running())
@@ -261,7 +263,7 @@ class JobManager:
             job_xdfs.append(dataframe.from_maps([{"job_id": job_spec_json["job_id"], "submit_ts": job_spec_json["submit_ts"]}]))
 
         # create single tsv
-        job_xdf = dataframe.merge_union(job_xdfs)
+        job_xdf = dataframe.merge_union(job_xdfs, dmsg = dmsg)
 
         # iterate
         for new_job_id in job_xdf.sort("submit_ts").col_as_array("job_id"):

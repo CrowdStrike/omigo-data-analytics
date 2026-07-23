@@ -123,7 +123,9 @@ def get_etl_file_datetime_str_from_ts(ts):
 
 # this method generates the basename minus the extension
 # prefix-startyyyymmdd-HHMMSS-endyyyymmdd-HHMMSS
-def get_etl_file_base_name_by_ts(prefix, start_ts, end_ts):
+def get_etl_file_base_name_by_ts(prefix, start_ts, end_ts, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "get_etl_file_base_name_by_ts")
+
     # convert to datetime
     start_datetime = timefuncs.utctimestamp_to_datetime(start_ts)
     end_datetime = timefuncs.utctimestamp_to_datetime(end_ts)
@@ -137,28 +139,31 @@ def get_etl_file_base_name_by_ts(prefix, start_ts, end_ts):
     # return
     return "{}-{}-{}-{}-{}".format(prefix, start_date_str, end_date_str, start_time_str, end_time_str)
 
-def get_etl_file_path_by_ts(base_dir, prefix, start_ts, end_ts):
+def get_etl_file_path_by_ts(base_dir, prefix, start_ts, end_ts, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "get_etl_file_path_by_ts")
+
     start_dt = timefuncs.utctimestamp_to_datetime_str(start_ts)[0:10].replace("-", "")
-    return "{}/dt={}/{}".format(base_dir, start_dt, get_etl_file_base_name_by_ts(prefix, start_ts, end_ts))
+    return "{}/dt={}/{}".format(base_dir, start_dt, get_etl_file_base_name_by_ts(prefix, start_ts, end_ts, dmsg = dmsg))
 
 def scan_by_datetime_range(path, start_date_str, end_date_str, prefix, filter_transform_func = None, cols = None, transform_func = None, spillover_window = 1, num_par = 5,
-    wait_sec = 5, timeout_seconds = 600, def_val_map = {}, sampling_rate = None, s3_region = None, aws_profile = None):
+    wait_sec = 5, timeout_seconds = 600, def_val_map = {}, sampling_rate = None, s3_region = None, aws_profile = None, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "scan_by_datetime_range")
 
     # debug
-    utils.info("scan_by_datetime_range: path: {}, start_date_str: {}, end_date_str: {}, spillover_window: {}, def_val_map: {}, sampling_rate: {}".format(
-        path, start_date_str, end_date_str, spillover_window, def_val_map, sampling_rate))
+    utils.info("{}: path: {}, start_date_str: {}, end_date_str: {}, spillover_window: {}, def_val_map: {}, sampling_rate: {}".format(
+        dmsg, path, start_date_str, end_date_str, spillover_window, def_val_map, sampling_rate))
 
     # read filepaths by scanning. this involves listing all the files, and then matching the condititions
     filepaths = get_file_paths_by_datetime_range(path,  start_date_str, end_date_str, prefix, spillover_window = spillover_window, num_par = num_par, sampling_rate = sampling_rate,
-        s3_region = s3_region, aws_profile = aws_profile)
+        s3_region = s3_region, aws_profile = aws_profile, dmsg = dmsg)
 
     # debug
-    utils.info("scan_by_datetime_range: number of paths to read: {}, num_par: {}, timeout_seconds: {}".format(len(filepaths), num_par, timeout_seconds))
+    utils.info("{}: number of paths to read: {}, num_par: {}, timeout_seconds: {}".format(dmsg, len(filepaths), num_par, timeout_seconds))
 
     # do some checks on the headers in the filepaths
 
     # debug
-    utils.debug("dfutils: scan_by_datetime_range: number of files to read: {}".format(len(filepaths)))
+    utils.debug("{}: scan_by_datetime_range: number of files to read: {}".format(dmsg, len(filepaths)))
 
     # read all the files in the filepath applying the filter function
     tasks = []
@@ -166,23 +171,26 @@ def scan_by_datetime_range(path, start_date_str, end_date_str, prefix, filter_tr
     # iterate over filepaths and submit
     for filepath in filepaths:
         tasks.append(utils.ThreadPoolTask(hydra.read_with_filter_transform, filepath, filter_transform_func = filter_transform_func, cols = cols, transform_func = transform_func,
-            s3_region = s3_region, aws_profile = aws_profile))
+            s3_region = s3_region, aws_profile = aws_profile, dmsg = dmsg))
 
     # execute and get results
-    xdf_list = utils.run_with_thread_pool(tasks, num_par = num_par, wait_sec = wait_sec)
+    xdf_list = utils.run_with_thread_pool(tasks, num_par = num_par, wait_sec = wait_sec, dmsg = dmsg)
 
     # combine all together
-    xdf_combined = dataframe.merge(xdf_list, def_val_map = def_val_map)
-    utils.info("scan_by_datetime_range: Number of records: {}".format(xdf_combined.num_rows()))
+    xdf_combined = dataframe.merge_union(xdf_list, def_val_map = def_val_map, dmsg  = dmsg)
+    utils.info("{}: Number of records: {}".format(dmsg, xdf_combined.num_rows()))
 
     # return
     return xdf_combined
 
 # this method is needed so that users dont have to interact with file_paths_util
-def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix, spillover_window = 1, sampling_rate = None, num_par = 10, wait_sec = 1, s3_region = None, aws_profile = None):
+def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix, spillover_window = 1, sampling_rate = None, num_par = 10, wait_sec = 1,
+    s3_region = None, aws_profile = None, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "get_file_paths_by_datetime_range")
+
     # get all the filepaths
     filepaths = file_paths_util.get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix, spillover_window = spillover_window, num_par = num_par, wait_sec = wait_sec,
-        s3_region = s3_region, aws_profile = aws_profile)
+        s3_region = s3_region, aws_profile = aws_profile, dmsg = dmsg)
 
     # check for sampling rate
     if (sampling_rate is not None):

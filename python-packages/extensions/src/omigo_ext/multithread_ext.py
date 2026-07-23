@@ -72,11 +72,23 @@ class MultiThreadDF(dataframe.DataFrame):
                     else:
                         break
 
-            # combine the results
+            # combine the results, collecting all exceptions
             results = []
-            for f in future_results:
-                utils.trace("MultiThreadDF: parallelize: xdf num_rows: {}".format(f.result().num_rows()))
-                results.append(f.result())
+            exceptions = []
+            for i, f in enumerate(future_results):
+                try:
+                    result = f.result()
+                    utils.trace("{}: parallelize: batch {} xdf num_rows: {}".format(self.dmsg, i, result.num_rows()))
+                    results.append(result)
+                except Exception as e:
+                    utils.error("{}: parallelize: Batch {} failed with exception: {}".format(self.dmsg, i, e))
+                    exceptions.append((i, e))
+
+            # if any batches failed, log summary and re-raise the first exception
+            if len(exceptions) > 0:
+                utils.error("{}: {} batch(es) failed out of {}".format(self.dmsg, len(exceptions), len(future_results)))
+                # re-raise the first exception to preserve original type and traceback
+                raise exceptions[0][1]
 
             # merge the dfs using a common union.
             combined_result = dataframe.merge(results, def_val_map = {})

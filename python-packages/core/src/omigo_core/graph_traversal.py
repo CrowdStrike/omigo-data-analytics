@@ -4,7 +4,9 @@ import queue
 # This is WIP. This detects cycles and ignore assigning them levels
 # TODO: there is this reverse_first flag which can be confusing. This api needs to be broken down into
 # forward or reverse only
-def get_bfs_levels(edf, vertex_ids, reverse_first = True):
+def get_bfs_levels(edf, vertex_ids, reverse_first = True, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "get_bfs_levels")
+
     # create map of levels
     fwd_levels = {}
     found_ids = []
@@ -75,7 +77,8 @@ def get_bfs_levels(edf, vertex_ids, reverse_first = True):
     # return
     return levels
 
-def get_forward_edges_only(edf, prefix, sep = ","):
+def get_forward_edges_only(edf, prefix, sep = ",", dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "get_forward_edges_only")
     # list of ids found so far in crawl
     paths = {}
     all_paths = {}
@@ -167,7 +170,8 @@ def get_forward_edges_only(edf, prefix, sep = ","):
         .transform("target", lambda t: ",".join(all_paths[t]) if (t in all_paths.keys()) else "", "{}:all_paths".format(prefix)) \
         .transform("target", lambda t: "|".join(ancestors_map[t]) if (t in ancestors_map.keys()) else "", "{}:ancestors".format(prefix))
 
-def get_time_based_forward_edges_only(edf, ts_col, prefix):
+def get_time_based_forward_edges_only(edf, ts_col, prefix, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "get_time_based_forward_edges_only")
     utils.warn_once("get_time_based_forward_edges_only: this is hard to understand and time ordering is tricky. Use get_forward_edges_only")
 
     # list of ids found so far in crawl
@@ -247,7 +251,7 @@ def remove_dangling_edges(edf, retain_vertex_ids, retain_node_filter_func, max_i
 
         # ege count flag
         edf2_edge_flags = edf_edge_count \
-            .print_stats(msg = "edf_edge_count") \
+            .print_stats("edf_edge_count", dmsg = dmsg) \
             .drop_cols(["outgoing_target"]) \
             .left_map_join(edf_num_outgoing_target, ["target"], rkeys = ["right:src"], def_val_map = {"outgoing_target": "0"}) \
             .noop(["src", "target", "incoming_target", "outgoing_target", "right:.*"], n = 1000, title = "edf_edge_count join") \
@@ -270,9 +274,9 @@ def remove_dangling_edges(edf, retain_vertex_ids, retain_node_filter_func, max_i
         # check for running the flag
         if (edf2_edge_flags.num_rows() == edf2_sync.num_rows()):
             dangling_edges_pruned = True
-            utils.debug("edf: no more dangling edges found")
+            utils.debug("{}: edf: no more dangling edges found".format(dmsg))
         else:
-            utils.info("edf: dangling edges found. running the loop again : {} / {}".format(count, max_iter))
+            utils.info("{}: edf: dangling edges found. running the loop again : {} / {}".format(dmsg, count, max_iter))
 
         # update the core data structure
         edf_result = edf2_sync
@@ -283,6 +287,8 @@ def remove_dangling_edges(edf, retain_vertex_ids, retain_node_filter_func, max_i
 # TODO: This method is a reference implementation
 def remove_cycles(vdf, edf, ts_col, retain_node_filter_func = None, dmsg = ""):
     utils.extend_inherit_message(dmsg, "remove_cycles")
+
+    # warn
     utils.warn_once("remove_cycles: This logic needs to be corrected for same edges from multiple data_sources to not confuse each other")
     utils.warn_once("remove_cycles: there is a weird check for single edge. the t1 in t2.split is not clear")
 
@@ -316,7 +322,7 @@ def remove_cycles(vdf, edf, ts_col, retain_node_filter_func = None, dmsg = ""):
         .drop_cols_with_prefix("graph") \
         .noop(1000, "edf_non_spl2 2", dataframe.DataFrame.select, ["src", "target", ts_col, "data_source:uniq_mkstr"])
 
-    edf2_included = dataframe.merge_union([edf_spl, edf_non_spl2]) \
+    edf2_included = dataframe.merge_union([edf_spl, edf_non_spl2], dmsg = dmsg) \
         .select(["src", "target", ts_col]) \
         .distinct() \
         .noop(1000, title = "edf2_included") \
@@ -343,7 +349,7 @@ def merge_similar_nodes_reference(vdf, edf, retain_vertex_ids, ts_col, retain_no
 
     # warn if cycles were present, and then remove them
     if (edf.num_rows() != edf_nocycle.num_rows()):
-        utils.warn_once("merge_similar_nodes: this api is unpredictable in presence of cycles. removing them for robustness")
+        utils.warn_once("{}: this api is unpredictable in presence of cycles. removing them for robustness".format(dmsg))
         # debug
         edf \
             .filter(["src", "target"], lambda src, tgt: (src, tgt) not in edf_nocycle.to_tuples(["src", "target"])) \
@@ -406,7 +412,7 @@ def merge_similar_nodes_reference(vdf, edf, retain_vertex_ids, ts_col, retain_no
         .rename("target:get_len", "num_nodes") \
         .add_const("edf_grouped_source", "leaf2")
 
-    edf_grouped = dataframe.merge_union([edf_grouped_leaf0, edf_grouped_leaf1, edf_grouped_leaf2]) \
+    edf_grouped = dataframe.merge_union([edf_grouped_leaf0, edf_grouped_leaf1, edf_grouped_leaf2], dmsg = dmsg) \
         .drop_cols(["incoming_target", "outgoing_target", "edge_target_level2", "count_target_level2", "is_leaf_target", "is_leaf_edge_target"]) \
         .reorder(["src", "target", "num_nodes"]) \
         .reverse_sort(["num_nodes"])
@@ -477,7 +483,8 @@ def split_graph_filter_func(src, tgt, ts, retain_vertex_ids, retain_vertex_annot
     else:
         return True
 
-def apply_time_order_based_filter(vdf, edf, retain_vertex_ids, retain_node_filter_func, strict_ordering_flag):
+def apply_time_order_based_filter(vdf, edf, retain_vertex_ids, retain_node_filter_func, strict_ordering_flag, dmsg = ""):
+    utils.extend_inherit_message(dmsg, "apply_time_order_based_filter")
     # find the min and max timestamps
     edf_min_max = edf \
         .aggregate(["src", "target"], ["ts", "ts"], [udfs.minint, udfs.maxint]) \

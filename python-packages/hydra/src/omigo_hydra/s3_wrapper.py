@@ -177,7 +177,9 @@ def check_file_exists(path, s3_region = None, aws_profile = None):
         # utils.error("check_file_exists: StackTrace: {}".format(traceback.format_exc()))
         return False
 
-def put_file_content(bucket_name, object_key, barr, s3_region = None, aws_profile = None):
+def put_file_content(bucket_name, object_key, barr, s3_region = None, aws_profile = None, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "put_file_content")
+
     # get s3 references
     s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
     s3_bucket = get_s3_resource_cache(s3_region, aws_profile)
@@ -189,11 +191,15 @@ def put_file_content(bucket_name, object_key, barr, s3_region = None, aws_profil
     obj.put(Body = barr)
 
 # TODO: Deprecated
-def put_s3_file_content(bucket_name, object_key, barr, s3_region = None, aws_profile = None):
-    utils.warn_once("use put_file_content instead")
-    return put_file_content(bucket_name, object_key, barr, s3_region = None, aws_profile = None)
+def put_s3_file_content(bucket_name, object_key, barr, s3_region = None, aws_profile = None, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "put_s3_file_content")
 
-def put_file_with_text_content(bucket_name, object_key, text, s3_region = None, aws_profile = None):
+    utils.warn_once("use put_file_content instead")
+    return put_file_content(bucket_name, object_key, barr, s3_region = None, aws_profile = None, dmsg = dmsg)
+
+def put_file_with_text_content(bucket_name, object_key, text, s3_region = None, aws_profile = None, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "put_file_with_text_content")
+
     s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
     barr = str.encode(text)
     if (object_key.endswith(".gz")):
@@ -206,10 +212,12 @@ def put_file_with_text_content(bucket_name, object_key, text, s3_region = None, 
             zfile.writestr(object_file_name[0:-4], barr)
         barr = mzip.getvalue()
 
-    put_file_content(bucket_name, object_key, barr, s3_region = s3_region, aws_profile = aws_profile)
+    put_file_content(bucket_name, object_key, barr, s3_region = s3_region, aws_profile = aws_profile, dmsg = dmsg)
 
 # TODO: Deprecated
-def put_s3_file_with_text_content(bucket_name, object_key, text, s3_region = None, aws_profile = None):
+def put_s3_file_with_text_content(bucket_name, object_key, text, s3_region = None, aws_profile = None, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "put_s3_file_with_text_content")
+
     utils.warn_once("use put_file_with_text_content instead")
     put_file_with_text_content(bucket_name, object_key, text, s3_region = s3_region, aws_profile = aws_profile)
 
@@ -319,7 +327,9 @@ def get_directory_listing(path, filter_func = None, ignore_if_missing = False, s
     # return
     return filenames
 
-def delete_file(path, ignore_if_missing = False, s3_region = None, aws_profile = None):
+def delete_file(path, ignore_if_missing = False, s3_region = None, aws_profile = None, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "delete_file")
+
     s3_region, aws_profile = resolve_region_profile(s3_region, aws_profile)
     s3 = get_s3_client_cache(s3_region = s3_region, aws_profile = aws_profile)
 

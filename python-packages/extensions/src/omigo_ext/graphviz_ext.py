@@ -153,11 +153,14 @@ def get_graphviz_data(vdf, edf, vertex_id_col, src_edge_col, dest_edge_col, vert
     # the vertex df must be distinct
     if (len(vertex_ids) != vdf.num_rows()):
         utils.warn("Vertex DataFrame is not unique")
-        vdf \
+        vdf_non_uniq = vdf \
             .group_count(vertex_id_col, "group") \
-            .gt_int("group:count", 1) \
-            .reverse_numerical_sort("group:count") \
-            .show(10, title = "Top 10 non unique vertex ids", max_col_width = 1000)
+            .gt_int("group:count", 1)
+
+        if (vdf_non_uniq.num_rows() > 0):
+            vdf \
+                .values_in(vertex_id_col, vdf_non_uniq.col_as_array_uniq(vertex_id_col)) \
+                .show_transpose(3, title = "Top 10 non unique vertex ids", max_col_width = 1000)
 
     # ideally all edge ids must be present in the vertices. fallback to create missing vertices
     missing_edge_ids = edge_ids.difference(vertex_ids)
