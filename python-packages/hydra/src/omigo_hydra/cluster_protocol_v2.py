@@ -4,7 +4,7 @@ import random
 import math
 # import threading
 import multiprocessing
-from omigo_core import tsv, utils, timefuncs
+from omigo_core import dataframe, utils, timefuncs
 from omigo_hydra import cluster_data, cluster_class_reflection, cluster_tsv, cluster_common_v2, cluster_arjun, etl
 from omigo_hydra.cluster_common_v2 import EntityType, EntityState, ClusterTaskType, ClusterIds, ClusterPaths
 
@@ -1005,7 +1005,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
                 raise Exception("ClusterWFProtocol: {}: multiple inputs and outputs not supported: {}, {}".format(self.get_entity_id(), input_ids, output_ids))
 
             # read input
-            xinput = self.cluster_handler.read_tsv(ClusterPaths.get_entity_data_input_file(wf_entity.entity_type, wf_entity.entity_id, input_ids[0], file_index))
+            xinput = self.cluster_handler.read_df(ClusterPaths.get_entity_data_input_file(wf_entity.entity_type, wf_entity.entity_id, input_ids[0], file_index))
             utils.info("ClusterWFProtocol: {}: execute_static: num rows: {}, num_cols: {}".format(self.get_entity_id(), xinput.num_rows(), xinput.num_cols()))
 
             # resolve start_ts. TODO: This needs to fall on some boundaries of timestamps
@@ -1039,7 +1039,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
                 file_index = 0
                 self.cluster_handler.create(ClusterPaths.get_entity_data_outputs(wf_entity.entity_type, wf_entity.entity_id))
                 self.cluster_handler.create(ClusterPaths.get_entity_data_output(wf_entity.entity_type, wf_entity.entity_id, output_id))
-                self.cluster_handler.write_tsv(ClusterPaths.get_entity_data_output_file(wf_entity.entity_type, wf_entity.entity_id, output_id, file_index), xoutput)
+                self.cluster_handler.write_df(ClusterPaths.get_entity_data_output_file(wf_entity.entity_type, wf_entity.entity_id, output_id, file_index), xoutput)
             else:
                 # wait for the presence of output. TODO
                 output_id = wf_entity.entity_spec.output_ids[0]
@@ -1093,7 +1093,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
                 raise Exception("ClusterWFProtocol: {}: multiple inputs and outputs not supported: {}, {}".format(self.get_entity_id(), input_ids, output_ids))
 
             # read input
-            xinput = self.cluster_handler.read_tsv(ClusterPaths.get_entity_data_input_file(wf_entity.entity_type, wf_entity.entity_id, input_ids[0], file_index))
+            xinput = self.cluster_handler.read_df(ClusterPaths.get_entity_data_input_file(wf_entity.entity_type, wf_entity.entity_id, input_ids[0], file_index))
 
             # resolve start_ts. TODO: This needs to fall on some boundaries of timestamps
             wf_spec_start_ts = wf_spec.start_ts if (wf_spec.start_ts is not None and wf_spec.start_ts > 0) else timefuncs.get_utctimestamp_sec()
@@ -1140,7 +1140,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
                 self.cluster_handler.create(ClusterPaths.get_entity_data_outputs(wf_entity.entity_type, wf_entity.entity_id))
                 self.cluster_handler.create(ClusterPaths.get_entity_data_output(wf_entity.entity_type, wf_entity.entity_id, output_id))
                 self.cluster_handler.create(ClusterPaths.get_entity_data_output_etl_dt(wf_entity.entity_type, wf_entity.entity_id, output_id, cur_start_ts))
-                self.cluster_handler.write_tsv(ClusterPaths.get_entity_data_output_etl_file(wf_entity.entity_type, wf_entity.entity_id, output_id, cur_file_start_ts, cur_file_end_ts), xoutput)
+                self.cluster_handler.write_df(ClusterPaths.get_entity_data_output_etl_file(wf_entity.entity_type, wf_entity.entity_id, output_id, cur_file_start_ts, cur_file_end_ts), xoutput)
 
                 # update the timestamps
                 cur_start_ts = cur_end_ts
@@ -1176,7 +1176,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
                 raise Exception("ClusterWFProtocol: {}: multiple inputs and outputs not supported: {}, {}".format(self.get_entity_id(), input_ids, output_ids))
 
             # read input
-            xinput = self.cluster_handler.read_tsv(ClusterPaths.get_entity_data_input_file(wf_entity.entity_type, wf_entity.entity_id, input_ids[0], file_index))
+            xinput = self.cluster_handler.read_df(ClusterPaths.get_entity_data_input_file(wf_entity.entity_type, wf_entity.entity_id, input_ids[0], file_index))
 
             # save input locally
             self.local_cluster_handler.create(ClusterPaths.get_entity_data(wf_entity.entity_type, wf_entity.entity_id))
@@ -1188,7 +1188,7 @@ class ClusterWFProtocol(ClusterEntityProtocol):
                 input_id = wf_spec.input_ids[i]
                 file_index = 0
                 self.local_cluster_handler.create(ClusterPaths.get_entity_data_input(wf_entity.entity_type, wf_entity.entity_id, input_id))
-                self.local_cluster_handler.write_tsv(ClusterPaths.get_entity_data_input_file(wf_entity.entity_type, wf_entity.entity_id, input_id, file_index), xinputs[i])
+                self.local_cluster_handler.write_df(ClusterPaths.get_entity_data_input_file(wf_entity.entity_type, wf_entity.entity_id, input_id, file_index), xinputs[i])
 
             # initialize outputs
             self.local_cluster_handler.create(ClusterPaths.get_entity_data_outputs(wf_entity.entity_type, wf_entity.entity_id))
@@ -1223,11 +1223,11 @@ class ClusterWFProtocol(ClusterEntityProtocol):
                     # check for output to appear first. TODO: need better way to coordinate as this can still time out
                     if (self.local_cluster_handler.file_exists_with_wait(ClusterPaths.get_entity_data_output_file(self.get_entity_type(), self.get_entity_id(), wf_spec.output_ids[0], 0), attempts = 100)):
                         # read output
-                        xoutput = self.local_cluster_handler.read_tsv(ClusterPaths.get_entity_data_output_file(self.get_entity_type(), self.get_entity_id(), wf_spec.output_ids[0], 0))
+                        xoutput = self.local_cluster_handler.read_df(ClusterPaths.get_entity_data_output_file(self.get_entity_type(), self.get_entity_id(), wf_spec.output_ids[0], 0))
                         xoutput.show_transpose(3, title = "ClusterWFProtocol: execute_remote")
 
                         # copy the output
-                        self.cluster_handler.write_tsv(ClusterPaths.get_entity_data_output_file(self.get_entity_type(), self.get_entity_id(), wf_spec.output_ids[0], 0), xoutput)
+                        self.cluster_handler.write_df(ClusterPaths.get_entity_data_output_file(self.get_entity_type(), self.get_entity_id(), wf_spec.output_ids[0], 0), xoutput)
 
                     # break loop
                     break
@@ -1254,37 +1254,37 @@ class ClusterWFProtocol(ClusterEntityProtocol):
             raise e
 
     # resolve meta parameters
-    def resolve_meta(self, xtsv, wf_start_ts, use_full_data, start_ts, end_ts):
+    def resolve_meta(self, xdf, wf_start_ts, use_full_data, start_ts, end_ts):
         # resolve params first
-        xtsv1 = self.__resolve_meta_params__(xtsv, start_ts, end_ts)
+        xdf1 = self.__resolve_meta_params__(xdf, start_ts, end_ts)
 
         # resolve data and do etl scan if needed
-        xtsv2 = self.__resolve_reference_paths__(xtsv1, wf_start_ts, use_full_data, start_ts, end_ts)
+        xdf2 = self.__resolve_reference_paths__(xdf1, wf_start_ts, use_full_data, start_ts, end_ts)
 
         # resolve meta params again TODO
-        xtsv3 = self.__resolve_meta_params__(xtsv2, start_ts, end_ts)
+        xdf3 = self.__resolve_meta_params__(xdf2, start_ts, end_ts)
 
         # return
-        return xtsv3
+        return xdf3
 
     # TODO: these need to be defined properly
-    def __resolve_reference_paths__(self, xtsv, wf_start_ts, use_full_data, start_ts, end_ts):
-        # check if TSVReference is defined. TODO
-        if (xtsv.has_col(cluster_common_v2.TSVReference.OMIGO_REFERENCE_PATH)):
-            return self.__resolve_reference_paths__(cluster_common_v2.TSVReference.read(xtsv), wf_start_ts, use_full_data, start_ts, end_ts)
+    def __resolve_reference_paths__(self, xdf, wf_start_ts, use_full_data, start_ts, end_ts):
+        # check if DFReference is defined. TODO
+        if (xdf.has_col(cluster_common_v2.DFReference.OMIGO_REFERENCE_PATH)):
+            return self.__resolve_reference_paths__(cluster_common_v2.DFReference.read(xdf), wf_start_ts, use_full_data, start_ts, end_ts)
 
         # check if etl path is defined
         etl_path_col = None
-        for c in xtsv.get_columns():
+        for c in xdf.get_columns():
             if (c.startswith(cluster_arjun.OMIGO_ARJUN_ETL_PATH_PREFIX)):
-                utils.info("ClusterWFProtocol: __resolve_reference_paths__: found etl path: {}, {}".format(c, xtsv.get_columns()))
+                utils.info("ClusterWFProtocol: __resolve_reference_paths__: found etl path: {}, {}".format(c, xdf.get_columns()))
                 etl_path_col = c
                 break
 
         # if etl path is defined, resolve it
         if (etl_path_col is not None):
             etsvs = []
-            mps = xtsv.to_maps()
+            mps = xdf.to_maps()
 
             # iterate over each row and resolve the tsvs
             for mp in mps:
@@ -1329,10 +1329,10 @@ class ClusterWFProtocol(ClusterEntityProtocol):
             return self.__resolve_reference_paths__(tsv.merge_union(etsvs), wf_start_ts, use_full_data, start_ts, end_ts)
 
         # final fallback
-        return xtsv
+        return xdf
 
     # internal method to resolve meta parameters
-    def __resolve_meta_params__(self, xtsv, start_ts, end_ts):
+    def __resolve_meta_params__(self, xdf, start_ts, end_ts):
         def __resolve_meta_params_inner__(x):
             # column values
             start_ts_str = timefuncs.utctimestamp_to_datetime_str(start_ts)
@@ -1352,17 +1352,17 @@ class ClusterWFProtocol(ClusterEntityProtocol):
             return x
 
         # apply the tranformation on each column
-        xtsv = xtsv.transform_inline(xtsv.get_columns(), lambda x: __resolve_meta_params_inner__(x), ignore_if_missing = True)
+        xdf = xdf.transform_inline(xdf.get_columns(), lambda x: __resolve_meta_params_inner__(x), ignore_if_missing = True)
 
         # return
-        return xtsv
+        return xdf
 
     # resolve meta parameters for external task
-    def resolve_external_task_meta_params(self, xtsv, input_id, output_id, file_index):
-        return self.__resolve_external_task_meta_params__(xtsv, input_id, output_id, file_index)
+    def resolve_external_task_meta_params(self, xdf, input_id, output_id, file_index):
+        return self.__resolve_external_task_meta_params__(xdf, input_id, output_id, file_index)
 
     # internal method to resolve meta parameters for external task
-    def __resolve_external_task_meta_params__(self, xtsv, input_id, output_id, file_index):
+    def __resolve_external_task_meta_params__(self, xdf, input_id, output_id, file_index):
         def __resolve_external_task_meta_params_inner__(x):
             # list of columns to replace
             cols = {
@@ -1379,21 +1379,21 @@ class ClusterWFProtocol(ClusterEntityProtocol):
             return x
 
         # apply the tranformation on each column
-        xtsv = xtsv.transform_inline(xtsv.get_columns(), lambda x: __resolve_external_task_meta_params_inner__(x), ignore_if_missing = True)
+        xdf = xdf.transform_inline(xdf.get_columns(), lambda x: __resolve_external_task_meta_params_inner__(x), ignore_if_missing = True)
 
         # return
-        return xtsv
+        return xdf
 
     # resolve timestamp for etl file
-    def __resolve_etl_file_timestamp__(self, xtsv, start_ts, end_ts):
+    def __resolve_etl_file_timestamp__(self, xdf, start_ts, end_ts):
         # check for no data
-        if (xtsv.num_rows() == 0):
+        if (xdf.num_rows() == 0):
             return (start_ts, end_ts)
 
         # check if the special column is defined
-        if (xtsv.has_col(cluster_arjun.OMIGO_ARJUN_EVENT_TS)):
+        if (xdf.has_col(cluster_arjun.OMIGO_ARJUN_EVENT_TS)):
             # take the min max values
-            col_values = sorted(xtsv.col_as_array_uniq(cluster_arjun.OMIGO_ARJUN_EVENT_TS))
+            col_values = sorted(xdf.col_as_array_uniq(cluster_arjun.OMIGO_ARJUN_EVENT_TS))
             event_start_ts, event_end_ts = (col_values[0], col_values[-1])
 
             # resolve the value of the timestamp to numeric seconds
@@ -1556,7 +1556,7 @@ class ClusterSessionProtocol(ClusterEntityProtocol):
             input_id = wf_spec.input_ids[i]
             file_index = 0
             self.cluster_handler.create(ClusterPaths.get_entity_data_input(wf_entity.entity_type, wf_entity.entity_id, input_id))
-            self.cluster_handler.write_tsv(ClusterPaths.get_entity_data_input_file(wf_entity.entity_type, wf_entity.entity_id, input_id, file_index), xinputs[i])
+            self.cluster_handler.write_df(ClusterPaths.get_entity_data_input_file(wf_entity.entity_type, wf_entity.entity_id, input_id, file_index), xinputs[i])
 
         # initialize output directories
         self.cluster_handler.create(ClusterPaths.get_entity_data_outputs(wf_entity.entity_type, wf_entity.entity_id))
@@ -1888,12 +1888,12 @@ class ClusterExecutorContext:
         self.duration = duration
 
     # execute multiple jobs are workflow
-    def execute_jobs(self, xtsv, jobs_operations, input_ids, output_ids, start_ts = None, use_full_data = False, num_splits = 10):
+    def execute_jobs(self, xdf, jobs_operations, input_ids, output_ids, start_ts = None, use_full_data = False, num_splits = 10):
         # create workflow semantics from job
         wf_spec = self.__create_wf_spec__(jobs_operations, input_ids, output_ids, start_ts, use_full_data, num_splits)
 
         # get session protocol
-        xinputs = [xtsv]
+        xinputs = [xdf]
         wf_id = self.session_protocol.submit_workflow(wf_spec, xinputs)
 
         # return

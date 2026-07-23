@@ -31,7 +31,9 @@ def get_directory_listing(path, filter_func = None, ignore_if_missing = False, s
     return full_paths
 
 # TODO: not in s3
-def makedirs(path, exist_ok = True):
+def makedirs(path, exist_ok = True, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "makedirs")
+
     return os.makedirs(path, exist_ok = exist_ok)
 
 def get_file_content_as_text(path):
@@ -65,7 +67,9 @@ def get_last_modified_timestamp(path):
     return timefuncs.datetime_to_utctimestamp_sec(datetime.datetime.utcfromtimestamp(int(os.path.getmtime(path))))
 
 # TODO: this is not tested
-def put_file_with_text_content(path, text):
+def put_file_with_text_content(path, text, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "put_file_with_text_content")
+
     utils.warn_once("put_file_with_text_content is not tested fully")
 
     # initialize
@@ -91,14 +95,16 @@ def put_file_with_text_content(path, text):
         output_file.close()
 
 # TODO: return success status
-def delete_file(path, ignore_if_missing = True):
-    utils.debug("delete_file: path: {}, ignore_if_missing: {}".format(path, ignore_if_missing))
+def delete_file(path, ignore_if_missing = True, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "delete_file")
+
+    utils.debug("{}: path: {}, ignore_if_missing: {}".format(dmsg, path, ignore_if_missing))
     # check if the file exists
     if (check_path_exists(path) == False):
         if (ignore_if_missing == False):
-            raise Exception("delete_file: path doesnt exist: {}".format(path))
+            raise Exception("{}: path doesnt exist: {}".format(dmsg, path))
         else:
-            utils.debug("delete_file: path doesnt exist: {}".format(path))
+            utils.debug("{}: path doesnt exist: {}".format(dmsg, path))
 
         return
 
@@ -106,7 +112,9 @@ def delete_file(path, ignore_if_missing = True):
     os.remove(path)
 
 # TODO: This api doesnt have s3 counterpart
-def delete_dir(path, ignore_if_missing = True):
+def delete_dir(path, ignore_if_missing = True, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "delete_dir")
+
     utils.warn_once("delete_dir: this api doesnt have s3 counterpart")
     utils.debug("delete_dir: path: {}, ignore_if_missing: {}".format(path, ignore_if_missing))
     # check if the file exists

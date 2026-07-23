@@ -192,7 +192,9 @@ class S3FSWrapper:
         return self.file_exists("{}/{}".format(path, RESERVED_HIDDEN_FILE))
 
     # TODO: confusing logic
-    def delete_file_with_wait(self, path, ignore_if_missing = True, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS):
+    def delete_file_with_wait(self, path, ignore_if_missing = True, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "S3FSWrapper: delete_file_with_wait")
+
         # check for ignore missing
         if (self.file_exists(path) == False):
             if (ignore_if_missing == True):
@@ -203,29 +205,35 @@ class S3FSWrapper:
                 if (attempts > 0):
                     utils.info("delete_file_with_wait: path: {} doesnt exists. ignore_if_missing is False. attempts: {}, sleep for : {} seconds".format(path, attempts, wait_sec))
                     time.sleep(wait_sec)
-                    return self.delete_file_with_wait(path, ignore_if_missing = ignore_if_missing, wait_sec = wait_sec, attempts = attempts - 1)
+                    return self.delete_file_with_wait(path, ignore_if_missing = ignore_if_missing, wait_sec = wait_sec, attempts = attempts - 1, dmsg = dmsg)
                 else:
                     utils.info("delete_file_with_wait: path doesnt exists. ignore_if_missing is False. attempts: over")
                     raise Exception("delete_file_with_wait: unable to delete file: {}".format(path))
         else:
             # file exists. call delete
-            self.delete_file(path, ignore_if_missing = ignore_if_missing)
+            self.delete_file(path, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
             # verify that the file is deleted
             return self.file_not_exists_with_wait(path)
 
-    def delete_file(self, path, ignore_if_missing = False):
+    def delete_file(self, path, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "S3FSWrapper: delete_file")
+
         if (self.__is_s3__(path)):
-            return self.__s3_delete_file__(path, ignore_if_missing = ignore_if_missing)
+            return self.__s3_delete_file__(path, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
         else:
-            return self.__local_delete_file__(path, ignore_if_missing = ignore_if_missing)
+            return self.__local_delete_file__(path, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
-    def __s3_delete_file__(self, path, ignore_if_missing = False):
-        return s3_wrapper.delete_file(path, ignore_if_missing = ignore_if_missing, s3_region = self.s3_region, aws_profile = self.aws_profile)
+    def __s3_delete_file__(self, path, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "S3FSWrapper: __s3_delete_file__")
 
-    def __local_delete_file__(self, path, ignore_if_missing = False):
+        return s3_wrapper.delete_file(path, ignore_if_missing = ignore_if_missing, s3_region = self.s3_region, aws_profile = self.aws_profile, dmsg = dmsg)
+
+    def __local_delete_file__(self, path, ignore_if_missing = False, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "S3FSWrapper: __local_delete_file__")
+
         # delete file
-        local_fs_wrapper.delete_file(path, ignore_if_missing = ignore_if_missing)
+        local_fs_wrapper.delete_file(path, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
         # check if this was the reserved file for directory
         if (path.endswith("/" + RESERVED_HIDDEN_FILE)):
@@ -233,7 +241,9 @@ class S3FSWrapper:
             dir_path = path[0:path.rindex("/")]
             local_fs_wrapper.delete_dir(dir_path)
 
-    def delete_dir_with_wait(self, path, ignore_if_missing = True, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS):
+    def delete_dir_with_wait(self, path, ignore_if_missing = True, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "S3FSWrapper: delete_dir_with_wait")
+
         path = self.__normalize_path__(path)
         file_path = "{}/{}".format(path, RESERVED_HIDDEN_FILE)
 
@@ -251,7 +261,7 @@ class S3FSWrapper:
             return False
 
         # delete the reserved file
-        return self.delete_file_with_wait(file_path, ignore_if_missing = ignore_if_missing, wait_sec = wait_sec, attempts = attempts)
+        return self.delete_file_with_wait(file_path, ignore_if_missing = ignore_if_missing, wait_sec = wait_sec, attempts = attempts, dmsg = dmsg)
 
     def get_parent_directory(self, path):
         # normalize
@@ -263,60 +273,75 @@ class S3FSWrapper:
         # return
         return path[0:index]
 
-    def write_text_file(self, path, text):
+    def write_text_file(self, path, text, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "S3FSWrapper: write_text_file")
+
         # validation
         if (text is None):
-            raise Exception("write_text_file: text is None. Returning")
+            raise Exception("{}: text is None. Returning".format(dmsg))
 
         if (path is None):
-            raise Exception("write_text_file: path is None. Returning")
+            raise Exception("{}: path is None. Returning".format(dmsg))
 
         # write
         if (self.__is_s3__(path)):
-            return self.__s3_write_text_file__(path, text)
+            return self.__s3_write_text_file__(path, text, dmsg = dmsg)
         else:
-            return self.__local_write_text_file__(path, text)
+            return self.__local_write_text_file__(path, text, dmsg = dmsg)
 
-    def __s3_write_text_file__(self, path, text):
+    def __s3_write_text_file__(self, path, text, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "S3FSWrapper: __s3_write_text_file__")
+
         path = self.__normalize_path__(path)
         bucket_name, object_key = utils.split_s3_path(path)
-        s3_wrapper.put_file_with_text_content(bucket_name, object_key, text, s3_region = self.s3_region, aws_profile = self.aws_profile)
+        s3_wrapper.put_file_with_text_content(bucket_name, object_key, text, s3_region = self.s3_region, aws_profile = self.aws_profile, dmsg = dmsg)
 
-    def __local_write_text_file__(self, path, text):
+    def __local_write_text_file__(self, path, text, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "S3FSWrapper: __local_write_text_file__")
+
         path = self.__normalize_path__(path)
-        local_fs_wrapper.put_file_with_text_content(path, text)
+        local_fs_wrapper.put_file_with_text_content(path, text, dmsg = dmsg)
 
-    def create_dir(self, path):
-        utils.debug("create_dir: {}".format(path))
+    def create_dir(self, path, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "S3FSWrapper: create_dir")
+
+        utils.debug("{}: {}".format(dmsg, path))
         if (self.__is_s3__(path)):
             self.__s3_create_dir__(path)
         else:
             self.__local_create_dir__(path)
 
-    def __s3_create_dir__(self, path):
+    def __s3_create_dir__(self, path, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "S3FSWrapper: __s3_create_dir__")
+
         path = self.__normalize_path__(path)
         file_path = "{}/{}".format(path, RESERVED_HIDDEN_FILE)
         text = ""
-        self.write_text_file(file_path, text)
+        self.write_text_file(file_path, text, dmsg = dmsg)
 
-    def __local_create_dir__(self, path):
+    def __local_create_dir__(self, path, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "S3FSWrapper: __local_create_dir__")
+
         path = self.__normalize_path__(path)
         # create the directory
-        local_fs_wrapper.makedirs(path)
+        local_fs_wrapper.makedirs(path, dmsg = dmsg)
 
         # create the reserved file
         file_path = "{}/{}".format(path, RESERVED_HIDDEN_FILE)
         text = ""
-        self.write_text_file(file_path, text)
+        self.write_text_file(file_path, text, dmsg = dmsg)
 
-    def makedirs(self, path, levels = 1):
-        utils.trace("makedirs: path: {}, levels: {}".format(path, levels))
+    def makedirs(self, path, levels = 1, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "S3FSWrapper: makedirs")
+
+        utils.trace("{}: path: {}, levels: {}".format(dmsg, path, levels))
         if (self.__is_s3__(path)):
-            self.__s3_makedirs__(path, levels = levels)
+            self.__s3_makedirs__(path, levels = levels, dmsg = dmsg)
         else:
-            self.__local_makedirs__(path, levels = levels)
+            self.__local_makedirs__(path, levels = levels, dmsg = dmsg)
 
-    def __s3_makedirs__(self, path, levels = None):
+    def __s3_makedirs__(self, path, levels = None, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "S3FSWrapper: __s3_makedirs__")
         # normalize path
         path = self.__normalize_path__(path)
 
@@ -333,9 +358,11 @@ class S3FSWrapper:
 
             # create the directory if it doesnt exist. This will cover path too
             if (self.is_directory(parent_dir) == False):
-                self.create_dir(parent_dir)
+                self.create_dir(parent_dir, dmsg = dmsg)
 
-    def __local_makedirs__(self, path, levels = None):
+    def __local_makedirs__(self, path, levels = None, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "S3FSWrapper: __local_makedirs__")
+
         # normalize path
         path = self.__normalize_path__(path)
         # TODO: silent bug probably. The split creates an empty string as first part for leading '/'
@@ -350,7 +377,7 @@ class S3FSWrapper:
 
             # create the directory if it doesnt exist. This will cover path too
             if (self.is_directory(parent_dir) == False):
-                self.create_dir(parent_dir)
+                self.create_dir(parent_dir, dmsg = dmsg)
 
     def get_last_modified_timestamp(self, path):
         if (self.__is_s3__(path)):
@@ -369,7 +396,9 @@ class S3FSWrapper:
     def __local_get_last_modified_timestamp__(self, path):
         return local_fs_wrapper.get_last_modified_timestamp(path)
 
-    def copy_leaf_dir(self, src_path, dest_path, overwrite = False, append = True):
+    def copy_leaf_dir(self, src_path, dest_path, overwrite = False, append = True, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "S3FSWrapper: copy_leaf_dir")
+
         # check if src exists
         if (self.dir_exists(src_path) == False):
             raise Exception("copy_leaf_dir: src_path doesnt exist: {}".format(src_path))
@@ -385,7 +414,7 @@ class S3FSWrapper:
                 raise Exception("copy_leaf_dir: dest_path exists and overwrite = False: {}".format(dest_path))
 
         # create dir
-        self.create_dir(dest_path)
+        self.create_dir(dest_path, dmsg = dmsg)
 
         # gather the list of files to copy
         src_files = self.list_files(src_path)

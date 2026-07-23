@@ -38,6 +38,8 @@ OMIGO_CODE_TODO_WARNING = "OMIGO_CODE_TODO_WARNING"
 OMIGO_BIG_DF_WARN_SIZE_THRESH = "OMIGO_BIG_DF_WARN_SIZE_THRESH"
 OMIGO_RATE_LIMIT_N_WARNINGS = "OMIGO_RATE_LIMIT_N_WARNINGS"
 OMIGO_NOOP_N_WARNINGS = "OMIGO_NOOP_N_WARNINGS"
+OMIGO_MAX_DEBUG_MSG_LEN = int(os.environ.get("OMIGO_MAX_DEBUG_MSG_LEN", "500"))
+OMIGO_MAX_DEBUG_MSG_MULT = float(os.environ.get("OMIGO_MAX_DEBUG_MSG_MULT", "0.8"))
 
 def is_critical():
     return str(os.environ.get(OMIGO_CRITICAL, "1")) == "1"
@@ -80,6 +82,8 @@ def set_big_tsv_warn_size_thresh(thresh):
 
 def trace(msg):
     if (is_trace()):
+        if (len(msg) > OMIGO_MAX_DEBUG_MSG_LEN):
+            msg = msg[0:int(0.2 * OMIGO_MAX_DEBUG_MSG_LEN)] + " ... " + msg[-int(OMIGO_MAX_DEBUG_MSG_MULT * OMIGO_MAX_DEBUG_MSG_LEN):]
         print("[TRACE]: {}".format(msg))
 
 def trace_once(msg):
@@ -100,6 +104,8 @@ def trace_once(msg):
 
 def debug(msg):
     if (is_debug()):
+        if (len(msg) > OMIGO_MAX_DEBUG_MSG_LEN):
+            msg = msg[0:int(0.2 * OMIGO_MAX_DEBUG_MSG_LEN)] + " ... " + msg[-int(OMIGO_MAX_DEBUG_MSG_MULT * OMIGO_MAX_DEBUG_MSG_LEN):]
         print("[DEBUG]: {}".format(msg))
 
 def debug_once(msg):
@@ -111,6 +117,8 @@ def debug_once(msg):
     global DEBUG_MSG_CACHE
     # check if msg is already displayed
     if (msg not in DEBUG_MSG_CACHE.keys()):
+        if (len(msg) > OMIGO_MAX_DEBUG_MSG_LEN):
+            msg = msg[0:int(0.2 * OMIGO_MAX_DEBUG_MSG_LEN)] + " ... " + msg[-int(OMIGO_MAX_DEBUG_MSG_MULT * OMIGO_MAX_DEBUG_MSG_LEN):]
         print("[DEBUG ONCE ONLY]: " + msg)
         DEBUG_MSG_CACHE[msg] = 1
 
@@ -120,6 +128,8 @@ def debug_once(msg):
 
 def info(msg):
     if (is_info()):
+        if (len(msg) > OMIGO_MAX_DEBUG_MSG_LEN):
+            msg = msg[0:int(0.2 * OMIGO_MAX_DEBUG_MSG_LEN)] + " ... " + msg[-int(OMIGO_MAX_DEBUG_MSG_MULT * OMIGO_MAX_DEBUG_MSG_LEN):]
         print("[INFO]: {}".format(msg))
 
 def info_once(msg):
@@ -148,6 +158,8 @@ def info_without_header(msg):
 
 def error(msg):
     if (is_error()):
+        if (len(msg) > OMIGO_MAX_DEBUG_MSG_LEN):
+            msg = msg[0:int(0.2 * OMIGO_MAX_DEBUG_MSG_LEN)] + " ... " + msg[-int(OMIGO_MAX_DEBUG_MSG_MULT * OMIGO_MAX_DEBUG_MSG_LEN):]
         print("[ERROR]: {}".format(msg))
 
 def error_once(msg):
@@ -221,6 +233,8 @@ def warn_once(msg):
     global WARN_MSG_CACHE
     # check if msg is already displayed
     if (msg not in WARN_MSG_CACHE.keys()):
+        if (len(msg) > OMIGO_MAX_DEBUG_MSG_LEN):
+            msg = msg[0:int(0.2 * OMIGO_MAX_DEBUG_MSG_LEN)] + " ... " + msg[-int(OMIGO_MAX_DEBUG_MSG_MULT * OMIGO_MAX_DEBUG_MSG_LEN):]
         print("[WARN ONCE ONLY]: " + msg)
         WARN_MSG_CACHE[msg] = 1
 
@@ -380,12 +394,24 @@ def run_with_thread_pool(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0, d
     if (num_par == 0):
         trace("{}: running in single threaded mode".format(dmsg))
 
-        # iterate
-        for task in tasks:
+        # iterate and collect exceptions
+        exceptions = []
+        for i, task in enumerate(tasks):
             func = task.func
             args = task.args
             kwargs = task.kwargs
-            results.append(func(*args, **kwargs))
+            try:
+                results.append(func(*args, **kwargs))
+            except Exception as e:
+                error("{}: Task {} failed with exception: {}".format(dmsg, i, e))
+                exceptions.append((i, e))
+                results.append(None)
+
+        # if any tasks failed, log summary and re-raise the first exception
+        if len(exceptions) > 0:
+            error("{}: {} task(s) failed out of {}".format(dmsg, len(exceptions), len(tasks)))
+            # re-raise the first exception to preserve original type and traceback
+            raise exceptions[0][1]
 
         # return
         return results
@@ -417,17 +443,34 @@ def run_with_thread_pool(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0, d
                     info("{}: run_with_thread_pool: finished".format(dmsg))
                     break
 
-            # combine the results
-            for f in future_results:
-                results.append(f.result())
+            # combine the results, collecting all exceptions
+            exceptions = []
+            for i, f in enumerate(future_results):
+                try:
+                    results.append(f.result())
+                except Exception as e:
+                    error("{}: Task {} failed with exception: {}".format(dmsg, i, e))
+                    exceptions.append((i, e))
+                    results.append(None)
 
             # wait for post_wait_sec for mitigating eventual consistency
             if (post_wait_sec > 0):
                 info("{}: sleeping for post_wait_sec: {}".format(dmsg, post_wait_sec))
                 time.sleep(post_wait_sec)
 
+            # if any tasks failed, log summary and re-raise the first exception
+            if len(exceptions) > 0:
+                error("{}: {} task(s) failed out of {}".format(dmsg, len(exceptions), len(future_results)))
+                # re-raise the first exception to preserve original type and traceback
+                raise exceptions[0][1]
+
             # return
             return results
+
+def run_with_thread_pool_failsafe(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0, dmsg = ""):
+    results = run_with_thread_pool(tasks, num_par = num_par, wait_sec = wait_sec, post_wait_sec = post_wait_sec, dmsg = dmsg)
+    # filter out None values (defensive programming)
+    return [r for r in results if r is not None]
 
 def raise_exception_or_warn(msg, ignore_if_missing, max_len = 2000):
     # strip the message to max_len
@@ -865,12 +908,12 @@ def __run_return_func_with_retry_inner__(retry_attempts, retry_wait_seconds, exp
         try:
             return func(*args, **kwargs)
         except Exception as e:
+            retry_attempts = retry_attempts - 1
             if (retry_attempts > 0):
                 error("__run_return_func_with_retry_inner__: Caught Exception: {}, retry_attempts: {}, Retrying after sleeping for {} seconds".format(e,
                     retry_attempts, retry_wait_seconds))
                 traceback.print_exc(file = sys.stdout)
                 time.sleep(retry_wait_seconds)
-                retry_attempts = retry_attempts - 1
 
                 # change wait time based on backoff
                 if (exp_backoff == True):
@@ -884,12 +927,12 @@ def __run_noreturn_func_with_retry_inner__(retry_attempts, retry_wait_seconds, e
             func(*args, **kwargs)
             return
         except Exception as e:
+            retry_attempts = retry_attempts - 1
             if (retry_attempts > 0):
                 error("__run_noreturn_func_with_retry_inner__: Caught Exception: {}, retry_attempts: {}, Retrying after sleeping for {} seconds".format(e,
                     retry_attempts, retry_wait_seconds))
                 traceback.print_exc(file = sys.stdout)
                 time.sleep(retry_wait_seconds)
-                retry_attempts = retry_attempts - 1
 
                 # change wait time based on backoff
                 if (exp_backoff == True):

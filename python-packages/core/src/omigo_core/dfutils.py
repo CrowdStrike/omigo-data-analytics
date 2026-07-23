@@ -6,10 +6,11 @@ from omigo_core import dataframe, utils, wsclient
 # TODO: find the difference between ascii and utf-8 encoding
 # TODO: need to document that a simple union can be achieved by setting def_val_map = {}
 # migrated
-def merge(df_list, def_val_map = None):
+def merge(df_list, def_val_map = None, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "merge")
     # validation
     if (len(df_list) == 0):
-        utils.warn("Error in input. List of tsv is empty")
+        utils.warn("{}: Error in input. List of tsv is empty".format(dmsg))
         return dataframe.create_empty()
 
     # remove tsvs without any columns
@@ -17,14 +18,14 @@ def merge(df_list, def_val_map = None):
 
     # base condition
     if (len(df_list) == 0):
-        utils.warn("List of df is empty. Returning")
+        utils.warn("{}: List of df is empty. Returning".format(dmsg))
         return dataframe.create_empty()
 
     # warn if a huge tsv is found
     for i in range(len(df_list)):
         if (df_list[i].size_in_gb() >= 1):
-            utils.warn("merge: Found a very big tsv: {} / {}, num_rows: {}, size (GB): {}. max_size_cols_stats: {}".format(
-                i + 1, len(df_list), df_list[i].num_rows(), df_list[i].size_in_gb(),
+            utils.warn("{}: Found a very big tsv: {} / {}, num_rows: {}, size (GB): {}. max_size_cols_stats: {}".format(
+                dmsg, i + 1, len(df_list), df_list[i].num_rows(), df_list[i].size_in_gb(),
                 str(df_list[i].get_max_size_cols_stats())))
             df_list[i].show_transpose(1, title = "merge: big dataframe")
 
@@ -43,13 +44,13 @@ def merge(df_list, def_val_map = None):
             if (len(header_diffs) > 0):
                 # TODO
                 if (def_val_map is None):
-                    utils.warn("Mismatch in header at index: {}. Cant merge. Using merge_intersect for common intersection. Some of the differences in header: {}".format(
-                        index, str(header_diffs)))
+                    utils.warn("{}: Mismatch in header at index: {}. Cant merge. Using merge_intersect for common intersection. Some of the differences in header: {}".format(
+                        dmsg, index, str(header_diffs)))
             else:
-                utils.warn("Mismatch in order of header fields: {}, {}. Using merge intersect".format(header_fields, xdf.get_header_fields()))
+                utils.warn("{}: Mismatch in order of header fields: {}, {}. Using merge intersect".format(dmsg, header_fields, xdf.get_header_fields()))
 
             # return
-            return merge_intersect(df_list, def_val_map = def_val_map)
+            return merge_intersect(df_list, def_val_map = def_val_map, dmsg = dmsg)
 
         # increment
         index = index + 1
@@ -88,13 +89,15 @@ def get_diffs_in_headers(df_list):
 
 # merge intersection
 # migrated
-def merge_intersect(df_list, def_val_map = None):
+def merge_intersect(df_list, def_val_map = None, dmsg = ""):
+    dmsg = utils.extend_inherit_message(dmsg, "merge_intersect")
+
     # remove zero length tsvs
     df_list = list(filter(lambda x: x.num_cols() > 0, df_list))
 
     # base condition
     if (len(df_list) == 0):
-        raise Exception("List of df is empty")
+        raise Exception("{}: List of df is empty".format(dmsg))
 
     # boundary condition
     if (len(df_list) == 1):
@@ -113,7 +116,7 @@ def merge_intersect(df_list, def_val_map = None):
     # print if number of unique headers are more than 1
     if (len(diff_cols) > 0):
         # debug
-        utils.debug("merge_intersect: missing columns: {}".format(str(diff_cols)[0:100] + "..."))
+        utils.debug("{}: missing columns: {}".format(dmsg, str(diff_cols)[0:100] + "..."))
 
         # check which of the columns among the diff have default values
         if (def_val_map is not None):
@@ -129,10 +132,10 @@ def merge_intersect(df_list, def_val_map = None):
             # assign empty string to the columns for which default value was not defined
             for h in diff_cols:
                 if (h in def_val_map.keys()):
-                    utils.trace_once("merge_intersect: assigning default value for {}: {}".format(h, def_val_map[h]))
+                    utils.trace_once("{}: assigning default value for {}: {}".format(dmsg, h, def_val_map[h]))
                     effective_def_val_map[h] = str(def_val_map[h])
                 else:
-                    utils.trace_once("merge_intersect: assigning empty string as default value to column: {}".format(h))
+                    utils.trace_once("{}: assigning empty string as default value to column: {}".format(dmsg, h))
                     effective_def_val_map[h] = ""
 
             # get the list of keys in order
