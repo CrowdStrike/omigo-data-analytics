@@ -256,6 +256,15 @@ def warn_once(msg):
 
     # refer to global variable
     global WARN_MSG_CACHE
+<<<<<<< HEAD
+=======
+    # check if msg is already displayed
+    if (msg not in WARN_MSG_CACHE.keys()):
+        if (len(msg) > OMIGO_MAX_DEBUG_MSG_LEN):
+            msg = msg[0:int(0.2 * OMIGO_MAX_DEBUG_MSG_LEN)] + " ... " + msg[-int(OMIGO_MAX_DEBUG_MSG_MULT * OMIGO_MAX_DEBUG_MSG_LEN):]
+        print("[WARN ONCE ONLY]: " + msg)
+        WARN_MSG_CACHE[msg] = 1
+>>>>>>> ed5ac77d3c03d91e8e323857196c091497ed00e1
 
     # Thread-safe check and update
     with WARN_MSG_CACHE_LOCK:
@@ -438,9 +447,14 @@ def run_with_thread_pool(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0, r
         # if any tasks failed, log summary and re-raise the first exception
         if len(exceptions) > 0:
             error("{}: {} task(s) failed out of {}".format(dmsg, len(exceptions), len(tasks)))
+<<<<<<< HEAD
             # re-raise the first exception to preserve original type and traceback if raise_on_error is True
             if raise_on_error:
                 raise exceptions[0][1]
+=======
+            # re-raise the first exception to preserve original type and traceback
+            raise exceptions[0][1]
+>>>>>>> ed5ac77d3c03d91e8e323857196c091497ed00e1
 
         # return
         return results
@@ -490,19 +504,28 @@ def run_with_thread_pool(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0, r
             # if any tasks failed, log summary and re-raise the first exception
             if len(exceptions) > 0:
                 error("{}: {} task(s) failed out of {}".format(dmsg, len(exceptions), len(future_results)))
+<<<<<<< HEAD
                 # re-raise the first exception to preserve original type and traceback if raise_on_error is True
                 if raise_on_error:
                     raise exceptions[0][1]
+=======
+                # re-raise the first exception to preserve original type and traceback
+                raise exceptions[0][1]
+>>>>>>> ed5ac77d3c03d91e8e323857196c091497ed00e1
 
             # return
             return results
 
 def run_with_thread_pool_failsafe(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0, dmsg = ""):
+<<<<<<< HEAD
     dmsg = extend_inherit_message(dmsg, "run_with_thread_pool_failsafe")
 
     # call run_with_thread_pool with raise_on_error=False to get all results without exceptions
     results = run_with_thread_pool(tasks, num_par = num_par, wait_sec = wait_sec, post_wait_sec = post_wait_sec, raise_on_error = False, dmsg = dmsg)
 
+=======
+    results = run_with_thread_pool(tasks, num_par = num_par, wait_sec = wait_sec, post_wait_sec = post_wait_sec, dmsg = dmsg)
+>>>>>>> ed5ac77d3c03d91e8e323857196c091497ed00e1
     # filter out None values (defensive programming)
     return [r for r in results if r is not None]
 
