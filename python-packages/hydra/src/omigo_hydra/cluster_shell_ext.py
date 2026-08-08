@@ -1,4 +1,4 @@
-from omigo_core import tsv, utils
+from omigo_core import tsv, dataframe, utils
 
 class ShellExecutorBase:
     def __init__(self, template, default_props = {}):
@@ -84,6 +84,40 @@ class SparkJobShellExecutorTSV(tsv.TSV):
     # init
     def __init__(self, header, data, url_encoded_template, props, jar_location):
         super().__init__(header, data)
+        self.url_encoded_template = url_encoded_template
+        self.props = props
+        self.jar_location = jar_location
+
+    # this generates the executable script as output
+    def execute(self, main_class_col, command_line_template, output_col, prefix = "shell"):
+        # method to be used for explode api
+        def __execute_inner__(mp):
+            # replace template with anything in the data
+            template = utils.replace_template_props(mp, utils.url_decode(self.url_encoded_template))
+
+            # set the new properties
+            new_props = {}
+            new_props["jar_location"] = self.jar_location
+            new_props["class"] = mp[main_class_col]
+            new_props["command-line-args"] = utils.replace_template_props(mp, command_line_template)
+
+            # result
+            result_mp = {}
+            spark_shell_executor = SparkJobShellExecutor(template = template)
+            result_mp[output_col + ":url_encoded"] = utils.url_encode(spark_shell_executor.generate_script(props = new_props))
+
+            # return
+            return [result_mp]
+
+        # return
+        return self \
+            .explode(".*", __execute_inner__, prefix, collapse = False)
+
+# Shell script executor for spark job using DataFrame. TODO: This is WIP
+class SparkJobShellExecutorDF(dataframe.DataFrame):
+    # init
+    def __init__(self, header_fields, data_fields, url_encoded_template, props, jar_location):
+        super().__init__(header_fields, data_fields)
         self.url_encoded_template = url_encoded_template
         self.props = props
         self.jar_location = jar_location

@@ -7,7 +7,7 @@ import math
 import json
 import threading
 from omigo_core import dataframe, utils, timefuncs
-from omigo_hydra import cluster_data, cluster_class_reflection, s3io_wrapper, etl
+from omigo_hydra import cluster_data, cluster_class_reflection, s3io_wrapper, etl, hydra
 
 # class that takes the base path in S3, and implement all distributed communication under that.
 # takes care of protocol level things for future
@@ -18,17 +18,22 @@ if ("HYDRA_PATH" in os.environ.keys()):
 else:
     utils.warn_once("Use HYDRA_PATH env variable")
 
-if ("HYDRA_LOCAL_PATH" in os.environ.keys()):
-    HYDRA_LOCAL_PATH = os.environ["HYDRA_LOCAL_PATH"]
-else:
-    utils.warn_once("Use HYDRA_LOCAL_PATH env variable")
+# Shard configuration (V2)
+NUM_SHARDS_DEFAULT = 4
+NUM_SHARDS = int(os.environ.get("HYDRA_NUM_SHARDS", str(NUM_SHARDS_DEFAULT)))
+
+def get_shard_for_entity(entity_id, num_shards=None, shard_override=None):
+    """Deterministic shard assignment via hash. shard_override for testing."""
+    if shard_override is not None:
+        return shard_override
+    if num_shards is None:
+        num_shards = NUM_SHARDS
+    return hash(entity_id) % num_shards
 
 # global variables
 HYDRA_CLUSTER_HANDLER = None
-HYDRA_LOCAL_CLUSTER_HANDLER = None
 
 HYDRA_CLUSTER_HANDLER_LOCK = threading.Lock()
-HYDRA_LOCAL_CLUSTER_HANDLER_LOCK = threading.Lock()
 
 # some constants
 ONE_MINUTE_IN_SECONDS = 60
@@ -36,6 +41,10 @@ ONE_MINUTE_IN_SECONDS = 60
 # this is repeated in s3io_wrapper. TODO
 DEFAULT_WAIT_SEC = 3
 DEFAULT_ATTEMPTS = 3
+DEFAULT_UPSTREAM_READ_DELAY_30SEC = 30
+DEFAULT_UPSTREAM_WAIT_10_SEC = 10
+DEFAULT_INTER_ITERATION_DELAY_5_SEC = 5
+DEFAULT_UPSTREAM_RETRY_BEFORE_STATE_CHECK = 10
 
 def construct_dynamic_value_json():
     return "value.{}.json".format(timefuncs.get_utctimestamp_sec())
@@ -45,6 +54,7 @@ def construct_dynamic_value_json():
 # EntityState
 class EntityState:
     CREATED            = "created"
+    ASSIGNED           = "assigned"
     ALIVE              = "alive"
     DEAD               = "dead"
     COMPLETED          = "completed"
@@ -56,6 +66,7 @@ class EntityState:
     def get_all():
         return [
             EntityState.CREATED,
+            EntityState.ASSIGNED,
             EntityState.ALIVE,
             EntityState.DEAD,
             EntityState.COMPLETED,
@@ -64,6 +75,21 @@ class EntityState:
             EntityState.REASSIGNED,
             EntityState.CLEANUP
         ]
+
+    # priority index for state resolution tiebreaking (lower index = higher priority).
+    # used when two states have the same timestamp to determine which wins.
+    def get_priority_index():
+        return {
+            EntityState.CLEANUP: 0,
+            EntityState.ABORTED: 1,
+            EntityState.REASSIGNED: 2,
+            EntityState.DEAD: 3,
+            EntityState.COMPLETED: 4,
+            EntityState.FAILED: 5,
+            EntityState.ALIVE: 6,
+            EntityState.ASSIGNED: 7,
+            EntityState.CREATED: 8
+        }
 
 # EntityCompletedState
 class EntityCompletedState:
@@ -90,6 +116,7 @@ class EntityType:
     AGENT              = "agent"
     DOUBLE_AGENT       = "double-agent"
     INTELI_AGENT       = "inteli-agent"
+    SYSTEM_AGENT       = "system-agent"
     SWF                = "swf"
     WF                 = "wf"
     JOB                = "job"
@@ -110,6 +137,7 @@ class EntityType:
             EntityType.AGENT,
             EntityType.DOUBLE_AGENT,
             EntityType.INTELI_AGENT,
+            EntityType.SYSTEM_AGENT,
             EntityType.WF,
             EntityType.SWF,
             EntityType.JOB,
@@ -132,6 +160,7 @@ EntityIsActiveMap[EntityType.WORKER] = True
 EntityIsActiveMap[EntityType.AGENT] = True
 EntityIsActiveMap[EntityType.DOUBLE_AGENT] = True
 EntityIsActiveMap[EntityType.INTELI_AGENT] = True
+EntityIsActiveMap[EntityType.SYSTEM_AGENT] = True
 EntityIsActiveMap[EntityType.SWF] = False
 EntityIsActiveMap[EntityType.WF] = False
 EntityIsActiveMap[EntityType.JOB] = False
@@ -139,6 +168,13 @@ EntityIsActiveMap[EntityType.TASK] = False
 EntityIsActiveMap[EntityType.BATCH] = False
 EntityIsActiveMap[EntityType.CLIENT] = True
 EntityIsActiveMap[EntityType.SESSION] = True
+
+# Derived lists of active and passive entity types
+EntityActiveTypes = [k for k, v in EntityIsActiveMap.items() if (v == True)]
+EntityPassiveTypes = [k for k, v in EntityIsActiveMap.items() if (v == False)]
+
+def is_passive_entity(entity_type):
+    return EntityIsActiveMap.get(entity_type) == False
 
 # Create the map for supervisor. Note: There is no BATCH_MANAGER
 EntitySupervisorMap = {}
@@ -152,22 +188,21 @@ EntitySupervisorMap[EntityType.WORKER] = EntityType.RESOURCE_MANAGER
 EntitySupervisorMap[EntityType.AGENT] = EntityType.RESOURCE_MANAGER
 EntitySupervisorMap[EntityType.DOUBLE_AGENT] = EntityType.RESOURCE_MANAGER
 EntitySupervisorMap[EntityType.INTELI_AGENT] = EntityType.RESOURCE_MANAGER
+EntitySupervisorMap[EntityType.SYSTEM_AGENT] = EntityType.RESOURCE_MANAGER
 EntitySupervisorMap[EntityType.SWF] = EntityType.SWF_MANAGER
 EntitySupervisorMap[EntityType.WF] = EntityType.WF_MANAGER
 EntitySupervisorMap[EntityType.JOB] = EntityType.JOB_MANAGER
 EntitySupervisorMap[EntityType.TASK] = EntityType.TASK_MANAGER
 EntitySupervisorMap[EntityType.BATCH] = EntityType.TASK_MANAGER # this is JOB_MANAGER here, but in passive children its TASK_MANAGER
-EntitySupervisorMap[EntityType.CLIENT] = EntityType.MASTER
-EntitySupervisorMap[EntityType.SESSION] = EntityType.MASTER
+EntitySupervisorMap[EntityType.CLIENT] = EntityType.RESOURCE_MANAGER
+EntitySupervisorMap[EntityType.SESSION] = EntityType.RESOURCE_MANAGER
 
 # Create the map for active children
 EntityActiveChildrenMap = {}
 # TODO: Master belongs here because of active children entry
 EntityActiveChildrenMap[EntityType.MASTER] = [
     EntityType.MASTER,
-    EntityType.RESOURCE_MANAGER,
-    EntityType.SESSION,
-    EntityType.CLIENT
+    EntityType.RESOURCE_MANAGER
 ]
 
 # Active Children Map
@@ -179,7 +214,10 @@ EntityActiveChildrenMap[EntityType.RESOURCE_MANAGER] = [
     EntityType.WORKER,
     EntityType.AGENT,
     EntityType.DOUBLE_AGENT,
-    EntityType.INTELI_AGENT
+    EntityType.INTELI_AGENT,
+    EntityType.SYSTEM_AGENT,
+    EntityType.CLIENT,
+    EntityType.SESSION
 ]
 
 # Empty children for all the other entities
@@ -191,6 +229,7 @@ EntityActiveChildrenMap[EntityType.WORKER] = []
 EntityActiveChildrenMap[EntityType.AGENT] = []
 EntityActiveChildrenMap[EntityType.DOUBLE_AGENT] = []
 EntityActiveChildrenMap[EntityType.INTELI_AGENT] = []
+EntityActiveChildrenMap[EntityType.SYSTEM_AGENT] = []
 EntityActiveChildrenMap[EntityType.SWF] = []
 EntityActiveChildrenMap[EntityType.WF] = []
 EntityActiveChildrenMap[EntityType.JOB] = []
@@ -211,6 +250,7 @@ EntityPassiveChildrenMap[EntityType.WORKER] = []
 EntityPassiveChildrenMap[EntityType.AGENT] = []
 EntityPassiveChildrenMap[EntityType.DOUBLE_AGENT] = []
 EntityPassiveChildrenMap[EntityType.INTELI_AGENT] = []
+EntityPassiveChildrenMap[EntityType.SYSTEM_AGENT] = []
 EntityPassiveChildrenMap[EntityType.SWF] = []
 EntityPassiveChildrenMap[EntityType.WF] = []
 EntityPassiveChildrenMap[EntityType.JOB] = []
@@ -232,6 +272,7 @@ EntityDependentsMap[EntityType.WORKER] = []
 EntityDependentsMap[EntityType.AGENT] = []
 EntityDependentsMap[EntityType.DOUBLE_AGENT] = []
 EntityDependentsMap[EntityType.INTELI_AGENT] = []
+EntityDependentsMap[EntityType.SYSTEM_AGENT] = []
 EntityDependentsMap[EntityType.SWF] = [EntityType.WF]
 EntityDependentsMap[EntityType.WF] = [EntityType.JOB]
 EntityDependentsMap[EntityType.JOB] = [EntityType.TASK]
@@ -263,17 +304,19 @@ EntityPassiveSupervisorTypes = [EntityType.SWF_MANAGER, EntityType.WF_MANAGER, E
 
 # capacity map
 ENTITY_CAPACITY_DEFAULT = 10
+ENTITY_CAPACITY_DEFAULT_ONE = 1
 EntityCapacityMap = {}
 EntityCapacityMap[EntityType.MASTER] = ENTITY_CAPACITY_DEFAULT
-EntityCapacityMap[EntityType.RESOURCE_MANAGER] = ENTITY_CAPACITY_DEFAULT
+EntityCapacityMap[EntityType.RESOURCE_MANAGER] = 100
 EntityCapacityMap[EntityType.SWF_MANAGER] = ENTITY_CAPACITY_DEFAULT
 EntityCapacityMap[EntityType.WF_MANAGER] = ENTITY_CAPACITY_DEFAULT
 EntityCapacityMap[EntityType.JOB_MANAGER] = ENTITY_CAPACITY_DEFAULT
 EntityCapacityMap[EntityType.TASK_MANAGER] = ENTITY_CAPACITY_DEFAULT
 EntityCapacityMap[EntityType.WORKER] = ENTITY_CAPACITY_DEFAULT
-EntityCapacityMap[EntityType.AGENT] = 1
-EntityCapacityMap[EntityType.DOUBLE_AGENT] = 1
-EntityCapacityMap[EntityType.INTELI_AGENT] = 1
+EntityCapacityMap[EntityType.AGENT] = ENTITY_CAPACITY_DEFAULT_ONE
+EntityCapacityMap[EntityType.DOUBLE_AGENT] = ENTITY_CAPACITY_DEFAULT_ONE
+EntityCapacityMap[EntityType.INTELI_AGENT] = ENTITY_CAPACITY_DEFAULT_ONE
+EntityCapacityMap[EntityType.SYSTEM_AGENT] = ENTITY_CAPACITY_DEFAULT_ONE
 
 # Constants for cluster capabilities. These are just suggested constants and in realize plain strings will be used
 class ClusterCapabilities:
@@ -285,6 +328,7 @@ class ClusterCapabilities:
     LOGSCALE    = "logscale"
     KAFKA       = "kafka"
     WEBSERVICE  = "webservice"
+    JIRA        = "jira"
 
 # primary entity class
 class ClusterEntity(cluster_data.JsonSer):
@@ -296,11 +340,12 @@ class ClusterEntity(cluster_data.JsonSer):
     # active_children: are active entities that are monitored for checking liveness
     # passive_children: are passive entities that are assigned for execution and periodically monitored for completion
     # dependents: are lifecycle dependents that if the parent is aborted, the dependents will be aborted too
-    def __init__(self, entity_type, entity_id, ts, lease):
+    def __init__(self, entity_type, entity_id, ts, lease, namespace=None):
         self.entity_type = entity_type
         self.entity_id = entity_id
         self.ts = ts
         self.lease = lease
+        self.namespace = namespace
 
     # parse from json
     def from_json(json_obj):
@@ -312,12 +357,13 @@ class ClusterEntity(cluster_data.JsonSer):
             json_obj["entity_type"],
             json_obj["entity_id"],
             json_obj["ts"],
-            json_obj["lease"]
+            json_obj["lease"],
+            namespace=json_obj.get("namespace")
         )
 
     # constructor
-    def new(entity_type, entity_id, ts, lease):
-        return ClusterEntity(entity_type, entity_id, ts, lease)
+    def new(entity_type, entity_id, ts, lease, namespace=None):
+        return ClusterEntity(entity_type, entity_id, ts, lease, namespace=namespace)
 
 # deserialize clusetr entity
 def deserialize_cluster_entity(json_obj):
@@ -345,6 +391,8 @@ def deserialize_cluster_entity(json_obj):
         return ClusterEntityDoubleAgent.from_json(json_obj)
     elif (entity_type == EntityType.INTELI_AGENT):
         return ClusterEntityInteliAgent.from_json(json_obj)
+    elif (entity_type == EntityType.SYSTEM_AGENT):
+        return ClusterEntitySystemAgent.from_json(json_obj)
     elif (entity_type == EntityType.SWF):
         return ClusterEntitySWF.from_json(json_obj)
     elif (entity_type == EntityType.WF):
@@ -360,7 +408,7 @@ def deserialize_cluster_entity(json_obj):
     elif (entity_type == EntityType.SESSION):
         return ClusterEntitySession.from_json(json_obj)
     else:
-        raise Exception("deserialize_cluster_entity: unknown entity type: {}".format(xentity_type))
+        raise Exception("deserialize_cluster_entity: unknown entity type: {}".format(entity_type))
 
 # Master
 class ClusterEntityMaster(ClusterEntity):
@@ -452,13 +500,22 @@ class ClusterEntityInteliAgent(ClusterEntity):
     def new(entity_id, ts = timefuncs.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
         return ClusterEntityInteliAgent(entity_id, ts, lease)
 
+# System Agent
+class ClusterEntitySystemAgent(ClusterEntity):
+    def __init__(self, entity_id, ts, lease):
+        super().__init__(EntityType.SYSTEM_AGENT, entity_id, ts, lease)
+
+    # constructor
+    def new(entity_id, ts = timefuncs.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_ACTIVE_ENTITY_LEASE):
+        return ClusterEntitySystemAgent(entity_id, ts, lease)
+
 # SWF
 class ClusterEntitySWF(ClusterEntity):
-    def __init__(self, entity_id, ts, lease, client_id, session_id, entity_spec):
-        super().__init__(EntityType.SWF, entity_id, ts, lease)
-        self.entity_spec = entity_spec
+    def __init__(self, namespace, entity_id, ts, lease, client_id, session_id, entity_spec):
+        super().__init__(EntityType.SWF, entity_id, ts, lease, namespace=namespace)
         self.client_id = client_id
         self.session_id = session_id
+        self.entity_spec = entity_spec
 
     # parse from json
     def from_json(json_obj):
@@ -468,22 +525,23 @@ class ClusterEntitySWF(ClusterEntity):
 
         # return
         return ClusterEntitySWF.new(
+            json_obj["namespace"],
             json_obj["entity_id"],
             json_obj["client_id"],
             json_obj["session_id"],
             deserialize_cluster_spec(json_obj["entity_spec"]),
             json_obj["ts"],
-            json_obj["lease"]
+            json_obj["lease"],
         )
 
     # constructor
-    def new(entity_id, client_id, session_id, entity_spec, ts = timefuncs.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_PASSIVE_ENTITY_LEASE):
-        return ClusterEntitySWF(entity_id, ts, lease, client_id, session_id, entity_spec)
+    def new(namespace, entity_id, client_id, session_id, entity_spec, ts = timefuncs.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_PASSIVE_ENTITY_LEASE):
+        return ClusterEntitySWF(namespace, entity_id, ts, lease, client_id, session_id, entity_spec)
 
 # WF
 class ClusterEntityWF(ClusterEntity):
-    def __init__(self, entity_id, ts, lease, client_id, session_id, entity_spec):
-        super().__init__(EntityType.WF, entity_id, ts, lease)
+    def __init__(self, namespace, entity_id, ts, lease, client_id, session_id, entity_spec):
+        super().__init__(EntityType.WF, entity_id, ts, lease, namespace=namespace)
         self.client_id = client_id
         self.session_id = session_id
         self.entity_spec = entity_spec
@@ -527,33 +585,34 @@ class ClusterEntityWF(ClusterEntity):
 
         # return
         return ClusterEntityWF.new(
+            json_obj["namespace"],
             json_obj["entity_id"],
             json_obj["client_id"],
             json_obj["session_id"],
             deserialize_cluster_spec(json_obj["entity_spec"]),
             json_obj["ts"],
-            json_obj["lease"]
+            json_obj["lease"],
         )
 
     # constructor
-    def new(entity_id, client_id, session_id, entity_spec, ts = timefuncs.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_PASSIVE_ENTITY_LEASE):
-        return ClusterEntityWF(entity_id, ts, lease, client_id, session_id, entity_spec)
+    def new(namespace, entity_id, client_id, session_id, entity_spec, ts = timefuncs.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_PASSIVE_ENTITY_LEASE):
+        return ClusterEntityWF(namespace, entity_id, ts, lease, client_id, session_id, entity_spec)
 
 # Job
 class ClusterEntityJob(ClusterEntity):
-    def __init__(self, entity_id, ts, lease, client_id, session_id, entity_spec):
-        super().__init__(EntityType.JOB, entity_id, ts, lease)
+    def __init__(self, namespace, entity_id, ts, lease, client_id, session_id, entity_spec):
+        super().__init__(EntityType.JOB, entity_id, ts, lease, namespace=namespace)
         self.entity_spec = entity_spec
         self.client_id = client_id
         self.session_id = session_id
 
-    def new(entity_id, client_id, session_id, entity_spec, ts = timefuncs.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_PASSIVE_ENTITY_LEASE):
-        return ClusterEntityJob(entity_id, ts, lease, client_id, session_id, entity_spec)
+    def new(namespace, entity_id, client_id, session_id, entity_spec, ts = timefuncs.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_PASSIVE_ENTITY_LEASE):
+        return ClusterEntityJob(namespace, entity_id, ts, lease, client_id, session_id, entity_spec)
 
 # Task
 class ClusterEntityTask(ClusterEntity):
-    def __init__(self, entity_id, ts, lease, client_id, session_id, entity_spec):
-        super().__init__(EntityType.TASK, entity_id, ts, lease)
+    def __init__(self, namespace, entity_id, ts, lease, client_id, session_id, entity_spec):
+        super().__init__(EntityType.TASK, entity_id, ts, lease, namespace=namespace)
         self.client_id = client_id
         self.session_id = session_id
         self.entity_spec = entity_spec
@@ -566,29 +625,30 @@ class ClusterEntityTask(ClusterEntity):
 
         # return
         return ClusterEntityTask.new(
+            json_obj["namespace"],
             json_obj["entity_id"],
             json_obj["client_id"],
             json_obj["session_id"],
             deserialize_cluster_spec(json_obj["entity_spec"]),
             json_obj["ts"],
-            json_obj["lease"]
+            json_obj["lease"],
         )
 
     # constructor
-    def new(entity_id, client_id, session_id, entity_spec, ts = timefuncs.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_PASSIVE_ENTITY_LEASE):
-        return ClusterEntityTask(entity_id, ts, lease, client_id, session_id, entity_spec)
+    def new(namespace, entity_id, client_id, session_id, entity_spec, ts = timefuncs.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_PASSIVE_ENTITY_LEASE):
+        return ClusterEntityTask(namespace, entity_id, ts, lease, client_id, session_id, entity_spec)
 
 # Batch
 class ClusterEntityBatch(ClusterEntity):
-    def __init__(self, entity_id, ts, lease, client_id, session_id, entity_spec):
-        super().__init__(EntityType.BATCH, entity_id, ts, lease)
+    def __init__(self, namespace, entity_id, ts, lease, client_id, session_id, entity_spec):
+        super().__init__(EntityType.BATCH, entity_id, ts, lease, namespace=namespace)
         self.client_id = client_id
         self.session_id = session_id
         self.entity_spec = entity_spec
 
     # constructor
-    def new(entity_id, client_id, session_id, entity_spec, ts = timefuncs.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_PASSIVE_ENTITY_LEASE):
-        return ClusterEntityBatch(entity_id, ts, lease, client_id, session_id, entity_spec)
+    def new(namespace, entity_id, client_id, session_id, entity_spec, ts = timefuncs.get_utctimestamp_sec(), lease = ClusterEntity.DEFAULT_PASSIVE_ENTITY_LEASE):
+        return ClusterEntityBatch(namespace, entity_id, ts, lease, client_id, session_id, entity_spec)
 
 # Client
 class ClusterEntityClient(ClusterEntity):
@@ -641,6 +701,7 @@ EXTEND_CLASS_OP = "extend_class_op"
 MAP_OPS = "map_ops"
 REDUCE_OP = "reduce_op"
 SINGLETON_OP = "singleton_op"
+CHECKPOINT_OP = "checkpoint_op"
 
 # method to construct the correct ClusterSpec
 def deserialize_cluster_spec(json_obj):
@@ -669,9 +730,11 @@ def deserialize_cluster_spec(json_obj):
 # SWF Spec
 # TODO: this needs redesigning
 class ClusterSpecSWF(ClusterSpecBase):
-    def __init__(self, num_inputs, num_outputs, wfs_specs):
-        super().__init__(EntityType.SWF, num_inputs, num_outputs)
+    def __init__(self, wfs_specs, tags = {}, params = {}):
+        super().__init__(EntityType.SWF, 0, 0)
         self.wfs_specs = wfs_specs
+        self.tags = tags
+        self.params = params
 
     def build(self):
         super().build()
@@ -690,29 +753,37 @@ class ClusterSpecSWF(ClusterSpecBase):
         # return
         return ClusterSpecSWF.new(
             wfs_specs,
-            json_obj["num_inputs"],
-            json_obj["num_outputs"]
+            tags = json_obj.get("tags", {}),
+            params = json_obj.get("params", {})
         )
 
     # constructor
-    def new(wfs_specs, num_inputs = 1, num_outputs = 1):
-        return ClusterSpecSWF(wfs_specs, num_inputs, num_outputs)
+    def new(wfs_specs, tags = {}, params = {}):
+        return ClusterSpecSWF(wfs_specs, tags = tags, params = params)
 
 # WF Spec
 class ClusterSpecWF(ClusterSpecBase):
-    def __init__(self, jobs_specs, is_live, is_remote, is_external, max_job_execution_time, interval, start_ts, use_full_data, duration, input_ids, output_ids):
-        super().__init__(EntityType.WF, len(input_ids), len(output_ids))
+    def __init__(self, jobs_specs, name, is_live, is_external, max_job_execution_time, bucket_interval, ticks_interval, start_ts, use_full_data, duration, input_ids, output_ids, primary_input_id = None, tags = {}, event_ts_col = None, upstream_inputs = {}, params = {}, input_params_config = {}, parent_swf_id = None):
+        super().__init__(EntityType.WF, 0, 0)
         self.jobs_specs = jobs_specs
+        self.name = name
         self.is_live = is_live
-        self.is_remote = is_remote
         self.is_external = is_external
         self.max_job_execution_time = max_job_execution_time
-        self.interval = interval
+        self.bucket_interval = bucket_interval
+        self.ticks_interval = ticks_interval
         self.start_ts = start_ts
         self.use_full_data = use_full_data
         self.duration = duration
         self.input_ids = input_ids
         self.output_ids = output_ids
+        self.primary_input_id = primary_input_id
+        self.tags = tags
+        self.event_ts_col = event_ts_col
+        self.upstream_inputs = upstream_inputs
+        self.params = params
+        self.input_params_config = input_params_config
+        self.parent_swf_id = parent_swf_id
 
     def build(self):
         super().build()
@@ -731,33 +802,60 @@ class ClusterSpecWF(ClusterSpecBase):
         # return
         return ClusterSpecWF.new(
             jobs_specs,
-            json_obj["is_live"],
-            json_obj["is_remote"],
-            json_obj["is_external"],
-            json_obj["max_job_execution_time"],
-            json_obj["interval"],
-            json_obj["start_ts"],
-            json_obj["use_full_data"],
-            json_obj["duration"],
-            json_obj["input_ids"],
-            json_obj["output_ids"]
+            name = json_obj.get("name", ""),
+            is_live = json_obj["is_live"],
+            is_external = json_obj["is_external"],
+            max_job_execution_time = json_obj["max_job_execution_time"],
+            bucket_interval = json_obj["bucket_interval"],
+            ticks_interval = json_obj["ticks_interval"],
+            start_ts = json_obj["start_ts"],
+            use_full_data = json_obj["use_full_data"],
+            duration = json_obj["duration"],
+            input_ids = json_obj["input_ids"],
+            output_ids = json_obj["output_ids"],
+            primary_input_id = json_obj.get("primary_input_id", None),
+            tags = json_obj.get("tags", {}),
+            event_ts_col = json_obj.get("event_ts_col", None),
+            upstream_inputs = json_obj.get("upstream_inputs", {}),
+            params = json_obj.get("params", {}),
+            input_params_config = json_obj.get("input_params_config", {}),
+            parent_swf_id = json_obj.get("parent_swf_id", None)
         )
 
     # constructor
-    def new(jobs_specs, is_live = False, is_remote = False, is_external = False, max_job_execution_time = 600, interval = -1, start_ts = 0, use_full_data = False, duration = 0, input_ids = None, output_ids = None):
-        # create defaults
-        if (input_ids is None):
-            raise Exception("ClusterSpecWF: input ids can not be None")
+    def new(jobs_specs, name = "", is_live = False, is_external = False, max_job_execution_time = 600,
+            bucket_interval = -1, ticks_interval = None, start_ts = 0, use_full_data = False,
+            duration = 0, input_ids = [], output_ids = [], primary_input_id = None, tags = {}, event_ts_col = None, upstream_inputs = {}, params = {}, input_params_config = {}, parent_swf_id = None):
 
-        if (output_ids is None):
-            raise Exception("ClusterSpecWF: output ids can not be None")
+        # default ticks_interval to bucket_interval (tumbling windows)
+        if (ticks_interval is None):
+            ticks_interval = bucket_interval
+
+        # validate bucket_interval for live workflows
+        if (is_live == True and bucket_interval > 0):
+            from omigo_hydra import etl
+            if (bucket_interval not in etl.ALLOWED_LIVE_INTERVALS_SECONDS):
+                raise Exception("ClusterSpecWF: live workflow bucket_interval must be one of {} seconds, got: {}".format(
+                    etl.ALLOWED_LIVE_INTERVALS_SECONDS, bucket_interval))
+
+        # validate ticks_interval for live workflows
+        if (is_live == True and ticks_interval > 0):
+            from omigo_hydra import etl
+            if (ticks_interval not in etl.ALLOWED_LIVE_INTERVALS_SECONDS):
+                raise Exception("ClusterSpecWF: live workflow ticks_interval must be one of {} seconds, got: {}".format(
+                    etl.ALLOWED_LIVE_INTERVALS_SECONDS, ticks_interval))
+
+        if (len(output_ids) == 0):
+            raise Exception("ClusterSpecWF: output ids can not be empty")
 
         # return
-        return ClusterSpecWF(jobs_specs, is_live, is_remote, is_external, max_job_execution_time, interval, start_ts, use_full_data, duration, input_ids, output_ids)
+        return ClusterSpecWF(jobs_specs, name, is_live, is_external, max_job_execution_time,
+            bucket_interval, ticks_interval, start_ts, use_full_data, duration, input_ids, output_ids,
+            primary_input_id = primary_input_id, tags = tags, event_ts_col = event_ts_col, upstream_inputs = upstream_inputs, params = params, input_params_config = input_params_config, parent_swf_id = parent_swf_id)
 
 # Job Spec
 class ClusterSpecJob(ClusterSpecBase):
-    def __init__(self, map_partitioner, map_task, reduce_partitioner, reduce_task, singleton_task, extend_class_def, num_inputs, num_outputs):
+    def __init__(self, map_partitioner, map_task, reduce_partitioner, reduce_task, singleton_task, extend_class_def, num_inputs, num_outputs, checkpoint_def=None):
         super().__init__(EntityType.JOB, num_inputs, num_outputs)
         self.map_partitioner = map_partitioner
         self.map_task = map_task
@@ -765,6 +863,7 @@ class ClusterSpecJob(ClusterSpecBase):
         self.reduce_task = reduce_task
         self.singleton_task = singleton_task
         self.extend_class_def = extend_class_def
+        self.checkpoint_def = checkpoint_def
 
     def build(self):
         super().build()
@@ -775,6 +874,11 @@ class ClusterSpecJob(ClusterSpecBase):
         if (json_obj is None):
             return None
 
+        # checkpoint_def may be absent in older specs
+        checkpoint_def = None
+        if ("checkpoint_def" in json_obj and json_obj["checkpoint_def"] is not None):
+            checkpoint_def = ClusterSpecCheckpointDef.from_json(json_obj["checkpoint_def"])
+
         # return
         return ClusterSpecJob.new(
             ClusterSpecPartitionTask.from_json(json_obj["map_partitioner"]),
@@ -784,12 +888,13 @@ class ClusterSpecJob(ClusterSpecBase):
             ClusterSpecSingletonTask.from_json(json_obj["singleton_task"]),
             ClusterSpecExtendClassDef.from_json(json_obj["extend_class_def"]),
             json_obj["num_inputs"],
-            json_obj["num_outputs"]
+            json_obj["num_outputs"],
+            checkpoint_def=checkpoint_def
         )
 
     # constructor
-    def new(map_partitioner, map_task, reduce_partitioner, reduce_task, singleton_task, extend_class_def, num_inputs = 1, num_outputs = 1):
-        return ClusterSpecJob(map_partitioner, map_task, reduce_partitioner, reduce_task, singleton_task, extend_class_def, num_inputs, num_outputs)
+    def new(map_partitioner, map_task, reduce_partitioner, reduce_task, singleton_task, extend_class_def, num_inputs=1, num_outputs=1, checkpoint_def=None):
+        return ClusterSpecJob(map_partitioner, map_task, reduce_partitioner, reduce_task, singleton_task, extend_class_def, num_inputs, num_outputs, checkpoint_def=checkpoint_def)
 
 # Task Spec
 class ClusterSpecTask(ClusterSpecBase):
@@ -925,6 +1030,32 @@ class ClusterSpecSingletonTask(ClusterSpecTask):
     # constructor
     def new(singleton_op, num_inputs = 1, num_outputs = 1):
         return ClusterSpecSingletonTask(singleton_op, num_inputs, num_outputs)
+
+# Checkpoint Def Spec
+class ClusterSpecCheckpointDef(ClusterSpecTask):
+    def __init__(self, checkpoint_op, num_inputs, num_outputs):
+        super().__init__(ClusterTaskType.CHECKPOINT, num_inputs, num_outputs)
+        self.checkpoint_op = checkpoint_op
+
+    def build(self):
+        super().build()
+
+    # parse from json
+    def from_json(json_obj):
+        # check for None
+        if (json_obj is None):
+            return None
+
+        # return
+        return ClusterSpecCheckpointDef.new(
+            ClusterCheckpointOperation.from_json(json_obj[CHECKPOINT_OP]),
+            json_obj["num_inputs"],
+            json_obj["num_outputs"]
+        )
+
+    # constructor
+    def new(checkpoint_op, num_inputs=1, num_outputs=1):
+        return ClusterSpecCheckpointDef(checkpoint_op, num_inputs, num_outputs)
 
 # Partition Task Spec
 class ClusterSpecPartitionTask(ClusterSpecTask):
@@ -1100,6 +1231,8 @@ class ClusterTaskType:
     SINGLETON = "singleton"
     PARTITION = "partition"
     HASH_PARTITION = "hash_partition"
+    SINGLETON_PARTITION = "singleton_partition"
+    CHECKPOINT = "checkpoint"
 
 # ClusterTaskOperation
 class ClusterTaskOperation(ClusterOperation):
@@ -1198,6 +1331,21 @@ class ClusterSingletonOperation(ClusterTaskOperation):
         # return
         return ClusterSingletonOperation(name, requirements, *args, **kwargs)
 
+# ClusterCheckpointOperation - persists intermediate data and skips already-computed stages
+class ClusterCheckpointOperation(cluster_data.JsonSer):
+    def __init__(self, name, overwrite=False):
+        self.name = name
+        self.overwrite = overwrite
+        self.task_type = ClusterTaskType.CHECKPOINT
+
+    # parse from json
+    def from_json(json_obj):
+        # check for None
+        if (json_obj is None):
+            return None
+
+        return ClusterCheckpointOperation(json_obj["name"], overwrite=json_obj.get("overwrite", False))
+
 # deerialize cluster task operation
 def deserialize_cluster_task_operation(json_obj):
     # check for None
@@ -1216,6 +1364,8 @@ def deserialize_cluster_task_operation(json_obj):
         return ClusterReduceOperation.from_json(json_obj)
     elif (task_type == ClusterTaskType.SINGLETON):
         return ClusterSingletonOperation.from_json(json_obj)
+    elif (task_type == ClusterTaskType.CHECKPOINT):
+        return ClusterCheckpointOperation.from_json(json_obj)
     else:
         raise Exception("deserialize_cluster_task_operation: unknown task_type for ClusterTaskOperation: {}".format(task_type))
 
@@ -1368,11 +1518,15 @@ class ClusterFileHandler(cluster_data.JsonSer):
             raise Exception("create: path: {}, failed to verify".format(path))
 
     def list_files(self, path):
-        utils.debug("list_files : {}".format(path))
+        utils.trace("list_files : {}".format(path))
         return self.fs.list_files(self.__makepath__(path))
 
+    def list_leaf_dir(self, path):
+        utils.trace("list_leaf_dir: {}".format(path))
+        return self.fs.list_leaf_dir(self.__makepath__(path))
+
     def list_dirs(self, path):
-        utils.debug("list_dirs  : {}".format(path))
+        utils.trace("list_dirs  : {}".format(path))
         return self.fs.list_dirs(self.__makepath__(path))
 
     def list_all_recursive(self, path):
@@ -1389,7 +1543,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
 
             # create full path
             pathf = "{}/{}".format(path, f)
-            utils.debug("pathf: {}".format(pathf))
+            utils.trace("pathf: {}".format(pathf))
 
             # recursive call for directory
             if (self.fs.is_directory(self.__makepath__(pathf))):
@@ -1400,11 +1554,13 @@ class ClusterFileHandler(cluster_data.JsonSer):
         return sorted(results)
 
     def remove_file(self, path, ignore_if_missing = False, verify = True, ignore_logging = False):
+        # check logging
         if (ignore_logging == False):
-            utils.info("remove_file : {}".format(path))
-        else:
             utils.debug("remove_file : {}".format(path))
+        else:
+            utils.trace("remove_file : {}".format(path))
 
+        # call
         self.fs.delete_file_with_wait(self.__makepath__(path), ignore_if_missing = ignore_if_missing)
 
         # check for commit
@@ -1414,9 +1570,9 @@ class ClusterFileHandler(cluster_data.JsonSer):
     def remove_dir(self, path, ignore_if_missing = False, verify = True, ignore_logging = False):
         # debug
         if (ignore_logging == False):
-            utils.info("remove_dir  : {}".format(path))
-        else:
             utils.debug("remove_dir  : {}".format(path))
+        else:
+            utils.trace("remove_dir  : {}".format(path))
 
         # check for ignore_if_missing
         if (self.dir_exists(path) == False):
@@ -1505,7 +1661,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
             raise Exception("{}: Null xdf: {}".format(dmsg, path))
 
         utils.info("{}: {}, num_rows: {}, num_cols: {}".format(dmsg, path, xdf.num_rows(), xdf.num_cols()))
-        tsv.write(xdf, self.__makepath__(path))
+        hydra.write(xdf, self.__makepath__(path))
 
     def update(self, path, msg, verify = True, ignore_logging = False, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "update")
@@ -1531,9 +1687,9 @@ class ClusterFileHandler(cluster_data.JsonSer):
 
         self.fs.write_text_file(self.__makepath__(path), json.dumps(json_obj))
         if (ignore_logging == False):
-            utils.info("{}: {}".format(dmsg, path))
-        else:
             utils.debug("{}: {}".format(dmsg, path))
+        else:
+            utils.trace("{}: {}".format(dmsg, path))
 
         # check for commit
         if (verify == True and self.file_exists_with_wait(path) == False):
@@ -1559,7 +1715,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
             if (len(sorted_files) > max_keep):
                 # iterate and delete
                 for f in sorted_files[0:-max_keep]:
-                    self.remove_file("{}/{}".format(path, f), ignore_logging = ignore_logging)
+                    self.remove_file("{}/{}".format(path, f), ignore_if_missing = True, ignore_logging = ignore_logging)
 
     def update_dynamic_value(self, path, msg, verify = True, ignore_logging = False, max_keep = 2, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "update_dynamic_value")
@@ -1576,7 +1732,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
 
     # TODO: this api needs rethinking coz of eventual consistency
     def file_not_exists(self, path):
-        utils.debug("file_not_exists : {}".format(path))
+        utils.trace("file_not_exists : {}".format(path))
         return self.fs.file_not_exists(self.__makepath__(path))
 
     def file_not_exists_with_wait(self, path):
@@ -1587,7 +1743,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
 
     # TODO: this api needs rethinking coz of eventual consistency
     def file_exists(self, path):
-        utils.debug("file_exists    : {}".format(path))
+        utils.trace("file_exists    : {}".format(path))
         return self.fs.file_exists(self.__makepath__(path))
 
     def file_exists_with_wait(self, path, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS, ignore_if_missing = False):
@@ -1653,7 +1809,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
 
     def read(self, path):
         path = self.__normalize_path__(path)
-        utils.debug("read: {}".format(path))
+        utils.trace("read: {}".format(path))
         return self.fs.read_text_file_with_wait(self.__makepath__(path))
 
     # TODO: Race condition . Create method with wait suffix
@@ -1675,7 +1831,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
     def read_df(self, path_or_paths):
         paths = utils.get_argument_as_array(path_or_paths)
         full_paths = list([self.__makepath__(self.__normalize_path__(p)) for p in utils.get_argument_as_array(path_or_paths)])
-        return tsv.read(full_paths)
+        return hydra.read(full_paths)
 
     # this is a special method that reads all the files in a directory. The format of the filename is <something>.TIMESTAMP.EXTENSION
     # the filename with the highest timestamp will be returned
@@ -1687,7 +1843,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
 
         # boundary conditions
         if (files is None or len(files) == 0):
-            utils.debug("get_recent_files: path: {}, no file found.".format(path))
+            utils.trace("get_recent_files: path: {}, no file found.".format(path))
             return None
 
         # return
@@ -1744,7 +1900,7 @@ class ClusterFileHandler(cluster_data.JsonSer):
     # JSONDecodeError
     def read_most_recent_json(self, path, wait_sec = DEFAULT_WAIT_SEC, attempts = DEFAULT_ATTEMPTS):
         content = self.read_most_recent(path)
-        if (content is not None):
+        if (content is not None and content != ""):
             try:
                 return json.loads(content)
             except Exception as e:
@@ -1835,31 +1991,6 @@ class ClusterPaths:
         # return
         return HYDRA_CLUSTER_HANDLER
 
-    # global constants
-    def get_local_base_path():
-        global HYDRA_LOCAL_PATH
-        if (HYDRA_LOCAL_PATH is None):
-            raise Exception("HYDRA_LOCAL_PATH is None")
-
-        return HYDRA_LOCAL_PATH
-
-    def set_local_base_path(path):
-        global HYDRA_LOCAL_PATH
-        HYDRA_LOCAL_PATH = path
-
-    def get_local_cluster_handler():
-        # refer global variables
-        global HYDRA_LOCAL_CLUSTER_HANDLER
-        global HYDRA_LOCAL_CLUSTER_HANDLER_LOCK
-
-        # use lock for thread safety
-        with HYDRA_LOCAL_CLUSTER_HANDLER_LOCK:
-            if (HYDRA_LOCAL_CLUSTER_HANDLER is None):
-                HYDRA_LOCAL_CLUSTER_HANDLER = ClusterFileHandler.new(ClusterPaths.get_local_base_path())
-
-        # return
-        return HYDRA_LOCAL_CLUSTER_HANDLER
-
     #########################################################################################
     # all entities that need life cycle management
     #########################################################################################
@@ -1902,8 +2033,47 @@ class ClusterPaths:
     def __get_current_master_base_path__():
         return "/current-master"
 
+    # Message Bus paths
+    def __get_message_bus_base_path__():
+        return "/message-bus"
+
+    # Shard paths (V2)
+    def __get_shards_base_path__():
+        return "/shards"
+
+    def get_shard_path(shard_id):
+        return "{}/shard-{:02d}".format(ClusterPaths.__get_shards_base_path__(), shard_id)
+
+    def get_shard_incoming(shard_id, entity_type):
+        return "{}/entities-incoming/{}s".format(ClusterPaths.get_shard_path(shard_id), entity_type)
+
+    def get_shard_entity_incoming(shard_id, entity_type, entity_id):
+        return "{}/{}".format(ClusterPaths.get_shard_incoming(shard_id, entity_type), entity_id)
+
+    @staticmethod
+    def get_shard_assigned_rm(shard_id):
+        """Master's assignment of which RM owns this shard."""
+        return "{}/assigned-rm".format(ClusterPaths.get_shard_path(shard_id))
+
+    def get_shard_assigned_rm_candidates(shard_id):
+        """RM candidates for this shard."""
+        return "{}/assigned-rm-candidates".format(ClusterPaths.get_shard_path(shard_id))
+
+    def get_all_shard_base_paths():
+        """Returns all shard directory paths that need to be created at cluster init."""
+        paths = []
+        for shard_id in range(NUM_SHARDS):
+            paths.append(ClusterPaths.get_shard_path(shard_id))
+            paths.append("{}/entities-incoming".format(ClusterPaths.get_shard_path(shard_id)))
+            # create per-entity-type incoming directories under each shard
+            for xentity_type in EntityType.get_all():
+                paths.append(ClusterPaths.get_shard_incoming(shard_id, xentity_type))
+            paths.append(ClusterPaths.get_shard_assigned_rm(shard_id))
+            paths.append(ClusterPaths.get_shard_assigned_rm_candidates(shard_id))
+        return paths
+
     def get_base_paths():
-        return [
+        base = [
             ClusterPaths.__get_entities_ids_base_path__(),
             ClusterPaths.__get_entities_base_path__(),
             ClusterPaths.__get_entities_state_base_path__(),
@@ -1916,8 +2086,12 @@ class ClusterPaths:
             ClusterPaths.__get_entities_assigned_executors__(),
             ClusterPaths.__get_entities_assigned_execution_tasks__(),
             ClusterPaths.__get_entities_data__(),
-            ClusterPaths.__get_current_master_base_path__()
+            ClusterPaths.__get_current_master_base_path__(),
+            ClusterPaths.__get_shards_base_path__(),
+            ClusterPaths.__get_message_bus_base_path__()
         ]
+        base.extend(ClusterPaths.get_all_shard_base_paths())
+        return base
 
     # /entities
     def get_entities_ids(entity_type):
@@ -2042,8 +2216,8 @@ class ClusterPaths:
     def get_entity_data_input(entity_type, entity_id, input_id):
         return "{}/{}".format(ClusterPaths.get_entity_data_inputs(entity_type, entity_id), input_id)
 
-    def get_entity_data_input_file(entity_type, entity_id, input_id, file_index):
-        return "{}/{}.tsv.gz".format(ClusterPaths.get_entity_data_input(entity_type, entity_id, input_id), file_index)
+    def get_entity_data_input_default_file(entity_type, entity_id, input_id):
+        return "{}/0.tsv.gz".format(ClusterPaths.get_entity_data_input(entity_type, entity_id, input_id))
 
     def get_entity_data_outputs(entity_type, entity_id):
         return "{}/outputs".format(ClusterPaths.get_entity_data(entity_type, entity_id))
@@ -2051,8 +2225,11 @@ class ClusterPaths:
     def get_entity_data_output(entity_type, entity_id, output_id):
         return "{}/{}".format(ClusterPaths.get_entity_data_outputs(entity_type, entity_id), output_id)
 
-    def get_entity_data_output_file(entity_type, entity_id, output_id, file_index):
-        return "{}/{}.tsv.gz".format(ClusterPaths.get_entity_data_output(entity_type, entity_id, output_id), file_index)
+    def get_entity_data_output_default_file(entity_type, entity_id, output_id):
+        return "{}/0.tsv.gz".format(ClusterPaths.get_entity_data_output(entity_type, entity_id, output_id))
+
+    def get_checkpoint_path(entity_type, entity_id, checkpoint_name):
+        return "{}/checkpoints/{}".format(ClusterPaths.get_entity_data_outputs(entity_type, entity_id), checkpoint_name)
 
     def get_entity_data_output_etl_dt(entity_type, entity_id, output_id, start_ts):
         return "{}/dt={}".format(ClusterPaths.get_entity_data_output(entity_type, entity_id, output_id), etl.get_etl_file_date_str_from_ts(start_ts))
@@ -2072,6 +2249,168 @@ class ClusterPaths:
 
     def get_entity_data_input_batch_hash(entity_type, entity_id, input_id, batch_id, hash_id):
         return "{}/{}".format(ClusterPaths.get_entity_data_input_batch_hashes(entity_type, entity_id, input_id, batch_id), hash_id)
+
+    # ==================== NAMESPACE REGISTRY ====================
+    def get_namespaces_base_path():
+        return "/namespaces"
+
+    def get_namespace_path(namespace):
+        return "{}/{}".format(ClusterPaths.get_namespaces_base_path(), namespace)
+
+    # ==================== MESSAGE BUS PATHS ====================
+    # Single flat location for all message bus files — namespace is in the data, not the path.
+    def get_message_bus_base():
+        return ClusterPaths.__get_message_bus_base_path__()
+
+    def get_message_bus_incoming_current():
+        return "{}/incoming-current".format(ClusterPaths.get_message_bus_base())
+
+    def get_message_bus_incoming_late():
+        return "{}/incoming-late".format(ClusterPaths.get_message_bus_base())
+
+    def get_message_bus_incoming_late_file(message_id):
+        return "{}/{}.tsv.gz".format(ClusterPaths.get_message_bus_incoming_late(), message_id)
+
+    def get_message_bus_buckets():
+        return "{}/buckets".format(ClusterPaths.get_message_bus_base())
+
+    def get_message_bus_bucket(bucket_level):
+        return "{}/{}".format(ClusterPaths.get_message_bus_buckets(), bucket_level)
+
+    def get_message_bus_bucket_etl_dt(bucket_level, start_ts):
+        return "{}/dt={}".format(ClusterPaths.get_message_bus_bucket(bucket_level), etl.get_etl_file_date_str_from_ts(start_ts))
+
+    def get_message_bus_bucket_etl_file(bucket_level, start_ts, end_ts):
+        return "{}/{}.tsv.gz".format(ClusterPaths.get_message_bus_bucket_etl_dt(bucket_level, start_ts),
+            etl.get_etl_file_base_name_by_ts(ClusterPaths.DEFAULT_OUTPUT_PREFIX, start_ts, end_ts))
+
+    def get_message_bus_message_file(message_id):
+        return "{}/{}.tsv.gz".format(ClusterPaths.get_message_bus_incoming_current(), message_id)
+
+    def get_message_bus_completed():
+        return "{}/completed".format(ClusterPaths.get_message_bus_base())
+
+    def get_message_bus_completed_file(message_id):
+        return "{}/{}.tsv.gz".format(ClusterPaths.get_message_bus_completed(), message_id)
+
+    # ==================== ACTIVE ENTITY PATHS ====================
+    # Active entities have no namespace segment. These mirror the existing methods.
+    def get_active_entity_id_path(entity_type, entity_id):
+        return "{}/{}".format(ClusterPaths.get_entities_ids(entity_type), entity_id)
+
+    def get_active_entity_details_path(entity_type, entity_id):
+        return "{}/{}".format(ClusterPaths.get_entities(entity_type), entity_id)
+
+    def get_active_entity_state_path(entity_type, entity_state, entity_id):
+        return "{}/{}".format(ClusterPaths.get_entities_state_by_state(entity_type, entity_state), entity_id)
+
+    def get_active_entity_incoming_path(entity_type, entity_id):
+        return "{}/{}".format(ClusterPaths.get_entities_incoming(entity_type), entity_id)
+
+    def get_active_entity_assigned_supervisor_path(entity_type, entity_id):
+        return "{}/{}".format(ClusterPaths.get_entities_assigned_supervisor(entity_type), entity_id)
+
+    def get_active_entity_heartbeat_path(entity_type, entity_id):
+        return "{}/{}".format(ClusterPaths.get_entities_heartbeat(entity_type), entity_id)
+
+    def get_active_entity_data_path(entity_type, entity_id):
+        return "{}/{}".format(ClusterPaths.get_entities_data(entity_type), entity_id)
+
+    # ==================== PASSIVE ENTITY PATHS ====================
+    # Passive entities have {namespace} immediately before {entity_id}.
+    def get_passive_entity_id_path(namespace, entity_type, entity_id):
+        return "{}/{}/{}".format(ClusterPaths.get_entities_ids(entity_type), namespace, entity_id)
+
+    def get_passive_entity_details_path(namespace, entity_type, entity_id):
+        return "{}/{}/{}".format(ClusterPaths.get_entities(entity_type), namespace, entity_id)
+
+    def get_passive_entity_state_path(namespace, entity_type, entity_state, entity_id):
+        return "{}/{}/{}".format(ClusterPaths.get_entities_state_by_state(entity_type, entity_state), namespace, entity_id)
+
+    def get_passive_entities_state_by_state(namespace, entity_type, entity_state):
+        return "{}/{}".format(ClusterPaths.get_entities_state_by_state(entity_type, entity_state), namespace)
+
+    def get_passive_entity_incoming_path(namespace, entity_type, entity_id):
+        return "{}/{}/{}".format(ClusterPaths.get_entities_incoming(entity_type), namespace, entity_id)
+
+    def get_passive_entity_assigned_supervisor_path(namespace, entity_type, entity_id):
+        return "{}/{}/{}".format(ClusterPaths.get_entities_assigned_supervisor(entity_type), namespace, entity_id)
+
+    def get_passive_entity_data_path(namespace, entity_type, entity_id):
+        return "{}/{}/{}".format(ClusterPaths.get_entities_data(entity_type), namespace, entity_id)
+
+    def get_passive_entity_assigned_executors_path(namespace, entity_type, entity_id):
+        return "{}/{}/{}".format(ClusterPaths.get_entities_assigned_executors(entity_type), namespace, entity_id)
+
+    def get_passive_entity_assigned_executors_by_child_type_path(namespace, entity_type, entity_id, child_entity_type):
+        return "{}/{}s".format(ClusterPaths.get_passive_entity_assigned_executors_path(namespace, entity_type, entity_id), child_entity_type)
+
+    def get_passive_entity_assigned_executors_by_id_path(namespace, entity_type, entity_id, child_entity_type, child_entity_id):
+        return "{}/{}".format(ClusterPaths.get_passive_entity_assigned_executors_by_child_type_path(namespace, entity_type, entity_id, child_entity_type), child_entity_id)
+
+    # Heartbeat path for passive entities
+    def get_passive_entity_heartbeat_path(namespace, entity_type, entity_id):
+        return "{}/{}/{}".format(ClusterPaths.get_entities_heartbeat(entity_type), namespace, entity_id)
+
+    # Data sub-paths for passive entities (build on existing get_passive_entity_data_path)
+    def get_passive_entity_data_inputs_path(namespace, entity_type, entity_id):
+        return "{}/inputs".format(ClusterPaths.get_passive_entity_data_path(namespace, entity_type, entity_id))
+
+    def get_passive_entity_data_input_path(namespace, entity_type, entity_id, input_id):
+        return "{}/{}".format(ClusterPaths.get_passive_entity_data_inputs_path(namespace, entity_type, entity_id), input_id)
+
+    def get_passive_entity_data_input_default_file_path(namespace, entity_type, entity_id, input_id):
+        return "{}/0.tsv.gz".format(ClusterPaths.get_passive_entity_data_input_path(namespace, entity_type, entity_id, input_id))
+
+    def get_passive_entity_data_outputs_path(namespace, entity_type, entity_id):
+        return "{}/outputs".format(ClusterPaths.get_passive_entity_data_path(namespace, entity_type, entity_id))
+
+    def get_passive_entity_data_output_path(namespace, entity_type, entity_id, output_id):
+        return "{}/{}".format(ClusterPaths.get_passive_entity_data_outputs_path(namespace, entity_type, entity_id), output_id)
+
+    def get_passive_entity_data_output_default_file_path(namespace, entity_type, entity_id, output_id):
+        return "{}/0.tsv.gz".format(ClusterPaths.get_passive_entity_data_output_path(namespace, entity_type, entity_id, output_id))
+
+    def get_passive_entity_data_output_etl_dt_path(namespace, entity_type, entity_id, output_id, start_ts):
+        return "{}/dt={}".format(ClusterPaths.get_passive_entity_data_output_path(namespace, entity_type, entity_id, output_id), etl.get_etl_file_date_str_from_ts(start_ts))
+
+    def get_passive_entity_data_output_etl_file_path(namespace, entity_type, entity_id, output_id, start_ts, end_ts):
+        return "{}/{}.tsv.gz".format(ClusterPaths.get_passive_entity_data_output_etl_dt_path(namespace, entity_type, entity_id, output_id, start_ts),
+            etl.get_etl_file_base_name_by_ts(ClusterPaths.DEFAULT_OUTPUT_PREFIX, start_ts, end_ts))
+
+    def get_passive_entity_checkpoint_path(namespace, entity_type, entity_id, checkpoint_name):
+        return "{}/checkpoints/{}".format(ClusterPaths.get_passive_entity_data_outputs_path(namespace, entity_type, entity_id), checkpoint_name)
+
+    def get_passive_entity_data_input_batches_path(namespace, entity_type, entity_id, input_id):
+        return "{}/batches".format(ClusterPaths.get_passive_entity_data_input_path(namespace, entity_type, entity_id, input_id))
+
+    def get_passive_entity_data_input_batch_path(namespace, entity_type, entity_id, input_id, batch_id):
+        return "{}/{}".format(ClusterPaths.get_passive_entity_data_input_batches_path(namespace, entity_type, entity_id, input_id), batch_id)
+
+    def get_passive_entity_data_input_batch_hashes_path(namespace, entity_type, entity_id, input_id, batch_id):
+        return "{}/hashes".format(ClusterPaths.get_passive_entity_data_input_batch_path(namespace, entity_type, entity_id, input_id, batch_id))
+
+    def get_passive_entity_data_input_batch_hash_path(namespace, entity_type, entity_id, input_id, batch_id, hash_id):
+        return "{}/{}".format(ClusterPaths.get_passive_entity_data_input_batch_hashes_path(namespace, entity_type, entity_id, input_id, batch_id), hash_id)
+
+    # Shard paths for passive entities
+    def get_passive_shard_entity_incoming(namespace, shard_id, entity_type, entity_id):
+        return "{}/{}/{}".format(ClusterPaths.get_shard_incoming(shard_id, entity_type), namespace, entity_id)
+
+    # ==================== SUPERVISOR-SCOPED PASSIVE PATHS ====================
+    # Passive children under a supervisor, with namespace before child entity_id
+    def get_entity_passive_children_by_namespace(namespace, entity_type, entity_id, child_entity_type):
+        return "{}/{}".format(ClusterPaths.get_entity_passive_children_by_child_type(entity_type, entity_id, child_entity_type), namespace)
+
+    def get_entity_passive_children_by_ns_id(namespace, entity_type, entity_id, child_entity_type, child_entity_id):
+        return "{}/{}".format(ClusterPaths.get_entity_passive_children_by_namespace(namespace, entity_type, entity_id, child_entity_type), child_entity_id)
+
+    # Assigned execution tasks under an executor, with namespace before task entity_id
+    def get_entity_assigned_execution_tasks_by_namespace(namespace, entity_type, entity_id, child_entity_type):
+        return "{}/{}".format(ClusterPaths.get_entity_assigned_execution_tasks_by_child_type(entity_type, entity_id, child_entity_type), namespace)
+
+    def get_entity_assigned_execution_tasks_by_ns_id(namespace, entity_type, entity_id, child_entity_type, child_entity_id):
+        return "{}/{}".format(ClusterPaths.get_entity_assigned_execution_tasks_by_namespace(namespace, entity_type, entity_id, child_entity_type), child_entity_id)
 
 # ClusterExtendClass
 class ClusterExtendClass(cluster_data.JsonSer):
@@ -2111,11 +2450,12 @@ class ClusterExtendClass(cluster_data.JsonSer):
 
 # ClusterOperationJob
 class ClusterOperationJob(cluster_data.JsonSer):
-    def __init__(self, map_ops, reduce_op, singleton_op, extend_class_op):
+    def __init__(self, map_ops, reduce_op, singleton_op, extend_class_op, checkpoint_op=None):
         self.map_ops = map_ops
         self.reduce_op = reduce_op
         self.singleton_op = singleton_op
         self.extend_class_op = extend_class_op
+        self.checkpoint_op = checkpoint_op
 
     # parse from json
     def from_json(json_obj):
@@ -2126,6 +2466,8 @@ class ClusterOperationJob(cluster_data.JsonSer):
         # create
         map_ops = []
         reduce_op = None
+        singleton_op = None
+        extend_class_op = None
         extend_class_def = None
 
         # add maps
@@ -2150,13 +2492,24 @@ class ClusterOperationJob(cluster_data.JsonSer):
             if (value is not None and value != ""):
                 extend_class_op = ClusterExtendClass.from_json(value)
 
+        # check for None or empty in checkpoint_op
+        checkpoint_op = None
+        if (CHECKPOINT_OP in json_obj.keys()):
+            value = json_obj[CHECKPOINT_OP]
+            if (value is not None and value != ""):
+                checkpoint_op = ClusterCheckpointOperation.from_json(value)
+
         # return
-        return ClusterOperationJob.new(map_ops, reduce_op, singleton_op, extend_class_op)
+        return ClusterOperationJob.new(map_ops, reduce_op, singleton_op, extend_class_op, checkpoint_op=checkpoint_op)
 
     # constructor
-    def new(map_ops, reduce_op, singleton_op, extend_class_op):
+    def new(map_ops, reduce_op, singleton_op, extend_class_op, checkpoint_op=None):
         # return
-        return ClusterOperationJob(map_ops, reduce_op, singleton_op, extend_class_op)
+        return ClusterOperationJob(map_ops, reduce_op, singleton_op, extend_class_op, checkpoint_op=checkpoint_op)
+
+# helper to convert millis to YYYYmmDDHHMMSS.milliseconds format
+def __millis_to_ts_str__(ts_millis):
+    return "{}.{:03d}".format(datetime.datetime.utcfromtimestamp(ts_millis // 1000).strftime("%Y%m%d%H%M%S"), ts_millis % 1000)
 
 # ClusterIds
 class ClusterIds:
@@ -2165,14 +2518,14 @@ class ClusterIds:
     WF_COUNTER = 0
     JOB_COUNTER = 0
     TASK_COUNTER = 0
-    TIMESTAMP = timefuncs.get_utctimestamp_sec()
+    TIMESTAMP = __millis_to_ts_str__(timefuncs.get_utctimestamp_millis())
 
     def set_id(ident):
         ClusterIds.ID_SUFFIX = ident
 
     def generate_swf_id():
         global ID_SUFFIX
-        ClusterIds.WF_COUNTER = ClusterIds.WF_COUNTER + 1
+        ClusterIds.SWF_COUNTER = ClusterIds.SWF_COUNTER + 1
         wf_id = "swf{:02}-{:04d}-{}".format(ClusterIds.ID_SUFFIX, ClusterIds.SWF_COUNTER, ClusterIds.TIMESTAMP)
 
         # return
@@ -2219,7 +2572,7 @@ def load_extend_class_obj(extend_class_op, header, data):
     kwargs = cluster_data.load_native_objects(extend_class_op.kwargs)
 
     # debug
-    utils.debug("load_extend_class_obj: class_name: {}, header: {}, data: {}, args: {}, kwargs: {}".format(class_name, len(header), len(data), args, kwargs))
+    utils.trace("load_extend_class_obj: class_name: {}, header: {}, data: {}, args: {}, kwargs: {}".format(class_name, len(header), len(data), args, kwargs))
 
     # take class reference
     class_ref = cluster_class_reflection.load_class_ref_by_name(class_name)
@@ -2247,7 +2600,7 @@ class DFReference:
             # iterate through each reference path
             for line in self.xdf.get_data():
                 fields = line.split("\t", -1)
-                tasks.append(utils.ThreadPoolTask(tsv.read, fields[index]))
+                tasks.append(utils.ThreadPoolTask(hydra.read, fields[index]))
 
             # read the paths. merge with union
             results = utils.run_with_thread_pool(tasks, num_par = num_par, dmsg = dmsg)

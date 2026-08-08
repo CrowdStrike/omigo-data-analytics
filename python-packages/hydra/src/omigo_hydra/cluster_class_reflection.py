@@ -1,7 +1,7 @@
 import inspect
 import importlib
 import math
-from omigo_core import tsv, utils
+from omigo_core import tsv, dataframe, utils
 
 # TODO: Currying
 # https://stackoverflow.com/questions/3589311/get-defining-class-of-unbound-method-object-in-python-3/25959545#25959545
@@ -71,7 +71,7 @@ def load_fully_qualified_func(fully_qual_func_name):
         func_name = parts[1]
 
         # load method
-        utils.debug("load_fully_qualified_func: {}, func_name: {}, module_name: {}".format(fully_qual_func_name, func_name, module_name))
+        utils.trace("load_fully_qualified_func: {}, func_name: {}, module_name: {}".format(fully_qual_func_name, func_name, module_name))
 
         # check loading of the class
         try:
@@ -90,7 +90,7 @@ def load_fully_qualified_func(fully_qual_func_name):
         module_name = ".".join(parts[0:-2])
 
         # load method
-        utils.debug("load_fully_qualified_func: {}, func_name: {}, class_name: {}, module_name: {}".format(fully_qual_func_name, func_name, class_name, module_name))
+        utils.trace("load_fully_qualified_func: {}, func_name: {}, class_name: {}, module_name: {}".format(fully_qual_func_name, func_name, class_name, module_name))
 
         # check loading of the class
         try:
@@ -103,7 +103,12 @@ def load_fully_qualified_func(fully_qual_func_name):
                 # check for function
                 return getattr(class_reference, func_name)
             else:
-                raise Exception("class name not found in the module: {}, class: {}".format(module_name, class_name))
+                # class_name might be a submodule, not a class (e.g., package.module.func)
+                try:
+                    sub_module = importlib.import_module("{}.{}".format(module_name, class_name))
+                    return getattr(sub_module, func_name)
+                except (ImportError, AttributeError):
+                    raise Exception("class name not found in the module: {}, class: {}".format(module_name, class_name))
         except Exception as e:
             utils.error("function not found: {}".format(fully_qual_func_name))
             raise e
@@ -116,7 +121,7 @@ def verify_tsv_subclass_func(fully_qual_func_name):
         if (inspect.ismethod(f) or inspect.isfunction(f)):
             # get the class reference
             class_reference = get_class_that_defined_method(f)
-            utils.debug("class for function: {}, {}".format(fully_qual_func_name, class_reference))
+            utils.trace("class for function: {}, {}".format(fully_qual_func_name, class_reference))
 
             # check if class is of TSV type
             if (class_reference == tsv.TSV):
@@ -135,6 +140,35 @@ def verify_tsv_subclass_func(fully_qual_func_name):
             return False
     except Exception as e:
         utils.error("verify_tsv_subclass_func: failed: {}".format(e))
+        return False
+
+# TODO: these methods are hacky version of class loading and referencing
+def verify_df_subclass_func(fully_qual_func_name):
+    try:
+        f = load_fully_qualified_func(fully_qual_func_name)
+        # check if f is a function
+        if (inspect.ismethod(f) or inspect.isfunction(f)):
+            # get the class reference
+            class_reference = get_class_that_defined_method(f)
+            utils.trace("class for function: {}, {}".format(fully_qual_func_name, class_reference))
+
+            # check if class is of DataFrame type
+            if (class_reference == dataframe.DataFrame):
+                return True
+            else:
+                # check if bases classes
+                # check for base classes
+                df_base_classes = list(filter(lambda t: t == dataframe.DataFrame, class_reference.__bases__))
+                if (len(df_base_classes) > 0):
+                    return True
+                else:
+                    utils.error("verify_df_subclass_func: failed. fully_qual_func_name is not inheriting from DataFrame class: {}".format(fully_qual_func_name))
+                    return False
+        else:
+            utils.error("verify_df_subclass_func: failed. fully_qual_func_name is not function: {}".format(fully_qual_func_name))
+            return False
+    except Exception as e:
+        utils.error("verify_df_subclass_func: failed: {}".format(e))
         return False
 
 # >>> type(lambda x: x+2)
@@ -167,8 +201,31 @@ def has_valid_reflective_name(func):
     return True
 
 
+# registry for hydra class mappings
+__HYDRA_CLASS_REGISTRY__ = {}
+
+# decorator to register a hydra version of a class
+def hydra_class_for(original_class):
+    def decorator(hydra_cls):
+        # set in registry
+        __HYDRA_CLASS_REGISTRY__[original_class] = hydra_cls
+
+        # debug
+        utils.debug_once("hydra_class_for: registered {} -> {}".format(original_class.__name__, hydra_cls.__name__))
+
+        # return
+        return hydra_cls
+
+    # return
+    return decorator
+
 # get the hydra version of the class extension
 def get_hydra_class(class_ref, fallback_modules = None):
+    # check registry first
+    if (class_ref in __HYDRA_CLASS_REGISTRY__):
+        utils.info_once("get_hydra_class: found registered hydra version for class: {}".format(class_ref.__name__))
+        return __HYDRA_CLASS_REGISTRY__[class_ref]
+
     # get the module and class name
     module = inspect.getmodule(class_ref)
     module_name = module.__name__
@@ -181,27 +238,18 @@ def get_hydra_class(class_ref, fallback_modules = None):
     utils.trace("get_hydra_class: class_name: {}, module_name: {}, hydra_class_name: {}".format(class_name, module_name, hydra_class_name))
 
     # check if the existing module has the hydra class present
-    for member in inspect.getmembers(module):
-        # the member is a tuple (name, reference)
-        utils.trace("get_hydra_class: member: {}".format(member[0]))
-
-        # compare
-        if (member[0] == hydra_class_name):
-            # found the hydra class
-            utils.info_once("get_hydra_class: found hydra version for class: {}: {}.{}".format(class_ref.__name__, module_name, member[0]))
-            return member[1]
+    hydra_cls = getattr(module, hydra_class_name, None)
+    if (hydra_cls is not None):
+        utils.info_once("get_hydra_class: found hydra version for class: {}: {}.{}".format(class_ref.__name__, module_name, hydra_class_name))
+        return hydra_cls
 
     # look into fallback_module if that is defined
     if (fallback_modules is not None):
-        # iterate through all fallback modules
         for fallback_module in fallback_modules:
-            # the hydra class doesnt exist in primary location. check cluster_tsv
-            for member in inspect.getmembers(fallback_module):
-                # the member is a tuple (name, reference)
-                if (member[0] == hydra_class_name):
-                    # found the hydra class
-                    utils.info_once("get_hydra_class: found hydra version for class: {}: {}.{}".format(class_ref.__name__, fallback_module.__name__, member[0]))
-                    return member[1]
+            hydra_cls = getattr(fallback_module, hydra_class_name, None)
+            if (hydra_cls is not None):
+                utils.info_once("get_hydra_class: found hydra version for class: {}: {}.{}".format(class_ref.__name__, fallback_module.__name__, hydra_class_name))
+                return hydra_cls
 
     # raise exception that no hydra version found
     utils.warn("get_hydra_class: Not able to find the hydra version for class: {}".format(class_ref.__name__))

@@ -208,3 +208,41 @@ def get_file_paths_by_datetime_range(path, start_date_str, end_date_str, prefix,
     # return
     return filepaths
 
+# Allowed live workflow intervals in seconds (5s, 10s, 20s, 30s, 1, 2, 3, 4, 5, 6, 10, 12, 15, 20, 30, 60 min, 2hrs, 4hrs, 8hrs, 12hrs, 24hrs)
+ALLOWED_LIVE_INTERVALS_SECONDS = [5, 10, 20, 30, 60, 120, 180, 240, 300, 360, 600, 720, 900, 1200, 1800, 3600, 2*3600, 4*3600, 8*3600, 86400]
+
+def floor_to_bucket(ts_seconds, interval_seconds):
+    """Floor a UTC epoch-seconds timestamp to the nearest bucket boundary.
+
+    Buckets are aligned to top-of-hour multiples of interval_seconds.
+    All intervals (60, 300, 600, 1800, 3600) divide evenly into 3600.
+    """
+    hour_start = ts_seconds - (ts_seconds % 3600)
+    offset = ts_seconds - hour_start
+    bucket_offset = offset - (offset % interval_seconds)
+    return hour_start + bucket_offset
+
+def get_expected_upstream_etl_file_paths(base_path, upstream_interval, cur_start_ts, cur_end_ts, ticks_interval = None):
+    """Compute deterministic ETL file paths that an upstream WF would have written
+    for the time window [cur_start_ts, cur_end_ts).
+
+    base_path: the upstream output ETL directory (e.g. .../outputs/<output_id>)
+    upstream_interval: the upstream WF's bucket_interval (window width per file)
+    cur_start_ts: start of the downstream bucket (epoch seconds)
+    cur_end_ts: end of the downstream bucket (epoch seconds)
+    ticks_interval: the upstream WF's ticks_interval (step between files). Defaults to upstream_interval if None.
+
+    Returns list of file paths in chronological order.
+    """
+    if (ticks_interval is None):
+        ticks_interval = upstream_interval
+    paths = []
+    bucket_start = floor_to_bucket(cur_start_ts, ticks_interval)
+    while bucket_start < cur_end_ts:
+        bucket_end = bucket_start + upstream_interval
+        dt_str = get_etl_file_date_str_from_ts(bucket_start)
+        base_name = get_etl_file_base_name_by_ts("output", bucket_start, bucket_end)
+        paths.append("{}/dt={}/{}.tsv.gz".format(base_path, dt_str, base_name))
+        bucket_start = bucket_start + ticks_interval
+    return paths
+

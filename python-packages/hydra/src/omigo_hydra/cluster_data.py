@@ -1,4 +1,4 @@
-from omigo_core import tsv
+from omigo_core import dataframe
 from omigo_core import utils
 from omigo_hydra import cluster_funcs, cluster_class_reflection
 import base64
@@ -8,6 +8,10 @@ import json
 
 # warn
 utils.warn_once("cluster_data: this uses dill library for serializing python code. This is experimental and not used in production")
+
+# Proxy DataFrame serialization constants (single source of truth)
+PROXY_DATAFRAME_DATA_TYPE = "proxy_dataframe"
+PROXY_DATAFRAME_MARKER_KEY = "__proxy_dataframe_id__"
 
 # class to serialize all the data values as json
 # TBD: use json.loads properly
@@ -77,6 +81,17 @@ class ClusterBool(ClusterOperand):
 class ClusterStr(ClusterOperand):
     def __init__(self, value):
         super().__init__("str", value)
+
+    def validate(self):
+        return isinstance(self.value, str)
+
+# Cluster Proxy DataFrame class — serialized reference to a named input_id, resolved at execution time.
+class ClusterProxyDataFrame(ClusterOperand):
+    """Value is a string (single input_id)."""
+    def __init__(self, value):
+        if (isinstance(value, list)):
+            raise Exception("ClusterProxyDataFrame: multiple input_ids are not supported yet. Got: {}".format(value))
+        super().__init__(PROXY_DATAFRAME_DATA_TYPE, value)
 
     def validate(self):
         return isinstance(self.value, str)
@@ -251,6 +266,14 @@ def load_native_objects(cluster_operand):
         return int(value)
     elif (data_type == "float"):
         return float(value)
+    elif (data_type == PROXY_DATAFRAME_DATA_TYPE):
+        return {PROXY_DATAFRAME_MARKER_KEY: value}
+    elif (data_type == "WFBlueprint"):
+        from omigo_hydra.cluster_df import WFBlueprint
+        from omigo_hydra.cluster_common_v2 import ClusterOperationJob
+        jobs_operations = [ClusterOperationJob.from_json(op_json) for op_json in value["jobs_operations"]]
+        xinput = dataframe.DataFrame(value["xinput_header"], value["xinput_data"])
+        return WFBlueprint(jobs_operations, xinput, value["num_splits"])
     elif (data_type == "object"):
         return load_native_objects(value)
     elif (data_type == "pyobject"):
@@ -451,12 +474,12 @@ class ClusterArrayFunction(ClusterFunc):
 def map_to_cluster_func(func):
     # print(type(func))
     cluster_func = None
-    if (isinstance(func, (type(tsv.__init__), type(tsv.enable_debug_mode)))):
+    if (isinstance(func, (type(dataframe.__init__), type(dataframe.enable_debug_mode)))):
         # check the fully qualified name
         fqn = cluster_class_reflection.get_fully_qualified_name(func)
 
-        # check if it is lambda
-        if (cluster_class_reflection.is_lambda_func(func)):
+        # check if it is lambda or a __main__ function (not importable on remote agents)
+        if (cluster_class_reflection.is_lambda_func(func) or func.__module__ == "__main__"):
             cluster_func = ClusterFuncLambda(func)
         else:
             cluster_func = ClusterFuncLibrary(cluster_class_reflection.get_fully_qualified_name(func))
@@ -541,17 +564,60 @@ def cluster_operand_serializer(value):
     if (isinstance(value, dict)):
         return ClusterDict(dict([(k, cluster_operand_serializer(value[k])) for k in value.keys()]))
 
+    # hydra_udf decorated functions (HydraUDFWrapper instances)
+    if (hasattr(value, "fqn") and hasattr(value, "func")):
+        if (cluster_class_reflection.is_lambda_func(value.func) or value.func.__module__ == "__main__"):
+            return ClusterFuncLambda(value.func)
+        else:
+            return ClusterFuncLibrary(value.fqn)
+
     # builtin methods dont have __dict__. Use them through cluster_funcs package
     if (cluster_class_reflection.is_builtin_func(value)):
         return map_to_cluster_func(value)
 
     # check for functions
-    if (isinstance(value, (type(tsv.enable_debug_mode), type(tsv.__init__), type(cluster_operand_serializer)))):
+    if (isinstance(value, (type(dataframe.enable_debug_mode), type(dataframe.__init__), type(cluster_operand_serializer)))):
         return map_to_cluster_func(value)
 
     # functions already serialized are return as such. TODO
     if (isinstance(value, (ClusterFunc, ClusterFuncLambda, ClusterFuncLibrary, ClusterFuncJS))):
         return value
+
+    # Check for WFBlueprint (deserialized from JSON round-trip via from_json → constructor)
+    from omigo_hydra.cluster_df import WFBlueprint
+    if (isinstance(value, WFBlueprint)):
+        return ClusterOperand("WFBlueprint", {
+            "jobs_operations": [op.to_json() for op in value.jobs_operations],
+            "xinput_header": value.xinput.header_fields,
+            "xinput_data": value.xinput.data_fields,
+            "num_splits": value.num_splits,
+        })
+
+    # Check for non-proxy HydraDF (lazy operation chain passed as operand, e.g. join argument)
+    # Must come BEFORE the proxy detection block which also checks for header_fields.
+    from omigo_hydra.cluster_df import HydraBaseDF
+    if (isinstance(value, HydraBaseDF)):
+        from omigo_hydra import cluster_arjun
+        # If it's a proxy, let the existing proxy detection handle it (fall through)
+        if (cluster_arjun.OMIGO_ARJUN_PROXY_DATAFRAME_ID not in value.header_fields):
+            # Convert to WFBlueprint and serialize as a special operand
+            bp = value.to_wf_spec()
+            return ClusterOperand("WFBlueprint", {
+                "jobs_operations": [op.to_json() for op in bp.jobs_operations],
+                "xinput_header": bp.xinput.header_fields,
+                "xinput_data": bp.xinput.data_fields,
+                "num_splits": bp.num_splits,
+            })
+
+    # detect proxy HydraDF (created by ctx.read_df()) — serialize as ClusterProxyDataFrame
+    if (hasattr(value, "header_fields") or hasattr(value, "get_header_fields")):
+        from omigo_hydra import cluster_arjun
+        header_fields = value.header_fields if hasattr(value, "header_fields") else value.get_header_fields()
+        if (cluster_arjun.OMIGO_ARJUN_PROXY_DATAFRAME_ID in header_fields):
+            # data_fields is row-major: [[col0_val, col1_val, ...]]. First row, then column index.
+            col_index = header_fields.index(cluster_arjun.OMIGO_ARJUN_PROXY_DATAFRAME_ID)
+            proxy_id = value.data_fields[0][col_index]
+            return ClusterProxyDataFrame(proxy_id)
 
     raise Exception("Unknown data type: {}".format(type(value)))
 
@@ -595,6 +661,11 @@ def cluster_operand_deserializer(obj):
         return ClusterInt(int(value))
     elif (data_type == "float"):
         return ClusterFloat(float(value))
+    elif (data_type == PROXY_DATAFRAME_DATA_TYPE):
+        return ClusterProxyDataFrame(value)
+    elif (data_type == "WFBlueprint"):
+        # keep raw dict — load_native_objects handles the actual deserialization
+        return ClusterOperand("WFBlueprint", value)
     # elif (data_type == "array_bool"):
     #     result = []
     #     for x in value:

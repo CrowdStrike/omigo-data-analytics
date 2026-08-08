@@ -98,7 +98,7 @@ def put_file_with_text_content(path, text, dmsg = ""):
 def delete_file(path, ignore_if_missing = True, dmsg = ""):
     dmsg = utils.extend_inherit_message(dmsg, "delete_file")
 
-    utils.debug("{}: path: {}, ignore_if_missing: {}".format(dmsg, path, ignore_if_missing))
+    utils.trace("{}: path: {}, ignore_if_missing: {}".format(dmsg, path, ignore_if_missing))
     # check if the file exists
     if (check_path_exists(path) == False):
         if (ignore_if_missing == False):
@@ -108,15 +108,21 @@ def delete_file(path, ignore_if_missing = True, dmsg = ""):
 
         return
 
-    # delete
-    os.remove(path)
+    # delete - wrap in try/except to handle race condition where file is deleted between check and remove
+    try:
+        os.remove(path)
+    except FileNotFoundError:
+        if (ignore_if_missing == False):
+            raise
+        else:
+            utils.debug("{}: path was deleted between existence check and remove (race condition): {}".format(dmsg, path))
 
 # TODO: This api doesnt have s3 counterpart
 def delete_dir(path, ignore_if_missing = True, dmsg = ""):
     dmsg = utils.extend_inherit_message(dmsg, "delete_dir")
 
     utils.warn_once("delete_dir: this api doesnt have s3 counterpart")
-    utils.debug("delete_dir: path: {}, ignore_if_missing: {}".format(path, ignore_if_missing))
+    utils.trace("delete_dir: path: {}, ignore_if_missing: {}".format(path, ignore_if_missing))
     # check if the file exists
     if (check_path_exists(path) == False):
         if (ignore_if_missing == False):

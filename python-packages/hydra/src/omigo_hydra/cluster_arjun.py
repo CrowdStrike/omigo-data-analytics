@@ -3,13 +3,27 @@
 # Meta parameters
 OMIGO_ARJUN_START_TS = "omigo.arjun.start_ts"
 OMIGO_ARJUN_END_TS = "omigo.arjun.end_ts"
-OMIGO_ARJUN_EVENT_TS = "omigo.arjun.event_ts"
 OMIGO_ARJUN_BASE_PATH = "omigo.arjun.base_path"
 
 OMIGO_ARJUN_INPUT_FILE = "omigo.arjun.input_file"
 OMIGO_ARJUN_OUTPUT_FILE = "omigo.arjun.output_file"
 
+# Proxy DataFrame: a regular DataFrame with this sentinel column holding the upstream input_id.
+# Resolved by SWFBuilder.materialize() at DAG build time.
+OMIGO_ARJUN_PROXY_DATAFRAME_ID = ".omigo.arjun.proxy.dataframe.id"
+
+# Proxy DataFrame params enrichment: JSON-serialized list of param keys to add_const from seed_input.
+OMIGO_ARJUN_PROXY_PARAMS = ".omigo.arjun.proxy.params"
+
+# Proxy DataFrame params prefix: prefix for add_const column names ({prefix}:{key}).
+OMIGO_ARJUN_PROXY_PARAMS_PREFIX = ".omigo.arjun.proxy.params.prefix"
+
+# Dataframe name identifier: used to tag WF outputs so downstream consumers can identify
+# source rows after merge_union aggregation. Currently used by lateral movement combined_data WF.
+OMIGO_ARJUN_DATAFRAME_NAME = ".omigo.arjun.dataframe.name"
+
 # ETL specific header parameters
+OMIGO_ARJUN_EVENT_TS = ".omigo.arjun.event_ts"
 OMIGO_ARJUN_ETL_PATH_PREFIX = ".omigo.arjun.etl.path."
 OMIGO_ARJUN_ETL_START_TS = ".omigo.arjun.etl.start_ts"
 OMIGO_ARJUN_ETL_END_TS = ".omigo.arjun.etl.end_ts"

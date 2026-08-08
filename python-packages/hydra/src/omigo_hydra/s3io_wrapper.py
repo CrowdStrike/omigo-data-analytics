@@ -1,5 +1,4 @@
 from omigo_hydra import s3_wrapper, local_fs_wrapper
-from omigo_core import tsv
 from omigo_core import utils
 import time
 import datetime
@@ -101,7 +100,11 @@ class S3FSWrapper:
         if (self.file_exists(path) == False and attempts > 0):
             utils.info("read: path: {} doesnt exist. waiting for {} seconds. attempts: {}".format(path, wait_sec, attempts))
             time.sleep(wait_sec)
-            return self.read_file_contents_as_text_with_wait(path, wait_sec = wait_sec, attempts = attempts - 1)
+            return self.read_text_file_with_wait(path, wait_sec = wait_sec, attempts = attempts - 1)
+
+        # check if file exists after all retries
+        if (self.file_exists(path) == False):
+            raise Exception("read_text_file_with_wait: file doesnt exist after all retries: {}".format(path))
 
         # return
         return self.read_text_file(path)

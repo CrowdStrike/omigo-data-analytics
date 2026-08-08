@@ -1,3 +1,4 @@
+# DEPRECATED: Use cluster_df.py instead. This file is based on the legacy TSV class.
 # central place for all serialized version of the tsvs
 from omigo_core import tsv, utils, timefuncs
 from omigo_hydra import cluster_common_v2
@@ -128,7 +129,7 @@ class HydraBaseTSV:
                 job_mr_splits.append((map_ops, reduce_op, singleton_op))
 
             # boundary condition if last sequence of operations was map only. TODO: dont use isinstance
-            if (isinstance(self.operations[-1], (cluster_common_v2.ClusterReduceOperation), cluster_common_v2.ClusterSingletonOperation) == False):
+            if (isinstance(self.operations[-1], (cluster_common_v2.ClusterReduceOperation, cluster_common_v2.ClusterSingletonOperation)) == False):
                 map_ops = self.operations[reduce_indexes[-1]+1:]
                 reduce_op = None
                 singleton_op = None
@@ -211,7 +212,9 @@ class HydraTSV(HydraBaseTSV):
         raise Exception("Not implemented")
 
     def __new_hydra_tsv__(self, new_op):
-        return HydraTSV(self.header, self.data, self.ctx, self.__copy_and_append_operations__(new_op))
+        new_htsv = HydraTSV(self.header, self.data, self.ctx, self.__copy_and_append_operations__(new_op), self.requirements)
+        new_htsv.set_hydra_num_splits(self.num_splits)
+        return new_htsv
 
     def to_string(self, *args, **kwargs):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.to_string, self.requirements, *args, **kwargs))
@@ -363,16 +366,16 @@ class HydraTSV(HydraBaseTSV):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.apply_precision, self.requirements, *args, **kwargs))
 
     def skip(self, *args, **kwargs):
-        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.skip, self.requirements, *args, **kwargs))
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterSingletonOperation(TSV.skip, self.requirements, *args, **kwargs))
 
     def skip_rows(self, *args, **kwargs):
-        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.skip_rows, self.requirements, *args, **kwargs))
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterSingletonOperation(TSV.skip_rows, self.requirements, *args, **kwargs))
 
     def last(self, *args, **kwargs):
-        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.last, self.requirements, *args, **kwargs))
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterSingletonOperation(TSV.last, self.requirements, *args, **kwargs))
 
     def take(self, *args, **kwargs):
-        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.take, self.requirements, *args, **kwargs))
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterSingletonOperation(TSV.take, self.requirements, *args, **kwargs))
 
     def distinct(self, *args, **kwargs):
         grouping_cols = self.__get_columns__()
@@ -403,7 +406,7 @@ class HydraTSV(HydraBaseTSV):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.drop_cols_if_exists, self.requirements, *args, **kwargs))
 
     def drop_empty_cols(self, *args, **kwargs):
-        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.drop_empty_cols, self.requirements, *args, **kwargs))
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterSingletonOperation(TSV.drop_empty_cols, self.requirements, *args, **kwargs))
 
     def drop_empty_rows(self, *args, **kwargs):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.drop_empty_rows, self.requirements, *args, **kwargs))
@@ -417,6 +420,9 @@ class HydraTSV(HydraBaseTSV):
         for c in select_cols:
             grouping_cols.append(c)
         grouping_cols.append(args[0])
+
+        op = cluster_common_v2.ClusterReduceOperation(grouping_cols, self.num_splits, TSV.window_aggregate, self.requirements, *args, **kwargs)
+        return self.__new_hydra_tsv__(op)
 
     def group_by_key(self, *args, **kwargs):
         grouping_cols = args[0]
@@ -538,7 +544,7 @@ class HydraTSV(HydraBaseTSV):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.to_numeric, self.requirements, *args, **kwargs))
 
     def add_seq_num(self, *args, **kwargs):
-        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.add_seq_num, self.requirements, *args, **kwargs))
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterSingletonOperation(TSV.add_seq_num, self.requirements, *args, **kwargs))
 
     def show_transpose(self, *args, **kwargs):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterSingletonOperation(TSV.show_transpose, self.requirements, *args, **kwargs))
@@ -652,7 +658,7 @@ class HydraTSV(HydraBaseTSV):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.assign_value, self.requirements, *args, **kwargs))
 
     def concat_as_cols(self, *args, **kwargs):
-        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.concat_as_cols, self.requirements, *args, **kwargs))
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterSingletonOperation(TSV.concat_as_cols, self.requirements, *args, **kwargs))
 
     def add_col_prefix(self, *args, **kwargs):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.add_col_prefix, self.requirements, *args, **kwargs))
@@ -763,9 +769,7 @@ class HydraTSV(HydraBaseTSV):
         return self.__new_hydra_tsv__(op)
 
     def sample_column_by_max_uniq_values(self, *args, **kwargs):
-        grouping_cols = args[0]
-        op = cluster_common_v2.ClusterReduceOperation(grouping_cols, self.num_splits, TSV.sample_column_by_max_uniq_values, self.requirements, *args, **kwargs)
-        return self.__new_hydra_tsv__(op)
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterSingletonOperation(TSV.sample_column_by_max_uniq_values, self.requirements, *args, **kwargs))
 
     def sample_class_by_min_class_count(self, *args, **kwargs):
         grouping_cols = args[0]
@@ -808,7 +812,7 @@ class HydraTSV(HydraBaseTSV):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.generate_key_hash, self.requirements, *args, **kwargs))
 
     def cumulative_sum(self, *args, **kwargs):
-        return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.cumulative_sum, self.requirements, *args, **kwargs))
+        return self.__new_hydra_tsv__(cluster_common_v2.ClusterSingletonOperation(TSV.cumulative_sum, self.requirements, *args, **kwargs))
 
     def replicate_rows(self, *args, **kwargs):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.replicate_rows, self.requirements, *args, **kwargs))
@@ -837,7 +841,7 @@ class HydraTSV(HydraBaseTSV):
     def set_missing_values(self, *args, **kwargs):
         return self.__new_hydra_tsv__(cluster_common_v2.ClusterMapOperation(TSV.set_missing_values, self.requirements, *args, **kwargs))
 
-    def extend_class(self, *args, **kwargs):
+    def extend_class(self, newclass, *args, **kwargs):
         # find the corresponding hydra version of the class.
         hydra_class_ref = cluster_class_reflection.get_hydra_class(newclass, [sys.modules[__name__]])
 
@@ -947,7 +951,9 @@ class HydraTSV(HydraBaseTSV):
 
 class HydraHelper:
     def new_hydra_tsv(hydra_base, new_op):
-        return HydraTSV(hydra_base.header, hydra_base.data, ctx = hydra_base.ctx, operations = hydra_base.__copy_and_append_operations__(new_op))
+        new_htsv = HydraTSV(hydra_base.header, hydra_base.data, ctx = hydra_base.ctx, operations = hydra_base.__copy_and_append_operations__(new_op), requirements = hydra_base.requirements)
+        new_htsv.set_hydra_num_splits(hydra_base.num_splits)
+        return new_htsv
 
 class HydraSparkJobShellExecutorTSV(HydraBaseTSV):
     def __init__(self, header, data):
