@@ -1,7 +1,5 @@
 # Statistical ML Documentation
 
-> Generated with assistance from [Claude](https://claude.ai) (Anthropic) through iterative conversation and design exploration.
-
 ## What This Is
 
 Guiding principles and reference material for designing statistical and ML-based systems — drawn from years of working with big data systems and informed by active areas of research in statistics, ML pipelines, and feature engineering.
