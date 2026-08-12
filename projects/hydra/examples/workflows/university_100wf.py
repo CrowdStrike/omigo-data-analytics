@@ -1,6 +1,6 @@
-from omigo_hydra_v2 import cluster_services_v2, cluster_common_v2
-from omigo_hydra_v2 import cluster_protocol_v2
-from omigo_hydra_v2.cluster_services_v2 import SWFBuilder
+from omigo_hydra import cluster_services_v2, cluster_common_v2
+from omigo_hydra import cluster_protocol_v2
+from omigo_hydra.cluster_services_v2 import SWFBuilder
 from omigo_core import utils
 import sys, os, argparse
 
