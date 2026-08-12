@@ -4951,6 +4951,49 @@ class DataFrame:
         dmsg = utils.extend_inherit_message(dmsg, "set_missing_values")
         return self.transform_inline(cols, lambda x: x if (x != "") else default_val, ignore_if_missing = ignore_if_missing, dmsg = dmsg)
 
+    def materialize(self, ctx = None, input_ids = None, output_ids = None, start_ts = None, use_full_data = None, tags = None, name = None):
+        """Store this DataFrame in ctx under output_ids. Returns self.
+
+        In local mode (LocalExecutorContext): eagerly stores the result in ctx's in-memory store.
+        In cluster mode (ClusterExecutorContext): overridden by HydraDF to submit to cluster.
+
+        All parameters use None defaults to force callers to use keyword arguments.
+        This prevents silent breakage from the old positional signature (name, input_ids, output_ids).
+        """
+        # validate ctx
+        if (ctx is None):
+            raise Exception("DataFrame.materialize: ctx is required")
+        if (isinstance(ctx, str)):
+            raise Exception("DataFrame.materialize: ctx must be an ExecutorContext, not a string. "
+                "Signature changed: use materialize(ctx = my_ctx, output_ids = [...], name = '...')")
+
+        # validate output_ids
+        if (output_ids is None or len(output_ids) == 0):
+            raise Exception("DataFrame.materialize: output_ids is required (non-empty list). "
+                "No point materializing without storing output.")
+
+        # apply defaults for optional params
+        if (input_ids is None):
+            input_ids = []
+        if (tags is None):
+            tags = {}
+        if (name is None):
+            name = ""
+
+        ctx.store_output(self, output_ids)
+        return self
+
+    def checkpoint(self, name, overwrite = False, ctx = None):
+        """Store this DataFrame in ctx under name. Returns self.
+
+        Signature matches HydraDF.checkpoint(name, overwrite) for uniformity.
+        In local mode: if ctx is provided, stores result in ctx's in-memory store under name.
+        In cluster mode: HydraDF overrides this to append a ClusterCheckpointOperation.
+        """
+        if (ctx is not None):
+            ctx.store_output(self, [name])
+        return self
+
     # calls class that inherits TSV
     def extend_class(self, newclass, *args, **kwargs):
         return newclass(self.get_header_fields(), self.get_data_fields(), *args, **kwargs)
