@@ -1,6 +1,6 @@
-from omigo_hydra_v2 import cluster_services_v2, cluster_common_v2, message_bus
-from omigo_hydra_v2.cluster_common_v2 import ClusterPaths
-from omigo_hydra_v2.message_bus import MessageBus, BucketRollup
+from omigo_hydra import cluster_services_v2, cluster_common_v2, message_bus
+from omigo_hydra.cluster_common_v2 import ClusterPaths
+from omigo_hydra.message_bus import MessageBus, BucketRollup
 from omigo_core import timefuncs
 import sys, os, json, time
 
@@ -105,7 +105,7 @@ rollup = BucketRollup()
 
 # compute the current 01min bucket boundary
 interval_01min = message_bus.MESSAGE_BUS_BUCKET_INTERVALS_SECONDS[message_bus.BUCKET_01MIN]
-from omigo_hydra_v2 import etl
+from omigo_hydra import etl
 bucket_start = etl.floor_to_bucket(now, interval_01min)
 bucket_end = bucket_start + interval_01min
 
