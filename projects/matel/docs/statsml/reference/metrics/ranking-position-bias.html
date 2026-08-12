@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Web Ranking — Position Bias & CTR Feedback Loops</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 20px 10px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.3em; margin: 30px 0 12px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 6px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 40%; }
+.obj-table td:last-child { width: 60%; text-align: center; }
+.obj-table tr:nth-child(even) td { background: #fafcfe; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+</style>
+</head>
+<body>
+
+<h1>Web Ranking — Position Bias &amp; CTR Feedback Loops</h1>
+<p class="subtitle">How top-k positions on search results and product listings create self-reinforcing rank, starve new items, and make CTR a useless relevance signal.</p>
+
+<h2>1. Position Bias — Visibility Masquerades as Relevance</h2>
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Top-k ranks have static engagement regardless of content quality</div>
+<ul>
+<li><strong>The problem:</strong> Position 1 gets ~30% CTR. Position 5 gets ~4%. This is visibility, not relevance. Raw CTR conflates "user saw it" with "user wanted it."</li>
+<li><strong>Who hits this:</strong> Search ranking teams, e-commerce product listing, ad placement optimization.</li>
+<li><strong>Why it persists:</strong> Position 1 item always "validates" — it gets clicks no matter what. Teams see high CTR and conclude the ranking is working.</li>
+<li><strong>The invisible damage:</strong> Items that would perform better if shown at position 1 are never tested there. You're optimizing within a biased observation window.</li>
+</ul>
+<p><strong>Fix:</strong> Position-debiased CTR (IPW weighting by position propensity). Randomized slot experiments. Normalize CTR by expected position baseline.</p>
+</td><td><canvas id="ca1" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>2. CTR &rarr; Rank &rarr; CTR Feedback Loop</h2>
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Rich-get-richer: once an item is shown, it wins forever</div>
+<ul>
+<li><strong>The loop:</strong> Item gets high position → gets clicks → CTR goes up → ranker boosts it → gets higher position → more clicks. Exponential divergence.</li>
+<li><strong>What breaks:</strong> After a few retraining cycles, rank ordering becomes frozen. The top items are there because they were there, not because they're best.</li>
+<li><strong>How fast:</strong> Unlike credit score loops (months), ranking loops compound hourly. A new item has hours to prove itself or gets buried permanently.</li>
+</ul>
+<p><strong>Fix:</strong> Exploration budget (epsilon-greedy, Thompson sampling). Periodic position randomization. Freshness decay that forces re-evaluation.</p>
+</td><td><canvas id="ca2" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>3. Cold Start Starvation</h2>
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">New items can't compete because they have no signal — because they're never shown</div>
+<ul>
+<li><strong>The trap:</strong> New item → no CTR data → low confidence → ranked low → few impressions → still no CTR data. The system never learns if the item is good.</li>
+<li><strong>Asymmetry:</strong> Established items have thousands of impressions. Even mediocre items with stable CTR beat new items with zero signal. The system is risk-averse by default.</li>
+<li><strong>Business impact:</strong> New sellers on marketplaces, new content creators, new products — all systematically disadvantaged regardless of quality.</li>
+</ul>
+<p><strong>Fix:</strong> Exploration-exploitation tradeoff. Upper confidence bound (UCB) scoring. Guaranteed impression quota for new items. Bayesian prior that assumes reasonable CTR until proven otherwise.</p>
+</td><td><canvas id="ca3" width="720" height="300"></canvas></td></tr>
+</table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    return {ctx:ctx, w:w, h:h};
+}
+
+// 1. Position bias CTR decay
+(function(){var s=setup('ca1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 14px -apple-system';ctx.textAlign='center';
+ctx.fillText('CTR by Position: Visibility, Not Relevance',w/2,20);
+var positions=[{pos:1,ctr:32},{pos:2,ctr:18},{pos:3,ctr:11},{pos:4,ctr:7},{pos:5,ctr:4},{pos:6,ctr:3},{pos:7,ctr:2},{pos:8,ctr:1.5}];
+var m={left:80,right:40,top:45,bottom:50};var pw=w-m.left-m.right,ph=h-m.top-m.bottom;
+var barW=pw/positions.length-10;
+positions.forEach(function(p,i){
+var x=m.left+i*(barW+10);var barH=(p.ctr/35)*ph;var y=m.top+ph-barH;
+ctx.fillStyle=i<2?'rgba(39,174,96,0.6)':'rgba(26,82,118,0.35)';
+ctx.fillRect(x,y,barW,barH);
+ctx.fillStyle='#333';ctx.font='bold 12px -apple-system';ctx.textAlign='center';
+ctx.fillText(p.ctr+'%',x+barW/2,y-8);
+ctx.fillText('#'+p.pos,x+barW/2,m.top+ph+15);
+});
+ctx.fillStyle='#e74c3c';ctx.font='bold 12px -apple-system';ctx.textAlign='center';
+ctx.fillText('Position 1 gets 8x the clicks of Position 5 — same content would get same ratio',w/2,h-10);
+ctx.fillStyle='#666';ctx.font='12px -apple-system';
+ctx.fillText('Position',w/2,m.top+ph+35);
+})();
+
+// 2. CTR feedback loop — divergence over retraining cycles
+(function(){var s=setup('ca2');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 14px -apple-system';ctx.textAlign='center';
+ctx.fillText('Rank Divergence Over Retraining Cycles',w/2,20);
+var m={left:70,right:40,top:45,bottom:40};var pw=w-m.left-m.right,ph=h-m.top-m.bottom;
+// Winner line (exponential up)
+var winner=[30,38,50,65,78,88,94,97];
+// Loser line (decay)
+var loser=[28,22,16,11,7,4,3,2];
+ctx.strokeStyle='#27ae60';ctx.lineWidth=3;ctx.beginPath();
+winner.forEach(function(v,i){var x=m.left+i*(pw/7);var y=m.top+ph-(v/100)*ph;
+if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});ctx.stroke();
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=3;ctx.beginPath();
+loser.forEach(function(v,i){var x=m.left+i*(pw/7);var y=m.top+ph-(v/100)*ph;
+if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});ctx.stroke();
+// Labels
+ctx.fillStyle='#27ae60';ctx.font='bold 12px -apple-system';ctx.textAlign='left';
+ctx.fillText('Item A (got position 1 initially)',m.left+pw*0.5,m.top+10);
+ctx.fillStyle='#e74c3c';
+ctx.fillText('Item B (started at position 5)',m.left+pw*0.5,m.top+ph-10);
+ctx.fillStyle='#666';ctx.font='12px -apple-system';ctx.textAlign='center';
+ctx.fillText('Retraining cycle',w/2,h-10);
+// Axis
+ctx.strokeStyle='#ccc';ctx.lineWidth=1;ctx.beginPath();
+ctx.moveTo(m.left,m.top+ph);ctx.lineTo(m.left+pw,m.top+ph);ctx.stroke();
+})();
+
+// 3. Cold start — impression/signal gap
+(function(){var s=setup('ca3');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 14px -apple-system';ctx.textAlign='center';
+ctx.fillText('Impression Gap: Established vs New Items',w/2,20);
+var items=[
+{label:'Established A',impressions:12000,ctr:4.2,color:'#27ae60'},
+{label:'Established B',impressions:8500,ctr:3.8,color:'#27ae60'},
+{label:'Established C',impressions:6000,ctr:3.1,color:'rgba(26,82,118,0.6)'},
+{label:'New Item X',impressions:45,ctr:null,color:'#e74c3c'},
+{label:'New Item Y',impressions:12,ctr:null,color:'#e74c3c'}
+];
+var m={left:130,top:45,bottom:30};var maxImp=12000;var barH=36;var gap=8;
+items.forEach(function(it,i){
+var y=m.top+i*(barH+gap);
+var barW=(it.impressions/maxImp)*(w-m.left-80);
+ctx.fillStyle=it.color;ctx.globalAlpha=0.6;ctx.fillRect(m.left,y,barW,barH);ctx.globalAlpha=1;
+ctx.fillStyle='#333';ctx.font='12px -apple-system';ctx.textAlign='right';
+ctx.fillText(it.label,m.left-10,y+barH/2+4);
+ctx.textAlign='left';
+var info=it.impressions.toLocaleString()+' imp'+(it.ctr?' · CTR '+it.ctr+'%':' · CTR: ???');
+ctx.fillText(info,m.left+barW+8,y+barH/2+4);
+});
+ctx.fillStyle='#e74c3c';ctx.font='bold 12px -apple-system';ctx.textAlign='center';
+ctx.fillText('New items get <1% of impressions — system literally cannot learn if they are good',w/2,h-8);
+})();
+</script>
+</body>
+</html>

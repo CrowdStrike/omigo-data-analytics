@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>27. Identity / IAM — Domain Pitfalls</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 40px 20px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; }
+.nav a:hover { text-decoration: underline; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-table tr:nth-child(even) td { background: #fafcfe; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+</style>
+</head>
+<body>
+
+
+<h1>Identity / IAM — Domain Pitfalls</h1>
+<p class="subtitle">Data traps specific to identity management, authentication, and access control analytics</p>
+
+<div class="philosophy">Identity data combines human behavior, system automation, and policy enforcement. The same event (a login) can mean completely different things depending on context that the log alone doesn't capture. Most "anomaly detection" on identity data produces overwhelming false positives because the baseline assumptions are wrong.</div>
+
+<h2 id="impossible-travel">1. Impossible Travel False Positives</h2>
+<table class="obj-table"><tr>
+<td>
+<div class="obj-title">Geographic impossibility alerts are almost always wrong</div>
+<ul>
+<li>User logs in from NYC, then London 10 minutes later</li>
+<li>Alert fires: "impossible travel detected!"</li>
+<li>Real causes: VPN egress changed, mobile IP geolocation wrong, shared/service account, corporate proxy routing</li>
+<li>IP geolocation databases are 50-80% accurate at city level</li>
+<li>Corporate VPNs make everyone appear at HQ or a data center</li>
+</ul>
+<p><strong>Impact:</strong> 95%+ of "impossible travel" alerts are false positives. Alert fatigue causes real compromises to be ignored.</p>
+</td>
+<td><canvas id="c1" width="720" height="300"></canvas></td>
+</tr></table>
+
+<h2 id="mfa-fatigue">2. MFA Fatigue Attacks Look Legitimate</h2>
+<table class="obj-table"><tr>
+<td>
+<div class="obj-title">Successful MFA doesn't mean legitimate access</div>
+<ul>
+<li>Attacker spams MFA push notifications repeatedly</li>
+<li>Exhausted user approves at 3am to make it stop</li>
+<li>Event log shows: "MFA: Success" — indistinguishable from real login</li>
+<li>Without behavioral context (time-of-day, request frequency, denial count before approval), attack is invisible</li>
+<li>Standard audit logs don't correlate denied pushes with eventual approval</li>
+</ul>
+<p><strong>Impact:</strong> MFA fatigue attacks bypass the strongest auth control while leaving a clean audit trail.</p>
+</td>
+<td><canvas id="c2" width="720" height="300"></canvas></td>
+</tr></table>
+
+<h2 id="nested-groups">3. Nested Group Explosion</h2>
+<table class="obj-table"><tr>
+<td>
+<div class="obj-title">Transitive permissions hide in group hierarchies</div>
+<ul>
+<li>User is member of Group A</li>
+<li>Group A is nested in Group B</li>
+<li>Group B is nested in Group C</li>
+<li>Group C has admin access</li>
+<li>Effective permissions require full graph traversal</li>
+<li>Flat permission lists miss inherited access entirely</li>
+</ul>
+<p><strong>Impact:</strong> n groups x m nesting levels = O(n x m) complexity. Most access reviews only check direct membership, missing transitive admin paths.</p>
+</td>
+<td><canvas id="c3" width="720" height="300"></canvas></td>
+</tr></table>
+
+<h2 id="service-vs-human">4. Service Account vs Human Confusion</h2>
+<table class="obj-table"><tr>
+<td>
+<div class="obj-title">Two fundamentally different account types analyzed as one</div>
+<ul>
+<li>Service accounts: 24/7 access, no location pattern, no MFA, high-volume API calls</li>
+<li>Human accounts: 9-5 activity, single location, MFA, interactive sessions</li>
+<li>Analyzing together: service accounts look like "anomalous humans"</li>
+<li>Anomaly detection trained on mixed data produces garbage baselines</li>
+<li>Must segment account types before any behavioral analysis</li>
+</ul>
+<p><strong>Impact:</strong> Unsegmented analysis floods SOC with false alerts on normal automation while missing real human account compromise.</p>
+</td>
+<td><canvas id="c4" width="720" height="300"></canvas></td>
+</tr></table>
+
+<h2 id="token-lifetime">5. Token Lifetime vs Session Mismatch</h2>
+<table class="obj-table"><tr>
+<td>
+<div class="obj-title">Multiple overlapping auth layers create timeline ambiguity</div>
+<ul>
+<li>OAuth access token: 1 hour lifetime</li>
+<li>Session cookie: 8 hour lifetime</li>
+<li>SSO session: 24 hour lifetime</li>
+<li>Which "login time" is the real one?</li>
+<li>Audit logs show different timestamps depending on which layer you query</li>
+<li>Token refresh looks like "new login" in some systems</li>
+</ul>
+<p><strong>Impact:</strong> Timeline of access is ambiguous. Incident response cannot determine actual compromise window without understanding all auth layers.</p>
+</td>
+<td><canvas id="c5" width="720" height="300"></canvas></td>
+</tr></table>
+
+<h2 id="dormant-accounts">6. Dormant Account Risk Invisible</h2>
+<table class="obj-table"><tr>
+<td>
+<div class="obj-title">Account inactivity alone doesn't indicate risk level</div>
+<ul>
+<li>Account unused for 6 months — what does it mean?</li>
+<li>Possibility 1: Terminated employee (HIGH RISK — should be disabled)</li>
+<li>Possibility 2: Parental leave (expected — will return)</li>
+<li>Possibility 3: Automation account between scheduled deployments (normal)</li>
+<li>Status field alone doesn't tell you the reason</li>
+<li>Need HR system integration, manager context, account purpose metadata</li>
+</ul>
+<p><strong>Impact:</strong> Without external context, dormant account cleanup either disables critical automation or leaves compromisable accounts active.</p>
+</td>
+<td><canvas id="c6" width="720" height="300"></canvas></td>
+</tr></table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id);
+    if (!c) return null;
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return {ctx: ctx, w: w, h: h};
+}
+
+// Chart 1: Impossible Travel
+(function() {
+    var s = setup('c1');
+    if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = '17px -apple-system, sans-serif';
+
+    // Draw simplified world map outline (two continents)
+    ctx.strokeStyle = '#ccd9e0';
+    ctx.lineWidth = 1.5;
+    // North America blob
+    ctx.beginPath();
+    ctx.ellipse(200, 130, 80, 55, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = '#eef4f8';
+    ctx.fill();
+    // Europe blob
+    ctx.beginPath();
+    ctx.ellipse(450, 110, 70, 50, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = '#eef4f8';
+    ctx.fill();
+
+    // NYC marker
+    ctx.fillStyle = '#2980b9';
+    ctx.beginPath();
+    ctx.arc(220, 140, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 14px -apple-system, sans-serif';
+    ctx.fillText('NYC', 205, 165);
+
+    // London marker
+    ctx.fillStyle = '#2980b9';
+    ctx.beginPath();
+    ctx.arc(440, 100, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('London', 418, 80);
+
+    // Arrow between them
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(228, 135);
+    ctx.quadraticCurveTo(330, 60, 432, 100);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 10 min label on arrow
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 13px -apple-system, sans-serif';
+    ctx.fillText('10 min?!', 310, 75);
+
+    // Timeline at bottom
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(100, 230);
+    ctx.lineTo(600, 230);
+    ctx.stroke();
+    ctx.fillStyle = '#666';
+    ctx.font = '12px -apple-system, sans-serif';
+    ctx.fillText('9:00 AM', 140, 248);
+    ctx.fillText('9:10 AM', 440, 248);
+
+    // Real causes
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '12px -apple-system, sans-serif';
+    ctx.fillText('Real causes: VPN | Bad GeoIP | Shared Acct | Proxy', 150, 270);
+
+    // Big false positive label
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 32px -apple-system, sans-serif';
+    ctx.fillText('95% FALSE', 540, 160);
+    ctx.font = '14px -apple-system, sans-serif';
+    ctx.fillText('POSITIVES', 565, 180);
+})();
+
+// Chart 2: MFA Fatigue
+(function() {
+    var s = setup('c2');
+    if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = '17px -apple-system, sans-serif';
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 15px -apple-system, sans-serif';
+    ctx.fillText('MFA Push Sequence (Attacker Spamming)', 50, 25);
+
+    // Push notifications sequence
+    var pushes = [
+        {time: '2:41 AM', result: 'DENY', color: '#27ae60'},
+        {time: '2:43 AM', result: 'DENY', color: '#27ae60'},
+        {time: '2:47 AM', result: 'DENY', color: '#27ae60'},
+        {time: '2:52 AM', result: 'DENY', color: '#27ae60'},
+        {time: '2:58 AM', result: 'DENY', color: '#27ae60'},
+        {time: '3:01 AM', result: 'APPROVE', color: '#e74c3c'}
+    ];
+
+    for (var i = 0; i < pushes.length; i++) {
+        var x = 50 + i * 105;
+        var y = 60;
+
+        // Phone icon (rectangle)
+        ctx.strokeStyle = pushes[i].color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, 45, 70);
+
+        // Notification bell
+        ctx.fillStyle = pushes[i].color;
+        ctx.font = '20px -apple-system, sans-serif';
+        ctx.fillText(pushes[i].result === 'DENY' ? '🔕' : '✓', x + 12, y + 40);
+
+        // Time
+        ctx.fillStyle = '#666';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillText(pushes[i].time, x + 2, y + 85);
+
+        // Result
+        ctx.fillStyle = pushes[i].color;
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillText(pushes[i].result, x + 5, y + 62);
+    }
+
+    // Arrow down to audit log
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(360, 160);
+    ctx.lineTo(360, 185);
+    ctx.lineTo(355, 180);
+    ctx.moveTo(360, 185);
+    ctx.lineTo(365, 180);
+    ctx.stroke();
+
+    // Audit log box
+    ctx.fillStyle = '#f8f9fa';
+    ctx.fillRect(150, 190, 420, 60);
+    ctx.strokeStyle = '#dee2e6';
+    ctx.strokeRect(150, 190, 420, 60);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 13px -apple-system, sans-serif';
+    ctx.fillText('AUDIT LOG:', 165, 212);
+
+    ctx.fillStyle = '#333';
+    ctx.font = '14px monospace';
+    ctx.fillText('3:01 AM | user@corp | MFA: SUCCESS', 165, 237);
+
+    // Warning
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 14px -apple-system, sans-serif';
+    ctx.fillText('Looks 100% legitimate — attack invisible in logs', 170, 275);
+})();
+
+// Chart 3: Nested Groups
+(function() {
+    var s = setup('c3');
+    if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = '17px -apple-system, sans-serif';
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 14px -apple-system, sans-serif';
+    ctx.fillText('Transitive Group Membership — Hidden Privilege', 180, 30);
+
+    // Complexity note
+    ctx.fillStyle = '#666';
+    ctx.font = '12px -apple-system, sans-serif';
+    ctx.fillText('O(n x m) complexity: n groups x m nesting depth', 220, 50);
+
+    // Graph nodes
+    var nodes = [
+        {x: 80, y: 150, label: 'User', color: '#2980b9'},
+        {x: 220, y: 150, label: 'Group A', color: '#27ae60'},
+        {x: 360, y: 150, label: 'Group B', color: '#f39c12'},
+        {x: 500, y: 150, label: 'Group C', color: '#e67e22'},
+        {x: 640, y: 150, label: 'ADMIN', color: '#e74c3c'}
+    ];
+
+    // Draw edges
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 2;
+    for (var i = 0; i < nodes.length - 1; i++) {
+        ctx.beginPath();
+        ctx.moveTo(nodes[i].x + 35, nodes[i].y);
+        ctx.lineTo(nodes[i+1].x - 35, nodes[i+1].y);
+        ctx.stroke();
+        // Arrow
+        ctx.beginPath();
+        ctx.moveTo(nodes[i+1].x - 35, nodes[i+1].y);
+        ctx.lineTo(nodes[i+1].x - 45, nodes[i+1].y - 5);
+        ctx.moveTo(nodes[i+1].x - 35, nodes[i+1].y);
+        ctx.lineTo(nodes[i+1].x - 45, nodes[i+1].y + 5);
+        ctx.stroke();
+    }
+
+    // Draw nodes
+    for (var i = 0; i < nodes.length; i++) {
+        ctx.fillStyle = nodes[i].color;
+        ctx.beginPath();
+        ctx.arc(nodes[i].x, nodes[i].y, 30, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(nodes[i].label, nodes[i].x, nodes[i].y + 4);
+    }
+
+    ctx.textAlign = 'left';
+
+    // "What flat list shows" section
+    ctx.fillStyle = '#f0f4f8';
+    ctx.fillRect(50, 220, 280, 60);
+    ctx.strokeStyle = '#2980b9';
+    ctx.strokeRect(50, 220, 280, 60);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 13px -apple-system, sans-serif';
+    ctx.fillText('Flat Permission List:', 60, 240);
+    ctx.fillStyle = '#333';
+    ctx.font = '12px monospace';
+    ctx.fillText('user: member of "Group A"', 60, 260);
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('(looks harmless)', 60, 275);
+
+    // "What's actually true" section
+    ctx.fillStyle = '#fdf2f2';
+    ctx.fillRect(380, 220, 300, 60);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.strokeRect(380, 220, 300, 60);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 13px -apple-system, sans-serif';
+    ctx.fillText('Effective (graph traversal):', 390, 240);
+    ctx.fillStyle = '#333';
+    ctx.font = '12px monospace';
+    ctx.fillText('user -> A -> B -> C -> ADMIN', 390, 260);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px -apple-system, sans-serif';
+    ctx.fillText('HIDDEN ADMIN ACCESS!', 390, 275);
+})();
+
+// Chart 4: Service vs Human
+(function() {
+    var s = setup('c4');
+    if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = '17px -apple-system, sans-serif';
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 14px -apple-system, sans-serif';
+    ctx.fillText('Mixed analysis = service accounts flagged as anomalous', 140, 20);
+
+    var chartLeft = 80, chartRight = 680, chartTop = 50, chartBottom = 220;
+    var chartW = chartRight - chartLeft;
+    var chartH = chartBottom - chartTop;
+
+    // Axes
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(chartLeft, chartBottom);
+    ctx.lineTo(chartRight, chartBottom);
+    ctx.moveTo(chartLeft, chartTop);
+    ctx.lineTo(chartLeft, chartBottom);
+    ctx.stroke();
+
+    // X-axis labels (hours)
+    ctx.fillStyle = '#666';
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    var hours = ['0', '3', '6', '9', '12', '15', '18', '21', '24'];
+    for (var i = 0; i < hours.length; i++) {
+        var x = chartLeft + (i / 8) * chartW;
+        ctx.fillText(hours[i] + 'h', x, chartBottom + 15);
+    }
+    ctx.textAlign = 'left';
+
+    // Y-axis label
+    ctx.fillStyle = '#666';
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.save();
+    ctx.translate(25, 150);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Activity Level', 0, 0);
+    ctx.restore();
+
+    // Human activity: bell curve centered at noon (hour 12)
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i <= 100; i++) {
+        var hour = (i / 100) * 24;
+        var activity = Math.exp(-0.5 * Math.pow((hour - 12) / 2.5, 2));
+        var x = chartLeft + (i / 100) * chartW;
+        var y = chartBottom - activity * chartH * 0.85;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Service account: flat line
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([8, 4]);
+    ctx.beginPath();
+    ctx.moveTo(chartLeft, chartBottom - chartH * 0.45);
+    ctx.lineTo(chartRight, chartBottom - chartH * 0.45);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Legend
+    ctx.fillStyle = '#2980b9';
+    ctx.fillRect(450, 35, 20, 3);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = '12px -apple-system, sans-serif';
+    ctx.fillText('Human (9-5 pattern)', 475, 40);
+
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 3]);
+    ctx.beginPath();
+    ctx.moveTo(450, 55);
+    ctx.lineTo(470, 55);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Service Acct (24/7 flat)', 475, 58);
+
+    // Annotation
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 13px -apple-system, sans-serif';
+    ctx.fillText('"Anomalous" if treated as human!', 430, chartBottom - chartH * 0.45 - 12);
+
+    // Bottom note
+    ctx.fillStyle = '#666';
+    ctx.font = '12px -apple-system, sans-serif';
+    ctx.fillText('Must segment account types BEFORE behavioral analysis', 200, 265);
+})();
+
+// Chart 5: Token Lifetime
+(function() {
+    var s = setup('c5');
+    if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = '17px -apple-system, sans-serif';
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 14px -apple-system, sans-serif';
+    ctx.fillText('Overlapping Auth Layer Lifetimes', 230, 25);
+
+    var barLeft = 180, barRight = 650;
+    var totalWidth = barRight - barLeft;
+
+    // Three bars representing different lifetimes
+    var bars = [
+        {label: 'OAuth Token', hours: 1, color: '#3498db', y: 70},
+        {label: 'Session Cookie', hours: 8, color: '#f39c12', y: 130},
+        {label: 'SSO Session', hours: 24, color: '#27ae60', y: 190}
+    ];
+
+    var maxHours = 24;
+
+    for (var i = 0; i < bars.length; i++) {
+        var b = bars[i];
+        var barW = (b.hours / maxHours) * totalWidth;
+
+        // Label
+        ctx.fillStyle = '#333';
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(b.label, barLeft - 10, b.y + 18);
+
+        // Bar
+        ctx.fillStyle = b.color;
+        ctx.globalAlpha = 0.7;
+        ctx.fillRect(barLeft, b.y, barW, 30);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = b.color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(barLeft, b.y, barW, 30);
+
+        // Duration label
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        if (barW > 60) {
+            ctx.fillText(b.hours + 'hr', barLeft + 8, b.y + 20);
+        } else {
+            ctx.fillStyle = b.color;
+            ctx.fillText(b.hours + 'hr', barLeft + barW + 5, b.y + 20);
+        }
+    }
+
+    ctx.textAlign = 'left';
+
+    // Timeline axis
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(barLeft, 240);
+    ctx.lineTo(barRight, 240);
+    ctx.stroke();
+
+    // Hour markers
+    ctx.fillStyle = '#666';
+    ctx.font = '10px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    for (var h = 0; h <= 24; h += 4) {
+        var x = barLeft + (h / 24) * totalWidth;
+        ctx.beginPath();
+        ctx.moveTo(x, 237);
+        ctx.lineTo(x, 243);
+        ctx.stroke();
+        ctx.fillText(h + 'h', x, 255);
+    }
+    ctx.textAlign = 'left';
+
+    // Question marks at different "login" points
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 22px -apple-system, sans-serif';
+    ctx.fillText('?', barLeft - 3, 60);
+    ctx.fillText('?', barLeft + (1/24) * totalWidth + 5, 125);
+    ctx.fillText('?', barLeft + (8/24) * totalWidth + 5, 185);
+
+    // Bottom question
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 14px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Which timestamp is the "real" login? Different logs disagree.', w / 2, 285);
+    ctx.textAlign = 'left';
+})();
+
+// Chart 6: Dormant Accounts
+(function() {
+    var s = setup('c6');
+    if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = '17px -apple-system, sans-serif';
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 14px -apple-system, sans-serif';
+    ctx.fillText('Dormant Accounts: Identical Appearance, Different Reality', 140, 25);
+
+    // Timeline
+    var tlLeft = 100, tlRight = 650, tlY = 80;
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(tlLeft, tlY);
+    ctx.lineTo(tlRight, tlY);
+    ctx.stroke();
+
+    // Month labels
+    ctx.fillStyle = '#666';
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    for (var i = 0; i < 12; i++) {
+        var x = tlLeft + (i / 11) * (tlRight - tlLeft);
+        ctx.fillText(months[i], x, tlY + 15);
+    }
+    ctx.textAlign = 'left';
+
+    // "Last active" marker at January for all three
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath();
+    ctx.moveTo(tlLeft, tlY - 8);
+    ctx.lineTo(tlLeft - 5, tlY - 15);
+    ctx.lineTo(tlLeft + 5, tlY - 15);
+    ctx.fill();
+    ctx.fillStyle = '#666';
+    ctx.font = '10px -apple-system, sans-serif';
+    ctx.fillText('Last activity', tlLeft - 20, tlY - 20);
+
+    // "Now" marker
+    ctx.fillStyle = '#2980b9';
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.fillText('NOW', tlRight - 10, tlY - 15);
+
+    // Three accounts as circles - all look the same from outside
+    var accounts = [
+        {y: 140, label: 'Account A', reason: 'Terminated Employee', risk: 'HIGH RISK', riskColor: '#e74c3c'},
+        {y: 195, label: 'Account B', reason: 'Parental Leave', risk: 'EXPECTED', riskColor: '#27ae60'},
+        {y: 250, label: 'Account C', reason: 'Automation (quarterly)', risk: 'NORMAL', riskColor: '#2980b9'}
+    ];
+
+    for (var i = 0; i < accounts.length; i++) {
+        var a = accounts[i];
+
+        // Gray circle (all look the same)
+        ctx.fillStyle = '#bdc3c7';
+        ctx.beginPath();
+        ctx.arc(150, a.y, 22, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#95a5a6';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Label
+        ctx.fillStyle = '#333';
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.fillText(a.label, 185, a.y - 5);
+
+        // "6 months inactive" text
+        ctx.fillStyle = '#999';
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillText('6 months inactive', 185, a.y + 12);
+
+        // Arrow to real reason
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(330, a.y);
+        ctx.lineTo(400, a.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Real reason (hidden without context)
+        ctx.fillStyle = a.riskColor;
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillText(a.reason, 410, a.y - 5);
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillText(a.risk, 410, a.y + 12);
+    }
+
+    // Bracket showing "all look identical"
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(120, 120);
+    ctx.lineTo(110, 120);
+    ctx.lineTo(110, 270);
+    ctx.lineTo(120, 270);
+    ctx.stroke();
+
+    ctx.fillStyle = '#666';
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.save();
+    ctx.translate(100, 200);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center';
+    ctx.fillText('Look identical', 0, 0);
+    ctx.restore();
+
+    // "Need HR integration" note
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Requires HR/context integration to differentiate', w / 2, 290);
+    ctx.textAlign = 'left';
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Network Security Pitfalls</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; padding: 20px; background: #f5f7fa; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 14px; }
+.nav a:hover { text-decoration: underline; }
+h1 { color: #1a5276; border-bottom: 3px solid #2980b9; padding-bottom: 10px; }
+.obj-table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
+.obj-table td { padding: 15px; border: 1px solid #2980b9; vertical-align: top; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-title { font-weight: bold; color: #1a5276; font-size: 16px; margin-bottom: 8px; }
+.pitfall-desc { color: #333; font-size: 14px; line-height: 1.6; }
+canvas { max-width: 100%; }
+</style>
+</head>
+<body>
+<h1>Network Security Pitfalls</h1>
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">1. Encrypted Traffic Opacity</div>
+<div class="pitfall-desc">
+TLS 1.3: can't inspect payload without MITM proxy. 85%+ of traffic is encrypted.
+IDS can only see: packet sizes, timing, destinations &mdash; metadata not content.
+Most signature-based rules are blind to encrypted payloads. Detection must rely
+on traffic analysis patterns rather than deep packet inspection.
+</div>
+</td>
+<td><canvas id="canvas1"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">2. East-West Blindspot</div>
+<div class="pitfall-desc">
+Traditional firewalls sit at the perimeter. Once inside: lateral movement between
+servers is often UNMONITORED. Attacker inside the network moves freely.
+"Flat network" = one compromised host = access to everything. Internal traffic
+volumes dwarf perimeter traffic but receive far less security scrutiny.
+</div>
+</td>
+<td><canvas id="canvas2"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">3. Protocol Misuse</div>
+<div class="pitfall-desc">
+DNS used for data exfiltration. HTTPS for C2 communication. ICMP for covert
+channels. All look like "normal" traffic at protocol level. Detection requires
+understanding BEHAVIOR within legitimate protocols, not just checking that the
+protocol headers are well-formed.
+</div>
+</td>
+<td><canvas id="canvas3"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">4. DNS Tunneling</div>
+<div class="pitfall-desc">
+Encode stolen data as DNS subdomains: abc123.evil.com. Each query = 255 bytes
+exfiltrated. Millions of queries = gigabytes stolen. DNS is always allowed through
+firewalls &mdash; perfect covert channel. Standard DNS monitoring rarely inspects
+subdomain entropy or query frequency patterns.
+</div>
+</td>
+<td><canvas id="canvas4"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">5. Bandwidth-Constrained Inspection</div>
+<div class="pitfall-desc">
+Full packet capture at 10Gbps = 4.3TB/hour. Can't store everything. Must sample
+or filter. Whatever you don't capture is invisible to retrospective investigation.
+Evidence destroyed by bandwidth economics. Attackers can hide in the gaps between
+sampled packets.
+</div>
+</td>
+<td><canvas id="canvas5"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">6. Infrastructure Changes Break Baselines</div>
+<div class="pitfall-desc">
+Migrate from on-prem to cloud &rarr; all traffic patterns change. New CDN &rarr;
+different packet timing. Model trained on old infra = useless on new. Every infra
+change = full retrain. Continuous model drift makes anomaly detection unreliable
+during transitions.
+</div>
+</td>
+<td><canvas id="canvas6"></canvas></td>
+</tr>
+</table>
+<script>
+function setupCanvas(canvas, width, height) {
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = width + 'px';
+    canvas.style.height = height + 'px';
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return ctx;
+}
+
+// Chart 1: Encrypted Traffic Opacity - Stacked bar showing what IDS can/cannot see
+(function() {
+    const canvas = document.getElementById('canvas1');
+    const ctx = setupCanvas(canvas, 720, 200);
+    const chartFont = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    ctx.font = 'bold ' + chartFont;
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('What IDS Can See in Encrypted Traffic', 360, 22);
+
+    const categories = ['Payload Content', 'Packet Sizes', 'Timing Patterns', 'Destinations', 'Signatures'];
+    const visibility = [0, 85, 70, 90, 5]; // percentage visible
+    const barWidth = 90;
+    const startX = 80;
+    const baseY = 175;
+    const maxHeight = 120;
+
+    ctx.font = chartFont;
+    for (let i = 0; i < categories.length; i++) {
+        const x = startX + i * 130;
+        const h = (visibility[i] / 100) * maxHeight;
+
+        // Invisible portion (red)
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillRect(x, baseY - maxHeight, barWidth, maxHeight - h);
+
+        // Visible portion (green)
+        ctx.fillStyle = '#27ae60';
+        ctx.fillRect(x, baseY - h, barWidth, h);
+
+        // Border
+        ctx.strokeStyle = '#2c3e50';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x, baseY - maxHeight, barWidth, maxHeight);
+
+        // Label
+        ctx.fillStyle = '#333';
+        ctx.textAlign = 'center';
+        ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillText(categories[i], x + barWidth / 2, baseY + 15);
+
+        // Percentage
+        ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillStyle = visibility[i] > 50 ? '#27ae60' : '#e74c3c';
+        ctx.fillText(visibility[i] + '%', x + barWidth / 2, baseY - maxHeight - 5);
+    }
+
+    // Legend
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(560, 40, 12, 12);
+    ctx.fillStyle = '#333';
+    ctx.textAlign = 'left';
+    ctx.fillText('Visible', 576, 51);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(560, 58, 12, 12);
+    ctx.fillStyle = '#333';
+    ctx.fillText('Blind', 576, 69);
+})();
+
+// Chart 2: East-West Blindspot - Pie chart showing monitored vs unmonitored traffic
+(function() {
+    const canvas = document.getElementById('canvas2');
+    const ctx = setupCanvas(canvas, 720, 200);
+    const chartFont = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    ctx.font = 'bold ' + chartFont;
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Network Traffic Monitoring Coverage', 360, 22);
+
+    // Pie chart - perimeter
+    const cx1 = 180, cy = 115, r = 65;
+    const perimeterData = [{ val: 90, color: '#27ae60', label: 'Monitored 90%' }, { val: 10, color: '#e74c3c', label: 'Unmonitored 10%' }];
+    let startAngle = -Math.PI / 2;
+    perimeterData.forEach(function(d) {
+        const sliceAngle = (d.val / 100) * 2 * Math.PI;
+        ctx.beginPath();
+        ctx.moveTo(cx1, cy);
+        ctx.arc(cx1, cy, r, startAngle, startAngle + sliceAngle);
+        ctx.closePath();
+        ctx.fillStyle = d.color;
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        startAngle += sliceAngle;
+    });
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('North-South', cx1, cy + r + 20);
+    ctx.fillText('(Perimeter)', cx1, cy + r + 36);
+
+    // Pie chart - internal
+    const cx2 = 420;
+    const internalData = [{ val: 20, color: '#27ae60', label: 'Monitored 20%' }, { val: 80, color: '#e74c3c', label: 'Unmonitored 80%' }];
+    startAngle = -Math.PI / 2;
+    internalData.forEach(function(d) {
+        const sliceAngle = (d.val / 100) * 2 * Math.PI;
+        ctx.beginPath();
+        ctx.moveTo(cx2, cy);
+        ctx.arc(cx2, cy, r, startAngle, startAngle + sliceAngle);
+        ctx.closePath();
+        ctx.fillStyle = d.color;
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        startAngle += sliceAngle;
+    });
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('East-West', cx2, cy + r + 20);
+    ctx.fillText('(Internal)', cx2, cy + r + 36);
+
+    // Legend
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(600, 80, 12, 12);
+    ctx.fillStyle = '#333';
+    ctx.textAlign = 'left';
+    ctx.fillText('Monitored', 616, 91);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(600, 100, 12, 12);
+    ctx.fillStyle = '#333';
+    ctx.fillText('Unmonitored', 616, 111);
+})();
+
+// Chart 3: Protocol Misuse - Bar chart showing legitimate vs malicious use per protocol
+(function() {
+    const canvas = document.getElementById('canvas3');
+    const ctx = setupCanvas(canvas, 720, 200);
+    const chartFont = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    ctx.font = 'bold ' + chartFont;
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Protocol: Legitimate vs Malicious Use (Detection Difficulty)', 360, 22);
+
+    const protocols = ['DNS', 'HTTPS', 'ICMP', 'SSH'];
+    const legitimate = [95, 99, 90, 85];
+    const malicious = [5, 1, 10, 15];
+    const detectionDiff = ['Hard', 'Very Hard', 'Medium', 'Medium'];
+    const barWidth = 50;
+    const groupWidth = 130;
+    const startX = 100;
+    const baseY = 160;
+    const maxHeight = 100;
+
+    ctx.font = chartFont;
+    for (let i = 0; i < protocols.length; i++) {
+        const gx = startX + i * groupWidth;
+
+        // Legitimate bar
+        const lh = (legitimate[i] / 100) * maxHeight;
+        ctx.fillStyle = '#3498db';
+        ctx.fillRect(gx, baseY - lh, barWidth, lh);
+
+        // Malicious bar (scaled up for visibility)
+        const mh = Math.max((malicious[i] / 100) * maxHeight, 5);
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillRect(gx + barWidth + 5, baseY - mh, barWidth, mh);
+
+        // Protocol label
+        ctx.fillStyle = '#333';
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillText(protocols[i], gx + barWidth + 2, baseY + 18);
+
+        // Detection difficulty
+        ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillStyle = '#e67e22';
+        ctx.fillText(detectionDiff[i], gx + barWidth + 2, baseY + 34);
+    }
+
+    // Baseline
+    ctx.strokeStyle = '#bdc3c7';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(80, baseY);
+    ctx.lineTo(650, baseY);
+    ctx.stroke();
+
+    // Legend
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#3498db';
+    ctx.fillRect(580, 45, 12, 12);
+    ctx.fillStyle = '#333';
+    ctx.textAlign = 'left';
+    ctx.fillText('Legitimate', 596, 56);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(580, 63, 12, 12);
+    ctx.fillStyle = '#333';
+    ctx.fillText('Malicious', 596, 74);
+})();
+
+// Chart 4: DNS Tunneling - Area chart showing cumulative data exfiltration over time
+(function() {
+    const canvas = document.getElementById('canvas4');
+    const ctx = setupCanvas(canvas, 720, 200);
+    const chartFont = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    ctx.font = 'bold ' + chartFont;
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('DNS Tunneling: Cumulative Data Exfiltration', 360, 22);
+
+    const startX = 80, endX = 650, baseY = 170, topY = 45;
+    const hours = 24;
+    // Deterministic data points for consistent rendering
+    const mbPerHour = [25, 42, 38, 55, 30, 48, 60, 35, 44, 52, 28, 46, 57, 33, 41, 50, 62, 37, 45, 53, 29, 47, 58, 40, 43];
+    const dataPoints = [];
+    let cumulative = 0;
+    for (let i = 0; i <= hours; i++) {
+        cumulative += mbPerHour[i];
+        dataPoints.push(cumulative);
+    }
+    const maxVal = dataPoints[dataPoints.length - 1];
+
+    // Draw area
+    ctx.beginPath();
+    ctx.moveTo(startX, baseY);
+    for (let i = 0; i < dataPoints.length; i++) {
+        const x = startX + (i / hours) * (endX - startX);
+        const y = baseY - (dataPoints[i] / maxVal) * (baseY - topY);
+        ctx.lineTo(x, y);
+    }
+    ctx.lineTo(endX, baseY);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.3)';
+    ctx.fill();
+
+    // Draw line
+    ctx.beginPath();
+    for (let i = 0; i < dataPoints.length; i++) {
+        const x = startX + (i / hours) * (endX - startX);
+        const y = baseY - (dataPoints[i] / maxVal) * (baseY - topY);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    // Axes
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(startX, topY);
+    ctx.lineTo(startX, baseY);
+    ctx.lineTo(endX, baseY);
+    ctx.stroke();
+
+    // Labels
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#333';
+    ctx.textAlign = 'center';
+    ctx.fillText('Hours', 365, 190);
+    for (let i = 0; i <= 24; i += 6) {
+        const x = startX + (i / hours) * (endX - startX);
+        ctx.fillText(i + 'h', x, baseY + 15);
+    }
+
+    // Y-axis label
+    ctx.save();
+    ctx.translate(25, 110);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('MB Exfiltrated', 0, 0);
+    ctx.restore();
+
+    // Annotation
+    ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'left';
+    ctx.fillText('255 bytes/query x millions = GBs stolen', 200, 55);
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#666';
+    ctx.fillText('DNS always allowed through firewalls', 200, 72);
+})();
+
+// Chart 5: Bandwidth-Constrained Inspection - Bar chart showing storage requirements
+(function() {
+    const canvas = document.getElementById('canvas5');
+    const ctx = setupCanvas(canvas, 720, 200);
+    const chartFont = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    ctx.font = 'bold ' + chartFont;
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Full Packet Capture Storage at 10Gbps', 360, 22);
+
+    const timeframes = ['1 Hour', '8 Hours', '1 Day', '1 Week', '1 Month'];
+    const storageTB = [4.3, 34.4, 103, 722, 3096];
+    const maxVal = 3096;
+    const barWidth = 80;
+    const startX = 90;
+    const baseY = 160;
+    const maxHeight = 105;
+    const gap = 115;
+
+    ctx.font = chartFont;
+    for (let i = 0; i < timeframes.length; i++) {
+        const x = startX + i * gap;
+        const h = Math.max((Math.log(storageTB[i]) / Math.log(maxVal)) * maxHeight, 10);
+
+        // Gradient bar
+        const gradient = ctx.createLinearGradient(x, baseY - h, x, baseY);
+        gradient.addColorStop(0, '#e74c3c');
+        gradient.addColorStop(1, '#f39c12');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(x, baseY - h, barWidth, h);
+
+        // Border
+        ctx.strokeStyle = '#c0392b';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x, baseY - h, barWidth, h);
+
+        // Value on top
+        ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillStyle = '#c0392b';
+        ctx.textAlign = 'center';
+        ctx.fillText(storageTB[i] + ' TB', x + barWidth / 2, baseY - h - 6);
+
+        // Label below
+        ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillStyle = '#333';
+        ctx.fillText(timeframes[i], x + barWidth / 2, baseY + 16);
+    }
+
+    // Baseline
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(70, baseY);
+    ctx.lineTo(680, baseY);
+    ctx.stroke();
+
+    // Note
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'right';
+    ctx.fillText('Log scale — what you can\'t store is invisible', 680, 190);
+})();
+
+// Chart 6: Infrastructure Changes Break Baselines - Line chart showing model accuracy over time
+(function() {
+    const canvas = document.getElementById('canvas6');
+    const ctx = setupCanvas(canvas, 720, 200);
+    const chartFont = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    ctx.font = 'bold ' + chartFont;
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Model Accuracy vs Infrastructure Changes', 360, 22);
+
+    const startX = 80, endX = 660, baseY = 170, topY = 50;
+    const months = 12;
+
+    // Deterministic accuracy data with drops at infra changes
+    const accuracy = [95, 92, 90, 55, 62, 70, 78, 45, 53, 61, 30, 42, 55];
+    const maxAcc = 100, minAcc = 20;
+
+    // Draw grid
+    ctx.strokeStyle = '#ecf0f1';
+    ctx.lineWidth = 1;
+    for (let pct = 20; pct <= 100; pct += 20) {
+        const y = baseY - ((pct - minAcc) / (maxAcc - minAcc)) * (baseY - topY);
+        ctx.beginPath();
+        ctx.moveTo(startX, y);
+        ctx.lineTo(endX, y);
+        ctx.stroke();
+        ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.textAlign = 'right';
+        ctx.fillText(pct + '%', startX - 8, y + 4);
+    }
+
+    // Draw accuracy line
+    ctx.beginPath();
+    for (let i = 0; i < accuracy.length; i++) {
+        const x = startX + (i / months) * (endX - startX);
+        const y = baseY - ((accuracy[i] - minAcc) / (maxAcc - minAcc)) * (baseY - topY);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    // Mark infrastructure change points
+    const changePoints = [3, 7, 10];
+    const labels = ['Cloud Migration', 'New CDN', 'Network Redesign'];
+    ctx.fillStyle = '#e74c3c';
+    changePoints.forEach(function(m, idx) {
+        const x = startX + (m / months) * (endX - startX);
+        ctx.beginPath();
+        ctx.setLineDash([4, 4]);
+        ctx.moveTo(x, topY);
+        ctx.lineTo(x, baseY);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Triangle marker
+        ctx.beginPath();
+        ctx.moveTo(x - 6, topY - 2);
+        ctx.lineTo(x + 6, topY - 2);
+        ctx.lineTo(x, topY + 8);
+        ctx.closePath();
+        ctx.fillStyle = '#e74c3c';
+        ctx.fill();
+
+        // Label
+        ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillStyle = '#e74c3c';
+        ctx.textAlign = 'center';
+        ctx.fillText(labels[idx], x, topY - 8);
+    });
+
+    // Axes
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(startX, topY);
+    ctx.lineTo(startX, baseY);
+    ctx.lineTo(endX, baseY);
+    ctx.stroke();
+
+    // X-axis labels
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#333';
+    ctx.textAlign = 'center';
+    for (let i = 0; i <= 12; i += 3) {
+        const x = startX + (i / months) * (endX - startX);
+        ctx.fillText('M' + i, x, baseY + 15);
+    }
+    ctx.fillText('Months', 370, 192);
+})();
+</script>
+</body>
+</html>

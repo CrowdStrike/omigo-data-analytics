@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Call Center - Domain-Specific Pitfalls</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 20px; background: #f8f9fa; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 14px; }
+.nav a:hover { text-decoration: underline; }
+h1 { color: #1a5276; margin-bottom: 10px; }
+.subtitle { color: #555; margin-bottom: 30px; font-size: 15px; }
+.obj-table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden; }
+.obj-table td { padding: 16px; border: 1px solid #2980b9; vertical-align: top; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-title { font-weight: bold; color: #1a5276; font-size: 16px; margin-bottom: 8px; }
+.pitfall-desc { color: #333; font-size: 14px; line-height: 1.6; }
+canvas { border: 1px solid #eee; border-radius: 4px; }
+</style>
+</head>
+<body>
+<h1>Call Center</h1>
+<p class="subtitle">Statistical pitfalls in call center analytics — metric gaming, survivor bias in IVR data, and the deception of averages.</p>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">1. Handle Time vs Resolution Quality</div>
+<div class="pitfall-desc">
+Short call = efficient? Or: cut customer off, unresolved, they call back tomorrow. Long call = inefficient? Or: complex issue fully resolved, never calls again. AHT alone is misleading.<br><br>
+Agent A: 3 short calls (3 min each) but 2 callbacks generated. Total time invested: 9 + 6 = 15 min for one resolution.<br>
+Agent B: 1 long call (12 min) but zero callbacks. Total time invested: 12 min with full resolution.<br><br>
+The "efficient" agent actually costs more in total handle time.
+</div>
+</td>
+<td><canvas id="canvas1" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">2. Agent Gaming Metrics</div>
+<div class="pitfall-desc">
+If metric = calls/hour: agents hang up fast, transfer aggressively, avoid complex issues. If metric = resolution: agents keep "easy" calls, escalate hard ones. Every metric is gamed the moment agents know about it.<br><br>
+The moment a new metric is introduced, behavior shifts to optimize that metric — often at the expense of the outcome the metric was meant to measure. Goodhart's Law in action: when a measure becomes a target, it ceases to be a good measure.
+</div>
+</td>
+<td><canvas id="canvas2" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">3. Repeat Caller Identification</div>
+<div class="pitfall-desc">
+Same person calls 3 times about same issue from different phones. System sees 3 separate interactions. Can't link them without sophisticated identity matching.<br><br>
+"First call resolution" metric is inflated by miscounting repeats. If you can't identify that caller #47, #112, and #203 are the same frustrated person calling from home, mobile, and work phone, your FCR rate is a fiction.
+</div>
+</td>
+<td><canvas id="canvas3" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">4. IVR Dropout = Lost Data</div>
+<div class="pitfall-desc">
+Customer navigates IVR for 5 minutes, gives up, hangs up. Their INTENT is never recorded. They become invisible demand. Only successful IVR completions generate data.<br><br>
+The frustrated majority is dark matter — they exist, they have needs, but your analytics system cannot see them. You only model the patients who survived the waiting room, not those who left.
+</div>
+</td>
+<td><canvas id="canvas4" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">5. Sentiment from Voice Tone</div>
+<div class="pitfall-desc">
+Angry voice = negative sentiment? Or: excited happy voice about a complaint? Sarcasm? Cultural differences in vocal expression?<br><br>
+Voice-based sentiment analysis is 60-70% accurate at best; worse for non-native speakers. A Southern US speaker saying "Well bless your heart" or British understatement reads completely wrong. Sarcasm inverts meaning entirely.
+</div>
+</td>
+<td><canvas id="canvas5" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">6. Seasonal Surge Modeling</div>
+<div class="pitfall-desc">
+January: returns from Christmas. April: tax questions. September: school enrollment. Each surge has different character.<br><br>
+A model trained on "average month" fails catastrophically in surge months. You need surge-specific models because the call mix, caller demographics, issue complexity, and resolution paths all change simultaneously during surges — it's not just "more of the same."
+</div>
+</td>
+<td><canvas id="canvas6" width="720" height="300"></canvas></td>
+</tr>
+</table>
+
+<script>
+function setupCanvas(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 200 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    return ctx;
+}
+
+// Canvas 1: Handle Time vs Resolution Quality
+(function() {
+    var ctx = setupCanvas('canvas1');
+    var w = 720, h = 200;
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Total Time Investment Comparison', w/2, 20);
+
+    // Agent A section
+    var axStart = 40, axY = 70;
+    ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#c0392b';
+    ctx.fillText('Agent A ("Efficient")', axStart, axY - 15);
+
+    // Draw 3 short calls
+    ctx.fillStyle = '#e74c3c';
+    var callWidth = 50;
+    for (var i = 0; i < 3; i++) {
+        ctx.fillRect(axStart + i * 65, axY, callWidth, 25);
+        ctx.fillStyle = '#fff';
+        ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('3 min', axStart + i * 65 + callWidth/2, axY + 16);
+        ctx.fillStyle = '#e74c3c';
+    }
+
+    // Draw 2 callbacks
+    ctx.fillStyle = '#f39c12';
+    for (var i = 0; i < 2; i++) {
+        ctx.fillRect(axStart + 200 + i * 65, axY, callWidth, 25);
+        ctx.fillStyle = '#fff';
+        ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('3 min', axStart + 200 + i * 65 + callWidth/2, axY + 16);
+        ctx.fillStyle = '#f39c12';
+    }
+
+    ctx.fillStyle = '#666';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('+ 2 callbacks', axStart + 200, axY - 5);
+
+    // Total bar for Agent A
+    ctx.fillStyle = '#c0392b';
+    ctx.fillRect(axStart + 400, axY, 150, 25);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Total: 15 min', axStart + 475, axY + 16);
+
+    // Agent B section
+    var bxY = 135;
+    ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('Agent B ("Slow")', axStart, bxY - 15);
+
+    // Draw 1 long call
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(axStart, bxY, 180, 25);
+    ctx.fillStyle = '#fff';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('12 min (fully resolved)', axStart + 90, bxY + 16);
+
+    // Zero callbacks
+    ctx.fillStyle = '#999';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('0 callbacks', axStart + 200, bxY + 16);
+
+    // Total bar for Agent B
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(axStart + 400, bxY, 120, 25);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Total: 12 min', axStart + 460, bxY + 16);
+
+    // Winner indicator
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('Better outcome', w - 30, bxY + 60);
+})();
+
+// Canvas 2: Agent Gaming Metrics
+(function() {
+    var ctx = setupCanvas('canvas2');
+    var w = 720, h = 200;
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Effect of Introducing "Calls/Hour" Metric', w/2, 20);
+
+    var leftPad = 80, rightPad = 40, topPad = 40, bottomPad = 40;
+    var chartW = w - leftPad - rightPad;
+    var chartH = h - topPad - bottomPad;
+
+    // Vertical line for metric introduction
+    var introX = leftPad + chartW * 0.35;
+    ctx.strokeStyle = '#999';
+    ctx.setLineDash([5, 3]);
+    ctx.beginPath();
+    ctx.moveTo(introX, topPad);
+    ctx.lineTo(introX, h - bottomPad + 10);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#666';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Metric introduced', introX, h - bottomPad + 25);
+
+    // X axis
+    ctx.strokeStyle = '#333';
+    ctx.beginPath();
+    ctx.moveTo(leftPad, h - bottomPad);
+    ctx.lineTo(w - rightPad, h - bottomPad);
+    ctx.stroke();
+
+    // Y axis
+    ctx.beginPath();
+    ctx.moveTo(leftPad, topPad);
+    ctx.lineTo(leftPad, h - bottomPad);
+    ctx.stroke();
+
+    // Calls/hour line (blue, goes up after intro)
+    var callsData = [6, 6.2, 6.1, 6.3, 8, 9.5, 11, 12, 13, 14];
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < callsData.length; i++) {
+        var x = leftPad + (i / (callsData.length - 1)) * chartW;
+        var y = topPad + chartH - ((callsData[i] - 4) / 12) * chartH;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Resolution rate line (red, goes down after intro)
+    var resData = [82, 83, 81, 82, 75, 68, 60, 55, 50, 45];
+    ctx.strokeStyle = '#c0392b';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < resData.length; i++) {
+        var x = leftPad + (i / (resData.length - 1)) * chartW;
+        var y = topPad + chartH - ((resData[i] - 30) / 70) * chartH;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.lineWidth = 1;
+
+    // Legend
+    ctx.fillStyle = '#2980b9';
+    ctx.fillRect(w - 200, topPad + 5, 20, 3);
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('Calls/Hour', w - 175, topPad + 10);
+
+    ctx.fillStyle = '#c0392b';
+    ctx.fillRect(w - 200, topPad + 25, 20, 3);
+    ctx.fillText('Resolution Rate %', w - 175, topPad + 30);
+
+    // Labels
+    ctx.fillStyle = '#555';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Time →', w/2, h - 5);
+    ctx.save();
+    ctx.translate(15, h/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillText('Performance', 0, 0);
+    ctx.restore();
+})();
+
+// Canvas 3: Repeat Caller Identification
+(function() {
+    var ctx = setupCanvas('canvas3');
+    var w = 720, h = 200;
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Same Person, Three Phones, Three "Resolved" Tickets', w/2, 20);
+
+    // Left side: 3 phone icons (drawn as rectangles with labels)
+    var phones = [{x: 80, y: 60}, {x: 80, y: 100}, {x: 80, y: 140}];
+    var phoneLabels = ['Home', 'Mobile', 'Work'];
+    for (var i = 0; i < 3; i++) {
+        // Phone rectangle
+        ctx.fillStyle = '#2980b9';
+        ctx.fillRect(phones[i].x - 15, phones[i].y - 10, 30, 20);
+        ctx.fillStyle = '#fff';
+        ctx.font = '9px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('TEL', phones[i].x, phones[i].y + 4);
+        ctx.fillStyle = '#555';
+        ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillText(phoneLabels[i], phones[i].x, phones[i].y + 25);
+    }
+
+    // Center: Person icon (circle head + body)
+    var personX = 240, personY = 100;
+    ctx.fillStyle = '#1a5276';
+    ctx.beginPath();
+    ctx.arc(personX, personY - 12, 12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(personX, personY + 15, 18, Math.PI, 0);
+    ctx.fill();
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#333';
+    ctx.textAlign = 'center';
+    ctx.fillText('1 Person', personX, personY + 45);
+    ctx.fillText('1 Unresolved Issue', personX, personY + 60);
+
+    // Arrows from phones to person
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 1.5;
+    for (var i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.moveTo(phones[i].x + 20, phones[i].y);
+        ctx.lineTo(personX - 25, personY);
+        ctx.stroke();
+    }
+
+    // Divider
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(350, 35);
+    ctx.lineTo(350, 185);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Right side: System's view
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('System View:', 530, 50);
+
+    // 3 separate tickets
+    var ticketY = [65, 105, 145];
+    for (var i = 0; i < 3; i++) {
+        ctx.fillStyle = '#f0f0f0';
+        ctx.fillRect(430, ticketY[i], 200, 30);
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(430, ticketY[i], 200, 30);
+        ctx.fillStyle = '#27ae60';
+        ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Ticket #' + (i + 1) + ' - Resolved', 530, ticketY[i] + 20);
+    }
+
+    // Reality label
+    ctx.fillStyle = '#c0392b';
+    ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('FCR = 100%?  Reality: 0%', 530, 190);
+
+    // Section labels
+    ctx.fillStyle = '#888';
+    ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('REALITY', 170, 190);
+})();
+
+// Canvas 4: IVR Dropout = Lost Data
+(function() {
+    var ctx = setupCanvas('canvas4');
+    var w = 720, h = 200;
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('IVR Funnel: The Invisible 60%', w/2, 20);
+
+    // Funnel shape
+    var funnelLeft = 150, funnelRight = 570;
+    var funnelTop = 40, funnelBottom = 180;
+
+    // Top of funnel (wide)
+    ctx.fillStyle = '#2980b9';
+    ctx.beginPath();
+    ctx.moveTo(funnelLeft, funnelTop);
+    ctx.lineTo(funnelRight, funnelTop);
+    ctx.lineTo(funnelRight - 50, funnelTop + 45);
+    ctx.lineTo(funnelLeft + 50, funnelTop + 45);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('1,000 Callers Enter IVR', w/2, funnelTop + 28);
+
+    // Dropout zone (red/dark)
+    ctx.fillStyle = '#e74c3c';
+    ctx.globalAlpha = 0.7;
+    ctx.beginPath();
+    ctx.moveTo(funnelLeft + 50, funnelTop + 48);
+    ctx.lineTo(funnelRight - 50, funnelTop + 48);
+    ctx.lineTo(funnelRight - 110, funnelTop + 95);
+    ctx.lineTo(funnelLeft + 110, funnelTop + 95);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 1.0;
+
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('600 Drop Out (DARK MATTER)', w/2, funnelTop + 77);
+
+    // Arrow pointing out for dropouts
+    ctx.strokeStyle = '#c0392b';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(funnelRight - 70, funnelTop + 70);
+    ctx.lineTo(funnelRight + 20, funnelTop + 70);
+    ctx.stroke();
+    ctx.fillStyle = '#c0392b';
+    ctx.beginPath();
+    ctx.moveTo(funnelRight + 20, funnelTop + 65);
+    ctx.lineTo(funnelRight + 30, funnelTop + 70);
+    ctx.lineTo(funnelRight + 20, funnelTop + 75);
+    ctx.closePath();
+    ctx.fill();
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('Invisible', funnelRight + 35, funnelTop + 65);
+    ctx.fillText('No data', funnelRight + 35, funnelTop + 80);
+
+    // Bottom of funnel (narrow) - reaches agent
+    ctx.fillStyle = '#27ae60';
+    ctx.beginPath();
+    ctx.moveTo(funnelLeft + 110, funnelTop + 98);
+    ctx.lineTo(funnelRight - 110, funnelTop + 98);
+    ctx.lineTo(funnelRight - 140, funnelBottom);
+    ctx.lineTo(funnelLeft + 140, funnelBottom);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('400 Reach Agent', w/2, funnelTop + 135);
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('(Only these generate data)', w/2, funnelTop + 152);
+
+    // Left annotation
+    ctx.fillStyle = '#666';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('Your analytics', funnelLeft - 10, funnelTop + 135);
+    ctx.fillText('only sees this →', funnelLeft - 10, funnelTop + 150);
+})();
+
+// Canvas 5: Sentiment from Voice Tone
+(function() {
+    var ctx = setupCanvas('canvas5');
+    var w = 720, h = 200;
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Voice Sentiment Confusion Matrix', w/2, 20);
+
+    // Matrix setup
+    var matX = 180, matY = 45;
+    var cellW = 110, cellH = 35;
+    var labels = ['Positive', 'Negative', 'Sarcasm', 'Neutral'];
+
+    // Header: Predicted
+    ctx.fillStyle = '#555';
+    ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('PREDICTED SENTIMENT', matX + cellW * 2, matY - 10);
+
+    // Column headers
+    ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    for (var j = 0; j < 4; j++) {
+        ctx.fillStyle = '#1a5276';
+        ctx.fillText(labels[j], matX + j * cellW + cellW/2, matY + 12);
+    }
+
+    // Row header
+    ctx.save();
+    ctx.translate(matX - 40, matY + cellH * 2 + 20);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillStyle = '#555';
+    ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('ACTUAL', 0, 0);
+    ctx.restore();
+
+    // Row labels
+    for (var i = 0; i < 4; i++) {
+        ctx.fillStyle = '#1a5276';
+        ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(labels[i], matX - 5, matY + 20 + (i + 1) * cellH + cellH/2 + 4);
+    }
+
+    // Matrix values (showing errors)
+    var matrix = [
+        [65, 5, 20, 10],
+        [8, 62, 10, 20],
+        [35, 15, 30, 20],
+        [15, 10, 15, 60]
+    ];
+
+    for (var i = 0; i < 4; i++) {
+        for (var j = 0; j < 4; j++) {
+            var val = matrix[i][j];
+            var cx = matX + j * cellW;
+            var cy = matY + 20 + (i + 1) * cellH;
+
+            // Color: green diagonal, red off-diagonal, intensity by value
+            if (i === j) {
+                var alpha = val / 100;
+                ctx.fillStyle = 'rgba(39, 174, 96, ' + (0.2 + alpha * 0.6) + ')';
+            } else {
+                var alpha = val / 100;
+                ctx.fillStyle = 'rgba(231, 76, 60, ' + (0.1 + alpha * 0.6) + ')';
+            }
+            ctx.fillRect(cx, cy, cellW - 2, cellH - 2);
+
+            // Value text
+            ctx.fillStyle = val > 40 ? '#fff' : '#333';
+            ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(val + '%', cx + cellW/2, cy + cellH/2 + 4);
+        }
+    }
+
+    // Annotation
+    ctx.fillStyle = '#c0392b';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('Sarcasm detected only 30%', matX + cellW * 4 + 10, matY + 85);
+    ctx.fillText('of the time — worse than', matX + cellW * 4 + 10, matY + 100);
+    ctx.fillText('random for 4 categories', matX + cellW * 4 + 10, matY + 115);
+})();
+
+// Canvas 6: Seasonal Surge Modeling
+(function() {
+    var ctx = setupCanvas('canvas6');
+    var w = 720, h = 200;
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Monthly Call Volume vs "Average" Model', w/2, 20);
+
+    var leftPad = 70, rightPad = 30, topPad = 35, bottomPad = 40;
+    var chartW = w - leftPad - rightPad;
+    var chartH = h - topPad - bottomPad;
+
+    // Axes
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(leftPad, h - bottomPad);
+    ctx.lineTo(w - rightPad, h - bottomPad);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(leftPad, topPad);
+    ctx.lineTo(leftPad, h - bottomPad);
+    ctx.stroke();
+
+    // Monthly data with surges in Jan(0), Apr(3), Sep(8)
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var volumes = [9500, 4200, 4000, 8800, 4100, 3800, 3900, 4300, 8200, 4000, 3900, 5500];
+    var maxVol = 10000;
+    var avgVol = 5400;
+
+    // Draw bars
+    var barW = chartW / 12 - 4;
+    for (var i = 0; i < 12; i++) {
+        var x = leftPad + (i / 12) * chartW + 2;
+        var barH = (volumes[i] / maxVol) * chartH;
+        var y = topPad + chartH - barH;
+
+        // Color surges differently
+        if (i === 0 || i === 3 || i === 8) {
+            ctx.fillStyle = '#e74c3c';
+        } else {
+            ctx.fillStyle = '#2980b9';
+        }
+        ctx.fillRect(x, y, barW, barH);
+
+        // Month label
+        ctx.fillStyle = '#555';
+        ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(months[i], x + barW/2, h - bottomPad + 12);
+    }
+
+    // Average model line (flat)
+    var avgY = topPad + chartH - (avgVol / maxVol) * chartH;
+    ctx.strokeStyle = '#f39c12';
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([8, 4]);
+    ctx.beginPath();
+    ctx.moveTo(leftPad, avgY);
+    ctx.lineTo(w - rightPad, avgY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.lineWidth = 1;
+
+    // Legend
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(leftPad + 10, topPad + 2, 12, 12);
+    ctx.fillStyle = '#333';
+    ctx.fillText('Surge months', leftPad + 26, topPad + 12);
+
+    ctx.fillStyle = '#2980b9';
+    ctx.fillRect(leftPad + 130, topPad + 2, 12, 12);
+    ctx.fillStyle = '#333';
+    ctx.fillText('Normal months', leftPad + 146, topPad + 12);
+
+    ctx.fillStyle = '#f39c12';
+    ctx.fillRect(leftPad + 260, topPad + 2, 20, 3);
+    ctx.fillStyle = '#333';
+    ctx.fillText('Average model prediction (misses all spikes)', leftPad + 284, topPad + 12);
+
+    // Y-axis labels
+    ctx.fillStyle = '#555';
+    ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('10K', leftPad - 5, topPad + 8);
+    ctx.fillText('5K', leftPad - 5, topPad + chartH/2 + 4);
+    ctx.fillText('0', leftPad - 5, h - bottomPad + 4);
+
+    // Surge labels
+    ctx.fillStyle = '#c0392b';
+    ctx.font = '9px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    var surgeMonths = [0, 3, 8];
+    var surgeLabels = ['Returns', 'Tax', 'School'];
+    for (var s = 0; s < 3; s++) {
+        var sx = leftPad + (surgeMonths[s] / 12) * chartW + 2 + barW/2;
+        ctx.fillText(surgeLabels[s], sx, h - bottomPad + 24);
+    }
+
+    // X-axis label
+    ctx.fillStyle = '#555';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Month', w/2, h - 3);
+})();
+</script>
+</body>
+</html>

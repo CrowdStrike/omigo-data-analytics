@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Continuous Monitoring Agent Execution Models — Discussion Backlog</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #fff; color: #2c3e50; line-height: 1.6; }
+h1 { color: #1a5276; border-bottom: 3px solid #2980b9; padding-bottom: 10px; }
+h2 { color: #1a5276; margin-top: 0; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { padding: 20px; vertical-align: top; border: 1px solid #2980b9; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-title { color: #1a5276; font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
+ul { margin: 10px 0; padding-left: 20px; }
+li { margin-bottom: 6px; }
+strong { color: #1a5276; }
+code { background: #e8f0f8; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; color: #1a5276; }
+.questions { background: #fff8e1; border-left: 3px solid #f39c12; padding: 10px 15px; margin: 10px 0; font-size: 0.9em; }
+canvas { display: block; margin: 8px auto; max-width: 100%; }
+.nav-link { display: inline-block; margin: 20px 0; color: #2980b9; text-decoration: none; font-weight: bold; }
+.nav-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<h1>Continuous Monitoring Agent Execution Models</h1>
+<p>Statistical profiling isn't a one-shot batch job — it's a continuous monitoring process. Data arrives, distributions shift, models degrade, alerts fire. The execution model determines how work gets distributed across agents that watch for changes, re-profile features, and trigger downstream actions.</p>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Execution Model A: File-Polling Agents</div>
+<p>Each agent independently polls the same input directory/file for new work. Simplest model — zero coordination infrastructure.</p>
+<ul>
+<li><strong>How it works:</strong> Agents watch a shared filesystem path (S3 prefix, directory). When new data files appear, each agent picks one up, processes it, writes results</li>
+<li><strong>Coordination:</strong> File-level locking or rename-on-claim (<code>input.csv</code> → <code>input.csv.processing</code>). No central coordinator</li>
+<li><strong>Advantages:</strong> Dead simple. No message broker. No scheduler. Works with any filesystem. Easy to debug — just look at the files</li>
+<li><strong>Disadvantages:</strong> Race conditions on claim. No priority ordering. No backpressure — if agents are slow, files pile up with no visibility. No retry semantics without extra logic</li>
+<li><strong>Failure mode:</strong> Agent dies mid-processing → file stuck in "processing" state forever. Need TTL-based recovery or heartbeat files</li>
+<li><strong>Best for:</strong> Small scale (< 10 agents), simple pipelines, batch-oriented work where latency doesn't matter</li>
+</ul>
+</td>
+<td>
+<canvas id="c1" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Execution Model B: Database Task Queue + Scheduler</div>
+<p>A central database holds all pending tasks. A scheduler assigns tasks to agents based on availability, priority, and affinity.</p>
+<ul>
+<li><strong>How it works:</strong> Tasks inserted into DB table with status (pending/assigned/running/done/failed). Scheduler queries for pending tasks, assigns to free agents via row lock + status update</li>
+<li><strong>Coordination:</strong> Centralized — scheduler has global view. Can implement priority queues, fair scheduling, affinity (agent A always handles feature X)</li>
+<li><strong>Advantages:</strong> Full visibility (query DB for status). Priority ordering. Retry logic built-in (failed → pending after N attempts). Exactly-once semantics via DB transactions. Rich scheduling policies</li>
+<li><strong>Disadvantages:</strong> Scheduler is single point of failure. DB becomes bottleneck at high throughput. More infrastructure (DB + scheduler service). Polling from scheduler adds latency</li>
+<li><strong>Failure mode:</strong> Scheduler dies → no new assignments (but running tasks complete). DB locks contention at scale. Need lease/heartbeat to detect dead agents holding tasks</li>
+<li><strong>Scaling:</strong> Works well to ~100 agents. Beyond that, DB write contention becomes real. Can shard by feature/dataset</li>
+<li><strong>Best for:</strong> Medium scale, need for visibility/debugging, complex scheduling policies, regulated environments needing audit trail</li>
+</ul>
+</td>
+<td>
+<canvas id="c2" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Execution Model C: Message Bus (Competing Consumers)</div>
+<p>Tasks published to a message queue. Agents subscribe as competing consumers — when free, pull next message, process it, acknowledge (deletes from queue).</p>
+<ul>
+<li><strong>How it works:</strong> Producer pushes profiling tasks to queue (Kafka, RabbitMQ, SQS, Redis Streams). Agents pull when ready. Ack on completion removes message. No-ack after timeout → message redelivered</li>
+<li><strong>Coordination:</strong> Queue handles distribution. No scheduler needed. Agents are self-scheduling — pull only when capacity exists (natural backpressure)</li>
+<li><strong>Advantages:</strong> Scales horizontally — add agents, they auto-join. Built-in retry (visibility timeout). Backpressure native. Decoupled producers/consumers. High throughput. No single point of failure (clustered brokers)</li>
+<li><strong>Disadvantages:</strong> At-least-once delivery (must handle duplicates). Message ordering not guaranteed across consumers. No global priority without multiple queues. Harder to get "status of task X" (message is gone once consumed)</li>
+<li><strong>Failure mode:</strong> Agent dies before ack → message redelivered (good). Poison messages that always fail → dead letter queue. Broker overload if consumers too slow</li>
+<li><strong>Variants:</strong>
+    <ul>
+        <li><strong>Single queue:</strong> FIFO, all agents equal. Simple but no priority</li>
+        <li><strong>Priority queues:</strong> Multiple queues (high/medium/low). Agents drain high first</li>
+        <li><strong>Topic-based:</strong> Route by feature type or dataset. Specialized agents per topic</li>
+        <li><strong>Stream with consumer groups:</strong> Kafka-style — messages persist, replayable, exactly-once with transactions</li>
+    </ul>
+</li>
+<li><strong>Best for:</strong> Large scale (100+ agents), high throughput, event-driven architectures, cloud-native environments</li>
+</ul>
+</td>
+<td>
+<canvas id="c3" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Comparison &amp; Hybrid Approaches</div>
+<p>No single model fits all scenarios. The right choice depends on scale, latency requirements, failure tolerance, and operational complexity budget.</p>
+<ul>
+<li><strong>Hybrid: DB + Message Bus:</strong> DB for task metadata and status tracking. Message bus for work distribution. Best of both — visibility of DB, throughput of queue. Tasks created in DB, events pushed to queue, agents update DB on completion</li>
+<li><strong>Hybrid: File + Message:</strong> Large data stays on filesystem (S3/GCS). Queue carries lightweight task descriptors (pointers to files). Agents pull descriptor, fetch data, process, write results back to FS</li>
+<li><strong>Scale transitions:</strong> Start with file-polling (prototype). Graduate to DB+scheduler (production). Evolve to message bus (scale). Each transition preserves the task semantics, changes only the distribution mechanism</li>
+</ul>
+<p><strong>Key dimensions for choosing:</strong></p>
+<ul>
+<li><strong>Throughput:</strong> File < DB < Message Bus</li>
+<li><strong>Visibility:</strong> DB > File > Message Bus</li>
+<li><strong>Complexity:</strong> File < DB < Message Bus</li>
+<li><strong>Fault tolerance:</strong> Message Bus > DB > File</li>
+<li><strong>Latency:</strong> Message Bus (push) < DB (poll interval) < File (scan interval)</li>
+</ul>
+<p><strong>For our pipeline specifically:</strong></p>
+<ul>
+<li>Monitoring agents watch for distribution drift (KS test between windows)</li>
+<li>Shape reclassification triggered when drift exceeds threshold</li>
+<li>Enrichment recalculation after shape change or new data window</li>
+<li>Cascade of dependent re-computations (shape change → bucket change → enrichment change → verdict change)</li>
+<li>Need: idempotent re-profiling, dependency-aware ordering, stale-result eviction</li>
+</ul>
+<div class="questions"><strong>Key questions:</strong> (1) What's the expected throughput — features per minute? (2) Do agents specialize (one per feature) or generalize (any agent handles any feature)? (3) How to handle cascading invalidation — one shape change triggers 5 downstream re-computations? (4) Should monitoring be continuous (streaming) or periodic (cron-like)? (5) What's the acceptable staleness — can a profile be 5 minutes old? 1 hour? (6) How does this interact with the lineage system (idea 18) — does each agent execution create a lineage record? (7) For the DB model — Postgres, Redis, or something domain-specific? (8) Cost model — always-on agents vs scale-to-zero serverless?</div>
+</td>
+<td>
+<canvas id="c4" width="720" height="300"></canvas>
+<canvas id="c5" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setupCanvas(id) {
+    var c = document.getElementById(id);
+    var w = c.width, h = c.height;
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return {ctx: ctx, w: w, h: h};
+}
+
+// Canvas 1: File-polling model
+(function() {
+    var s = setupCanvas('c1'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Model A: File-Polling Agents', w/2, 20);
+
+    // Shared filesystem (center)
+    ctx.fillStyle = 'rgba(41,128,185,0.1)';
+    ctx.fillRect(w/2 - 80, 60, 160, 100);
+    ctx.strokeStyle = '#2980b9'; ctx.lineWidth = 2;
+    ctx.strokeRect(w/2 - 80, 60, 160, 100);
+    ctx.fillStyle = '#2980b9'; ctx.font = 'bold 15px -apple-system';
+    ctx.fillText('Shared FS / S3', w/2, 80);
+
+    // Files inside
+    var files = ['data_001.csv', 'data_002.csv', 'data_003.csv'];
+    ctx.font = '10px SF Mono, monospace'; ctx.fillStyle = '#333';
+    files.forEach(function(f, i) {
+        ctx.fillText(f, w/2, 100 + i * 16);
+    });
+
+    // Agents (left and right)
+    var agents = [
+        {x: 80, y: 110, label: 'Agent 1'},
+        {x: 80, y: 190, label: 'Agent 2'},
+        {x: w - 80, y: 110, label: 'Agent 3'},
+        {x: w - 80, y: 190, label: 'Agent 4'}
+    ];
+
+    agents.forEach(function(a) {
+        ctx.fillStyle = 'rgba(39,174,96,0.15)';
+        ctx.beginPath(); ctx.roundRect(a.x - 45, a.y - 16, 90, 32, 5); ctx.fill();
+        ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.roundRect(a.x - 45, a.y - 16, 90, 32, 5); ctx.stroke();
+        ctx.fillStyle = '#27ae60'; ctx.font = 'bold 14px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText(a.label, a.x, a.y + 4);
+
+        // Polling arrows
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+        var tx = a.x < w/2 ? w/2 - 80 : w/2 + 80;
+        ctx.beginPath(); ctx.moveTo(a.x + (a.x < w/2 ? 45 : -45), a.y); ctx.lineTo(tx, a.y > 150 ? 155 : 110); ctx.stroke();
+        ctx.setLineDash([]);
+    });
+
+    // Label
+    ctx.fillStyle = '#e67e22'; ctx.font = '14px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('poll', 170, 100);
+    ctx.fillText('poll', w - 170, 100);
+
+    // Bottom annotation
+    ctx.fillStyle = '#555'; ctx.font = '14px -apple-system';
+    ctx.fillText('Each agent scans directory independently. Race on claim. No coordination.', w/2, h - 15);
+})();
+
+// Canvas 2: DB + Scheduler model
+(function() {
+    var s = setupCanvas('c2'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Model B: Database Task Queue + Scheduler', w/2, 20);
+
+    // Database (left)
+    ctx.fillStyle = 'rgba(142,68,173,0.1)';
+    ctx.beginPath(); ctx.roundRect(40, 60, 140, 80, 8); ctx.fill();
+    ctx.strokeStyle = '#8e44ad'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(40, 60, 140, 80, 8); ctx.stroke();
+    ctx.fillStyle = '#8e44ad'; ctx.font = 'bold 15px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Task DB', 110, 82);
+    ctx.font = '9px SF Mono, monospace'; ctx.fillStyle = '#555';
+    ctx.fillText('| id | status  | agent |', 110, 100);
+    ctx.fillText('| 1  | running | A1    |', 110, 114);
+    ctx.fillText('| 2  | pending | -     |', 110, 128);
+
+    // Scheduler (center)
+    ctx.fillStyle = 'rgba(230,126,34,0.15)';
+    ctx.beginPath(); ctx.roundRect(w/2 - 60, 70, 120, 50, 6); ctx.fill();
+    ctx.strokeStyle = '#e67e22'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(w/2 - 60, 70, 120, 50, 6); ctx.stroke();
+    ctx.fillStyle = '#e67e22'; ctx.font = 'bold 15px -apple-system';
+    ctx.fillText('Scheduler', w/2, 100);
+
+    // Arrow DB → Scheduler
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(180, 95); ctx.lineTo(w/2 - 60, 95); ctx.stroke();
+    ctx.fillStyle = '#555'; ctx.beginPath();
+    ctx.moveTo(w/2-65, 92); ctx.lineTo(w/2-58, 95); ctx.lineTo(w/2-65, 98); ctx.fill();
+
+    // Agents (right)
+    var agents = [{y: 60, label: 'Agent 1'}, {y: 110, label: 'Agent 2'}, {y: 160, label: 'Agent 3'}];
+    agents.forEach(function(a) {
+        var ax = w - 100;
+        ctx.fillStyle = 'rgba(39,174,96,0.15)';
+        ctx.beginPath(); ctx.roundRect(ax - 45, a.y, 90, 30, 5); ctx.fill();
+        ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.roundRect(ax - 45, a.y, 90, 30, 5); ctx.stroke();
+        ctx.fillStyle = '#27ae60'; ctx.font = 'bold 14px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText(a.label, ax, a.y + 19);
+
+        // Arrow Scheduler → Agent
+        ctx.strokeStyle = '#e67e22'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(w/2 + 60, 95); ctx.lineTo(ax - 45, a.y + 15); ctx.stroke();
+    });
+
+    // Labels
+    ctx.fillStyle = '#e67e22'; ctx.font = '13px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('assign', w/2 + 100, 70);
+
+    ctx.fillStyle = '#555'; ctx.font = '14px -apple-system';
+    ctx.fillText('Scheduler assigns tasks. DB tracks state. Full visibility + retry logic.', w/2, h - 15);
+})();
+
+// Canvas 3: Message Bus model
+(function() {
+    var s = setupCanvas('c3'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Model C: Message Bus (Competing Consumers)', w/2, 20);
+
+    // Producer (left)
+    ctx.fillStyle = 'rgba(41,128,185,0.15)';
+    ctx.beginPath(); ctx.roundRect(30, 90, 100, 40, 5); ctx.fill();
+    ctx.strokeStyle = '#2980b9'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.roundRect(30, 90, 100, 40, 5); ctx.stroke();
+    ctx.fillStyle = '#2980b9'; ctx.font = 'bold 14px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Producer', 80, 114);
+
+    // Queue (center) — shown as series of messages
+    ctx.fillStyle = 'rgba(231,76,60,0.08)';
+    ctx.fillRect(w/2 - 100, 70, 200, 80);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    ctx.strokeRect(w/2 - 100, 70, 200, 80);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 15px -apple-system';
+    ctx.fillText('Message Queue', w/2, 88);
+
+    // Messages in queue
+    var msgs = ['task_A', 'task_B', 'task_C', 'task_D'];
+    msgs.forEach(function(m, i) {
+        var mx = w/2 - 75 + i * 45;
+        ctx.fillStyle = '#fef9e7'; ctx.fillRect(mx, 100, 38, 22);
+        ctx.strokeStyle = '#e67e22'; ctx.lineWidth = 1; ctx.strokeRect(mx, 100, 38, 22);
+        ctx.fillStyle = '#333'; ctx.font = '8px SF Mono, monospace'; ctx.textAlign = 'center';
+        ctx.fillText(m, mx + 19, 114);
+    });
+
+    // Arrow Producer → Queue
+    ctx.strokeStyle = '#2980b9'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(130, 110); ctx.lineTo(w/2 - 100, 110); ctx.stroke();
+    ctx.fillStyle = '#2980b9'; ctx.beginPath();
+    ctx.moveTo(w/2-105, 107); ctx.lineTo(w/2-98, 110); ctx.lineTo(w/2-105, 113); ctx.fill();
+
+    // Agents (right) pulling from queue
+    var agents = [{y: 60, label: 'Agent 1'}, {y: 110, label: 'Agent 2'}, {y: 160, label: 'Agent 3'}];
+    agents.forEach(function(a) {
+        var ax = w - 90;
+        ctx.fillStyle = 'rgba(39,174,96,0.15)';
+        ctx.beginPath(); ctx.roundRect(ax - 45, a.y, 90, 30, 5); ctx.fill();
+        ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.roundRect(ax - 45, a.y, 90, 30, 5); ctx.stroke();
+        ctx.fillStyle = '#27ae60'; ctx.font = 'bold 14px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText(a.label, ax, a.y + 19);
+
+        // Pull arrow
+        ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(w/2 + 100, 110); ctx.lineTo(ax - 45, a.y + 15); ctx.stroke();
+    });
+
+    ctx.fillStyle = '#27ae60'; ctx.font = '13px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('pull + ack', w/2 + 140, 80);
+
+    ctx.fillStyle = '#555'; ctx.font = '14px -apple-system';
+    ctx.fillText('Agents pull when free. Ack deletes message. Natural backpressure. Scales horizontally.', w/2, h - 15);
+})();
+
+// Canvas 4: Comparison matrix
+(function() {
+    var s = setupCanvas('c4'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Comparison: File vs DB vs Message Bus', w/2, 20);
+
+    var cols = ['', 'Throughput', 'Visibility', 'Complexity', 'Fault Tol.', 'Latency'];
+    var rows = [
+        {label: 'File-Poll', vals: ['Low', 'Medium', 'Low', 'Low', 'High']},
+        {label: 'DB+Sched', vals: ['Medium', 'High', 'Medium', 'Medium', 'Medium']},
+        {label: 'Msg Bus', vals: ['High', 'Low', 'High', 'High', 'Low']}
+    ];
+    var colors = {Low: '#27ae60', Medium: '#e67e22', High: '#e74c3c'};
+    var colorsRev = {Low: '#e74c3c', Medium: '#e67e22', High: '#27ae60'}; // reversed for "good = high"
+
+    var colW = (w - 120) / 5, startX = 120, startY = 50, rowH = 40;
+
+    // Headers
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 14px -apple-system'; ctx.textAlign = 'center';
+    cols.forEach(function(c, i) {
+        if (i === 0) return;
+        ctx.fillText(c, startX + (i-1) * colW + colW/2, startY);
+    });
+
+    // Rows
+    rows.forEach(function(row, ri) {
+        var y = startY + 20 + ri * rowH;
+        // Row bg
+        ctx.fillStyle = ri % 2 === 0 ? 'rgba(26,82,118,0.03)' : 'transparent';
+        ctx.fillRect(20, y - 5, w - 40, rowH - 5);
+        // Label
+        ctx.fillStyle = '#1a5276'; ctx.font = 'bold 14px -apple-system'; ctx.textAlign = 'left';
+        ctx.fillText(row.label, 30, y + 16);
+        // Values
+        row.vals.forEach(function(v, vi) {
+            var useRev = (vi === 0 || vi === 3); // throughput, fault tolerance: high = good
+            var color = useRev ? colorsRev[v] : colors[v];
+            // For visibility: high = good. For complexity/latency: low = good
+            if (vi === 1) color = colorsRev[v]; // visibility high = good
+            if (vi === 2) color = colors[v]; // complexity low = good
+            if (vi === 4) color = colors[v]; // latency low = good
+
+            ctx.fillStyle = color; ctx.font = 'bold 14px -apple-system'; ctx.textAlign = 'center';
+            ctx.fillText(v, startX + vi * colW + colW/2, y + 16);
+        });
+    });
+
+    // Legend
+    ctx.fillStyle = '#27ae60'; ctx.font = '13px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('● = best for this dimension', 30, startY + 20 + 3 * rowH + 20);
+
+    ctx.fillStyle = '#555'; ctx.font = '14px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('No single model wins all dimensions. Hybrid approaches combine strengths.', w/2, h - 15);
+})();
+
+// Canvas 5: Pipeline-specific cascading re-computation
+(function() {
+    var s = setupCanvas('c5'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Cascading Re-Computation: What Agents Actually Monitor', w/2, 20);
+
+    // Pipeline stages as chain
+    var stages = [
+        {label: 'Data\nArrives', x: 70, color: '#2980b9'},
+        {label: 'Drift\nDetected', x: 200, color: '#e67e22'},
+        {label: 'Re-profile\nShape', x: 340, color: '#8e44ad'},
+        {label: 'Re-compute\nBuckets', x: 480, color: '#e74c3c'},
+        {label: 'Re-score\nEnrichment', x: 620, color: '#27ae60'}
+    ];
+
+    var y = 70, bw = 100, bh = 44;
+    stages.forEach(function(st, i) {
+        ctx.fillStyle = st.color; ctx.globalAlpha = 0.12;
+        ctx.beginPath(); ctx.roundRect(st.x - bw/2, y, bw, bh, 5); ctx.fill();
+        ctx.globalAlpha = 1; ctx.strokeStyle = st.color; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.roundRect(st.x - bw/2, y, bw, bh, 5); ctx.stroke();
+        ctx.fillStyle = st.color; ctx.font = 'bold 13px -apple-system'; ctx.textAlign = 'center';
+        var lines = st.label.split('\n');
+        lines.forEach(function(l, li) { ctx.fillText(l, st.x, y + 18 + li * 13); });
+
+        // Arrow to next
+        if (i < stages.length - 1) {
+            ctx.strokeStyle = '#bbb'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(st.x + bw/2, y + bh/2); ctx.lineTo(stages[i+1].x - bw/2, y + bh/2); ctx.stroke();
+            ctx.fillStyle = '#bbb'; ctx.beginPath();
+            var ax = stages[i+1].x - bw/2;
+            ctx.moveTo(ax-6, y+bh/2-4); ctx.lineTo(ax, y+bh/2); ctx.lineTo(ax-6, y+bh/2+4); ctx.fill();
+        }
+    });
+
+    // Trigger annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 14px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Each stage triggers next → cascade of invalidation', w/2, y + bh + 25);
+
+    // Agent assignment below
+    ctx.fillStyle = '#555'; ctx.font = '14px -apple-system';
+    ctx.fillText('Question: One agent per stage? One agent per feature? One agent handles full cascade?', w/2, h - 35);
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 14px -apple-system';
+    ctx.fillText('Must be idempotent — same input always produces same output regardless of execution model.', w/2, h - 15);
+})();
+</script>
+
+</body>
+</html>

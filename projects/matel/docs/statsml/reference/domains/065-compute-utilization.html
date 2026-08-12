@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CPU / Resource Utilization - Domain-Specific Pitfalls</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 20px; background: #f8f9fa; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 14px; }
+.nav a:hover { text-decoration: underline; }
+h1 { color: #1a5276; margin-bottom: 10px; }
+.subtitle { color: #555; margin-bottom: 30px; font-size: 15px; }
+.obj-table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden; }
+.obj-table td { padding: 16px; border: 1px solid #2980b9; vertical-align: top; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-title { font-weight: bold; color: #1a5276; font-size: 16px; margin-bottom: 8px; }
+.pitfall-desc { color: #333; font-size: 14px; line-height: 1.6; }
+canvas { border: 1px solid #eee; border-radius: 4px; }
+</style>
+</head>
+<body>
+<h1>CPU / Resource Utilization</h1>
+<p class="subtitle">Statistical pitfalls in compute metrics — the lies of averages, invisible overhead, and metrics that miss the actual bottleneck.</p>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">1. Average CPU Hides Bimodality</div>
+<div class="pitfall-desc">
+Server shows "50% CPU" but is actually idle for 30 seconds then pegged at 100% for 30 seconds. The average equals 50% but performance is terrible during the pegged phase. The mean tells you nothing about the shape of usage. You need the distribution, not the average. A bimodal workload produces a meaningless single summary number that masks two very different operational states.
+</div>
+</td>
+<td><canvas id="canvas1" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">2. Steal Time in VMs</div>
+<div class="pitfall-desc">
+VM shows "CPU idle" but the hypervisor is giving cycles to other tenants. Actual available compute is less than what's reported. The "steal%" metric is often ignored in dashboards. Your container thinks it has 4 cores but effectively gets 2.5. What appears as idle time is actually time stolen by the hypervisor for noisy neighbors. Without steal-time awareness, capacity planning is based on fiction.
+</div>
+</td>
+<td><canvas id="canvas2" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">3. Context Switch Overhead Unmeasured</div>
+<div class="pitfall-desc">
+CPU "utilization" counts work time. Context switch overhead lives in the gaps BETWEEN measurements. At 10,000 context switches per second, you lose 5-10% overhead that is invisible in utilization metrics. High thread counts impose a hidden tax. The CPU appears busy doing useful work, but a significant fraction is spent saving and restoring register state, flushing caches, and TLB invalidations.
+</div>
+</td>
+<td><canvas id="canvas3" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">4. NUMA Effects</div>
+<div class="pitfall-desc">
+Accessing memory on the wrong NUMA node incurs 2-3x latency. CPU utilization looks identical either way, but performance differs by 40%. "CPU%" cannot tell you whether the memory access pattern is optimal. You need memory controller metrics and NUMA hit/miss ratios. Two workloads with identical CPU% can have radically different throughput based solely on memory topology awareness.
+</div>
+</td>
+<td><canvas id="canvas4" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">5. GC Pauses as Periodic Spikes</div>
+<div class="pitfall-desc">
+Java GC: every 30 seconds, a 200ms stop-the-world pause. Average latency is 5ms; p99 is 200ms. The GC pause is invisible in the average but devastating for tail latency. The pattern is periodic but not perfectly predictable. Users see intermittent freezes that vanish in dashboards showing mean response time. Only percentile tracking reveals the true impact.
+</div>
+</td>
+<td><canvas id="canvas5" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">6. Cgroup Limits vs Actual Usage</div>
+<div class="pitfall-desc">
+Container limited to 2 CPU cores; actually uses 1.5. But the LIMIT changes throttling behavior. At 1.9 cores the kernel starts throttling. Throttle events are not visible as "usage" — they manifest as invisible slowdowns. The container never reports exceeding its limit, yet response times degrade. CFS throttling creates latency spikes that no CPU metric captures directly.
+</div>
+</td>
+<td><canvas id="canvas6" width="720" height="300"></canvas></td>
+</tr>
+</table>
+
+<script>
+function setupCanvas(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = 720 * dpr;
+    canvas.height = 200 * dpr;
+    canvas.style.width = '720px';
+    canvas.style.height = '200px';
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    return ctx;
+}
+
+// Canvas 1: Bimodal Distribution
+(function() {
+    var ctx = setupCanvas('canvas1');
+    var w = 720, h = 200;
+
+    ctx.fillStyle = '#fafbfc';
+    ctx.fillRect(0, 0, w, h);
+
+    // Axes
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(60, 20);
+    ctx.lineTo(60, 160);
+    ctx.lineTo(680, 160);
+    ctx.stroke();
+
+    // X-axis labels
+    ctx.fillStyle = '#333';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    var labels = ['0%', '20%', '40%', '60%', '80%', '100%'];
+    for (var i = 0; i < labels.length; i++) {
+        var x = 60 + i * 124;
+        ctx.fillText(labels[i], x, 175);
+    }
+
+    // Y-axis label
+    ctx.save();
+    ctx.translate(20, 90);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center';
+    ctx.fillText('Frequency', 0, 0);
+    ctx.restore();
+
+    // Draw bimodal distribution
+    var points = [];
+    for (var x = 0; x <= 620; x++) {
+        var pct = x / 620;
+        var y1 = Math.exp(-Math.pow((pct - 0.05) / 0.08, 2)) * 120;
+        var y2 = Math.exp(-Math.pow((pct - 0.95) / 0.08, 2)) * 120;
+        var y = y1 + y2 + 2;
+        points.push({ x: 60 + x, y: 160 - y });
+    }
+
+    // Fill
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, 160);
+    for (var i = 0; i < points.length; i++) {
+        ctx.lineTo(points[i].x, points[i].y);
+    }
+    ctx.lineTo(points[points.length - 1].x, 160);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(41, 128, 185, 0.3)';
+    ctx.fill();
+
+    // Stroke
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (var i = 0; i < points.length; i++) {
+        if (i === 0) ctx.moveTo(points[i].x, points[i].y);
+        else ctx.lineTo(points[i].x, points[i].y);
+    }
+    ctx.stroke();
+
+    // "Reported Average" line at 50%
+    var avgX = 60 + 310;
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(avgX, 25);
+    ctx.lineTo(avgX, 155);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Label for average
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Reported Avg: 50%', avgX, 18);
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('(almost no samples here!)', avgX, 192);
+
+    // Peak labels
+    ctx.fillStyle = '#2980b9';
+    ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('Idle peak', 95, 30);
+    ctx.fillText('Pegged peak', 640, 30);
+})();
+
+// Canvas 2: Steal Time Stacked Bar
+(function() {
+    var ctx = setupCanvas('canvas2');
+    var w = 720, h = 200;
+
+    ctx.fillStyle = '#fafbfc';
+    ctx.fillRect(0, 0, w, h);
+
+    // Title
+    ctx.fillStyle = '#333';
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('What VM Reports', 200, 20);
+    ctx.fillText('Reality (with Steal)', 520, 20);
+
+    var barW = 140, barH = 140, y0 = 35;
+
+    // VM Report bar: user 30%, system 20%, idle 50%
+    var vmX = 130;
+    ctx.fillStyle = '#2ecc71';
+    ctx.fillRect(vmX, y0, barW, barH * 0.3);
+    ctx.fillStyle = '#f39c12';
+    ctx.fillRect(vmX, y0 + barH * 0.3, barW, barH * 0.2);
+    ctx.fillStyle = '#ecf0f1';
+    ctx.fillRect(vmX, y0 + barH * 0.5, barW, barH * 0.5);
+
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(vmX, y0, barW, barH);
+
+    // Reality bar: user 30%, system 20%, steal 25%, actual idle 25%
+    var realX = 450;
+    ctx.fillStyle = '#2ecc71';
+    ctx.fillRect(realX, y0, barW, barH * 0.3);
+    ctx.fillStyle = '#f39c12';
+    ctx.fillRect(realX, y0 + barH * 0.3, barW, barH * 0.2);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(realX, y0 + barH * 0.5, barW, barH * 0.25);
+    ctx.fillStyle = '#ecf0f1';
+    ctx.fillRect(realX, y0 + barH * 0.75, barW, barH * 0.25);
+
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(realX, y0, barW, barH);
+
+    // Legend
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    var legendX = 610;
+
+    ctx.fillStyle = '#2ecc71';
+    ctx.fillRect(legendX, 40, 14, 14);
+    ctx.fillStyle = '#333';
+    ctx.fillText('User', legendX + 20, 52);
+
+    ctx.fillStyle = '#f39c12';
+    ctx.fillRect(legendX, 60, 14, 14);
+    ctx.fillStyle = '#333';
+    ctx.fillText('System', legendX + 20, 72);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(legendX, 80, 14, 14);
+    ctx.fillStyle = '#333';
+    ctx.fillText('Steal', legendX + 20, 92);
+
+    ctx.fillStyle = '#ecf0f1';
+    ctx.strokeStyle = '#bbb';
+    ctx.fillRect(legendX, 100, 14, 14);
+    ctx.strokeRect(legendX, 100, 14, 14);
+    ctx.fillStyle = '#333';
+    ctx.fillText('Idle', legendX + 20, 112);
+
+    // Percentage labels on bars
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('30% user', vmX + barW/2, y0 + barH * 0.17);
+    ctx.fillText('20% sys', vmX + barW/2, y0 + barH * 0.42);
+    ctx.fillStyle = '#666';
+    ctx.fillText('50% idle', vmX + barW/2, y0 + barH * 0.75);
+
+    ctx.fillStyle = '#fff';
+    ctx.fillText('30% user', realX + barW/2, y0 + barH * 0.17);
+    ctx.fillText('20% sys', realX + barW/2, y0 + barH * 0.42);
+    ctx.fillText('25% steal', realX + barW/2, y0 + barH * 0.64);
+    ctx.fillStyle = '#666';
+    ctx.fillText('25% idle', realX + barW/2, y0 + barH * 0.88);
+
+    // Annotations
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Looks fine!', vmX + barW/2, y0 + barH + 15);
+    ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('Half your "idle" is stolen!', realX + barW/2, y0 + barH + 15);
+})();
+
+// Canvas 3: Context Switch Timeline
+(function() {
+    var ctx = setupCanvas('canvas3');
+    var w = 720, h = 200;
+
+    ctx.fillStyle = '#fafbfc';
+    ctx.fillRect(0, 0, w, h);
+
+    // Title
+    ctx.fillStyle = '#333';
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Zoomed CPU Timeline — Work Blocks + Context Switch Gaps', w/2, 18);
+
+    // Draw timeline blocks
+    var timelineY = 40, blockH = 50;
+    var blocks = [
+        { w: 45, color: '#2ecc71' },
+        { w: 4, color: '#e74c3c' },
+        { w: 55, color: '#3498db' },
+        { w: 4, color: '#e74c3c' },
+        { w: 35, color: '#9b59b6' },
+        { w: 4, color: '#e74c3c' },
+        { w: 60, color: '#2ecc71' },
+        { w: 4, color: '#e74c3c' },
+        { w: 40, color: '#3498db' },
+        { w: 4, color: '#e74c3c' },
+        { w: 50, color: '#9b59b6' },
+        { w: 4, color: '#e74c3c' },
+        { w: 55, color: '#2ecc71' },
+        { w: 4, color: '#e74c3c' },
+        { w: 45, color: '#3498db' },
+        { w: 4, color: '#e74c3c' },
+        { w: 38, color: '#9b59b6' },
+        { w: 4, color: '#e74c3c' },
+        { w: 50, color: '#2ecc71' },
+        { w: 4, color: '#e74c3c' },
+        { w: 42, color: '#3498db' }
+    ];
+
+    var xPos = 30;
+    for (var i = 0; i < blocks.length; i++) {
+        ctx.fillStyle = blocks[i].color;
+        ctx.fillRect(xPos, timelineY, blocks[i].w, blockH);
+        if (blocks[i].color === '#e74c3c') {
+            ctx.strokeStyle = '#c0392b';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(xPos, timelineY, blocks[i].w, blockH);
+        }
+        xPos += blocks[i].w;
+    }
+
+    // Border around full timeline
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(30, timelineY, xPos - 30, blockH);
+
+    // Legend
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+
+    ctx.fillStyle = '#2ecc71';
+    ctx.fillRect(30, 105, 14, 14);
+    ctx.fillStyle = '#3498db';
+    ctx.fillRect(30, 125, 14, 14);
+    ctx.fillStyle = '#9b59b6';
+    ctx.fillRect(30, 145, 14, 14);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(30, 165, 14, 14);
+
+    ctx.fillStyle = '#333';
+    ctx.fillText('Thread A work', 50, 117);
+    ctx.fillText('Thread B work', 50, 137);
+    ctx.fillText('Thread C work', 50, 157);
+    ctx.fillText('Context switch (invisible in CPU%)', 50, 177);
+
+    // Sum calculation
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('10 switches shown = ~8% of this timeline', 690, 120);
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('At 10,000/sec: 5-10% hidden overhead', 690, 140);
+    ctx.fillText('CPU reports: "100% utilized"', 690, 160);
+    ctx.fillText('Reality: ~92% useful work', 690, 180);
+})();
+
+// Canvas 4: NUMA Effects
+(function() {
+    var ctx = setupCanvas('canvas4');
+    var w = 720, h = 200;
+
+    ctx.fillStyle = '#fafbfc';
+    ctx.fillRect(0, 0, w, h);
+
+    // Title
+    ctx.fillStyle = '#333';
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Same CPU Utilization (70%) — Different Throughput', w/2, 18);
+
+    var barW = 180, maxBarH = 130, y0 = 40;
+
+    // Left group - CPU utilization (identical)
+    ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('CPU Utilization', 160, 35);
+
+    // Local NUMA - CPU bar
+    ctx.fillStyle = '#2980b9';
+    ctx.fillRect(90, y0 + maxBarH * 0.3, 60, maxBarH * 0.7);
+    ctx.fillStyle = '#333';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('70%', 120, y0 + maxBarH + 15);
+    ctx.fillText('Local', 120, y0 + maxBarH + 30);
+
+    // Remote NUMA - CPU bar
+    ctx.fillStyle = '#2980b9';
+    ctx.fillRect(190, y0 + maxBarH * 0.3, 60, maxBarH * 0.7);
+    ctx.fillStyle = '#333';
+    ctx.fillText('70%', 220, y0 + maxBarH + 15);
+    ctx.fillText('Remote', 220, y0 + maxBarH + 30);
+
+    // Equals sign
+    ctx.font = 'bold 24px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#666';
+    ctx.fillText('=', 160, y0 + maxBarH * 0.65);
+
+    // Arrow
+    ctx.font = 'bold 20px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#333';
+    ctx.fillText('→', 320, y0 + maxBarH * 0.55);
+
+    // Right group - Throughput (different)
+    ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('Actual Throughput', 520, 35);
+
+    // Local NUMA - throughput bar (100%)
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(430, y0, 70, maxBarH);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('100%', 465, y0 + maxBarH/2);
+    ctx.fillStyle = '#333';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('Local NUMA', 465, y0 + maxBarH + 15);
+
+    // Remote NUMA - throughput bar (60%)
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(540, y0 + maxBarH * 0.4, 70, maxBarH * 0.6);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('60%', 575, y0 + maxBarH * 0.72);
+    ctx.fillStyle = '#333';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('Remote NUMA', 575, y0 + maxBarH + 15);
+
+    // 40% loss annotation
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('40% throughput loss', 620, y0 + maxBarH * 0.2);
+    ctx.fillText('invisible in CPU%!', 620, y0 + maxBarH * 0.35);
+})();
+
+// Canvas 5: GC Pauses
+(function() {
+    var ctx = setupCanvas('canvas5');
+    var w = 720, h = 200;
+
+    ctx.fillStyle = '#fafbfc';
+    ctx.fillRect(0, 0, w, h);
+
+    // Axes
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(55, 15);
+    ctx.lineTo(55, 160);
+    ctx.lineTo(695, 160);
+    ctx.stroke();
+
+    // Y-axis labels
+    ctx.fillStyle = '#333';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('200ms', 50, 30);
+    ctx.fillText('100ms', 50, 75);
+    ctx.fillText('5ms', 50, 153);
+    ctx.fillText('0ms', 50, 163);
+
+    // X-axis label
+    ctx.textAlign = 'center';
+    ctx.fillText('0s', 70, 175);
+    ctx.fillText('30s', 230, 175);
+    ctx.fillText('60s', 390, 175);
+    ctx.fillText('90s', 550, 175);
+    ctx.fillText('Time', 380, 192);
+
+    // Scale: y=160 is 0ms, y=25 is 200ms
+    function msToY(ms) { return 160 - (ms / 200) * 135; }
+
+    // Draw baseline latency (noisy around 5ms)
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    var seed = 42;
+    function rand() { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; }
+    for (var x = 60; x <= 690; x++) {
+        var baseMs = 3 + rand() * 6;
+        var y = msToY(baseMs);
+        if (x === 60) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // GC Spikes at ~30s intervals
+    var spikePositions = [230, 390, 550];
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    for (var i = 0; i < spikePositions.length; i++) {
+        var sx = spikePositions[i];
+        ctx.beginPath();
+        ctx.moveTo(sx - 3, msToY(5));
+        ctx.lineTo(sx, msToY(200));
+        ctx.lineTo(sx + 3, msToY(5));
+        ctx.stroke();
+
+        // Spike cap
+        ctx.fillStyle = '#e74c3c';
+        ctx.beginPath();
+        ctx.arc(sx, msToY(200), 4, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Average line
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(55, msToY(5));
+    ctx.lineTo(695, msToY(5));
+    ctx.stroke();
+
+    // P99 line
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(55, msToY(200));
+    ctx.lineTo(695, msToY(200));
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Labels
+    ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('Avg: 5ms (looks great!)', 560, msToY(5) + 15);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('p99: 200ms (GC pause)', 560, msToY(200) - 5);
+
+    // GC label
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('GC', spikePositions[0], msToY(200) - 10);
+    ctx.fillText('GC', spikePositions[1], msToY(200) - 10);
+    ctx.fillText('GC', spikePositions[2], msToY(200) - 10);
+})();
+
+// Canvas 6: Cgroup Limits
+(function() {
+    var ctx = setupCanvas('canvas6');
+    var w = 720, h = 200;
+
+    ctx.fillStyle = '#fafbfc';
+    ctx.fillRect(0, 0, w, h);
+
+    // Axes
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(55, 15);
+    ctx.lineTo(55, 165);
+    ctx.lineTo(695, 165);
+    ctx.stroke();
+
+    // Y-axis: CPU cores
+    ctx.fillStyle = '#333';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('2.5', 50, 22);
+    ctx.fillText('2.0', 50, 48);
+    ctx.fillText('1.5', 50, 82);
+    ctx.fillText('1.0', 50, 116);
+    ctx.fillText('0.5', 50, 148);
+    ctx.fillText('0', 50, 168);
+
+    // X-axis
+    ctx.textAlign = 'center';
+    ctx.fillText('Time', 380, 192);
+
+    // Scale: y=165 is 0 cores, y=18 is 2.5 cores
+    function coresToY(c) { return 165 - (c / 2.5) * 147; }
+
+    // Cgroup limit line at 2.0 cores
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([8, 4]);
+    ctx.beginPath();
+    ctx.moveTo(55, coresToY(2.0));
+    ctx.lineTo(695, coresToY(2.0));
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Throttle zone (1.8 to 2.0)
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.12)';
+    ctx.fillRect(55, coresToY(2.0), 640, coresToY(1.8) - coresToY(2.0));
+
+    // Throttle zone label
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('THROTTLE ZONE', 560, coresToY(1.9) + 4);
+
+    // Limit label
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('Cgroup Limit: 2.0 cores', 560, coresToY(2.0) - 6);
+
+    // CPU usage line (gradually rising, approaching limit)
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    var seed2 = 77;
+    function rand2() { seed2 = (seed2 * 16807) % 2147483647; return (seed2 - 1) / 2147483646; }
+    var usagePoints = [];
+    for (var x = 60; x <= 690; x++) {
+        var t = (x - 60) / 630;
+        var base = 0.8 + t * 1.1;
+        if (base > 1.95) base = 1.95;
+        var noise = (rand2() - 0.5) * 0.1;
+        var cores = Math.min(Math.max(base + noise, 0.5), 1.97);
+        usagePoints.push({ x: x, y: coresToY(cores), cores: cores });
+        if (x === 60) ctx.moveTo(x, coresToY(cores));
+        else ctx.lineTo(x, coresToY(cores));
+    }
+    ctx.stroke();
+
+    // Highlight throttle events (where usage > 1.8)
+    for (var i = 0; i < usagePoints.length; i++) {
+        if (usagePoints[i].cores > 1.8) {
+            ctx.fillStyle = 'rgba(231, 76, 60, 0.5)';
+            ctx.beginPath();
+            ctx.arc(usagePoints[i].x, usagePoints[i].y, 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    // Annotation
+    ctx.fillStyle = '#c0392b';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Usage never exceeds limit...', 350, coresToY(2.2));
+    ctx.fillText('but throttling causes invisible latency spikes', 350, coresToY(2.2) + 15);
+
+    // Usage label
+    ctx.fillStyle = '#2980b9';
+    ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('Reported CPU Usage', 65, coresToY(0.9));
+})();
+</script>
+</body>
+</html>

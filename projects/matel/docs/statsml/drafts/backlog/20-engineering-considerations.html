@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Processing Paradigms — Discussion Backlog</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #fff; color: #2c3e50; line-height: 1.6; }
+h1 { color: #1a5276; border-bottom: 3px solid #2980b9; padding-bottom: 10px; }
+h2 { color: #1a5276; margin-top: 0; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { padding: 20px; vertical-align: top; border: 1px solid #2980b9; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-title { color: #1a5276; font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
+ul { margin: 10px 0; padding-left: 20px; }
+li { margin-bottom: 6px; }
+strong { color: #1a5276; }
+code { background: #e8f0f8; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; color: #1a5276; }
+.questions { background: #fff8e1; border-left: 3px solid #f39c12; padding: 10px 15px; margin: 10px 0; font-size: 0.9em; }
+canvas { display: block; margin: 8px auto; max-width: 100%; }
+.nav-link { display: inline-block; margin: 20px 0; color: #2980b9; text-decoration: none; font-weight: bold; }
+.nav-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<h1>Data Processing Paradigms — Runtime Awareness and Execution Modes</h1>
+<p>Statistical profiling pipelines execute within specific computation paradigms that impose hard constraints on what's possible. A pipeline assuming all data fits in memory will silently produce wrong results on distributed data.</p>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Execution Paradigms</div>
+<ul>
+<li><strong>Single-machine notebook</strong> (pandas, R): All in RAM. Full random access. Exact statistics. Hard ceiling ~10-50GB</li>
+<li><strong>MapReduce / batch</strong> (Spark, Hadoop): Partitioned across nodes. No global ordering. Aggregations need shuffle. Not all stats are reducible</li>
+<li><strong>Streaming</strong> (Kafka, Flink, Beam): Data arrives continuously. No "full dataset." Approximate statistics (HyperLogLog, t-digest)</li>
+<li><strong>Actor-model</strong> (Akka, Erlang, Ray): No shared state. Results async/out-of-order. Must be combinable (monoid structure)</li>
+<li><strong>Mini-batch</strong> (online learning): Small chunks sequential. Running stats (Welford's). Exponential decay. Profiles evolve</li>
+</ul>
+
+<div class="obj-title" style="margin-top: 20px;">Storage and Filesystem Awareness</div>
+<ul>
+<li><strong>Object storage (S3/GCS/Blob):</strong> Object storage, not FS. No append. Eventual consistency on LIST</li>
+<li><strong>HDFS:</strong> Block-level distribution. Sequential reads fast, random impossible</li>
+<li><strong>Long-term archival:</strong> Retrieval minutes-hours. Must plan one-pass computation</li>
+<li><strong>Delta Lake / Iceberg / Hudi:</strong> ACID on object storage. Time travel. Schema evolution</li>
+</ul>
+
+<div class="obj-title" style="margin-top: 20px;">Eventual Consistency — The Silent Profiling Killer</div>
+<ul>
+<li>Write not immediately visible to all readers</li>
+<li>LIST operations stale — may miss files or see deleted ones</li>
+<li>Cross-partition writes not atomic</li>
+<li>Impact: Histogram may have missing bins, undercounted tails, phantom spikes</li>
+</ul>
+
+<div class="obj-title" style="margin-top: 20px;">What Pipeline Needs to Know</div>
+<ul>
+<li>Reducibility check: Is this stat computable in one distributed pass?</li>
+<li>Ordering assumptions: Does this test need ordered data?</li>
+<li>Memory bounds: Does this need full distribution materialized?</li>
+<li>Consistency guarantee: Read-after-write? Eventual? Max staleness?</li>
+<li>Fault tolerance: Can computation resume from checkpoint?</li>
+</ul>
+
+<div class="questions">
+<strong>Key Questions:</strong><br>
+(1) Auto-detect runtime or explicit declaration?<br>
+(2) Minimum window for valid streaming profile?<br>
+(3) "Requires exact" vs "has approximate variant"?<br>
+(4) Compatibility matrix: test x paradigm x validity?<br>
+(5) "Wait and retry" vs "proceed with CI"?<br>
+(6) Lineage interaction with distributed execution?
+</div>
+</td>
+<td>
+<canvas id="c1" width="720" height="300"></canvas>
+<canvas id="c2" width="720" height="260"></canvas>
+<canvas id="c3" width="720" height="220"></canvas>
+</td>
+</tr>
+</table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setupCanvas(id) {
+    var c = document.getElementById(id);
+    var w = c.width, h = c.height;
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return {ctx: ctx, w: w, h: h};
+}
+
+// Canvas 1: Grid of paradigms vs properties
+(function() {
+    var s = setupCanvas('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.fillStyle = '#f8f9fa';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Execution Paradigm Capabilities Matrix', w/2, 18);
+
+    var rows = ['Notebook\n(pandas/R)', 'MapReduce\n(Spark)', 'Streaming\n(Flink)', 'Actor-model\n(Ray)', 'Mini-batch\n(online)'];
+    var cols = ['Random\nAccess', 'Exact\nStats', 'Fault\nTolerant', 'Scalable', 'Ordered'];
+
+    var gridX = 140, gridY = 45;
+    var cellW = 100, cellH = 45;
+    var rowLabelW = 120;
+
+    // Column headers
+    ctx.font = 'bold 13px sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    cols.forEach(function(col, ci) {
+        var lines = col.split('\n');
+        lines.forEach(function(line, li) {
+            ctx.fillText(line, gridX + ci * cellW + cellW/2, gridY + 10 + li * 13);
+        });
+    });
+
+    // Row headers
+    ctx.textAlign = 'right';
+    rows.forEach(function(row, ri) {
+        var lines = row.split('\n');
+        ctx.font = '13px sans-serif';
+        ctx.fillStyle = '#2c3e50';
+        lines.forEach(function(line, li) {
+            ctx.fillText(line, gridX - 10, gridY + 38 + ri * cellH + 10 + li * 12);
+        });
+    });
+
+    // Grid data: 1 = yes (green), 0 = no (red), 0.5 = partial (orange)
+    var data = [
+        [1, 1, 0, 0, 1],      // Notebook
+        [0, 0.5, 1, 1, 0],    // MapReduce
+        [0, 0, 1, 1, 0.5],    // Streaming
+        [0, 0.5, 1, 1, 0],    // Actor
+        [0.5, 0, 0.5, 0.5, 1] // Mini-batch
+    ];
+
+    data.forEach(function(row, ri) {
+        row.forEach(function(val, ci) {
+            var cx = gridX + ci * cellW;
+            var cy = gridY + 30 + ri * cellH;
+
+            // Cell background
+            if (val === 1) ctx.fillStyle = 'rgba(39, 174, 96, 0.15)';
+            else if (val === 0) ctx.fillStyle = 'rgba(231, 76, 60, 0.1)';
+            else ctx.fillStyle = 'rgba(230, 126, 34, 0.12)';
+            ctx.fillRect(cx, cy, cellW, cellH);
+            ctx.strokeStyle = '#ddd';
+            ctx.lineWidth = 0.5;
+            ctx.strokeRect(cx, cy, cellW, cellH);
+
+            // Symbol
+            ctx.font = 'bold 19px sans-serif';
+            ctx.textAlign = 'center';
+            if (val === 1) { ctx.fillStyle = '#27ae60'; ctx.fillText('✓', cx + cellW/2, cy + cellH/2 + 6); }
+            else if (val === 0) { ctx.fillStyle = '#e74c3c'; ctx.fillText('✗', cx + cellW/2, cy + cellH/2 + 6); }
+            else { ctx.fillStyle = '#e67e22'; ctx.fillText('~', cx + cellW/2, cy + cellH/2 + 6); }
+        });
+    });
+
+    // Legend
+    ctx.font = '13px sans-serif';
+    ctx.textAlign = 'left';
+    var ly = 278;
+    ctx.fillStyle = '#27ae60'; ctx.fillText('✓ = Full support', 200, ly);
+    ctx.fillStyle = '#e67e22'; ctx.fillText('~ = Partial/approximate', 350, ly);
+    ctx.fillStyle = '#e74c3c'; ctx.fillText('✗ = Not available', 530, ly);
+})();
+
+// Canvas 2: Eventual consistency timeline
+(function() {
+    var s = setupCanvas('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.fillStyle = '#f8f9fa';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Eventual Consistency: The Danger Zone for Profiling', w/2, 18);
+
+    // Timeline
+    var tlY = 100, tlX1 = 60, tlX2 = 660;
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(tlX1, tlY);
+    ctx.lineTo(tlX2, tlY);
+    ctx.stroke();
+    // Arrow
+    ctx.fillStyle = '#2c3e50';
+    ctx.beginPath();
+    ctx.moveTo(tlX2, tlY);
+    ctx.lineTo(tlX2 - 8, tlY - 5);
+    ctx.lineTo(tlX2 - 8, tlY + 5);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.font = '13px sans-serif';
+    ctx.fillStyle = '#555';
+    ctx.textAlign = 'center';
+    ctx.fillText('time →', tlX2 - 30, tlY + 18);
+
+    // Events
+    var events = [
+        {x: 150, label: 'T1: Write\ncompletes', color: '#27ae60'},
+        {x: 350, label: 'T2: LIST returns\nstale results', color: '#e67e22'},
+        {x: 550, label: 'T3: Data finally\nvisible to all', color: '#27ae60'}
+    ];
+
+    events.forEach(function(ev) {
+        // Tick mark
+        ctx.strokeStyle = ev.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(ev.x, tlY - 15);
+        ctx.lineTo(ev.x, tlY + 15);
+        ctx.stroke();
+
+        // Label
+        ctx.font = 'bold 13px sans-serif';
+        ctx.fillStyle = ev.color;
+        ctx.textAlign = 'center';
+        var lines = ev.label.split('\n');
+        lines.forEach(function(line, li) {
+            ctx.fillText(line, ev.x, tlY - 25 - (lines.length - 1 - li) * 13);
+        });
+    });
+
+    // Danger zone
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.12)';
+    ctx.fillRect(150, tlY + 20, 400, 50);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(150, tlY + 20, 400, 50);
+    ctx.setLineDash([]);
+
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('DANGER ZONE', 350, tlY + 42);
+    ctx.font = '13px sans-serif';
+    ctx.fillText('Profiling here = wrong results (missing data, stale counts)', 350, tlY + 58);
+
+    // Impact examples below
+    ctx.font = '13px sans-serif';
+    ctx.fillStyle = '#2c3e50';
+    ctx.textAlign = 'left';
+    var iy = 195;
+    ctx.fillText('Impact on profiling:', 60, iy);
+    var impacts = [
+        'Histogram: missing bins from unread partitions',
+        'Count: underreported N (stale LIST)',
+        'Percentiles: biased by missing tail data',
+        'Shape detection: phantom spikes from partial reads'
+    ];
+    ctx.font = '13px sans-serif';
+    impacts.forEach(function(imp, i) {
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillText('• ' + imp, 80, iy + 18 + i * 16);
+    });
+})();
+
+// Canvas 3: Reducibility diagram
+(function() {
+    var s = setupCanvas('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.fillStyle = '#f8f9fa';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Statistic Reducibility: What Can Be Computed Distributed?', w/2, 18);
+
+    // Two columns
+    var leftX = 50, rightX = 400;
+    var colW = 250, topY = 45;
+
+    // Reducible column (green)
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.08)';
+    ctx.fillRect(leftX, topY, colW, 155);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(leftX, topY, colW, 155);
+
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText('REDUCIBLE (one pass OK)', leftX + colW/2, topY + 18);
+
+    var reducible = ['mean (sum/count)', 'count', 'min / max', 'variance (Welford\'s)', 'sum', 'boolean any/all'];
+    ctx.font = '13px sans-serif';
+    ctx.textAlign = 'left';
+    reducible.forEach(function(stat, i) {
+        ctx.fillStyle = '#27ae60';
+        ctx.fillText('✓', leftX + 15, topY + 40 + i * 20);
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillText(stat, leftX + 35, topY + 40 + i * 20);
+    });
+
+    // Non-reducible column (red)
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.08)';
+    ctx.fillRect(rightX, topY, colW, 155);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(rightX, topY, colW, 155);
+
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('NON-REDUCIBLE (needs collect)', rightX + colW/2, topY + 18);
+
+    var nonReducible = ['median', 'mode', 'KDE (kernel density)', 'exact percentiles', 'KS test statistic', 'histogram (exact bins)'];
+    ctx.font = '13px sans-serif';
+    ctx.textAlign = 'left';
+    nonReducible.forEach(function(stat, i) {
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillText('✗', rightX + 15, topY + 40 + i * 20);
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillText(stat, rightX + 35, topY + 40 + i * 20);
+    });
+
+    // Arrow annotation
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(rightX + colW + 10, topY + 80);
+    ctx.lineTo(rightX + colW + 30, topY + 80);
+    ctx.stroke();
+    ctx.font = '12px sans-serif';
+    ctx.fillStyle = '#e67e22';
+    ctx.textAlign = 'left';
+    ctx.fillText('Need', rightX + colW + 5, topY + 65);
+    ctx.fillText('collect-', rightX + colW + 5, topY + 95);
+    ctx.fillText('to-driver', rightX + colW + 5, topY + 108);
+})();
+</script>
+
+</body>
+</html>

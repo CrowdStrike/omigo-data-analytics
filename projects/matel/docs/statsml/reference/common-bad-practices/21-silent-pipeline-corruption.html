@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Silent Data Poisoning — Common Bad Practices</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 20px 10px; line-height: 1.6; }
+h1 { font-size: 1.6em; margin-bottom: 10px; color: #1a5276; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.0em; margin-bottom: 20px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; margin-right: 15px; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 6px 0; }
+strong { color: #1a5276; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 40%; }
+.obj-table td:last-child { width: 60%; text-align: center; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+</style>
+</head>
+<body>
+
+<h1>Ignoring Silent Pipeline Corruption</h1>
+<p class="subtitle">Negligent Practice — Not validating data semantics at pipeline boundaries. Bugs that produce wrong-but-plausible values pass every structural check and poison months of downstream work.</p>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">The Practice</div>
+<ul>
+<li>Pipeline has schema checks (types, nulls, row counts). No semantic checks (distributions, value ranges, cross-column relationships).</li>
+<li>A JOIN fanout silently doubles revenue. A timezone shift moves all timestamps +8 hours. A default change flips NULL to 0. No alert fires because row counts match, schema is valid, nulls are absent.</li>
+<li>Months of dashboards, models, and business decisions built on corrupted data. Discovered during quarterly reconciliation — 3 months too late.</li>
+</ul>
+<div class="obj-title" style="margin-top:14px;">Why It's Common</div>
+<ul>
+<li>"We have data validation!" — Yes, for STRUCTURE. Not for MEANING. Schema checks are necessary but nowhere near sufficient.</li>
+<li>"The tests pass!" — Tests check that code runs. They don't check that values make sense in context.</li>
+<li>"Row count matches expected." — 100K rows came in, 100K rows came out. But each row is wrong.</li>
+</ul>
+<div class="obj-title" style="margin-top:14px;">The Data-Specific Damage</div>
+<ul>
+<li><strong>Models trained on poison:</strong> ML model learns the corrupted pattern as ground truth. Accuracy drops gradually. By the time it's noticed, the model has been serving bad predictions for weeks.</li>
+<li><strong>Decisions made on fiction:</strong> "Revenue is up 40%!" → hire more people → discover it was a JOIN bug → revenue is flat → layoffs. The business decision was irreversible.</li>
+<li><strong>Calendar cost:</strong> Corrupt data can't be uncomputed. If raw data wasn't retained, or if the corruption window overlaps with a model training cycle, you've lost months of work.</li>
+</ul>
+<div class="obj-title" style="margin-top:14px;">What's Missing</div>
+<ul>
+<li>Distribution drift checks at every pipeline boundary (mean, variance, percentiles).</li>
+<li>Cross-column consistency checks (revenue = price × quantity).</li>
+<li>Row count change budgets (±5% expected, flag if exceeded).</li>
+<li>Value range assertions (latitude between -90 and 90, age between 0 and 120).</li>
+</ul>
+<p><strong>Why it persists:</strong> Semantic validation is harder than structural validation. It requires domain knowledge to write the checks. "What SHOULD this number be?" is a harder question than "IS this number a number?" Teams default to the easy checks and call it "validated."</p>
+<p><strong>The tell:</strong> Ask: "If the mean of column X shifted by 50%, would any alert fire?" If the answer is no — your pipeline is vulnerable to silent poisoning.</p>
+</td><td><canvas id="c1" width="720" height="380"></canvas></td></tr>
+</table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    return {ctx:ctx, w:w, h:h};
+}
+
+(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+
+ctx.fillStyle='#1a5276';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+ctx.fillText('What gets checked vs what should be checked',w/2,22);
+
+var margin={left:30,right:30,top:50,bottom:30};
+
+// Two columns: checked (structural) and unchecked (semantic)
+var colW=(w-margin.left-margin.right)/2-20;
+var leftX=margin.left, rightX=margin.left+colW+40;
+
+// Left: structural (checked)
+ctx.fillStyle='rgba(39,174,96,0.1)';
+ctx.fillRect(leftX,margin.top,colW,280);
+ctx.strokeStyle='#27ae60';ctx.lineWidth=2;
+ctx.strokeRect(leftX,margin.top,colW,280);
+
+ctx.fillStyle='#27ae60';ctx.font='bold 13px sans-serif';ctx.textAlign='center';
+ctx.fillText('✓ Structural Checks (what teams DO)',leftX+colW/2,margin.top+20);
+
+var structural=['Schema matches expected','No null in required fields','Row count within range','Data types correct','File/table exists','No duplicate primary keys'];
+ctx.fillStyle='#333';ctx.font='11px sans-serif';ctx.textAlign='left';
+structural.forEach(function(item,i){
+    ctx.fillText('✓ '+item,leftX+16,margin.top+50+i*28);
+});
+
+ctx.fillStyle='#27ae60';ctx.font='italic 11px sans-serif';ctx.textAlign='center';
+ctx.fillText('Necessary. Not sufficient.',leftX+colW/2,margin.top+265);
+
+// Right: semantic (unchecked)
+ctx.fillStyle='rgba(231,76,60,0.06)';
+ctx.fillRect(rightX,margin.top,colW,280);
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=2;
+ctx.strokeRect(rightX,margin.top,colW,280);
+
+ctx.fillStyle='#e74c3c';ctx.font='bold 13px sans-serif';ctx.textAlign='center';
+ctx.fillText('✗ Semantic Checks (what teams SKIP)',rightX+colW/2,margin.top+20);
+
+var semantic=['Distribution within expected range','Cross-column relationships hold','Values physically/logically plausible','Temporal consistency preserved','No silent fanout (1:1 → 1:N)','Feature correlations stable'];
+ctx.fillStyle='#333';ctx.font='11px sans-serif';ctx.textAlign='left';
+semantic.forEach(function(item,i){
+    ctx.fillText('✗ '+item,rightX+16,margin.top+50+i*28);
+});
+
+ctx.fillStyle='#e74c3c';ctx.font='italic 11px sans-serif';ctx.textAlign='center';
+ctx.fillText('This is where silent poisoning lives.',rightX+colW/2,margin.top+265);
+
+ctx.fillStyle='#555';ctx.font='italic 13px sans-serif';ctx.textAlign='center';
+ctx.fillText('Structural validation catches ~20% of bugs. Semantic validation catches the rest.',w/2,h-10);
+})();
+</script>
+</body>
+</html>

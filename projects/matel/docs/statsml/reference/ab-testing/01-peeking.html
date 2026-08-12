@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Peeking / Optional Stopping — A/B Testing Pitfalls</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 20px 10px; line-height: 1.6; }
+h1 { font-size: 1.6em; margin-bottom: 10px; color: #1a5276; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.0em; margin-bottom: 20px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; margin-right: 15px; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 6px 0; }
+strong { color: #1a5276; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 40%; }
+.obj-table td:last-child { width: 60%; text-align: center; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+</style>
+</head>
+<body>
+<h1>Peeking / Optional Stopping</h1>
+<p class="subtitle">Statistical Sin — Checking results daily until p&lt;0.05, then stopping.</p>
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">The Problem</div>
+<ul>
+<li>Run test. Check p-value DAILY. Day 3: p=0.03! "Significant! Ship!" But: checking N times inflates false positive rate from 5% to 20-30%.</li>
+<li>At any check, random fluctuation can cross 0.05. Check daily for 14 days: P(ever p&lt;0.05 | null true) ≈ 30%.</li>
+<li><strong>Why:</strong> Impatience + pressure to ship + "we have significance!" Nobody remembers that α=0.05 is valid for ONE check at a pre-determined time.</li>
+<li><strong>The math:</strong> With 14 daily checks at α=0.05, effective FPR ≈ 0.26. You're running a 26% false positive test, not a 5% one.</li>
+</ul>
+<p><strong>Correct approach:</strong> Fix sample size &amp; duration BEFORE the test. Check ONCE at end. Or: use sequential testing (Bayesian, always-valid p-values, group sequential designs) built for continuous monitoring.</p>
+<p><strong>The tell:</strong> Ask "when did you decide to stop?" If answer is "when it was significant" — invalid.</p>
+</td><td><canvas id="c1" width="720" height="340"></canvas></td></tr>
+</table>
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    return {ctx:ctx, w:w, h:h};
+}
+(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+var pad=50,gw=w-2*pad,gh=h-2*pad;
+// Background
+ctx.fillStyle='#f9f9f9';ctx.fillRect(pad,pad-10,gw,gh+20);
+// Axes
+ctx.strokeStyle='#666';ctx.lineWidth=1;
+ctx.beginPath();ctx.moveTo(pad,pad+gh);ctx.lineTo(pad+gw,pad+gh);ctx.stroke();
+ctx.beginPath();ctx.moveTo(pad,pad);ctx.lineTo(pad,pad+gh);ctx.stroke();
+// Y-axis labels
+ctx.fillStyle='#666';ctx.font='16px sans-serif';ctx.textAlign='right';
+ctx.fillText('0.00',pad-5,pad+gh);ctx.fillText('0.05',pad-5,pad+gh-gh*0.25);
+ctx.fillText('0.10',pad-5,pad+gh-gh*0.5);ctx.fillText('0.20',pad-5,pad+gh-gh*1.0);
+// X-axis labels
+ctx.textAlign='center';
+for(var d=1;d<=14;d++){ctx.fillText('D'+d,pad+(d-0.5)*gw/14,pad+gh+14);}
+// Alpha line at 0.05
+var alphaY=pad+gh-gh*0.25;
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=2;ctx.setLineDash([6,4]);
+ctx.beginPath();ctx.moveTo(pad,alphaY);ctx.lineTo(pad+gw,alphaY);ctx.stroke();
+ctx.setLineDash([]);
+ctx.fillStyle='#e74c3c';ctx.font='bold 18px sans-serif';ctx.textAlign='left';
+ctx.fillText('α = 0.05',pad+gw+5,alphaY+4);
+// P-value random walk
+var pvals=[0.15,0.11,0.03,0.08,0.12,0.09,0.07,0.06,0.04,0.08,0.11,0.09,0.13,0.10];
+ctx.strokeStyle='#1a5276';ctx.lineWidth=2.5;
+ctx.beginPath();
+for(var i=0;i<pvals.length;i++){
+    var x=pad+(i+0.5)*gw/14;
+    var y=pad+gh-pvals[i]/0.20*gh;
+    if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+}
+ctx.stroke();
+// Dots
+for(var i=0;i<pvals.length;i++){
+    var x=pad+(i+0.5)*gw/14;
+    var y=pad+gh-pvals[i]/0.20*gh;
+    ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);
+    ctx.fillStyle=pvals[i]<0.05?'#e74c3c':'#1a5276';ctx.fill();
+}
+// Arrow at day 3
+var ax=pad+2.5*gw/14,ay=pad+gh-0.03/0.20*gh;
+ctx.fillStyle='#e74c3c';ctx.font='bold 16px sans-serif';ctx.textAlign='center';
+ctx.fillText('Stopped here!',ax,ay-20);ctx.fillText('p=0.03',ax,ay-8);
+// Arrow
+ctx.beginPath();ctx.moveTo(ax,ay-5);ctx.lineTo(ax-4,ay-12);ctx.lineTo(ax+4,ay-12);ctx.fill();
+// Continuation label
+ctx.fillStyle='#27ae60';ctx.font='16px sans-serif';ctx.textAlign='center';
+ctx.fillText('...but p goes back above 0.05',pad+gw*0.7,pad+15);
+// Bottom label
+ctx.fillStyle='#666';ctx.font='italic 14px sans-serif';ctx.textAlign='center';
+ctx.fillText('Random walk crosses any threshold if you watch long enough.',w/2,h-5);
+})();
+</script>
+</body>
+</html>

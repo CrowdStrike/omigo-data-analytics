@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Endpoint Security Pitfalls</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; padding: 20px; background: #f5f7fa; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 14px; }
+.nav a:hover { text-decoration: underline; }
+h1 { color: #1a5276; border-bottom: 3px solid #2980b9; padding-bottom: 10px; }
+.obj-table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
+.obj-table td { padding: 15px; border: 1px solid #2980b9; vertical-align: top; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-title { font-weight: bold; color: #1a5276; font-size: 16px; margin-bottom: 8px; }
+.pitfall-desc { color: #333; font-size: 14px; line-height: 1.6; }
+canvas { max-width: 100%; }
+</style>
+</head>
+<body>
+<h1>Endpoint Security Pitfalls</h1>
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">1. Fileless Malware</div>
+<div class="pitfall-desc">
+Lives only in memory with no file to scan. Abuses PowerShell, WMI, and other scripting engines.
+Traditional file-hash-based detection is completely blind to these attacks. The malware leaves no
+artifacts on disk, so signature scanners find nothing. Security must analyze behavior (memory
+patterns, API calls, script execution) rather than file artifacts.
+</div>
+</td>
+<td><canvas id="canvas1" style="width:720px;height:200px;"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">2. Living-off-the-Land Binaries (LOLBins)</div>
+<div class="pitfall-desc">
+Attackers use legitimate Windows tools: certutil, mshta, regsvr32, rundll32. These same binaries
+are used by IT admins daily for legitimate administration. What makes usage "malicious" is context,
+not the binary itself. One person's admin task is another's attack vector. Blocking the binary
+blocks legitimate work; allowing it enables attacks.
+</div>
+</td>
+<td><canvas id="canvas2" style="width:720px;height:200px;"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">3. Process Tree Context Required</div>
+<div class="pitfall-desc">
+cmd.exe alone is normal. cmd.exe spawned by Word.exe is suspicious. cmd.exe spawned by Word.exe
+spawned by Outlook.exe receiving an email attachment is VERY suspicious. Security requires the
+full process ancestry tree, not just a single process in isolation. Without parent-child context,
+every process looks benign individually.
+</div>
+</td>
+<td><canvas id="canvas3" style="width:720px;height:200px;"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">4. Signature Delay</div>
+<div class="pitfall-desc">
+New malware appears in the wild. AV vendor obtains a sample, analyzes it, creates a signature,
+tests it, and pushes the update. This cycle takes 4-72 hours. During that entire window there is
+zero protection from signature-based detection. The gap between "in the wild" and "detected" is
+precisely when the most damage occurs.
+</div>
+</td>
+<td><canvas id="canvas4" style="width:720px;height:200px;"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">5. Per-Machine Behavioral Baseline</div>
+<div class="pitfall-desc">
+A developer machine regularly runs compilers, debuggers, and scripts &mdash; all normal activity.
+An accountant machine running those same tools is highly suspicious. A single behavioral model
+applied uniformly to all endpoints produces either massive false positives on developer machines
+OR missed attacks on non-developer endpoints. Each role needs its own baseline.
+</div>
+</td>
+<td><canvas id="canvas5" style="width:720px;height:200px;"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">6. Kernel/Ring-0 Rootkit Blindness</div>
+<div class="pitfall-desc">
+If malware compromises the kernel, it controls what the EDR agent CAN SEE. The agent runs in
+user-space (Ring 3) while the rootkit operates at Ring 0. The agent reports "all clear" because
+the rootkit hides processes, files, and network connections from it. You cannot trust a sensor
+that runs inside the compromised system it is supposed to monitor.
+</div>
+</td>
+<td><canvas id="canvas6" style="width:720px;height:200px;"></canvas></td>
+</tr>
+</table>
+<script>
+function setupCanvas(canvas, width, height) {
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = width + 'px';
+    canvas.style.height = height + 'px';
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return ctx;
+}
+
+// Chart 1: Fileless Malware - Detection rate comparison
+(function() {
+    const canvas = document.getElementById('canvas1');
+    const ctx = setupCanvas(canvas, 720, 200);
+    const chartFont = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Detection Rate: File-Based vs Fileless Malware', 360, 20);
+
+    const categories = ['File-Hash AV', 'Heuristic AV', 'Behavior Analysis', 'Memory Scanning', 'EDR (Advanced)'];
+    const fileBasedRates = [95, 85, 80, 70, 90];
+    const filelessRates = [5, 25, 65, 55, 70];
+    const barWidth = 25;
+    const startX = 100;
+    const spacing = 125;
+    const baseY = 175;
+    const maxHeight = 120;
+
+    ctx.font = chartFont;
+    for (let i = 0; i < categories.length; i++) {
+        const x = startX + i * spacing;
+
+        // File-based bar
+        const h1 = (fileBasedRates[i] / 100) * maxHeight;
+        ctx.fillStyle = '#27ae60';
+        ctx.fillRect(x - barWidth - 2, baseY - h1, barWidth, h1);
+
+        // Fileless bar
+        const h2 = (filelessRates[i] / 100) * maxHeight;
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillRect(x + 2, baseY - h2, barWidth, h2);
+
+        // Labels
+        ctx.fillStyle = '#333';
+        ctx.textAlign = 'center';
+        ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillText(categories[i], x, baseY + 15);
+
+        // Values
+        ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillStyle = '#27ae60';
+        ctx.fillText(fileBasedRates[i] + '%', x - barWidth + 10, baseY - h1 - 4);
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillText(filelessRates[i] + '%', x + barWidth - 10, baseY - h2 - 4);
+    }
+
+    // Legend
+    ctx.font = chartFont;
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(20, 40, 15, 15);
+    ctx.fillStyle = '#333';
+    ctx.textAlign = 'left';
+    ctx.fillText('File-Based Malware', 40, 53);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(220, 40, 15, 15);
+    ctx.fillStyle = '#333';
+    ctx.fillText('Fileless Malware', 240, 53);
+})();
+
+// Chart 2: LOLBins - Legitimate vs Malicious usage
+(function() {
+    const canvas = document.getElementById('canvas2');
+    const ctx = setupCanvas(canvas, 720, 200);
+    const chartFont = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('LOLBin Usage: Legitimate Admin vs Attacker (daily executions)', 360, 20);
+
+    const tools = ['certutil', 'mshta', 'regsvr32', 'rundll32', 'wmic'];
+    const legitimate = [120, 15, 85, 300, 95];
+    const malicious = [3, 2, 4, 8, 5];
+    const startX = 80;
+    const spacing = 130;
+    const baseY = 170;
+    const maxHeight = 110;
+    const maxVal = 300;
+
+    ctx.font = chartFont;
+
+    for (let i = 0; i < tools.length; i++) {
+        const x = startX + i * spacing;
+
+        // Legitimate bar (tall)
+        const h1 = (legitimate[i] / maxVal) * maxHeight;
+        ctx.fillStyle = '#3498db';
+        ctx.fillRect(x - 20, baseY - h1, 22, h1);
+
+        // Malicious bar (tiny - the problem!)
+        const h2 = Math.max((malicious[i] / maxVal) * maxHeight, 3);
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillRect(x + 5, baseY - h2, 22, h2);
+
+        // Tool name
+        ctx.fillStyle = '#333';
+        ctx.textAlign = 'center';
+        ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillText(tools[i], x + 5, baseY + 16);
+
+        // Values
+        ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillStyle = '#3498db';
+        ctx.fillText(legitimate[i], x - 9, baseY - h1 - 4);
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillText(malicious[i], x + 16, baseY - h2 - 4);
+    }
+
+    // Legend
+    ctx.font = chartFont;
+    ctx.fillStyle = '#3498db';
+    ctx.fillRect(20, 40, 15, 15);
+    ctx.fillStyle = '#333';
+    ctx.textAlign = 'left';
+    ctx.fillText('Legitimate Use', 40, 53);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(200, 40, 15, 15);
+    ctx.fillStyle = '#333';
+    ctx.fillText('Malicious Use (hidden in noise)', 220, 53);
+})();
+
+// Chart 3: Process Tree Context - Suspicion levels
+(function() {
+    const canvas = document.getElementById('canvas3');
+    const ctx = setupCanvas(canvas, 720, 200);
+    const chartFont = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Suspicion Score by Process Ancestry Depth', 360, 20);
+
+    // Draw process tree diagram
+    const trees = [
+        { label: 'cmd.exe\n(alone)', score: 5, color: '#27ae60' },
+        { label: 'explorer.exe\n  └ cmd.exe', score: 10, color: '#27ae60' },
+        { label: 'winword.exe\n  └ cmd.exe', score: 72, color: '#f39c12' },
+        { label: 'outlook.exe\n  └ winword.exe\n    └ cmd.exe', score: 95, color: '#e74c3c' }
+    ];
+
+    const startX = 50;
+    const spacing = 175;
+    const barBase = 170;
+    const maxHeight = 100;
+
+    for (let i = 0; i < trees.length; i++) {
+        const x = startX + i * spacing;
+
+        // Bar
+        const h = (trees[i].score / 100) * maxHeight;
+        ctx.fillStyle = trees[i].color;
+        ctx.fillRect(x + 30, barBase - h, 80, h);
+
+        // Score on bar
+        ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'center';
+        ctx.fillText(trees[i].score + '%', x + 70, barBase - h + 20);
+
+        // Process tree label
+        ctx.font = '12px monospace';
+        ctx.fillStyle = '#333';
+        ctx.textAlign = 'left';
+        const lines = trees[i].label.split('\n');
+        for (let j = 0; j < lines.length; j++) {
+            ctx.fillText(lines[j], x + 10, 55 + j * 15);
+        }
+    }
+
+    // Axis label
+    ctx.font = chartFont;
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    ctx.fillText('More ancestry context → Higher confidence in detection', 360, 195);
+})();
+
+// Chart 4: Signature Delay - Timeline
+(function() {
+    const canvas = document.getElementById('canvas4');
+    const ctx = setupCanvas(canvas, 720, 200);
+    const chartFont = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Signature Update Timeline: The Unprotected Window', 360, 20);
+
+    // Timeline
+    const timelineY = 100;
+    const startX = 50;
+    const endX = 680;
+
+    // Background danger zone
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.1)';
+    ctx.fillRect(startX, 45, 480, 110);
+
+    // Danger zone label
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('ZERO PROTECTION WINDOW (4-72 hours)', 290, 60);
+
+    // Timeline line
+    ctx.beginPath();
+    ctx.moveTo(startX, timelineY);
+    ctx.lineTo(endX, timelineY);
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Events on timeline
+    const events = [
+        { x: 50, label: 'Malware\nReleased', time: 'T+0h' },
+        { x: 180, label: 'First\nVictims', time: 'T+1h' },
+        { x: 310, label: 'Vendor Gets\nSample', time: 'T+4h' },
+        { x: 430, label: 'Signature\nCreated', time: 'T+24h' },
+        { x: 530, label: 'Update\nPushed', time: 'T+48h' },
+        { x: 640, label: 'Endpoints\nProtected', time: 'T+72h' }
+    ];
+
+    for (let i = 0; i < events.length; i++) {
+        const e = events[i];
+
+        // Dot
+        ctx.beginPath();
+        ctx.arc(e.x, timelineY, 6, 0, Math.PI * 2);
+        ctx.fillStyle = i < 4 ? '#e74c3c' : '#27ae60';
+        ctx.fill();
+
+        // Label
+        ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillStyle = '#333';
+        ctx.textAlign = 'center';
+        const lines = e.label.split('\n');
+        for (let j = 0; j < lines.length; j++) {
+            ctx.fillText(lines[j], e.x, timelineY + 25 + j * 14);
+        }
+
+        // Time
+        ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillStyle = '#2980b9';
+        ctx.fillText(e.time, e.x, timelineY - 15);
+    }
+
+    // Damage indicator
+    ctx.font = chartFont;
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('Damage occurs HERE ↓', 290, 175);
+})();
+
+// Chart 5: Per-Machine Behavioral Baseline
+(function() {
+    const canvas = document.getElementById('canvas5');
+    const ctx = setupCanvas(canvas, 720, 200);
+    const chartFont = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Alert Rates: Universal Model vs Per-Role Baseline', 360, 20);
+
+    // Categories
+    const roles = ['Developer', 'Accountant', 'Executive', 'IT Admin', 'Intern'];
+    const universalFP = [85, 5, 8, 60, 12];
+    const perRoleFP = [8, 7, 6, 10, 9];
+
+    const startX = 70;
+    const spacing = 135;
+    const baseY = 175;
+    const maxHeight = 110;
+
+    for (let i = 0; i < roles.length; i++) {
+        const x = startX + i * spacing;
+        const barW = 20;
+
+        // Universal model FP bar
+        const h1 = (universalFP[i] / 100) * maxHeight;
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillRect(x - barW - 4, baseY - h1, barW, h1);
+
+        // Per-role FP bar
+        const h2 = (perRoleFP[i] / 100) * maxHeight;
+        ctx.fillStyle = '#27ae60';
+        ctx.fillRect(x + 4, baseY - h2, barW, h2);
+
+        // Role label
+        ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillStyle = '#333';
+        ctx.textAlign = 'center';
+        ctx.fillText(roles[i], x + 2, baseY + 15);
+
+        // Values
+        ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillStyle = '#e74c3c';
+        ctx.textAlign = 'center';
+        ctx.fillText(universalFP[i] + '%', x - barW + 6, baseY - h1 - 3);
+        ctx.fillStyle = '#27ae60';
+        ctx.fillText(perRoleFP[i] + '%', x + barW - 6, baseY - h2 - 3);
+    }
+
+    // Legend
+    ctx.font = chartFont;
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(20, 40, 15, 15);
+    ctx.fillStyle = '#333';
+    ctx.textAlign = 'left';
+    ctx.fillText('Universal Model (FP%)', 40, 53);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(300, 40, 15, 15);
+    ctx.fillStyle = '#333';
+    ctx.fillText('Per-Role Baseline (FP%)', 320, 53);
+})();
+
+// Chart 6: Kernel/Ring-0 Rootkit Blindness - Trust layers
+(function() {
+    const canvas = document.getElementById('canvas6');
+    const ctx = setupCanvas(canvas, 720, 200);
+    const chartFont = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Privilege Rings: What the EDR Agent Can See', 360, 20);
+
+    // Left side: Ring diagram
+    const centerX = 180;
+    const centerY = 120;
+    const radii = [75, 55, 35];
+    const colors = ['#e74c3c', '#f39c12', '#3498db'];
+
+    for (let i = 0; i < radii.length; i++) {
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radii[i], 0, Math.PI * 2);
+        ctx.fillStyle = colors[i] + '33';
+        ctx.fill();
+        ctx.strokeStyle = colors[i];
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
+
+    // Ring labels
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Ring 0', centerX, centerY - 60);
+    ctx.fillStyle = '#f39c12';
+    ctx.fillText('Ring 1/2', centerX, centerY - 38);
+    ctx.fillStyle = '#3498db';
+    ctx.fillText('Ring 3', centerX, centerY - 10);
+    ctx.fillStyle = '#333';
+    ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('EDR Agent', centerX, centerY + 8);
+
+    // Right side: What each layer sees
+    const rightX = 350;
+    ctx.textAlign = 'left';
+
+    // Rootkit at Ring 0
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Rootkit (Ring 0) controls:', rightX, 55);
+    ctx.font = chartFont;
+    ctx.fillStyle = '#333';
+    ctx.fillText('• Process list (hides malware)', rightX + 10, 78);
+    ctx.fillText('• File system (hides payloads)', rightX + 10, 100);
+    ctx.fillText('• Network stack (hides C2)', rightX + 10, 122);
+
+    // EDR reports
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('EDR Agent (Ring 3) reports:', rightX, 150);
+    ctx.font = chartFont;
+    ctx.fillStyle = '#666';
+    ctx.fillText('• "All clear!" (sees only what kernel allows)', rightX + 10, 173);
+
+    // Arrow showing control
+    ctx.beginPath();
+    ctx.moveTo(270, 100);
+    ctx.lineTo(340, 100);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 3]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Warning
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('⚠ Cannot trust sensor inside compromised system', 360, 197);
+})();
+</script>
+</body>
+</html>

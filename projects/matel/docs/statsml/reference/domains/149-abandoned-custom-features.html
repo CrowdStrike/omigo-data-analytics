@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>149. Abandoned Custom Features Polluting Pipelines</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 20px 10px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 40%; }
+.obj-table td:last-child { width: 60%; text-align: center; }
+.obj-table tr:nth-child(even) td { background: #fafcfe; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+</style>
+</head>
+<body>
+
+<h1>Abandoned Custom Features Polluting Pipelines</h1>
+<p class="subtitle">Short-term research projects add custom tracking and features. The project ends or the feature doesn't launch. The instrumentation stays — consuming compute, adding latency, polluting schemas, confusing future engineers. Nobody removes it because nobody owns it.</p>
+
+<div class="philosophy">
+<strong>The core problem:</strong> Adding a feature to a pipeline takes 1 day. Removing it requires: understanding all downstream dependencies, confirming nothing else uses it, getting approval from the pipeline owner, and accepting risk that removal breaks something silently. The asymmetry (easy to add, hard to remove) means features accumulate monotonically. After 3 years: 40% of pipeline compute serves dead features.
+</div>
+
+<h2>Pitfall 1: The "Temporary" Addition That Becomes Permanent</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Added for Q3 Research → Still Running 2 Years Later</div>
+<ul>
+<li><strong>The pattern:</strong> "I need scroll-depth tracking for my personalization experiment." Added in 2 days. Experiment concluded: scroll depth isn't predictive. But the event still fires on every page load, 50M times/day, stored forever.</li>
+<li><strong>Why nobody removes it:</strong> The person who added it moved teams. New pipeline owner sees the event, doesn't know its history. "Maybe something depends on it." Leaves it. Safe choice — but expensive long-term.</li>
+<li><strong>The compound effect:</strong> 10 researchers/year × 3 custom features each × 3 years = 90 abandoned features. Combined: 5 hours of daily compute, 200GB/day storage, 40ms added latency from dead instrumentation.</li>
+</ul>
+</td><td><canvas id="c1" width="720" height="260"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 2: Schema Pollution — Dead Columns That Confuse Everyone</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">200 Columns in the Feature Store. 80 Are From Dead Projects.</div>
+<ul>
+<li><strong>The confusion:</strong> New hire sees `exp_q3_2024_scroll_v2`, `tmp_user_affinity_test`, `model_candidate_b_score`. Are these active? Deprecated? Safe to use? No documentation. Creator gone.</li>
+<li><strong>The accidental usage:</strong> AutoML picks up a dead feature (it happens to correlate with the target because it was computed from related data). Model trains on it. Feature stops updating 6 months later (compute was finally decommissioned). Model silently degrades because a key input went stale.</li>
+<li><strong>The cleanup cost:</strong> To safely remove 1 dead column: trace all downstream consumers (dashboards, models, reports, exports). Confirm zero dependencies. This takes 2-4 hours PER COLUMN. 80 dead columns = 160-320 hours of cleanup. Nobody has that bandwidth, so it never happens.</li>
+</ul>
+</td><td><canvas id="c2" width="720" height="260"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 3: Latency and Cost Creep — Death by a Thousand Cuts</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Each Addition Is Small. Together They're Crippling.</div>
+<ul>
+<li><strong>Per-feature cost:</strong> 2ms latency, 10min compute/day, 5GB storage/day, $30/month. Negligible individually.</li>
+<li><strong>50 abandoned features:</strong> 100ms latency (user-noticeable), 8 hours compute/day (entire cluster capacity), 250GB storage/day ($170/month), $1,500/month total. Significant.</li>
+<li><strong>The invisible tax:</strong> Pipeline takes 12 hours to run. Stakeholders complain it's slow. 40% of that time is computing features nobody reads. But nobody knows WHICH 40% — so you can't speed it up without auditing everything.</li>
+<li><strong>The irony:</strong> Team requests more compute budget because "the pipeline is too slow." Gets approved. Real fix: remove dead features. But that requires effort nobody is incentivized to do (no one gets promoted for deleting code).</li>
+</ul>
+</td><td><canvas id="c3" width="720" height="260"></canvas></td></tr>
+</table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    return {ctx:ctx, w:w, h:h};
+}
+
+(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+ctx.fillStyle='#1a5276';ctx.font='bold 13px sans-serif';ctx.textAlign='center';
+ctx.fillText('Feature lifecycle: added quickly, never removed',w/2,18);
+
+var steps=[
+    {label:'Day 1:\nAdd feature',color:'#27ae60',time:'2 hours'},
+    {label:'Month 3:\nProject ends',color:'#e67e22',time:'—'},
+    {label:'Month 6:\nCreator\nleaves team',color:'#e67e22',time:'—'},
+    {label:'Year 1:\nStill running\n"just in case"',color:'#e74c3c',time:'$360 wasted'},
+    {label:'Year 3:\nNobody knows\nwhat it does',color:'#922b21',time:'$1,080 wasted'}
+];
+
+var margin={left:30,right:30,top:40,bottom:30};
+var stepW=(w-margin.left-margin.right)/steps.length;
+
+steps.forEach(function(step,i){
+    var x=margin.left+i*stepW;
+    var y=margin.top+30;
+    ctx.fillStyle=step.color;ctx.globalAlpha=0.15;
+    ctx.fillRect(x+4,y,stepW-8,140);ctx.globalAlpha=1;
+    ctx.strokeStyle=step.color;ctx.lineWidth=2;ctx.strokeRect(x+4,y,stepW-8,140);
+
+    ctx.fillStyle=step.color;ctx.font='bold 11px sans-serif';ctx.textAlign='center';
+    var lines=step.label.split('\n');
+    lines.forEach(function(line,li){ctx.fillText(line,x+stepW/2,y+25+li*14);});
+
+    ctx.fillStyle='#555';ctx.font='10px sans-serif';
+    ctx.fillText(step.time,x+stepW/2,y+125);
+
+    if(i<steps.length-1){
+        ctx.strokeStyle='#999';ctx.lineWidth=2;
+        ctx.beginPath();ctx.moveTo(x+stepW-4,y+70);ctx.lineTo(x+stepW+4,y+70);ctx.stroke();
+    }
+});
+
+ctx.fillStyle='#555';ctx.font='italic 12px sans-serif';ctx.textAlign='center';
+ctx.fillText('Adding: 2 hours. Removing: "too risky." Net: features only accumulate.',w/2,h-8);
+})();
+
+(function(){var s=setup('c2');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+ctx.fillStyle='#1a5276';ctx.font='bold 13px sans-serif';ctx.textAlign='center';
+ctx.fillText('Feature store columns: active vs abandoned',w/2,18);
+
+var total=200,active=120,dead=80;
+var margin={left:40,right:40,top:50,bottom:40};
+var barW=w-margin.left-margin.right;
+var barH=50;
+var y=margin.top+20;
+
+var activeW=(active/total)*barW;
+var deadW=(dead/total)*barW;
+
+ctx.fillStyle='#27ae60';ctx.fillRect(margin.left,y,activeW,barH);
+ctx.fillStyle='#e74c3c';ctx.fillRect(margin.left+activeW,y,deadW,barH);
+ctx.strokeStyle='#333';ctx.lineWidth=1.5;ctx.strokeRect(margin.left,y,barW,barH);
+
+ctx.fillStyle='#fff';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
+ctx.fillText(active+' active columns (60%)',margin.left+activeW/2,y+barH/2+4);
+ctx.fillText(dead+' dead columns (40%)',margin.left+activeW+deadW/2,y+barH/2+4);
+
+ctx.fillStyle='#e74c3c';ctx.font='11px sans-serif';ctx.textAlign='center';
+ctx.fillText('Dead columns: no owner, no docs, unknown dependencies. Too risky to remove, too costly to keep.',w/2,y+barH+30);
+
+ctx.fillStyle='#555';ctx.font='italic 12px sans-serif';
+ctx.fillText('New ML engineer: "Which columns can I use?" Answer: "Nobody knows for sure."',w/2,h-10);
+})();
+
+(function(){var s=setup('c3');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+ctx.fillStyle='#1a5276';ctx.font='bold 13px sans-serif';ctx.textAlign='center';
+ctx.fillText('Cumulative cost of abandoned features over time',w/2,18);
+
+var margin={left:60,right:30,top:45,bottom:40};
+var plotW=w-margin.left-margin.right;
+var plotH=h-margin.top-margin.bottom;
+
+ctx.strokeStyle='#333';ctx.lineWidth=1.5;
+ctx.beginPath();ctx.moveTo(margin.left,margin.top);ctx.lineTo(margin.left,margin.top+plotH);
+ctx.lineTo(margin.left+plotW,margin.top+plotH);ctx.stroke();
+
+// Stepped line (grows with each abandoned project)
+var months=36;
+var cost=[];var c2=0;
+for(var m=0;m<months;m++){
+    if(m%3===0&&m>0)c2+=30; // each quarter: another $30/mo added
+    cost.push(c2);
+}
+var maxCost=400;
+var dx=plotW/months;
+
+ctx.fillStyle='rgba(231,76,60,0.2)';
+ctx.beginPath();ctx.moveTo(margin.left,margin.top+plotH);
+cost.forEach(function(v,i){ctx.lineTo(margin.left+i*dx,margin.top+plotH-(v/maxCost)*plotH);});
+ctx.lineTo(margin.left+(months-1)*dx,margin.top+plotH);ctx.closePath();ctx.fill();
+
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=2.5;
+ctx.beginPath();
+cost.forEach(function(v,i){
+    var px=margin.left+i*dx,py=margin.top+plotH-(v/maxCost)*plotH;
+    if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
+});
+ctx.stroke();
+
+ctx.fillStyle='#e74c3c';ctx.font='bold 11px sans-serif';ctx.textAlign='right';
+ctx.fillText('$'+cost[months-1]+'/month',margin.left+plotW,margin.top+20);
+ctx.fillStyle='#555';ctx.font='10px sans-serif';ctx.textAlign='center';
+ctx.fillText('Year 1',margin.left+plotW*0.17,margin.top+plotH+12);
+ctx.fillText('Year 2',margin.left+plotW*0.5,margin.top+plotH+12);
+ctx.fillText('Year 3',margin.left+plotW*0.83,margin.top+plotH+12);
+
+ctx.fillStyle='#555';ctx.font='italic 12px sans-serif';ctx.textAlign='center';
+ctx.fillText('Staircase growth: each abandoned project adds permanent cost. Never decreases without active cleanup.',w/2,h-8);
+})();
+</script>
+</body>
+</html>

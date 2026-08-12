@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Distribution Matching</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 40px 20px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; }
+.nav a:hover { text-decoration: underline; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-table tr:nth-child(even) td { background: #fafcfe; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+.toc { background: #f8fafb; border: 1px solid #e0e0e0; padding: 20px 30px; margin: 20px 0 30px; border-radius: 4px; }
+.toc ol { margin: 10px 0 0 20px; font-size: 0.92em; }
+.toc ol li { margin: 5px 0; }
+.toc ol li a { color: #2980b9; text-decoration: none; }
+.toc ol li a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+
+<h1>Distribution Matching</h1>
+<p class="subtitle">Identifying which known distribution families fit a feature's data &mdash; multiple matches with confidence levels.</p>
+
+<div class="toc">
+<strong>Table of Contents</strong>
+<ol>
+<li><a href="#principle">Core Principle: Match Many, Commit to None</a></li>
+<li><a href="#families">The Basic Distribution Families</a></li>
+<li><a href="#fitting">Fitting & Scoring</a></li>
+<li><a href="#examples">Visual Examples</a></li>
+<li><a href="#nonstandard">Non-Standard Shapes</a></li>
+<li><a href="#connection">Connection to Precondition Checking</a></li>
+</ol>
+</div>
+
+<h2 id="principle">1. Core Principle: Match Many, Commit to None</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Keep All Good Fits — Don't Pick One Winner</div>
+<ul>
+<li>Test each feature against known families. Report ALL matches with confidence scores.</li>
+<li>A feature might be "80% normal, 60% exponential" — both interpretations lead to valid tests</li>
+<li>Different matches suggest different test strategies — each becomes a candidate</li>
+<li>The right answer might be NONE of the standard families (use non-parametric)</li>
+</ul>
+<p><strong>Why?</strong> Forcing a single choice is artificial. Multiple plausible fits give richer downstream options for separation testing.</p>
+</td>
+<td>
+<canvas id="c1" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="families">2. The Basic Distribution Families</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Normal (Gaussian) — Symmetric Bell</div>
+<ul>
+<li>Symmetric, mean = median = mode</li>
+<li>~68% within 1σ, ~95% within 2σ</li>
+<li>The reference for parametric tests (t-test, ANOVA)</li>
+<li><strong>Reject if:</strong> |skewness| > 2 or kurtosis > 9 or bimodal</li>
+</ul>
+<p><strong>Real examples:</strong> Height (same gender), blood pressure in healthy pop, IQ, measurement errors.</p>
+</td>
+<td>
+<canvas id="c-normal" width="720" height="300"></canvas>
+</td>
+</tr>
+</table>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Exponential — Rapid Decay from Zero</div>
+<ul>
+<li>Highest density at minimum, monotonically decreasing</li>
+<li>Mean ≈ standard deviation (for pure exponential)</li>
+<li>Memoryless: P(X > s+t | X > s) = P(X > t)</li>
+<li><strong>Reject if:</strong> any value < 0, or mode far from min, or |skewness - 2| > 1.5</li>
+</ul>
+<p><strong>Real examples:</strong> Time between events, wait times, days since last login, radioactive decay.</p>
+</td>
+<td>
+<canvas id="c-exp" width="720" height="300"></canvas>
+</td>
+</tr>
+</table>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Uniform — Flat (No Peak)</div>
+<ul>
+<li>Roughly equal density everywhere between bounds</li>
+<li>No peak structure, kurtosis ~ 1.8</li>
+<li>Mean-based tests are meaningless (no concentration)</li>
+<li><strong>Reject if:</strong> clear peaks exist, kurtosis > 2.5, or multimodal</li>
+</ul>
+<p><strong>Real examples:</strong> Hash values, random IDs, uniformly sampled timestamps, shuffled indices.</p>
+</td>
+<td>
+<canvas id="c-uniform" width="720" height="300"></canvas>
+</td>
+</tr>
+</table>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Mixture of 2 Normals — Bimodal or Heavy-Shouldered</div>
+<ul>
+<li>Two overlapping subpopulations with different means/spreads</li>
+<li>Can appear bimodal (well-separated) or as a single wide peak with shoulders</li>
+<li>Decompose via EM algorithm; test each component separately</li>
+<li><strong>Reject if:</strong> clearly unimodal (Hartigan's dip test p > 0.3)</li>
+</ul>
+<p><strong>Real examples:</strong> Hemoglobin (male+female mixed), blood pressure (medicated vs not), bimodal income.</p>
+</td>
+<td>
+<canvas id="c-mixture" width="720" height="300"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="fitting">3. Fitting & Scoring</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">How to Compare Candidate Fits</div>
+<ul>
+<li><strong>Step 1 — Feasibility filter:</strong> Check basic properties (all positive? symmetric? bounded?) to instantly reject impossible families. Cost: O(1).</li>
+<li><strong>Step 2 — Fit parameters:</strong> For each surviving family, fit via MLE (maximum likelihood). Get the "best version" of each family.</li>
+<li><strong>Step 3 — Measure fit quality:</strong> KS distance (max gap to empirical CDF), Anderson-Darling (emphasizes tails), histogram chi-squared.</li>
+<li><strong>Step 4 — Rank with AIC:</strong> Penalize complex models (more parameters). AIC weight = probability of being best model among candidates.</li>
+<li><strong>Step 5 — Combined confidence:</strong> Blend absolute fit (KS score) with relative ranking (AIC weight). If KS > 0.20, reject regardless of ranking.</li>
+</ul>
+<p><strong>Total cost:</strong> ~O(n log n) regardless of how many families tested. The sort for CDF comparison dominates.</p>
+</td>
+<td>
+<canvas id="c-fitting" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="examples">4. Visual Examples</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Example A: Response Times (Clear Right-Skew)</div>
+<ul>
+<li>API latency, n=400. Peak early, long right tail.</li>
+<li>Best match: right-skewed (conf 0.82). Exponential is distant second (0.12).</li>
+<li><strong>Action:</strong> Use non-parametric tests on raw values, or test on log(values) if normality holds after transform.</li>
+</ul>
+</td>
+<td>
+<canvas id="c-ex1" width="720" height="300"></canvas>
+</td>
+</tr>
+</table>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Example B: Test Scores (Near-Normal)</div>
+<ul>
+<li>Standardized exam, n=350. Symmetric bell.</li>
+<li>Best match: Normal (conf 0.88). Nothing else close.</li>
+<li><strong>Action:</strong> t-test directly applicable. No transformation needed.</li>
+</ul>
+</td>
+<td>
+<canvas id="c-ex2" width="720" height="300"></canvas>
+</td>
+</tr>
+</table>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Example C: Bimodal Blood Pressure</div>
+<ul>
+<li>Two subpopulations (medicated vs not), n=350.</li>
+<li>Best match: Mixture of 2 Normals (conf 0.74). Normal alone fails (0.18).</li>
+<li><strong>Action:</strong> DO NOT apply t-test on combined data. Decompose into components, test each separately.</li>
+</ul>
+</td>
+<td>
+<canvas id="c-ex3" width="720" height="300"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="nonstandard">5. Non-Standard Shapes</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">When Nothing Matches — Use Non-Parametric</div>
+<ul>
+<li><strong>Zero-inflated:</strong> Spike at 0 + continuous tail. Split into binary (has/hasn't) + fit the non-zero part.</li>
+<li><strong>Truncated/censored:</strong> Pile-up at a boundary (sensor cap, salary limit). Fit truncated model or treat boundary as separate bucket.</li>
+<li><strong>Discrete spikes on continuous:</strong> Round numbers over-represented. Separate spikes from smooth part.</li>
+<li><strong>Multi-component (3+):</strong> Complex shape from heterogeneous populations. Use non-parametric tests.</li>
+</ul>
+<p><strong>Fallback:</strong> If all families score confidence < 0.3, use Mann-Whitney / permutation test. Range-based analysis still works perfectly regardless of distribution shape.</p>
+</td>
+<td>
+<canvas id="c-nonstandard" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="connection">6. Connection to Precondition Checking</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Distribution Match → Which Tests to Apply</div>
+<ul>
+<li><strong>Normal match:</strong> t-test directly on raw values</li>
+<li><strong>Right-skewed match:</strong> t-test on log(values) or Mann-Whitney on raw</li>
+<li><strong>Exponential match:</strong> Mann-Whitney or compare rates</li>
+<li><strong>Uniform match:</strong> Range-based analysis only (mean comparison is meaningless)</li>
+<li><strong>Mixture match:</strong> Decompose, test components separately</li>
+<li><strong>No match:</strong> Non-parametric fallback (Mann-Whitney, permutation)</li>
+</ul>
+<p><strong>Multiple matches = multiple test candidates.</strong> Each produces separation evidence. Weight by confidence during aggregation. The non-parametric fallback is always available regardless of match quality.</p>
+</td>
+<td>
+<canvas id="c-connection" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<div class="philosophy">
+<strong>Key insight:</strong> Distribution matching adds information but doesn't gate progress. Even "nothing matches" is useful — it steers toward non-parametric tests. The exact parametric family matters less than knowing whether the data needs transformation before testing.
+</div>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id);
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return {ctx: ctx, w: w, h: h};
+}
+
+// Seeded PRNG
+function mulberry32(a) {
+    return function() {
+        a |= 0; a = a + 0x6D2B79F5 | 0;
+        var t = Math.imul(a ^ a >>> 15, 1 | a);
+        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+}
+function boxMuller(rng) {
+    var u = rng(); if (u < 0.0001) u = 0.0001;
+    var v = rng();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+function drawHist(ctx, data, w, h, color, m) {
+    m = m || {left:30, right:10, top:10, bottom:15};
+    var pw = w - m.left - m.right, ph = h - m.top - m.bottom;
+    var min = data[0], max = data[0];
+    for (var i = 1; i < data.length; i++) { if (data[i] < min) min = data[i]; if (data[i] > max) max = data[i]; }
+    var range = max - min || 1;
+    var nBins = 25, binW = range / nBins;
+    var bins = new Array(nBins).fill(0);
+    for (var i = 0; i < data.length; i++) {
+        var idx = Math.min(nBins-1, Math.floor((data[i]-min)/binW));
+        bins[idx]++;
+    }
+    var maxB = Math.max.apply(null, bins);
+    var bW = pw / nBins;
+    ctx.fillStyle = color; ctx.globalAlpha = 0.5;
+    for (var i = 0; i < nBins; i++) {
+        var barH = (bins[i]/maxB) * ph;
+        ctx.fillRect(m.left + i*bW, m.top + ph - barH, bW-1, barH);
+    }
+    ctx.globalAlpha = 1;
+
+    // Density line: Gaussian-smoothed bin heights + SE band
+    var sigma = 1.2;
+    var kernelR = Math.ceil(sigma * 3);
+    var smoothed = new Array(nBins);
+    for (var i = 0; i < nBins; i++) {
+        var sum = 0, wsum = 0;
+        for (var j = Math.max(0, i - kernelR); j <= Math.min(nBins - 1, i + kernelR); j++) {
+            var wt = Math.exp(-0.5 * ((j - i) / sigma) * ((j - i) / sigma));
+            sum += bins[j] * wt;
+            wsum += wt;
+        }
+        smoothed[i] = sum / wsum;
+    }
+    var effN = Math.min(200, Math.max(30, data.length));
+
+    // SE band
+    ctx.save();
+    ctx.fillStyle = 'rgba(230, 126, 34, 0.18)';
+    ctx.beginPath();
+    for (var i = 0; i < nBins; i++) {
+        var px = m.left + i * bW + bW / 2;
+        var upper = smoothed[i] + 1.96 * smoothed[i] / Math.sqrt(effN);
+        var py = m.top + ph - (upper / maxB) * ph;
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    for (var i = nBins - 1; i >= 0; i--) {
+        var px = m.left + i * bW + bW / 2;
+        var lower = Math.max(0, smoothed[i] - 1.96 * smoothed[i] / Math.sqrt(effN));
+        var py = m.top + ph - (lower / maxB) * ph;
+        ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    // Smoothed density line
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (var i = 0; i < nBins; i++) {
+        var px = m.left + i * bW + bW / 2;
+        var py = m.top + ph - (smoothed[i] / maxB) * ph;
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    // Axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(m.left, m.top+ph); ctx.lineTo(m.left+pw, m.top+ph); ctx.stroke();
+}
+
+// 1. Core principle
+(function() {
+    var s = setup('c1'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('One Feature → Multiple Candidate Fits', 40, 22);
+
+    // Draw histogram
+    var rng = mulberry32(42);
+    var data = [];
+    for (var i = 0; i < 300; i++) data.push(Math.exp(1 + 0.6 * boxMuller(rng)));
+    drawHist(ctx, data, 360, 200, 'rgba(26,82,118,0.4)', {left:40, right:10, top:40, bottom:20});
+
+    // Confidence bars on right
+    var matches = [
+        {name: 'Right-skewed', conf: 0.78, color: '#e67e22'},
+        {name: 'Normal', conf: 0.15, color: '#3498db'},
+        {name: 'Exponential', conf: 0.12, color: '#e74c3c'},
+        {name: 'Uniform', conf: 0.0, color: '#9b59b6'},
+    ];
+    var bx = 400, by = 50;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Match Confidence:', bx, by - 10);
+    matches.forEach(function(m, i) {
+        var y = by + i * 40;
+        ctx.fillStyle = '#333'; ctx.font = '17px -apple-system'; ctx.textAlign = 'left';
+        ctx.fillText(m.name, bx, y + 14);
+        var barW = m.conf * 200;
+        ctx.fillStyle = m.color; ctx.globalAlpha = 0.6;
+        ctx.fillRect(bx + 130, y, barW, 20); ctx.globalAlpha = 1;
+        ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1;
+        ctx.strokeRect(bx + 130, y, 200, 20);
+        ctx.fillStyle = m.conf > 0.5 ? m.color : '#999';
+        ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+        ctx.fillText(m.conf.toFixed(2), bx + 340, y + 14);
+    });
+
+    ctx.fillStyle = '#555'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Keep all matches above threshold — don\'t force one winner', w/2, h - 10);
+})();
+
+// Normal distribution
+(function() {
+    var s = setup('c-normal'), ctx = s.ctx, w = s.w, h = s.h;
+    var rng = mulberry32(100);
+    var data = [];
+    for (var i = 0; i < 300; i++) data.push(boxMuller(rng));
+    drawHist(ctx, data, w, h, '#3498db');
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Normal — symmetric bell, mean=median=mode', 40, 16);
+})();
+
+// Exponential
+(function() {
+    var s = setup('c-exp'), ctx = s.ctx, w = s.w, h = s.h;
+    var rng = mulberry32(200);
+    var data = [];
+    for (var i = 0; i < 300; i++) { var u = rng(); if (u < 0.0001) u = 0.0001; data.push(-Math.log(u)); }
+    drawHist(ctx, data, w, h, '#e74c3c');
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Exponential — decay from zero, memoryless', 40, 16);
+})();
+
+// Uniform
+(function() {
+    var s = setup('c-uniform'), ctx = s.ctx, w = s.w, h = s.h;
+    var rng = mulberry32(300);
+    var data = [];
+    for (var i = 0; i < 300; i++) data.push(rng() * 10);
+    drawHist(ctx, data, w, h, '#9b59b6');
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Uniform — flat, no peak structure', 40, 16);
+})();
+
+// Mixture of 2 normals
+(function() {
+    var s = setup('c-mixture'), ctx = s.ctx, w = s.w, h = s.h;
+    var rng = mulberry32(400);
+    var data = [];
+    for (var i = 0; i < 300; i++) {
+        if (rng() < 0.45) data.push(-2 + 0.8 * boxMuller(rng));
+        else data.push(2.5 + 1.0 * boxMuller(rng));
+    }
+    drawHist(ctx, data, w, h, '#16a085');
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Mixture of 2 Normals — bimodal, two subpopulations', 40, 16);
+})();
+
+// Fitting & scoring
+(function() {
+    var s = setup('c-fitting'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Fitting Pipeline', 40, 22);
+
+    var steps = [
+        {label: 'Feasibility\nFilter', sub: 'reject impossible', color: '#7f8c8d'},
+        {label: 'MLE\nFit', sub: 'best params', color: '#f39c12'},
+        {label: 'Goodness\nof Fit', sub: 'KS, AD, χ²', color: '#2980b9'},
+        {label: 'AIC\nRanking', sub: 'penalize complexity', color: '#8e44ad'},
+        {label: 'Combined\nConfidence', sub: '0-1 score', color: '#27ae60'}
+    ];
+    var bw = 120, bh = 55, gap = 15;
+    var totalW = steps.length * bw + (steps.length-1) * gap;
+    var sx = (w - totalW) / 2, cy = h/2;
+
+    steps.forEach(function(st, i) {
+        var x = sx + i * (bw + gap);
+        ctx.fillStyle = st.color; ctx.globalAlpha = 0.15;
+        ctx.beginPath(); ctx.roundRect(x, cy - bh/2, bw, bh, 6); ctx.fill();
+        ctx.globalAlpha = 1; ctx.strokeStyle = st.color; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.roundRect(x, cy - bh/2, bw, bh, 6); ctx.stroke();
+        ctx.fillStyle = st.color; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+        var lines = st.label.split('\n');
+        ctx.fillText(lines[0], x + bw/2, cy - 6);
+        ctx.fillText(lines[1], x + bw/2, cy + 14);
+        ctx.fillStyle = '#666'; ctx.font = '17px -apple-system';
+        ctx.fillText(st.sub, x + bw/2, cy + bh/2 + 16);
+        if (i < steps.length - 1) {
+            ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(x+bw+2, cy); ctx.lineTo(x+bw+gap-2, cy); ctx.stroke();
+            ctx.fillStyle = '#999'; ctx.beginPath();
+            ctx.moveTo(x+bw+gap-6, cy-3); ctx.lineTo(x+bw+gap-1, cy); ctx.lineTo(x+bw+gap-6, cy+3); ctx.fill();
+        }
+    });
+})();
+
+// Example A: Right-skewed
+(function() {
+    var s = setup('c-ex1'), ctx = s.ctx, w = s.w, h = s.h;
+    var rng = mulberry32(800);
+    var data = [];
+    for (var i = 0; i < 400; i++) data.push(Math.exp(3.5 + 0.7 * boxMuller(rng)));
+    drawHist(ctx, data, w, h, '#e67e22');
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Response Times — right-skewed (conf 0.82)', 40, 16);
+})();
+
+// Example B: Normal
+(function() {
+    var s = setup('c-ex2'), ctx = s.ctx, w = s.w, h = s.h;
+    var rng = mulberry32(801);
+    var data = [];
+    for (var i = 0; i < 350; i++) data.push(72 + 12 * boxMuller(rng));
+    drawHist(ctx, data, w, h, '#3498db');
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Test Scores — normal (conf 0.88), t-test valid directly', 40, 16);
+})();
+
+// Example C: Bimodal
+(function() {
+    var s = setup('c-ex3'), ctx = s.ctx, w = s.w, h = s.h;
+    var rng = mulberry32(804);
+    var data = [];
+    for (var i = 0; i < 350; i++) {
+        if (rng() < 0.55) data.push(120 + 8 * boxMuller(rng));
+        else data.push(145 + 10 * boxMuller(rng));
+    }
+    drawHist(ctx, data, w, h, '#16a085');
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Blood Pressure — mixture (conf 0.74), decompose first', 40, 16);
+})();
+
+// Non-standard shapes
+(function() {
+    var s = setup('c-nonstandard'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Non-Standard Shapes That Don\'t Fit Any Family', 40, 22);
+
+    var rng = mulberry32(900);
+
+    // Zero-inflated (left)
+    var d1 = []; for (var i = 0; i < 150; i++) d1.push(0); for (var i = 0; i < 100; i++) d1.push(Math.exp(2 + 0.8*boxMuller(rng)));
+    drawHist(ctx, d1, 340, 180, '#e67e22', {left:40, right:10, top:50, bottom:15});
+    ctx.fillStyle = '#e67e22'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Zero-inflated', 200, 48);
+
+    // Truncated (right)
+    var d2 = []; for (var i = 0; i < 200; i++) { var v = 50 + 15*boxMuller(rng); d2.push(v > 80 ? 80 : v); }
+    drawHist(ctx, d2, 340, 180, '#3498db', {left:390, right:10, top:50, bottom:15});
+    ctx.fillStyle = '#3498db'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Truncated/Censored', 560, 48);
+
+    ctx.fillStyle = '#555'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('When nothing matches → non-parametric tests + range-based analysis', w/2, h - 10);
+})();
+
+// Connection to precondition checking
+(function() {
+    var s = setup('c-connection'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Distribution Match → Test Selection', 40, 22);
+
+    var routes = [
+        {match: 'Normal', test: 't-test on raw', color: '#3498db'},
+        {match: 'Right-skewed', test: 'Mann-Whitney or log-transform', color: '#e67e22'},
+        {match: 'Exponential', test: 'Mann-Whitney / rate compare', color: '#e74c3c'},
+        {match: 'Uniform', test: 'Range-based only', color: '#9b59b6'},
+        {match: 'Mixture', test: 'Decompose → test components', color: '#16a085'},
+        {match: 'No match', test: 'Non-parametric fallback', color: '#7f8c8d'}
+    ];
+
+    routes.forEach(function(r, i) {
+        var y = 45 + i * 37;
+        ctx.fillStyle = r.color; ctx.globalAlpha = 0.1;
+        ctx.fillRect(40, y, w - 80, 30); ctx.globalAlpha = 1;
+        ctx.strokeStyle = r.color; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.roundRect(40, y, w - 80, 30, 4); ctx.stroke();
+        ctx.fillStyle = r.color; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+        ctx.fillText(r.match, 60, y + 20);
+        ctx.fillStyle = '#333'; ctx.font = '17px -apple-system'; ctx.textAlign = 'left';
+        ctx.fillText('→  ' + r.test, 230, y + 20);
+    });
+})();
+</script>
+</body>
+</html>

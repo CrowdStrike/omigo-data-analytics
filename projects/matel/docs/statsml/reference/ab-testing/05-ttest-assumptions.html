@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T-Test on Non-Normal / Non-Independent Data — A/B Testing Pitfalls</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 20px 10px; line-height: 1.6; }
+h1 { font-size: 1.6em; margin-bottom: 10px; color: #1a5276; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.0em; margin-bottom: 20px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; margin-right: 15px; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 6px 0; }
+strong { color: #1a5276; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 40%; }
+.obj-table td:last-child { width: 60%; text-align: center; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+</style>
+</head>
+<body>
+<h1>T-Test on Non-Normal / Non-Independent Data</h1>
+<p class="subtitle">Statistical Sin — Apply t-test blindly regardless of data distribution or independence.</p>
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">The Problem</div>
+<ul>
+<li><strong>T-test assumes:</strong> (1) Data is approximately normal (or N large enough for CLT). (2) Observations are independent. (3) Variances are comparable.</li>
+<li><strong>Non-normal violations:</strong> Revenue data is extremely heavy-tailed. Time-on-site is right-skewed. Conversion is binary (0/1). The CLT helps with MEANS but NOT with heavy tails — you need enormous N.</li>
+<li><strong>Non-independence violations:</strong> Same user appears multiple times. Users in social networks influence each other. Pageviews from the same session are correlated. Treating correlated observations as independent INFLATES sample size and underestimates variance.</li>
+<li><strong>The consequence:</strong> Wrong test on wrong data = wrong p-value. Your "p=0.02" might actually be p=0.15 after accounting for non-independence.</li>
+</ul>
+<p><strong>Correct approach:</strong> For heavy-tailed data: use Mann-Whitney, bootstrap, or trimmed means. For non-independent: cluster-robust standard errors or mixed-effects models. For binary outcomes: proportion test or chi-squared. NEVER default to t-test without checking assumptions.</p>
+<p><strong>The tell:</strong> Ask "what does the distribution of this metric look like?" and "are observations independent?" If nobody checked — the test is invalid.</p>
+</td><td><canvas id="c1" width="720" height="340"></canvas></td></tr>
+</table>
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    return {ctx:ctx, w:w, h:h};
+}
+(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+// Three distribution shapes side by side
+var pw=200,ph=130,py=40,gap=25;
+var sx=(w-3*pw-2*gap)/2;
+function gauss(x,mu,sig){return Math.exp(-0.5*Math.pow((x-mu)/sig,2));}
+
+// 1. Normal (what t-test assumes)
+var x1=sx;
+ctx.fillStyle='#27ae60';ctx.font='bold 18px sans-serif';ctx.textAlign='center';
+ctx.fillText('Normal (t-test assumes)',x1+pw/2,py-10);
+ctx.beginPath();ctx.strokeStyle='#27ae60';ctx.lineWidth=2;
+for(var i=0;i<=100;i++){
+    var t=(i-50)/15;
+    var y=gauss(t,0,1)*ph*0.9;
+    var px2=x1+i*pw/100;
+    var py2=py+ph-y;
+    if(i===0)ctx.moveTo(px2,py2);else ctx.lineTo(px2,py2);
+}
+ctx.stroke();
+ctx.lineTo(x1+pw,py+ph);ctx.lineTo(x1,py+ph);ctx.closePath();
+ctx.fillStyle='rgba(39,174,96,0.2)';ctx.fill();
+// Checkmark
+ctx.fillStyle='#27ae60';ctx.font='bold 18px sans-serif';
+ctx.fillText('✓',x1+pw/2,py+ph+20);
+
+// 2. Heavy-tailed (revenue)
+var x2=sx+pw+gap;
+ctx.fillStyle='#e74c3c';ctx.font='bold 18px sans-serif';ctx.textAlign='center';
+ctx.fillText('Heavy-tailed (revenue)',x2+pw/2,py-10);
+ctx.beginPath();ctx.strokeStyle='#e74c3c';ctx.lineWidth=2;
+for(var i=0;i<=100;i++){
+    var t=i/100*5;
+    var y=(t<0.3?t/0.3:Math.exp(-0.8*(t-0.3)))*ph*0.85;
+    var px2=x2+i*pw/100;
+    var py2=py+ph-y;
+    if(i===0)ctx.moveTo(px2,py2);else ctx.lineTo(px2,py2);
+}
+ctx.stroke();
+ctx.lineTo(x2+pw,py+ph);ctx.lineTo(x2,py+ph);ctx.closePath();
+ctx.fillStyle='rgba(231,76,60,0.15)';ctx.fill();
+// X mark
+ctx.fillStyle='#e74c3c';ctx.font='bold 18px sans-serif';
+ctx.fillText('✗',x2+pw/2,py+ph+20);
+
+// 3. Binary (conversion)
+var x3=sx+2*(pw+gap);
+ctx.fillStyle='#e74c3c';ctx.font='bold 18px sans-serif';ctx.textAlign='center';
+ctx.fillText('Binary (conversion)',x3+pw/2,py-10);
+// Two bars
+var barW2=40,barGap=60;
+var bx1=x3+pw/2-barGap/2-barW2,bx2=x3+pw/2+barGap/2;
+ctx.fillStyle='rgba(231,76,60,0.4)';
+ctx.fillRect(bx1,py+20,barW2,ph-20);
+ctx.fillRect(bx2,py+ph*0.55,barW2,ph*0.45);
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=1.5;
+ctx.strokeRect(bx1,py+20,barW2,ph-20);
+ctx.strokeRect(bx2,py+ph*0.55,barW2,ph*0.45);
+ctx.fillStyle='#666';ctx.font='16px sans-serif';
+ctx.fillText('0',bx1+barW2/2,py+ph+12);
+ctx.fillText('1',bx2+barW2/2,py+ph+12);
+// X mark
+ctx.fillStyle='#e74c3c';ctx.font='bold 18px sans-serif';ctx.textAlign='center';
+ctx.fillText('✗',x3+pw/2,py+ph+20);
+
+// Bottom label
+ctx.fillStyle='#666';ctx.font='italic 14px sans-serif';ctx.textAlign='center';
+ctx.fillText('T-test is valid for LEFT only. Applied to all three anyway. Wrong test = wrong answer.',w/2,h-6);
+})();
+</script>
+</body>
+</html>

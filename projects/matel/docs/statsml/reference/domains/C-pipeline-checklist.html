@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pipeline Stage Checklist</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 40px 20px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.3em; margin: 35px 0 12px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; }
+strong { color: #1a5276; }
+.gate { background: #fff; border: 2px solid #e74c3c; border-radius: 8px; padding: 16px 20px; margin: 14px 0; }
+.gate .stage { font-size: 0.8em; color: #e74c3c; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; margin-bottom: 6px; }
+.gate .question { font-size: 0.95em; color: #1a5276; font-weight: 700; margin: 6px 0; padding-left: 20px; position: relative; }
+.gate .question::before { content: "□"; position: absolute; left: 0; color: #e74c3c; }
+.gate .fail { font-size: 0.85em; color: #c0392b; margin: 2px 0 2px 20px; }
+.domain-ref { font-size: 0.8em; color: #999; margin-left: 20px; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+</style>
+</head>
+<body>
+
+<h1>Pipeline Stage Checklist</h1>
+<p class="subtitle">For each pipeline stage: the questions you MUST answer before proceeding. Derived from real domain failures. If any answer is "no" or "don't know" — STOP.</p>
+
+<h2>Stage 1: Data Collection & Ingestion</h2>
+
+<div class="gate">
+<div class="stage">Gate Check — Before Using This Data</div>
+<div class="question">Do I know WHO is NOT in this dataset? (What population is excluded?)</div>
+<div class="fail">If no → survivorship bias. You're analyzing survivors, not the population.</div>
+<div class="domain-ref">Healthcare: only tested patients. Courts: only litigated cases. E-commerce: only converted users.</div>
+
+<div class="question">For every timestamp: do I know the timezone, granularity (sec/ms/μs), and whether it's UTC?</div>
+<div class="fail">If no → potential 1-8 hour offsets or 1000× scale errors from ms/s confusion.</div>
+<div class="domain-ref">cloud provider multi-region. Cross-service joins. Unix epoch ambiguity.</div>
+
+<div class="question">If multiple sources feed the same table: are semantics identical across all sources?</div>
+<div class="fail">If no → same column name, different meaning. "Amount" in dollars vs cents vs local currency.</div>
+<div class="domain-ref">Multi-hospital lab data. Multi-region billing. Cross-platform analytics.</div>
+
+<div class="question">Are there duplicates from retries, fanout joins, or ETL re-runs?</div>
+<div class="fail">If yes and undetected → inflated counts, wrong averages, bogus significance.</div>
+<div class="domain-ref">Event pipelines. Payment retries. 1-to-many joins.</div>
+
+<div class="question">Do I know the data's latency? How old is the "freshest" record?</div>
+<div class="fail">If unknown → you may be analyzing stale data from hours/days ago without realizing.</div>
+<div class="domain-ref">SEC filings (60-day lag). Feature store staleness. Billing lag (30+ days).</div>
+</div>
+
+<canvas id="pc1" width="720" height="280" style="display:block;margin:10px auto;"></canvas>
+
+<h2>Stage 2: Profiling & Type Detection</h2>
+
+<div class="gate">
+<div class="stage">Gate Check — Before Profiling</div>
+<div class="question">For columns with missing values: is the missingness informative (MNAR) or random (MCAR)?</div>
+<div class="fail">If MNAR and you impute with mean → you destroy the signal that absence carries.</div>
+<div class="domain-ref">Healthcare: "lab not ordered" = healthy. Cybersecurity: "no log" = deleted. Survey: "no response" = unhappy.</div>
+
+<div class="question">Do sub-populations in my data have different reference ranges for the same feature?</div>
+<div class="fail">If yes and you profile globally → universal thresholds misclassify sub-populations.</div>
+<div class="domain-ref">Healthcare: hemoglobin by age/sex/ethnicity. Education: test scores by developmental stage.</div>
+
+<div class="question">Has the column's MEANING changed over time? (Same name, different semantics after a migration.)</div>
+<div class="fail">If yes and undetected → all analysis on post-change data is wrong, no error thrown.</div>
+<div class="domain-ref">Revenue gross→net. Status codes renumbered. Units changed (USD→cents).</div>
+
+<div class="question">Are there point masses (spike at zero, cap at max) that need separate treatment?</div>
+<div class="fail">If ignored → spike dominates all statistics. Mean is meaningless. Histogram is useless.</div>
+<div class="domain-ref">Capital gain (95% zero). 2nd floor SF. Insurance claims. Sensor saturation.</div>
+
+<div class="question">What's the meta-distribution Gini? If >0.7: is adaptive bucketing planned?</div>
+<div class="fail">If high Gini with equal-width bins → 80% of data in one bin, rest empty. Useless.</div>
+<div class="domain-ref">Income. Hospital charges. File sizes. Any power-law feature.</div>
+</div>
+
+<canvas id="pc2" width="720" height="280" style="display:block;margin:10px auto;"></canvas>
+
+<h2>Stage 3: Shape Detection</h2>
+
+<div class="gate">
+<div class="stage">Gate Check — Before Classifying Shape</div>
+<div class="question">Is n > 100 for this feature? (Below this: shape classification is unreliable.)</div>
+<div class="fail">If no → report "insufficient for shape" and use non-parametric methods. Don't guess.</div>
+<div class="domain-ref">Sports: 17 games/season. Rare diseases: 50 patients. New product: 30 purchases.</div>
+
+<div class="question">Have I run at multiple bin resolutions? Does the shape persist across scales?</div>
+<div class="fail">If shape only visible at one resolution → it's an artifact, not real structure.</div>
+<div class="domain-ref">Apparent bimodality that vanishes at different bin width. Noise peaks. Rounding artifacts.</div>
+
+<div class="question">Am I mixing sub-populations that should be profiled separately?</div>
+<div class="fail">If yes → artificial multimodality. "Bimodal" is actually two populations with different means.</div>
+<div class="domain-ref">Male+female hemoglobin. Summer+winter energy. Pre+post migration data.</div>
+
+<div class="question">Is this feature stationary over the time range of my data?</div>
+<div class="fail">If no → the "shape" you detected is an average across different regimes. Not real.</div>
+<div class="domain-ref">Revenue pre/post COVID. User behavior pre/post feature launch. Seasonal features.</div>
+</div>
+
+<canvas id="pc3" width="720" height="280" style="display:block;margin:10px auto;"></canvas>
+
+<h2>Stage 4: Statistical Testing</h2>
+
+<div class="gate">
+<div class="stage">Gate Check — Before Claiming Significance</div>
+<div class="question">How many tests am I running total? Have I adjusted for multiple comparisons?</div>
+<div class="fail">If 100 features × 10 buckets = 1000 tests at p<0.05 → expect 50 false positives. Must correct.</div>
+<div class="domain-ref">Genomics (20K genes). Feature selection. Multi-bucket enrichment testing.</div>
+
+<div class="question">Is the enrichment PRACTICALLY significant, not just statistically significant?</div>
+<div class="fail">At large n, trivial effects (1.006×) become "significant." But useless for classification.</div>
+<div class="domain-ref">Large datasets where everything is "significant." Clinical trials with negligible effects.</div>
+
+<div class="question">Is the CI lower bound still above the decision threshold?</div>
+<div class="fail">If CI includes base rate → point estimate is meaningless. Can't trust the bucket.</div>
+<div class="domain-ref">Small n buckets with wide CIs. "85% purity" with CI [55%, 97%].</div>
+
+<div class="question">Am I comparing to the correct BASE RATE, not to 50%?</div>
+<div class="fail">If base is 5%: a bucket at 10% is 2× enrichment (strong!). Comparing to 50%: "only 10%" = dismissed.</div>
+<div class="domain-ref">Fraud (0.1% base). Rare disease (1% base). High-value customer (5% base).</div>
+
+<div class="question">Is my test set TRULY independent of all training decisions?</div>
+<div class="fail">If test set influenced: feature selection, threshold tuning, or hyperparameters → it's NOT independent.</div>
+<div class="domain-ref">Test set evaluated 50× (overfit). Features selected on full data. Threshold tuned on test.</div>
+</div>
+
+<canvas id="pc4" width="720" height="280" style="display:block;margin:10px auto;"></canvas>
+
+<h2>Stage 5: Feature Engineering</h2>
+
+<div class="gate">
+<div class="stage">Gate Check — Before Using This Feature</div>
+<div class="question">Would this feature ACTUALLY be available at prediction time in production?</div>
+<div class="fail">If no → leakage. Feature computed from future events. "Collection calls made" predicts default because it FOLLOWS default.</div>
+<div class="domain-ref">Any derived feature using future data. Treatment-as-feature. Post-event aggregates.</div>
+
+<div class="question">Does this feature encode a protected attribute through a proxy?</div>
+<div class="fail">If yes (zip code ↔ race, name ↔ gender) → model discriminates despite removing the protected attribute.</div>
+<div class="domain-ref">Hiring models. Credit scoring. Insurance pricing. Predictive policing.</div>
+
+<div class="question">Is this feature computed the SAME WAY in training (batch) and serving (real-time)?</div>
+<div class="fail">If different (batch SQL vs streaming compute) → training-serving skew. Subtle numerical differences degrade predictions.</div>
+<div class="domain-ref">Feature stores. Real-time vs batch aggregation. Rolling windows with different boundaries.</div>
+
+<div class="question">If this feature is based on my own system's output: have I debiased it?</div>
+<div class="fail">If not → feedback loop. CTR reflects position bias, not item quality. View count reflects ranking, not demand.</div>
+<div class="domain-ref">Click-through rate. View count. Recommendation-driven engagement.</div>
+</div>
+
+<canvas id="pc5" width="720" height="280" style="display:block;margin:10px auto;"></canvas>
+
+<h2>Stage 6: Model Training & Evaluation</h2>
+
+<div class="gate">
+<div class="stage">Gate Check — Before Trusting Results</div>
+<div class="question">Is train/test split at the ENTITY level, not the ROW level?</div>
+<div class="fail">If same patient/user in both → model memorizes entities, not patterns. Accuracy inflated 10-20%.</div>
+<div class="domain-ref">Patient visits. User sessions. Multi-row entities. Time-series forecasting.</div>
+
+<div class="question">For time-ordered data: is the split temporal (train on past, test on future)?</div>
+<div class="fail">If random split → model uses future info. Accuracy inflated by 10-30%.</div>
+<div class="domain-ref">Any financial data. User behavior. Sensor data. Event streams.</div>
+
+<div class="question">Is my model complexity appropriate for my data size?</div>
+<div class="fail">1M parameters on 500 rows = memorization. Neural net on n=200: logistic regression will win.</div>
+<div class="domain-ref">Small medical datasets. Rare event prediction. Low-resource NLP.</div>
+
+<div class="question">Have I evaluated on the RARE class specifically, not just overall accuracy?</div>
+<div class="fail">95% accuracy on 95/5 data = predicting majority always. Recall on minority = 0%.</div>
+<div class="domain-ref">Fraud. Disease. Cybersecurity attacks. Any imbalanced problem.</div>
+
+<div class="question">How many times have I evaluated on this test set? (>10 = burned)</div>
+<div class="fail">Each evaluation leaks test info into decisions. After 50 rounds: effectively training on test set.</div>
+<div class="domain-ref">Kaggle leaderboard overfitting. Research paper p-hacking. Iterative model development.</div>
+</div>
+
+<canvas id="pc6" width="720" height="280" style="display:block;margin:10px auto;"></canvas>
+
+<h2>Stage 7: Deployment & Monitoring</h2>
+
+<div class="gate">
+<div class="stage">Gate Check — Before and After Deployment</div>
+<div class="question">Do I have data validation checks that alert on distribution shifts BEFORE predictions are served?</div>
+<div class="fail">If no → silent schema change (dollars→cents) produces wrong predictions for weeks before anyone notices.</div>
+<div class="domain-ref">Upstream migrations. Unit changes. New category values. NULL rate changes.</div>
+
+<div class="question">Am I monitoring CORRECTNESS, not just availability/latency?</div>
+<div class="fail">System serves wrong answers fast and confidently. Dashboard says "healthy" while predictions are garbage.</div>
+<div class="domain-ref">Stale caches. Feature store failures. Model serving outdated version.</div>
+
+<div class="question">Is there a mechanism to detect when the model's assumptions have been violated in production?</div>
+<div class="fail">If no → model degrades silently over months. Blamed on "model staleness" when actual cause is upstream data drift.</div>
+<div class="domain-ref">Concept drift. Population shift. Seasonal patterns not in training. Policy changes.</div>
+
+<div class="question">For adversarial domains: when was the model last retrained? (>30 days in security = stale)</div>
+<div class="fail">Adversaries adapt in days. A 6-month-old model in cybersecurity/fraud/spam is already significantly evaded.</div>
+<div class="domain-ref">Spam filters. Fraud detection. Content moderation. Any domain with active adversaries.</div>
+
+<div class="question">Do I have a kill switch to fall back to a simple/previous model if the new one misbehaves?</div>
+<div class="fail">If no → a bad model in production causes damage until the next full deployment cycle (hours/days).</div>
+<div class="domain-ref">Canary deployment. Feature flags. Shadow mode. A/B test with abort criteria.</div>
+</div>
+
+<canvas id="pc7" width="720" height="280" style="display:block;margin:10px auto;"></canvas>
+
+<div class="philosophy">
+<strong>How to use this document:</strong> Print it. Before each pipeline stage, read the gate checks. If you can't answer YES to all questions: STOP and investigate. Each "no" represents a domain failure that has burned real teams with real consequences. The questions are simple. The consequences of skipping them are not.
+</div>
+
+<script>
+function setupCanvas(id, w, h) {
+  const c = document.getElementById(id);
+  const dpr = window.devicePixelRatio || 1;
+  c.width = w * dpr; c.height = h * dpr;
+  c.style.width = w + 'px'; c.style.height = h + 'px';
+  const ctx = c.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+  return ctx;
+}
+
+function drawArrow(ctx, x1, y1, x2, y2, color) {
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  const angle = Math.atan2(y2 - y1, x2 - x1);
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - 10 * Math.cos(angle - 0.4), y2 - 10 * Math.sin(angle - 0.4));
+  ctx.lineTo(x2 - 10 * Math.cos(angle + 0.4), y2 - 10 * Math.sin(angle + 0.4));
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+}
+
+function drawPC1() {
+  const ctx = setupCanvas('pc1', 720, 180);
+  // Title
+  ctx.fillStyle = '#1a5276';
+  ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('Data Collection: Semantic Mismatch Across Sources', 180, 20);
+  ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+  // Source A - dollars
+  ctx.fillStyle = '#27ae60';
+  ctx.fillRect(30, 40, 120, 40);
+  ctx.fillStyle = '#fff';
+  ctx.fillText('Source A', 50, 65);
+  ctx.fillStyle = '#27ae60';
+  ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('amount = $150.00', 30, 100);
+  ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+  // Source B - cents
+  ctx.fillStyle = '#e67e22';
+  ctx.fillRect(30, 110, 120, 40);
+  ctx.fillStyle = '#fff';
+  ctx.fillText('Source B', 50, 135);
+  ctx.fillStyle = '#e67e22';
+  ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('amount = 15000¢', 30, 165);
+  ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+  // Source C - yen
+  ctx.fillStyle = '#e74c3c';
+  ctx.fillRect(200, 75, 120, 40);
+  ctx.fillStyle = '#fff';
+  ctx.fillText('Source C', 220, 100);
+  ctx.fillStyle = '#e74c3c';
+  ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('amount = ¥22500', 200, 132);
+  ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+  // Arrows converging to merged table
+  drawArrow(ctx, 150, 60, 420, 75, '#27ae60');
+  drawArrow(ctx, 150, 130, 420, 90, '#e67e22');
+  drawArrow(ctx, 320, 95, 420, 90, '#e74c3c');
+  // Merged table
+  ctx.fillStyle = '#1a5276';
+  ctx.fillRect(420, 55, 160, 70);
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('Merged Table', 445, 80);
+  ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('150, 15000, 22500', 435, 100);
+  ctx.fillText('Same column name!', 440, 117);
+  ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+  // Warning
+  ctx.fillStyle = '#e74c3c';
+  ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('100x error', 610, 90);
+  ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+}
+
+function drawPC2() {
+  const ctx = setupCanvas('pc2', 720, 180);
+  // Title
+  ctx.fillStyle = '#1a5276';
+  ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('Profiling: Global vs Sub-Population Distributions', 180, 20);
+  ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+  // Left side: global profile (misleading)
+  ctx.fillStyle = '#e74c3c';
+  ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('Global Profile (MISLEADING)', 50, 40);
+  ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+  // Draw misleading bell curve as bars
+  const globalBars = [15, 30, 55, 70, 80, 85, 80, 70, 55, 30, 15];
+  for (let i = 0; i < globalBars.length; i++) {
+    const h = globalBars[i] * 0.9;
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.4)';
+    ctx.fillRect(40 + i * 25, 160 - h, 22, h);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.strokeRect(40 + i * 25, 160 - h, 22, h);
+  }
+  // Threshold line
+  ctx.setLineDash([5, 3]);
+  ctx.beginPath();
+  ctx.moveTo(40, 90);
+  ctx.lineTo(310, 90);
+  ctx.strokeStyle = '#e74c3c';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#e74c3c';
+  ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('universal threshold', 200, 86);
+  // Right side: sub-population profiles (correct)
+  ctx.fillStyle = '#27ae60';
+  ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('Per-Subpopulation (CORRECT)', 420, 40);
+  ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+  // Population A - lower
+  const popA = [25, 55, 80, 60, 30, 10, 0, 0, 0, 0];
+  for (let i = 0; i < popA.length; i++) {
+    if (popA[i] === 0) continue;
+    const h = popA[i] * 0.7;
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.5)';
+    ctx.fillRect(400 + i * 25, 160 - h, 22, h);
+    ctx.strokeStyle = '#27ae60';
+    ctx.strokeRect(400 + i * 25, 160 - h, 22, h);
+  }
+  // Population B - higher
+  const popB = [0, 0, 0, 0, 10, 30, 60, 80, 55, 25];
+  for (let i = 0; i < popB.length; i++) {
+    if (popB[i] === 0) continue;
+    const h = popB[i] * 0.7;
+    ctx.fillStyle = 'rgba(26, 82, 118, 0.5)';
+    ctx.fillRect(400 + i * 25, 160 - h, 22, h);
+    ctx.strokeStyle = '#1a5276';
+    ctx.strokeRect(400 + i * 25, 160 - h, 22, h);
+  }
+  ctx.fillStyle = '#27ae60';
+  ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('Pop A', 430, 175);
+  ctx.fillStyle = '#1a5276';
+  ctx.fillText('Pop B', 580, 175);
+}
+
+function drawPC3() {
+  const ctx = setupCanvas('pc3', 720, 180);
+  // Title
+  ctx.fillStyle = '#1a5276';
+  ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('Shape Detection: Same Data at 3 Resolutions', 200, 20);
+  ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+  // Resolution 1: 5 bins - unimodal
+  ctx.fillStyle = '#1a5276';
+  ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('5 bins', 55, 40);
+  const bins5 = [25, 60, 90, 55, 20];
+  for (let i = 0; i < bins5.length; i++) {
+    const h = bins5[i];
+    ctx.fillStyle = 'rgba(26, 82, 118, 0.6)';
+    ctx.fillRect(20 + i * 40, 160 - h, 36, h);
+    ctx.strokeStyle = '#1a5276';
+    ctx.strokeRect(20 + i * 40, 160 - h, 36, h);
+  }
+  ctx.fillStyle = '#1a5276';
+  ctx.fillText('Unimodal?', 55, 175);
+  // Resolution 2: 10 bins - bimodal
+  ctx.fillStyle = '#e67e22';
+  ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('10 bins', 295, 40);
+  const bins10 = [15, 40, 55, 35, 15, 10, 30, 60, 45, 12];
+  for (let i = 0; i < bins10.length; i++) {
+    const h = bins10[i] * 1.3;
+    ctx.fillStyle = 'rgba(230, 126, 34, 0.6)';
+    ctx.fillRect(250 + i * 22, 160 - h, 19, h);
+    ctx.strokeStyle = '#e67e22';
+    ctx.strokeRect(250 + i * 22, 160 - h, 19, h);
+  }
+  ctx.fillStyle = '#e67e22';
+  ctx.fillText('Bimodal?', 295, 175);
+  // Resolution 3: 20 bins - noisy
+  ctx.fillStyle = '#e74c3c';
+  ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('20 bins', 570, 40);
+  const bins20 = [8, 20, 30, 45, 38, 50, 30, 18, 12, 8, 5, 10, 25, 40, 55, 48, 35, 20, 10, 5];
+  for (let i = 0; i < bins20.length; i++) {
+    const h = bins20[i] * 1.5;
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.5)';
+    ctx.fillRect(500 + i * 11, 160 - h, 9, h);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.strokeRect(500 + i * 11, 160 - h, 9, h);
+  }
+  ctx.fillStyle = '#e74c3c';
+  ctx.fillText('Noise?', 570, 175);
+  // Question mark in center
+  ctx.fillStyle = '#1a5276';
+  ctx.font = 'bold 30px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('?', 235, 110);
+  ctx.fillText('?', 480, 110);
+  ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+}
+
+function drawPC4() {
+  const ctx = setupCanvas('pc4', 720, 180);
+  // Title
+  ctx.fillStyle = '#1a5276';
+  ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('Multiple Testing: 1000 Tests at p<0.05 = 50 False Positives', 140, 20);
+  ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+  // Draw 1000 dots in a grid (40x25)
+  const cols = 40;
+  const rows = 25;
+  const dotR = 2.5;
+  const startX = 30;
+  const startY = 35;
+  const spacingX = 16.5;
+  const spacingY = 5.5;
+  // Predetermine which 50 dots are "false positives"
+  const falsePositives = new Set();
+  // Spread them out somewhat evenly
+  for (let i = 0; i < 50; i++) {
+    falsePositives.add(i * 20 + (i % 7) * 3);
+  }
+  let idx = 0;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const x = startX + c * spacingX;
+      const y = startY + r * spacingY;
+      ctx.beginPath();
+      ctx.arc(x, y, dotR, 0, Math.PI * 2);
+      if (falsePositives.has(idx)) {
+        ctx.fillStyle = '#e74c3c';
+      } else {
+        ctx.fillStyle = '#ccd1d9';
+      }
+      ctx.fill();
+      idx++;
+    }
+  }
+  // Legend
+  ctx.fillStyle = '#ccd1d9';
+  ctx.beginPath();
+  ctx.arc(620, 60, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#333';
+  ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('True null', 632, 65);
+  ctx.fillStyle = '#e74c3c';
+  ctx.beginPath();
+  ctx.arc(620, 85, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#e74c3c';
+  ctx.fillText('False positive', 632, 90);
+  ctx.fillStyle = '#1a5276';
+  ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('50 red dots =', 615, 120);
+  ctx.fillText('expected false', 615, 135);
+  ctx.fillText('discoveries at', 615, 150);
+  ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('alpha = 0.05', 620, 168);
+  ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+}
+
+function drawPC5() {
+  const ctx = setupCanvas('pc5', 720, 180);
+  // Title
+  ctx.fillStyle = '#1a5276';
+  ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('Feature Engineering: Temporal Leakage', 220, 20);
+  ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+  // Timeline
+  ctx.beginPath();
+  ctx.moveTo(40, 100);
+  ctx.lineTo(680, 100);
+  ctx.strokeStyle = '#1a5276';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  // Time markers
+  ctx.fillStyle = '#1a5276';
+  ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+  const timePoints = ['t-3', 't-2', 't-1', 'Prediction', 't+1', 't+2', 't+3'];
+  const xPositions = [80, 170, 260, 360, 460, 550, 640];
+  for (let i = 0; i < timePoints.length; i++) {
+    ctx.beginPath();
+    ctx.moveTo(xPositions[i], 93);
+    ctx.lineTo(xPositions[i], 107);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText(timePoints[i], xPositions[i] - 15, 125);
+  }
+  // Prediction boundary (red vertical line)
+  ctx.beginPath();
+  ctx.moveTo(360, 40);
+  ctx.lineTo(360, 160);
+  ctx.strokeStyle = '#e74c3c';
+  ctx.lineWidth = 3;
+  ctx.setLineDash([6, 4]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // Valid features (green zone)
+  ctx.fillStyle = 'rgba(39, 174, 96, 0.15)';
+  ctx.fillRect(40, 40, 320, 120);
+  ctx.fillStyle = '#27ae60';
+  ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('Valid features (past)', 120, 55);
+  // Invalid zone (red)
+  ctx.fillStyle = 'rgba(231, 76, 60, 0.1)';
+  ctx.fillRect(360, 40, 320, 120);
+  ctx.fillStyle = '#e74c3c';
+  ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('FUTURE (unavailable)', 450, 55);
+  // Leaking feature arrow crossing boundary
+  ctx.beginPath();
+  ctx.moveTo(500, 75);
+  ctx.lineTo(300, 75);
+  ctx.strokeStyle = '#e74c3c';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+  drawArrow(ctx, 500, 75, 300, 75, '#e74c3c');
+  // Red X at crossing
+  ctx.fillStyle = '#e74c3c';
+  ctx.font = 'bold 28px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('X', 352, 82);
+  ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillStyle = '#e74c3c';
+  ctx.fillText('LEAKAGE: feature uses future data', 380, 170);
+  ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+}
+
+function drawPC6() {
+  const ctx = setupCanvas('pc6', 720, 180);
+  // Title
+  ctx.fillStyle = '#1a5276';
+  ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('Training/Evaluation: Entity Leakage in Splits', 200, 20);
+  ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+  // LEFT: Wrong - row-level split
+  ctx.fillStyle = '#e74c3c';
+  ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('WRONG: Row-level split', 50, 45);
+  // Train box
+  ctx.fillStyle = 'rgba(231, 76, 60, 0.1)';
+  ctx.fillRect(30, 50, 140, 110);
+  ctx.strokeStyle = '#e74c3c';
+  ctx.strokeRect(30, 50, 140, 110);
+  ctx.fillStyle = '#1a5276';
+  ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('TRAIN', 75, 68);
+  // Patient icons in train
+  const patients = ['P1', 'P2', 'P1', 'P3'];
+  const colors = ['#e74c3c', '#27ae60', '#e74c3c', '#e67e22'];
+  for (let i = 0; i < patients.length; i++) {
+    ctx.beginPath();
+    ctx.arc(60 + (i % 2) * 60, 90 + Math.floor(i / 2) * 30, 10, 0, Math.PI * 2);
+    ctx.fillStyle = colors[i];
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText(patients[i], 52 + (i % 2) * 60, 94 + Math.floor(i / 2) * 30);
+  }
+  // Test box
+  ctx.fillStyle = 'rgba(231, 76, 60, 0.1)';
+  ctx.fillRect(180, 50, 140, 110);
+  ctx.strokeStyle = '#e74c3c';
+  ctx.strokeRect(180, 50, 140, 110);
+  ctx.fillStyle = '#1a5276';
+  ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('TEST', 230, 68);
+  // Patient icons in test (P1 appears again = leak)
+  const testPatients = ['P1', 'P4', 'P2', 'P1'];
+  const testColors = ['#e74c3c', '#1a5276', '#27ae60', '#e74c3c'];
+  for (let i = 0; i < testPatients.length; i++) {
+    ctx.beginPath();
+    ctx.arc(210 + (i % 2) * 60, 90 + Math.floor(i / 2) * 30, 10, 0, Math.PI * 2);
+    ctx.fillStyle = testColors[i];
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText(testPatients[i], 202 + (i % 2) * 60, 94 + Math.floor(i / 2) * 30);
+  }
+  // Leak indicator
+  ctx.fillStyle = '#e74c3c';
+  ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('P1 in BOTH = leak!', 75, 172);
+  // RIGHT: Correct - entity-level split
+  ctx.fillStyle = '#27ae60';
+  ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('CORRECT: Entity-level split', 420, 45);
+  // Train box
+  ctx.fillStyle = 'rgba(39, 174, 96, 0.1)';
+  ctx.fillRect(400, 50, 140, 110);
+  ctx.strokeStyle = '#27ae60';
+  ctx.strokeRect(400, 50, 140, 110);
+  ctx.fillStyle = '#1a5276';
+  ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('TRAIN', 445, 68);
+  // All visits from P1, P2
+  const trainCorrect = ['P1', 'P1', 'P2', 'P2'];
+  const trainCColors = ['#e74c3c', '#e74c3c', '#27ae60', '#27ae60'];
+  for (let i = 0; i < trainCorrect.length; i++) {
+    ctx.beginPath();
+    ctx.arc(430 + (i % 2) * 60, 90 + Math.floor(i / 2) * 30, 10, 0, Math.PI * 2);
+    ctx.fillStyle = trainCColors[i];
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText(trainCorrect[i], 422 + (i % 2) * 60, 94 + Math.floor(i / 2) * 30);
+  }
+  // Test box
+  ctx.fillStyle = 'rgba(39, 174, 96, 0.1)';
+  ctx.fillRect(550, 50, 140, 110);
+  ctx.strokeStyle = '#27ae60';
+  ctx.strokeRect(550, 50, 140, 110);
+  ctx.fillStyle = '#1a5276';
+  ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('TEST', 600, 68);
+  // All visits from P3, P4
+  const testCorrect = ['P3', 'P3', 'P4', 'P4'];
+  const testCColors = ['#e67e22', '#e67e22', '#1a5276', '#1a5276'];
+  for (let i = 0; i < testCorrect.length; i++) {
+    ctx.beginPath();
+    ctx.arc(580 + (i % 2) * 60, 90 + Math.floor(i / 2) * 30, 10, 0, Math.PI * 2);
+    ctx.fillStyle = testCColors[i];
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText(testCorrect[i], 572 + (i % 2) * 60, 94 + Math.floor(i / 2) * 30);
+  }
+  // Correct indicator
+  ctx.fillStyle = '#27ae60';
+  ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('No entity overlap!', 460, 172);
+  ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+}
+
+function drawPC7() {
+  const ctx = setupCanvas('pc7', 720, 180);
+  // Title
+  ctx.fillStyle = '#1a5276';
+  ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('Deployment: Distribution Shift Detection Dashboard', 180, 20);
+  ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+  // Time axis
+  ctx.beginPath();
+  ctx.moveTo(50, 140);
+  ctx.lineTo(550, 140);
+  ctx.strokeStyle = '#1a5276';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  // Y axis
+  ctx.beginPath();
+  ctx.moveTo(50, 35);
+  ctx.lineTo(50, 140);
+  ctx.stroke();
+  ctx.fillStyle = '#1a5276';
+  ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('Distribution', 5, 55);
+  ctx.fillText('Distance', 12, 70);
+  ctx.fillText('Time', 290, 158);
+  // Normal distribution line (stable)
+  ctx.beginPath();
+  ctx.moveTo(60, 120);
+  const normalPoints = [120, 118, 122, 119, 121, 120, 117, 123, 120, 118, 121, 119];
+  for (let i = 0; i < normalPoints.length; i++) {
+    ctx.lineTo(60 + (i + 1) * 25, normalPoints[i]);
+  }
+  ctx.strokeStyle = '#27ae60';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+  // Shift point
+  const shiftX = 360;
+  // Shifted distribution line (rising)
+  ctx.beginPath();
+  ctx.moveTo(shiftX, 118);
+  const shiftPoints = [110, 95, 78, 60, 48, 42, 38];
+  for (let i = 0; i < shiftPoints.length; i++) {
+    ctx.lineTo(shiftX + (i + 1) * 25, shiftPoints[i]);
+  }
+  ctx.strokeStyle = '#e74c3c';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+  // Threshold line
+  ctx.setLineDash([5, 4]);
+  ctx.beginPath();
+  ctx.moveTo(50, 80);
+  ctx.lineTo(550, 80);
+  ctx.strokeStyle = '#e67e22';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#e67e22';
+  ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('Alert Threshold', 555, 84);
+  // Alert trigger point
+  const alertX = 435;
+  ctx.beginPath();
+  ctx.arc(alertX, 78, 8, 0, Math.PI * 2);
+  ctx.fillStyle = '#e74c3c';
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('!', 432, 83);
+  // Alert box
+  ctx.fillStyle = 'rgba(231, 76, 60, 0.1)';
+  ctx.fillRect(570, 35, 140, 70);
+  ctx.strokeStyle = '#e74c3c';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(570, 35, 140, 70);
+  ctx.fillStyle = '#e74c3c';
+  ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('ALERT', 615, 55);
+  ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('Drift detected!', 590, 73);
+  ctx.fillText('Block predictions', 585, 90);
+  ctx.fillText('until investigated', 583, 104);
+  // Arrow from alert point to box
+  drawArrow(ctx, 443, 73, 570, 60, '#e74c3c');
+  // Labels
+  ctx.fillStyle = '#27ae60';
+  ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('Stable', 150, 135);
+  ctx.fillStyle = '#e74c3c';
+  ctx.fillText('Schema change ($ to cents)', 370, 158);
+  ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+}
+
+drawPC1();
+drawPC2();
+drawPC3();
+drawPC4();
+drawPC5();
+drawPC6();
+drawPC7();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Log Transformation: Dangers and Interpretability — Discussion Backlog</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #fff; color: #2c3e50; line-height: 1.6; }
+h1 { color: #1a5276; border-bottom: 3px solid #2980b9; padding-bottom: 10px; }
+h2 { color: #1a5276; margin-top: 0; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { padding: 20px; vertical-align: top; border: 1px solid #2980b9; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-title { color: #1a5276; font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
+ul { margin: 10px 0; padding-left: 20px; }
+li { margin-bottom: 6px; }
+strong { color: #1a5276; }
+code { background: #e8f0f8; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; color: #1a5276; }
+.questions { background: #fff8e1; border-left: 3px solid #f39c12; padding: 10px 15px; margin: 10px 0; font-size: 0.9em; }
+canvas { display: block; margin: 8px auto; max-width: 100%; }
+.nav-link { display: inline-block; margin: 20px 0; color: #2980b9; text-decoration: none; font-weight: bold; }
+.nav-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<h1>Log Transformation: Dangers and Interpretability</h1>
+<p>Log transformation is the most commonly applied "fix" for right-skewed data. But it changes data in ways rarely acknowledged.</p>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Core Problems</div>
+<ul>
+<li><strong>Scale compression:</strong> $50K, $200K, $1M become 10.8, 12.2, 13.8 — nearly indistinguishable</li>
+<li><strong>Interpretability loss:</strong> "mean difference of 0.3 in log space" means nothing intuitive</li>
+<li><strong>Zero/negative values:</strong> log(0) undefined, log(negative) undefined. Hacks introduce artifacts</li>
+<li><strong>Changed test semantics:</strong> t-test on log data tests GEOMETRIC means, not arithmetic</li>
+<li><strong>Shape doesn't transfer:</strong> "Normal in log space" = log-normal in original space</li>
+<li><strong>Threshold trap:</strong> "log(cholesterol) > 5.8" means "cholesterol > 330" — non-obvious</li>
+</ul>
+
+<div class="obj-title" style="margin-top: 20px;">What to Do Instead</div>
+<ul>
+<li>Detect log-normal shape via CNN — flag explicitly</li>
+<li>Use non-parametric test (Mann-Whitney) on original scale</li>
+<li>If transform chosen: document exactly what quantity is compared</li>
+<li>Never silently transform</li>
+</ul>
+
+<div class="questions">
+<strong>Key Questions:</strong><br>
+1. Ever recommend log-transform?<br>
+2. Auto-route to Mann-Whitney?<br>
+3. Box-Cox generalization?
+</div>
+</td>
+<td>
+<canvas id="c1" width="720" height="280"></canvas>
+<canvas id="c2" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setupCanvas(id) {
+    var c = document.getElementById(id);
+    var w = c.width, h = c.height;
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return {ctx: ctx, w: w, h: h};
+}
+
+// Canvas 1: Original scale vs log scale comparison
+(function() {
+    var s = setupCanvas('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var marginTop = 30, marginBottom = 50;
+    var halfW = w / 2 - 20;
+
+    // Title
+    ctx.font = 'bold 16px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Scale Compression: Original vs Log Transform', w / 2, 18);
+
+    // Original scale (left)
+    var origData = [
+        {label: '$30K', val: 30, freq: 15},
+        {label: '$50K', val: 50, freq: 25},
+        {label: '$70K', val: 70, freq: 20},
+        {label: '$100K', val: 100, freq: 12},
+        {label: '$200K', val: 200, freq: 5},
+        {label: '$500K', val: 500, freq: 2},
+        {label: '$1M', val: 1000, freq: 1}
+    ];
+
+    var leftX = 30, barAreaW = halfW - 40;
+    var maxFreq = 25;
+    var barH = (h - marginTop - marginBottom) / origData.length - 3;
+
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Original Scale', leftX + barAreaW / 2, marginTop + 3);
+
+    for (var i = 0; i < origData.length; i++) {
+        var y = marginTop + 12 + i * (barH + 3);
+        var bw = (origData[i].freq / maxFreq) * (barAreaW - 50);
+
+        ctx.fillStyle = 'rgba(26,82,118,0.35)';
+        ctx.fillRect(leftX + 50, y, bw, barH);
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(leftX + 50, y, bw, barH);
+
+        ctx.fillStyle = '#2c3e50';
+        ctx.textAlign = 'right';
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.fillText(origData[i].label, leftX + 46, y + barH / 2 + 3);
+    }
+
+    // Arrow in middle
+    var arrowX = w / 2;
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(arrowX - 15, h / 2);
+    ctx.lineTo(arrowX + 15, h / 2);
+    ctx.lineTo(arrowX + 10, h / 2 - 5);
+    ctx.moveTo(arrowX + 15, h / 2);
+    ctx.lineTo(arrowX + 10, h / 2 + 5);
+    ctx.stroke();
+    ctx.font = '12px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('log()', arrowX, h / 2 - 10);
+
+    // Log scale (right)
+    var logData = [
+        {label: '10.3', val: 10.3, orig: '$30K'},
+        {label: '10.8', val: 10.8, orig: '$50K'},
+        {label: '11.2', val: 11.2, orig: '$70K'},
+        {label: '11.5', val: 11.5, orig: '$100K'},
+        {label: '12.2', val: 12.2, orig: '$200K'},
+        {label: '13.1', val: 13.1, orig: '$500K'},
+        {label: '13.8', val: 13.8, orig: '$1M'}
+    ];
+
+    var rightX = w / 2 + 20;
+    var logMin = 10, logMax = 14;
+
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Log Scale (compressed!)', rightX + barAreaW / 2, marginTop + 3);
+
+    for (var i = 0; i < logData.length; i++) {
+        var y = marginTop + 12 + i * (barH + 3);
+        var bw = ((logData[i].val - logMin) / (logMax - logMin)) * (barAreaW - 50);
+
+        ctx.fillStyle = (i >= 4) ? 'rgba(231,76,60,0.3)' : 'rgba(26,82,118,0.35)';
+        ctx.fillRect(rightX + 50, y, bw, barH);
+        ctx.strokeStyle = (i >= 4) ? '#e74c3c' : '#1a5276';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(rightX + 50, y, bw, barH);
+
+        ctx.fillStyle = '#2c3e50';
+        ctx.textAlign = 'right';
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.fillText(logData[i].label, rightX + 46, y + barH / 2 + 3);
+    }
+
+    // Annotation
+    ctx.font = 'bold 13px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('20x difference ($50K vs $1M) becomes only 1.3x in log!', w / 2, h - 10);
+})();
+
+// Canvas 2: Test semantics diagram
+(function() {
+    var s = setupCanvas('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Title
+    ctx.font = 'bold 16px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('What t-test on log(x) Actually Tests', w / 2, 20);
+
+    // Left box: what you think
+    var boxW = 280, boxH = 80;
+    var leftBoxX = 40, boxY = 50;
+
+    ctx.fillStyle = '#e8f8e8';
+    ctx.fillRect(leftBoxX, boxY, boxW, boxH);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(leftBoxX, boxY, boxW, boxH);
+
+    ctx.font = 'bold 14px -apple-system, sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText('What you THINK you test:', leftBoxX + boxW / 2, boxY + 20);
+    ctx.font = '15px -apple-system, sans-serif';
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('H0: mean(A) = mean(B)', leftBoxX + boxW / 2, boxY + 42);
+    ctx.font = '14px -apple-system, sans-serif';
+    ctx.fillText('(arithmetic mean difference)', leftBoxX + boxW / 2, boxY + 60);
+
+    // Right box: what actually happens
+    var rightBoxX = w - boxW - 40;
+
+    ctx.fillStyle = '#fde8e8';
+    ctx.fillRect(rightBoxX, boxY, boxW, boxH);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(rightBoxX, boxY, boxW, boxH);
+
+    ctx.font = 'bold 14px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('What you ACTUALLY test:', rightBoxX + boxW / 2, boxY + 20);
+    ctx.font = '15px -apple-system, sans-serif';
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('H0: geomean(A) = geomean(B)', rightBoxX + boxW / 2, boxY + 42);
+    ctx.font = '14px -apple-system, sans-serif';
+    ctx.fillText('(geometric mean RATIO)', rightBoxX + boxW / 2, boxY + 60);
+
+    // Arrow between
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    var arrY = boxY + boxH / 2;
+    ctx.beginPath();
+    ctx.moveTo(leftBoxX + boxW + 5, arrY);
+    ctx.lineTo(rightBoxX - 5, arrY);
+    ctx.lineTo(rightBoxX - 12, arrY - 5);
+    ctx.moveTo(rightBoxX - 5, arrY);
+    ctx.lineTo(rightBoxX - 12, arrY + 5);
+    ctx.stroke();
+    ctx.font = '12px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('log()', (leftBoxX + boxW + rightBoxX) / 2, arrY - 8);
+
+    // Example section
+    var exY = 155;
+    ctx.fillStyle = '#f8f9fa';
+    ctx.fillRect(40, exY, w - 80, 100);
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(40, exY, w - 80, 100);
+
+    ctx.font = 'bold 15px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Concrete Example: Income Comparison', w / 2, exY + 20);
+
+    ctx.font = '14px -apple-system, sans-serif';
+    ctx.fillStyle = '#2c3e50';
+    ctx.textAlign = 'left';
+    ctx.fillText('Group A incomes: $40K, $50K, $60K, $200K', 60, exY + 42);
+    ctx.fillText('Group B incomes: $45K, $55K, $65K, $70K', 60, exY + 58);
+    ctx.fillText('Arithmetic means: A=$87.5K vs B=$58.75K (A higher by $28.75K)', 60, exY + 78);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Log means test geometric: A=$72.5K vs B=$57.9K (much closer! outlier dampened)', 60, exY + 94);
+})();
+</script>
+
+</body>
+</html>

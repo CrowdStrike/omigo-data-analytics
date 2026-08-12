@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anti-Patterns & Design Patterns for Data Systems</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 40px 20px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.3em; margin: 35px 0 12px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; }
+strong { color: #1a5276; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin: 16px 0; border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0; }
+.anti { background: #fdf2f2; padding: 16px 18px; border-right: 3px solid #e74c3c; }
+.anti .label { color: #c0392b; font-size: 0.78em; text-transform: uppercase; font-weight: 700; letter-spacing: 1px; margin-bottom: 6px; }
+.anti .title { color: #c0392b; font-weight: 700; font-size: 0.95em; margin-bottom: 6px; }
+.anti p { font-size: 0.88em; color: #666; }
+.design { background: #f0faf0; padding: 16px 18px; border-left: 3px solid #27ae60; }
+.design .label { color: #1e8449; font-size: 0.78em; text-transform: uppercase; font-weight: 700; letter-spacing: 1px; margin-bottom: 6px; }
+.design .title { color: #1e8449; font-weight: 700; font-size: 0.95em; margin-bottom: 6px; }
+.design p { font-size: 0.88em; color: #555; }
+.domain-refs { font-size: 0.8em; color: #999; margin-top: 6px; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+@media (max-width: 700px) { .pair { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+
+<h1>Anti-Patterns & Design Patterns for Data Systems</h1>
+<p class="subtitle">Common mistakes in data collection, analysis, and ML — paired with the correct design. If you see yourself on the left: switch to the right.</p>
+
+<h2>Data Collection</h2>
+
+<div class="pair">
+<div class="anti"><div class="label">Anti-Pattern</div><div class="title">Impute all missing values with column mean</div><p>Treats all NULLs as "data collection failure." Fills with population average. Destroys the signal that absence carries.</p><div class="domain-refs">Healthcare: makes healthy patients look sick. Cybersecurity: hides log deletion.</div></div>
+<div class="design"><div class="label">Design Pattern</div><div class="title">Create is_missing feature + classify missingness type</div><p>MCAR: safe to impute. MAR: conditional imputation. MNAR: absence IS the feature. Always create binary "is_missing_X" alongside any imputation. Test if missingness predicts the target — often it's stronger than the value itself.</p></div>
+</div>
+
+<div class="pair">
+<div class="anti"><div class="label">Anti-Pattern</div><div class="title">UNION multiple sources into one table trusting schema match</div><p>Same column names + same types = same data, right? Wrong. "Amount" in USD from source A, cents from B, local currency from C.</p><div class="domain-refs">Multi-hospital labs. Cross-region billing. Multi-platform analytics.</div></div>
+<div class="design"><div class="label">Design Pattern</div><div class="title">Tag source_id + profile each source independently before joining</div><p>Add source_system_id to every row. Profile distributions PER SOURCE: mean, std, null rate, category values. If they differ for "same" column → semantic mismatch. Compare before combining, not after.</p></div>
+</div>
+
+<div class="pair">
+<div class="anti"><div class="label">Anti-Pattern</div><div class="title">Use "current state" queries for historical analysis</div><p>Query the database today for what happened last quarter. But: earnings restated, addresses changed, codes updated. Current values overwrite history.</p><div class="domain-refs">Finance: restated earnings. HR: changed job titles. E-commerce: updated prices.</div></div>
+<div class="design"><div class="label">Design Pattern</div><div class="title">Point-in-time database: store snapshots, query "as-of date X"</div><p>Every record versioned by timestamp. "What was this customer's address on March 15?" Not "what is their address now?" Requires append-only storage + temporal query capability. SCD Type 2 tables or event sourcing.</p></div>
+</div>
+
+<h2>Profiling & Shape Detection</h2>
+
+<div class="pair">
+<div class="anti"><div class="label">Anti-Pattern</div><div class="title">Profile the entire column as one distribution</div><p>Compute mean, std, shape across ALL data. But if data has gaps, spikes, or sub-populations → the global profile is meaningless (mean in an empty gap).</p><div class="domain-refs">Troponin: two clusters. Capital gain: spike + continuous. Hemoglobin: male + female.</div></div>
+<div class="design"><div class="label">Design Pattern</div><div class="title">Value existence mapping → split → profile each segment</div><p>Step 1: Where does data EXIST? (gaps, spikes, clusters). Step 2: Split at structural boundaries. Step 3: Profile each segment independently. A mean across two clusters is fiction. Profile within each cluster.</p></div>
+</div>
+
+<div class="pair">
+<div class="anti"><div class="label">Anti-Pattern</div><div class="title">Use one bin count for all features</div><p>20 bins for everything. Power-law feature: 1 bin has 80% of data, 19 bins are empty. Uniform feature: works fine. One-size-fits-all = wrong for most.</p><div class="domain-refs">Income. Hospital charges. File sizes. Any skewed distribution.</div></div>
+<div class="design"><div class="label">Design Pattern</div><div class="title">Multi-resolution + percentile-width + meta-distribution Gini</div><p>Run at multiple bin counts (doc 13). Use equal-count bins where width encodes density (doc 27). Compute meta-distribution Gini (doc 28) — if > 0.7: feature needs adaptive treatment. Let the data tell you the right resolution.</p></div>
+</div>
+
+<div class="pair">
+<div class="anti"><div class="label">Anti-Pattern</div><div class="title">Report a single summary statistic ("mean = 50")</div><p>If distribution is bimodal (peaks at 20 and 80), mean = 50 represents a state that NEVER occurs. Summary stats are insufficient — they hide multi-modality, spikes, and tails.</p><div class="domain-refs">CPU utilization. Income. Latency (cache hit vs miss).</div></div>
+<div class="design"><div class="label">Design Pattern</div><div class="title">Always report shape + distribution alongside summary stats</div><p>Shape class (bell/skew/bimodal/spike) is as important as mean/std. Bimodal with mean 50? The mean is a lie — report the two peaks. Include at minimum: shape, skewness, Gini, max/mean ratio. Summary + shape together = truth.</p></div>
+</div>
+
+<h2>Statistical Testing</h2>
+
+<div class="pair">
+<div class="anti"><div class="label">Anti-Pattern</div><div class="title">Report p-value without effect size</div><p>At n=100,000: enrichment 1.006× is "significant" (p<0.001). But useless for classification. Statistical significance ≠ practical significance.</p><div class="domain-refs">Large datasets. Clinical trials. Any high-n analysis.</div></div>
+<div class="design"><div class="label">Design Pattern</div><div class="title">Require BOTH p < threshold AND enrichment > minimum practical level</div><p>Gate: p < 0.05/n_tests (Bonferroni) AND enrichment > 1.5× (or whatever is actionable for your domain). Reject anything that's significant but trivially small. Report effect size FIRST, p-value second.</p></div>
+</div>
+
+<div class="pair">
+<div class="anti"><div class="label">Anti-Pattern</div><div class="title">Fine-bucket rare classes (20 buckets at 0.01% positive rate)</div><p>20 buckets × 0.01% positive = 12 positives per bucket. Below any statistical minimum. Every bucket is unvalidatable noise.</p><div class="domain-refs">Fraud. Rare disease. Security attacks. Any extreme imbalance.</div></div>
+<div class="design"><div class="label">Design Pattern</div><div class="title">Fewer buckets (5 max) or skip bucketing entirely → use rank tests</div><p>Mann-Whitney doesn't need bucketing — ranks positives vs negatives directly. If you must bucket: compute minimum n_positive needed per bucket (30). Then: max_buckets = total_positives / 30. At 600 positives: max 20 buckets. At 60: max 2.</p></div>
+</div>
+
+<div class="pair">
+<div class="anti"><div class="label">Anti-Pattern</div><div class="title">Check A/B test results daily until significant</div><p>"Peeking" inflates false positive rate from 5% to 25-50%. You stop when it looks good but would never stop when it looks bad.</p><div class="domain-refs">Every A/B test platform. Product teams. Growth teams.</div></div>
+<div class="design"><div class="label">Design Pattern</div><div class="title">Fix sample size upfront (power analysis). Don't peek. Or use sequential testing.</div><p>Pre-commit: "we will evaluate at n=5000 per group, not before." OR: use always-valid p-values / group sequential methods that mathematically account for continuous monitoring. No color-coding results until test is COMPLETE.</p></div>
+</div>
+
+<h2>Feature Engineering</h2>
+
+<div class="pair">
+<div class="anti"><div class="label">Anti-Pattern</div><div class="title">Use CTR / engagement as item quality feature</div><p>CTR is 90% determined by position shown, not quality. Item at position 1: 30% CTR. Same item at position 10: 2%. The feature encodes YOUR bias, not the entity's property.</p><div class="domain-refs">Search ranking. Recommendations. Ad targeting. Any system with position effects.</div></div>
+<div class="design"><div class="label">Design Pattern</div><div class="title">Debias: CTR adjusted for position. Or: use random-position holdout traffic.</div><p>Option A: "CTR relative to position-average" as feature. Option B: Reserve 5% traffic for random ranking → measure CTR without position bias → use THAT as quality signal. Option C: Log position alongside every event and train position-aware models.</p></div>
+</div>
+
+<div class="pair">
+<div class="anti"><div class="label">Anti-Pattern</div><div class="title">Include a feature without checking causal direction</div><p>"Collection calls made" perfectly predicts loan default. But calls happen BECAUSE of default. It's a consequence, not a cause. Feature encodes the label.</p><div class="domain-refs">Treatment predicting disease. Support tickets predicting churn. Retention call predicting loyalty.</div></div>
+<div class="design"><div class="label">Design Pattern</div><div class="title">Timeline audit: for every feature, draw WHEN it was generated relative to target event</div><p>If feature_timestamp ≥ target_event_timestamp: it's leakage, remove it. This catches: post-event features, backfilled data, and consequence-as-cause. Automate: assert max(feature_timestamps) < min(prediction_timestamps) per entity.</p></div>
+</div>
+
+<div class="pair">
+<div class="anti"><div class="label">Anti-Pattern</div><div class="title">Remove protected attribute and assume fairness</div><p>Removed "gender" from model. But zip code, university, first name all correlate 0.8+ with gender. Model still discriminates through proxies.</p><div class="domain-refs">Hiring. Credit. Insurance. Policing. Any regulated domain.</div></div>
+<div class="design"><div class="label">Design Pattern</div><div class="title">Audit correlations with protected attributes. Remove proxies, not just the attribute.</div><p>Compute correlation of EVERY feature with protected attributes. If r > 0.5 with race/gender: it's a proxy. Either remove it, or apply fairness constraints (equalized odds, demographic parity). Test: does model output differ by protected group? If yes: unfair regardless of which features were removed.</p></div>
+</div>
+
+<h2>Training & Evaluation</h2>
+
+<div class="pair">
+<div class="anti"><div class="label">Anti-Pattern</div><div class="title">Random train/test split on time-ordered data</div><p>Shuffles time. Future data in train, past data in test. Model "predicts" the past using future. Gap between random and temporal split: 10-30%.</p><div class="domain-refs">Every financial dataset. User behavior. IoT sensors. Clinical events.</div></div>
+<div class="design"><div class="label">Design Pattern</div><div class="title">Temporal split: train on [t₀,t₁], test on [t₁,t₂]. Never shuffle across time.</div><p>Simulate reality: model trained on everything up to date X, evaluated on everything after date X. This is what production actually faces — predicting the future from the past. If performance drops vs random split: that gap WAS leakage.</p></div>
+</div>
+
+<div class="pair">
+<div class="anti"><div class="label">Anti-Pattern</div><div class="title">Evaluate with accuracy on imbalanced data</div><p>"95% accuracy!" on 95/5 data = predicting majority class always. Recall on rare class = 0%. Completely useless detector.</p><div class="domain-refs">Fraud (0.1%). Cancer (1%). Cybersecurity (0.001%). Any rare event.</div></div>
+<div class="design"><div class="label">Design Pattern</div><div class="title">Evaluate with precision/recall/F1 on the minority class. Report at multiple thresholds (PR curve).</div><p>Ask: "of the things you flagged, how many were real?" (precision) and "of the real events, how many did you catch?" (recall). Report both + the tradeoff curve. Business decides where on the curve to operate based on cost of FP vs FN.</p></div>
+</div>
+
+<div class="pair">
+<div class="anti"><div class="label">Anti-Pattern</div><div class="title">Select features on full dataset, then split into train/test</div><p>Feature selection used test data to decide which features matter. Test is no longer independent. Performance inflated by 5-10%.</p><div class="domain-refs">Univariate feature selection. Correlation screening. PCA. Any dimensionality reduction.</div></div>
+<div class="design"><div class="label">Design Pattern</div><div class="title">Feature selection INSIDE cross-validation loop. Re-select per fold.</div><p>Pipeline: for each CV fold → select features on TRAIN fold only → build model on selected features → evaluate on TEST fold. Each fold independently selects features. Final feature set = intersection of what was selected across folds.</p></div>
+</div>
+
+<h2>Deployment & Monitoring</h2>
+
+<div class="pair">
+<div class="anti"><div class="label">Anti-Pattern</div><div class="title">Deploy model and check results quarterly</div><p>Model silently degrades for 3 months. By the time you notice: thousands of wrong predictions served. Cause: upstream data change 2 months ago that nobody detected.</p><div class="domain-refs">Silent schema changes. Feature store staleness. Concept drift. Population shift.</div></div>
+<div class="design"><div class="label">Design Pattern</div><div class="title">Data validation on every input + distribution monitoring on every output</div><p>INPUT: schema checks, range checks, KS test vs last week, null rate changes → alert BEFORE serving. OUTPUT: prediction distribution vs expected → alert if predictions shift. Weekly: compare predictions vs actual outcomes (if available). Cheap, catches 90% of silent failures.</p></div>
+</div>
+
+<div class="pair">
+<div class="anti"><div class="label">Anti-Pattern</div><div class="title">Trust model confidence at face value</div><p>Model says "85% probability." But model was never calibrated. Actual rate when model says 85%: could be 50% or 95%. Confidence is a NUMBER, not a calibrated probability.</p><div class="domain-refs">All probabilistic models. Risk scores. Churn prediction. Medical diagnosis.</div></div>
+<div class="design"><div class="label">Design Pattern</div><div class="title">Calibrate predictions + report calibration curve alongside performance</div><p>Platt scaling or isotonic regression post-training. Verify: when model says "80%", does the event happen 80% of the time? Plot calibration curve (reliability diagram). If not calibrated: model probabilities are ordinal (ranking) not cardinal (probabilities).</p></div>
+</div>
+
+<div class="pair">
+<div class="anti"><div class="label">Anti-Pattern</div><div class="title">Train on batch-computed features, serve with real-time features</div><p>Batch: "30-day average" from perfect SQL query. Serving: same metric from streaming pipeline with different edge cases, NULL handling, timestamps. Subtle differences → silent performance drop.</p><div class="domain-refs">Feature stores. Real-time ML. Any batch-train + online-serve system.</div></div>
+<div class="design"><div class="label">Design Pattern</div><div class="title">Unified feature pipeline (same code for batch and serving) + feature parity monitoring</div><p>One function computes the feature, called both during training and serving. If impossible: log serving-time features, compare against batch-computed features for same records offline. Alert on systematic deviation. Any gap = training-serving skew.</p></div>
+</div>
+
+<h2>Data Operations & Hygiene</h2>
+
+<div class="pair">
+<div class="anti"><div class="label">Anti-Pattern</div><div class="title">Same metric, same data — cherry-pick the aggregation level</div><p>"Engagement rate" computed per-user: +2%. Per-session: +12%. Per-click: +40%. Same metric name, same underlying data, three different truths depending on denominator. Pick the level that makes your case. The subtle part: this isn't lying — all three numbers are correct. But a per-click metric dominated by one power user's 500 clicks is a different claim than a per-user metric showing most people are unaffected.</p><div class="domain-refs">Growth reviews. Engagement dashboards. Funnel analysis. Any hierarchical data: user → session → event → sub-event.</div></div>
+<div class="design"><div class="label">Design Pattern</div><div class="title">Let statistical assumptions choose the aggregation level, then declare it upfront.</div><p>The correct level is where observations are independent units — not the finest granularity with the most rows. Independence, normality, and the metric's natural unit dictate the level: engagement rate per SRP belongs at the search-page level (each search is one decision). Time-on-site is a session-level metric (within-session pages are correlated). Picking per-click inflates N with non-independent duplicates → pseudoreplication → guaranteed but meaningless significance. Declare the level before analysis, justify it from the metric's semantics, and if levels disagree, report the discrepancy as concentration: "per-click +40%, per-user +2% — 3 power users driving 80% of new clicks."</p></div>
+</div>
+
+<div class="pair">
+<div class="anti"><div class="label">Anti-Pattern</div><div class="title">No source_id logged with ingested data</div><p>Data flows from 5 upstream systems into one table. When something looks wrong, you can't trace which source produced the bad row. "Where did this come from?" → nobody knows.</p><div class="domain-refs">Multi-hospital labs. Cross-region billing. Multi-platform event streams. Merged datasets.</div></div>
+<div class="design"><div class="label">Design Pattern</div><div class="title">Tag every row with source_system_id + ingestion_timestamp</div><p>Mandatory metadata on every record: which system produced it, when it arrived. When anomalies appear: filter by source and profile each independently. Source attribution is free at ingestion, expensive to reconstruct after the fact.</p></div>
+</div>
+
+<div class="pair">
+<div class="anti"><div class="label">Anti-Pattern</div><div class="title">No row count assertion after JOIN</div><p>Users table (10K rows) JOIN Orders (50K rows) = 50K rows. Nobody checked. "Revenue per user" computed on 50K rows: wrong by 5×. Or: LEFT JOIN drops 2K users silently. Nobody noticed the row count changed.</p><div class="domain-refs">Any pipeline with joins. ETL workflows. Feature engineering on relational data.</div></div>
+<div class="design"><div class="label">Design Pattern</div><div class="title">Assert row count before and after every join. Alert on unexpected change.</div><p>Rule: if count(output) > count(left_input) → you have a fanout → investigate. If count(output) < count(left_input) → you dropped rows → investigate. Automate this assertion in every ETL step.</p></div>
+</div>
+
+<div class="pair">
+<div class="anti"><div class="label">Anti-Pattern</div><div class="title">ETL pipeline with no data quality checks between stages</div><p>Data flows: raw → cleaned → transformed → modeled → served. No validation between steps. Garbage produced at step 2 propagates silently to step 5. Discovered weeks later by a user complaint.</p><div class="domain-refs">Any multi-stage pipeline. Airflow DAGs. Spark jobs. dbt models.</div></div>
+<div class="design"><div class="label">Design Pattern</div><div class="title">Validation gate between every stage: schema + distribution + business rules</div><p>After each step: assert column types, null rates within tolerance, value ranges within bounds, row counts within expected ±10%. HALT the pipeline if any check fails. Cheap (seconds of compute) and prevents cascading garbage. Great Expectations, dbt tests, custom assertions.</p></div>
+</div>
+
+<div class="pair">
+<div class="anti"><div class="label">Anti-Pattern</div><div class="title">Overwrite yesterday's data without versioning</div><p>Daily pipeline overwrites the "current" table. Bug introduced yesterday → today's table is wrong. But yesterday's table is gone — overwritten. Can't compare, can't roll back, can't investigate.</p><div class="domain-refs">Any daily/hourly batch pipeline. Feature store updates. Reporting tables.</div></div>
+<div class="design"><div class="label">Design Pattern</div><div class="title">Partition by date. Never delete. Compare today vs yesterday automatically.</div><p>Store each run as a dated partition (dt=2024-08-01). Current = latest partition. Investigation: diff any two dates. Rollback: point to previous partition. Storage is cheap; lost data is expensive. Keep 30+ days of history minimum.</p></div>
+</div>
+
+<div class="pair">
+<div class="anti"><div class="label">Anti-Pattern</div><div class="title">Hard-code thresholds from one dataset</div><p>"Anomaly if value > 1000" — works great on THIS dataset. Deploy to new client/region: normal values are 5000+. Threshold is meaningless outside its training context. Magic numbers everywhere.</p><div class="domain-refs">Alerting systems. Feature engineering. Anomaly detection. Data validation.</div></div>
+<div class="design"><div class="label">Design Pattern</div><div class="title">Derive thresholds from data statistics (percentiles, std from mean)</div><p>Instead of "value > 1000": "value > p99 of trailing 30 days" or "value > mean + 3σ." Threshold adapts to each deployment context. Self-calibrating. Works across populations without manual tuning.</p></div>
+</div>
+
+<div class="pair">
+<div class="anti"><div class="label">Anti-Pattern</div><div class="title">Relative time in pipeline queries (NOW() - INTERVAL)</div><p><code>WHERE ts > NOW() - INTERVAL '1 hour'</code>. Pipeline fails at 10:02, auto-retries at 10:07 — window silently shifts 5 minutes. Different data, no error, "success." Backfill? Impossible. Debug? Can't reproduce. Every partial-failure recovery corrupts the output slightly.</p><div class="domain-refs">Any scheduled ETL. Airflow DAGs. Cron-triggered pipelines. Feature store refresh. Monitoring queries.</div></div>
+<div class="design"><div class="label">Design Pattern</div><div class="title">Pre-construct absolute time boundaries. Pass as parameters.</div><p>Scheduler computes <code>window_start</code>, <code>window_end</code> once. Query receives them as bind parameters. Retry = same parameters = same results. Backfill = pass any historical window. Query is a pure function of its inputs. Separate "when to run" from "what range to query." Log the boundaries for audit.</p></div>
+</div>
+
+<h2>AI Assistants & LLM Analysis</h2>
+
+<div class="pair">
+<div class="anti"><div class="label">Anti-Pattern</div><div class="title">AI assistant agrees with everything you say (confirmation bias as a service)</div><p>User says "I think feature X matters." AI: "Yes! Feature X is very important because..." User feels validated. But AI would say the same about feature Y, Z, or any claim. The agreement is reflexive, not evidence-based. LLMs are sycophantic by training — optimized to be "helpful" which in practice means agreeable.</p><div class="domain-refs">ChatGPT. Claude. Copilot. Any LLM used for data analysis.</div></div>
+<div class="design"><div class="label">Design Pattern</div><div class="title">Demand evidence, not agreement. Ask "why might I be wrong?" not "am I right?"</div><p>Prompt for: "What's the strongest counter-argument?" "Under what conditions would this conclusion be false?" "What data would DISPROVE this?" Treat AI agreement as zero evidence. Only treat AI DISAGREEMENT or SPECIFIC COUNTER-EVIDENCE as information. If it agrees too easily: it's not thinking, it's pleasing.</p></div>
+</div>
+
+<div class="pair">
+<div class="anti"><div class="label">Anti-Pattern</div><div class="title">Using LLM output as ground truth without verification</div><p>"Claude said the p-value for this test should be 0.03" → used directly. But: LLMs hallucinate statistics, invent citations, confuse formulas. The output LOOKS authoritative (confident language, proper formatting) but may be completely fabricated.</p><div class="domain-refs">Any AI-assisted analysis. Code generation. Statistical interpretation.</div></div>
+<div class="design"><div class="label">Design Pattern</div><div class="title">LLM output = hypothesis to verify, never ground truth</div><p>AI generates analysis → run the ACTUAL computation to verify. AI suggests a test → check the assumptions YOURSELF. AI cites a paper → look it up. Treat LLM output the way you'd treat a junior analyst's first draft: probably directionally right, possibly wrong in details, NEVER trustworthy without review.</p></div>
+</div>
+
+<div class="pair">
+<div class="anti"><div class="label">Anti-Pattern</div><div class="title">Asking LLM the same question differently until it gives the answer you want</div><p>AI says "this correlation is likely spurious." Re-ask with leading framing: "Given that X is clearly related to Y, explain why..." Now AI agrees. You got the answer you wanted. But you just p-hacked the AI — tried multiple phrasings until one confirmed your bias.</p><div class="domain-refs">Prompt engineering for confirmation. Iterative rephrasing. "Make it say what I believe."</div></div>
+<div class="design"><div class="label">Design Pattern</div><div class="title">Ask ONCE with neutral framing. If AI disagrees: that's MORE informative than agreement.</div><p>The first answer (before you inject bias) is the least contaminated. If it contradicts you: investigate WHY, don't reframe until it agrees. AI disagreement = signal to check your assumption. AI agreement after 5 rephrasings = you trained it to echo you.</p></div>
+</div>
+
+<div class="philosophy">
+<strong>How to use:</strong> For any decision in your pipeline, find the anti-pattern that matches what you're about to do. If you see yourself on the left side: switch to the right side. Every anti-pattern on the left has burned real teams with real consequences — often silently for months before discovery.
+</div>
+
+</body>
+</html>

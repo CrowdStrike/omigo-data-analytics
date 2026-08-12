@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Abandoned Custom Features — Common Bad Practices</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 20px 10px; line-height: 1.6; }
+h1 { font-size: 1.6em; margin-bottom: 10px; color: #1a5276; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.0em; margin-bottom: 20px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; margin-right: 15px; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 6px 0; }
+strong { color: #1a5276; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 40%; }
+.obj-table td:last-child { width: 60%; text-align: center; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+</style>
+</head>
+<body>
+
+<h1>Abandoned Custom Features in Pipeline</h1>
+<p class="subtitle">Negligent Accumulation — Added tracking or a feature for a short-term research project. Project ended. Feature never launched. The custom instrumentation still runs — consuming compute, adding latency, polluting the schema. Nobody removes it because nobody owns it anymore.</p>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">The Practice</div>
+<ul>
+<li>Researcher adds a custom event ("track scroll depth on page X for experiment Y"). Experiment ends. Event keeps firing. Adds 2ms latency per page load. Generates 50GB/day of data nobody reads. Costs $400/month in storage.</li>
+<li>Engineer adds a feature to the feature store for a model that was never deployed. Feature computation runs daily (3 hours of Spark). Nobody uses the output. But removing it requires understanding what depends on it — and nobody wants to risk breaking something.</li>
+<li>After 2 years: 30% of pipeline compute goes to features nobody uses. Schema has 200 columns, 80 are from abandoned projects. New hires spend days trying to understand what `exp_q3_2024_scroll_v2` means.</li>
+</ul>
+<div class="obj-title" style="margin-top:14px;">Why It's a Data Science Problem</div>
+<ul>
+<li><strong>Schema pollution:</strong> Every abandoned feature is a column in your feature store that confuses the next person. They might accidentally USE it in a model — training on stale, unmaintained, potentially broken data.</li>
+<li><strong>Compute waste:</strong> Feature computation isn't free. 30 abandoned features × 10 minutes each = 5 hours of daily compute for nothing. That's cluster capacity not available for actual work.</li>
+<li><strong>Latency creep:</strong> Each instrumentation point adds latency to the user-facing product. 20 abandoned tracking events × 2ms = 40ms added to page load. For nothing. But nobody knows which 20 are safe to remove.</li>
+<li><strong>Data quality confusion:</strong> When investigating a data quality issue, you encounter these ghost features. "Is this column still maintained? Does anything depend on it? Why does it have NULLs after March 2024?" Hours of investigation for something that's just dead code in data form.</li>
+</ul>
+<div class="obj-title" style="margin-top:14px;">The Ownership Problem</div>
+<ul>
+<li>Person who added it left the company. No documentation on why it exists or what depends on it.</li>
+<li>"I'll clean it up after the project" → project ends → person moves to next project → cleanup never happens.</li>
+<li>No automated system tracks: "this feature was added on date X for project Y. Project Y ended on date Z. Feature should be reviewed for removal."</li>
+<li>Fear of removal: "what if something breaks?" → everything stays forever → pipeline becomes a graveyard of dead features that nobody dares touch.</li>
+</ul>
+<p><strong>The compounding cost:</strong> Each abandoned feature is cheap individually ($30/month compute, one schema column). But they accumulate. After 3 years of 10 projects/year, each leaving 3-5 abandoned features: 30-50 zombie features. Combined cost: $1,500/month compute + 5 hours daily pipeline time + schema that nobody can understand + latency creep that degrades user experience.</p>
+<p><strong>The fix:</strong> Feature TTL (time-to-live). Every feature/event added to the pipeline gets a mandatory expiry date. If not renewed (conscious decision to keep it), it auto-disables. Forces regular review of what's still needed.</p>
+</td><td><canvas id="c1" width="720" height="400"></canvas></td></tr>
+</table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    return {ctx:ctx, w:w, h:h};
+}
+
+(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+ctx.fillStyle='#1a5276';ctx.font='bold 13px sans-serif';ctx.textAlign='center';
+ctx.fillText('Pipeline accumulates dead features over time',w/2,20);
+
+var margin={left:60,right:30,top:50,bottom:60};
+var plotW=w-margin.left-margin.right;
+var plotH=h-margin.top-margin.bottom;
+
+// Axes
+ctx.strokeStyle='#333';ctx.lineWidth=1.5;
+ctx.beginPath();ctx.moveTo(margin.left,margin.top);ctx.lineTo(margin.left,margin.top+plotH);
+ctx.lineTo(margin.left+plotW,margin.top+plotH);ctx.stroke();
+
+// X: time (years)
+ctx.fillStyle='#333';ctx.font='10px sans-serif';ctx.textAlign='center';
+ctx.fillText('Year 1',margin.left+plotW*0.17,margin.top+plotH+14);
+ctx.fillText('Year 2',margin.left+plotW*0.5,margin.top+plotH+14);
+ctx.fillText('Year 3',margin.left+plotW*0.83,margin.top+plotH+14);
+
+// Stacked area: active features vs dead features
+var months=36;
+var dx=plotW/months;
+var active=[],dead=[];
+var activeCount=10,deadCount=0;
+for(var m=0;m<months;m++){
+    // Every 3 months: project adds 3 features, some become dead
+    if(m>0&&m%3===0){activeCount+=3;deadCount+=2;activeCount-=1;}
+    active.push(activeCount);
+    dead.push(deadCount);
+}
+
+var maxFeatures=60;
+
+// Dead features area (bottom, red)
+ctx.fillStyle='rgba(231,76,60,0.3)';
+ctx.beginPath();ctx.moveTo(margin.left,margin.top+plotH);
+for(var m=0;m<months;m++){
+    var x=margin.left+m*dx;
+    var y=margin.top+plotH-(dead[m]/maxFeatures)*plotH;
+    ctx.lineTo(x,y);
+}
+ctx.lineTo(margin.left+(months-1)*dx,margin.top+plotH);ctx.closePath();ctx.fill();
+
+// Active features area (top, green)
+ctx.fillStyle='rgba(39,174,96,0.3)';
+ctx.beginPath();
+for(var m=0;m<months;m++){
+    var x=margin.left+m*dx;
+    var y=margin.top+plotH-((dead[m]+active[m])/maxFeatures)*plotH;
+    ctx.lineTo(x,y);
+}
+for(var m=months-1;m>=0;m--){
+    var x=margin.left+m*dx;
+    var y=margin.top+plotH-(dead[m]/maxFeatures)*plotH;
+    ctx.lineTo(x,y);
+}
+ctx.closePath();ctx.fill();
+
+// Lines
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=2;
+ctx.beginPath();
+for(var m=0;m<months;m++){
+    var x=margin.left+m*dx;
+    var y=margin.top+plotH-(dead[m]/maxFeatures)*plotH;
+    if(m===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+}
+ctx.stroke();
+
+ctx.strokeStyle='#27ae60';ctx.lineWidth=2;
+ctx.beginPath();
+for(var m=0;m<months;m++){
+    var x=margin.left+m*dx;
+    var y=margin.top+plotH-((dead[m]+active[m])/maxFeatures)*plotH;
+    if(m===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+}
+ctx.stroke();
+
+// Labels
+ctx.fillStyle='#27ae60';ctx.font='bold 11px sans-serif';ctx.textAlign='left';
+ctx.fillText('Active features (in use)',margin.left+plotW*0.6,margin.top+30);
+ctx.fillStyle='#e74c3c';
+ctx.fillText('Dead features (abandoned, still running)',margin.left+plotW*0.4,margin.top+plotH*0.65);
+
+// Year 3 stats
+ctx.fillStyle='#e74c3c';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
+ctx.fillText('Year 3: ~40% of pipeline compute is dead features',w/2,h-30);
+ctx.fillStyle='#555';ctx.font='italic 12px sans-serif';
+ctx.fillText('Nobody removes them because nobody knows what depends on them.',w/2,h-12);
+})();
+</script>
+</body>
+</html>

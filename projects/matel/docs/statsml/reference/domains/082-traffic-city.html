@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Traffic/City Planning - Domain-Specific Pitfalls</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f8f9fa;
+            color: #333;
+        }
+
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            background: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #1a5276;
+            margin-bottom: 10px;
+        }
+
+        .nav-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #2980b9;
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        .nav-link:hover {
+            text-decoration: underline;
+        }
+
+        .obj-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        .obj-table th,
+        .obj-table td {
+            border: 1px solid #2980b9;
+            padding: 12px 15px;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        .obj-table th {
+            background: #1a5276;
+            color: #fff;
+            font-weight: 600;
+        }
+
+        .obj-table th:first-child,
+        .obj-table td:first-child {
+            width: 45%;
+        }
+
+        .obj-table th:last-child,
+        .obj-table td:last-child {
+            width: 55%;
+        }
+
+        .obj-table tr:nth-child(even) {
+            background: #f0f8ff;
+        }
+
+        .obj-table tr:hover {
+            background: #e8f4fd;
+        }
+
+        .canvas-container {
+            margin: 30px 0;
+            text-align: center;
+        }
+
+        canvas {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+
+        <h1>Traffic/City Planning - Domain-Specific Pitfalls</h1>
+
+        <table class="obj-table">
+            <thead>
+                <tr>
+                    <th>Pitfall</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Induced demand</td>
+                    <td>Build new highway lane &rarr; congestion relief &rarr; more people drive (latent demand activated) &rarr; same congestion in 3-5 years; model predicts "less congestion" but doesn't model behavioral response to the improvement</td>
+                </tr>
+                <tr>
+                    <td>Sensor coverage gaps</td>
+                    <td>Cameras at intersections; no data between them; GPS traces from phones: biased toward smartphone-owners; traffic counts: sampled 2 days/year then extrapolated; the full picture is interpolated from sparse measurements</td>
+                </tr>
+                <tr>
+                    <td>Simulation &ne; reality</td>
+                    <td>SUMO/VISSIM microsimulation: agents follow rules; real drivers: road rage, illegal U-turns, double parking, jaywalking; simulation is orderly, reality is chaotic; policy designed in simulation fails in reality</td>
+                </tr>
+                <tr>
+                    <td>Special event disruption</td>
+                    <td>Concert, sports game, protest, construction: completely overrides normal patterns; model trained on "normal days" fails 50+ days/year; must detect event AND model its unique impact in real-time</td>
+                </tr>
+                <tr>
+                    <td>Multi-modal interaction</td>
+                    <td>Car-bike-pedestrian-bus-scooter share space; each mode has different speed, trajectory, priority; optimizing for cars hurts cyclists; city planning must model ALL modes simultaneously; car-centric data = car-centric policy</td>
+                </tr>
+                <tr>
+                    <td>Origin-destination matrix from partial data</td>
+                    <td>You know WHERE traffic is but not where it CAME FROM or WHERE it's GOING; OD estimation from link counts is massively underdetermined; many OD matrices produce same observed traffic; the inverse problem is ill-posed</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="canvas-container">
+            <canvas id="vizCanvas"></canvas>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            const canvas = document.getElementById('vizCanvas');
+            const ctx = canvas.getContext('2d');
+            const dpr = window.devicePixelRatio || 1;
+            const width = 720;
+            const height = 200;
+
+            canvas.width = width * dpr;
+            canvas.height = height * dpr;
+            canvas.style.width = width + 'px';
+            canvas.style.height = height + 'px';
+            ctx.scale(dpr, dpr);
+            ctx.font = '17px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+
+            // Chart area
+            const leftMargin = 70;
+            const rightMargin = 40;
+            const topMargin = 30;
+            const bottomMargin = 40;
+            const chartWidth = width - leftMargin - rightMargin;
+            const chartHeight = height - topMargin - bottomMargin;
+
+            // Background
+            ctx.fillStyle = '#fafafa';
+            ctx.fillRect(leftMargin, topMargin, chartWidth, chartHeight);
+
+            // Grid lines
+            ctx.strokeStyle = '#e0e0e0';
+            ctx.lineWidth = 0.5;
+            for (let i = 1; i < 4; i++) {
+                const y = topMargin + (i / 4) * chartHeight;
+                ctx.beginPath();
+                ctx.moveTo(leftMargin, y);
+                ctx.lineTo(leftMargin + chartWidth, y);
+                ctx.stroke();
+            }
+
+            // Axes
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(leftMargin, topMargin);
+            ctx.lineTo(leftMargin, topMargin + chartHeight);
+            ctx.lineTo(leftMargin + chartWidth, topMargin + chartHeight);
+            ctx.stroke();
+
+            // Y-axis label
+            ctx.save();
+            ctx.translate(15, topMargin + chartHeight / 2);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillStyle = '#333';
+            ctx.font = '13px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Congestion Level', 0, 0);
+            ctx.restore();
+
+            // X-axis label
+            ctx.fillStyle = '#333';
+            ctx.font = '13px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Time (Years)', leftMargin + chartWidth / 2, height - 5);
+
+            // X-axis ticks and labels
+            const years = ['0', '1', '2', '3', '4', '5', '6'];
+            ctx.font = '12px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#555';
+            years.forEach(function(label, i) {
+                const x = leftMargin + (i / (years.length - 1)) * chartWidth;
+                ctx.beginPath();
+                ctx.strokeStyle = '#333';
+                ctx.moveTo(x, topMargin + chartHeight);
+                ctx.lineTo(x, topMargin + chartHeight + 5);
+                ctx.stroke();
+                ctx.fillText(label, x, topMargin + chartHeight + 18);
+            });
+
+            // Y-axis ticks
+            ctx.textAlign = 'right';
+            const yLabels = ['Low', 'Med', 'High'];
+            yLabels.forEach(function(label, i) {
+                const y = topMargin + chartHeight - (i / (yLabels.length - 1)) * chartHeight;
+                ctx.beginPath();
+                ctx.strokeStyle = '#333';
+                ctx.moveTo(leftMargin - 5, y);
+                ctx.lineTo(leftMargin, y);
+                ctx.stroke();
+                ctx.fillText(label, leftMargin - 10, y + 4);
+            });
+
+            // "Lane Added" dashed vertical line at year 1.5
+            const laneAddedX = leftMargin + (1.5 / 6) * chartWidth;
+            ctx.strokeStyle = '#c0392b';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 4]);
+            ctx.beginPath();
+            ctx.moveTo(laneAddedX, topMargin);
+            ctx.lineTo(laneAddedX, topMargin + chartHeight);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Label for lane added
+            ctx.fillStyle = '#c0392b';
+            ctx.font = '12px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Lane Added', laneAddedX, topMargin - 8);
+
+            // Congestion data points (normalized 0-1)
+            const dataPoints = [
+                {x: 0, y: 0.82},
+                {x: 0.5, y: 0.80},
+                {x: 1.0, y: 0.78},
+                {x: 1.5, y: 0.75},
+                {x: 1.8, y: 0.40},
+                {x: 2.0, y: 0.35},
+                {x: 2.5, y: 0.45},
+                {x: 3.0, y: 0.55},
+                {x: 3.5, y: 0.62},
+                {x: 4.0, y: 0.70},
+                {x: 4.5, y: 0.75},
+                {x: 5.0, y: 0.78},
+                {x: 5.5, y: 0.80},
+                {x: 6.0, y: 0.82}
+            ];
+
+            // Fill area under the curve
+            ctx.fillStyle = 'rgba(230, 126, 34, 0.15)';
+            ctx.beginPath();
+            dataPoints.forEach(function(pt, i) {
+                const px = leftMargin + (pt.x / 6) * chartWidth;
+                const py = topMargin + chartHeight - pt.y * chartHeight;
+                if (i === 0) {
+                    ctx.moveTo(px, py);
+                } else {
+                    ctx.lineTo(px, py);
+                }
+            });
+            ctx.lineTo(leftMargin + (dataPoints[dataPoints.length - 1].x / 6) * chartWidth, topMargin + chartHeight);
+            ctx.lineTo(leftMargin, topMargin + chartHeight);
+            ctx.closePath();
+            ctx.fill();
+
+            // Draw congestion line
+            ctx.strokeStyle = '#e67e22';
+            ctx.lineWidth = 3;
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            dataPoints.forEach(function(pt, i) {
+                const px = leftMargin + (pt.x / 6) * chartWidth;
+                const py = topMargin + chartHeight - pt.y * chartHeight;
+                if (i === 0) {
+                    ctx.moveTo(px, py);
+                } else {
+                    ctx.lineTo(px, py);
+                }
+            });
+            ctx.stroke();
+
+            // Data point dots
+            dataPoints.forEach(function(pt) {
+                const px = leftMargin + (pt.x / 6) * chartWidth;
+                const py = topMargin + chartHeight - pt.y * chartHeight;
+                ctx.beginPath();
+                ctx.arc(px, py, 3, 0, Math.PI * 2);
+                ctx.fillStyle = '#e67e22';
+                ctx.fill();
+            });
+
+            // Annotations
+            ctx.fillStyle = '#555';
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+            ctx.textAlign = 'left';
+            const dipX = leftMargin + (2.0 / 6) * chartWidth;
+            const dipY = topMargin + chartHeight - 0.35 * chartHeight;
+            ctx.fillText('Relief dip', dipX + 8, dipY + 3);
+
+            ctx.textAlign = 'right';
+            const returnX = leftMargin + (5.5 / 6) * chartWidth;
+            const returnY = topMargin + chartHeight - 0.80 * chartHeight;
+            ctx.fillText('Back to original level', returnX - 5, returnY - 8);
+
+            // Title below canvas
+            ctx.font = '17px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+            ctx.fillStyle = '#1a5276';
+            ctx.textAlign = 'center';
+            ctx.fillText('Induced Demand: Congestion Returns After Capacity Expansion', width / 2, height - 2);
+        })();
+    </script>
+</body>
+</html>

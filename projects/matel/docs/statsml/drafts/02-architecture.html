@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architecture: Pipeline Overview</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 40px 20px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; }
+.nav a:hover { text-decoration: underline; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-table tr:nth-child(even) td { background: #fafcfe; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+.toc { background: #f8fafb; border: 1px solid #e0e0e0; padding: 20px 30px; margin: 20px 0 30px; border-radius: 4px; }
+.toc ol { margin: 10px 0 0 20px; font-size: 0.92em; }
+.toc ol li { margin: 5px 0; }
+.toc ol li a { color: #2980b9; text-decoration: none; }
+.toc ol li a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<h1>Architecture: Pipeline Overview</h1>
+<p class="subtitle">One raw feature &rarr; type classification &rarr; shape classification &rarr; splitting &rarr; model fitting &rarr; range testing &rarr; evidence aggregation</p>
+
+<div class="toc">
+<strong>Table of Contents</strong>
+<ol>
+<li><a href="#pipeline">High-Level Pipeline Flow</a></li>
+<li><a href="#typegate">Feature Type Classification</a></li>
+<li><a href="#shape">Shape Classification (CNN)</a></li>
+<li><a href="#gapsplit">Gap Splitting</a></li>
+<li><a href="#valleysplit">Valley Splitting</a></li>
+<li><a href="#models">Multiple Candidate Models</a></li>
+<li><a href="#ranges">Range-Based Significance</a></li>
+<li><a href="#expansion">Feature Expansion</a></li>
+<li><a href="#classification">Classification: Evidence Aggregation</a></li>
+</ol>
+</div>
+
+<h2 id="pipeline">1. High-Level Pipeline Flow</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Raw Features → Classification Evidence</div>
+<ul>
+<li><strong>Step 1:</strong> Classify feature type (numerical / binary / categorical)</li>
+<li><strong>Step 2:</strong> Classify shape via CNN (11 classes)</li>
+<li><strong>Step 3:</strong> Split if needed (gaps → valleys)</li>
+<li><strong>Step 4:</strong> Fit multiple candidate models per segment</li>
+<li><strong>Step 5:</strong> Find significant ranges within each model</li>
+<li><strong>Step 6:</strong> Expand into binary features</li>
+<li><strong>Step 7:</strong> Aggregate evidence at classification time</li>
+</ul>
+<p>Each step enriches the data model. Nothing is assumed — everything verified.</p>
+</td>
+<td>
+<canvas id="c1" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="typegate">2. Feature Type Classification</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Multi-Score Gate — Independent Type Scores</div>
+<ul>
+<li>Each column scored independently as numerical (0-100%), binary (0-100%), categorical (0-100%)</li>
+<li>Scores are NOT mutually exclusive — "Overall Qual (1-10)" can be 75% numerical AND 45% categorical</li>
+<li>Routing: high numerical → shape CNN → splitting → models. High binary → proportion test. High categorical → chi-squared.</li>
+<li>Ambiguous features (ordinal) run BOTH paths — never force a single wrong route</li>
+</ul>
+<p><strong>Example:</strong> Zip codes parse as numbers but are 100% categorical. Multi-score catches this.</p>
+</td>
+<td>
+<canvas id="c2" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="shape">3. Shape Classification (CNN)</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">CNN on Histogram Silhouettes → 11 Classes</div>
+<ul>
+<li>64×64 grayscale histogram image → CNN → soft probabilities across all 11 shape classes</li>
+<li>Classes: bell, right_skew, left_skew, bimodal, multimodal, heavy_tail, spike, uniform, u_shaped, ascending, descending</li>
+<li>Multi-candidate: top-2 shapes give alternative interpretations when confidence is low</li>
+<li>Shape determines pipeline routing — bell goes direct to testing, bimodal gets split first</li>
+</ul>
+<p><strong>Why CNN over statistical tests?</strong> Tests give binary yes/no. CNN gives shape identity with confidence.</p>
+</td>
+<td>
+<canvas id="c3" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="gapsplit">4. Gap Splitting</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Empty Bins → Separated Populations</div>
+<ul>
+<li>Contiguous empty histogram bins indicate true gaps between sub-populations</li>
+<li>Variance validation: if 3σ of either side can fill the gap, it's not real — skip</li>
+<li>Split point placed proportional to left/right variance</li>
+<li>Recurse once per side, maximum 4 segments total</li>
+</ul>
+<p><strong>Example:</strong> "2nd Flr SF" — spike at 0, gap, then continuous distribution. Gap split → binary (has_2nd_floor) + continuous segment.</p>
+</td>
+<td>
+<canvas id="c4" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="valleysplit">5. Valley Splitting</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Density Dip Between Two Peaks → Split</div>
+<ul>
+<li>Valley = lowest bin between two peaks</li>
+<li>Must drop ≥25% from BOTH peaks (not just one — a shoulder doesn't count)</li>
+<li>Adaptive threshold: 30% for n&lt;100, 25% for n=100-200, 20% for n&gt;200</li>
+<li>Minimum 30 samples on each side after split</li>
+</ul>
+<p><strong>Purpose:</strong> A t-test on bimodal data is meaningless. After splitting, each component can be tested independently.</p>
+</td>
+<td>
+<canvas id="c5" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="models">6. Multiple Candidate Models</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Keep All Good Fits — Don't Force One Winner</div>
+<ul>
+<li>Same data can be described by multiple mathematical models</li>
+<li>Each model is a different lens — highlights different ranges and patterns</li>
+<li>Keep any model above a quality threshold; discard only if redundant</li>
+<li>Different models may find different significant ranges → richer signal</li>
+</ul>
+<p><strong>Key:</strong> The exact model family matters less than what significant ranges it finds.</p>
+</td>
+<td>
+<canvas id="c6" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="ranges">7. Range-Based Significance</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Local Signal > Global Signal</div>
+<ul>
+<li>A feature can show no global significance (same mean for pos and neg) but within a specific range, one class dominates</li>
+<li>Each model identifies ranges where pos/neg ratio differs significantly from base rate</li>
+<li>Ranges carry: purity score, dominant class, p-value, sample count</li>
+<li>Only ranges with sufficient n AND statistical significance are kept</li>
+</ul>
+<p><strong>Example:</strong> Age has no global signal, but [70-85] is 92% positive — range-based testing finds it.</p>
+</td>
+<td>
+<canvas id="c7" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="expansion">8. Feature Expansion</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">1 Raw Feature → Many Binary Features</div>
+<ul>
+<li>Each significant range from each model → one binary feature ("is value in this range?")</li>
+<li>Overlapping ranges from different models are both kept — they're independent evidence</li>
+<li>Each expanded feature carries: source model, range bounds, purity, confidence, test used</li>
+<li>Typical: 1 raw feature → 3-5 expanded binary features</li>
+</ul>
+<p><strong>Result:</strong> 50 raw features → 150-250 statistically validated binary features. This is what the classifier sees.</p>
+</td>
+<td>
+<canvas id="c8" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="classification">9. Classification: Evidence Aggregation</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Every Prediction = Auditable Evidence Chain</div>
+<ul>
+<li>New data point evaluated against all extended features — which ranges does it hit?</li>
+<li>Multiple models agreeing → strong evidence. Models disagreeing → low confidence.</li>
+<li>Cascade: check strongest features first, classify when agreement is sufficient</li>
+<li>Full reasoning trace: "feature X, model A: value 72 in [65-80], purity 0.93 pos"</li>
+</ul>
+<p><strong>Never force a classification without evidence.</strong> If nothing fires strongly, report low confidence.</p>
+</td>
+<td>
+<canvas id="c9" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<div class="philosophy">
+<strong>Living system:</strong> As new data arrives, shapes become clearer, new models emerge, previously significant ranges may lose significance, and new ranges appear. The architecture supports incremental updates — no full rebuild needed.
+</div>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id);
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return {ctx: ctx, w: w, h: h};
+}
+function box(ctx, x, y, w, h, fill, stroke, lines, opts) {
+    opts = opts || {};
+    ctx.fillStyle = fill; ctx.strokeStyle = stroke; ctx.lineWidth = opts.lw || 2;
+    ctx.beginPath(); ctx.roundRect(x, y, w, h, 6); ctx.fill(); ctx.stroke();
+    if (lines) {
+        ctx.fillStyle = opts.tc || '#2c3e50';
+        ctx.font = opts.font || '17px -apple-system, sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        var lh = opts.lh || 18;
+        var startY = y + h/2 - (lines.length-1)*lh/2;
+        lines.forEach(function(l, i) { ctx.fillText(l, x+w/2, startY + i*lh); });
+    }
+}
+function arrow(ctx, x1, y1, x2, y2, color) {
+    ctx.strokeStyle = color || '#666'; ctx.fillStyle = color || '#666'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var a = Math.atan2(y2-y1, x2-x1);
+    ctx.beginPath(); ctx.moveTo(x2, y2);
+    ctx.lineTo(x2-8*Math.cos(a-0.4), y2-8*Math.sin(a-0.4));
+    ctx.lineTo(x2-8*Math.cos(a+0.4), y2-8*Math.sin(a+0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// 1. Pipeline flow
+(function() {
+    var s = setup('c1'), ctx = s.ctx, w = s.w, h = s.h;
+    var steps = [
+        {l: 'Type Gate', c: '#7f8c8d'},
+        {l: 'Shape CNN', c: '#f39c12'},
+        {l: 'Gap Split', c: '#e74c3c'},
+        {l: 'Valley Split', c: '#8e44ad'},
+        {l: 'Model Fit', c: '#2980b9'},
+        {l: 'Range Test', c: '#27ae60'},
+        {l: 'Expand', c: '#e67e22'}
+    ];
+    var bw = 85, bh = 40, gap = 10;
+    var totalW = steps.length * bw + (steps.length-1) * gap;
+    var sx = (w - totalW) / 2, cy = h/2 - 20;
+    steps.forEach(function(st, i) {
+        var x = sx + i*(bw+gap);
+        box(ctx, x, cy-bh/2, bw, bh, st.c, st.c, [st.l], {tc:'#fff', font:'bold 17px -apple-system'});
+        if (i < steps.length-1) arrow(ctx, x+bw+2, cy, x+bw+gap-2, cy, '#999');
+    });
+    // Input/output labels
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Raw Feature', w/2, cy - 50);
+    ctx.fillText('↓', w/2, cy - 35);
+    ctx.fillText('↓', w/2, cy + 40);
+    ctx.fillText('Expanded Binary Features → Evidence → Classification', w/2, cy + 60);
+})();
+
+// 2. Type classification
+(function() {
+    var s = setup('c2'), ctx = s.ctx, w = s.w, h = s.h;
+    // Input
+    box(ctx, 30, 100, 100, 50, '#f0f4f8', '#7f8c8d', ['Raw Column'], {font:'17px -apple-system'});
+    arrow(ctx, 135, 125, 175, 125, '#666');
+    // Three score bars
+    var scores = [{l:'numerical', v:85, c:'#27ae60'}, {l:'binary', v:10, c:'#1abc9c'}, {l:'categorical', v:15, c:'#8e44ad'}];
+    scores.forEach(function(sc, i) {
+        var y = 70 + i*40;
+        ctx.fillStyle = '#f8f9fa'; ctx.fillRect(180, y, 200, 24);
+        ctx.fillStyle = sc.c; ctx.fillRect(180, y, sc.v*2, 24);
+        ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1; ctx.strokeRect(180, y, 200, 24);
+        ctx.fillStyle = '#333'; ctx.font = '17px -apple-system'; ctx.textAlign = 'left';
+        ctx.fillText(sc.l + ': ' + sc.v + '%', 390, y + 16);
+    });
+    // Route
+    arrow(ctx, 500, 82, 560, 82, '#27ae60');
+    ctx.fillStyle = '#27ae60'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('→ Shape CNN', 565, 87);
+    ctx.fillStyle = '#666'; ctx.font = '17px -apple-system';
+    ctx.fillText('(highest score routes)', 565, 110);
+    // Example
+    ctx.fillStyle = '#888'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Scores are independent — one feature can be 75% num AND 45% cat', w/2, h-20);
+})();
+
+// 3. Shape CNN
+(function() {
+    var s = setup('c3'), ctx = s.ctx, w = s.w, h = s.h;
+    // Mini histogram
+    var bins = [3, 8, 15, 28, 42, 55, 60, 52, 38, 25, 14, 6, 2];
+    var maxB = 60, bx = 40, by = 50, bw = 150, bh = 120;
+    ctx.fillStyle = '#f8f9fa'; ctx.fillRect(bx, by, bw, bh);
+    var barW = bw / bins.length;
+    ctx.fillStyle = 'rgba(26, 82, 118, 0.4)';
+    bins.forEach(function(v, i) { ctx.fillRect(bx + i*barW, by + bh - (v/maxB)*bh, barW-1, (v/maxB)*bh); });
+    ctx.fillStyle = '#333'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('64×64 image', bx + bw/2, by + bh + 20);
+
+    // Arrow to CNN
+    arrow(ctx, bx + bw + 15, by + bh/2, 250, by + bh/2, '#f39c12');
+    box(ctx, 250, by + 20, 110, 70, '#fef9e7', '#f39c12', ['CNN', '11-class', 'softmax'], {font:'bold 17px -apple-system', lh: 20});
+
+    // Arrow to probs
+    arrow(ctx, 365, by + bh/2, 420, by + bh/2, '#f39c12');
+
+    // Top probabilities
+    var probs = [{c:'bell', p:'82%'}, {c:'right_skew', p:'9%'}, {c:'bimodal', p:'4%'}];
+    probs.forEach(function(pr, i) {
+        var y = 55 + i*30;
+        ctx.fillStyle = i === 0 ? '#1a5276' : '#999';
+        ctx.font = (i === 0 ? 'bold ' : '') + '17px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(pr.c + '  ' + pr.p, 430, y);
+    });
+
+    // Routing note
+    ctx.fillStyle = '#555'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Shape → Pipeline Route: bell/skew=direct, bimodal=split first, spike=separate', w/2, h-20);
+})();
+
+// 4. Gap splitting
+(function() {
+    var s = setup('c4'), ctx = s.ctx, w = s.w, h = s.h;
+    // Histogram with gap
+    var bins = [5, 12, 25, 38, 45, 42, 30, 15, 4, 0, 0, 0, 0, 3, 10, 22, 35, 28, 12, 4];
+    var maxB = 45, ox = 80, oy = 40, hw = 550, hh = 140;
+    var barW = hw / bins.length;
+    ctx.fillStyle = 'rgba(26, 82, 118, 0.35)';
+    bins.forEach(function(v, i) {
+        if (v > 0) ctx.fillRect(ox + i*barW, oy + hh - (v/maxB)*hh, barW-2, (v/maxB)*hh);
+    });
+    // Highlight gap
+    ctx.fillStyle = 'rgba(231,76,60,0.12)';
+    ctx.fillRect(ox + 9*barW, oy, 4*barW, hh);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.setLineDash([5,3]);
+    ctx.strokeRect(ox + 9*barW, oy, 4*barW, hh); ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('GAP', ox + 11*barW, oy - 8);
+    // Split point
+    var splitX = ox + 10.5*barW;
+    ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 2; ctx.setLineDash([6,3]);
+    ctx.beginPath(); ctx.moveTo(splitX, oy); ctx.lineTo(splitX, oy+hh); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#27ae60'; ctx.font = '17px -apple-system';
+    ctx.fillText('split', splitX, oy + hh + 18);
+    // Labels
+    ctx.fillStyle = '#2980b9'; ctx.font = 'bold 17px -apple-system';
+    ctx.fillText('Segment 1', ox + 4*barW, h - 20);
+    ctx.fillStyle = '#8e44ad';
+    ctx.fillText('Segment 2', ox + 16*barW, h - 20);
+})();
+
+// 5. Valley splitting
+(function() {
+    var s = setup('c5'), ctx = s.ctx, w = s.w, h = s.h;
+    // Bimodal histogram
+    var bins = [2, 6, 15, 30, 42, 38, 25, 15, 10, 8, 7, 9, 14, 22, 35, 40, 32, 18, 8, 3];
+    var maxB = 42, ox = 80, oy = 40, hw = 550, hh = 140;
+    var barW = hw / bins.length;
+    bins.forEach(function(v, i) {
+        var isV = (i >= 8 && i <= 11);
+        ctx.fillStyle = isV ? 'rgba(142, 68, 173, 0.4)' : 'rgba(26, 82, 118, 0.35)';
+        ctx.fillRect(ox + i*barW, oy + hh - (v/maxB)*hh, barW-2, (v/maxB)*hh);
+    });
+    // Peak annotations
+    ctx.strokeStyle = '#2980b9'; ctx.lineWidth = 1.5; ctx.setLineDash([3,2]);
+    ctx.beginPath(); ctx.moveTo(ox + 4.5*barW, oy); ctx.lineTo(ox + 4.5*barW, oy+hh); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ox + 15.5*barW, oy); ctx.lineTo(ox + 15.5*barW, oy+hh); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#2980b9'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Peak 1', ox + 4.5*barW, oy - 8);
+    ctx.fillText('Peak 2', ox + 15.5*barW, oy - 8);
+    // Valley
+    ctx.strokeStyle = '#8e44ad'; ctx.lineWidth = 2; ctx.setLineDash([5,3]);
+    ctx.beginPath(); ctx.moveTo(ox + 10*barW, oy); ctx.lineTo(ox + 10*barW, oy+hh); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#8e44ad'; ctx.font = 'bold 17px -apple-system';
+    ctx.fillText('Valley (split if ≥25% drop from both peaks)', w/2, h - 20);
+})();
+
+// 6. Multiple models
+(function() {
+    var s = setup('c6'), ctx = s.ctx, w = s.w, h = s.h;
+    // Feature box
+    box(ctx, 30, 100, 100, 50, '#e8f8f5', '#1abc9c', ['Feature'], {font:'bold 17px -apple-system'});
+    // Arrow fan
+    arrow(ctx, 135, 115, 195, 75, '#666');
+    arrow(ctx, 135, 125, 195, 125, '#666');
+    arrow(ctx, 135, 135, 195, 175, '#666');
+    // Model boxes
+    box(ctx, 195, 55, 150, 36, '#fef9e7', '#f39c12', ['Model A (fit 0.91)'], {font:'17px -apple-system'});
+    box(ctx, 195, 107, 150, 36, '#fdedec', '#e74c3c', ['Model B (fit 0.87)'], {font:'17px -apple-system'});
+    box(ctx, 195, 159, 150, 36, '#f4ecf7', '#8e44ad', ['Model C (fit 0.82)'], {font:'17px -apple-system'});
+    // Arrows to ranges
+    arrow(ctx, 350, 73, 410, 63, '#666');
+    arrow(ctx, 350, 73, 410, 93, '#666');
+    arrow(ctx, 350, 125, 410, 133, '#666');
+    arrow(ctx, 350, 177, 410, 173, '#666');
+    // Ranges found
+    ctx.fillStyle = '#27ae60'; ctx.font = '17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('→ Range [60-90] sig', 415, 67);
+    ctx.fillText('→ Range [18-25] sig', 415, 97);
+    ctx.fillText('→ Range [65-80] sig', 415, 137);
+    ctx.fillText('→ Range [70-75] sig', 415, 177);
+    // Note
+    ctx.fillStyle = '#555'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Different models find different significant ranges — keep all of them', w/2, h - 20);
+})();
+
+// 7. Range significance
+(function() {
+    var s = setup('c7'), ctx = s.ctx, w = s.w, h = s.h;
+    // Number line
+    var nlY = 130, nlL = 80, nlR = w - 80;
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(nlL, nlY); ctx.lineTo(nlR, nlY); ctx.stroke();
+    // Ticks
+    for (var i = 0; i <= 10; i++) {
+        var x = nlL + i * (nlR-nlL)/10;
+        ctx.beginPath(); ctx.moveTo(x, nlY-4); ctx.lineTo(x, nlY+4); ctx.stroke();
+    }
+    ctx.fillStyle = '#333'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('0', nlL, nlY+18); ctx.fillText('100', nlR, nlY+18);
+    // Highlighted ranges
+    var ranges = [
+        {s:2, e:4, c:'rgba(39,174,96,0.2)', bc:'#27ae60', l:'purity 0.89 pos'},
+        {s:6, e:8, c:'rgba(231,76,60,0.2)', bc:'#e74c3c', l:'purity 0.92 neg'},
+    ];
+    ranges.forEach(function(r) {
+        var x1 = nlL + r.s*(nlR-nlL)/10, x2 = nlL + r.e*(nlR-nlL)/10;
+        ctx.fillStyle = r.c; ctx.fillRect(x1, nlY-50, x2-x1, 50);
+        ctx.strokeStyle = r.bc; ctx.lineWidth = 2; ctx.strokeRect(x1, nlY-50, x2-x1, 50);
+        ctx.fillStyle = r.bc; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText(r.l, (x1+x2)/2, nlY - 60);
+    });
+    // No-signal middle
+    ctx.fillStyle = '#bbb'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('no signal', nlL + 5*(nlR-nlL)/10, nlY - 30);
+    ctx.fillStyle = '#555'; ctx.font = '17px -apple-system';
+    ctx.fillText('Global test sees no difference. Range-based testing finds local pockets of purity.', w/2, h - 20);
+})();
+
+// 8. Feature expansion
+(function() {
+    var s = setup('c8'), ctx = s.ctx, w = s.w, h = s.h;
+    // Raw on left
+    box(ctx, 30, 80, 100, 110, '#e8f8f5', '#1abc9c', ['5 raw', 'features'], {font:'bold 17px -apple-system', lh: 22});
+    // Arrow
+    arrow(ctx, 135, 135, 200, 135, '#666');
+    // Middle: pipeline
+    box(ctx, 200, 100, 150, 70, '#eaf2f8', '#2980b9', ['Pipeline:', 'type → shape →', 'split → model →', 'range test'], {font:'17px -apple-system', lh: 16});
+    // Arrow
+    arrow(ctx, 355, 135, 420, 135, '#666');
+    // Extended on right
+    box(ctx, 420, 60, 250, 150, '#d4efdf', '#27ae60', null);
+    ctx.fillStyle = '#2c3e50'; ctx.font = '17px SF Mono, monospace'; ctx.textAlign = 'left';
+    var feats = ['age_range_60_90   [0|1]', 'age_range_18_25   [0|1]', 'inc_range_150k+   [0|1]', 'chol_range_240+   [0|1]', 'bp_range_140+     [0|1]', '... (13-15 total)'];
+    feats.forEach(function(f, i) { ctx.fillText(f, 435, 85 + i*22); });
+    // Label
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('5 raw → 13-15 validated binary features', w/2, h - 20);
+})();
+
+// 9. Classification
+(function() {
+    var s = setup('c9'), ctx = s.ctx, w = s.w, h = s.h;
+    // Input
+    box(ctx, 30, 90, 120, 60, '#fef9e7', '#f39c12', ['New patient:', 'age=72', 'chol=285'], {font:'17px -apple-system', lh: 18});
+    arrow(ctx, 155, 120, 210, 120, '#666');
+    // Evaluation
+    box(ctx, 210, 90, 120, 60, '#eaf2f8', '#2980b9', ['Check all', 'extended', 'features'], {font:'17px -apple-system', lh: 18});
+    arrow(ctx, 335, 120, 390, 120, '#666');
+    // Hits
+    ctx.fillStyle = '#27ae60'; ctx.font = '17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('✓ age_60_90 → pos (0.93)', 395, 80);
+    ctx.fillText('✓ chol_240+ → pos (0.70)', 395, 105);
+    ctx.fillText('✓ chol_280+ → pos (0.83)', 395, 130);
+    ctx.fillText('✗ inc_150k+ → miss', 395, 155);
+    // Result
+    arrow(ctx, 550, 175, 550, 200, '#27ae60');
+    box(ctx, 460, 200, 180, 45, '#d4efdf', '#27ae60', ['POSITIVE (conf 0.91)'], {font:'bold 17px -apple-system', tc:'#1e8449'});
+    // Trace note
+    ctx.fillStyle = '#555'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('3 models agree pos, 0 disagree → classify with full reasoning trace', w/2, h - 10);
+})();
+</script>
+</body>
+</html>

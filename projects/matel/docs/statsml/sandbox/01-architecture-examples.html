@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>08b. Architecture Examples — Real Features Through the Pipeline</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 40px 20px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 50px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+h3 { font-size: 1.1em; margin: 20px 0 10px; color: #6c3483; }
+p { margin: 10px 0; color: #333; font-size: 0.92em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; }
+.nav a:hover { text-decoration: underline; }
+canvas { display: block; margin: 15px 0; width: 100%; height: auto; background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 8px; }
+.pipeline-path { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 12px 0; border-radius: 0 6px 6px 0; }
+.pipeline-path code { background: #e8f0f8; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; color: #1a5276; }
+.pipeline-path .arrow { color: #2980b9; font-weight: bold; }
+.example { margin: 30px 0; padding: 20px; background: #fafafa; border: 1px solid #e8e8e8; border-radius: 8px; }
+.example h3 { margin-top: 0; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 15px 0; }
+.step-box { background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 12px; }
+.step-box h4 { font-size: 0.9em; color: #2980b9; margin-bottom: 6px; }
+.step-box p { font-size: 0.85em; margin: 4px 0; }
+.result { background: #d4efdf; border: 1px solid #27ae60; border-radius: 6px; padding: 10px 14px; margin: 10px 0; font-size: 0.88em; }
+.skip { background: #fef9e7; border: 1px solid #f4d03f; border-radius: 6px; padding: 10px 14px; margin: 10px 0; font-size: 0.88em; }
+@media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<h1>08b. Architecture Examples</h1>
+<p class="subtitle">How real features from Ames Housing and Adult Census flow through the pipeline — each taking a different path based on its shape</p>
+
+<!-- ============================== EXAMPLE 1 ============================== -->
+<div class="example">
+<h2>Example 1: SalePrice (Ames Housing) — Right-Skew Path</h2>
+<canvas id="ex1-hist" width="960" height="300"></canvas>
+
+<div class="pipeline-path">
+    <code>Shape Classification</code> <span class="arrow">→</span> right_skew (87%)
+    <span class="arrow">→</span> <code>Gap Split?</code> NO (no empty bins)
+    <span class="arrow">→</span> <code>Valley Split?</code> NO (no bimodal valley)
+    <span class="arrow">→</span> <code>Model Fitting</code> (right_skew, gamma candidates)
+    <span class="arrow">→</span> <code>Range Testing</code>
+</div>
+
+<div class="grid">
+<div class="step-box">
+    <h4>Step 1: Shape = right_skew</h4>
+    <p>CNN sees: peak early, long right tail. Top-2: right_skew (87%), heavy_tail (8%).</p>
+    <p>Routing: bell/skew path — direct to model fitting, no splitting needed.</p>
+</div>
+<div class="step-box">
+    <h4>Step 2-3: Splitting = SKIPPED</h4>
+    <p>No empty-bin gaps in the histogram. No valley between two peaks. The distribution is unimodal.</p>
+    <p>Feature stays as one segment.</p>
+</div>
+<div class="step-box">
+    <h4>Step 4: Model Fitting</h4>
+    <p>Candidate A: Right-skew (μ=11.9, σ=0.42) — fit score 0.91</p>
+    <p>Candidate B: Gamma (α=5.1, β=35k) — fit score 0.84</p>
+    <p>Candidate C: Weibull — fit score 0.78</p>
+</div>
+<div class="step-box">
+    <h4>Step 5: Range Testing</h4>
+    <p>Right-skew model: range [300k+] has purity 0.82 for high-quality homes</p>
+    <p>Gamma model: range [50k-100k] has purity 0.91 for lower-income neighborhoods</p>
+    <p>Both kept as extended features.</p>
+</div>
+</div>
+<div class="result"><strong>Result:</strong> 1 feature → 1 segment → 2-3 candidate models → 3-4 extended binary features</div>
+</div>
+
+<!-- ============================== EXAMPLE 2 ============================== -->
+<div class="example">
+<h2>Example 2: 2nd Flr SF (Ames Housing) — Zero-Inflated / Gap Split Path</h2>
+<canvas id="ex2-hist" width="960" height="300"></canvas>
+
+<div class="pipeline-path">
+    <code>Shape Classification</code> <span class="arrow">→</span> spike (72%)
+    <span class="arrow">→</span> <code>Gap Split?</code> YES — empty bins between 0 and ~300
+    <span class="arrow">→</span> Segment 1: spike at 0 (n=1678) | Segment 2: right-skew (n=1252)
+    <span class="arrow">→</span> <code>Model Fitting</code> on Segment 2 only
+</div>
+
+<div class="grid">
+<div class="step-box">
+    <h4>Step 1: Shape = spike</h4>
+    <p>CNN sees: massive spike at 0 (57% of data), then a separate continuous distribution. Top-2: spike (72%), bimodal (15%).</p>
+    <p>Routing: spike path — separate zero-mass, fit remainder.</p>
+</div>
+<div class="step-box">
+    <h4>Step 2: Gap Split = YES</h4>
+    <p>Empty bins between bin 0 (value=0) and bin ~3 (value≈300). Run length = 1-2 bins depending on resolution.</p>
+    <p>But more importantly: structural zero. Values ARE zero or ARE a continuous floor area. Binary split at 0.</p>
+</div>
+<div class="step-box">
+    <h4>Step 3: Valley Split = N/A</h4>
+    <p>Segment 1 is a point mass (all zeros). No valley to detect.</p>
+    <p>Segment 2 (non-zero values) is checked: unimodal right-skew. No valley.</p>
+</div>
+<div class="step-box">
+    <h4>Step 4-5: Model Fitting & Ranges</h4>
+    <p>Segment 1 → binary feature: "has_2nd_floor" (yes/no)</p>
+    <p>Segment 2 → Right-skew fit on non-zero values. Ranges: [300-600] typical, [1200+] large homes.</p>
+    <p>The binary feature alone may be highly predictive.</p>
+</div>
+</div>
+<div class="result"><strong>Result:</strong> 1 feature → 2 segments → binary indicator + continuous model → 3 extended features (has_2nd_floor, 2ndflr_typical, 2ndflr_large)</div>
+</div>
+
+<!-- ============================== EXAMPLE 3 ============================== -->
+<div class="example">
+<h2>Example 3: Capital_Gain (Adult Census) — Extreme Zero-Inflation + Outlier Spike</h2>
+<canvas id="ex3-hist" width="960" height="300"></canvas>
+
+<div class="pipeline-path">
+    <code>Shape Classification</code> <span class="arrow">→</span> spike (91%)
+    <span class="arrow">→</span> <code>Gap Split?</code> YES — multiple gaps
+    <span class="arrow">→</span> Segment 1: zero (n=30913) | Segment 2: mid-range (n=1489) | Segment 3: cap at 99999 (n=159)
+    <span class="arrow">→</span> <code>Model Fitting</code> on Segment 2 | Segment 3 is a point mass
+</div>
+
+<div class="grid">
+<div class="step-box">
+    <h4>Step 1: Shape = spike (extreme)</h4>
+    <p>95% of data at zero. Remaining 5% scattered with an additional spike at max value. CNN: spike (91%).</p>
+    <p>Routing: spike path with recursive gap detection.</p>
+</div>
+<div class="step-box">
+    <h4>Step 2: Gap Split = YES (two gaps)</h4>
+    <p>Gap 1: between 0 and first non-zero values (~100). Clear structural zero.</p>
+    <p>Gap 2: between mid-range cluster (tops at ~40k) and outlier spike at 99999. Many empty bins in between.</p>
+    <p>Result: 3 segments.</p>
+</div>
+<div class="step-box">
+    <h4>Segment Analysis</h4>
+    <p>Seg 1 (n=30913): All zeros — binary feature "has_capital_gain"</p>
+    <p>Seg 2 (n=1489): Right-skewed continuous. Genuine capital gains ($100-$40k)</p>
+    <p>Seg 3 (n=159): Point mass at 99999 — likely a coding cap/censored value</p>
+</div>
+<div class="step-box">
+    <h4>Model Fitting</h4>
+    <p>Seg 1 → binary indicator</p>
+    <p>Seg 2 → Right-skew fit (most gains are small, few are large)</p>
+    <p>Seg 3 → binary indicator "capital_gain_capped" — very strong signal (likely all >50K income)</p>
+    <p>Extended: has_gain, gain_small, gain_large, gain_capped</p>
+</div>
+</div>
+<div class="result"><strong>Result:</strong> 1 feature → 3 segments → 4 extended binary features. The "capped at 99999" group is likely 100% >50K income — extremely high purity.</div>
+</div>
+
+<!-- ============================== EXAMPLE 4 ============================== -->
+<div class="example">
+<h2>Example 4: Year Built (Ames Housing) — Left-Skew / Possible Bimodal</h2>
+<canvas id="ex4-hist" width="960" height="300"></canvas>
+
+<div class="pipeline-path">
+    <code>Shape Classification</code> <span class="arrow">→</span> left_skew (45%) / bimodal (30%)
+    <span class="arrow">→</span> <code>Gap Split?</code> NO (no empty bins)
+    <span class="arrow">→</span> <code>Valley Split?</code> MAYBE — check valley between 1970s dip and 2000s peak
+    <span class="arrow">→</span> If valley ≥ 25% from both peaks → split into "older stock" vs "newer construction"
+</div>
+
+<div class="grid">
+<div class="step-box">
+    <h4>Step 1: Shape = ambiguous</h4>
+    <p>CNN top-2: left_skew (45%), bimodal (30%). Ascending overall trend with a possible dip in 1980s-1990s.</p>
+    <p>When top-1 confidence is low, try BOTH paths and compare.</p>
+</div>
+<div class="step-box">
+    <h4>Step 3: Valley Split — boundary case</h4>
+    <p>Peak 1: ~1960 (older stock), Peak 2: ~2005 (newer build)</p>
+    <p>Valley: ~1980-1990 region. Drop from Peak 1: moderate. Drop from Peak 2: moderate.</p>
+    <p>This is a judgment call — depends on exact bin counts whether 25% threshold is met.</p>
+</div>
+<div class="step-box">
+    <h4>If NO split (left-skew path)</h4>
+    <p>Treat as single continuous feature. Model: no standard parametric fit (it's a historical accumulation).</p>
+    <p>Non-parametric ranges: [<1960] old, [1960-2000] mid, [2000+] new</p>
+</div>
+<div class="step-box">
+    <h4>If YES split (bimodal path)</h4>
+    <p>Segment 1: houses built before ~1985 (older stock, n≈1500)</p>
+    <p>Segment 2: houses built after ~1985 (newer construction, n≈1430)</p>
+    <p>Each segment tested for significance against price target independently.</p>
+</div>
+</div>
+<div class="skip"><strong>Multi-candidate approach:</strong> When CNN confidence is split between two shape classes, run BOTH pipelines and keep whichever produces more significant ranges. This is the "multiple interpretations" philosophy in action.</div>
+</div>
+
+<!-- ============================== EXAMPLE 5 ============================== -->
+<div class="example">
+<h2>Example 5: Hours_per_week (Adult Census) — Spike-Dominated</h2>
+<canvas id="ex5-hist" width="960" height="300"></canvas>
+
+<div class="pipeline-path">
+    <code>Shape Classification</code> <span class="arrow">→</span> spike (78%)
+    <span class="arrow">→</span> <code>Gap Split?</code> NO (no empty bins — values exist everywhere from 1 to 99)
+    <span class="arrow">→</span> <code>Valley Split?</code> MAYBE — valleys on either side of the 40hr spike
+    <span class="arrow">→</span> <code>Model Fitting</code>: non-standard (point-mass + continuous mixture)
+</div>
+
+<div class="grid">
+<div class="step-box">
+    <h4>Step 1: Shape = spike</h4>
+    <p>~50% of values at exactly 40 (full-time standard). Continuous tails on both sides. CNN: spike (78%).</p>
+    <p>This is NOT zero-inflated — the spike is at the MODE, not at a boundary.</p>
+</div>
+<div class="step-box">
+    <h4>Step 2-3: Splitting = COMPLEX</h4>
+    <p>No empty gaps (all hours 1-99 have some data). Valley exists on both sides of 40 but it's the spike creating artificial "valleys."</p>
+    <p>Valley criterion: the spike IS the peak. Drop from spike to neighbors is large, but this is structural, not bimodal.</p>
+</div>
+<div class="step-box">
+    <h4>Pipeline Challenge</h4>
+    <p>This feature doesn't fit the standard split → fit → range pipeline cleanly.</p>
+    <p>Options: (a) Treat 40 as a point mass + fit remainder, (b) discretize into bins (part-time, full-time, overtime), (c) non-parametric model only.</p>
+</div>
+<div class="step-box">
+    <h4>Practical Resolution</h4>
+    <p>Create structural bins: <35 (part-time), 35-45 (full-time), >45 (overtime)</p>
+    <p>Each bin tested for target separation independently.</p>
+    <p>Extended features: is_parttime, is_fulltime, is_overtime</p>
+</div>
+</div>
+<div class="skip"><strong>Lesson:</strong> Not every feature fits neatly into "detect shape → split → parametric model." Spike-at-mode features need special handling — the pipeline must recognize when structural binning is more appropriate than distributional splitting.</div>
+</div>
+
+<!-- ============================== EXAMPLE 6 ============================== -->
+<div class="example">
+<h2>Example 6: Lot Area (Ames Housing) — Extreme Right-Skew with Outliers</h2>
+<canvas id="ex6-hist" width="960" height="300"></canvas>
+
+<div class="pipeline-path">
+    <code>Shape Classification</code> <span class="arrow">→</span> exponential (55%) / heavy_tail (35%)
+    <span class="arrow">→</span> <code>Gap Split?</code> YES — empty bins above ~50k (long tail)
+    <span class="arrow">→</span> Segment 1: main mass 1300-25000 (n≈2870) | Segment 2: outliers 50k-215k (n≈60)
+    <span class="arrow">→</span> <code>Model Fitting</code> on Segment 1 | Segment 2 too small for reliable modeling
+</div>
+
+<div class="grid">
+<div class="step-box">
+    <h4>Step 1: Shape = exponential/heavy_tail</h4>
+    <p>98% of data below 25k, but max is 215k. The histogram is dominated by 2 bins. CNN unsure between exponential decay and heavy-tail.</p>
+</div>
+<div class="step-box">
+    <h4>Step 2: Gap Split = YES</h4>
+    <p>Multiple empty bins between ~50k and the scattered extreme outliers. Gap is genuine — these are estate-sized parcels vs normal residential lots.</p>
+    <p>Split point: ~50k (well beyond 3σ of main distribution).</p>
+</div>
+<div class="step-box">
+    <h4>Segment 1: Main distribution</h4>
+    <p>n≈2870, range [1300-50000]. Still right-skewed but manageable.</p>
+    <p>After log transform: approximately normal! → right_skew model fits well.</p>
+    <p>Ranges: [1300-5000] small lots, [15000-50000] large lots.</p>
+</div>
+<div class="step-box">
+    <h4>Segment 2: Outlier parcels</h4>
+    <p>n≈60, range [50000-215000]. Too few for reliable parametric model.</p>
+    <p>Treatment: binary indicator "is_large_parcel" — useful if these correlate with specific neighborhoods or prices.</p>
+</div>
+</div>
+<div class="result"><strong>Result:</strong> Gap split isolates outliers → main mass gets right_skew fit → transformation detection (Phase 2) would find log(Lot_Area) is bell-shaped → parametric tests apply on the transform.</div>
+</div>
+
+<!-- ============================== SUMMARY ============================== -->
+<h2>Pipeline Path Summary</h2>
+<canvas id="summary-canvas" width="960" height="350"></canvas>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+
+function setup(id, w, h) {
+    var c = document.getElementById(id);
+    c.width = w * dpr;
+    c.height = h * dpr;
+    c.style.width = '100%';
+    c.style.height = 'auto';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return ctx;
+}
+
+function drawHist(ctx, bins, w, h, opts) {
+    opts = opts || {};
+    var margin = {left: 10, right: 10, top: 15, bottom: 20};
+    var pw = w - margin.left - margin.right;
+    var ph = h - margin.top - margin.bottom;
+    var maxB = Math.max.apply(null, bins);
+    var bW = pw / bins.length;
+
+    // Bars
+    ctx.fillStyle = opts.barColor || 'rgba(26, 82, 118, 0.35)';
+    bins.forEach(function(v, i) {
+        var barH = (v / maxB) * ph;
+        if (v > 0) ctx.fillRect(margin.left + i*bW + 1, margin.top + ph - barH, bW - 2, barH);
+    });
+
+    // Variance/SE band with Gaussian-weighted smoothing
+    drawSEBand(ctx, bins, w, h, margin, pw, ph, bW, maxB);
+
+    // Baseline
+    ctx.strokeStyle = '#ccc'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(margin.left, margin.top+ph); ctx.lineTo(margin.left+pw, margin.top+ph); ctx.stroke();
+
+    // Labels
+    if (opts.labels) {
+        ctx.fillStyle = '#666'; ctx.font = '11px -apple-system, sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText(opts.labels[0], margin.left+30, h-3);
+        ctx.fillText(opts.labels[1], w/2, h-3);
+        ctx.fillText(opts.labels[2], w-margin.right-30, h-3);
+    }
+    if (opts.title) {
+        ctx.fillStyle = '#1a5276'; ctx.font = 'bold 12px -apple-system, sans-serif'; ctx.textAlign = 'left';
+        ctx.fillText(opts.title, margin.left+5, 12);
+    }
+}
+
+function drawSEBand(ctx, bins, w, h, margin, pw, ph, bW, maxB) {
+    var sigma = 1.2;
+    var radius = Math.ceil(sigma * 3);
+    var n = bins.length;
+
+    // Compute Gaussian-weighted smoothed values
+    var smoothed = [];
+    for (var i = 0; i < n; i++) {
+        var sum = 0, ww = 0;
+        for (var j = Math.max(0, i - radius); j <= Math.min(n - 1, i + radius); j++) {
+            var d = i - j;
+            var wt = Math.exp(-0.5 * d * d / (sigma * sigma));
+            sum += bins[j] * wt;
+            ww += wt;
+        }
+        smoothed.push(sum / ww);
+    }
+
+    // Winsorize: cap smoothed values at 2x the original bar height
+    // For zero bins, use 2x nearest nonzero neighbor to avoid killing the line
+    for (var i = 0; i < n; i++) {
+        var cap = 2 * bins[i];
+        if (bins[i] === 0) {
+            // Find nearest nonzero bin
+            for (var k = 1; k < n; k++) {
+                if (i - k >= 0 && bins[i - k] > 0) { cap = 2 * bins[i - k]; break; }
+                if (i + k < n && bins[i + k] > 0) { cap = 2 * bins[i + k]; break; }
+            }
+        }
+        if (cap > 0 && smoothed[i] > cap) smoothed[i] = cap;
+    }
+
+    // effN = sum of all bin values, capped to keep band visible as a teaching illustration
+    var effN = 0;
+    for (var i = 0; i < n; i++) effN += bins[i];
+    if (effN < 30) effN = 30;
+    if (effN > 200) effN = 200; // cap for visual clarity — real pipeline uses actual N
+
+    // Compute SE band: upper = smoothed + 1.96 * smoothed/sqrt(effN), lower = smoothed - 1.96 * smoothed/sqrt(effN)
+    var sqrtN = Math.sqrt(effN);
+    var upper = [], lower = [];
+    for (var i = 0; i < n; i++) {
+        var se = 1.96 * smoothed[i] / sqrtN;
+        upper.push(smoothed[i] + se);
+        lower.push(Math.max(0, smoothed[i] - se));
+    }
+
+    // Convert values to pixel Y coordinates (scale relative to maxB to match bar heights)
+    function valToY(v) {
+        var clamped = Math.min(v, maxB);
+        return margin.top + ph - (clamped / maxB) * ph;
+    }
+
+    // Draw filled SE band as polygon (upper forward, lower backward)
+    ctx.beginPath();
+    for (var i = 0; i < n; i++) {
+        var x = margin.left + (i + 0.5) * bW;
+        var y = valToY(upper[i]);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    for (var i = n - 1; i >= 0; i--) {
+        var x = margin.left + (i + 0.5) * bW;
+        var y = valToY(lower[i]);
+        ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(230, 126, 34, 0.25)';
+    ctx.fill();
+
+    // Draw smoothed center line
+    ctx.beginPath();
+    for (var i = 0; i < n; i++) {
+        var x = margin.left + (i + 0.5) * bW;
+        var y = valToY(smoothed[i]);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+}
+
+// Example 1: SalePrice
+(function() {
+    var ctx = setup('ex1-hist', 960, 200);
+    ctx.fillStyle = '#f8f9fa'; ctx.fillRect(0,0,960,200);
+    drawHist(ctx, [11,135,451,882,565,343,210,119,88,46,35,16,11,3,6,3,4,0,0,2], 960, 200,
+        {labels: ['$13k','$384k','$755k'], title: 'SalePrice — right-skew, no gaps, no valleys'});
+})();
+
+// Example 2: 2nd Flr SF
+(function() {
+    var ctx = setup('ex2-hist', 960, 200);
+    ctx.fillStyle = '#f8f9fa'; ctx.fillRect(0,0,960,200);
+    drawHist(ctx, [1678,8,19,50,99,172,210,199,210,73,70,52,46,22,6,7,1,5,2,1], 960, 200,
+        {labels: ['0','1000','2065'], title: '2nd Flr SF — spike at 0, gap, then continuous'});
+    // Highlight the gap
+    var bW = 940/20;
+    ctx.fillStyle = 'rgba(231,76,60,0.15)';
+    ctx.fillRect(10 + 1*bW, 15, 1*bW, 165);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1.5; ctx.setLineDash([4,2]);
+    ctx.strokeRect(10 + 1*bW, 15, 1*bW, 165);
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('gap', 10+1.5*bW, 12);
+})();
+
+// Example 3: Capital_Gain
+(function() {
+    var ctx = setup('ex3-hist', 960, 200);
+    ctx.fillStyle = '#f8f9fa'; ctx.fillRect(0,0,960,200);
+    drawHist(ctx, [30913,878,157,360,38,49,5,0,2,0,0,0,0,0,0,0,0,0,0,159], 960, 200,
+        {labels: ['0','50k','99999'], title: 'Capital_Gain — 95% zero, scattered mid, spike at cap'});
+    // Highlight gaps
+    var bW = 940/20;
+    ctx.fillStyle = 'rgba(231,76,60,0.1)';
+    ctx.fillRect(10 + 7*bW, 15, 12*bW, 165);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('empty gap (12 bins)', 10+13*bW, 12);
+})();
+
+// Example 4: Year Built
+(function() {
+    var ctx = setup('ex4-hist', 960, 200);
+    ctx.fillStyle = '#f8f9fa'; ctx.fillRect(0,0,960,200);
+    drawHist(ctx, [2,9,9,6,37,53,117,122,60,102,70,186,270,258,218,218,76,200,352,565], 960, 200,
+        {labels: ['1872','1941','2010'], title: 'Year Built — ascending / possible bimodal'});
+    // Mark possible valley
+    var bW = 940/20;
+    ctx.fillStyle = 'rgba(142,68,173,0.12)';
+    ctx.fillRect(10 + 8*bW, 15, 3*bW, 165);
+    ctx.fillStyle = '#8e44ad'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('valley?', 10+9.5*bW, 12);
+})();
+
+// Example 5: Hours_per_week
+(function() {
+    var ctx = setup('ex5-hist', 960, 200);
+    ctx.fillStyle = '#f8f9fa'; ctx.fillRect(0,0,960,200);
+    drawHist(ctx, [205,531,645,1547,1015,1302,1635,16100,2442,677,3036,841,1519,277,365,83,182,20,34,105], 960, 200,
+        {labels: ['1','50','99'], title: 'Hours/week — massive spike at 40, continuous tails'});
+    // Mark spike
+    var bW = 940/20;
+    ctx.strokeStyle = '#e67e22'; ctx.lineWidth = 2; ctx.setLineDash([4,2]);
+    ctx.beginPath(); ctx.moveTo(10+7.5*bW, 15); ctx.lineTo(10+7.5*bW, 180); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e67e22'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('40hr spike', 10+7.5*bW, 12);
+})();
+
+// Example 6: Lot Area
+(function() {
+    var ctx = setup('ex6-hist', 960, 200);
+    ctx.fillStyle = '#f8f9fa'; ctx.fillRect(0,0,960,200);
+    drawHist(ctx, [2301,570,30,11,10,3,1,0,0,0,1,0,0,0,1,1,0,0,0,1], 960, 200,
+        {labels: ['1.3k','108k','215k'], title: 'Lot Area — extreme right-skew, outliers beyond 50k'});
+    var bW = 940/20;
+    ctx.fillStyle = 'rgba(231,76,60,0.1)';
+    ctx.fillRect(10 + 7*bW, 15, 13*bW, 165);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('mostly empty — outlier territory', 10+13*bW, 12);
+})();
+
+// Summary canvas
+(function() {
+    var ctx = setup('summary-canvas', 960, 350);
+    ctx.fillStyle = '#f8f9fa'; ctx.fillRect(0,0,960,350);
+
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 14px -apple-system, sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('Pipeline Paths by Feature Shape', 480, 25);
+
+    // Table-like layout
+    var rows = [
+        {feature: 'SalePrice', shape: 'right_skew', gap: '—', valley: '—', segments: '1', model: 'right_skew, gamma', ext: '3-4'},
+        {feature: '2nd Flr SF', shape: 'spike', gap: 'YES (at 0)', valley: '—', segments: '2', model: 'binary + right_skew', ext: '3'},
+        {feature: 'Capital_Gain', shape: 'spike (extreme)', gap: 'YES (×2)', valley: '—', segments: '3', model: 'binary + log-norm + binary', ext: '4'},
+        {feature: 'Year Built', shape: 'left_skew/bimodal', gap: '—', valley: 'MAYBE', segments: '1-2', model: 'non-parametric / per-segment', ext: '2-4'},
+        {feature: 'Hours/week', shape: 'spike (at mode)', gap: '—', valley: '—', segments: '3 (structural)', model: 'structural bins', ext: '3'},
+        {feature: 'Lot Area', shape: 'exponential', gap: 'YES', valley: '—', segments: '2', model: 'right_skew + binary', ext: '3'},
+    ];
+
+    var cols = [{x:50, w:120, h:'Feature'}, {x:170, w:130, h:'Shape Class'}, {x:300, w:100, h:'Gap Split'}, {x:400, w:80, h:'Valley'}, {x:480, w:70, h:'Segs'}, {x:550, w:200, h:'Model Candidates'}, {x:750, w:80, h:'Ext Feats'}];
+
+    // Header
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 11px -apple-system, sans-serif'; ctx.textAlign = 'left';
+    cols.forEach(function(c) { ctx.fillText(c.h, c.x, 55); });
+    ctx.strokeStyle = '#2980b9'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(40, 62); ctx.lineTo(850, 62); ctx.stroke();
+
+    // Rows
+    rows.forEach(function(r, i) {
+        var y = 82 + i * 42;
+        ctx.fillStyle = i % 2 === 0 ? '#f0f4f8' : '#fff';
+        ctx.fillRect(40, y-12, 810, 38);
+        ctx.fillStyle = '#333'; ctx.font = '11px -apple-system, sans-serif'; ctx.textAlign = 'left';
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillText(r.feature, cols[0].x, y+5);
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillText(r.shape, cols[1].x, y+5);
+        ctx.fillStyle = r.gap === '—' ? '#aaa' : '#e74c3c';
+        ctx.fillText(r.gap, cols[2].x, y+5);
+        ctx.fillStyle = r.valley === '—' ? '#aaa' : (r.valley === 'MAYBE' ? '#e67e22' : '#8e44ad');
+        ctx.fillText(r.valley, cols[3].x, y+5);
+        ctx.fillStyle = '#333';
+        ctx.fillText(r.segments, cols[4].x, y+5);
+        ctx.fillText(r.model, cols[5].x, y+5);
+        ctx.fillStyle = '#1a5276'; ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillText(r.ext, cols[6].x, y+5);
+    });
+
+    // Bottom note
+    ctx.fillStyle = '#666'; ctx.font = 'italic 11px -apple-system, sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('Each raw feature takes a different path through the pipeline based on its detected shape.', 480, 330);
+    ctx.fillText('The pipeline is NOT one-size-fits-all — it adapts per feature.', 480, 346);
+})();
+</script>
+
+</body>
+</html>

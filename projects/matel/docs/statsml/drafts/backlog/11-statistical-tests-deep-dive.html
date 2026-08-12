@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deep-Dive Analysis of Popular Statistical Tests — Discussion Backlog</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #fff; color: #2c3e50; line-height: 1.6; }
+h1 { color: #1a5276; border-bottom: 3px solid #2980b9; padding-bottom: 10px; }
+h2 { color: #1a5276; margin-top: 0; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { padding: 20px; vertical-align: top; border: 1px solid #2980b9; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-title { color: #1a5276; font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
+ul { margin: 10px 0; padding-left: 20px; }
+li { margin-bottom: 6px; }
+strong { color: #1a5276; }
+code { background: #e8f0f8; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; color: #1a5276; }
+.questions { background: #fff8e1; border-left: 3px solid #f39c12; padding: 10px 15px; margin: 10px 0; font-size: 0.9em; }
+canvas { display: block; margin: 8px auto; max-width: 100%; }
+.nav-link { display: inline-block; margin: 20px 0; color: #2980b9; text-decoration: none; font-weight: bold; }
+.nav-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<h1>Deep-Dive Analysis of Popular Statistical Tests</h1>
+<p>The assumptions reference covers what each test needs. But we lack analysis of HOW each test behaves on real data — edge cases, sensitivity to violations, power curves, when they silently give wrong answers.</p>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Tests Needing Deep-Dive</div>
+<ul>
+<li><strong>t-test:</strong> How robust really? At what skew × n does it break?</li>
+<li><strong>z-test (proportions):</strong> np ≥ 10 rule — what happens at np=8?</li>
+<li><strong>Proportion test:</strong> Bucket purity testing — when is "75% positive" significant?</li>
+<li><strong>Chi-squared:</strong> Expected count &lt; 5 rule — how wrong do p-values get?</li>
+<li><strong>KS test:</strong> Conservative with ties — how much power lost on discrete data?</li>
+<li><strong>Cross-entropy:</strong> As loss function AND comparison metric</li>
+<li><strong>Gini impurity:</strong> vs entropy for splits — do they differ?</li>
+<li><strong>Information gain:</strong> Bias toward high-cardinality features</li>
+<li><strong>Entropy:</strong> As a shape descriptor</li>
+</ul>
+
+<div class="obj-title" style="margin-top: 20px;">Each Test Needs</div>
+<ul>
+<li>Math intuition with visualization</li>
+<li>Real data examples</li>
+<li>Boundary conditions</li>
+<li>Comparison with alternatives</li>
+</ul>
+
+<div class="questions">
+<strong>Key Questions:</strong><br>
+1. Individual docs or consolidated?<br>
+2. Tie-back to multi-candidate framework?<br>
+3. Include simulation results?
+</div>
+</td>
+<td>
+<canvas id="c1" width="720" height="280"></canvas>
+<canvas id="c2" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setupCanvas(id) {
+    var c = document.getElementById(id);
+    var w = c.width, h = c.height;
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return {ctx: ctx, w: w, h: h};
+}
+
+// Canvas 1: Test danger zones — stacked bars showing valid vs violated regions
+(function() {
+    var s = setupCanvas('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var tests = [
+        {name: 't-test', valid: 0.7, caution: 0.15, danger: 0.15},
+        {name: 'z-test (prop)', valid: 0.5, caution: 0.2, danger: 0.3},
+        {name: 'Proportion', valid: 0.6, caution: 0.2, danger: 0.2},
+        {name: 'Chi-squared', valid: 0.55, caution: 0.25, danger: 0.2},
+        {name: 'KS test', valid: 0.4, caution: 0.3, danger: 0.3},
+        {name: 'Cross-entropy', valid: 0.65, caution: 0.2, danger: 0.15},
+        {name: 'Gini', valid: 0.75, caution: 0.15, danger: 0.1},
+        {name: 'Info gain', valid: 0.45, caution: 0.25, danger: 0.3},
+        {name: 'Entropy', valid: 0.7, caution: 0.2, danger: 0.1}
+    ];
+
+    var marginLeft = 100, marginRight = 30, marginTop = 35, marginBottom = 30;
+    var plotW = w - marginLeft - marginRight;
+    var plotH = h - marginTop - marginBottom;
+    var barH = plotH / tests.length - 4;
+
+    // Title
+    ctx.font = 'bold 16px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Test Assumption Regions: Valid / Caution / Violated', w / 2, 18);
+
+    // Legend
+    ctx.font = '14px -apple-system, sans-serif';
+    ctx.textAlign = 'left';
+    var lx = marginLeft + 10;
+    ctx.fillStyle = '#27ae60'; ctx.fillRect(lx, 24, 12, 10); ctx.fillStyle = '#2c3e50'; ctx.fillText('Valid', lx + 15, 33);
+    ctx.fillStyle = '#e67e22'; ctx.fillRect(lx + 60, 24, 12, 10); ctx.fillStyle = '#2c3e50'; ctx.fillText('Caution', lx + 75, 33);
+    ctx.fillStyle = '#e74c3c'; ctx.fillRect(lx + 140, 24, 12, 10); ctx.fillStyle = '#2c3e50'; ctx.fillText('Violated', lx + 155, 33);
+
+    for (var i = 0; i < tests.length; i++) {
+        var t = tests[i];
+        var y = marginTop + i * (barH + 4);
+
+        // Label
+        ctx.font = '14px -apple-system, sans-serif';
+        ctx.fillStyle = '#2c3e50';
+        ctx.textAlign = 'right';
+        ctx.fillText(t.name, marginLeft - 8, y + barH / 2 + 4);
+
+        // Valid (green)
+        var x = marginLeft;
+        var segW = t.valid * plotW;
+        ctx.fillStyle = '#27ae60';
+        ctx.fillRect(x, y, segW, barH);
+        x += segW;
+
+        // Caution (orange)
+        segW = t.caution * plotW;
+        ctx.fillStyle = '#e67e22';
+        ctx.fillRect(x, y, segW, barH);
+        x += segW;
+
+        // Danger (red)
+        segW = t.danger * plotW;
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillRect(x, y, segW, barH);
+    }
+
+    // Border
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(marginLeft, marginTop, plotW, plotH);
+})();
+
+// Canvas 2: Power curve degradation
+(function() {
+    var s = setupCanvas('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var marginLeft = 60, marginRight = 30, marginTop = 35, marginBottom = 45;
+    var plotW = w - marginLeft - marginRight;
+    var plotH = h - marginTop - marginBottom;
+
+    // Title
+    ctx.font = 'bold 16px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Power Curve Degradation as Assumptions are Violated', w / 2, 18);
+
+    // Axes
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(marginLeft, marginTop);
+    ctx.lineTo(marginLeft, marginTop + plotH);
+    ctx.lineTo(marginLeft + plotW, marginTop + plotH);
+    ctx.stroke();
+
+    // Y-axis label
+    ctx.save();
+    ctx.translate(15, marginTop + plotH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.font = '14px -apple-system, sans-serif';
+    ctx.fillStyle = '#2c3e50';
+    ctx.textAlign = 'center';
+    ctx.fillText('Statistical Power', 0, 0);
+    ctx.restore();
+
+    // X-axis label
+    ctx.font = '14px -apple-system, sans-serif';
+    ctx.fillStyle = '#2c3e50';
+    ctx.textAlign = 'center';
+    ctx.fillText('Assumption Violation Severity', marginLeft + plotW / 2, h - 5);
+
+    // Y-axis ticks
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.textAlign = 'right';
+    for (var p = 0; p <= 1; p += 0.2) {
+        var yy = marginTop + plotH - p * plotH;
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillText(p.toFixed(1), marginLeft - 5, yy + 3);
+        ctx.strokeStyle = '#ecf0f1';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath(); ctx.moveTo(marginLeft, yy); ctx.lineTo(marginLeft + plotW, yy); ctx.stroke();
+    }
+
+    // X-axis ticks
+    ctx.textAlign = 'center';
+    var xlabels = ['None', 'Mild', 'Moderate', 'Severe', 'Extreme'];
+    for (var i = 0; i < xlabels.length; i++) {
+        var xx = marginLeft + (i / (xlabels.length - 1)) * plotW;
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillText(xlabels[i], xx, marginTop + plotH + 15);
+    }
+
+    // Power curves for different tests
+    var curves = [
+        {name: 't-test (n=30)', color: '#1a5276', points: [0.85, 0.82, 0.75, 0.60, 0.45]},
+        {name: 't-test (n=100)', color: '#27ae60', points: [0.95, 0.93, 0.88, 0.78, 0.65]},
+        {name: 'KS test', color: '#e74c3c', points: [0.70, 0.55, 0.40, 0.28, 0.18]},
+        {name: 'Chi-squared', color: '#e67e22', points: [0.80, 0.72, 0.55, 0.35, 0.20]}
+    ];
+
+    for (var c = 0; c < curves.length; c++) {
+        var curve = curves[c];
+        ctx.strokeStyle = curve.color;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        for (var i = 0; i < curve.points.length; i++) {
+            var px = marginLeft + (i / (curve.points.length - 1)) * plotW;
+            var py = marginTop + plotH - curve.points[i] * plotH;
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+    }
+
+    // Legend
+    ctx.font = '13px -apple-system, sans-serif';
+    var ly = marginTop + 8;
+    for (var c = 0; c < curves.length; c++) {
+        var lx = marginLeft + plotW - 130;
+        ctx.strokeStyle = curves[c].color;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.moveTo(lx, ly + c * 16); ctx.lineTo(lx + 20, ly + c * 16); ctx.stroke();
+        ctx.fillStyle = '#2c3e50';
+        ctx.textAlign = 'left';
+        ctx.fillText(curves[c].name, lx + 25, ly + c * 16 + 3);
+    }
+
+    // 0.8 power threshold line
+    var threshY = marginTop + plotH - 0.8 * plotH;
+    ctx.strokeStyle = '#95a5a6';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(marginLeft, threshY); ctx.lineTo(marginLeft + plotW, threshY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.fillStyle = '#95a5a6';
+    ctx.textAlign = 'left';
+    ctx.fillText('0.8 threshold', marginLeft + 3, threshY - 5);
+})();
+</script>
+
+</body>
+</html>

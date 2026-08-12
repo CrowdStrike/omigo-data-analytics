@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mobile Swipe — Temporal Bias, Fatigue & Single-Result Framing</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 20px 10px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.3em; margin: 30px 0 12px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 6px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 40%; }
+.obj-table td:last-child { width: 60%; text-align: center; }
+.obj-table tr:nth-child(even) td { background: #fafcfe; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+</style>
+</head>
+<body>
+
+<h1>Mobile Swipe — Temporal Bias, Fatigue &amp; Single-Result Framing</h1>
+<p class="subtitle">TikTok-style single-result interfaces eliminate visual position bias but introduce different measurement problems: temporal decay, attention fatigue, and framing effects from no-comparison context.</p>
+
+<h2>1. Temporal Position Bias</h2>
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Session start vs minute 20 — same content, different engagement</div>
+<ul>
+<li><strong>What changed:</strong> No simultaneous rank comparison (slot 1 vs slot 5). But content shown at session start gets higher engagement than content shown 20 minutes in — purely because of when it appears.</li>
+<li><strong>Why:</strong> User is fresh, curious, high dopamine at session start. By minute 20: habituated, thumb on autopilot, skipping faster. The content didn't change — the user's state did.</li>
+<li><strong>The measurement error:</strong> Content shown early in sessions gets inflated engagement scores. Content shown late gets deflated. Model learns "early-session content is better" when it's actually "early-session users are more receptive."</li>
+</ul>
+<p><strong>Fix:</strong> Normalize engagement by session position (how many items deep). Compare content only against other content shown at similar session depths. Time-in-session as a covariate.</p>
+</td><td><canvas id="ca1" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>2. Attention Fatigue &amp; Swipe Velocity</h2>
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Engagement drops not because content is worse, but because the user is depleted</div>
+<ul>
+<li><strong>The pattern:</strong> First 10 items: average watch time 8s. Items 20-30: 4s. Items 50+: 2s. Swipe velocity increases monotonically. User is in "scroll zombie" mode.</li>
+<li><strong>What the model sees:</strong> Later items "underperform." But the user isn't evaluating anymore — they're in a motor habit loop. Dwell time measures fatigue state, not content quality.</li>
+<li><strong>Compounding:</strong> Model demotes content that happened to be shown during fatigue windows → that content gets fewer future impressions → never gets a fair evaluation during fresh sessions.</li>
+</ul>
+<p><strong>Fix:</strong> Session-depth-adjusted scoring. Fatigue detection (swipe velocity spike = stop counting engagement). Only train on first N items per session where attention is plausibly active.</p>
+</td><td><canvas id="ca2" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>3. Single-Result Framing — No Comparison Context</h2>
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">One item on screen means binary accept/reject — not relative preference</div>
+<ul>
+<li><strong>What's different:</strong> In a ranked list, users compare items against each other. In swipe UI, each item is evaluated in isolation. This changes decision psychology fundamentally.</li>
+<li><strong>The bias:</strong> Content that "hooks in 0.5s" wins — not content that's best. Thumbnails, first-frame, audio hook dominate. Substantive content that needs 3s to show value gets swiped past.</li>
+<li><strong>Signal confusion:</strong> A "skip" doesn't mean "bad content." It means "didn't hook fast enough in THIS context at THIS fatigue level." But the model treats it as a negative relevance signal.</li>
+<li><strong>Contrast effect:</strong> Item quality perception depends on what came before. Great content after 5 great items → skipped (saturation). Mediocre content after 5 bad items → engaged (relief).</li>
+</ul>
+<p><strong>Fix:</strong> Separate "hook quality" from "content quality" (short-term vs long-term engagement). Measure completion rate, replay, share — not just initial dwell. Sequence-aware models that account for preceding content.</p>
+</td><td><canvas id="ca3" width="720" height="300"></canvas></td></tr>
+</table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    return {ctx:ctx, w:w, h:h};
+}
+
+// 1. Temporal position — engagement decay over session time
+(function(){var s=setup('ca1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 14px -apple-system';ctx.textAlign='center';
+ctx.fillText('Engagement Rate by Session Depth (Same Content Quality)',w/2,20);
+var m={left:70,right:40,top:50,bottom:45};var pw=w-m.left-m.right,ph=h-m.top-m.bottom;
+var points=[{depth:1,eng:72},{depth:5,eng:65},{depth:10,eng:55},{depth:15,eng:42},{depth:20,eng:33},{depth:30,eng:24},{depth:40,eng:18},{depth:50,eng:14}];
+var maxEng=80;
+// Shaded area
+ctx.fillStyle='rgba(26,82,118,0.1)';ctx.beginPath();
+ctx.moveTo(m.left,m.top+ph);
+points.forEach(function(p,i){var x=m.left+i*(pw/(points.length-1));var y=m.top+ph-(p.eng/maxEng)*ph;
+if(i===0)ctx.lineTo(x,y);else ctx.lineTo(x,y);});
+ctx.lineTo(m.left+(points.length-1)*(pw/(points.length-1)),m.top+ph);ctx.closePath();ctx.fill();
+// Line
+ctx.strokeStyle='#1a5276';ctx.lineWidth=3;ctx.beginPath();
+points.forEach(function(p,i){var x=m.left+i*(pw/(points.length-1));var y=m.top+ph-(p.eng/maxEng)*ph;
+if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});ctx.stroke();
+// Points
+points.forEach(function(p,i){var x=m.left+i*(pw/(points.length-1));var y=m.top+ph-(p.eng/maxEng)*ph;
+ctx.beginPath();ctx.arc(x,y,4,0,2*Math.PI);ctx.fillStyle='#1a5276';ctx.fill();
+ctx.fillStyle='#333';ctx.font='10px -apple-system';ctx.textAlign='center';
+ctx.fillText(p.eng+'%',x,y-12);
+ctx.fillText('#'+p.depth,x,m.top+ph+14);});
+ctx.fillStyle='#666';ctx.font='12px -apple-system';ctx.textAlign='center';
+ctx.fillText('Items deep in session',w/2,h-10);
+ctx.fillStyle='#e74c3c';ctx.font='bold 11px -apple-system';
+ctx.fillText('← fresh user',m.left+20,m.top+15);
+ctx.fillText('fatigued user →',m.left+pw-50,m.top+ph-20);
+})();
+
+// 2. Swipe velocity acceleration
+(function(){var s=setup('ca2');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 14px -apple-system';ctx.textAlign='center';
+ctx.fillText('Watch Time & Swipe Velocity Over Session',w/2,20);
+var m={left:70,right:60,top:50,bottom:40};var pw=w-m.left-m.right,ph=h-m.top-m.bottom;
+// Watch time (decreasing)
+var watchTime=[8.2,7.5,6.8,5.5,4.2,3.5,2.8,2.2,1.8,1.5];
+// Swipe velocity (increasing, items/min)
+var swipeVel=[6,7,9,12,16,19,23,27,30,33];
+var maxWatch=9,maxVel=35;
+// Watch time line
+ctx.strokeStyle='#27ae60';ctx.lineWidth=2.5;ctx.beginPath();
+watchTime.forEach(function(v,i){var x=m.left+i*(pw/9);var y=m.top+ph-(v/maxWatch)*ph;
+if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});ctx.stroke();
+// Swipe velocity line
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=2.5;ctx.setLineDash([5,3]);ctx.beginPath();
+swipeVel.forEach(function(v,i){var x=m.left+i*(pw/9);var y=m.top+ph-(v/maxVel)*ph;
+if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});ctx.stroke();ctx.setLineDash([]);
+// Zombie zone
+var zomboX=m.left+6*(pw/9);
+ctx.fillStyle='rgba(231,76,60,0.06)';ctx.fillRect(zomboX,m.top,m.left+pw-zomboX,ph);
+ctx.fillStyle='#e74c3c';ctx.font='10px -apple-system';ctx.textAlign='center';
+ctx.fillText('"scroll zombie"',zomboX+(m.left+pw-zomboX)/2,m.top+12);
+// Legend
+ctx.font='bold 11px -apple-system';ctx.textAlign='left';
+ctx.fillStyle='#27ae60';ctx.fillText('— Watch time (sec)',m.left,h-10);
+ctx.fillStyle='#e74c3c';ctx.fillText('--- Swipe velocity (items/min)',m.left+180,h-10);
+})();
+
+// 3. Single-result framing — hook vs quality
+(function(){var s=setup('ca3');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 14px -apple-system';ctx.textAlign='center';
+ctx.fillText('Hook Speed vs Content Quality — What Swipe UI Selects For',w/2,20);
+var m={left:60,top:50,bottom:30};
+var items=[
+{label:'Clickbait hook\n(shallow content)',hook:95,quality:20,color:'#e74c3c'},
+{label:'Strong hook\n(good content)',hook:80,quality:75,color:'#27ae60'},
+{label:'Slow build\n(excellent content)',hook:25,quality:92,color:'#2980b9'},
+{label:'No hook\n(great content)',hook:8,quality:85,color:'#8e44ad'}
+];
+var barH=28,gap=20,maxW=320;var startY=m.top;
+items.forEach(function(it,i){
+var y=startY+i*(barH*2+gap);
+// Hook bar
+ctx.fillStyle=it.hook>60?'rgba(231,76,60,0.5)':'rgba(26,82,118,0.3)';
+ctx.fillRect(200,y,(it.hook/100)*maxW,barH);
+ctx.fillStyle='#333';ctx.font='10px -apple-system';ctx.textAlign='left';
+ctx.fillText('Hook: '+it.hook+'%',200+(it.hook/100)*maxW+5,y+barH/2+3);
+// Quality bar
+ctx.fillStyle=it.quality>60?'rgba(39,174,96,0.5)':'rgba(200,200,200,0.4)';
+ctx.fillRect(200,y+barH,(it.quality/100)*maxW,barH);
+ctx.fillStyle='#333';
+ctx.fillText('Quality: '+it.quality+'%',200+(it.quality/100)*maxW+5,y+barH+barH/2+3);
+// Label
+ctx.fillStyle=it.color;ctx.font='bold 11px -apple-system';ctx.textAlign='right';
+var lines=it.label.split('\n');
+lines.forEach(function(l,li){ctx.fillText(l,190,y+barH-4+(li*13));});
+});
+ctx.fillStyle='#e74c3c';ctx.font='bold 11px -apple-system';ctx.textAlign='center';
+ctx.fillText('Swipe UI: only hook matters. Slow-build content is invisible regardless of quality.',w/2,h-6);
+})();
+</script>
+</body>
+</html>

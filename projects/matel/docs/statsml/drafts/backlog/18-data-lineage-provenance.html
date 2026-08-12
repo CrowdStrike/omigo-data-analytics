@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Lineage — Provenance Tracking Through the Pipeline — Discussion Backlog</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #fff; color: #2c3e50; line-height: 1.6; }
+h1 { color: #1a5276; border-bottom: 3px solid #2980b9; padding-bottom: 10px; }
+h2 { color: #1a5276; margin-top: 0; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { padding: 20px; vertical-align: top; border: 1px solid #2980b9; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-title { color: #1a5276; font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
+ul { margin: 10px 0; padding-left: 20px; }
+li { margin-bottom: 6px; }
+strong { color: #1a5276; }
+code { background: #e8f0f8; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; color: #1a5276; }
+.questions { background: #fff8e1; border-left: 3px solid #f39c12; padding: 10px 15px; margin: 10px 0; font-size: 0.9em; }
+canvas { display: block; margin: 8px auto; max-width: 100%; }
+.nav-link { display: inline-block; margin: 20px 0; color: #2980b9; text-decoration: none; font-weight: bold; }
+.nav-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<h1>Data Lineage — Provenance Tracking Through the Pipeline</h1>
+<p>Every derived result should carry a record of HOW it was produced — which raw data, which transforms, which parameters, which code version. Without lineage, results are unauditable black boxes.</p>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">What Lineage Captures</div>
+<ul>
+<li><strong>Source tracking:</strong> Which rows, columns, time window contributed? Record filter predicate, not just "n=3200"</li>
+<li><strong>Transform chain:</strong> Raw → type detection → bucket strategy → shape classification → enrichment → verdict</li>
+<li><strong>Parameter provenance:</strong> Hard-coded? Data-driven? User override? Affects trust level</li>
+<li><strong>Branching decisions:</strong> At each fork, WHY that branch was chosen</li>
+<li><strong>Aggregation lineage:</strong> Which features contributed what weight to final answer</li>
+</ul>
+
+<div class="obj-title" style="margin-top: 20px;">Why This Matters</div>
+<ul>
+<li>Multi-candidate validation: Records which candidates tried, passed, selected</li>
+<li>Reproducibility: Same data + lineage = same result</li>
+<li>Debugging bad verdicts: Trace back to first incorrect step</li>
+<li>Temporal validity: Timestamps enable staleness detection</li>
+<li>Audit trail: Proof chain for regulated domains</li>
+</ul>
+
+<div class="obj-title" style="margin-top: 20px;">Hard Challenges — Lineage Across Boundaries</div>
+<ul>
+<li><strong>SQL transforms:</strong> GROUP BY, CASE WHEN, window functions — no 1:1 column mapping</li>
+<li><strong>Joins:</strong> Fan-out (1:N) creates rows from nowhere. Multi-hop chains</li>
+<li><strong>Native code:</strong> pandas apply(), for-loops — opaque to static analysis</li>
+<li><strong>Mixed-mode pipelines:</strong> SQL → Python → SQL → model</li>
+<li><strong>Lossy transforms:</strong> Aggregations, sampling, dedup destroy information</li>
+</ul>
+
+<div class="questions">
+<strong>Key Questions:</strong><br>
+(1) Minimum viable lineage?<br>
+(2) Stochastic components?<br>
+(3) Human-readable vs compact?<br>
+(4) Caching interaction?<br>
+(5) Storage scale?<br>
+(6) SQL: parse query plans or instrument?<br>
+(7) Joins: per-row or per-column?<br>
+(8) Native code: annotations or tracing?
+</div>
+</td>
+<td>
+<canvas id="c1" width="720" height="260"></canvas>
+<canvas id="c2" width="720" height="260"></canvas>
+<canvas id="c3" width="720" height="220"></canvas>
+</td>
+</tr>
+</table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setupCanvas(id) {
+    var c = document.getElementById(id);
+    var w = c.width, h = c.height;
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return {ctx: ctx, w: w, h: h};
+}
+
+// Helper to draw a rounded rect
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+// Canvas 1: DAG flowing left to right
+(function() {
+    var s = setupCanvas('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.fillStyle = '#f8f9fa';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Transform DAG with Language Zone Boundaries', w/2, 18);
+
+    // Zone backgrounds
+    var zones = [
+        {x: 15, w: 160, label: 'SQL', color: 'rgba(39, 174, 96, 0.08)'},
+        {x: 180, w: 160, label: 'DataFrame', color: 'rgba(41, 128, 185, 0.08)'},
+        {x: 345, w: 180, label: 'Python', color: 'rgba(230, 126, 34, 0.08)'},
+        {x: 530, w: 170, label: 'Pipeline', color: 'rgba(142, 68, 173, 0.08)'}
+    ];
+
+    zones.forEach(function(z) {
+        ctx.fillStyle = z.color;
+        ctx.fillRect(z.x, 30, z.w, 200);
+        ctx.font = '13px sans-serif';
+        ctx.fillStyle = '#555';
+        ctx.textAlign = 'center';
+        ctx.fillText(z.label, z.x + z.w/2, 240);
+    });
+
+    // Dashed zone boundaries
+    ctx.setLineDash([4, 3]);
+    ctx.strokeStyle = '#bdc3c7';
+    ctx.lineWidth = 1;
+    [175, 340, 525].forEach(function(x) {
+        ctx.beginPath();
+        ctx.moveTo(x, 30);
+        ctx.lineTo(x, 230);
+        ctx.stroke();
+    });
+    ctx.setLineDash([]);
+
+    // DAG nodes
+    var nodes = [
+        {x: 40, y: 70, w: 100, h: 35, label: 'Raw Table', color: '#27ae60'},
+        {x: 40, y: 140, w: 100, h: 35, label: 'Ref Table', color: '#27ae60'},
+        {x: 195, y: 100, w: 120, h: 35, label: 'JOIN / GROUP BY', color: '#2980b9'},
+        {x: 365, y: 70, w: 130, h: 35, label: 'Python Transform', color: '#e67e22'},
+        {x: 365, y: 140, w: 130, h: 35, label: 'Feature Eng.', color: '#e67e22'},
+        {x: 550, y: 70, w: 120, h: 35, label: 'Shape Classify', color: '#8e44ad'},
+        {x: 550, y: 140, w: 120, h: 35, label: 'Enrichment', color: '#8e44ad'},
+        {x: 620, y: 195, w: 70, h: 30, label: 'Verdict', color: '#1a5276'}
+    ];
+
+    nodes.forEach(function(n) {
+        roundRect(ctx, n.x, n.y, n.w, n.h, 5);
+        ctx.fillStyle = n.color;
+        ctx.fill();
+        ctx.font = 'bold 13px sans-serif';
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'center';
+        ctx.fillText(n.label, n.x + n.w/2, n.y + n.h/2 + 4);
+    });
+
+    // Arrows
+    var arrows = [[0,2],[1,2],[2,3],[2,4],[3,5],[4,6],[5,7],[6,7]];
+    ctx.strokeStyle = '#7f8c8d';
+    ctx.lineWidth = 1.5;
+    arrows.forEach(function(a) {
+        var from = nodes[a[0]], to = nodes[a[1]];
+        var fx = from.x + from.w, fy = from.y + from.h/2;
+        var tx = to.x, ty = to.y + to.h/2;
+        ctx.beginPath();
+        ctx.moveTo(fx, fy);
+        ctx.lineTo(tx, ty);
+        ctx.stroke();
+        // Arrowhead
+        var angle = Math.atan2(ty - fy, tx - fx);
+        ctx.fillStyle = '#555';
+        ctx.beginPath();
+        ctx.moveTo(tx, ty);
+        ctx.lineTo(tx - 8*Math.cos(angle - 0.4), ty - 8*Math.sin(angle - 0.4));
+        ctx.lineTo(tx - 8*Math.cos(angle + 0.4), ty - 8*Math.sin(angle + 0.4));
+        ctx.closePath();
+        ctx.fill();
+    });
+})();
+
+// Canvas 2: JOIN fan-out problem
+(function() {
+    var s = setupCanvas('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.fillStyle = '#f8f9fa';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('JOIN Fan-Out: Row Provenance Problem', w/2, 18);
+
+    // Orders table (left)
+    var otX = 60, otY = 45;
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('orders (3 rows)', otX + 80, otY - 5);
+
+    ctx.font = '10px monospace';
+    var orderRows = [
+        ['order_id', 'customer'],
+        ['1001', 'Alice'],
+        ['1002', 'Bob'],
+        ['1003', 'Alice']
+    ];
+    orderRows.forEach(function(row, ri) {
+        var ry = otY + ri * 25;
+        ctx.fillStyle = ri === 0 ? '#1a5276' : (ri % 2 === 0 ? '#eaf2f8' : '#fff');
+        ctx.fillRect(otX, ry, 160, 25);
+        ctx.strokeStyle = '#bdc3c7';
+        ctx.strokeRect(otX, ry, 160, 25);
+        ctx.fillStyle = ri === 0 ? '#fff' : '#2c3e50';
+        ctx.textAlign = 'left';
+        ctx.fillText(row[0], otX + 10, ry + 16);
+        ctx.fillText(row[1], otX + 90, ry + 16);
+    });
+
+    // Items table (right)
+    var itX = 430, itY = 35;
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('items (7 rows after JOIN)', itX + 110, itY - 5);
+
+    ctx.font = '10px monospace';
+    var itemRows = [
+        ['order_id', 'item', 'amount'],
+        ['1001', 'Widget', '$50'],
+        ['1001', 'Gadget', '$30'],
+        ['1001', 'Cable', '$10'],
+        ['1002', 'Widget', '$50'],
+        ['1002', 'Screen', '$200'],
+        ['1003', 'Gadget', '$30'],
+        ['1003', 'Cable', '$10']
+    ];
+    itemRows.forEach(function(row, ri) {
+        var ry = itY + ri * 22;
+        ctx.fillStyle = ri === 0 ? '#1a5276' : (ri % 2 === 0 ? '#eaf2f8' : '#fff');
+        ctx.fillRect(itX, ry, 220, 22);
+        ctx.strokeStyle = '#bdc3c7';
+        ctx.strokeRect(itX, ry, 220, 22);
+        ctx.fillStyle = ri === 0 ? '#fff' : '#2c3e50';
+        ctx.textAlign = 'left';
+        ctx.fillText(row[0], itX + 10, ry + 15);
+        ctx.fillText(row[1], itX + 80, ry + 15);
+        ctx.fillText(row[2], itX + 160, ry + 15);
+    });
+
+    // Fan-out arrows
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 1.5;
+    // Order 1001 → items 1-3
+    [1,2,3].forEach(function(ri) {
+        ctx.beginPath();
+        ctx.moveTo(otX + 160, otY + 25 + 12);
+        ctx.lineTo(itX, itY + ri * 22 + 11);
+        ctx.stroke();
+    });
+    // Order 1002 → items 4-5
+    [4,5].forEach(function(ri) {
+        ctx.beginPath();
+        ctx.moveTo(otX + 160, otY + 50 + 12);
+        ctx.lineTo(itX, itY + ri * 22 + 11);
+        ctx.stroke();
+    });
+    // Order 1003 → items 6-7
+    [6,7].forEach(function(ri) {
+        ctx.beginPath();
+        ctx.moveTo(otX + 160, otY + 75 + 12);
+        ctx.lineTo(itX, itY + ri * 22 + 11);
+        ctx.stroke();
+    });
+
+    // Fan-out label
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillStyle = '#e67e22';
+    ctx.textAlign = 'center';
+    ctx.fillText('1:N fan-out', 330, 90);
+
+    // Bottom question
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('After GROUP BY: which source rows contributed?', w/2, 230);
+    ctx.font = '14px sans-serif';
+    ctx.fillStyle = '#555';
+    ctx.fillText('Lineage = ??? (aggregation destroys per-row provenance)', w/2, 248);
+})();
+
+// Canvas 3: Native code opacity
+(function() {
+    var s = setupCanvas('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.fillStyle = '#f8f9fa';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Code Traceability Spectrum', w/2, 18);
+
+    // Three columns
+    var colW = 200, gap = 30;
+    var cols = [
+        {x: 50, label: 'SQL (Traceable)', color: '#27ae60', code: 'SELECT dept,\n  AVG(salary)\nFROM employees\nGROUP BY dept', verdict: 'Lineage: FULL\nInput cols known\nOutput type inferred'},
+        {x: 280, label: 'Python Lambda (Opaque)', color: '#e74c3c', code: 'df["x"] = df.apply(\n  lambda r: magic(r),\n  axis=1\n)', verdict: 'Lineage: NONE\nBlack box function\nCannot infer types'},
+        {x: 510, label: 'Annotated (Hybrid)', color: '#e67e22', code: '@lineage(\n  inputs=["age","income"],\n  output_type="float",\n  desc="risk_score"\n)\ndef compute(r): ...', verdict: 'Lineage: DECLARED\nHuman annotation\nTrust but verify'}
+    ];
+
+    cols.forEach(function(col) {
+        // Header
+        ctx.fillStyle = col.color;
+        ctx.fillRect(col.x, 35, colW, 25);
+        ctx.font = 'bold 13px sans-serif';
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'center';
+        ctx.fillText(col.label, col.x + colW/2, 52);
+
+        // Code block
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillRect(col.x, 62, colW, 80);
+        ctx.font = '9px monospace';
+        ctx.fillStyle = '#ecf0f1';
+        ctx.textAlign = 'left';
+        col.code.split('\n').forEach(function(line, li) {
+            ctx.fillText(line, col.x + 8, 78 + li * 14);
+        });
+
+        // Verdict
+        ctx.fillStyle = 'rgba(' + (col.color === '#27ae60' ? '39,174,96' : col.color === '#e74c3c' ? '231,76,60' : '230,126,34') + ',0.1)';
+        ctx.fillRect(col.x, 148, colW, 55);
+        ctx.font = '13px sans-serif';
+        ctx.fillStyle = col.color;
+        ctx.textAlign = 'center';
+        col.verdict.split('\n').forEach(function(line, li) {
+            ctx.fillText(line, col.x + colW/2, 165 + li * 15);
+        });
+    });
+})();
+</script>
+
+</body>
+</html>

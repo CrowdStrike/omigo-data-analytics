@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wrong Split Level — A/B Testing Pitfalls</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 20px 10px; line-height: 1.6; }
+h1 { font-size: 1.6em; margin-bottom: 10px; color: #1a5276; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.0em; margin-bottom: 20px; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 6px 0; }
+strong { color: #1a5276; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 40%; }
+.obj-table td:last-child { width: 60%; text-align: center; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+</style>
+</head>
+<body>
+<h1>Wrong Split Level (Sub-Unit Randomization)</h1>
+<p class="subtitle">Design Flaw — Splitting at a granularity below the natural unit of independence. Outcomes within the cluster are correlated, so individual-level randomization violates independence.</p>
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">The Problem</div>
+<ul>
+<li>The experiment randomizes at a level more granular than where independence actually lives. Sub-units within a cluster share fate — they are not independent observations.</li>
+<li><strong>Web:</strong> Splitting by session/GUID/cookie when a single user has multiple devices and sessions. The same person gets both A and B. Their behavior is correlated across sessions — not independent.</li>
+<li><strong>Health:</strong> Randomizing a hygiene intervention at the individual level when the disease is communicable within households. One treated person in the family reduces exposure for all family members. The household is the natural unit of independence.</li>
+<li><strong>Education:</strong> Randomizing a teaching method per student within a classroom. Students interact, share notes, compare experiences — the classroom is the independent unit.</li>
+</ul>
+<p><strong>Why it matters:</strong> When sub-units within a cluster are correlated, your effective sample size is the number of clusters, not the number of sub-units. Treating N=5000 sessions as independent when they come from N=800 users inflates precision and produces false positives.</p>
+</td><td><canvas id="c1" width="720" height="340"></canvas></td></tr>
+</table>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Domain Examples</div>
+<ul>
+<li><strong>Web platforms:</strong> User has phone + laptop + tablet. Cookie-based split assigns phone to treatment, laptop to control. Conversion is a user-level decision, not a device-level one. Split by user-id.</li>
+<li><strong>Epidemiology:</strong> Testing hand-washing promotion to reduce diarrheal disease. Randomizing individuals within a village is meaningless — water source is shared, transmission is household-clustered. Randomize at village or household level.</li>
+<li><strong>Marketplace:</strong> Splitting buyers individually for a new recommendation algorithm, but buyers in the same household share a delivery address and purchasing patterns. The household is the correlated unit.</li>
+<li><strong>Mobile apps:</strong> Splitting by app install ID when a user reinstalls or has multiple accounts. The "independent" units are the same person.</li>
+</ul>
+<p><strong>Correct approach:</strong> Identify the level at which outcomes are independent. Randomize at that level. If you must randomize lower, use cluster-robust standard errors or mixed-effects models that account for the intra-cluster correlation (ICC).</p>
+<p><strong>The tell:</strong> Ask "can two units in different arms actually be the same entity, or share the same outcome?" If yes — your split level is too granular.</p>
+</td><td><canvas id="c2" width="720" height="340"></canvas></td></tr>
+</table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    return {ctx:ctx, w:w, h:h};
+}
+// Canvas 1: Web example — one user, multiple sessions split differently
+(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+
+// Title
+ctx.fillStyle = '#1a5276';
+ctx.font = 'bold 15px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('One User — Three Sessions — Split Independently', w/2, 20);
+
+// Draw the user (large circle)
+ctx.beginPath();
+ctx.arc(w/2, 110, 50, 0, Math.PI * 2);
+ctx.fillStyle = 'rgba(26,82,118,0.1)';
+ctx.fill();
+ctx.strokeStyle = '#1a5276';
+ctx.lineWidth = 3;
+ctx.stroke();
+ctx.fillStyle = '#1a5276';
+ctx.font = 'bold 14px sans-serif';
+ctx.fillText('User #4281', w/2, 115);
+
+// Three devices below
+var devices = [
+    {x: 180, label: 'Phone (cookie A)', color: '#27ae60', group: 'Treatment'},
+    {x: 360, label: 'Laptop (cookie B)', color: '#e74c3c', group: 'Control'},
+    {x: 540, label: 'Tablet (cookie C)', color: '#27ae60', group: 'Treatment'}
+];
+
+devices.forEach(function(d) {
+    // Line from user to device
+    ctx.beginPath();
+    ctx.moveTo(w/2, 160);
+    ctx.lineTo(d.x, 210);
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Device box
+    ctx.fillStyle = d.color === '#27ae60' ? 'rgba(39,174,96,0.15)' : 'rgba(231,76,60,0.15)';
+    ctx.fillRect(d.x - 60, 210, 120, 50);
+    ctx.strokeStyle = d.color;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(d.x - 60, 210, 120, 50);
+
+    ctx.fillStyle = '#333';
+    ctx.font = '12px sans-serif';
+    ctx.fillText(d.label, d.x, 232);
+    ctx.fillStyle = d.color;
+    ctx.font = 'bold 13px sans-serif';
+    ctx.fillText(d.group, d.x, 250);
+});
+
+// Bottom warning
+ctx.fillStyle = '#e74c3c';
+ctx.font = 'bold 14px sans-serif';
+ctx.fillText('Same person in BOTH arms → independence violated', w/2, 300);
+ctx.font = '13px sans-serif';
+ctx.fillStyle = '#666';
+ctx.fillText('Fix: split by user-id, not by cookie/session/device', w/2, 320);
+})();
+
+// Canvas 2: Health example — household cluster
+(function(){var s=setup('c2');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+
+// Title
+ctx.fillStyle = '#1a5276';
+ctx.font = 'bold 15px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('Communicable Disease — Individual vs Household Randomization', w/2, 20);
+
+// Left side: WRONG — individual split within household
+ctx.fillStyle = '#e74c3c';
+ctx.font = 'bold 13px sans-serif';
+ctx.fillText('✗ Wrong: Split by person', 180, 50);
+
+// Household box (left)
+ctx.strokeStyle = '#999';
+ctx.lineWidth = 2;
+ctx.setLineDash([5, 3]);
+ctx.strokeRect(80, 60, 200, 180);
+ctx.setLineDash([]);
+ctx.fillStyle = '#666';
+ctx.font = '12px sans-serif';
+ctx.fillText('Household', 180, 255);
+
+// Family members
+var leftMembers = [
+    {x: 130, y: 110, color: '#27ae60', label: 'T'},
+    {x: 230, y: 110, color: '#e74c3c', label: 'C'},
+    {x: 130, y: 190, color: '#e74c3c', label: 'C'},
+    {x: 230, y: 190, color: '#27ae60', label: 'T'}
+];
+leftMembers.forEach(function(m) {
+    ctx.beginPath();
+    ctx.arc(m.x, m.y, 20, 0, Math.PI * 2);
+    ctx.fillStyle = m.color === '#27ae60' ? 'rgba(39,174,96,0.2)' : 'rgba(231,76,60,0.2)';
+    ctx.fill();
+    ctx.strokeStyle = m.color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = m.color;
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(m.label, m.x, m.y + 5);
+});
+
+// Infection arrows within household
+ctx.strokeStyle = '#e67e22';
+ctx.lineWidth = 1.5;
+ctx.setLineDash([3, 2]);
+ctx.beginPath(); ctx.moveTo(150, 110); ctx.lineTo(210, 110); ctx.stroke();
+ctx.beginPath(); ctx.moveTo(130, 130); ctx.lineTo(130, 170); ctx.stroke();
+ctx.beginPath(); ctx.moveTo(150, 190); ctx.lineTo(210, 190); ctx.stroke();
+ctx.setLineDash([]);
+
+ctx.fillStyle = '#e67e22';
+ctx.font = '11px sans-serif';
+ctx.fillText('transmission', 180, 150);
+
+// Right side: CORRECT — household-level split
+ctx.fillStyle = '#27ae60';
+ctx.font = 'bold 13px sans-serif';
+ctx.fillText('✓ Correct: Split by household', 540, 50);
+
+// Household A (Treatment)
+ctx.strokeStyle = '#27ae60';
+ctx.lineWidth = 2;
+ctx.strokeRect(430, 60, 100, 120);
+ctx.fillStyle = '#27ae60';
+ctx.font = '11px sans-serif';
+ctx.fillText('House A', 480, 195);
+ctx.font = 'bold 11px sans-serif';
+ctx.fillText('(Treatment)', 480, 208);
+
+for (var i = 0; i < 4; i++) {
+    var mx = 460 + (i % 2) * 40;
+    var my = 95 + Math.floor(i / 2) * 50;
+    ctx.beginPath();
+    ctx.arc(mx, my, 15, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(39,174,96,0.25)';
+    ctx.fill();
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+}
+
+// Household B (Control)
+ctx.strokeStyle = '#1a5276';
+ctx.lineWidth = 2;
+ctx.strokeRect(560, 60, 100, 120);
+ctx.fillStyle = '#1a5276';
+ctx.font = '11px sans-serif';
+ctx.fillText('House B', 610, 195);
+ctx.font = 'bold 11px sans-serif';
+ctx.fillText('(Control)', 610, 208);
+
+for (var i = 0; i < 4; i++) {
+    var mx = 590 + (i % 2) * 40;
+    var my = 95 + Math.floor(i / 2) * 50;
+    ctx.beginPath();
+    ctx.arc(mx, my, 15, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(26,82,118,0.15)';
+    ctx.fill();
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+}
+
+// Bottom note
+ctx.fillStyle = '#333';
+ctx.font = '13px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('Entire household gets same assignment → no within-cluster contamination', w/2, 280);
+ctx.fillStyle = '#666';
+ctx.font = '12px sans-serif';
+ctx.fillText('Effective N = number of households, not number of people', w/2, 300);
+ctx.fillText('Use ICC (intra-cluster correlation) to estimate design effect', w/2, 318);
+})();
+</script>
+</body>
+</html>

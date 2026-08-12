@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Feedback Loops & Structural Biases</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; color: #2c3e50; padding: 40px; line-height: 1.6; }
+h1 { font-size: 1.8rem; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 10px; margin-bottom: 30px; }
+h2 { font-size: 1.3rem; color: #1a5276; margin-bottom: 10px; }
+table { width: 100%; border-collapse: collapse; margin-bottom: 40px; }
+td { vertical-align: top; padding: 16px; }
+td:first-child { width: 45%; }
+td:last-child { width: 55%; }
+p { margin-bottom: 10px; }
+.example { background: #f8f9fa; border-left: 3px solid #e67e22; padding: 8px 12px; margin: 10px 0; font-size: 0.9rem; }
+canvas { display: block; width: 720px; height: 300px; }
+</style>
+</head>
+<body>
+
+<h1>Feedback Loops &amp; Structural Biases</h1>
+
+<table>
+<tr>
+<td>
+<h2>1. Self-Fulfilling Prophecy</h2>
+<p>A model's prediction causes the very outcome it predicted, then that outcome reinforces the model in retraining.</p>
+<div class="example">Model predicts churn &rarr; team deprioritizes customer &rarr; customer churns &rarr; model "validated."</div>
+<div class="example">Credit score low &rarr; denied credit &rarr; can't build history &rarr; score stays low.</div>
+<p>The feedback loop makes it impossible to observe the counterfactual: what would have happened without the prediction?</p>
+</td>
+<td>
+<canvas id="c1" width="720" height="300"></canvas>
+</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td>
+<h2>2. Omitted Variable Bias</h2>
+<p>When a confounding variable is left out of the model, the estimated effect of included variables absorbs the confounder's influence.</p>
+<div class="example">"Education &rarr; Income" effect is overstated when "Parental Wealth" is omitted. Parental wealth drives both education access and income independently.</div>
+<p>The observed coefficient conflates the direct effect with the confounded path, producing a biased and inconsistent estimate.</p>
+</td>
+<td>
+<canvas id="c2" width="720" height="300"></canvas>
+</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td>
+<h2>3. Collider Bias</h2>
+<p>Conditioning on a common effect (collider) of two independent causes induces a spurious association between those causes.</p>
+<div class="example">Talent and looks are independent in the population. But among famous people (fame requires talent OR looks), they appear negatively correlated: famous people who lack talent tend to be good-looking, and vice versa.</div>
+<p>The bias arises from selection: restricting analysis to a subset defined by the collider opens a non-causal path.</p>
+</td>
+<td>
+<canvas id="c3" width="720" height="300"></canvas>
+</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td>
+<h2>4. Position Bias &rarr; CTR Feedback Loop</h2>
+<p>Items shown in top positions get more clicks simply because they're visible. The system interprets clicks as relevance, boosts rank, which generates more clicks. A self-fulfilling prophecy specific to ranking systems.</p>
+<div class="example">Search result at position 1 gets 30% CTR regardless of quality. Position 5 gets 4%. System trains on this &rarr; position 1 item "wins" every retraining cycle. New items never get enough impressions to compete (cold start starvation).</div>
+<div class="example">YouTube autoplay: video plays next &rarr; counts as engagement &rarr; model boosts it &rarr; autoplays more. The user never chose it; the system chose for them and then credited their "engagement."</div>
+<p>Unlike credit scores, this loop operates at massive scale and compounds hourly. Mitigation requires explicit exploration (epsilon-greedy, Thompson sampling) or position-debiased CTR models that discount top-slot clicks.</p>
+</td>
+<td>
+<canvas id="c4" width="720" height="300"></canvas>
+</td>
+</tr>
+</table>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var w = 720, h = 300;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return ctx;
+}
+
+// --- Self-Fulfilling Prophecy: Circular loop ---
+(function() {
+    var ctx = setup('c1');
+    var cx = 360, cy = 150, r = 100;
+    var labels = ['Prediction', 'Action', 'Outcome', 'Training Data'];
+    var angles = [-Math.PI/2, 0, Math.PI/2, Math.PI];
+
+    // Draw circular arrow path
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+    ctx.strokeStyle = 'rgba(26,82,118,0.15)';
+    ctx.lineWidth = 20;
+    ctx.stroke();
+
+    // Draw arrow segments
+    for (var i = 0; i < 4; i++) {
+        var startAngle = angles[i] + 0.15;
+        var endAngle = angles[(i + 1) % 4] - 0.15;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, startAngle, endAngle);
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        // Arrowhead at end
+        var ax = cx + r * Math.cos(endAngle);
+        var ay = cy + r * Math.sin(endAngle);
+        var tangentAngle = endAngle + Math.PI / 2;
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(ax - 12 * Math.cos(tangentAngle - 0.4), ay - 12 * Math.sin(tangentAngle - 0.4));
+        ctx.lineTo(ax - 12 * Math.cos(tangentAngle + 0.4), ay - 12 * Math.sin(tangentAngle + 0.4));
+        ctx.closePath();
+        ctx.fillStyle = '#1a5276';
+        ctx.fill();
+    }
+
+    // Labels
+    var labelPositions = [
+        { x: cx, y: cy - r - 25 },
+        { x: cx + r + 60, y: cy },
+        { x: cx, y: cy + r + 30 },
+        { x: cx - r - 60, y: cy }
+    ];
+    var colors = ['#e74c3c', '#e67e22', '#1a5276', '#27ae60'];
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = 'bold 14px -apple-system, sans-serif';
+    for (var i = 0; i < 4; i++) {
+        ctx.fillStyle = colors[i];
+        ctx.fillText(labels[i], labelPositions[i].x, labelPositions[i].y);
+    }
+
+    // Center label
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.fillStyle = '#7f8c8d';
+    ctx.fillText('feedback loop', cx, cy - 8);
+    ctx.fillText('(no counterfactual)', cx, cy + 8);
+})();
+
+// --- Omitted Variable Bias: DAG ---
+(function() {
+    var ctx = setup('c2');
+
+    var nodes = {
+        edu: { x: 180, y: 200, label: 'Education' },
+        inc: { x: 540, y: 200, label: 'Income' },
+        pw:  { x: 360, y: 70, label: 'Parental Wealth' }
+    };
+
+    function drawArrow(from, to, dashed, color, lineWidth) {
+        var dx = to.x - from.x;
+        var dy = to.y - from.y;
+        var len = Math.sqrt(dx * dx + dy * dy);
+        var ux = dx / len, uy = dy / len;
+        var startX = from.x + ux * 40;
+        var startY = from.y + uy * 20;
+        var endX = to.x - ux * 40;
+        var endY = to.y - uy * 20;
+
+        ctx.beginPath();
+        if (dashed) ctx.setLineDash([6, 4]);
+        else ctx.setLineDash([]);
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = lineWidth || 2.5;
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Arrowhead
+        var angle = Math.atan2(endY - startY, endX - startX);
+        ctx.beginPath();
+        ctx.moveTo(endX, endY);
+        ctx.lineTo(endX - 10 * Math.cos(angle - 0.35), endY - 10 * Math.sin(angle - 0.35));
+        ctx.lineTo(endX - 10 * Math.cos(angle + 0.35), endY - 10 * Math.sin(angle + 0.35));
+        ctx.closePath();
+        ctx.fillStyle = color;
+        ctx.fill();
+    }
+
+    // Observed path (solid, overstated)
+    drawArrow(nodes.edu, nodes.inc, false, '#e74c3c', 3);
+
+    // Confounder paths (dashed)
+    drawArrow(nodes.pw, nodes.edu, true, '#e67e22', 2.5);
+    drawArrow(nodes.pw, nodes.inc, true, '#e67e22', 2.5);
+
+    // Nodes
+    ctx.font = 'bold 14px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    for (var key in nodes) {
+        var n = nodes[key];
+        ctx.beginPath();
+        ctx.ellipse(n.x, n.y, 55, 22, 0, 0, 2 * Math.PI);
+        ctx.fillStyle = key === 'pw' ? '#fdebd0' : '#eaf2f8';
+        ctx.fill();
+        ctx.strokeStyle = key === 'pw' ? '#e67e22' : '#1a5276';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.fillStyle = key === 'pw' ? '#e67e22' : '#1a5276';
+        ctx.fillText(n.label, n.x, n.y);
+    }
+
+    // Legend
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(140, 260, 20, 3);
+    ctx.fillText('Observed (overstated)', 165, 264);
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(340, 261);
+    ctx.lineTo(360, 261);
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e67e22';
+    ctx.fillText('Hidden confounder paths', 365, 264);
+})();
+
+// --- Collider Bias: DAG ---
+(function() {
+    var ctx = setup('c3');
+
+    var nodes = {
+        talent: { x: 180, y: 80, label: 'Talent' },
+        looks:  { x: 540, y: 80, label: 'Looks' },
+        fame:   { x: 360, y: 200, label: 'Fame' }
+    };
+
+    function drawArrow(from, to, color) {
+        var dx = to.x - from.x;
+        var dy = to.y - from.y;
+        var len = Math.sqrt(dx * dx + dy * dy);
+        var ux = dx / len, uy = dy / len;
+        var startX = from.x + ux * 40;
+        var startY = from.y + uy * 18;
+        var endX = to.x - ux * 40;
+        var endY = to.y - uy * 18;
+
+        ctx.beginPath();
+        ctx.setLineDash([]);
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        var angle = Math.atan2(endY - startY, endX - startX);
+        ctx.beginPath();
+        ctx.moveTo(endX, endY);
+        ctx.lineTo(endX - 10 * Math.cos(angle - 0.35), endY - 10 * Math.sin(angle - 0.35));
+        ctx.lineTo(endX - 10 * Math.cos(angle + 0.35), endY - 10 * Math.sin(angle + 0.35));
+        ctx.closePath();
+        ctx.fillStyle = color;
+        ctx.fill();
+    }
+
+    // Causal arrows into collider
+    drawArrow(nodes.talent, nodes.fame, '#1a5276');
+    drawArrow(nodes.looks, nodes.fame, '#1a5276');
+
+    // Spurious correlation (dashed red)
+    ctx.beginPath();
+    ctx.setLineDash([5, 4]);
+    ctx.moveTo(230, 80);
+    ctx.lineTo(490, 80);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Spurious label
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('spurious negative correlation', 360, 65);
+    ctx.fillText('(appears when conditioning on Fame)', 360, 50);
+
+    // Nodes
+    ctx.font = 'bold 14px -apple-system, sans-serif';
+    ctx.textBaseline = 'middle';
+
+    for (var key in nodes) {
+        var n = nodes[key];
+        ctx.beginPath();
+        ctx.ellipse(n.x, n.y, 48, 22, 0, 0, 2 * Math.PI);
+        if (key === 'fame') {
+            ctx.fillStyle = '#fdebd0';
+            ctx.fill();
+            ctx.strokeStyle = '#e67e22';
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+            // Double border to indicate conditioning
+            ctx.beginPath();
+            ctx.ellipse(n.x, n.y, 54, 28, 0, 0, 2 * Math.PI);
+            ctx.strokeStyle = '#e67e22';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+        } else {
+            ctx.fillStyle = '#eaf2f8';
+            ctx.fill();
+            ctx.strokeStyle = '#1a5276';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+        ctx.fillStyle = key === 'fame' ? '#e67e22' : '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText(n.label, n.x, n.y);
+    }
+
+    // Conditioned label
+    ctx.font = '10px -apple-system, sans-serif';
+    ctx.fillStyle = '#e67e22';
+    ctx.fillText('[conditioned on]', nodes.fame.x, nodes.fame.y + 38);
+
+    // Legend
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#1a5276';
+    ctx.fillRect(140, 270, 20, 3);
+    ctx.fillText('Causal path', 165, 274);
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(320, 271);
+    ctx.lineTo(340, 271);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Spurious (selection-induced)', 345, 274);
+})();
+
+// --- Position Bias CTR Feedback Loop ---
+(function() {
+    var ctx = setup('c4');
+    var cx = 360, cy = 140, r = 90;
+    var labels = ['High Position', 'More Clicks', 'Higher CTR Score', 'Boosted Rank'];
+    var angles = [-Math.PI/2, 0, Math.PI/2, Math.PI];
+    var colors = ['#1a5276', '#27ae60', '#e67e22', '#8e44ad'];
+
+    // Background ring
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+    ctx.strokeStyle = 'rgba(26,82,118,0.12)';
+    ctx.lineWidth = 22;
+    ctx.stroke();
+
+    // Arrow segments
+    for (var i = 0; i < 4; i++) {
+        var startAngle = angles[i] + 0.2;
+        var endAngle = angles[(i + 1) % 4] - 0.2;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, startAngle, endAngle);
+        ctx.strokeStyle = colors[i];
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        var ax = cx + r * Math.cos(endAngle);
+        var ay = cy + r * Math.sin(endAngle);
+        var tangentAngle = endAngle + Math.PI / 2;
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(ax - 11 * Math.cos(tangentAngle - 0.4), ay - 11 * Math.sin(tangentAngle - 0.4));
+        ctx.lineTo(ax - 11 * Math.cos(tangentAngle + 0.4), ay - 11 * Math.sin(tangentAngle + 0.4));
+        ctx.closePath();
+        ctx.fillStyle = colors[i];
+        ctx.fill();
+    }
+
+    // Labels
+    var positions = [
+        { x: cx, y: cy - r - 22 },
+        { x: cx + r + 55, y: cy },
+        { x: cx, y: cy + r + 25 },
+        { x: cx - r - 55, y: cy }
+    ];
+    ctx.font = 'bold 12px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (var i = 0; i < 4; i++) {
+        ctx.fillStyle = colors[i];
+        ctx.fillText(labels[i], positions[i].x, positions[i].y);
+    }
+
+    // Center
+    ctx.font = 'bold 11px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('rich-get-richer', cx, cy - 8);
+    ctx.font = '10px -apple-system, sans-serif';
+    ctx.fillStyle = '#7f8c8d';
+    ctx.fillText('(Matthew effect)', cx, cy + 8);
+
+    // Starvation note at bottom
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('New items never reach top positions → no clicks → no signal → permanent cold start', cx, 275);
+})();
+</script>
+
+</body>
+</html>

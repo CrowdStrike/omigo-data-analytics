@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hierarchical Data with Implicit Relationships — Discussion Backlog</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #fff; color: #2c3e50; line-height: 1.6; }
+h1 { color: #1a5276; border-bottom: 3px solid #2980b9; padding-bottom: 10px; }
+h2 { color: #1a5276; margin-top: 30px; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { padding: 20px; vertical-align: top; border: 1px solid #2980b9; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-title { color: #1a5276; font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
+ul { margin: 10px 0; padding-left: 20px; }
+li { margin-bottom: 6px; }
+strong { color: #1a5276; }
+code { background: #e8f0f8; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; color: #1a5276; }
+.questions { background: #fff8e1; border-left: 3px solid #f39c12; padding: 10px 15px; margin: 10px 0; font-size: 0.9em; }
+.status { display: inline-block; background: #e8f0f8; color: #1a5276; padding: 3px 10px; border-radius: 12px; font-size: 0.85em; font-weight: bold; margin-bottom: 20px; }
+</style>
+</head>
+<body>
+
+<h1>Hierarchical Data with Implicit Relationships</h1>
+<span class="status">TO DISCUSS</span>
+
+<p>Many datasets contain columns that form implicit hierarchies — parent/child, part/whole, containment — without explicit foreign keys or tree structure. The pipeline needs to detect these relationships and understand their consequences for profiling and modeling.</p>
+
+<h2>Types of Implicit Hierarchy</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Containment Hierarchies</div>
+<ul>
+<li><strong>Geographic:</strong> city → state → country → region (each level fully determines levels above)</li>
+<li><strong>Organizational:</strong> employee → team → department → division</li>
+<li><strong>Temporal:</strong> day → week → month → quarter → year</li>
+<li><strong>Product:</strong> SKU → product line → category → department</li>
+</ul>
+<div class="questions">Detection signal: if column A has N unique values and column B has M where M ≪ N, and every value of A maps to exactly one value of B — that's a functional dependency revealing hierarchy.</div>
+</td>
+<td>
+<div class="obj-title">Derived/Computed Hierarchies</div>
+<ul>
+<li><strong>Aggregation:</strong> line_item_total is qty × price; order_total is sum of line items</li>
+<li><strong>Bucketing:</strong> age_group is derived from age; income_bracket from income</li>
+<li><strong>Encoding:</strong> first 3 digits of ZIP = region; ICD code prefix = disease category</li>
+<li><strong>Composite keys:</strong> account_id embeds branch_code + customer_seq</li>
+</ul>
+<div class="questions">These create perfect multicollinearity if both parent and child enter a model. Detection: substring/prefix patterns, exact functional relationships, or suspiciously high correlation with discrete steps.</div>
+</td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">Semantic Hierarchies (Hardest)</div>
+<ul>
+<li><strong>Taxonomic:</strong> "laptop" is-a "computer" is-a "electronics" — but stored as flat category strings</li>
+<li><strong>Part-whole:</strong> engine is part of car, but the dataset just has <code>component</code> and <code>system</code> columns</li>
+<li><strong>Role-based:</strong> manager is an employee who supervises other employees (self-referential)</li>
+</ul>
+<div class="questions">Can't detect purely from data distributions — requires either domain metadata, naming conventions, or explicit ontology. How much should the pipeline attempt without external knowledge?</div>
+</td>
+<td>
+<div class="obj-title">Implicit Graph Structure</div>
+<ul>
+<li><strong>Referral chains:</strong> user_id + referred_by_user_id = hidden tree</li>
+<li><strong>Supply chain:</strong> supplier → manufacturer → distributor → retailer (encoded as separate entity columns)</li>
+<li><strong>Approval flows:</strong> created_by → reviewed_by → approved_by = DAG</li>
+</ul>
+<div class="questions">These are graph relationships flattened into tabular form. Profiling each column independently misses the structure entirely. What does "feature profiling" even mean here?</div>
+</td>
+</tr>
+</table>
+
+<h2>Context-Scoped Identifiers (Motivating Example)</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Roll Number Problem</div>
+<p>A student's roll number (e.g., 15) is meaningful only within the context of their class. Roll number 15 in Class 3-A is a completely different student than roll number 15 in Class 3-B.</p>
+<ul>
+<li>The identifier <strong>looks numeric</strong> — type classifier might say <code>int_num</code></li>
+<li>It <strong>looks low-cardinality</strong> — values 1-50 repeat across classes</li>
+<li>Profiling it alone produces a near-uniform distribution — meaningless</li>
+<li>It only resolves to an entity when paired with its <strong>scoping column</strong> (class)</li>
+</ul>
+<div class="questions">This is a compound key disguised as a single column. The pipeline sees a number; the domain sees an identifier that requires context. How do we detect that a column is scoped?</div>
+</td>
+<td>
+<div class="obj-title">More Examples of Scoped IDs</div>
+<ul>
+<li><strong>Seat number</strong> — meaningful only within a flight</li>
+<li><strong>Apartment number</strong> — meaningful only within a building</li>
+<li><strong>Port number</strong> — meaningful only within a host IP</li>
+<li><strong>Question number</strong> — meaningful only within an exam</li>
+<li><strong>Employee ID</strong> — sometimes scoped to a subsidiary/branch</li>
+<li><strong>Version number</strong> — meaningful only within a software package</li>
+</ul>
+<div class="questions">Detection heuristic: if unique(col) is low but unique(col, scope_col) ≈ nrows — the column is scoped. Also: column named *_number, *_id with suspiciously low cardinality relative to row count.</div>
+</td>
+</tr>
+</table>
+
+<h2>Why This Matters for the Pipeline</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Statistical Consequences</div>
+<ul>
+<li><strong>Redundant information:</strong> city + state + zip all encode overlapping location signal → inflated importance</li>
+<li><strong>Simpson's paradox:</strong> aggregating across hierarchy levels hides or reverses effects</li>
+<li><strong>Non-independence:</strong> observations within the same group (same department, same region) are correlated — violates i.i.d. assumption</li>
+<li><strong>Ecological fallacy:</strong> group-level statistics don't apply to individuals within the group</li>
+</ul>
+</td>
+<td>
+<div class="obj-title">Modeling Consequences</div>
+<ul>
+<li><strong>Multicollinearity:</strong> including both levels of hierarchy inflates variance</li>
+<li><strong>Leakage:</strong> child-level aggregates leak parent-level labels</li>
+<li><strong>Cardinality explosion:</strong> one-hot encoding leaf-level of deep hierarchy creates thousands of sparse features</li>
+<li><strong>Wrong granularity:</strong> model trained at wrong level of hierarchy → predictions don't match decision context</li>
+</ul>
+</td>
+</tr>
+</table>
+
+<h2>Key Discussion Points</h2>
+
+<ul>
+<li>What automatic detection is feasible? Functional dependency mining? Cardinality ratios? Prefix/substring patterns?</li>
+<li>Once detected, should the pipeline recommend which level to use — or present all levels with warnings?</li>
+<li>How does this interact with the type classifier? (A hierarchy column might be <code>cat</code> at leaf, <code>cat</code> at root, but with very different cardinality profiles)</li>
+<li>Should hierarchical features get a special encoding strategy (target encoding at group level, embeddings that respect hierarchy)?</li>
+<li>Mixed-level datasets: some rows at leaf level, others at intermediate nodes — how to detect and handle?</li>
+<li>When should the pipeline suggest multilevel/hierarchical models instead of flat feature engineering?</li>
+</ul>
+
+
+</body>
+</html>

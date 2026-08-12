@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CNN Shape Classification</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 40px 20px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; }
+.nav a:hover { text-decoration: underline; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-table tr:nth-child(even) td { background: #fafcfe; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+.toc { background: #f8fafb; border: 1px solid #e0e0e0; padding: 20px 30px; margin: 20px 0 30px; border-radius: 4px; }
+.toc ol { margin: 10px 0 0 20px; font-size: 0.92em; }
+.toc ol li { margin: 5px 0; }
+.toc ol li a { color: #2980b9; text-decoration: none; }
+.toc ol li a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+
+<h1>CNN Shape Classification</h1>
+<p class="subtitle">MNIST for distributions — classify histogram shapes visually using a trained CNN.</p>
+
+<div class="toc">
+<strong>Table of Contents</strong>
+<ol>
+<li><a href="#idea">The Core Idea</a></li>
+<li><a href="#classes">The 11 Shape Classes</a></li>
+<li><a href="#training">Training Data</a></li>
+<li><a href="#pipeline">Multi-Rendering Pipeline</a></li>
+<li><a href="#integration">Integration with Pipeline</a></li>
+<li><a href="#limitations">Limitations</a></li>
+</ol>
+</div>
+
+<h2 id="idea">1. The Core Idea</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Raw Data → Histogram Image → CNN → Shape Probabilities</div>
+<ul>
+<li>Render feature values as a 64×64 grayscale histogram image</li>
+<li>Feed to a CNN (2 conv layers + 2 FC layers) → softmax over 11 classes</li>
+<li>Output: soft probabilities ("70% bimodal, 25% heavy_tail, 5% other")</li>
+</ul>
+<p><strong>Why this works:</strong></p>
+<ul>
+<li><strong>Noise tolerance:</strong> Rendering to 64px is a low-pass filter — tiny dips can't survive</li>
+<li><strong>No thresholds:</strong> Model learns what matters from examples, not manual rules</li>
+<li><strong>Unlimited training data:</strong> Generate from known distributions — perfect ground truth</li>
+<li><strong>Multi-candidate:</strong> Softmax gives probabilities, not a hard label</li>
+</ul>
+</td>
+<td>
+<canvas id="c1" width="720" height="240"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="classes">2. The 11 Shape Classes</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Visual Categories — Not Mathematical Families</div>
+<ul>
+<li><strong>bell:</strong> Single symmetric hill (normal-like)</li>
+<li><strong>right_skew:</strong> Peak left, long tail right</li>
+<li><strong>left_skew:</strong> Peak right, long tail left</li>
+<li><strong>bimodal:</strong> Two distinct hills with valley</li>
+<li><strong>multimodal:</strong> 3+ hills</li>
+<li><strong>uniform:</strong> Flat, no dominant peak</li>
+<li><strong>descending:</strong> Monotone decrease left to right</li>
+<li><strong>ascending:</strong> Monotone increase left to right</li>
+<li><strong>u_shaped:</strong> High at edges, low in middle</li>
+<li><strong>spike:</strong> One extreme concentration</li>
+<li><strong>heavy_tail:</strong> Bell-like but fat tails</li>
+</ul>
+<p>These are what a human sees at a glance — shape identity, not parametric family.</p>
+</td>
+<td>
+<canvas id="c2" width="720" height="340"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="training">3. Training Data</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Synthetic Generation — Infinite, Perfectly Labeled</div>
+<ul>
+<li>11 classes × 10,000 samples × 3 renderings = <strong>330,000 training images</strong></li>
+<li>Label is your generation choice — no human labeling needed, no ambiguity</li>
+<li>Varied sample sizes (n=200 to n=5000) so model handles both noisy and clean</li>
+<li><strong>Boundary examples:</strong> Deliberately generated near class borders (e.g., Student-t with df=3→20 spans bell↔heavy_tail)</li>
+</ul>
+<p><strong>Key:</strong> The model sees all 3 rendering styles during training with the same label, forcing it to learn shape rather than rendering artifacts.</p>
+</td>
+<td>
+<canvas id="c3" width="720" height="240"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="pipeline">4. Multi-Rendering Pipeline</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Same Data → 3 Renderings → Compare Outputs</div>
+<ul>
+<li><strong>Histogram A (Sturges):</strong> Coarse (12 bins). Sees major modes.</li>
+<li><strong>Histogram B (√n):</strong> Fine (31+ bins). Resolves close peaks.</li>
+<li><strong>KDE Density:</strong> Smooth curve. Immune to bin-size effects.</li>
+</ul>
+<p><strong>Agreement = confidence.</strong> If all 3 say "right_skew" → high confidence. If histograms say "multimodal" but KDE says "bell" → rounding artifact detected (comb teeth from integer data).</p>
+<p><strong>Example:</strong> SalePrice — all 3 renderings: right_skew 65-78% → high confidence. Year Built — histograms: multimodal, KDE: bimodal → artifact detected, trust KDE.</p>
+</td>
+<td>
+<canvas id="c4" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="integration">5. Integration with Pipeline</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Shape → Routing → Test Selection</div>
+<p><strong>Shape determines pipeline routing:</strong></p>
+<ul>
+<li><strong>bell / heavy_tail:</strong> Direct to testing. t-test candidates viable.</li>
+<li><strong>right_skew / left_skew:</strong> Test on transformed data or use non-parametric.</li>
+<li><strong>bimodal / multimodal:</strong> Split first, then test each component. t-test inappropriate on combined.</li>
+<li><strong>spike:</strong> Separate spike mass, test remainder.</li>
+<li><strong>uniform:</strong> No central tendency — range-based analysis only.</li>
+</ul>
+<p><strong>CNN + Multi-Resolution Persistence:</strong> If CNN says bimodal (0.72) and persistence=0.85 → high confidence. If CNN says bimodal (0.55) but persistence=0.40 → marginal, report uncertain.</p>
+</td>
+<td>
+<canvas id="c5" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="limitations">6. Limitations</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Hard Cases and Boundaries</div>
+<ul>
+<li><strong>bell vs heavy_tail:</strong> Difference is only in tails — few pixels. Hardest distinction.</li>
+<li><strong>Unequal mixtures (80/20):</strong> Minor component may not create a visible second peak.</li>
+<li><strong>Very small n (&lt;100-150):</strong> Histogram is so noisy that shape is genuinely ambiguous. CNN should output low confidence.</li>
+</ul>
+<p><strong>What CNN does NOT replace:</strong></p>
+<ul>
+<li>Goodness-of-fit tests (KS, Anderson-Darling)</li>
+<li>Parameter estimation</li>
+<li>Statistical significance testing</li>
+</ul>
+<p>It replaces: the first-pass "what does this look like?" question a human answers by glancing at the plot.</p>
+</td>
+<td>
+<canvas id="c6" width="720" height="240"></canvas>
+</td>
+</tr>
+</table>
+
+<div class="philosophy">
+<strong>v3-full results:</strong> 11 classes. Discriminative: 93.1% top-1, 99.3% top-2. Generative: 92.6% top-1, 99.4% top-2. Independent per-class scores. FP rates: multimodal 0%, u_shaped 0.1%.
+</div>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id);
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return {ctx: ctx, w: w, h: h};
+}
+function mulberry32(seed) {
+    return function() { seed |= 0; seed = seed + 0x6D2B79F5 | 0; var t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+}
+
+// 1. Pipeline flow
+(function() {
+    var s = setup('c1'), ctx = s.ctx, w = s.w, h = s.h;
+    var steps = ['Raw Data', '64-bin\nHistogram', '64×64\nImage', 'CNN', 'Shape\nProbs'];
+    var colors = ['#7f8c8d', '#f39c12', '#e67e22', '#2980b9', '#27ae60'];
+    var bw = 120, bh = 50, gap = 15;
+    var totalW = steps.length * bw + (steps.length-1) * gap;
+    var sx = (w - totalW) / 2, cy = h/2;
+
+    steps.forEach(function(st, i) {
+        var x = sx + i*(bw+gap);
+        ctx.fillStyle = colors[i]; ctx.globalAlpha = 0.15;
+        ctx.beginPath(); ctx.roundRect(x, cy-bh/2, bw, bh, 6); ctx.fill();
+        ctx.globalAlpha = 1; ctx.strokeStyle = colors[i]; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.roundRect(x, cy-bh/2, bw, bh, 6); ctx.stroke();
+        ctx.fillStyle = colors[i]; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+        var lines = st.split('\n');
+        lines.forEach(function(l, li) { ctx.fillText(l, x+bw/2, cy - 4 + (li - (lines.length-1)/2)*18); });
+        if (i < steps.length-1) {
+            ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(x+bw+2, cy); ctx.lineTo(x+bw+gap-2, cy); ctx.stroke();
+            ctx.fillStyle = '#999'; ctx.beginPath();
+            ctx.moveTo(x+bw+gap-6, cy-3); ctx.lineTo(x+bw+gap-1, cy); ctx.lineTo(x+bw+gap-6, cy+3); ctx.fill();
+        }
+    });
+})();
+
+// 2. Shape classes gallery
+(function() {
+    var s = setup('c2'), ctx = s.ctx, w = s.w, h = s.h;
+    var rng = mulberry32(42);
+    function randn() { var u = rng(), v = rng(); if (u < 0.001) u = 0.001; return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+
+    var shapes = [
+        {name: 'bell', bins: [1,3,7,14,22,30,35,30,22,14,7,3,1]},
+        {name: 'right_skew', bins: [5,35,30,20,12,8,5,3,2,1,1,0,0]},
+        {name: 'bimodal', bins: [2,8,20,28,18,6,3,5,18,28,20,8,2]},
+        {name: 'uniform', bins: [12,11,13,12,11,14,12,13,11,12,13,12,11]},
+        {name: 'spike', bins: [1,1,2,2,3,40,3,2,1,1,1,0,0]},
+        {name: 'descending', bins: [40,30,22,16,12,8,6,4,3,2,1,1,0]},
+        {name: 'heavy_tail', bins: [2,4,6,10,18,30,35,30,18,10,6,4,2]},
+        {name: 'u_shaped', bins: [25,18,10,5,3,2,2,3,5,10,18,25,30]},
+        {name: 'ascending', bins: [0,1,1,2,3,4,6,8,12,16,22,30,40]},
+        {name: 'left_skew', bins: [0,0,1,1,2,3,5,8,12,20,30,35,5]},
+        {name: 'multimodal', bins: [3,15,20,8,3,2,4,18,15,4,3,16,20]}
+    ];
+
+    var cols = 4, cellW = w / cols, cellH = 80;
+    shapes.forEach(function(sh, i) {
+        var col = i % cols, row = Math.floor(i / cols);
+        var cx = col * cellW + 10, cy = row * cellH + 10;
+        var maxB = Math.max.apply(null, sh.bins);
+        var bW = (cellW - 30) / sh.bins.length;
+        sh.bins.forEach(function(v, bi) {
+            var barH = (v / maxB) * 45;
+            ctx.fillStyle = 'rgba(26,82,118,0.4)';
+            ctx.fillRect(cx + bi*bW, cy + 50 - barH, bW-1, barH);
+        });
+        ctx.fillStyle = '#1a5276'; ctx.font = '17px -apple-system'; ctx.textAlign = 'left';
+        ctx.fillText(sh.name, cx, cy + 65);
+    });
+})();
+
+// 3. Training data
+(function() {
+    var s = setup('c3'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Training: Same Shape at Different Sample Sizes', 40, 22);
+
+    var labels = ['n=200 (noisy)', 'n=1000 (clear)', 'n=5000 (clean)'];
+    var noiseLevels = [8, 3, 1]; // noise multiplier
+
+    labels.forEach(function(l, i) {
+        var ox = 40 + i * 230, oy = 50;
+        var bins = [];
+        var rng = mulberry32(100 + i*50);
+        for (var b = 0; b < 20; b++) {
+            var v = Math.exp(-0.5*Math.pow((b-10)/4, 2)) * 30;
+            v += (rng() - 0.5) * noiseLevels[i] * 5;
+            bins.push(Math.max(0, v));
+        }
+        var maxB = Math.max.apply(null, bins);
+        var bW = 200 / bins.length;
+        bins.forEach(function(v, bi) {
+            var barH = (v / maxB) * 120;
+            ctx.fillStyle = 'rgba(26,82,118,0.4)';
+            ctx.fillRect(ox + bi*bW, oy + 130 - barH, bW-1, barH);
+        });
+        ctx.fillStyle = '#666'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText(l, ox + 100, oy + 155);
+        ctx.fillStyle = '#27ae60'; ctx.font = 'bold 17px -apple-system';
+        ctx.fillText('→ all labeled "bell"', ox + 100, oy + 175);
+    });
+})();
+
+// 4. Multi-rendering
+(function() {
+    var s = setup('c4'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('3 Renderings → Compare → Confidence', 40, 22);
+
+    var renderings = [
+        {label: 'Sturges (12 bins)', result: 'right_skew 65%', agree: true},
+        {label: '√n (54 bins)', result: 'right_skew 72%', agree: true},
+        {label: 'KDE (smooth)', result: 'right_skew 78%', agree: true}
+    ];
+
+    renderings.forEach(function(r, i) {
+        var y = 50 + i * 60;
+        var color = r.agree ? '#27ae60' : '#e67e22';
+        ctx.fillStyle = color; ctx.globalAlpha = 0.1;
+        ctx.fillRect(40, y, w - 80, 48); ctx.globalAlpha = 1;
+        ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.roundRect(40, y, w - 80, 48, 4); ctx.stroke();
+        ctx.fillStyle = '#333'; ctx.font = '17px -apple-system'; ctx.textAlign = 'left';
+        ctx.fillText(r.label, 60, y + 20);
+        ctx.fillStyle = color; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText(r.result, w/2, y + 20);
+        ctx.fillStyle = '#27ae60'; ctx.font = '17px -apple-system'; ctx.textAlign = 'right';
+        ctx.fillText('✓ agree', w - 60, y + 20);
+    });
+
+    ctx.fillStyle = '#27ae60'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('All 3 agree → HIGH CONFIDENCE: right_skew', w/2, h - 15);
+})();
+
+// 5. Integration
+(function() {
+    var s = setup('c5'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Shape → Pipeline Route', 40, 22);
+
+    var routes = [
+        {shape: 'bell / heavy_tail', action: 'Direct to testing (t-test viable)', color: '#27ae60'},
+        {shape: 'right_skew / left_skew', action: 'Transform or non-parametric', color: '#e67e22'},
+        {shape: 'bimodal / multimodal', action: 'Split first, then test each', color: '#8e44ad'},
+        {shape: 'spike', action: 'Separate spike, test remainder', color: '#e74c3c'},
+        {shape: 'uniform', action: 'Range-based only (no mean test)', color: '#7f8c8d'}
+    ];
+
+    routes.forEach(function(r, i) {
+        var y = 48 + i * 42;
+        ctx.fillStyle = r.color; ctx.globalAlpha = 0.1;
+        ctx.fillRect(40, y, w-80, 35); ctx.globalAlpha = 1;
+        ctx.strokeStyle = r.color; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.roundRect(40, y, w-80, 35, 4); ctx.stroke();
+        ctx.fillStyle = r.color; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+        ctx.fillText(r.shape, 60, y + 22);
+        ctx.fillStyle = '#333'; ctx.font = '17px -apple-system'; ctx.textAlign = 'left';
+        ctx.fillText('→  ' + r.action, 280, y + 22);
+    });
+})();
+
+// 6. Limitations
+(function() {
+    var s = setup('c6'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Hard Cases for the CNN', 40, 22);
+
+    var cases = [
+        {case: 'bell vs heavy_tail', why: 'Difference only in tails (few pixels)', difficulty: 0.9},
+        {case: 'Unequal mixture (80/20)', why: 'Minor peak may not be visible', difficulty: 0.7},
+        {case: 'Very small n (<150)', why: 'Histogram too noisy to classify', difficulty: 0.85}
+    ];
+
+    cases.forEach(function(c, i) {
+        var y = 50 + i * 60;
+        var barW = c.difficulty * 400;
+        ctx.fillStyle = 'rgba(231,76,60,0.2)'; ctx.fillRect(60, y, barW, 35);
+        ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1; ctx.strokeRect(60, y, barW, 35);
+        ctx.fillStyle = '#333'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+        ctx.fillText(c.case, 70, y + 15);
+        ctx.fillStyle = '#666'; ctx.font = '17px -apple-system';
+        ctx.fillText(c.why, 70, y + 32);
+        ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+        ctx.fillText((c.difficulty * 100).toFixed(0) + '% hard', barW + 75, y + 22);
+    });
+})();
+</script>
+</body>
+</html>

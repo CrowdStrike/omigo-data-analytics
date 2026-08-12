@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Semi-Structured Datasets with Nested Columns — Discussion Backlog</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #fff; color: #2c3e50; line-height: 1.6; }
+h1 { color: #1a5276; border-bottom: 3px solid #2980b9; padding-bottom: 10px; }
+h2 { color: #1a5276; margin-top: 0; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { padding: 20px; vertical-align: top; border: 1px solid #2980b9; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-title { color: #1a5276; font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
+ul { margin: 10px 0; padding-left: 20px; }
+li { margin-bottom: 6px; }
+strong { color: #1a5276; }
+code { background: #e8f0f8; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; color: #1a5276; }
+.questions { background: #fff8e1; border-left: 3px solid #f39c12; padding: 10px 15px; margin: 10px 0; font-size: 0.9em; }
+canvas { display: block; margin: 8px auto; max-width: 100%; }
+.nav-link { display: inline-block; margin: 20px 0; color: #2980b9; text-decoration: none; font-weight: bold; }
+.nav-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<h1>Semi-Structured Datasets with Nested Columns</h1>
+<p>Real-world data isn't flat tables. JSON logs, medical records, e-commerce events all have nested structure that must be understood before profiling.</p>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Types of Nesting</div>
+<ul>
+<li><strong>JSON objects:</strong> <code>{"address": {"city": "NYC", "zip": "10001", "coords": {"lat": 40.7, "lng": -74.0}}}</code></li>
+<li><strong>Arrays of varying length:</strong> <code>{"purchases": [{"item": "A", "amt": 50}, {"item": "B", "amt": 120}]}</code></li>
+<li><strong>Mixed depth:</strong> Some rows 3 levels deep, others 1</li>
+<li><strong>Repeated nested groups:</strong> Patient has multiple diagnoses with date + code + severity</li>
+</ul>
+
+<div class="obj-title" style="margin-top: 20px;">Challenges</div>
+<ul>
+<li>Flattening destroys context</li>
+<li>Array aggregation is a modeling choice (count? max? mean? last?)</li>
+<li>Sparsity from flattening (70% missing = "not applicable"?)</li>
+<li>Type detection at every level needed</li>
+<li>Cardinality explosion from one-hot on nested objects</li>
+</ul>
+
+<div class="obj-title" style="margin-top: 20px;">Approach</div>
+<ul>
+<li>Schema inference first</li>
+<li>Semantic grouping (nested fields under same parent = feature GROUP)</li>
+<li>Array summarization candidates (multiple summaries per array field)</li>
+<li>Depth-aware type detection</li>
+<li>Missingness as signal</li>
+</ul>
+
+<div class="questions">
+<strong>Key Questions:</strong><br>
+(1) When to flatten vs keep structure?<br>
+(2) Predefined vs learned summarization?<br>
+(3) Effective n for sparse nested fields?<br>
+(4) Auto-detect keys vs features?<br>
+(5) Schema drift in nested structures?
+</div>
+</td>
+<td>
+<canvas id="c1" width="720" height="340"></canvas>
+<canvas id="c2" width="720" height="300"></canvas>
+</td>
+</tr>
+</table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setupCanvas(id) {
+    var c = document.getElementById(id);
+    var w = c.width, h = c.height;
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return {ctx: ctx, w: w, h: h};
+}
+
+// Canvas 1: JSON tree structure
+(function() {
+    var s = setupCanvas('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.fillStyle = '#f8f9fa';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.font = 'bold 16px monospace';
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('JSON Tree: patient_record', 20, 25);
+
+    // Tree nodes
+    var nodes = [
+        {x: 160, y: 60, label: 'patient_record', color: '#1a5276', level: 0},
+        {x: 80, y: 130, label: 'demographics', color: '#27ae60', level: 1},
+        {x: 260, y: 130, label: 'lab_results[]', color: '#e67e22', level: 1},
+        {x: 420, y: 130, label: 'medications[]', color: '#e67e22', level: 1},
+        {x: 30, y: 200, label: 'age', color: '#27ae60', level: 2},
+        {x: 100, y: 200, label: 'gender', color: '#27ae60', level: 2},
+        {x: 170, y: 200, label: 'address{}', color: '#2980b9', level: 2},
+        {x: 200, y: 200, label: 'date', color: '#27ae60', level: 2},
+        {x: 280, y: 200, label: 'test_name', color: '#27ae60', level: 2},
+        {x: 360, y: 200, label: 'value', color: '#27ae60', level: 2},
+        {x: 380, y: 200, label: 'drug_name', color: '#27ae60', level: 2},
+        {x: 460, y: 200, label: 'dosage', color: '#27ae60', level: 2},
+        {x: 540, y: 200, label: 'start_date', color: '#27ae60', level: 2},
+        {x: 120, y: 270, label: 'city', color: '#27ae60', level: 3},
+        {x: 200, y: 270, label: 'zip', color: '#27ae60', level: 3},
+        {x: 280, y: 270, label: 'coords{}', color: '#2980b9', level: 3},
+        {x: 250, y: 320, label: 'lat', color: '#27ae60', level: 4},
+        {x: 320, y: 320, label: 'lng', color: '#27ae60', level: 4},
+    ];
+
+    // Draw connections
+    ctx.strokeStyle = '#bdc3c7';
+    ctx.lineWidth = 1.5;
+    // Root to level 1
+    var connections = [
+        [0,1],[0,2],[0,3],
+        [1,4],[1,5],[1,6],
+        [2,7],[2,8],[2,9],
+        [3,10],[3,11],[3,12],
+        [6,13],[6,14],[6,15],
+        [15,16],[15,17]
+    ];
+
+    connections.forEach(function(c) {
+        var from = nodes[c[0]], to = nodes[c[1]];
+        ctx.beginPath();
+        ctx.moveTo(from.x, from.y + 12);
+        ctx.lineTo(to.x, to.y - 8);
+        ctx.stroke();
+    });
+
+    // Draw nodes
+    nodes.forEach(function(n) {
+        ctx.font = n.level === 0 ? 'bold 14px monospace' : '10px monospace';
+        ctx.fillStyle = n.color;
+        var tw = ctx.measureText(n.label).width;
+        // Background
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(n.x - tw/2 - 4, n.y - 8, tw + 8, 18);
+        ctx.strokeStyle = n.color;
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(n.x - tw/2 - 4, n.y - 8, tw + 8, 18);
+        // Text
+        ctx.fillStyle = n.color;
+        ctx.textAlign = 'center';
+        ctx.fillText(n.label, n.x, n.y + 5);
+    });
+
+    // Legend
+    ctx.textAlign = 'left';
+    ctx.font = '14px sans-serif';
+    var lx = 520, ly = 60;
+    ctx.fillStyle = '#27ae60'; ctx.fillRect(lx, ly, 12, 12);
+    ctx.fillStyle = '#2c3e50'; ctx.fillText('Leaf (scalar)', lx + 18, ly + 10);
+    ctx.fillStyle = '#2980b9'; ctx.fillRect(lx, ly + 20, 12, 12);
+    ctx.fillStyle = '#2c3e50'; ctx.fillText('Object (nested)', lx + 18, ly + 30);
+    ctx.fillStyle = '#e67e22'; ctx.fillRect(lx, ly + 40, 12, 12);
+    ctx.fillStyle = '#2c3e50'; ctx.fillText('Array (repeated)', lx + 18, ly + 50);
+
+    // Depth labels
+    ctx.font = '12px sans-serif';
+    ctx.fillStyle = '#95a5a6';
+    ctx.textAlign = 'right';
+    ctx.fillText('depth 0', 700, 65);
+    ctx.fillText('depth 1', 700, 135);
+    ctx.fillText('depth 2', 700, 205);
+    ctx.fillText('depth 3', 700, 275);
+    ctx.fillText('depth 4', 700, 325);
+})();
+
+// Canvas 2: Flattened output table
+(function() {
+    var s = setupCanvas('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.fillStyle = '#f8f9fa';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.font = 'bold 16px sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'left';
+    ctx.fillText('Flattened Output: Derived Features from Nested Structure', 20, 25);
+
+    // Table header
+    var cols = ['Feature', 'Source Path', 'Strategy', 'Type', 'Example'];
+    var colX = [20, 150, 340, 470, 560];
+    var rowH = 38;
+    var startY = 55;
+
+    // Header
+    ctx.fillStyle = '#1a5276';
+    ctx.fillRect(15, startY - 5, 690, rowH);
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillStyle = '#fff';
+    cols.forEach(function(col, i) {
+        ctx.fillText(col, colX[i], startY + 18);
+    });
+
+    // Rows
+    var rows = [
+        ['age', 'demographics.age', 'direct', 'int', '42'],
+        ['lab_count', 'lab_results[]', 'array → count', 'int', '7'],
+        ['cholesterol_last', 'lab_results[].value', 'array → latest', 'float', '215.3'],
+        ['cholesterol_trend', 'lab_results[].value', 'array → slope', 'float', '-2.1'],
+        ['med_count', 'medications[]', 'array → count', 'int', '3'],
+        ['max_dosage', 'medications[].dosage', 'array → max', 'float', '500.0'],
+    ];
+
+    rows.forEach(function(row, ri) {
+        var y = startY + rowH + ri * rowH;
+        ctx.fillStyle = ri % 2 === 0 ? '#fff' : '#eaf2f8';
+        ctx.fillRect(15, y - 5, 690, rowH);
+        ctx.font = '10px monospace';
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillText(row[0], colX[0], y + 18);
+        ctx.fillStyle = '#555';
+        ctx.fillText(row[1], colX[1], y + 18);
+        ctx.fillStyle = row[2].includes('array') ? '#e67e22' : '#27ae60';
+        ctx.font = '13px sans-serif';
+        ctx.fillText(row[2], colX[2], y + 18);
+        ctx.fillStyle = '#1a5276';
+        ctx.fillText(row[3], colX[3], y + 18);
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillText(row[4], colX[4], y + 18);
+    });
+
+    // Arrow annotation
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(340, startY + rowH + 2 * rowH + 10);
+    ctx.lineTo(340, startY + rowH + 3 * rowH + 10);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.font = '12px sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Same source, different aggregations', 350, startY + rowH + 2.5 * rowH + 15);
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Location Data / Cell Triangulation — Domain Pitfalls</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 20px 10px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 40%; }
+.obj-table td:last-child { width: 60%; text-align: center; }
+.obj-table tr:nth-child(even) td { background: #fafcfe; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+</style>
+</head>
+<body>
+
+<h1>Location Data / Cell Triangulation</h1>
+<p class="subtitle">Precision illusions, privacy leakage, granularity mismatches, and the fundamental tension between location utility and individual privacy.</p>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">1. Precision Varies 1000× By Method — Same Data Format</div>
+<ul>
+<li><strong>GPS:</strong> ±2-5m outdoor, fails indoors/urban canyons. Highest precision but only works with clear sky.</li>
+<li><strong>WiFi positioning:</strong> ±15-30m. Works indoors. Depends on known AP database (which is stale).</li>
+<li><strong>Cell tower triangulation:</strong> ±100-500m urban, ±2-5km rural. Always available but very coarse.</li>
+<li><strong>The problem:</strong> All report as (lat, lng) with same decimal places. A coordinate with 6 decimal places LOOKS like 0.1m precision but may actually be ±2km if from cell tower only.</li>
+<li><strong>No metadata indicating method:</strong> Most apps/databases store just the coordinates. You can't tell if "40.7128, -74.0060" came from GPS (accurate) or cell triangulation (could be anywhere in lower Manhattan).</li>
+</ul>
+<p><strong>Impact:</strong> Analysis assumes uniform precision. Geofencing (alert when user enters zone) triggers from ±500m away. "User was at the crime scene" might mean "user was within 2km of the crime scene." Precision uncertainty is INVISIBLE in the data.</p>
+</td><td><canvas id="c1" width="720" height="300"></canvas></td></tr>
+</table>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">2. Tower Handoff = Phantom Movement</div>
+<ul>
+<li>Phone connects to Tower A → location reported as Tower A's position (±300m). Seconds later: phone connects to Tower B (stronger signal) → location jumps 2km instantly.</li>
+<li>User didn't move. The phone just switched towers. In the data: "user moved 2km in 5 seconds" = impossible.</li>
+<li><strong>"Impossible travel" alerts in security:</strong> User logged in from NYC, then "London" 10 minutes later. Actually: VPN reconnected to a different exit node. Or: phone switched from a tower geolocated incorrectly.</li>
+<li>This creates oscillation: phone bounces between two towers → location data shows user "ping-ponging" between two points 1km apart. Repeatedly. All day. While sitting at their desk.</li>
+<li><strong>Speed calculation from this:</strong> "User traveled 2km in 5 seconds = 1440 km/h." Data says supersonic movement. Reality: tower handoff while stationary.</li>
+</ul>
+<p><strong>Impact:</strong> Any analysis using location CHANGES (speed, distance, travel patterns) from cell data is contaminated by phantom movements from tower handoffs. Must filter physically impossible movements before any analysis.</p>
+</td><td><canvas id="c2" width="720" height="300"></canvas></td></tr>
+</table>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">3. Indoor / Vertical Ambiguity (Which Floor? Which Building?)</div>
+<ul>
+<li>Triangulation gives (lat, lng) — 2D position. But: was the person on floor 1 or floor 30? In the parking garage below? On the roof?</li>
+<li>Same (lat, lng): could be the target's office on floor 15, the coffee shop on floor 1, or the unrelated business on floor 8.</li>
+<li><strong>Geofence warrants:</strong> Police request "all phones in this building" → get everyone within the FOOTPRINT including: adjacent buildings, underground subway, park across the street (within ±100m).</li>
+<li>Shopping mall: triangulation says "in the mall." Which store? First floor or food court? The granularity needed for business analytics (which store?) exceeds the precision available (somewhere in this 200m radius).</li>
+<li><strong>Z-axis is essentially unmeasured:</strong> Barometric altitude exists in some phones but is rarely included in location APIs. A 50-story building is a flat point on most maps.</li>
+</ul>
+<p><strong>Impact:</strong> "User visited competitor's store" — actually user was in the same mall, different floor. Retail foot traffic analytics based on cell data over-counts by including everyone in the vertical column above/below the store.</p>
+</td><td><canvas id="c3" width="720" height="300"></canvas></td></tr>
+</table>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">4. Two Points = Unique Identity (Home + Work De-Anonymization)</div>
+<ul>
+<li>Phone at location X from 10pm-7am every night = HOME. Phone at location Y from 9am-5pm weekdays = WORK.</li>
+<li>Home address + work address = unique identifier for 95% of the US population. No name needed.</li>
+<li><strong>"Anonymized" location datasets:</strong> Remove name, remove phone number, keep locations. Still uniquely identifiable from routine patterns alone.</li>
+<li>Research (MIT): 4 spatiotemporal points (places + times) uniquely identify 95% of individuals in a dataset of 1.5 million.</li>
+<li><strong>Sold by data brokers:</strong> "Anonymized" mobility data sold commercially. Journalists have repeatedly identified individuals (military personnel at bases, government officials, protesters, abortion clinic visitors).</li>
+</ul>
+<p><strong>Impact:</strong> There is NO meaningful anonymization of location traces. The pattern IS the identity. Removing device IDs doesn't help — the trajectory itself is a fingerprint. "Anonymized location data" is an oxymoron with sufficient temporal resolution.</p>
+</td><td><canvas id="c4" width="720" height="300"></canvas></td></tr>
+</table>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">5. Urban Density Bias — Rural Populations Are Invisible</div>
+<ul>
+<li><strong>Urban:</strong> 20 towers per km² → triangulation precision ±100m. Good enough for block-level analysis.</li>
+<li><strong>Suburban:</strong> 2-5 towers per km² → precision ±500m. Neighborhood-level at best.</li>
+<li><strong>Rural:</strong> 1 tower per 10-50 km² → precision ±2-5km. Useless for anything except "they're somewhere in this county."</li>
+<li>Any location-based analysis has INHERENTLY BETTER quality in wealthy urban areas (more infrastructure) and worse quality in poor/rural areas. This creates systematic bias in any model using location features.</li>
+<li><strong>Coverage gaps:</strong> Dead zones where no signal exists. People in those areas generate ZERO data points. They're invisible — not "at home" but truly untrackable.</li>
+</ul>
+<p><strong>Impact:</strong> Mobility studies, traffic analysis, population density estimates — all biased toward urban populations. "Average travel distance" is measured more precisely for urban residents → appears different even if actual behavior is similar. Precision inequality creates analytical inequality.</p>
+</td><td><canvas id="c5" width="720" height="300"></canvas></td></tr>
+</table>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">6. Granularity Mismatch: Collection vs Purpose vs Consent</div>
+<ul>
+<li><strong>Collected at:</strong> Every 30 seconds, GPS-level precision (weather app "needs location" for forecast).</li>
+<li><strong>Consented for:</strong> "Show me nearby restaurants" (one-time, coarse).</li>
+<li><strong>Used for:</strong> Sold to data broker → political campaign targeting → law enforcement geofence warrant.</li>
+<li>The GRANULARITY collected (continuous, precise) vastly exceeds what's needed for the stated purpose. The excess granularity enables use cases the user never consented to.</li>
+<li><strong>Temporal granularity:</strong> "Location access: always" → phone reports every minute, 24/7, whether app is open or not. 1440 data points/day × 365 days = 525,600 points/year PER PERSON. Stored indefinitely.</li>
+</ul>
+<p><strong>Impact:</strong> Data minimization principle violated at collection. Downstream users have access to precision/frequency they shouldn't (and the user wouldn't consent to if asked clearly). "Do you want to share your exact location every 30 seconds with unknown third parties for years?" → nobody says yes. But that's what "Allow location: Always" means.</p>
+</td><td><canvas id="c6" width="720" height="300"></canvas></td></tr>
+</table>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">7. Stingray / IMSI Catchers — Fake Towers in Your Data</div>
+<ul>
+<li>Law enforcement and criminals deploy fake cell towers ("stingrays") that phones connect to automatically.</li>
+<li>Phone doesn't know the difference between a real tower and a stingray. Connects → reports location → data captured.</li>
+<li><strong>In your location dataset:</strong> Some "tower connections" are to surveillance devices, not real infrastructure. The location data includes points from devices that shouldn't exist. No way to distinguish.</li>
+<li>Stingrays can force phone to downgrade from 4G/5G to 2G (no encryption) → intercept communications. The "location" data point also indicates the phone's security was compromised at that moment.</li>
+<li><strong>Mass surveillance at events:</strong> Stingray at protest/rally captures ALL phones in range. Later analysis: "who was at this protest?" answered from fake-tower connection logs.</li>
+</ul>
+<p><strong>Impact:</strong> Data provenance uncertainty — you don't know if a location point came from legitimate infrastructure or a surveillance device. Analyses built on this data may include surveillance artifacts that contaminate mobility patterns.</p>
+</td><td><canvas id="c7" width="720" height="300"></canvas></td></tr>
+</table>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">8. Geofence Warrant Over-Inclusion (Legal Misuse of Imprecise Data)</div>
+<ul>
+<li>Police issue geofence warrant: "Give us all device IDs within 100m of this location between 2-3pm."</li>
+<li>Problem: cell triangulation is ±300m. Everyone within 400m radius is included. That's an entire city block — hundreds of innocent people.</li>
+<li><strong>False inclusion:</strong> Person on the 10th floor of building across the street, person in subway BELOW the building, delivery driver who passed through, person whose phone connected to a distant tower that was geolocated with ±500m error.</li>
+<li>Suspect pool from geofence: 200 devices. Actual people at the crime scene: 3. False positive rate: 98.5%. But: all 200 are now investigated.</li>
+<li><strong>search engine reports:</strong> Received 11,554 geofence warrants in 2020 alone (US). Each returns dozens-hundreds of devices. Most of those people have NOTHING to do with the investigation.</li>
+</ul>
+<p><strong>Impact:</strong> Location data precision is INSUFFICIENT for the legal standard it's being used at. "Beyond reasonable doubt" requires precision that cell triangulation cannot provide. But the data LOOKS precise (6 decimal places!) so courts accept it.</p>
+</td><td><canvas id="c8" width="720" height="300"></canvas></td></tr>
+</table>
+
+<div class="philosophy">
+<strong>The meta-problem:</strong> Location data has a unique property — it's simultaneously the most USEFUL data type (every app wants it) and the most DANGEROUS for privacy (it uniquely identifies individuals, reveals political/religious/health activities, and can't be meaningfully anonymized). Every system that collects, stores, or analyzes location data must answer: "Is the precision we're collecting proportional to the purpose? And who else might access this?"
+</div>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    return {ctx:ctx, w:w, h:h};
+}
+
+// 1. Precision varies by method
+(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Same Coordinates — Wildly Different Actual Precision',w/2,20);
+var methods=[{name:'GPS',radius:5,color:'#27ae60'},{name:'WiFi',radius:30,color:'#2980b9'},{name:'Cell Tower',radius:150,color:'#e74c3c'}];
+var cx=w/2,cy=110;
+methods.forEach(function(m,i){
+    var r=m.radius*0.8;
+    ctx.strokeStyle=m.color;ctx.lineWidth=2;ctx.setLineDash([4,3]);
+    ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle=m.color;ctx.font='17px -apple-system';ctx.textAlign='left';
+    ctx.fillText(m.name+' (±'+m.radius+'m → ±'+(m.radius>100?Math.round(m.radius/1000*10)/10+'km':m.radius+'m')+')',w/2+170,50+i*35);
+});
+ctx.fillStyle='#333';ctx.beginPath();ctx.arc(cx,cy,4,0,Math.PI*2);ctx.fill();
+ctx.fillStyle='#e74c3c';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('All report same (lat,lng) format. Precision is INVISIBLE.',w/2,h-10);
+})();
+
+// 2. Tower handoff phantom movement
+(function(){var s=setup('c2');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('User Stationary — Data Shows 2km "Movement" (Tower Handoff)',w/2,20);
+// Two towers
+ctx.fillStyle='#2980b9';ctx.beginPath();ctx.moveTo(150,50);ctx.lineTo(140,130);ctx.lineTo(160,130);ctx.closePath();ctx.fill();
+ctx.fillText('Tower A',150,145);
+ctx.fillStyle='#e74c3c';ctx.beginPath();ctx.moveTo(550,50);ctx.lineTo(540,130);ctx.lineTo(560,130);ctx.closePath();ctx.fill();
+ctx.fillText('Tower B',550,145);
+// User in middle (stationary)
+ctx.fillStyle='#333';ctx.beginPath();ctx.arc(350,100,8,0,Math.PI*2);ctx.fill();
+ctx.fillStyle='#333';ctx.font='17px -apple-system';ctx.fillText('User (stationary)',350,75);
+// Arrows showing reported "movement"
+ctx.strokeStyle='#e67e22';ctx.lineWidth=2;ctx.setLineDash([5,3]);
+ctx.beginPath();ctx.moveTo(160,100);ctx.lineTo(540,100);ctx.stroke();ctx.setLineDash([]);
+ctx.fillStyle='#e67e22';ctx.font='bold 17px -apple-system';
+ctx.fillText('Data: "moved 2km in 5 seconds" = 1440 km/h',350,h-10);
+})();
+
+// 3. Vertical ambiguity
+(function(){var s=setup('c3');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Same (lat,lng) — Floor 1? Floor 15? Parking Garage? Subway?',w/2,20);
+// Building cross-section
+ctx.fillStyle='#f0f4f8';ctx.fillRect(250,40,200,140);
+ctx.strokeStyle='#999';ctx.lineWidth=1;
+for(var i=0;i<7;i++){var y=40+i*20;ctx.beginPath();ctx.moveTo(250,y);ctx.lineTo(450,y);ctx.stroke();}
+ctx.strokeRect(250,40,200,140);
+// Labels for floors
+ctx.fillStyle='#e74c3c';ctx.font='17px -apple-system';ctx.textAlign='left';
+ctx.fillText('Floor 6: Target\'s office',460,55);
+ctx.fillStyle='#666';
+ctx.fillText('Floor 3: Coffee shop',460,95);
+ctx.fillText('Floor 1: Lobby',460,135);
+ctx.fillText('B1: Parking',460,165);
+// The location point
+ctx.fillStyle='#e74c3c';ctx.beginPath();ctx.arc(350,90,6,0,Math.PI*2);ctx.fill();
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=1.5;ctx.setLineDash([3,3]);
+ctx.beginPath();ctx.moveTo(350,40);ctx.lineTo(350,180);ctx.stroke();ctx.setLineDash([]);
+ctx.fillStyle='#e74c3c';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Z-axis unmeasured. "In this building" = 7 possible locations.',w/2,h-8);
+})();
+
+// 4. Home+work = identity
+(function(){var s=setup('c4');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('2 Points (Home + Work) = Unique Identity for 95% of People',w/2,20);
+// Home
+ctx.fillStyle='rgba(41,128,185,0.2)';ctx.beginPath();ctx.arc(180,110,50,0,Math.PI*2);ctx.fill();
+ctx.strokeStyle='#2980b9';ctx.lineWidth=2;ctx.beginPath();ctx.arc(180,110,50,0,Math.PI*2);ctx.stroke();
+ctx.fillStyle='#2980b9';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('HOME',180,115);ctx.font='17px -apple-system';ctx.fillText('10pm-7am',180,135);
+// Work
+ctx.fillStyle='rgba(39,174,96,0.2)';ctx.beginPath();ctx.arc(520,110,50,0,Math.PI*2);ctx.fill();
+ctx.strokeStyle='#27ae60';ctx.lineWidth=2;ctx.beginPath();ctx.arc(520,110,50,0,Math.PI*2);ctx.stroke();
+ctx.fillStyle='#27ae60';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('WORK',520,115);ctx.font='17px -apple-system';ctx.fillText('9am-5pm',520,135);
+// Arrow + result
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(230,110);ctx.lineTo(470,110);ctx.stroke();
+ctx.fillStyle='#e74c3c';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('= UNIQUE PERSON (95% of US pop)',350,85);
+ctx.fillStyle='#555';ctx.font='17px -apple-system';
+ctx.fillText('"Anonymized" location data is an oxymoron.',w/2,h-8);
+})();
+
+// 5. Urban bias
+(function(){var s=setup('c5');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Tower Density = Precision Inequality',w/2,20);
+var areas=[{name:'Urban',towers:20,precision:'±100m',color:'#27ae60'},
+           {name:'Suburban',towers:4,precision:'±500m',color:'#e67e22'},
+           {name:'Rural',towers:0.5,precision:'±5km',color:'#e74c3c'}];
+var bW=200;
+areas.forEach(function(a,i){var x=60+i*230,y=50;
+    ctx.fillStyle=a.color;ctx.globalAlpha=0.2;ctx.fillRect(x,y,bW,100);ctx.globalAlpha=1;
+    ctx.strokeStyle=a.color;ctx.lineWidth=2;ctx.strokeRect(x,y,bW,100);
+    ctx.fillStyle=a.color;ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+    ctx.fillText(a.name,x+bW/2,y+25);
+    ctx.fillStyle='#333';ctx.font='17px -apple-system';
+    ctx.fillText(a.towers+' towers/km²',x+bW/2,y+55);
+    ctx.fillText('Precision: '+a.precision,x+bW/2,y+80);
+});
+ctx.fillStyle='#e74c3c';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Wealthy areas get better data quality. Systematic bias.',w/2,h-8);
+})();
+
+// 6. Granularity mismatch
+(function(){var s=setup('c6');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Collected vs Consented vs Actually Used',w/2,20);
+var layers=[{label:'Collected: every 30s, GPS precision',width:0.95,color:'#e74c3c'},
+            {label:'Consented for: "nearby restaurants" (one-time, coarse)',width:0.4,color:'#e67e22'},
+            {label:'Actually needed: city-level (±10km)',width:0.15,color:'#27ae60'}];
+layers.forEach(function(l,i){var y=50+i*50;var barW=l.width*600;
+    ctx.fillStyle=l.color;ctx.globalAlpha=0.3;ctx.fillRect(60,y,barW,35);ctx.globalAlpha=1;
+    ctx.strokeStyle=l.color;ctx.lineWidth=1.5;ctx.strokeRect(60,y,barW,35);
+    ctx.fillStyle='#333';ctx.font='17px -apple-system';ctx.textAlign='left';
+    ctx.fillText(l.label,70,y+22);
+});
+ctx.fillStyle='#e74c3c';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Excess precision collected enables uses user never consented to.',w/2,h-8);
+})();
+
+// 7. Stingray
+(function(){var s=setup('c7');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Fake Cell Tower (Stingray) — Phone Connects Automatically',w/2,20);
+// Real towers
+ctx.fillStyle='#27ae60';
+ctx.beginPath();ctx.moveTo(100,60);ctx.lineTo(90,130);ctx.lineTo(110,130);ctx.closePath();ctx.fill();
+ctx.beginPath();ctx.moveTo(600,60);ctx.lineTo(590,130);ctx.lineTo(610,130);ctx.closePath();ctx.fill();
+ctx.font='17px -apple-system';ctx.textAlign='center';ctx.fillText('Real',100,145);ctx.fillText('Real',600,145);
+// Fake tower (stingray)
+ctx.fillStyle='#e74c3c';
+ctx.beginPath();ctx.moveTo(350,60);ctx.lineTo(340,130);ctx.lineTo(360,130);ctx.closePath();ctx.fill();
+ctx.font='bold 17px -apple-system';ctx.fillText('STINGRAY',350,145);
+// Phones connecting to fake
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=1.5;ctx.setLineDash([3,3]);
+for(var i=0;i<5;i++){var px=250+i*50,py=170;
+    ctx.fillStyle='#333';ctx.beginPath();ctx.arc(px,py,5,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.moveTo(px,py-5);ctx.lineTo(350,135);ctx.stroke();
+}
+ctx.setLineDash([]);
+ctx.fillStyle='#e74c3c';ctx.font='17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Phone can\'t distinguish real from fake. Data provenance = uncertain.',w/2,h-8);
+})();
+
+// 8. Geofence over-inclusion
+(function(){var s=setup('c8');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Geofence Warrant: Request 100m → Get 400m (Due to Precision)',w/2,20);
+// Crime scene (small)
+ctx.fillStyle='rgba(231,76,60,0.3)';ctx.beginPath();ctx.arc(350,110,20,0,Math.PI*2);ctx.fill();
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=2;ctx.beginPath();ctx.arc(350,110,20,0,Math.PI*2);ctx.stroke();
+// Actual sweep radius
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=1.5;ctx.setLineDash([5,3]);
+ctx.beginPath();ctx.arc(350,110,80,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+// Innocent people in radius
+ctx.fillStyle='#999';
+var innocents=[[290,80],[310,140],[380,70],[400,130],[270,110],[420,90],[330,160],[370,50]];
+innocents.forEach(function(p){ctx.beginPath();ctx.arc(p[0],p[1],4,0,Math.PI*2);ctx.fill();});
+// Labels
+ctx.fillStyle='#e74c3c';ctx.font='17px -apple-system';ctx.textAlign='left';
+ctx.fillText('● Crime scene (actual)',460,70);
+ctx.fillStyle='#999';ctx.fillText('● Innocent people swept in',460,95);
+ctx.fillStyle='#e74c3c';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('200 devices returned. 3 relevant. False positive rate: 98.5%.',w/2,h-8);
+})();
+</script>
+</body>
+</html>

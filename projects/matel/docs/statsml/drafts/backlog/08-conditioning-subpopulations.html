@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>1-Level Conditioning to Reveal Hidden Subpopulations — Discussion Backlog</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #fff; color: #2c3e50; line-height: 1.6; }
+h1 { color: #1a5276; border-bottom: 3px solid #2980b9; padding-bottom: 10px; }
+h2 { color: #1a5276; margin-top: 0; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { padding: 20px; vertical-align: top; border: 1px solid #2980b9; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-title { color: #1a5276; font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
+ul { margin: 10px 0; padding-left: 20px; }
+li { margin-bottom: 6px; }
+strong { color: #1a5276; }
+code { background: #e8f0f8; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; color: #1a5276; }
+.questions { background: #fff8e1; border-left: 3px solid #f39c12; padding: 10px 15px; margin: 10px 0; font-size: 0.9em; }
+canvas { display: block; margin: 8px auto; max-width: 100%; }
+.nav-link { display: inline-block; margin: 20px 0; color: #2980b9; text-decoration: none; font-weight: bold; }
+.nav-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<h1>1-Level Conditioning to Reveal Hidden Subpopulations</h1>
+<p>A feature that looks unimodal (noisy mountain) may actually be a mixture of clean subpopulations hidden by a categorical variable.</p>
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Method</div>
+<ul>
+<li>For each continuous feature X, split by each low-cardinality feature Z (binary/categorical with 5 or fewer levels)</li>
+<li>Classify X|Z=z for each level separately</li>
+</ul>
+<div class="obj-title" style="margin-top: 15px;">Signal</div>
+<ul>
+<li>If X is "noisy bell" but X|Z=male and X|Z=female are both "clean bell" with different means, then Z explains the shape</li>
+<li><strong>Example:</strong> Weight looks like a wide mountain with bumps. Split by gender yields two tight bells at 65kg and 80kg</li>
+</ul>
+<div class="obj-title" style="margin-top: 15px;">Extensions</div>
+<ul>
+<li>Works for any latent grouping: profession, region, age-band, treatment/control</li>
+<li>Automatically detects Simpson's paradox scenarios</li>
+</ul>
+<div class="questions">
+<strong>Key Questions:</strong><br>
+(1) Only low-cardinality splits?<br>
+(2) How to measure "cleaner after split"?<br>
+(3) Minimum n per subgroup?
+</div>
+</td>
+<td>
+<canvas id="c1" width="720" height="280"></canvas>
+<canvas id="c2" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setupCanvas(id) {
+    var c = document.getElementById(id);
+    var w = c.width, h = c.height;
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return {ctx: ctx, w: w, h: h};
+}
+
+function gaussianY(x, mean, std, amplitude) {
+    var exp = -0.5 * Math.pow((x - mean) / std, 2);
+    return amplitude * Math.exp(exp);
+}
+
+// Canvas 1: Combined "noisy mountain" distribution
+(function() {
+    var s = setupCanvas('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var margin = {top: 40, right: 30, bottom: 50, left: 50};
+    var pw = w - margin.left - margin.right;
+    var ph = h - margin.top - margin.bottom;
+
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Combined Distribution: Weight (all people)', w/2, 20);
+
+    // Generate combined histogram (mixture of two gaussians)
+    var numBins = 30;
+    var bins = [];
+    for (var i = 0; i < numBins; i++) {
+        var x = 45 + (i / numBins) * 60; // 45kg to 105kg range
+        var y1 = gaussianY(x, 65, 6, 40); // female peak
+        var y2 = gaussianY(x, 80, 7, 38); // male peak
+        bins.push(y1 + y2);
+    }
+    var maxVal = Math.max.apply(null, bins) * 1.1;
+    var barW = pw / numBins;
+
+    // Axes
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(margin.left, margin.top);
+    ctx.lineTo(margin.left, margin.top + ph);
+    ctx.lineTo(margin.left + pw, margin.top + ph);
+    ctx.stroke();
+
+    // Draw bars
+    for (var i = 0; i < numBins; i++) {
+        var barH = (bins[i] / maxVal) * ph;
+        var x = margin.left + i * barW;
+        var y = margin.top + ph - barH;
+        ctx.fillStyle = 'rgba(26, 82, 118, 0.35)';
+        ctx.fillRect(x + 0.5, y, barW - 1, barH);
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(x + 0.5, y, barW - 1, barH);
+    }
+
+    // Label "noisy mountain"
+    ctx.font = 'italic 12px -apple-system, sans-serif';
+    ctx.fillStyle = '#e67e22';
+    ctx.textAlign = 'center';
+    ctx.fillText('Shape: "noisy mountain" — wide, bumpy', w/2, margin.top + ph + 25);
+
+    // X-axis labels
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('45kg', margin.left, margin.top + ph + 40);
+    ctx.fillText('75kg', margin.left + pw/2, margin.top + ph + 40);
+    ctx.fillText('105kg', margin.left + pw, margin.top + ph + 40);
+
+    // Arrow pointing right
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(w - 40, h/2);
+    ctx.lineTo(w - 20, h/2);
+    ctx.stroke();
+    ctx.fillStyle = '#e67e22';
+    ctx.beginPath();
+    ctx.moveTo(w - 20, h/2);
+    ctx.lineTo(w - 30, h/2 - 6);
+    ctx.lineTo(w - 30, h/2 + 6);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.fillText('split by Z', w - 30, h/2 - 12);
+
+    // Y-axis label
+    ctx.save();
+    ctx.translate(15, margin.top + ph/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.font = '14px -apple-system, sans-serif';
+    ctx.fillStyle = '#2c3e50';
+    ctx.textAlign = 'center';
+    ctx.fillText('Count', 0, 0);
+    ctx.restore();
+})();
+
+// Canvas 2: Split by gender — two clean bells
+(function() {
+    var s = setupCanvas('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var margin = {top: 40, right: 30, bottom: 50, left: 50};
+    var pw = w - margin.left - margin.right;
+    var ph = h - margin.top - margin.bottom;
+
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('After Split: Weight | Gender', w/2, 20);
+
+    var numBins = 30;
+    var barW = pw / numBins;
+
+    // Female distribution (red)
+    var femaleBins = [];
+    for (var i = 0; i < numBins; i++) {
+        var x = 45 + (i / numBins) * 60;
+        femaleBins.push(gaussianY(x, 65, 5, 38));
+    }
+
+    // Male distribution (blue)
+    var maleBins = [];
+    for (var i = 0; i < numBins; i++) {
+        var x = 45 + (i / numBins) * 60;
+        maleBins.push(gaussianY(x, 80, 5.5, 36));
+    }
+
+    var maxVal = 42;
+
+    // Axes
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(margin.left, margin.top);
+    ctx.lineTo(margin.left, margin.top + ph);
+    ctx.lineTo(margin.left + pw, margin.top + ph);
+    ctx.stroke();
+
+    // Draw female bars (red)
+    for (var i = 0; i < numBins; i++) {
+        var barH = (femaleBins[i] / maxVal) * ph;
+        var x = margin.left + i * barW;
+        var y = margin.top + ph - barH;
+        if (barH > 1) {
+            ctx.fillStyle = 'rgba(231, 76, 60, 0.3)';
+            ctx.fillRect(x + 0.5, y, barW - 1, barH);
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 0.8;
+            ctx.strokeRect(x + 0.5, y, barW - 1, barH);
+        }
+    }
+
+    // Draw male bars (blue)
+    for (var i = 0; i < numBins; i++) {
+        var barH = (maleBins[i] / maxVal) * ph;
+        var x = margin.left + i * barW;
+        var y = margin.top + ph - barH;
+        if (barH > 1) {
+            ctx.fillStyle = 'rgba(26, 82, 118, 0.3)';
+            ctx.fillRect(x + 0.5, y, barW - 1, barH);
+            ctx.strokeStyle = '#1a5276';
+            ctx.lineWidth = 0.8;
+            ctx.strokeRect(x + 0.5, y, barW - 1, barH);
+        }
+    }
+
+    // Labels for peaks
+    ctx.font = 'bold 15px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    var femalePeakX = margin.left + (20/60) * pw;
+    ctx.fillText('Female ~65kg', femalePeakX, margin.top + 15);
+
+    ctx.fillStyle = '#1a5276';
+    var malePeakX = margin.left + (35/60) * pw;
+    ctx.fillText('Male ~80kg', malePeakX + 50, margin.top + 15);
+
+    // Shape labels
+    ctx.font = 'italic 11px -apple-system, sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('"clean bell"', femalePeakX, margin.top + ph + 25);
+    ctx.fillText('"clean bell"', malePeakX + 50, margin.top + ph + 25);
+
+    // X-axis
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('45kg', margin.left, margin.top + ph + 40);
+    ctx.fillText('75kg', margin.left + pw/2, margin.top + ph + 40);
+    ctx.fillText('105kg', margin.left + pw, margin.top + ph + 40);
+
+    // Verdict
+    ctx.font = 'bold 15px -apple-system, sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'right';
+    ctx.fillText('Z=Gender EXPLAINS the shape', w - margin.right, margin.top + ph + 40);
+})();
+</script>
+
+</body>
+</html>

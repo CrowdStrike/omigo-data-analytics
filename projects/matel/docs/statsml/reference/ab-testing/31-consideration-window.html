@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Consideration Window Exceeds Test Duration — A/B Testing Pitfalls</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 20px 10px; line-height: 1.6; }
+h1 { font-size: 1.6em; margin-bottom: 10px; color: #1a5276; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.0em; margin-bottom: 20px; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 6px 0; }
+strong { color: #1a5276; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 40%; }
+.obj-table td:last-child { width: 60%; text-align: center; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+</style>
+</head>
+<body>
+<h1>Consideration Window Exceeds Test Duration</h1>
+<p class="subtitle">Measurement Flaw — High-price purchases have research cycles of weeks or months. A 2-week A/B test captures noise from pre-test decisions leaking in and in-test decisions leaking out, with the distortion scaling with item price.</p>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">The Core Problem</div>
+<ul>
+<li>A user researching a $2,000 laptop spends 3–6 weeks comparing options. A user buying a $15 phone case decides in one session.</li>
+<li>A/B test runs for 14 days. The phone-case buyer's entire journey (search → checkout) fits cleanly within the window. The laptop buyer started researching 4 weeks before the test and might not purchase until 2 weeks after.</li>
+<li>Ideally you'd only count journeys where the first search AND the final payment both fall within the test window. But that's impractical — it would exclude the highest-value transactions entirely.</li>
+<li>Result: your test metric is dominated by low-price impulse purchases (clean signal) and polluted by high-price purchases that are either pre-decided (attributed to test but test had no influence) or still-pending (test influenced them but conversion happens after test ends).</li>
+</ul>
+<div class="philosophy"><strong>Key insight:</strong> The higher the item price, the longer the consideration window, and the less likely the full purchase journey fits inside any practical test duration. Price and noise are positively correlated — and high-price items dominate revenue metrics.</div>
+</td><td><canvas id="c1" width="720" height="340"></canvas></td></tr>
+</table>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Three Sources of Noise</div>
+<ul>
+<li><strong>Pre-test leakage (left-censoring):</strong> User decided to buy before the test started. They happen to convert during the test. Their conversion is counted but the test variant had zero influence — the decision was already made.</li>
+<li><strong>Post-test leakage (right-censoring):</strong> User was genuinely influenced by the test variant during research, but converts 3 weeks after the test ends. This real signal is never counted. Treatment's effect is underestimated.</li>
+<li><strong>Mid-test contamination:</strong> User sees Treatment for the first week of their research, then the test ends and they see the default for the remaining 3 weeks before purchasing. Partial exposure, diluted attribution.</li>
+</ul>
+<p><strong>Net effect:</strong> Revenue metrics become extremely noisy. Small improvements to the high-consideration funnel are invisible because they're buried under pre-decided conversions and lost post-test conversions. Tests are biased toward detecting changes that affect impulse purchases only.</p>
+</td><td><canvas id="c2" width="720" height="340"></canvas></td></tr>
+</table>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Why Standard Fixes Don't Work</div>
+<ul>
+<li><strong>"Run the test longer"</strong> — helps marginally, but a 6-week test still misses a 10-week laptop purchase cycle. And the longer you run, the more seasonal/external confounds creep in.</li>
+<li><strong>"Use intent metrics"</strong> — add-to-cart, wishlist, time-on-page. Better signal for high-consideration items but doesn't measure actual revenue impact.</li>
+<li><strong>"Segment by price tier"</strong> — post-hoc segmentation inflates multiple comparison risk. But pre-registered price-tier analysis is valid.</li>
+<li><strong>"Attribution window"</strong> — count conversions up to 30 days post-exposure. Better, but you're now measuring a mix of test-influenced and pre-decided purchases with no way to separate them.</li>
+</ul>
+<p><strong>Realistic mitigations:</strong> (1) Pre-register separate metrics for impulse vs. considered purchases. (2) Use leading indicators (search depth, comparison actions, cart additions) as primary metric for high-price tiers. (3) Run longer holdout experiments for revenue-critical features. (4) Accept that 2-week tests cannot reliably measure impact on high-consideration purchases — and don't pretend they can.</p>
+<p><strong>The tell:</strong> Revenue per user is "flat" in a 2-week test, but 60-day holdout shows +8%. The short test was too brief to capture the actual purchase decisions it influenced.</p>
+</td><td><canvas id="c3" width="720" height="340"></canvas></td></tr>
+</table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    return {ctx:ctx, w:w, h:h};
+}
+
+// Canvas 1: Price vs consideration window — test captures only the bottom
+(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle = '#1a5276';
+ctx.font = 'bold 14px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('Item Price vs. Consideration Window', w/2, 18);
+
+// Axes
+var ox = 80, oy = 280, gw = 580, gh = 220;
+ctx.strokeStyle = '#333';
+ctx.lineWidth = 1.5;
+ctx.beginPath();
+ctx.moveTo(ox, oy - gh);
+ctx.lineTo(ox, oy);
+ctx.lineTo(ox + gw, oy);
+ctx.stroke();
+
+// Y-axis label
+ctx.save();
+ctx.translate(25, oy - gh/2);
+ctx.rotate(-Math.PI/2);
+ctx.fillStyle = '#333';
+ctx.font = '12px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('Item Price', 0, 0);
+ctx.restore();
+
+// X-axis label
+ctx.fillStyle = '#333';
+ctx.font = '12px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('Consideration Window (days)', ox + gw/2, oy + 30);
+
+// Test window shading (0–14 days)
+var testEnd = ox + (14/70) * gw;
+ctx.fillStyle = 'rgba(39,174,96,0.08)';
+ctx.fillRect(ox, oy - gh, testEnd - ox, gh);
+ctx.strokeStyle = '#27ae60';
+ctx.lineWidth = 2;
+ctx.setLineDash([5, 3]);
+ctx.beginPath();
+ctx.moveTo(testEnd, oy - gh);
+ctx.lineTo(testEnd, oy);
+ctx.stroke();
+ctx.setLineDash([]);
+ctx.fillStyle = '#27ae60';
+ctx.font = 'bold 11px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('Test window', (ox + testEnd)/2, oy - gh + 15);
+ctx.fillText('(14 days)', (ox + testEnd)/2, oy - gh + 28);
+
+// Data points — price vs days
+var items = [
+    {days: 1, price: 15, label: 'Phone case'},
+    {days: 2, price: 30, label: 'T-shirt'},
+    {days: 3, price: 50, label: 'Book'},
+    {days: 5, price: 80, label: 'Headphones'},
+    {days: 7, price: 150, label: 'Shoes'},
+    {days: 14, price: 300, label: 'Monitor'},
+    {days: 21, price: 600, label: 'Phone'},
+    {days: 30, price: 1000, label: 'Camera'},
+    {days: 45, price: 1500, label: 'Laptop'},
+    {days: 60, price: 3000, label: 'Furniture'},
+    {days: 90, price: 5000, label: 'Car deposit'}
+];
+
+// Scale
+var maxDays = 70, maxPrice = 5500;
+
+items.forEach(function(item) {
+    var px = ox + (Math.min(item.days, maxDays) / maxDays) * gw;
+    var py = oy - (item.price / maxPrice) * gh;
+    var inWindow = item.days <= 14;
+
+    ctx.beginPath();
+    ctx.arc(px, py, 6, 0, Math.PI * 2);
+    ctx.fillStyle = inWindow ? '#27ae60' : '#e74c3c';
+    ctx.fill();
+
+    ctx.fillStyle = inWindow ? '#27ae60' : '#e74c3c';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(item.label + ' ($' + item.price + ')', px + 9, py + 4);
+});
+
+// Price axis ticks
+[500, 1000, 2000, 3000, 5000].forEach(function(p) {
+    var y = oy - (p / maxPrice) * gh;
+    ctx.fillStyle = '#888';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('$' + p, ox - 5, y + 3);
+});
+
+// Day axis ticks
+[7, 14, 30, 45, 60].forEach(function(d) {
+    var x = ox + (d / maxDays) * gw;
+    ctx.fillStyle = '#888';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(d + 'd', x, oy + 14);
+});
+
+// Legend
+ctx.fillStyle = '#27ae60';
+ctx.font = '11px sans-serif';
+ctx.textAlign = 'left';
+ctx.fillText('● Fits in test window', ox + 10, oy + 50);
+ctx.fillStyle = '#e74c3c';
+ctx.fillText('● Exceeds test window — noise source', ox + 170, oy + 50);
+})();
+
+// Canvas 2: Timeline showing pre-test and post-test leakage
+(function(){var s=setup('c2');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle = '#1a5276';
+ctx.font = 'bold 14px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('Three Noise Sources in a 14-Day Test', w/2, 18);
+
+// Timeline
+var tx = 80, tw = 560, ty = 60;
+ctx.strokeStyle = '#ccc';
+ctx.lineWidth = 2;
+
+// Test window
+var testStart = tx + tw * 0.25;
+var testEndX = tx + tw * 0.75;
+ctx.fillStyle = 'rgba(39,174,96,0.08)';
+ctx.fillRect(testStart, 40, testEndX - testStart, 280);
+ctx.strokeStyle = '#27ae60';
+ctx.lineWidth = 2;
+ctx.setLineDash([5, 3]);
+ctx.beginPath();
+ctx.moveTo(testStart, 40); ctx.lineTo(testStart, 320);
+ctx.moveTo(testEndX, 40); ctx.lineTo(testEndX, 320);
+ctx.stroke();
+ctx.setLineDash([]);
+ctx.fillStyle = '#27ae60';
+ctx.font = 'bold 12px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('TEST WINDOW', (testStart + testEndX)/2, 55);
+
+// Time labels
+ctx.fillStyle = '#888';
+ctx.font = '11px sans-serif';
+ctx.fillText('4 weeks before', tx + tw * 0.1, 330);
+ctx.fillText('Day 1', testStart, 330);
+ctx.fillText('Day 14', testEndX, 330);
+ctx.fillText('4 weeks after', tx + tw * 0.9, 330);
+
+// Journey 1: Pre-decided (leaks in)
+var j1y = 90;
+ctx.fillStyle = '#e74c3c';
+ctx.font = 'bold 12px sans-serif';
+ctx.textAlign = 'left';
+ctx.fillText('Pre-decided ($1200 camera)', tx, j1y);
+ctx.strokeStyle = '#e74c3c';
+ctx.lineWidth = 3;
+ctx.beginPath();
+ctx.moveTo(tx + 20, j1y + 20);
+ctx.lineTo(testStart + 60, j1y + 20);
+ctx.stroke();
+// Purchase dot inside test
+ctx.beginPath();
+ctx.arc(testStart + 60, j1y + 20, 6, 0, Math.PI * 2);
+ctx.fillStyle = '#e74c3c';
+ctx.fill();
+ctx.font = '10px sans-serif';
+ctx.fillText('💰 buys (but decided weeks ago)', testStart + 72, j1y + 24);
+
+// Journey 2: Influenced but converts after (leaks out)
+var j2y = 160;
+ctx.fillStyle = '#e67e22';
+ctx.font = 'bold 12px sans-serif';
+ctx.fillText('Influenced but late ($1800 laptop)', tx, j2y);
+ctx.strokeStyle = '#e67e22';
+ctx.lineWidth = 3;
+ctx.beginPath();
+ctx.moveTo(testStart + 40, j2y + 20);
+ctx.lineTo(tx + tw * 0.88, j2y + 20);
+ctx.stroke();
+ctx.beginPath();
+ctx.arc(tx + tw * 0.88, j2y + 20, 6, 0, Math.PI * 2);
+ctx.fillStyle = '#e67e22';
+ctx.fill();
+ctx.font = '10px sans-serif';
+ctx.fillText('💰 converts after test ends', tx + tw * 0.72, j2y + 40);
+
+// Journey 3: Clean (fits inside)
+var j3y = 230;
+ctx.fillStyle = '#27ae60';
+ctx.font = 'bold 12px sans-serif';
+ctx.fillText('Clean journey ($20 book)', tx, j3y);
+ctx.strokeStyle = '#27ae60';
+ctx.lineWidth = 3;
+ctx.beginPath();
+ctx.moveTo(testStart + 30, j3y + 20);
+ctx.lineTo(testStart + 100, j3y + 20);
+ctx.stroke();
+ctx.beginPath();
+ctx.arc(testStart + 100, j3y + 20, 6, 0, Math.PI * 2);
+ctx.fillStyle = '#27ae60';
+ctx.fill();
+ctx.font = '10px sans-serif';
+ctx.fillText('💰 clean signal', testStart + 112, j3y + 24);
+
+// Annotations
+ctx.fillStyle = '#e74c3c';
+ctx.font = '10px sans-serif';
+ctx.textAlign = 'left';
+ctx.fillText('↑ Counted but test had no influence', testStart + 72, j1y + 40);
+ctx.fillStyle = '#e67e22';
+ctx.fillText('↑ Real influence but never counted', tx + tw * 0.72, j2y + 55);
+})();
+
+// Canvas 3: Revenue composition — most revenue from noisy segment
+(function(){var s=setup('c3');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle = '#1a5276';
+ctx.font = 'bold 14px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('Revenue Contribution vs. Measurement Quality', w/2, 18);
+
+// Stacked bar: volume vs revenue
+var bx = 100, bw = 200, gap = 150;
+
+// Volume bar
+var volY = 50, volH = 240;
+ctx.strokeStyle = '#333';
+ctx.lineWidth = 1.5;
+ctx.strokeRect(bx, volY, bw, volH);
+
+// 70% impulse, 20% medium, 10% high-consideration by volume
+var v1 = volH * 0.70, v2 = volH * 0.20, v3 = volH * 0.10;
+ctx.fillStyle = 'rgba(39,174,96,0.4)';
+ctx.fillRect(bx, volY, bw, v1);
+ctx.fillStyle = 'rgba(230,126,34,0.4)';
+ctx.fillRect(bx, volY + v1, bw, v2);
+ctx.fillStyle = 'rgba(231,76,60,0.4)';
+ctx.fillRect(bx, volY + v1 + v2, bw, v3);
+
+ctx.fillStyle = '#333';
+ctx.font = 'bold 13px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('Transaction Volume', bx + bw/2, volY + volH + 20);
+
+ctx.font = '11px sans-serif';
+ctx.fillStyle = '#27ae60';
+ctx.fillText('70% impulse', bx + bw/2, volY + v1/2 + 5);
+ctx.fillText('(clean signal)', bx + bw/2, volY + v1/2 + 18);
+ctx.fillStyle = '#e67e22';
+ctx.fillText('20% medium', bx + bw/2, volY + v1 + v2/2 + 5);
+ctx.fillStyle = '#e74c3c';
+ctx.fillText('10% high', bx + bw/2, volY + v1 + v2 + v3/2 + 5);
+
+// Revenue bar
+var rx = bx + bw + gap;
+ctx.strokeStyle = '#333';
+ctx.lineWidth = 1.5;
+ctx.strokeRect(rx, volY, bw, volH);
+
+// 20% impulse, 30% medium, 50% high-consideration by revenue
+var r1 = volH * 0.20, r2 = volH * 0.30, r3 = volH * 0.50;
+ctx.fillStyle = 'rgba(39,174,96,0.4)';
+ctx.fillRect(rx, volY, bw, r1);
+ctx.fillStyle = 'rgba(230,126,34,0.4)';
+ctx.fillRect(rx, volY + r1, bw, r2);
+ctx.fillStyle = 'rgba(231,76,60,0.4)';
+ctx.fillRect(rx, volY + r1 + r2, bw, r3);
+
+ctx.fillStyle = '#333';
+ctx.font = 'bold 13px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('Revenue Share', rx + bw/2, volY + volH + 20);
+
+ctx.font = '11px sans-serif';
+ctx.fillStyle = '#27ae60';
+ctx.fillText('20% revenue', rx + bw/2, volY + r1/2 + 5);
+ctx.fillStyle = '#e67e22';
+ctx.fillText('30% revenue', rx + bw/2, volY + r1 + r2/2 + 5);
+ctx.fillStyle = '#e74c3c';
+ctx.fillText('50% revenue', rx + bw/2, volY + r1 + r2 + r3/2 - 5);
+ctx.fillText('(noisiest signal)', rx + bw/2, volY + r1 + r2 + r3/2 + 10);
+
+// Right side annotation
+var ax = rx + bw + 30;
+ctx.fillStyle = '#e74c3c';
+ctx.font = 'bold 12px sans-serif';
+ctx.textAlign = 'left';
+ctx.fillText('Half your revenue', ax, volY + r1 + r2 + r3/2 - 10);
+ctx.fillText('comes from the', ax, volY + r1 + r2 + r3/2 + 5);
+ctx.fillText('segment you', ax, volY + r1 + r2 + r3/2 + 20);
+ctx.fillText("can't measure", ax, volY + r1 + r2 + r3/2 + 35);
+ctx.fillText('in 14 days.', ax, volY + r1 + r2 + r3/2 + 50);
+})();
+</script>
+</body>
+</html>

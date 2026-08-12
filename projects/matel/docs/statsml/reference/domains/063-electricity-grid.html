@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Electricity / Smart Grid - Domain-Specific Pitfalls</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 20px; background: #f8f9fa; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 14px; }
+.nav a:hover { text-decoration: underline; }
+h1 { color: #1a5276; margin-bottom: 10px; }
+.subtitle { color: #555; margin-bottom: 30px; font-size: 15px; }
+.obj-table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden; }
+.obj-table td { padding: 16px; border: 1px solid #2980b9; vertical-align: top; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-title { font-weight: bold; color: #1a5276; font-size: 16px; margin-bottom: 8px; }
+.pitfall-desc { color: #333; font-size: 14px; line-height: 1.6; }
+canvas { border: 1px solid #eee; border-radius: 4px; }
+</style>
+</head>
+<body>
+<h1>Electricity / Smart Grid</h1>
+<p class="subtitle">Statistical pitfalls in grid analytics — temporal aliasing, net metering deceptions, and the cascade from weather forecast to capacity planning.</p>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">1. 15-Minute Interval Hides Sub-Minute Spikes</div>
+<div class="pitfall-desc">
+Smart meters report the <strong>average</strong> consumption over 15-minute intervals. A household drawing 0.5 kW for 14 minutes then spiking to 20 kW for 1 minute produces a reported average of ~1.8 kW. The 20 kW spike — the one that blew the transformer — is completely invisible in the interval data. Capacity planning, fault detection, and equipment protection all fail when the true instantaneous load is hidden behind temporal averaging.
+</div>
+</td>
+<td><canvas id="canvas1" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">2. Net Metering Obscures Consumption</div>
+<div class="pitfall-desc">
+Homes with rooftop solar report only the <strong>net</strong> value (consumption minus generation). At noon a meter shows &minus;2 kW, but the actual household consumption is 3 kW and the solar panels generate 5 kW. The utility sees &minus;2 kW, yet the load on internal wiring and the local transformer is a full 3 kW. Capacity planning based on net meter data systematically underestimates the true electrical load on infrastructure.
+</div>
+</td>
+<td><canvas id="canvas2" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">3. EV Charging as Unpredictable New Load</div>
+<div class="pitfall-desc">
+One household adds a Tesla: +40 kW demand when charging. A residential transformer is designed for a neighborhood peak of ~100 kW. Five EVs charging simultaneously push demand to 200 kW — double the rated capacity. Historic load data contains no signal for this because EV adoption is a <strong>structural break</strong> that appears neighborhood by neighborhood with no warning in the training window.
+</div>
+</td>
+<td><canvas id="canvas3" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">4. Meter Tampering / Theft</div>
+<div class="pitfall-desc">
+Commercial customers bypass meters to steal electricity. In the data this appears as "reduced consumption." A naive model interprets the drop as "efficiency improved" — but it is actually theft. Globally, 3–5% of all electricity is stolen. The signal is invisible in legitimate data because the meter itself is compromised. Anomaly detection must compare against physical proxies (transformer load vs. sum of downstream meters) to catch it.
+</div>
+</td>
+<td><canvas id="canvas4" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">5. Demand Response Event Distortion</div>
+<div class="pitfall-desc">
+The utility sends a "reduce consumption" signal. Participants reduce load during the event window. But in the following 2 hours, consumption <strong>rebounds</strong> as deferred loads catch up (HVAC re-cooling, delayed laundry). Net energy savings over a 4-hour window &asymp; zero. Event-day data shows an artificial pattern — the dip and rebound — that does not generalize to normal days and biases any model trained on it.
+</div>
+</td>
+<td><canvas id="canvas5" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">6. Weather Forecast Error Cascade</div>
+<div class="pitfall-desc">
+Demand forecasts depend on temperature forecasts. A temperature forecast error of &plusmn;3 &deg;F cascades into a demand forecast error of &plusmn;8%. One day at 100 &deg;F vs. 97 &deg;F produces a 15% difference in peak demand. The entire capacity planning chain <strong>amplifies</strong> the weather forecast error at each step — temperature &rarr; demand &rarr; reserve margin &rarr; dispatch cost — making the final decision far less reliable than the original weather input.
+</div>
+</td>
+<td><canvas id="canvas6" width="720" height="300"></canvas></td>
+</tr>
+</table>
+
+<script>
+function setupCanvas(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 200 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    return ctx;
+}
+
+// Canvas 1: 15-Minute Interval Hides Sub-Minute Spikes
+(function() {
+    var ctx = setupCanvas('canvas1');
+    var W = 720, H = 200;
+
+    ctx.fillStyle = '#f9fbfd';
+    ctx.fillRect(0, 0, W, H);
+
+    // Axes
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(60, 15);
+    ctx.lineTo(60, 165);
+    ctx.lineTo(690, 165);
+    ctx.stroke();
+
+    // Y-axis labels
+    ctx.fillStyle = '#555';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('20 kW', 55, 30);
+    ctx.fillText('10 kW', 55, 75);
+    ctx.fillText('1.8 kW', 55, 140);
+    ctx.fillText('0.5 kW', 55, 155);
+    ctx.fillText('0', 55, 165);
+
+    // Time axis
+    ctx.textAlign = 'center';
+    ctx.fillText('0 min', 80, 180);
+    ctx.fillText('5 min', 200, 180);
+    ctx.fillText('10 min', 370, 180);
+    ctx.fillText('14 min', 540, 180);
+    ctx.fillText('15 min', 620, 180);
+
+    // Actual consumption line (0.5kW for 14 min, spike to 20kW for 1 min)
+    var xStart = 80;
+    var xEnd = 620;
+    var xSpike = 560;
+    var yBase = 155;
+    var ySpike = 25;
+
+    // Flat baseline
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(xStart, yBase);
+    ctx.lineTo(xSpike, yBase);
+    ctx.lineTo(xSpike, ySpike);
+    ctx.lineTo(xEnd, ySpike);
+    ctx.lineTo(xEnd, yBase);
+    ctx.stroke();
+
+    // Fill spike area
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.15)';
+    ctx.beginPath();
+    ctx.moveTo(xSpike, yBase);
+    ctx.lineTo(xSpike, ySpike);
+    ctx.lineTo(xEnd, ySpike);
+    ctx.lineTo(xEnd, yBase);
+    ctx.closePath();
+    ctx.fill();
+
+    // 15-min average line
+    var yAvg = 140;
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([8, 4]);
+    ctx.beginPath();
+    ctx.moveTo(xStart, yAvg);
+    ctx.lineTo(xEnd, yAvg);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Labels
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'left';
+    ctx.fillText('Actual: 20 kW spike', 400, 20);
+
+    ctx.fillStyle = '#2980b9';
+    ctx.fillText('15-min avg: 1.8 kW', 200, 133);
+
+    // Annotation
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#c0392b';
+    ctx.textAlign = 'center';
+    ctx.fillText('"Invisible in interval data"', 590, 55);
+
+    // Legend
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(80, 188, 12, 3);
+    ctx.fillText('Actual', 106, 193);
+    ctx.fillStyle = '#2980b9';
+    ctx.fillRect(160, 188, 12, 3);
+    ctx.fillText('Reported Avg', 200, 193);
+})();
+
+// Canvas 2: Net Metering Obscures Consumption
+(function() {
+    var ctx = setupCanvas('canvas2');
+    var W = 720, H = 200;
+
+    ctx.fillStyle = '#f9fbfd';
+    ctx.fillRect(0, 0, W, H);
+
+    // Bar chart
+    var barWidth = 100;
+    var gap = 80;
+    var baseY = 150;
+    var scale = 20;
+
+    // Consumption bar (3 kW)
+    var x1 = 130;
+    var h1 = 3 * scale;
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(x1, baseY - h1, barWidth, h1);
+    ctx.strokeStyle = '#c0392b';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x1, baseY - h1, barWidth, h1);
+
+    // Solar generation bar (5 kW)
+    var x2 = x1 + barWidth + gap;
+    var h2 = 5 * scale;
+    ctx.fillStyle = '#f39c12';
+    ctx.fillRect(x2, baseY - h2, barWidth, h2);
+    ctx.strokeStyle = '#d68910';
+    ctx.strokeRect(x2, baseY - h2, barWidth, h2);
+
+    // Net meter reading (-2 kW) - below baseline
+    var x3 = x2 + barWidth + gap;
+    var h3 = 2 * scale;
+    ctx.fillStyle = '#2980b9';
+    ctx.fillRect(x3, baseY, barWidth, h3);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x3, baseY, barWidth, h3);
+
+    // Baseline
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(100, baseY);
+    ctx.lineTo(650, baseY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Labels
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#c0392b';
+    ctx.fillText('Actual Load', x1 + barWidth / 2, baseY - h1 - 8);
+    ctx.fillText('3 kW', x1 + barWidth / 2, baseY - h1 + 25);
+
+    ctx.fillStyle = '#d68910';
+    ctx.fillText('Solar Gen.', x2 + barWidth / 2, baseY - h2 - 8);
+    ctx.fillText('5 kW', x2 + barWidth / 2, baseY - h2 + 25);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('Net Meter', x3 + barWidth / 2, baseY + h3 + 20);
+    ctx.fillText('-2 kW', x3 + barWidth / 2, baseY + h3 / 2 + 6);
+
+    // Zero line label
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#555';
+    ctx.textAlign = 'left';
+    ctx.fillText('0 kW', 65, baseY + 4);
+
+    // Annotation
+    ctx.font = '14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('Utility sees -2 kW but wiring carries 3 kW', W / 2, 18);
+
+    // Arrow from consumption to net
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(x1 + barWidth / 2, baseY - h1 + 5);
+    ctx.quadraticCurveTo(W / 2, 30, x3 + barWidth / 2, baseY + 5);
+    ctx.stroke();
+    ctx.setLineDash([]);
+})();
+
+// Canvas 3: EV Charging as Unpredictable New Load
+(function() {
+    var ctx = setupCanvas('canvas3');
+    var W = 720, H = 200;
+
+    ctx.fillStyle = '#f9fbfd';
+    ctx.fillRect(0, 0, W, H);
+
+    // Axes
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(60, 10);
+    ctx.lineTo(60, 165);
+    ctx.lineTo(690, 165);
+    ctx.stroke();
+
+    // Y-axis scale: 0 to 220 kW mapped to y: 165 to 15
+    function yScale(kw) { return 165 - (kw / 220) * 150; }
+
+    // Y labels
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#555';
+    ctx.textAlign = 'right';
+    ctx.fillText('200 kW', 55, yScale(200) + 4);
+    ctx.fillText('150 kW', 55, yScale(150) + 4);
+    ctx.fillText('100 kW', 55, yScale(100) + 4);
+    ctx.fillText('50 kW', 55, yScale(50) + 4);
+    ctx.fillText('0', 55, 168);
+
+    // Transformer limit line at 100 kW
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(60, yScale(100));
+    ctx.lineTo(690, yScale(100));
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'left';
+    ctx.fillText('Transformer Limit: 100 kW', 500, yScale(100) - 5);
+
+    // Load segments
+    var segments = [
+        { xStart: 80, xEnd: 250, load: 85 },
+        { xStart: 250, xEnd: 350, load: 90 },
+        { xStart: 350, xEnd: 420, load: 140 },
+        { xStart: 420, xEnd: 520, load: 180 },
+        { xStart: 520, xEnd: 640, load: 200 }
+    ];
+
+    // Draw load area
+    ctx.fillStyle = 'rgba(41, 128, 185, 0.2)';
+    ctx.beginPath();
+    ctx.moveTo(80, 165);
+    for (var i = 0; i < segments.length; i++) {
+        var seg = segments[i];
+        ctx.lineTo(seg.xStart, yScale(seg.load));
+        ctx.lineTo(seg.xEnd, yScale(seg.load));
+    }
+    ctx.lineTo(640, 165);
+    ctx.closePath();
+    ctx.fill();
+
+    // Draw load line
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(80, yScale(85));
+    for (var i = 0; i < segments.length; i++) {
+        var seg = segments[i];
+        ctx.lineTo(seg.xStart, yScale(seg.load));
+        ctx.lineTo(seg.xEnd, yScale(seg.load));
+    }
+    ctx.stroke();
+
+    // Step annotations
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Historical', 165, 185);
+    ctx.fillText('+1 EV', 385, yScale(140) - 8);
+    ctx.fillText('+3 EVs', 470, yScale(180) - 8);
+    ctx.fillText('+5 EVs', 580, yScale(200) - 8);
+
+    // Title
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Neighborhood Load Over Time', 375, 185);
+})();
+
+// Canvas 4: Meter Tampering / Theft
+(function() {
+    var ctx = setupCanvas('canvas4');
+    var W = 720, H = 200;
+
+    ctx.fillStyle = '#f9fbfd';
+    ctx.fillRect(0, 0, W, H);
+
+    // Axes
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(60, 20);
+    ctx.lineTo(60, 160);
+    ctx.lineTo(690, 160);
+    ctx.stroke();
+
+    // Consumption trend line - normal then drops
+    var points = [
+        [80, 50], [130, 55], [180, 48], [230, 52], [280, 50], [320, 53],
+        [340, 53], [360, 90], [400, 95], [450, 100], [500, 98], [550, 102], [600, 97], [650, 100]
+    ];
+
+    // Shaded area for stolen electricity
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.1)';
+    ctx.beginPath();
+    ctx.moveTo(340, 53);
+    ctx.lineTo(650, 50);
+    ctx.lineTo(650, 100);
+    ctx.lineTo(340, 53);
+    ctx.closePath();
+    ctx.fill();
+
+    // True consumption dashed line
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(340, 53);
+    ctx.lineTo(650, 50);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Reported consumption line
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(points[0][0], points[0][1]);
+    for (var i = 1; i < points.length; i++) {
+        ctx.lineTo(points[i][0], points[i][1]);
+    }
+    ctx.stroke();
+
+    // 3-5% global theft shaded band at bottom
+    ctx.fillStyle = 'rgba(155, 89, 182, 0.2)';
+    ctx.fillRect(60, 140, 630, 18);
+    ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#8e44ad';
+    ctx.textAlign = 'center';
+    ctx.fillText('3-5% of global electricity is stolen (invisible in data)', 375, 153);
+
+    // Annotations
+    ctx.font = '14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+
+    ctx.fillStyle = '#2980b9';
+    ctx.fillText('Model: "Efficiency improved"', 420, 120);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Reality: Theft', 420, 43);
+
+    // Vertical line showing theft start
+    ctx.strokeStyle = '#7f8c8d';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 2]);
+    ctx.beginPath();
+    ctx.moveTo(340, 20);
+    ctx.lineTo(340, 138);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#7f8c8d';
+    ctx.textAlign = 'center';
+    ctx.fillText('Tampering begins', 340, 135);
+
+    // Y-axis labels
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#555';
+    ctx.fillText('High', 55, 50);
+    ctx.fillText('Low', 55, 105);
+
+    // Legend
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#2980b9';
+    ctx.fillRect(80, 17, 14, 3);
+    ctx.fillText('Reported', 98, 21);
+    ctx.fillStyle = '#e74c3c';
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(170, 18);
+    ctx.lineTo(184, 18);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillText('Actual', 188, 21);
+})();
+
+// Canvas 5: Demand Response Event Distortion
+(function() {
+    var ctx = setupCanvas('canvas5');
+    var W = 720, H = 200;
+
+    ctx.fillStyle = '#f9fbfd';
+    ctx.fillRect(0, 0, W, H);
+
+    // Axes
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(60, 15);
+    ctx.lineTo(60, 160);
+    ctx.lineTo(690, 160);
+    ctx.stroke();
+
+    var baselineY = 80;
+
+    // Baseline dashed
+    ctx.strokeStyle = '#7f8c8d';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(60, baselineY);
+    ctx.lineTo(690, baselineY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Demand curve points
+    var curvePoints = [
+        [80, 80], [120, 78], [160, 82], [200, 80],
+        [220, 80], [250, 110], [280, 130], [310, 125], [340, 120],
+        [360, 120], [380, 65], [410, 40], [440, 45], [470, 50], [500, 55],
+        [530, 65], [560, 75], [590, 78], [620, 80], [650, 80]
+    ];
+
+    // Shaded "savings" area (below baseline during DR)
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.25)';
+    ctx.beginPath();
+    ctx.moveTo(220, baselineY);
+    ctx.lineTo(220, 80);
+    ctx.lineTo(250, 110);
+    ctx.lineTo(280, 130);
+    ctx.lineTo(310, 125);
+    ctx.lineTo(340, 120);
+    ctx.lineTo(360, 120);
+    ctx.lineTo(360, baselineY);
+    ctx.closePath();
+    ctx.fill();
+
+    // Shaded "rebound" area (above baseline after DR)
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.25)';
+    ctx.beginPath();
+    ctx.moveTo(360, baselineY);
+    ctx.lineTo(360, 65);
+    ctx.lineTo(380, 65);
+    ctx.lineTo(410, 40);
+    ctx.lineTo(440, 45);
+    ctx.lineTo(470, 50);
+    ctx.lineTo(500, 55);
+    ctx.lineTo(530, 65);
+    ctx.lineTo(560, 75);
+    ctx.lineTo(560, baselineY);
+    ctx.closePath();
+    ctx.fill();
+
+    // Draw demand curve
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(curvePoints[0][0], curvePoints[0][1]);
+    for (var i = 1; i < curvePoints.length; i++) {
+        var prev = curvePoints[i - 1];
+        var curr = curvePoints[i];
+        var cpx = (prev[0] + curr[0]) / 2;
+        ctx.quadraticCurveTo(prev[0], prev[1], cpx, (prev[1] + curr[1]) / 2);
+    }
+    var last = curvePoints[curvePoints.length - 1];
+    ctx.lineTo(last[0], last[1]);
+    ctx.stroke();
+
+    // Labels
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('"Savings"', 290, 145);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('"Rebound"', 450, 35);
+
+    ctx.fillStyle = '#7f8c8d';
+    ctx.textAlign = 'left';
+    ctx.fillText('Baseline', 62, baselineY - 5);
+
+    // DR event bracket
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(220, 165);
+    ctx.lineTo(220, 172);
+    ctx.lineTo(360, 172);
+    ctx.lineTo(360, 165);
+    ctx.stroke();
+    ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('DR Event', 290, 183);
+
+    // Net savings annotation
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'right';
+    ctx.fillText('Net savings ≈ 0', 680, 25);
+})();
+
+// Canvas 6: Weather Forecast Error Cascade
+(function() {
+    var ctx = setupCanvas('canvas6');
+    var W = 720, H = 200;
+
+    ctx.fillStyle = '#f9fbfd';
+    ctx.fillRect(0, 0, W, H);
+
+    // Three cascading error bars showing amplification
+    var stages = [
+        { x: 130, label1: 'Temperature', label2: 'Forecast', error: '±3°F', barH: 30, color: '#27ae60' },
+        { x: 350, label1: 'Demand', label2: 'Forecast', error: '±8%', barH: 55, color: '#f39c12' },
+        { x: 570, label1: 'Capacity', label2: 'Planning', error: '±15%', barH: 80, color: '#e74c3c' }
+    ];
+
+    var centerY = 100;
+    var barWidth = 80;
+
+    for (var i = 0; i < stages.length; i++) {
+        var s = stages[i];
+
+        // Error bar rectangle
+        ctx.fillStyle = s.color + '33';
+        ctx.fillRect(s.x - barWidth / 2, centerY - s.barH, barWidth, s.barH * 2);
+        ctx.strokeStyle = s.color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(s.x - barWidth / 2, centerY - s.barH, barWidth, s.barH * 2);
+
+        // Center point
+        ctx.fillStyle = s.color;
+        ctx.beginPath();
+        ctx.arc(s.x, centerY, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Error whiskers
+        ctx.strokeStyle = s.color;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(s.x, centerY - s.barH);
+        ctx.lineTo(s.x, centerY + s.barH);
+        ctx.stroke();
+        // Caps
+        ctx.beginPath();
+        ctx.moveTo(s.x - 12, centerY - s.barH);
+        ctx.lineTo(s.x + 12, centerY - s.barH);
+        ctx.moveTo(s.x - 12, centerY + s.barH);
+        ctx.lineTo(s.x + 12, centerY + s.barH);
+        ctx.stroke();
+
+        // Error label
+        ctx.font = '17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillStyle = s.color;
+        ctx.textAlign = 'center';
+        ctx.fillText(s.error, s.x, centerY - s.barH - 12);
+
+        // Stage label
+        ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillStyle = '#333';
+        ctx.fillText(s.label1, s.x, centerY + s.barH + 20);
+        ctx.fillText(s.label2, s.x, centerY + s.barH + 35);
+    }
+
+    // Amplification arrows between stages
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.fillStyle = '#1a5276';
+
+    for (var i = 0; i < stages.length - 1; i++) {
+        var fromX = stages[i].x + barWidth / 2 + 10;
+        var toX = stages[i + 1].x - barWidth / 2 - 10;
+        var midX = (fromX + toX) / 2;
+
+        ctx.beginPath();
+        ctx.moveTo(fromX, centerY);
+        ctx.lineTo(toX - 8, centerY);
+        ctx.stroke();
+
+        // Arrowhead
+        ctx.beginPath();
+        ctx.moveTo(toX, centerY);
+        ctx.lineTo(toX - 10, centerY - 5);
+        ctx.lineTo(toX - 10, centerY + 5);
+        ctx.closePath();
+        ctx.fill();
+
+        // Amplification label
+        ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#1a5276';
+        ctx.fillText('amplifies', midX, centerY - 10);
+    }
+
+    // Title
+    ctx.font = '14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Error Amplification Cascade', W / 2, 15);
+})();
+</script>
+</body>
+</html>

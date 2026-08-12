@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>36. Schema Lineage Extraction & SLiCE Scores</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #fff; color: #2c3e50; line-height: 1.6; }
+h1 { font-size: 1.6em; color: #1a5276; margin-bottom: 8px; }
+h2 { font-size: 1.3em; color: #1a5276; margin: 30px 0 12px; border-bottom: 2px solid #2980b9; padding-bottom: 6px; }
+p { margin: 10px 0; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1em; margin-bottom: 20px; }
+.status { display: inline-block; background: #fef9e7; border: 1px solid #f39c12; color: #b7950b; padding: 4px 12px; border-radius: 4px; font-size: 0.85em; font-weight: 600; margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; }
+ul { margin: 8px 0 8px 20px; font-size: 0.92em; }
+li { margin: 4px 0; }
+table.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+table.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: top; }
+table.obj-table td:first-child { width: 45%; }
+table.obj-table td:last-child { width: 55%; text-align: center; }
+canvas { display: block; margin: 0 auto; }
+</style>
+</head>
+<body>
+
+<div class="nav"><a href="../discussion-backlog.html">← Discussion Backlog</a></div>
+
+<h1>36. Schema Lineage Extraction &amp; SLiCE Scores</h1>
+<p class="subtitle">Tracking column provenance and computing slice-level confidence</p>
+<span class="status">STUB — To Be Expanded</span>
+
+<h2>Core Idea</h2>
+<table class="obj-table">
+<tr>
+<td>
+<p><strong>Schema Lineage:</strong> Track how each column arrived — source table, transformations applied, joins traversed. Know the provenance of every feature.</p>
+<p><strong>SLiCE Scores:</strong> Score model confidence per data slice (subpopulation), not just globally. A model with 95% overall accuracy might be 60% on a critical slice.</p>
+<ul>
+<li>Column-level: source → transform → derived_name</li>
+<li>Slice-level: subgroup → metric → confidence</li>
+<li>Combined: which transformations degrade which slices?</li>
+</ul>
+<p><strong>Payoff:</strong> Know exactly where your model is trustworthy and where it's guessing.</p>
+</td>
+<td>
+<canvas id="c1" width="720" height="300"></canvas>
+</td>
+</tr>
+</table>
+
+<h2>Key Questions</h2>
+<ul>
+<li>How to represent lineage compactly (DAG? annotation layer?)</li>
+<li>Minimum slice size for meaningful score (sample sufficiency again)</li>
+<li>How slice scores interact with the multi-candidate model approach</li>
+<li>Schema evolution: what happens when upstream adds/removes columns?</li>
+</ul>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setupCanvas(id) {
+    var c = document.getElementById(id);
+    var w = c.width, h = c.height;
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return {ctx: ctx, w: w, h: h};
+}
+
+(function() {
+    var s = setupCanvas('c1'), ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.fillStyle = '#222'; ctx.font = 'bold 16px -apple-system, sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('SLiCE Scores: Confidence Per Subpopulation', w/2, 22);
+
+    // Bar chart of slice scores
+    var slices = [
+        {name: 'Overall', score: 95, color: '#27ae60'},
+        {name: 'Male 25-40', score: 93, color: '#27ae60'},
+        {name: 'Female 60+', score: 71, color: '#e67e22'},
+        {name: 'Income<20k', score: 62, color: '#e74c3c'},
+        {name: 'Rural ZIP', score: 58, color: '#e74c3c'}
+    ];
+    var barW = 100, gap = 25, baseY = h - 60, chartH = h - 120;
+    var totalW = slices.length * barW + (slices.length-1) * gap;
+    var startX = (w - totalW) / 2;
+
+    slices.forEach(function(sl, i) {
+        var x = startX + i * (barW + gap);
+        var bh = (sl.score / 100) * chartH;
+        ctx.fillStyle = sl.color + '88';
+        ctx.fillRect(x, baseY - bh, barW, bh);
+        ctx.strokeStyle = sl.color; ctx.lineWidth = 1.5;
+        ctx.strokeRect(x, baseY - bh, barW, bh);
+        ctx.fillStyle = '#222'; ctx.font = 'bold 15px -apple-system, sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText(sl.score + '%', x + barW/2, baseY - bh - 8);
+        ctx.fillStyle = '#333'; ctx.font = '13px -apple-system, sans-serif';
+        ctx.fillText(sl.name, x + barW/2, baseY + 16);
+    });
+
+    // Danger line at 70%
+    var dangerY = baseY - (70/100) * chartH;
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 3]);
+    ctx.beginPath(); ctx.moveTo(startX - 20, dangerY); ctx.lineTo(startX + totalW + 20, dangerY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '13px -apple-system, sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('Trust threshold', startX + totalW + 25, dangerY + 4);
+
+    ctx.fillStyle = '#555'; ctx.font = '14px -apple-system, sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('Global accuracy hides slice-level failures', w/2, h - 20);
+})();
+</script>
+
+</body>
+</html>

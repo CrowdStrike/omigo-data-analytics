@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>118. Data Lineage / Provenance Tracking</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 20px 10px; margin: 0; }
+h1 { color: #1a5276; border-bottom: 3px solid #2980b9; padding-bottom: 10px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-weight: 500; }
+.nav a:hover { text-decoration: underline; }
+table.obj-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+table.obj-table td { border: 1px solid #2980b9; padding: 15px; vertical-align: top; }
+table.obj-table td:first-child { width: 40%; }
+table.obj-table td:last-child { width: 60%; text-align: center; }
+.obj-title { font-size: 1.1em; font-weight: 700; color: #1a5276; margin-bottom: 8px; }
+ul { margin: 8px 0; padding-left: 20px; }
+li { margin-bottom: 4px; font-size: 0.95em; }
+p { font-size: 0.95em; margin: 8px 0 0 0; }
+canvas { display: block; margin: 0 auto; }
+</style>
+</head>
+<body>
+<h1>Data Lineage / Provenance Tracking</h1>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Can't Trace How a Number Was Computed</div>
+<ul><li>3 teams, 5 transforms later — where did this value come from?</li><li>Dashboard shows "$4.2M revenue" but nobody can reproduce it</li></ul>
+<p><strong>Example:</strong> CFO asks "why does this report say $4.2M when Finance says $3.8M?" Investigation takes 3 weeks across 5 teams — transforms applied in different order.</p>
+</td><td><canvas id="c1" width="720" height="300"></canvas></td></tr>
+</table>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Stale Lineage (Pipeline Changed, Docs Didn't)</div>
+<ul><li>Documentation says data flows A→B→C, reality is A→D→C</li><li>Teams make decisions based on incorrect lineage understanding</li></ul>
+<p><strong>Example:</strong> Lineage doc shows "customer_score" from CRM. Actually changed 8 months ago to pull from ML model. Team debugging CRM for a model issue.</p>
+</td><td><canvas id="c2" width="720" height="300"></canvas></td></tr>
+</table>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Circular Dependencies Undetected</div>
+<ul><li>A feeds B feeds C feeds A — circular loop creates amplification/instability</li><li>Without lineage tracking, cycles can run for months undetected</li></ul>
+<p><strong>Example:</strong> Risk score feeds pricing model feeds customer behavior prediction feeds risk score. Positive feedback loop amplified errors 340% over 6 months before detection.</p>
+</td><td><canvas id="c3" width="720" height="300"></canvas></td></tr>
+</table>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Schema Changes Propagating Untracked</div>
+<ul><li>Upstream team changes a column type — 47 downstream consumers break silently</li><li>No lineage = no impact analysis before schema changes</li></ul>
+<p><strong>Example:</strong> Team changed "amount" from cents (int) to dollars (float). 23 downstream pipelines silently processed values 100x too small for 2 weeks.</p>
+</td><td><canvas id="c4" width="720" height="300"></canvas></td></tr>
+</table>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Debugging Impossible Without Lineage</div>
+<ul><li>Value is wrong — but WHERE in the pipeline did it go wrong?</li><li>Without lineage, debugging = manually tracing through every system</li></ul>
+<p><strong>Example:</strong> A KPI is wrong by 12%. With lineage: found root cause in 2 hours (join condition). Without lineage: took 3 weeks of 4 engineers searching manually.</p>
+</td><td><canvas id="c5" width="720" height="300"></canvas></td></tr>
+</table>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Compliance/Audit Failure (GDPR)</div>
+<ul><li>"Show me all processing of this user's data" — can't answer without lineage</li><li>GDPR Article 30 requires processing records; without lineage = non-compliant</li></ul>
+<p><strong>Example:</strong> GDPR audit: "Where is user X's data processed?" Answer took 6 weeks, found data in 34 systems (expected: 8). Fine: EUR 2.3M for inadequate records.</p>
+</td><td><canvas id="c6" width="720" height="300"></canvas></td></tr>
+</table>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Lineage as Compliance Prerequisite — Not Afterthought</div>
+<ul>
+<li><strong>Data residency laws:</strong> GDPR (EU), CCPA (California), PIPEDA (Canada), LGPD (Brazil) — each requires knowing WHERE data lives, HOW it flows, WHO processes it. Without lineage, you cannot prove compliance.</li>
+<li><strong>Right to deletion:</strong> User requests data deletion. Without lineage, you delete from the primary DB but miss 12 downstream copies, cached features, model training snapshots, and analytics exports. You're non-compliant and don't know it.</li>
+<li><strong>Data minimization:</strong> Regulations require collecting ONLY what's needed. Without lineage, you can't audit what data flows where — so you can't prove minimization. Fields collected "just in case" propagate to 30 systems with no way to trace or remove them.</li>
+<li><strong>Cross-border transfer:</strong> Data crosses EU→US boundary during processing. Without lineage tracking geographic flow, you violate transfer restrictions unknowingly. The pipeline works perfectly — and is illegal.</li>
+</ul>
+<p><strong>The design failure:</strong> Teams build pipelines first, then discover compliance requirements. Retrofitting lineage into an existing system costs 10-50× more than building it in from day one. The architecture that "works" technically may be legally inoperable.</p>
+</td><td><canvas id="c6" width="720" height="300"></canvas></td></tr>
+</table>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Data Quality Issues Untraceable to Source</div>
+<ul><li>Bad data detected at consumption — but which of 12 sources introduced it?</li><li>Without lineage, you fix symptoms not root causes</li></ul>
+<p><strong>Example:</strong> 15% of customer records have invalid phone numbers. Issue traced (eventually) to a migration 2 years ago that truncated international prefixes. Without lineage: unfixable.</p>
+</td><td><canvas id="c7" width="720" height="300"></canvas></td></tr>
+</table>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Model Predictions Unexplainable Without Feature Lineage</div>
+<ul><li>Model trained on derived feature — can't explain what raw data influenced prediction</li><li>Explainability requires tracing features back to original sources</li></ul>
+<p><strong>Example:</strong> Model rejects loan application. Regulation requires explanation. Feature "risk_composite_v3" is derived from 47 raw fields across 8 systems — can't explain to customer.</p>
+</td><td><canvas id="c8" width="720" height="300"></canvas></td></tr>
+</table>
+
+<script>
+(function(){
+  var dpr = window.devicePixelRatio || 1;
+  function setupCanvas(id) {
+    var c = document.getElementById(id);
+    var w = 720, h = 200;
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return ctx;
+  }
+
+  // Chart 1: Data transform pipeline visualization
+  (function(){
+    var ctx = setupCanvas('c1');
+    ctx.fillStyle='#eaf2f8'; ctx.fillRect(0,0,720,200);
+    ctx.font='17px -apple-system'; ctx.fillStyle='#1a5276';
+    ctx.fillText('Value Transformation: $3.8M → $4.2M (Where?)', 195, 18);
+    var stages = ['Raw\n$3.8M','ETL\nTeam A','Join\nTeam B','Agg\nTeam C','Filter\nTeam D','Dashboard\n$4.2M'];
+    var values = [3.8,3.8,4.1,4.1,4.2,4.2];
+    for(var i=0;i<stages.length;i++){
+      var x=40+i*115, y=80;
+      // box
+      ctx.fillStyle = (values[i]!==values[Math.max(0,i-1)] && i>0) ? '#fdebd0' : '#d4efdf';
+      ctx.strokeStyle='#2980b9'; ctx.lineWidth=1.5;
+      ctx.fillRect(x,y,90,50); ctx.strokeRect(x,y,90,50);
+      var lines = stages[i].split('\n');
+      ctx.fillStyle='#1a5276'; ctx.font='10px -apple-system';
+      for(var j=0;j<lines.length;j++) ctx.fillText(lines[j],x+10,y+18+j*16);
+      // arrow
+      if(i<stages.length-1){
+        ctx.strokeStyle='#7f8c8d'; ctx.beginPath();
+        ctx.moveTo(x+90,y+25); ctx.lineTo(x+115,y+25); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x+115,y+25); ctx.lineTo(x+110,y+20); ctx.lineTo(x+110,y+30); ctx.closePath();
+        ctx.fillStyle='#7f8c8d'; ctx.fill();
+      }
+    }
+    // question marks on problem stages
+    ctx.fillStyle='#e74c3c'; ctx.font='bold 20px -apple-system';
+    ctx.fillText('?',40+2*115+35,75); ctx.fillText('?',40+4*115+35,75);
+    ctx.font='11px -apple-system'; ctx.fillStyle='#e74c3c';
+    ctx.fillText('$400K discrepancy introduced somewhere — but WHERE?',180,170);
+  })();
+
+  // Chart 2: Documented vs actual lineage
+  (function(){
+    var ctx = setupCanvas('c2');
+    ctx.fillStyle='#fef9e7'; ctx.fillRect(0,0,720,200);
+    ctx.font='17px -apple-system'; ctx.fillStyle='#1a5276';
+    ctx.fillText('Documented Lineage vs Reality', 260, 18);
+    // Documented path (top)
+    ctx.font='11px -apple-system'; ctx.fillStyle='#27ae60'; ctx.fillText('Documented:',20,50);
+    var docNodes = ['CRM','ETL','Warehouse','Dashboard'];
+    for(var i=0;i<docNodes.length;i++){
+      var x=120+i*150;
+      ctx.fillStyle='#d4efdf'; ctx.strokeStyle='#27ae60'; ctx.lineWidth=1.5;
+      ctx.fillRect(x,38,100,25); ctx.strokeRect(x,38,100,25);
+      ctx.fillStyle='#1a5276'; ctx.font='11px -apple-system'; ctx.fillText(docNodes[i],x+20,55);
+      if(i<3){ctx.strokeStyle='#27ae60'; ctx.beginPath(); ctx.moveTo(x+100,50); ctx.lineTo(x+150,50); ctx.stroke();}
+    }
+    // Actual path (bottom)
+    ctx.fillStyle='#e74c3c'; ctx.font='11px -apple-system'; ctx.fillText('Reality:',20,120);
+    var realNodes = ['CRM','ML Model','Cache','Warehouse','Dashboard'];
+    for(var i=0;i<realNodes.length;i++){
+      var x=100+i*125;
+      ctx.fillStyle='#fdebd0'; ctx.strokeStyle='#e74c3c'; ctx.lineWidth=1.5;
+      ctx.fillRect(x,108,95,25); ctx.strokeRect(x,108,95,25);
+      ctx.fillStyle='#1a5276'; ctx.font='10px -apple-system'; ctx.fillText(realNodes[i],x+10,124);
+      if(i<4){ctx.strokeStyle='#e74c3c'; ctx.beginPath(); ctx.moveTo(x+95,120); ctx.lineTo(x+125,120); ctx.stroke();}
+    }
+    ctx.font='11px -apple-system'; ctx.fillStyle='#e74c3c';
+    ctx.fillText('Team debugging CRM for an ML model issue — wasted 2 weeks',180,165);
+    // X mark on documented
+    ctx.strokeStyle='#e74c3c'; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(350,35); ctx.lineTo(380,65); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(380,35); ctx.lineTo(350,65); ctx.stroke();
+  })();
+
+  // Chart 3: Circular dependency feedback loop
+  (function(){
+    var ctx = setupCanvas('c3');
+    ctx.fillStyle='#f4ecf7'; ctx.fillRect(0,0,720,200);
+    ctx.font='17px -apple-system'; ctx.fillStyle='#1a5276';
+    ctx.fillText('Circular Dependency: Error Amplification Over Time', 185, 18);
+    // Draw cycle diagram
+    var cx=180, cy=110, r=60;
+    var nodes = ['Risk\nScore','Pricing\nModel','Behavior\nPred'];
+    var angles = [-Math.PI/2, Math.PI/6, 5*Math.PI/6];
+    for(var i=0;i<3;i++){
+      var nx=cx+r*Math.cos(angles[i]), ny=cy+r*Math.sin(angles[i]);
+      ctx.beginPath(); ctx.arc(nx,ny,28,0,Math.PI*2);
+      ctx.fillStyle='#e8daef'; ctx.fill(); ctx.strokeStyle='#8e44ad'; ctx.lineWidth=1.5; ctx.stroke();
+      var lines = nodes[i].split('\n'); ctx.fillStyle='#1a5276'; ctx.font='9px -apple-system';
+      for(var j=0;j<lines.length;j++) ctx.fillText(lines[j],nx-20,ny-3+j*11);
+      // arrows
+      var next=(i+1)%3;
+      var nnx=cx+r*Math.cos(angles[next]), nny=cy+r*Math.sin(angles[next]);
+      ctx.strokeStyle='#8e44ad'; ctx.lineWidth=2; ctx.beginPath();
+      ctx.moveTo(nx+20*Math.cos(angles[next]-angles[i]),ny+20*Math.sin(angles[next]-angles[i]));
+      ctx.lineTo(nnx-20*Math.cos(angles[next]-angles[i]),nny-20*Math.sin(angles[next]-angles[i]));
+      ctx.stroke();
+    }
+    // Error amplification chart on right
+    var errors = [1,1.3,1.7,2.3,3.1,4.2,5.8,8.1,11.4,16,22.4];
+    var maxE=25;
+    ctx.strokeStyle='#e74c3c'; ctx.lineWidth=2; ctx.beginPath();
+    for(var i=0;i<errors.length;i++){var x=320+i*35,y=180-(errors[i]/maxE)*150;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}
+    ctx.stroke();
+    ctx.font='11px -apple-system'; ctx.fillStyle='#e74c3c'; ctx.fillText('Error magnitude (340% in 6mo)',400,40);
+    ctx.fillStyle='#1a5276'; ctx.fillText('Months →',600,195);
+  })();
+
+  // Chart 4: Schema change impact propagation
+  (function(){
+    var ctx = setupCanvas('c4');
+    ctx.fillStyle='#eafaf1'; ctx.fillRect(0,0,720,200);
+    ctx.font='17px -apple-system'; ctx.fillStyle='#1a5276';
+    ctx.fillText('Schema Change Impact: 1 Column → 47 Broken Consumers', 170, 18);
+    // Source node
+    ctx.fillStyle='#e74c3c'; ctx.beginPath(); ctx.arc(80,100,25,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.font='9px -apple-system'; ctx.fillText('amount',60,98); ctx.fillText('int→float',57,110);
+    // Fan out
+    var layers = [[200,45],[200,85],[200,125],[200,165]];
+    var downstream = [12,15,11,9]; // consumers per layer
+    ctx.strokeStyle='#e74c3c'; ctx.lineWidth=1;
+    for(var i=0;i<layers.length;i++){
+      ctx.beginPath(); ctx.moveTo(105,100); ctx.lineTo(layers[i][0],layers[i][1]); ctx.stroke();
+      ctx.fillStyle='#fdebd0'; ctx.beginPath(); ctx.arc(layers[i][0],layers[i][1],15,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle='#e74c3c'; ctx.stroke();
+      // second tier
+      for(var j=0;j<3;j++){
+        var tx=320+j*60, ty=layers[i][1]-10+j*10;
+        ctx.strokeStyle='#f39c12'; ctx.beginPath(); ctx.moveTo(215,layers[i][1]); ctx.lineTo(tx,ty); ctx.stroke();
+        ctx.fillStyle='#fef9e7'; ctx.beginPath(); ctx.arc(tx,ty,8,0,Math.PI*2); ctx.fill();
+        ctx.strokeStyle='#f39c12'; ctx.stroke();
+      }
+    }
+    ctx.fillStyle='#1a5276'; ctx.font='12px -apple-system';
+    ctx.fillText('47 downstream consumers',480,60);
+    ctx.fillText('processing values 100x',480,78);
+    ctx.fillText('too small for 2 weeks',480,96);
+    ctx.fillStyle='#e74c3c'; ctx.font='11px -apple-system';
+    ctx.fillText('Silent failure — no errors thrown',480,130);
+    ctx.fillText('Just wrong numbers everywhere',480,148);
+  })();
+
+  // Chart 5: Debugging time with vs without lineage
+  (function(){
+    var ctx = setupCanvas('c5');
+    ctx.fillStyle='#ebf5fb'; ctx.fillRect(0,0,720,200);
+    ctx.font='17px -apple-system'; ctx.fillStyle='#1a5276';
+    ctx.fillText('Debugging Time: With vs Without Lineage', 225, 18);
+    var issues = ['Join error','Missing data','Wrong agg','Type mismatch','Stale cache'];
+    var withLineage = [2,1,3,1.5,0.5]; // hours
+    var withoutLineage = [120,80,160,60,40]; // hours
+    var maxH=180;
+    for(var i=0;i<issues.length;i++){
+      var x=70+i*130;
+      var h1=(withLineage[i]/maxH)*140; var h2=(withoutLineage[i]/maxH)*140;
+      ctx.fillStyle='#27ae60'; ctx.fillRect(x,175-h1,35,Math.max(h1,3));
+      ctx.fillStyle='#e74c3c'; ctx.fillRect(x+40,175-h2,35,h2);
+      ctx.fillStyle='#1a5276'; ctx.font='9px -apple-system';
+      ctx.fillText(issues[i],x,190);
+      ctx.fillText(withLineage[i]+'h',x+8,172-h1);
+      ctx.fillText(withoutLineage[i]+'h',x+42,170-h2);
+    }
+    ctx.fillStyle='#27ae60'; ctx.fillRect(560,35,12,12); ctx.fillStyle='#1a5276'; ctx.font='11px -apple-system'; ctx.fillText('With lineage',578,46);
+    ctx.fillStyle='#e74c3c'; ctx.fillRect(560,52,12,12); ctx.fillStyle='#1a5276'; ctx.fillText('Without',578,63);
+    ctx.fillStyle='#8e44ad'; ctx.fillText('Avg 50x faster with lineage',440,80);
+  })();
+
+  // Chart 6: GDPR audit - expected vs found systems
+  (function(){
+    var ctx = setupCanvas('c6');
+    ctx.fillStyle='#fdedec'; ctx.fillRect(0,0,720,200);
+    ctx.font='17px -apple-system'; ctx.fillStyle='#1a5276';
+    ctx.fillText('GDPR Audit: "Where is User X\'s Data?"', 235, 18);
+    var categories = ['Known\nSystems','Found During\nAudit','Total','Time to\nAnswer'];
+    var expected = [8,0,8,0];
+    var actual = [8,26,34,42]; // 42 = days
+    var max=45;
+    for(var i=0;i<categories.length;i++){
+      var x=70+i*170;
+      var h1=(expected[i]/max)*130; var h2=(actual[i]/max)*130;
+      if(expected[i]>0){ctx.fillStyle='#2980b9'; ctx.fillRect(x,170-h1,45,Math.max(h1,3));}
+      ctx.fillStyle='#e74c3c'; ctx.fillRect(x+50,170-h2,45,h2);
+      ctx.fillStyle='#1a5276'; ctx.font='9px -apple-system';
+      var lines=categories[i].split('\n');
+      for(var j=0;j<lines.length;j++) ctx.fillText(lines[j],x,187+j*10);
+      if(expected[i]>0) ctx.fillText(expected[i],x+15,165-h1);
+      ctx.fillText(actual[i]+(i===3?' days':''),x+55,165-h2);
+    }
+    ctx.fillStyle='#2980b9'; ctx.fillRect(520,35,12,12); ctx.fillStyle='#1a5276'; ctx.font='10px -apple-system'; ctx.fillText('Expected',538,46);
+    ctx.fillStyle='#e74c3c'; ctx.fillRect(520,52,12,12); ctx.fillStyle='#1a5276'; ctx.fillText('Reality',538,63);
+    ctx.fillStyle='#e74c3c'; ctx.font='11px -apple-system'; ctx.fillText('Fine: EUR 2.3M',520,85);
+  })();
+
+  // Chart 7: Data quality issue tracing
+  (function(){
+    var ctx = setupCanvas('c7');
+    ctx.fillStyle='#fef9e7'; ctx.fillRect(0,0,720,200);
+    ctx.font='17px -apple-system'; ctx.fillStyle='#1a5276';
+    ctx.fillText('Data Quality: Time to Find Root Cause by Source Count', 160, 18);
+    var sources = [1,2,3,5,8,12,20];
+    var days = [0.5,1,3,8,18,45,120];
+    var maxS=22, maxD=130;
+    ctx.fillStyle='rgba(231,76,60,0.1)';
+    ctx.beginPath(); ctx.moveTo(70,185);
+    for(var i=0;i<sources.length;i++) ctx.lineTo(70+(sources[i]/maxS)*580,185-(days[i]/maxD)*155);
+    ctx.lineTo(70+(20/maxS)*580,185); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='#e74c3c'; ctx.lineWidth=2.5; ctx.beginPath();
+    for(var i=0;i<sources.length;i++){
+      var x=70+(sources[i]/maxS)*580, y=185-(days[i]/maxD)*155;
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+    for(var i=0;i<sources.length;i++){
+      var x=70+(sources[i]/maxS)*580, y=185-(days[i]/maxD)*155;
+      ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fillStyle='#e74c3c'; ctx.fill();
+      ctx.fillStyle='#1a5276'; ctx.font='10px -apple-system';
+      ctx.fillText(days[i]+'d',x+5,y-8);
+    }
+    ctx.font='11px -apple-system'; ctx.fillStyle='#1a5276';
+    ctx.fillText('# Potential Sources →',500,198);
+    ctx.fillText('Days to find root cause ↑',5,35);
+    ctx.fillStyle='#e74c3c'; ctx.fillText('Exponential search without lineage',350,50);
+  })();
+
+  // Chart 8: Feature lineage depth
+  (function(){
+    var ctx = setupCanvas('c8');
+    ctx.fillStyle='#f4ecf7'; ctx.fillRect(0,0,720,200);
+    ctx.font='17px -apple-system'; ctx.fillStyle='#1a5276';
+    ctx.fillText('Model Feature Lineage Depth vs Explainability', 205, 18);
+    // Tree-like structure
+    ctx.fillStyle='#8e44ad'; ctx.beginPath(); ctx.arc(360,45,20,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#fff'; ctx.font='8px -apple-system'; ctx.fillText('risk_v3',345,48);
+    // Level 2
+    var l2 = [{x:200,y:90},{x:360,y:90},{x:520,y:90}];
+    for(var i=0;i<l2.length;i++){
+      ctx.strokeStyle='#8e44ad'; ctx.beginPath(); ctx.moveTo(360,65); ctx.lineTo(l2[i].x,l2[i].y-12); ctx.stroke();
+      ctx.fillStyle='#d2b4de'; ctx.beginPath(); ctx.arc(l2[i].x,l2[i].y,12,0,Math.PI*2); ctx.fill();
+    }
+    // Level 3 (many nodes)
+    var l3x = [100,150,200,250,300,350,400,450,500,550,600,650];
+    for(var i=0;i<l3x.length;i++){
+      var parentIdx = Math.floor(i/4);
+      ctx.strokeStyle='#bb8fce'; ctx.lineWidth=0.8; ctx.beginPath();
+      ctx.moveTo(l2[parentIdx].x,l2[parentIdx].y+12); ctx.lineTo(l3x[i],135); ctx.stroke();
+      ctx.fillStyle='#ebdef0'; ctx.beginPath(); ctx.arc(l3x[i],140,8,0,Math.PI*2); ctx.fill();
+    }
+    // Level 4 (raw sources)
+    for(var i=0;i<l3x.length;i++){
+      for(var j=0;j<3;j++){
+        var rx=l3x[i]-10+j*10, ry=172;
+        ctx.fillStyle='#f5eef8'; ctx.fillRect(rx-3,ry-3,6,6);
+      }
+    }
+    ctx.fillStyle='#1a5276'; ctx.font='11px -apple-system';
+    ctx.fillText('47 raw fields',15,175); ctx.fillText('8 systems',15,190);
+    ctx.fillStyle='#e74c3c'; ctx.font='11px -apple-system';
+    ctx.fillText('"Why was my loan rejected?"',440,175);
+    ctx.fillText('Cannot answer without full lineage',440,190);
+  })();
+})();
+</script>
+</body>
+</html>

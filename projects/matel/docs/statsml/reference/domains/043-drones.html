@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drones & UAV — Domain-Specific Pitfalls</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f9fafb;
+            color: #333;
+        }
+        h1 {
+            color: #1a5276;
+            margin-bottom: 5px;
+        }
+        h2 {
+            color: #1a5276;
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #2980b9;
+            text-decoration: none;
+            font-size: 15px;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+        }
+        .obj-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background: #fff;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        }
+        .obj-table th {
+            background: #1a5276;
+            color: #fff;
+            padding: 12px 16px;
+            text-align: left;
+            font-size: 15px;
+        }
+        .obj-table td {
+            border: 1px solid #2980b9;
+            padding: 16px;
+            vertical-align: top;
+        }
+        .obj-table td:first-child {
+            width: 45%;
+        }
+        .obj-table td:last-child {
+            width: 55%;
+            text-align: center;
+        }
+        .obj-table tr:nth-child(even) {
+            background: #f4f8fb;
+        }
+        .obj-title {
+            color: #1a5276;
+            font-weight: 700;
+            font-size: 17px;
+            margin-bottom: 8px;
+        }
+        .pitfall-desc {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #444;
+        }
+        canvas {
+            border: 1px solid #d5e8f0;
+            border-radius: 4px;
+            background: #fdfdfe;
+        }
+        header {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Drones &amp; UAV</h1>
+        <h2>Domain-Specific Pitfalls</h2>
+    </header>
+
+    <table class="obj-table">
+        <thead>
+            <tr>
+                <th>Pitfall Description</th>
+                <th>Visualization</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Row 1: GPS-Denied Environments -->
+            <tr>
+                <td>
+                    <div class="obj-title">1. GPS-Denied Environments</div>
+                    <div class="pitfall-desc">
+                        Indoors, urban canyons, and electronic warfare zones remove the primary navigation source entirely.
+                        When GPS signal is lost, the drone must fall back to visual-inertial odometry or pure inertial navigation.
+                        These fallback systems suffer from drift accumulation: small measurement errors compound over time,
+                        causing position uncertainty to grow every second the drone operates without external references.
+                        A drone that was positioned to within 1 meter accuracy under GPS can drift to 10+ meters of uncertainty
+                        within minutes of GPS denial. The uncertainty cone expands non-linearly, making path planning and
+                        obstacle avoidance increasingly unreliable. Return-to-home commands become dangerous when the drone
+                        no longer knows where "home" actually is relative to its current position.
+                    </div>
+                </td>
+                <td>
+                    <canvas id="canvas1" style="width:720px;height:200px;"></canvas>
+                </td>
+            </tr>
+
+            <!-- Row 2: Wind as Unmodeled Disturbance -->
+            <tr>
+                <td>
+                    <div class="obj-title">2. Wind as Unmodeled Disturbance</div>
+                    <div class="pitfall-desc">
+                        A gust hits the drone and pushes it 2 meters off course in an instant. Wind is fundamentally stochastic:
+                        turbulence near buildings creates unpredictable vortices, thermals cause sudden altitude changes,
+                        and wind shear at different altitudes means conditions change with every meter of ascent.
+                        The same flight path executed at the same time on different days yields a different trajectory every time.
+                        Deterministic planning fails because the environment is non-deterministic. Control systems must constantly
+                        fight wind disturbances, consuming additional battery and creating jerky motion for camera payloads.
+                        Wind models used in simulation rarely capture the true spatial and temporal variability encountered in
+                        real urban or mountainous environments, leading to overconfident mission time estimates and inadequate
+                        safety margins in trajectory planning.
+                    </div>
+                </td>
+                <td>
+                    <canvas id="canvas2" style="width:720px;height:200px;"></canvas>
+                </td>
+            </tr>
+
+            <!-- Row 3: Battery State Uncertainty -->
+            <tr>
+                <td>
+                    <div class="obj-title">3. Battery State Uncertainty</div>
+                    <div class="pitfall-desc">
+                        The battery reports 40% remaining, but actual usable capacity depends on temperature, cell age,
+                        current discharge rate, and individual cell imbalance within the pack. A reading of "40%" at -10°C
+                        does not equal "40%" at 25°C — cold batteries deliver significantly less energy and can voltage-sag
+                        under load, triggering emergency landings without warning. As batteries age through charge cycles,
+                        their internal resistance increases and capacity degrades non-uniformly across cells. High discharge
+                        rates during aggressive maneuvers temporarily reduce available capacity through the Peukert effect.
+                        Range estimation becomes deeply uncertain: the drone's flight computer may believe it can fly 2km to
+                        home base, but actual remaining energy might only support 1.2km. This uncertainty is invisible to
+                        operators until the drone drops from the sky.
+                    </div>
+                </td>
+                <td>
+                    <canvas id="canvas3" style="width:720px;height:200px;"></canvas>
+                </td>
+            </tr>
+
+            <!-- Row 4: No-Fly Zone Dynamic Updates -->
+            <tr>
+                <td>
+                    <div class="obj-title">4. No-Fly Zone Dynamic Updates</div>
+                    <div class="pitfall-desc">
+                        A new Temporary Flight Restriction (TFR) is posted and the drone must know immediately.
+                        Stale geofence data means the drone could be violating controlled airspace without any awareness.
+                        Airspace rules change in real-time during emergencies: a wildfire breaks out and a 5-mile TFR appears
+                        around it; the President's motorcade triggers a moving no-fly zone; a medical helicopter requests
+                        priority corridor access. The drone's geofence database, possibly loaded at takeoff, becomes outdated
+                        within minutes. Communication links to update this data may be unreliable precisely when the drone
+                        is in remote areas where TFRs are common (near airports, military installations, disaster zones).
+                        Violating airspace restrictions carries severe legal penalties and genuine safety risks — a drone
+                        that enters active emergency airspace can interfere with manned aircraft operations.
+                    </div>
+                </td>
+                <td>
+                    <canvas id="canvas4" style="width:720px;height:200px;"></canvas>
+                </td>
+            </tr>
+
+            <!-- Row 5: Swarm Coordination Data Explosion -->
+            <tr>
+                <td>
+                    <div class="obj-title">5. Swarm Coordination Data Explosion</div>
+                    <div class="pitfall-desc">
+                        Consider 100 drones, each producing 30 sensor readings at 10Hz — that is 30,000 messages per second
+                        that the swarm must process. Every drone needs to know the relevant state of its peers for collision
+                        avoidance, formation keeping, and task coordination. Full mesh communication does not scale: with N
+                        drones, mesh produces O(N²) communication links. At 100 drones that is 9,900 bidirectional links,
+                        each carrying position, velocity, intent, and sensor data. Radio bandwidth saturates, latency spikes,
+                        and packet collisions cause data loss at precisely the moments when coordination is most critical
+                        (dense formations, obstacle fields). The fundamental question becomes: what information to share,
+                        with whom, and how often? Hierarchical approaches reduce bandwidth but introduce single points of
+                        failure. Gossip protocols trade consistency for scalability. No solution is without tradeoffs.
+                    </div>
+                </td>
+                <td>
+                    <canvas id="canvas5" style="width:720px;height:200px;"></canvas>
+                </td>
+            </tr>
+
+            <!-- Row 6: Payload-Dependent Flight Dynamics -->
+            <tr>
+                <td>
+                    <div class="obj-title">6. Payload-Dependent Flight Dynamics</div>
+                    <div class="pitfall-desc">
+                        A drone carrying 0kg versus 5kg exhibits completely different flight characteristics.
+                        The added mass shifts the center of gravity, increases moment of inertia, requires higher thrust
+                        for the same maneuver, and changes the vibration modes of the airframe. A control model trained
+                        or tuned on an empty drone will oscillate, overshoot, or become sluggish when carrying a payload.
+                        Worse, the payload mass is often unknown or approximate — a delivery package might be labeled 3kg
+                        but actually weigh 3.4kg. Slung loads create pendulum dynamics that couple back into the flight
+                        controller. The drone needs online adaptation: detecting the actual payload characteristics during
+                        flight and adjusting control gains in real-time. Without this, PID controllers tuned for empty
+                        flight produce dangerous oscillations under load, and aggressive maneuvers that were safe when
+                        empty become impossible with payload attached.
+                    </div>
+                </td>
+                <td>
+                    <canvas id="canvas6" style="width:720px;height:200px;"></canvas>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+
+    <script>
+        function setupCanvas(id) {
+            const canvas = document.getElementById(id);
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = 720 * dpr;
+            canvas.height = 200 * dpr;
+            canvas.style.width = '720px';
+            canvas.style.height = '200px';
+            const ctx = canvas.getContext('2d');
+            ctx.scale(dpr, dpr);
+            return ctx;
+        }
+
+        // Canvas 1: Position uncertainty cone growing over time
+        (function() {
+            const ctx = setupCanvas('canvas1');
+            const W = 720, H = 200;
+
+            // Background
+            ctx.fillStyle = '#f8fbfe';
+            ctx.fillRect(0, 0, W, H);
+
+            // Draw axes
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(60, 20);
+            ctx.lineTo(60, 170);
+            ctx.lineTo(680, 170);
+            ctx.stroke();
+
+            // Labels
+            ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillStyle = '#1a5276';
+            ctx.textAlign = 'center';
+            ctx.fillText('Position Uncertainty Over Time (GPS Lost at t=0)', W/2, 18);
+
+            ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillStyle = '#555';
+            ctx.textAlign = 'center';
+            ctx.fillText('Time (seconds)', 370, 195);
+
+            ctx.save();
+            ctx.translate(15, 100);
+            ctx.rotate(-Math.PI/2);
+            ctx.textAlign = 'center';
+            ctx.fillText('Uncertainty (m)', 0, 0);
+            ctx.restore();
+
+            // GPS lost marker
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 3]);
+            ctx.beginPath();
+            ctx.moveTo(100, 20);
+            ctx.lineTo(100, 170);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillStyle = '#e74c3c';
+            ctx.textAlign = 'left';
+            ctx.fillText('GPS Lost', 104, 35);
+
+            // Draw uncertainty cone (upper and lower bounds)
+            const startX = 100;
+            const endX = 660;
+            const centerY = 170;
+
+            // Fill the cone
+            ctx.beginPath();
+            ctx.moveTo(startX, centerY);
+            for (let x = startX; x <= endX; x++) {
+                const t = (x - startX) / (endX - startX);
+                const uncertainty = Math.pow(t, 1.5) * 130;
+                ctx.lineTo(x, centerY - uncertainty);
+            }
+            for (let x = endX; x >= startX; x--) {
+                ctx.lineTo(x, centerY);
+            }
+            ctx.fillStyle = 'rgba(231, 76, 60, 0.15)';
+            ctx.fill();
+
+            // Upper bound line (uncertainty growth)
+            ctx.beginPath();
+            ctx.moveTo(startX, centerY);
+            for (let x = startX; x <= endX; x++) {
+                const t = (x - startX) / (endX - startX);
+                const uncertainty = Math.pow(t, 1.5) * 130;
+                ctx.lineTo(x, centerY - uncertainty);
+            }
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+
+            // Before GPS loss - flat line showing good accuracy
+            ctx.beginPath();
+            ctx.moveTo(60, centerY - 5);
+            ctx.lineTo(100, centerY - 5);
+            ctx.strokeStyle = '#27ae60';
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+
+            // Labels for regions
+            ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillStyle = '#27ae60';
+            ctx.textAlign = 'center';
+            ctx.fillText('GPS Active', 80, 145);
+
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillText('Inertial Only — Drift Accumulates', 400, 80);
+
+            // Time axis ticks
+            ctx.fillStyle = '#666';
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+            const times = [0, 30, 60, 90, 120];
+            times.forEach((t, i) => {
+                const x = 100 + i * 140;
+                ctx.beginPath();
+                ctx.moveTo(x, 170);
+                ctx.lineTo(x, 175);
+                ctx.strokeStyle = '#666';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                ctx.textAlign = 'center';
+                ctx.fillText(t + 's', x, 186);
+            });
+        })();
+
+        // Canvas 2: Planned path vs multiple actual trajectories
+        (function() {
+            const ctx = setupCanvas('canvas2');
+            const W = 720, H = 200;
+
+            ctx.fillStyle = '#f8fbfe';
+            ctx.fillRect(0, 0, W, H);
+
+            // Title
+            ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillStyle = '#1a5276';
+            ctx.textAlign = 'center';
+            ctx.fillText('Planned Path vs Actual Trajectories (Wind Disturbance)', W/2, 18);
+
+            // Draw planned path (straight line)
+            ctx.beginPath();
+            ctx.moveTo(60, 100);
+            ctx.lineTo(680, 100);
+            ctx.strokeStyle = '#1a5276';
+            ctx.lineWidth = 3;
+            ctx.setLineDash([8, 4]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Seed for reproducible random
+            function seededRandom(seed) {
+                let s = seed;
+                return function() {
+                    s = (s * 1664525 + 1013904223) & 0xFFFFFFFF;
+                    return (s >>> 0) / 0xFFFFFFFF;
+                };
+            }
+
+            // Draw multiple actual trajectories
+            const colors = ['#e74c3c', '#e67e22', '#9b59b6', '#2ecc71', '#3498db', '#f39c12', '#1abc9c'];
+            for (let traj = 0; traj < 7; traj++) {
+                const rng = seededRandom(traj * 137 + 42);
+                ctx.beginPath();
+                ctx.moveTo(60, 100);
+                let y = 100;
+                let vy = 0;
+                for (let x = 60; x <= 680; x += 3) {
+                    // Wind gusts - random walk with mean reversion
+                    vy += (rng() - 0.5) * 3;
+                    vy *= 0.97; // damping
+                    // Occasional strong gusts
+                    if (rng() < 0.02) {
+                        vy += (rng() - 0.5) * 12;
+                    }
+                    y += vy * 0.3;
+                    // Soft bounds
+                    if (y < 35) vy += 1;
+                    if (y > 165) vy -= 1;
+                    ctx.lineTo(x, y);
+                }
+                ctx.strokeStyle = colors[traj];
+                ctx.lineWidth = 1.5;
+                ctx.globalAlpha = 0.7;
+                ctx.stroke();
+                ctx.globalAlpha = 1.0;
+            }
+
+            // Legend
+            ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.setLineDash([8, 4]);
+            ctx.beginPath();
+            ctx.moveTo(80, 185);
+            ctx.lineTo(120, 185);
+            ctx.strokeStyle = '#1a5276';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = '#1a5276';
+            ctx.textAlign = 'left';
+            ctx.fillText('Planned Path', 125, 189);
+
+            ctx.beginPath();
+            ctx.moveTo(240, 185);
+            ctx.lineTo(280, 185);
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillText('Actual Flights (same plan, different wind)', 285, 189);
+
+            // Start/End markers
+            ctx.fillStyle = '#1a5276';
+            ctx.beginPath();
+            ctx.arc(60, 100, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(680, 100, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Start', 60, 125);
+            ctx.fillText('End', 680, 125);
+        })();
+
+        // Canvas 3: Battery capacity curves at different temperatures
+        (function() {
+            const ctx = setupCanvas('canvas3');
+            const W = 720, H = 200;
+
+            ctx.fillStyle = '#f8fbfe';
+            ctx.fillRect(0, 0, W, H);
+
+            // Title
+            ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillStyle = '#1a5276';
+            ctx.textAlign = 'center';
+            ctx.fillText('Battery Capacity vs Reported % at Different Temperatures', W/2, 18);
+
+            // Axes
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(80, 30);
+            ctx.lineTo(80, 170);
+            ctx.lineTo(670, 170);
+            ctx.stroke();
+
+            // Y-axis label
+            ctx.save();
+            ctx.translate(15, 100);
+            ctx.rotate(-Math.PI/2);
+            ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillStyle = '#555';
+            ctx.textAlign = 'center';
+            ctx.fillText('Actual Capacity (Wh)', 0, 0);
+            ctx.restore();
+
+            // X-axis label
+            ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillStyle = '#555';
+            ctx.textAlign = 'center';
+            ctx.fillText('Reported Battery %', 375, 195);
+
+            // X-axis ticks
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+            const percents = [100, 80, 60, 40, 20, 0];
+            percents.forEach((p, i) => {
+                const x = 80 + i * (590/5);
+                ctx.beginPath();
+                ctx.moveTo(x, 170);
+                ctx.lineTo(x, 175);
+                ctx.strokeStyle = '#666';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                ctx.fillStyle = '#666';
+                ctx.textAlign = 'center';
+                ctx.fillText(p + '%', x, 186);
+            });
+
+            // Temperature curves
+            const temps = [
+                { label: '25°C (ideal)', color: '#27ae60', factor: 1.0 },
+                { label: '10°C', color: '#f39c12', factor: 0.85 },
+                { label: '0°C', color: '#e67e22', factor: 0.7 },
+                { label: '-10°C', color: '#e74c3c', factor: 0.5 }
+            ];
+
+            const maxWh = 100; // 100Wh max capacity
+            const graphH = 135; // plotting height
+            const graphW = 590;
+
+            temps.forEach((temp, ti) => {
+                ctx.beginPath();
+                for (let i = 0; i <= 100; i++) {
+                    const x = 80 + (100 - i) / 100 * graphW;
+                    // Non-linear discharge: cold batteries drop off more steeply at low %
+                    let actual;
+                    if (temp.factor === 1.0) {
+                        actual = i / 100 * maxWh;
+                    } else {
+                        // Cold batteries: capacity drops non-linearly
+                        const nonlinearity = 1 + (1 - temp.factor) * 0.5;
+                        actual = Math.pow(i / 100, nonlinearity) * maxWh * temp.factor;
+                    }
+                    const y = 170 - (actual / maxWh) * graphH;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.strokeStyle = temp.color;
+                ctx.lineWidth = 2.5;
+                ctx.stroke();
+            });
+
+            // "40% reported" vertical line
+            const x40 = 80 + (100 - 40) / 100 * graphW;
+            ctx.setLineDash([4, 3]);
+            ctx.beginPath();
+            ctx.moveTo(x40, 30);
+            ctx.lineTo(x40, 170);
+            ctx.strokeStyle = '#888';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillStyle = '#888';
+            ctx.textAlign = 'center';
+            ctx.fillText('"40% reported"', x40, 42);
+
+            // Bracket showing divergence at 40%
+            const y25 = 170 - (0.4 * maxWh) / maxWh * graphH;
+            const yNeg10 = 170 - (Math.pow(0.4, 1.75) * maxWh * 0.5) / maxWh * graphH;
+            ctx.beginPath();
+            ctx.moveTo(x40 + 5, y25);
+            ctx.lineTo(x40 + 15, y25);
+            ctx.lineTo(x40 + 15, yNeg10);
+            ctx.lineTo(x40 + 5, yNeg10);
+            ctx.strokeStyle = '#c0392b';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            ctx.fillStyle = '#c0392b';
+            ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText('Real gap!', x40 + 18, (y25 + yNeg10)/2 + 4);
+
+            // Legend
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+            let lx = 450;
+            temps.forEach((temp, i) => {
+                const ly = 38 + i * 16;
+                ctx.beginPath();
+                ctx.moveTo(lx, ly);
+                ctx.lineTo(lx + 25, ly);
+                ctx.strokeStyle = temp.color;
+                ctx.lineWidth = 2.5;
+                ctx.stroke();
+                ctx.fillStyle = temp.color;
+                ctx.textAlign = 'left';
+                ctx.fillText(temp.label, lx + 30, ly + 4);
+            });
+        })();
+
+        // Canvas 4: Airspace map with zones appearing dynamically
+        (function() {
+            const ctx = setupCanvas('canvas4');
+            const W = 720, H = 200;
+
+            ctx.fillStyle = '#f8fbfe';
+            ctx.fillRect(0, 0, W, H);
+
+            // Title
+            ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillStyle = '#1a5276';
+            ctx.textAlign = 'center';
+            ctx.fillText('Dynamic Airspace Restrictions Over Time', W/2, 18);
+
+            // Timeline base
+            const timeY = 175;
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(60, timeY);
+            ctx.lineTo(680, timeY);
+            ctx.stroke();
+
+            // Time labels
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillStyle = '#666';
+            ctx.textAlign = 'center';
+            const times = ['T+0', 'T+5min', 'T+10min', 'T+15min', 'T+20min', 'T+25min'];
+            times.forEach((t, i) => {
+                const x = 60 + i * 124;
+                ctx.beginPath();
+                ctx.moveTo(x, timeY - 3);
+                ctx.lineTo(x, timeY + 3);
+                ctx.strokeStyle = '#666';
+                ctx.stroke();
+                ctx.fillText(t, x, timeY + 15);
+            });
+
+            // Draw zones as rectangles that appear at different times
+            // Zone 1: permanent airport zone
+            ctx.fillStyle = 'rgba(231, 76, 60, 0.25)';
+            ctx.fillRect(60, 35, 620, 25);
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(60, 35, 620, 25);
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillStyle = '#c0392b';
+            ctx.textAlign = 'left';
+            ctx.fillText('Airport Class B (permanent)', 65, 51);
+
+            // Zone 2: TFR appears at T+5
+            ctx.fillStyle = 'rgba(243, 156, 18, 0.3)';
+            ctx.fillRect(184, 65, 496, 22);
+            ctx.strokeStyle = '#e67e22';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(184, 65, 496, 22);
+            ctx.fillStyle = '#e67e22';
+            ctx.fillText('TFR — Wildfire (appears T+5)', 189, 80);
+
+            // Arrow showing appearance
+            ctx.beginPath();
+            ctx.moveTo(184, 160);
+            ctx.lineTo(184, 90);
+            ctx.strokeStyle = '#e67e22';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 2]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Zone 3: VIP movement at T+10, ends T+20
+            ctx.fillStyle = 'rgba(142, 68, 173, 0.25)';
+            ctx.fillRect(308, 92, 248, 22);
+            ctx.strokeStyle = '#8e44ad';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(308, 92, 248, 22);
+            ctx.fillStyle = '#8e44ad';
+            ctx.fillText('VIP TFR (T+10 to T+20)', 313, 107);
+
+            // Zone 4: Emergency corridor at T+15
+            ctx.fillStyle = 'rgba(41, 128, 185, 0.25)';
+            ctx.fillRect(432, 119, 248, 22);
+            ctx.strokeStyle = '#2980b9';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(432, 119, 248, 22);
+            ctx.fillStyle = '#2980b9';
+            ctx.fillText('HEMS Corridor (T+15 onward)', 437, 134);
+
+            // Drone position indicator
+            ctx.fillStyle = '#1a5276';
+            ctx.font = '18px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('✈', 370, 155);
+            ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('Drone (stale geofence data)', 370, 167);
+
+            // Warning symbol
+            ctx.fillStyle = '#e74c3c';
+            ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('⚠', 395, 105);
+        })();
+
+        // Canvas 5: Message count scaling with swarm size
+        (function() {
+            const ctx = setupCanvas('canvas5');
+            const W = 720, H = 200;
+
+            ctx.fillStyle = '#f8fbfe';
+            ctx.fillRect(0, 0, W, H);
+
+            // Title
+            ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillStyle = '#1a5276';
+            ctx.textAlign = 'center';
+            ctx.fillText('Communication Load: Full Mesh vs Hierarchical', W/2, 18);
+
+            // Axes
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(80, 30);
+            ctx.lineTo(80, 165);
+            ctx.lineTo(670, 165);
+            ctx.stroke();
+
+            // Y-axis label
+            ctx.save();
+            ctx.translate(14, 100);
+            ctx.rotate(-Math.PI/2);
+            ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillStyle = '#555';
+            ctx.textAlign = 'center';
+            ctx.fillText('Messages/sec (thousands)', 0, 0);
+            ctx.restore();
+
+            // X-axis label
+            ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillStyle = '#555';
+            ctx.textAlign = 'center';
+            ctx.fillText('Swarm Size (number of drones)', 375, 195);
+
+            // X-axis ticks
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+            const swarmSizes = [10, 25, 50, 75, 100, 150, 200];
+            const graphW = 580;
+            const graphH = 125;
+            const maxN = 200;
+
+            swarmSizes.forEach(n => {
+                const x = 80 + (n / maxN) * graphW;
+                ctx.beginPath();
+                ctx.moveTo(x, 165);
+                ctx.lineTo(x, 170);
+                ctx.strokeStyle = '#666';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                ctx.fillStyle = '#666';
+                ctx.textAlign = 'center';
+                ctx.fillText(n.toString(), x, 181);
+            });
+
+            // Full mesh: N*(N-1) * 30 readings * 10Hz / 1000
+            // At N=200: 200*199*300/1000 = 11,940k messages — scale to fit
+            const maxMsgs = 12000; // thousands
+
+            // Y-axis ticks
+            [0, 3000, 6000, 9000, 12000].forEach(v => {
+                const y = 165 - (v / maxMsgs) * graphH;
+                ctx.beginPath();
+                ctx.moveTo(75, y);
+                ctx.lineTo(80, y);
+                ctx.strokeStyle = '#666';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                ctx.fillStyle = '#666';
+                ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif';
+                ctx.textAlign = 'right';
+                ctx.fillText((v/1000).toFixed(0) + 'M', 73, y + 3);
+            });
+
+            // Full mesh curve (quadratic)
+            ctx.beginPath();
+            for (let n = 2; n <= maxN; n++) {
+                const msgs = n * (n - 1) * 300 / 1000; // in thousands
+                const x = 80 + (n / maxN) * graphW;
+                const y = 165 - (msgs / maxMsgs) * graphH;
+                if (n === 2) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+
+            // Fill under mesh curve
+            ctx.beginPath();
+            ctx.moveTo(80 + (2/maxN)*graphW, 165);
+            for (let n = 2; n <= maxN; n++) {
+                const msgs = n * (n - 1) * 300 / 1000;
+                const x = 80 + (n / maxN) * graphW;
+                const y = 165 - (msgs / maxMsgs) * graphH;
+                ctx.lineTo(x, y);
+            }
+            ctx.lineTo(80 + graphW, 165);
+            ctx.fillStyle = 'rgba(231, 76, 60, 0.08)';
+            ctx.fill();
+
+            // Hierarchical curve (N * log(N) * factor)
+            ctx.beginPath();
+            for (let n = 2; n <= maxN; n++) {
+                const msgs = n * Math.log2(n) * 30 / 1000; // much lower
+                const x = 80 + (n / maxN) * graphW;
+                const y = 165 - (msgs / maxMsgs) * graphH;
+                if (n === 2) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.strokeStyle = '#27ae60';
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+
+            // Bandwidth limit line
+            const limitY = 165 - (3000 / maxMsgs) * graphH;
+            ctx.setLineDash([6, 4]);
+            ctx.beginPath();
+            ctx.moveTo(80, limitY);
+            ctx.lineTo(670, limitY);
+            ctx.strokeStyle = '#f39c12';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillStyle = '#f39c12';
+            ctx.textAlign = 'left';
+            ctx.fillText('Radio bandwidth limit', 500, limitY - 5);
+
+            // Legend
+            ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.beginPath();
+            ctx.moveTo(150, 45);
+            ctx.lineTo(185, 45);
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+            ctx.fillStyle = '#e74c3c';
+            ctx.textAlign = 'left';
+            ctx.fillText('Full Mesh O(N²)', 190, 49);
+
+            ctx.beginPath();
+            ctx.moveTo(350, 45);
+            ctx.lineTo(385, 45);
+            ctx.strokeStyle = '#27ae60';
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+            ctx.fillStyle = '#27ae60';
+            ctx.fillText('Hierarchical O(N log N)', 390, 49);
+        })();
+
+        // Canvas 6: Flight response curves for different payload weights
+        (function() {
+            const ctx = setupCanvas('canvas6');
+            const W = 720, H = 200;
+
+            ctx.fillStyle = '#f8fbfe';
+            ctx.fillRect(0, 0, W, H);
+
+            // Title
+            ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillStyle = '#1a5276';
+            ctx.textAlign = 'center';
+            ctx.fillText('Step Response: Altitude Command at Different Payload Weights', W/2, 18);
+
+            // Axes
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(80, 30);
+            ctx.lineTo(80, 170);
+            ctx.lineTo(670, 170);
+            ctx.stroke();
+
+            // Labels
+            ctx.save();
+            ctx.translate(15, 100);
+            ctx.rotate(-Math.PI/2);
+            ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillStyle = '#555';
+            ctx.textAlign = 'center';
+            ctx.fillText('Altitude Response', 0, 0);
+            ctx.restore();
+
+            ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillStyle = '#555';
+            ctx.textAlign = 'center';
+            ctx.fillText('Time (ms)', 375, 195);
+
+            // Target altitude line
+            const targetY = 60;
+            ctx.setLineDash([6, 4]);
+            ctx.beginPath();
+            ctx.moveTo(80, targetY);
+            ctx.lineTo(670, targetY);
+            ctx.strokeStyle = '#888';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillStyle = '#888';
+            ctx.textAlign = 'left';
+            ctx.fillText('Target', 673, targetY + 4);
+
+            // Step response for different masses
+            // Second order system response: y(t) = 1 - e^(-zeta*wn*t) * (cos(wd*t) + (zeta/sqrt(1-zeta^2))*sin(wd*t))
+            const payloads = [
+                { label: '0 kg (empty)', color: '#27ae60', wn: 12, zeta: 0.6 },
+                { label: '2 kg', color: '#f39c12', wn: 8, zeta: 0.35 },
+                { label: '5 kg', color: '#e74c3c', wn: 5, zeta: 0.2 }
+            ];
+
+            const startX = 120; // step happens here
+            const graphW = 540;
+            const baseY = 160;
+            const amplitude = baseY - targetY;
+
+            // Draw step command
+            ctx.beginPath();
+            ctx.moveTo(80, baseY);
+            ctx.lineTo(startX, baseY);
+            ctx.lineTo(startX, targetY);
+            ctx.lineTo(startX, targetY);
+            ctx.strokeStyle = '#aaa';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 2]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            payloads.forEach(p => {
+                ctx.beginPath();
+                const wd = p.wn * Math.sqrt(1 - p.zeta * p.zeta);
+                for (let px = 0; px <= graphW; px++) {
+                    const t = (px / graphW) * 2.0; // 2 seconds total
+                    const x = startX + px;
+                    let y;
+                    if (px === 0) {
+                        y = baseY;
+                        ctx.moveTo(x, y);
+                    } else {
+                        const decay = Math.exp(-p.zeta * p.wn * t);
+                        const osc = Math.cos(wd * t) + (p.zeta / Math.sqrt(1 - p.zeta * p.zeta)) * Math.sin(wd * t);
+                        const response = 1 - decay * osc;
+                        y = baseY - response * amplitude;
+                        ctx.lineTo(x, y);
+                    }
+                }
+                ctx.strokeStyle = p.color;
+                ctx.lineWidth = 2.5;
+                ctx.stroke();
+            });
+
+            // Pre-step flat line
+            payloads.forEach(p => {
+                ctx.beginPath();
+                ctx.moveTo(80, baseY);
+                ctx.lineTo(startX, baseY);
+                ctx.strokeStyle = p.color;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            });
+
+            // Overshoot annotation for 5kg
+            ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillStyle = '#e74c3c';
+            ctx.textAlign = 'left';
+            ctx.fillText('Overshoot & oscillation', 230, 32);
+            ctx.beginPath();
+            ctx.moveTo(230, 34);
+            ctx.lineTo(210, 42);
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 0.8;
+            ctx.stroke();
+
+            // Legend
+            ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+            let lx = 430;
+            payloads.forEach((p, i) => {
+                const ly = 130 + i * 16;
+                ctx.beginPath();
+                ctx.moveTo(lx, ly);
+                ctx.lineTo(lx + 25, ly);
+                ctx.strokeStyle = p.color;
+                ctx.lineWidth = 2.5;
+                ctx.stroke();
+                ctx.fillStyle = p.color;
+                ctx.textAlign = 'left';
+                ctx.fillText(p.label, lx + 30, ly + 4);
+            });
+
+            // Time axis ticks
+            ctx.fillStyle = '#666';
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.textAlign = 'center';
+            [0, 500, 1000, 1500, 2000].forEach((t, i) => {
+                const x = startX + i * (graphW / 4);
+                ctx.beginPath();
+                ctx.moveTo(x, 170);
+                ctx.lineTo(x, 175);
+                ctx.strokeStyle = '#666';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                ctx.fillText(t + '', x, 186);
+            });
+        })();
+    </script>
+</body>
+</html>

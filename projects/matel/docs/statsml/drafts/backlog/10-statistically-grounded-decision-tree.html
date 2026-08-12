@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Statistically-Grounded Decision Tree Redesign — Discussion Backlog</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #fff; color: #2c3e50; line-height: 1.6; }
+h1 { color: #1a5276; border-bottom: 3px solid #2980b9; padding-bottom: 10px; }
+h2 { color: #1a5276; margin-top: 0; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { padding: 20px; vertical-align: top; border: 1px solid #2980b9; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-title { color: #1a5276; font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
+ul { margin: 10px 0; padding-left: 20px; }
+li { margin-bottom: 6px; }
+strong { color: #1a5276; }
+code { background: #e8f0f8; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; color: #1a5276; }
+.questions { background: #fff8e1; border-left: 3px solid #f39c12; padding: 10px 15px; margin: 10px 0; font-size: 0.9em; }
+canvas { display: block; margin: 8px auto; max-width: 100%; }
+.nav-link { display: inline-block; margin: 20px 0; color: #2980b9; text-decoration: none; font-weight: bold; }
+.nav-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<h1>Statistically-Grounded Decision Tree Redesign</h1>
+<p>Standard decision trees split greedily without checking statistical backing. Redesign: only continue branches with sufficient evidence.</p>
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Key Principles</div>
+<ul>
+<li><strong>Asymmetric branches:</strong> A split may produce one branch with significant data + clear signal, another with insufficient data</li>
+<li><strong>Significant branch only:</strong> If only left child has n > minimum AND passes separation test, only that branch continues</li>
+<li><strong>Split validation:</strong> Before committing, verify split creates statistically distinct subgroups</li>
+<li><strong>Partial trees:</strong> Resulting tree may be highly asymmetric — depth corresponds to evidence</li>
+</ul>
+<div class="obj-title" style="margin-top: 15px;">Cascade Integration</div>
+<ul>
+<li>"No decision" leaf passes to next feature's tree in cascade</li>
+<li>Each tree handles what it can prove; defers the rest</li>
+</ul>
+<div class="questions">
+<strong>Key Questions:</strong><br>
+(1) Minimum significance threshold?<br>
+(2) How to combine partial trees?<br>
+(3) Preventing over-conservatism?<br>
+(4) Confidence penalty for "no decision"?
+</div>
+</td>
+<td>
+<canvas id="c1" width="720" height="280"></canvas>
+<canvas id="c2" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setupCanvas(id) {
+    var c = document.getElementById(id);
+    var w = c.width, h = c.height;
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return {ctx: ctx, w: w, h: h};
+}
+
+// Canvas 1: Asymmetric statistically-grounded tree
+(function() {
+    var s = setupCanvas('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Statistically-Grounded Asymmetric Tree', w/2, 18);
+
+    // Tree nodes
+    var nodeW = 90, nodeH = 32;
+
+    function drawNode(x, y, label, color, dashed) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = dashed ? 1.5 : 2;
+        if (dashed) ctx.setLineDash([4, 3]);
+        else ctx.setLineDash([]);
+        ctx.fillStyle = color === '#e74c3c' ? 'rgba(231,76,60,0.08)' : 'rgba(39,174,96,0.08)';
+        ctx.beginPath();
+        ctx.roundRect(x - nodeW/2, y - nodeH/2, nodeW, nodeH, 6);
+        ctx.fill();
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.fillStyle = '#2c3e50';
+        ctx.textAlign = 'center';
+        ctx.fillText(label, x, y + 4);
+    }
+
+    function drawEdge(x1, y1, x2, y2, label, color) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1 + nodeH/2);
+        ctx.lineTo(x2, y2 - nodeH/2);
+        ctx.stroke();
+        if (label) {
+            ctx.font = '12px -apple-system, sans-serif';
+            ctx.fillStyle = color;
+            ctx.textAlign = 'center';
+            ctx.fillText(label, (x1+x2)/2 - 15, (y1+y2)/2 + 4);
+        }
+    }
+
+    // Root
+    var rootX = 240, rootY = 55;
+    drawNode(rootX, rootY, 'Age > 45', '#1a5276', false);
+
+    // Level 1
+    var l1LeftX = 140, l1RightX = 340, l1Y = 115;
+    drawEdge(rootX, rootY, l1LeftX, l1Y, 'n=1200', '#27ae60');
+    drawEdge(rootX, rootY, l1RightX, l1Y, 'n=23', '#e74c3c');
+    drawNode(l1LeftX, l1Y, 'Income > 50k', '#27ae60', false);
+    drawNode(l1RightX, l1Y, 'NO DECISION', '#e74c3c', true);
+
+    // p-value on left branch
+    ctx.font = 'bold 9px -apple-system, sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'left';
+    ctx.fillText('p=0.001', l1LeftX + nodeW/2 + 4, l1Y);
+
+    // Arrow from NO DECISION to cascade
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 2]);
+    ctx.beginPath();
+    ctx.moveTo(l1RightX + nodeW/2 + 5, l1Y);
+    ctx.lineTo(l1RightX + nodeW/2 + 40, l1Y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // Arrowhead
+    ctx.fillStyle = '#e67e22';
+    ctx.beginPath();
+    ctx.moveTo(l1RightX + nodeW/2 + 40, l1Y);
+    ctx.lineTo(l1RightX + nodeW/2 + 32, l1Y - 4);
+    ctx.lineTo(l1RightX + nodeW/2 + 32, l1Y + 4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.font = '12px -apple-system, sans-serif';
+    ctx.fillStyle = '#e67e22';
+    ctx.textAlign = 'left';
+    ctx.fillText('next feature', l1RightX + nodeW/2 + 42, l1Y + 3);
+    ctx.fillText('in cascade', l1RightX + nodeW/2 + 42, l1Y + 14);
+
+    // Level 2 (only from left)
+    var l2LeftX = 80, l2RightX = 200, l2Y = 180;
+    drawEdge(l1LeftX, l1Y, l2LeftX, l2Y, 'n=850', '#27ae60');
+    drawEdge(l1LeftX, l1Y, l2RightX, l2Y, 'n=350', '#27ae60');
+    drawNode(l2LeftX, l2Y, 'Predict: YES', '#27ae60', false);
+    drawNode(l2RightX, l2Y, 'Hours > 40', '#27ae60', false);
+
+    ctx.font = 'bold 9px -apple-system, sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'left';
+    ctx.fillText('p=0.003', l2RightX + nodeW/2 + 4, l2Y);
+
+    // Level 3
+    var l3LeftX = 160, l3RightX = 250, l3Y = 245;
+    drawEdge(l2RightX, l2Y, l3LeftX, l3Y, 'n=280', '#27ae60');
+    drawEdge(l2RightX, l2Y, l3RightX, l3Y, 'n=70', '#27ae60');
+    drawNode(l3LeftX, l3Y, 'Predict: YES', '#27ae60', false);
+    drawNode(l3RightX, l3Y, 'Predict: NO', '#27ae60', false);
+})();
+
+// Canvas 2: Traditional vs grounded comparison
+(function() {
+    var s = setupCanvas('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Traditional (symmetric) vs Statistically-Grounded (asymmetric)', w/2, 18);
+
+    // Left side: Traditional symmetric tree (gray)
+    var leftCenter = w * 0.25;
+    ctx.font = 'bold 14px -apple-system, sans-serif';
+    ctx.fillStyle = '#555';
+    ctx.fillText('Traditional', leftCenter, 42);
+
+    function drawMiniNode(x, y, size, color) {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(x, y, size, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    function drawMiniEdge(x1, y1, x2, y2, color) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+    }
+
+    // Traditional tree - symmetric
+    var treeColor = '#bdc3c7';
+    var ty = 65;
+    drawMiniNode(leftCenter, ty, 6, treeColor);
+    drawMiniEdge(leftCenter, ty+6, leftCenter-50, ty+40, treeColor);
+    drawMiniEdge(leftCenter, ty+6, leftCenter+50, ty+40, treeColor);
+    drawMiniNode(leftCenter-50, ty+45, 5, treeColor);
+    drawMiniNode(leftCenter+50, ty+45, 5, treeColor);
+    drawMiniEdge(leftCenter-50, ty+50, leftCenter-75, ty+85, treeColor);
+    drawMiniEdge(leftCenter-50, ty+50, leftCenter-25, ty+85, treeColor);
+    drawMiniEdge(leftCenter+50, ty+50, leftCenter+25, ty+85, treeColor);
+    drawMiniEdge(leftCenter+50, ty+50, leftCenter+75, ty+85, treeColor);
+    drawMiniNode(leftCenter-75, ty+90, 4, treeColor);
+    drawMiniNode(leftCenter-25, ty+90, 4, treeColor);
+    drawMiniNode(leftCenter+25, ty+90, 4, treeColor);
+    drawMiniNode(leftCenter+75, ty+90, 4, treeColor);
+    // Level 4
+    drawMiniEdge(leftCenter-75, ty+94, leftCenter-88, ty+125, treeColor);
+    drawMiniEdge(leftCenter-75, ty+94, leftCenter-62, ty+125, treeColor);
+    drawMiniEdge(leftCenter-25, ty+94, leftCenter-38, ty+125, treeColor);
+    drawMiniEdge(leftCenter-25, ty+94, leftCenter-12, ty+125, treeColor);
+    drawMiniEdge(leftCenter+25, ty+94, leftCenter+12, ty+125, treeColor);
+    drawMiniEdge(leftCenter+25, ty+94, leftCenter+38, ty+125, treeColor);
+    drawMiniEdge(leftCenter+75, ty+94, leftCenter+62, ty+125, treeColor);
+    drawMiniEdge(leftCenter+75, ty+94, leftCenter+88, ty+125, treeColor);
+    for (var i = -88; i <= 88; i += (176/7)) {
+        drawMiniNode(leftCenter + i, ty+130, 3, treeColor);
+    }
+
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.fillStyle = '#555';
+    ctx.textAlign = 'center';
+    ctx.fillText('All splits forced', leftCenter, ty + 155);
+    ctx.fillText('regardless of evidence', leftCenter, ty + 168);
+
+    // Divider
+    ctx.strokeStyle = '#ecf0f1';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(w/2, 35);
+    ctx.lineTo(w/2, h - 20);
+    ctx.stroke();
+
+    // Right side: Statistically-grounded asymmetric tree (colored)
+    var rightCenter = w * 0.72;
+    ctx.font = 'bold 14px -apple-system, sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('Statistically-Grounded', rightCenter, 42);
+
+    // Asymmetric tree
+    drawMiniNode(rightCenter, ty, 6, '#1a5276');
+    drawMiniEdge(rightCenter, ty+6, rightCenter-60, ty+40, '#27ae60');
+    drawMiniEdge(rightCenter, ty+6, rightCenter+50, ty+40, '#e74c3c');
+    drawMiniNode(rightCenter-60, ty+45, 5, '#27ae60');
+
+    // Right branch stops (no decision)
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 2]);
+    ctx.strokeRect(rightCenter+35, ty+37, 30, 16);
+    ctx.setLineDash([]);
+    ctx.font = '8px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('STOP', rightCenter+50, ty+48);
+
+    // Left branch continues deep
+    drawMiniEdge(rightCenter-60, ty+50, rightCenter-90, ty+85, '#27ae60');
+    drawMiniEdge(rightCenter-60, ty+50, rightCenter-35, ty+85, '#27ae60');
+    drawMiniNode(rightCenter-90, ty+90, 5, '#27ae60');
+    drawMiniNode(rightCenter-35, ty+90, 4, '#27ae60');
+
+    drawMiniEdge(rightCenter-90, ty+94, rightCenter-110, ty+125, '#27ae60');
+    drawMiniEdge(rightCenter-90, ty+94, rightCenter-70, ty+125, '#27ae60');
+    drawMiniNode(rightCenter-110, ty+130, 4, '#27ae60');
+    drawMiniNode(rightCenter-70, ty+130, 4, '#27ae60');
+
+    // p-value annotations
+    ctx.font = '8px -apple-system, sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'left';
+    ctx.fillText('p<0.01', rightCenter-55, ty+70);
+    ctx.fillText('p<0.05', rightCenter-82, ty+110);
+
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText('Only validated splits', rightCenter, ty + 155);
+    ctx.fillText('depth = evidence', rightCenter, ty + 168);
+
+    // Legend at bottom
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('Green = statistically validated', w/2 - 80, h - 8);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Red = insufficient evidence', w/2 + 100, h - 8);
+})();
+</script>
+
+</body>
+</html>

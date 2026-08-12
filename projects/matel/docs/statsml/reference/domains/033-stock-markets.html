@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Market Pitfalls - Domain-Specific Statistical Issues</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0; padding: 20px;
+            background: #f8f9fa;
+            color: #2c3e50;
+        }
+        .nav { margin-bottom: 20px; }
+        .nav a {
+            color: #2980b9; text-decoration: none; font-size: 14px;
+        }
+        .nav a:hover { text-decoration: underline; }
+        h1 {
+            color: #1a5276; margin-bottom: 10px;
+            border-bottom: 3px solid #2980b9; padding-bottom: 10px;
+        }
+        .subtitle { color: #555; margin-bottom: 30px; font-size: 15px; }
+        .obj-table {
+            width: 100%; border-collapse: collapse;
+            background: white; border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            overflow: hidden;
+        }
+        .obj-table tr { border-bottom: 2px solid #2980b9; }
+        .obj-table tr:last-child { border-bottom: none; }
+        .obj-table td {
+            padding: 20px; vertical-align: top;
+        }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; text-align: center; }
+        .obj-title {
+            color: #1a5276; font-size: 18px; font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .pitfall-text {
+            font-size: 14px; line-height: 1.7; color: #444;
+        }
+        canvas { max-width: 100%; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <h1>Stock Market Pitfalls</h1>
+    <p class="subtitle">Data quality and structural issues that invalidate equity market analysis</p>
+
+    <table class="obj-table">
+        <tr>
+            <td>
+                <div class="obj-title">1. Survivorship Bias in Indices</div>
+                <div class="pitfall-text">
+                    The S&P 500 today is not the S&P 500 of 2000. Failed companies are removed and successful ones added retroactively. Historical index returns are inflated by <strong>1-2% annually</strong> because the losers are excluded from the dataset after the fact. If you backtest a strategy on "current S&P 500 constituents" using historical prices, you're only looking at the survivors — companies that didn't go bankrupt, get acquired at distressed prices, or delist. This creates a systematic upward bias that doesn't reflect actual investable returns.
+                </div>
+            </td>
+            <td><canvas id="canvas1" width="500" height="300"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">2. Earnings Restatements / Point-in-Time Data</div>
+                <div class="pitfall-text">
+                    A company reports $2.00 EPS. Later, it restates to $1.50. Your database shows $1.50 for that quarter — but on the actual decision date, the market knew $2.00. Using restated data introduces <strong>look-ahead bias</strong>: your model "knew" the correct number before it was public. Point-in-time databases preserve what was known when, but they're expensive and rare. Most free data sources show the final restated values, making any historical analysis subtly contaminated with future information.
+                </div>
+            </td>
+            <td><canvas id="canvas2" width="500" height="300"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">3. Market Microstructure Noise</div>
+                <div class="pitfall-text">
+                    At sub-second timescales, "price" is not a clean signal. It bounces between bid and ask (bid-ask bounce), rounds to tick sizes, reflects hidden orders you can't see, and is affected by the specific exchange routing. OHLC bars hide massive intra-bar complexity — a "flat" bar might have seen wild swings within it. Any analysis using high-frequency data must account for the fact that observed prices are <strong>noisy estimates</strong> of true consensus value, with discrete jumps and structural artifacts unrelated to information.
+                </div>
+            </td>
+            <td><canvas id="canvas3" width="500" height="300"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">4. HFT Front-Running / Adverse Selection</div>
+                <div class="pitfall-text">
+                    Your limit order sits in the book. When you're wrong about direction, HFT firms pick it off instantly. When you're right, your order never fills because faster traders cancel their opposing orders. Your <strong>actual fills are adversely selected</strong>: the trades you execute have worse expected returns than your theoretical signal suggests. The gap between "signal return" and "filled order return" can be 30-50% of the alpha. This is invisible in any backtest using mid-prices or close prices.
+                </div>
+            </td>
+            <td><canvas id="canvas4" width="500" height="300"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">5. After-Hours / Pre-Market Gaps</div>
+                <div class="pitfall-text">
+                    Stock closes at $100. Earnings released at 4:30 PM. Opens at $85 the next day. Your stop-loss at $95 <strong>never triggered</strong> — the price gapped right past it. Any risk model that assumes continuous price movement (stop-losses, trailing stops, position sizing based on intraday moves) is fundamentally broken for overnight risk. Approximately 30-40% of total stock returns occur during non-trading hours. Models that ignore overnight gaps are using incomplete data and underestimating tail risk dramatically.
+                </div>
+            </td>
+            <td><canvas id="canvas5" width="500" height="300"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">6. Dividend Adjustments</div>
+                <div class="pitfall-text">
+                    On the ex-dividend date, a stock paying a $2 dividend drops by approximately $2 at the open. This is <strong>not a signal</strong> — it's a mechanical adjustment. If you don't adjust historical prices for dividends and splits, every ex-date looks like a crash in your data. A stock that paid $2/quarter dividends for 10 years shows a "decline" of $80 in unadjusted prices. Adjusted vs. unadjusted prices can lead to completely different conclusions about trends, support levels, and returns.
+                </div>
+            </td>
+            <td><canvas id="canvas6" width="500" height="300"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">7. Index Reconstitution Effects</div>
+                <div class="pitfall-text">
+                    When a company is added to the S&P 500, all index funds must buy it simultaneously. The stock jumps 3-5% in the days surrounding addition. This is a <strong>predictable short-term return</strong> from a structural flow, not a fundamental value change. The stock often reverts over the following weeks. Similarly, deletions from an index cause predictable selling pressure. These reconstitution effects create phantom signals in price data that look like momentum or value signals but are purely structural.
+                </div>
+            </td>
+            <td><canvas id="canvas7" width="500" height="300"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">8. Corporate Actions</div>
+                <div class="pitfall-text">
+                    Mergers, spinoffs, share buybacks, stock splits, rights issues, and special dividends all change the meaning of "price" for a ticker. A 2:1 stock split cuts the price in half overnight — not a crash. A spinoff creates a new entity while the parent drops by the spinoff value. Historical analysis must account for <strong>every corporate action</strong> or the price series is discontinuous. Ticker symbols get reused. Companies merge and change names. Without a corporate actions database, any long-term price analysis is unreliable.
+                </div>
+            </td>
+            <td><canvas id="canvas8" width="500" height="300"></canvas></td>
+        </tr>
+    </table>
+
+    <script>
+        function setupCanvas(id) {
+            const canvas = document.getElementById(id);
+            const ctx = canvas.getContext('2d');
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = 500 * dpr;
+            canvas.height = 300 * dpr;
+            canvas.style.width = '500px';
+            canvas.style.height = '300px';
+            ctx.scale(dpr, dpr);
+            ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+            return ctx;
+        }
+
+        // Chart 1: Survivorship Bias
+        (function() {
+            const ctx = setupCanvas('canvas1');
+            const w = 500, h = 300;
+            ctx.fillStyle = '#f0f4f8';
+            ctx.fillRect(0, 0, w, h);
+
+            ctx.fillStyle = '#1a5276';
+            ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('S&P 500: With vs Without Survivorship Bias', 90, 25);
+
+            const margin = {top: 45, right: 30, bottom: 50, left: 60};
+            const cw = w - margin.left - margin.right;
+            const ch = h - margin.top - margin.bottom;
+
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(margin.left, margin.top);
+            ctx.lineTo(margin.left, margin.top + ch);
+            ctx.lineTo(margin.left + cw, margin.top + ch);
+            ctx.stroke();
+
+            // Two growth lines: biased (survivors only) vs actual
+            const years = 30;
+            let biased = [100], actual = [100];
+            for (let i = 1; i <= years; i++) {
+                biased.push(biased[i-1] * 1.105); // 10.5% with bias
+                actual.push(actual[i-1] * 1.088); // 8.8% actual
+            }
+
+            const maxVal = biased[years];
+
+            // Biased line
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            biased.forEach((v, i) => {
+                const px = margin.left + (i / years) * cw;
+                const py = margin.top + ch - (v / maxVal) * ch * 0.9;
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            });
+            ctx.stroke();
+
+            // Actual line
+            ctx.strokeStyle = '#27ae60';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            actual.forEach((v, i) => {
+                const px = margin.left + (i / years) * cw;
+                const py = margin.top + ch - (v / maxVal) * ch * 0.9;
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            });
+            ctx.stroke();
+
+            // Gap annotation
+            const gapY1 = margin.top + ch - (biased[years] / maxVal) * ch * 0.9;
+            const gapY2 = margin.top + ch - (actual[years] / maxVal) * ch * 0.9;
+            ctx.fillStyle = '#e74c3c33';
+            ctx.fillRect(margin.left + cw * 0.8, gapY1, cw * 0.15, gapY2 - gapY1);
+
+            ctx.fillStyle = '#c0392b';
+            ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('~40% gap', margin.left + cw * 0.82, (gapY1 + gapY2) / 2 + 4);
+            ctx.fillText('after 30 yrs', margin.left + cw * 0.82, (gapY1 + gapY2) / 2 + 18);
+
+            // Legend
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillRect(margin.left + 10, margin.top + 5, 12, 12);
+            ctx.fillStyle = '#333';
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('Survivors only (10.5%/yr)', margin.left + 27, margin.top + 15);
+            ctx.fillStyle = '#27ae60';
+            ctx.fillRect(margin.left + 10, margin.top + 22, 12, 12);
+            ctx.fillStyle = '#333';
+            ctx.fillText('Including delisted (8.8%/yr)', margin.left + 27, margin.top + 32);
+
+            ctx.fillStyle = '#555';
+            ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('Years', margin.left + cw/2 - 15, h - 8);
+        })();
+
+        // Chart 2: Point-in-Time
+        (function() {
+            const ctx = setupCanvas('canvas2');
+            const w = 500, h = 300;
+            ctx.fillStyle = '#f0f4f8';
+            ctx.fillRect(0, 0, w, h);
+
+            ctx.fillStyle = '#1a5276';
+            ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('Point-in-Time vs Restated Data', 140, 25);
+
+            const margin = {top: 50, right: 30, bottom: 40, left: 50};
+            const cw = w - margin.left - margin.right;
+            const ch = h - margin.top - margin.bottom;
+
+            // Timeline showing what was known when
+            const events = [
+                {x: 0.1, label: 'Q1 Report:\nEPS = $2.00', color: '#2980b9', y: 0.3},
+                {x: 0.35, label: 'Model uses\n$2.00 (correct)', color: '#27ae60', y: 0.6},
+                {x: 0.6, label: 'Restatement:\nEPS → $1.50', color: '#e74c3c', y: 0.3},
+                {x: 0.85, label: 'Database shows\n$1.50 for Q1!', color: '#e74c3c', y: 0.6},
+            ];
+
+            // Timeline arrow
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(margin.left, margin.top + ch * 0.5);
+            ctx.lineTo(margin.left + cw, margin.top + ch * 0.5);
+            ctx.lineTo(margin.left + cw - 10, margin.top + ch * 0.5 - 5);
+            ctx.moveTo(margin.left + cw, margin.top + ch * 0.5);
+            ctx.lineTo(margin.left + cw - 10, margin.top + ch * 0.5 + 5);
+            ctx.stroke();
+
+            ctx.fillStyle = '#555';
+            ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('Time →', margin.left + cw - 45, margin.top + ch * 0.5 + 20);
+
+            events.forEach(e => {
+                const px = margin.left + e.x * cw;
+                const py = margin.top + e.y * ch;
+
+                // Dot on timeline
+                ctx.fillStyle = e.color;
+                ctx.beginPath();
+                ctx.arc(px, margin.top + ch * 0.5, 6, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Connector
+                ctx.strokeStyle = e.color;
+                ctx.lineWidth = 1;
+                ctx.setLineDash([2, 2]);
+                ctx.beginPath();
+                ctx.moveTo(px, margin.top + ch * 0.5);
+                ctx.lineTo(px, py);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // Label box
+                ctx.fillStyle = e.color + '15';
+                ctx.fillRect(px - 45, py - 20, 90, 35);
+                ctx.strokeStyle = e.color;
+                ctx.lineWidth = 1;
+                ctx.strokeRect(px - 45, py - 20, 90, 35);
+
+                ctx.fillStyle = e.color;
+                ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+                const lines = e.label.split('\n');
+                lines.forEach((line, li) => {
+                    ctx.fillText(line, px - 40, py - 5 + li * 14);
+                });
+            });
+
+            // Warning
+            ctx.fillStyle = '#c0392b';
+            ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('LOOK-AHEAD BIAS: model "knows" restatement before it happens', margin.left + 10, h - 12);
+        })();
+
+        // Chart 3: Market Microstructure
+        (function() {
+            const ctx = setupCanvas('canvas3');
+            const w = 500, h = 300;
+            ctx.fillStyle = '#f0f4f8';
+            ctx.fillRect(0, 0, w, h);
+
+            ctx.fillStyle = '#1a5276';
+            ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('Bid-Ask Bounce: What OHLC Bars Hide', 120, 25);
+
+            const margin = {top: 45, right: 30, bottom: 50, left: 60};
+            const cw = w - margin.left - margin.right;
+            const ch = h - margin.top - margin.bottom;
+
+            // Show a 1-minute period with bid-ask bounce
+            const mid = 100;
+            const spread = 0.02;
+            const n = 60;
+
+            // Generate tick data
+            let ticks = [];
+            let price = mid;
+            for (let i = 0; i < n; i++) {
+                // Alternating bid/ask with slight drift
+                const drift = (Math.random() - 0.5) * 0.005;
+                price += drift;
+                const isBid = Math.random() > 0.5;
+                ticks.push(isBid ? price - spread/2 : price + spread/2);
+            }
+
+            const minP = Math.min(...ticks) - 0.01;
+            const maxP = Math.max(...ticks) + 0.01;
+
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(margin.left, margin.top);
+            ctx.lineTo(margin.left, margin.top + ch);
+            ctx.lineTo(margin.left + cw, margin.top + ch);
+            ctx.stroke();
+
+            // Plot ticks
+            ctx.strokeStyle = '#2980b9';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ticks.forEach((t, i) => {
+                const px = margin.left + (i / n) * cw;
+                const py = margin.top + ch - ((t - minP) / (maxP - minP)) * ch;
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            });
+            ctx.stroke();
+
+            // Bid line
+            ctx.strokeStyle = '#27ae60';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 3]);
+            const bidY = margin.top + ch - ((mid - spread/2 - minP) / (maxP - minP)) * ch;
+            ctx.beginPath();
+            ctx.moveTo(margin.left, bidY);
+            ctx.lineTo(margin.left + cw, bidY);
+            ctx.stroke();
+
+            // Ask line
+            ctx.strokeStyle = '#e74c3c';
+            const askY = margin.top + ch - ((mid + spread/2 - minP) / (maxP - minP)) * ch;
+            ctx.beginPath();
+            ctx.moveTo(margin.left, askY);
+            ctx.lineTo(margin.left + cw, askY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Labels
+            ctx.fillStyle = '#27ae60';
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('Bid: $99.99', margin.left + cw - 75, bidY - 5);
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillText('Ask: $100.01', margin.left + cw - 80, askY + 12);
+
+            // OHLC bar representation
+            ctx.fillStyle = '#f39c12';
+            ctx.fillRect(margin.left + cw + 5, margin.top + 30, 3, ch - 50);
+            ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillStyle = '#f39c12';
+            ctx.fillText('OHLC', margin.left + cw - 5, margin.top + 20);
+            ctx.fillText('bar', margin.left + cw, margin.top + 32);
+
+            ctx.fillStyle = '#555';
+            ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('1-second window (60 ticks)', margin.left + cw/2 - 65, h - 10);
+
+            ctx.fillStyle = '#c0392b';
+            ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('Bounce between bid/ask = noise, not signal', margin.left + 10, margin.top + ch - 10);
+        })();
+
+        // Chart 4: Adverse Selection
+        (function() {
+            const ctx = setupCanvas('canvas4');
+            const w = 500, h = 300;
+            ctx.fillStyle = '#f0f4f8';
+            ctx.fillRect(0, 0, w, h);
+
+            ctx.fillStyle = '#1a5276';
+            ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('Adverse Selection: Filled vs Unfilled Orders', 100, 25);
+
+            const margin = {top: 50, right: 30, bottom: 55, left: 50};
+            const cw = w - margin.left - margin.right;
+            const ch = h - margin.top - margin.bottom;
+
+            // Two distributions: filled orders vs all signals
+            function drawDist(mean, std, color, startX, label) {
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2.5;
+                ctx.beginPath();
+                for (let x = -4; x <= 4; x += 0.1) {
+                    const y = Math.exp(-0.5 * Math.pow((x - mean) / std, 2));
+                    const px = margin.left + ((x + 5) / 10) * cw;
+                    const py = margin.top + ch - y * ch * 0.8;
+                    if (x === -4) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.stroke();
+
+                ctx.fillStyle = color;
+                ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, sans-serif';
+                const lx = margin.left + ((mean + 5) / 10) * cw;
+                ctx.fillText(label, lx - 40, margin.top + 15);
+            }
+
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(margin.left, margin.top + ch);
+            ctx.lineTo(margin.left + cw, margin.top + ch);
+            ctx.stroke();
+
+            // Zero return line
+            const zeroX = margin.left + (5/10) * cw;
+            ctx.strokeStyle = '#aaa';
+            ctx.setLineDash([3, 3]);
+            ctx.beginPath();
+            ctx.moveTo(zeroX, margin.top);
+            ctx.lineTo(zeroX, margin.top + ch);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = '#888';
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('0% return', zeroX - 20, margin.top + ch + 15);
+
+            drawDist(1.0, 1.2, '#27ae60', 0, 'All signals (theoretical)');
+            drawDist(-0.3, 1.2, '#e74c3c', 0, 'Actually filled orders');
+
+            // Arrow showing gap
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1.5;
+            const y_arr = margin.top + ch * 0.45;
+            const x1 = margin.left + ((1.0 + 5) / 10) * cw;
+            const x2 = margin.left + ((-0.3 + 5) / 10) * cw;
+            ctx.beginPath();
+            ctx.moveTo(x1, y_arr);
+            ctx.lineTo(x2, y_arr);
+            ctx.lineTo(x2 + 8, y_arr - 4);
+            ctx.moveTo(x2, y_arr);
+            ctx.lineTo(x2 + 8, y_arr + 4);
+            ctx.stroke();
+
+            ctx.fillStyle = '#333';
+            ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('Adverse selection gap', (x1 + x2) / 2 - 50, y_arr - 8);
+
+            ctx.fillStyle = '#555';
+            ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('Post-trade return (%)', margin.left + cw/2 - 50, h - 8);
+        })();
+
+        // Chart 5: After-hours gaps
+        (function() {
+            const ctx = setupCanvas('canvas5');
+            const w = 500, h = 300;
+            ctx.fillStyle = '#f0f4f8';
+            ctx.fillRect(0, 0, w, h);
+
+            ctx.fillStyle = '#1a5276';
+            ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('Overnight Gap: Stop-Loss Failure', 140, 25);
+
+            const margin = {top: 50, right: 30, bottom: 50, left: 60};
+            const cw = w - margin.left - margin.right;
+            const ch = h - margin.top - margin.bottom;
+
+            // Price chart with gap
+            const prices1 = [100, 100.5, 101, 100.8, 100.2, 100.5, 100.3, 100]; // Day 1
+            const prices2 = [85, 84, 85.5, 86, 85.5, 86.5, 87, 87.5]; // Day 2 after gap
+
+            const allPrices = [...prices1, ...prices2];
+            const minP = 82;
+            const maxP = 103;
+
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(margin.left, margin.top);
+            ctx.lineTo(margin.left, margin.top + ch);
+            ctx.lineTo(margin.left + cw, margin.top + ch);
+            ctx.stroke();
+
+            // Day 1
+            ctx.strokeStyle = '#2980b9';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            prices1.forEach((p, i) => {
+                const px = margin.left + (i / 16) * cw;
+                const py = margin.top + ch - ((p - minP) / (maxP - minP)) * ch;
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            });
+            ctx.stroke();
+
+            // Gap area
+            const gapStartX = margin.left + (7/16) * cw;
+            const gapEndX = margin.left + (8/16) * cw;
+            ctx.fillStyle = '#e74c3c22';
+            ctx.fillRect(gapStartX, margin.top, gapEndX - gapStartX, ch);
+
+            // Day 2
+            ctx.strokeStyle = '#2980b9';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            prices2.forEach((p, i) => {
+                const px = margin.left + ((i + 8) / 16) * cw;
+                const py = margin.top + ch - ((p - minP) / (maxP - minP)) * ch;
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            });
+            ctx.stroke();
+
+            // Stop-loss line
+            const stopY = margin.top + ch - ((95 - minP) / (maxP - minP)) * ch;
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.moveTo(margin.left, stopY);
+            ctx.lineTo(margin.left + cw, stopY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = '#e74c3c';
+            ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('Stop-loss: $95', margin.left + 5, stopY - 5);
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('NEVER TRIGGERED', margin.left + 5, stopY + 14);
+
+            // Annotations
+            ctx.fillStyle = '#555';
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('Day 1: Close $100', margin.left + 10, margin.top + ch + 15);
+            ctx.fillText('Overnight', gapStartX - 5, margin.top + ch + 15);
+            ctx.fillText('Day 2: Open $85', gapEndX + 20, margin.top + ch + 15);
+
+            ctx.fillStyle = '#c0392b';
+            ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('$15 GAP', (gapStartX + gapEndX)/2 - 20, margin.top + ch/2);
+
+            // Y labels
+            ctx.fillStyle = '#888';
+            ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif';
+            [85, 90, 95, 100].forEach(p => {
+                const py = margin.top + ch - ((p - minP) / (maxP - minP)) * ch;
+                ctx.fillText('$' + p, margin.left - 28, py + 4);
+            });
+        })();
+
+        // Chart 6: Dividend Adjustments
+        (function() {
+            const ctx = setupCanvas('canvas6');
+            const w = 500, h = 300;
+            ctx.fillStyle = '#f0f4f8';
+            ctx.fillRect(0, 0, w, h);
+
+            ctx.fillStyle = '#1a5276';
+            ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('Adjusted vs Unadjusted Price (Quarterly $2 Div)', 80, 25);
+
+            const margin = {top: 45, right: 30, bottom: 50, left: 60};
+            const cw = w - margin.left - margin.right;
+            const ch = h - margin.top - margin.bottom;
+
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(margin.left, margin.top);
+            ctx.lineTo(margin.left, margin.top + ch);
+            ctx.lineTo(margin.left + cw, margin.top + ch);
+            ctx.stroke();
+
+            // Unadjusted: drops $2 each quarter
+            const quarters = 20;
+            let unadj = [100];
+            let adj = [100];
+            for (let i = 1; i <= quarters; i++) {
+                const growth = 1.02; // 2% growth per quarter
+                unadj.push(unadj[i-1] * growth - 2); // drops by dividend
+                adj.push(adj[i-1] * growth); // adjusted stays smooth
+            }
+
+            const maxV = Math.max(...adj) * 1.1;
+            const minV = Math.min(...unadj) * 0.9;
+
+            // Adjusted line
+            ctx.strokeStyle = '#27ae60';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            adj.forEach((v, i) => {
+                const px = margin.left + (i / quarters) * cw;
+                const py = margin.top + ch - ((v - minV) / (maxV - minV)) * ch;
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            });
+            ctx.stroke();
+
+            // Unadjusted line (with drops)
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            unadj.forEach((v, i) => {
+                const px = margin.left + (i / quarters) * cw;
+                const py = margin.top + ch - ((v - minV) / (maxV - minV)) * ch;
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            });
+            ctx.stroke();
+
+            // Legend
+            ctx.fillStyle = '#27ae60';
+            ctx.fillRect(margin.left + 10, margin.top + 5, 12, 12);
+            ctx.fillStyle = '#333';
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('Dividend-adjusted (true return)', margin.left + 27, margin.top + 15);
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillRect(margin.left + 10, margin.top + 22, 12, 12);
+            ctx.fillStyle = '#333';
+            ctx.fillText('Unadjusted (looks like decline)', margin.left + 27, margin.top + 32);
+
+            ctx.fillStyle = '#555';
+            ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('Quarters', margin.left + cw/2 - 20, h - 8);
+
+            // Ex-date markers
+            ctx.fillStyle = '#e74c3c';
+            ctx.font = '9px -apple-system, BlinkMacSystemFont, sans-serif';
+            for (let i = 4; i <= quarters; i += 4) {
+                const px = margin.left + (i / quarters) * cw;
+                ctx.beginPath();
+                ctx.moveTo(px, margin.top + ch - 2);
+                ctx.lineTo(px, margin.top + ch + 5);
+                ctx.stroke();
+                ctx.fillText('Ex', px - 5, margin.top + ch + 14);
+            }
+        })();
+
+        // Chart 7: Index Reconstitution
+        (function() {
+            const ctx = setupCanvas('canvas7');
+            const w = 500, h = 300;
+            ctx.fillStyle = '#f0f4f8';
+            ctx.fillRect(0, 0, w, h);
+
+            ctx.fillStyle = '#1a5276';
+            ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('Stock Price Around S&P 500 Addition', 115, 25);
+
+            const margin = {top: 45, right: 30, bottom: 55, left: 60};
+            const cw = w - margin.left - margin.right;
+            const ch = h - margin.top - margin.bottom;
+
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(margin.left, margin.top);
+            ctx.lineTo(margin.left, margin.top + ch);
+            ctx.lineTo(margin.left + cw, margin.top + ch);
+            ctx.stroke();
+
+            // Price pattern: flat → announcement → jump → effective date → revert
+            const days = [-20, -15, -10, -5, -3, -2, -1, 0, 1, 2, 3, 5, 10, 15, 20, 30, 40, 50, 60];
+            const prices = [100, 100.5, 101, 101, 103, 104, 104.5, 105, 104.5, 104, 103.5, 103, 102.5, 102, 101.5, 101, 100.5, 100.2, 100];
+
+            const minP = 98;
+            const maxP = 107;
+
+            ctx.strokeStyle = '#2980b9';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            days.forEach((d, i) => {
+                const px = margin.left + ((d + 25) / 90) * cw;
+                const py = margin.top + ch - ((prices[i] - minP) / (maxP - minP)) * ch;
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            });
+            ctx.stroke();
+
+            // Announcement marker
+            const annX = margin.left + ((-5 + 25) / 90) * cw;
+            ctx.strokeStyle = '#e74c3c';
+            ctx.setLineDash([3, 3]);
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(annX, margin.top);
+            ctx.lineTo(annX, margin.top + ch);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = '#e74c3c';
+            ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('Announce', annX - 20, margin.top + 12);
+
+            // Effective date marker
+            const effX = margin.left + ((0 + 25) / 90) * cw;
+            ctx.strokeStyle = '#27ae60';
+            ctx.setLineDash([3, 3]);
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(effX, margin.top);
+            ctx.lineTo(effX, margin.top + ch);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = '#27ae60';
+            ctx.fillText('Effective', effX + 3, margin.top + 12);
+
+            // Jump annotation
+            ctx.fillStyle = '#c0392b';
+            ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('+5% (index fund buying)', margin.left + cw * 0.4, margin.top + 35);
+
+            // Reversion annotation
+            ctx.fillStyle = '#555';
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('Gradual reversion over 60 days', margin.left + cw * 0.5, margin.top + ch - 10);
+
+            ctx.fillStyle = '#555';
+            ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('Days relative to effective date', margin.left + cw/2 - 70, h - 8);
+        })();
+
+        // Chart 8: Corporate Actions
+        (function() {
+            const ctx = setupCanvas('canvas8');
+            const w = 500, h = 300;
+            ctx.fillStyle = '#f0f4f8';
+            ctx.fillRect(0, 0, w, h);
+
+            ctx.fillStyle = '#1a5276';
+            ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('Price Discontinuities from Corporate Actions', 100, 25);
+
+            const margin = {top: 50, right: 20, bottom: 50, left: 60};
+            const cw = w - margin.left - margin.right;
+            const ch = h - margin.top - margin.bottom;
+
+            // Timeline with various corporate actions
+            const actions = [
+                {x: 0.1, price_before: 200, price_after: 100, label: '2:1 Split', color: '#3498db'},
+                {x: 0.3, price_before: 110, price_after: 95, label: 'Spinoff\n($15 value)', color: '#9b59b6'},
+                {x: 0.5, price_before: 102, price_after: 99, label: 'Special\nDividend $3', color: '#27ae60'},
+                {x: 0.7, price_before: 105, price_after: 0, label: 'Acquired\n(delisted)', color: '#e74c3c'},
+                {x: 0.9, price_before: 0, price_after: 45, label: 'New ticker\n(same co.)', color: '#f39c12'},
+            ];
+
+            // Draw price line segments
+            let lastY = null;
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(margin.left, margin.top + ch);
+            ctx.lineTo(margin.left + cw, margin.top + ch);
+            ctx.stroke();
+
+            actions.forEach((a, i) => {
+                const px = margin.left + a.x * cw;
+                const maxPrice = 220;
+
+                if (a.price_before > 0) {
+                    const py = margin.top + ch - (a.price_before / maxPrice) * ch;
+                    ctx.fillStyle = a.color;
+                    ctx.beginPath();
+                    ctx.arc(px - 10, py, 5, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif';
+                    ctx.fillText('$' + a.price_before, px - 25, py - 10);
+                }
+
+                if (a.price_after > 0) {
+                    const py = margin.top + ch - (a.price_after / maxPrice) * ch;
+                    ctx.fillStyle = a.color;
+                    ctx.beginPath();
+                    ctx.arc(px + 10, py, 5, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif';
+                    ctx.fillText('$' + a.price_after, px + 15, py - 10);
+                }
+
+                // Arrow between
+                if (a.price_before > 0 && a.price_after > 0) {
+                    const y1 = margin.top + ch - (a.price_before / maxPrice) * ch;
+                    const y2 = margin.top + ch - (a.price_after / maxPrice) * ch;
+                    ctx.strokeStyle = a.color;
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.moveTo(px - 5, y1);
+                    ctx.lineTo(px + 5, y2);
+                    ctx.stroke();
+                }
+
+                // Label
+                ctx.fillStyle = a.color;
+                ctx.font = 'bold 10px -apple-system, BlinkMacSystemFont, sans-serif';
+                const lines = a.label.split('\n');
+                lines.forEach((line, li) => {
+                    ctx.fillText(line, px - 20, margin.top + ch + 15 + li * 12);
+                });
+            });
+
+            // Warning text
+            ctx.fillStyle = '#c0392b';
+            ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('Each action breaks price continuity — raw data is UNUSABLE without adjustments', margin.left, margin.top + 10);
+        })();
+    </script>
+</body>
+</html>

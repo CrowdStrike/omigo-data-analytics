@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>144. Missing Data Checkpoints Between Transformation Steps</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 20px 10px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 40%; }
+.obj-table td:last-child { width: 60%; text-align: center; }
+.obj-table tr:nth-child(even) td { background: #fafcfe; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+</style>
+</head>
+<body>
+
+<h1>Missing Data Checkpoints Between Transformation Steps</h1>
+<p class="subtitle">Not persisting the actual data at each significant transformation stage. When the final output doesn't add up, you have source data and final output — nothing in between. You cannot inspect what any intermediate step actually produced. Re-running may not reproduce the problem.</p>
+
+<div class="philosophy">
+<strong>The core problem:</strong> A 5-step data pipeline saves data at step 1 (raw input) and step 5 (final output). Steps 2, 3, 4 are ephemeral — their output exists only in memory during execution. When step 5 produces wrong results, the investigation question is: "Which of steps 2-4 produced something unexpected?" Without checkpointed data at each stage, you CANNOT answer this. You must re-run, add debugging, hope the issue reproduces. Often it doesn't — the upstream data has changed, the race condition doesn't trigger again, the transient state is gone.
+</div>
+
+<h2>Pitfall 1: Only Source and Final Output Exist — The Gap Is Uninspectable</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">5-Step Pipeline, 2 Checkpoints. 3 Blind Spots.</div>
+<ul>
+<li><strong>The pipeline:</strong> Raw → Clean → Join → Aggregate → Enrich → Model Input. You persist raw (step 1) and model input (step 5). Steps 2-4 are transient.</li>
+<li><strong>The symptom:</strong> Model accuracy drops 8%. You check step 5 output — feature values look wrong. You check step 1 — raw data looks fine. Somewhere between 1 and 5, something went wrong.</li>
+<li><strong>Without checkpoints:</strong> Cannot inspect what step 3 (join) actually produced. Did the join create duplicates? Did step 4 (aggregate) hit a NULL and produce zeros? Did step 2 (clean) drop rows it shouldn't have? You're guessing.</li>
+<li><strong>The re-run fallacy:</strong> "Just re-run with debugging." But the upstream data may have changed since the original run. The bug may be non-deterministic (race condition during the join). The transient state that caused the problem doesn't exist anymore. Re-running shows a DIFFERENT result — which tells you nothing about what happened last time.</li>
+<li><strong>With checkpoints at every step:</strong> Inspect step 3 output directly. Row count jumped 3× (fanout from a 1:N join). Found in 5 minutes. Didn't need to re-run anything.</li>
+</ul>
+</td><td><canvas id="c1" width="720" height="340"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 2: The Data Changed — You Can't Go Back</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">By the Time You Investigate, the Source Has Moved</div>
+<ul>
+<li><strong>Mutable sources:</strong> Your pipeline reads from a production database. Step 1 snapshot was taken at 3am. By 9am when you investigate, the source data has been updated — user statuses changed, rows were added, values corrected. Querying the source NOW gives you different data than the pipeline saw at 3am.</li>
+<li><strong>Without step 2 checkpoint:</strong> You can't compare "what did the clean step produce at 3am?" You only have the 3am raw snapshot and today's final output. The cleaning rules may have hit edge cases in the 3am data that don't exist in the current data.</li>
+<li><strong>Temporal debugging is impossible:</strong> The question "what did this pipeline stage produce at 3am on Tuesday?" is only answerable if you saved that output. Text logs tell you it ran. They don't tell you what the data looked like.</li>
+<li><strong>The months-later discovery:</strong> Problem detected in September. Root cause was in June. Without checkpointed intermediate data from June's runs, you can't trace what went wrong. June's source data is long overwritten. All you know: June raw → September output = bad. Three months of intermediate transformations are unrecoverable.</li>
+</ul>
+</td><td><canvas id="c2" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 3: Aggregation Destroys Debugging Information</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">After Aggregation, You Cannot Decompose the Number</div>
+<ul>
+<li><strong>The problem:</strong> Step 4 aggregates user-level data into cohort-level summary stats. Final output says "cohort A average = $450." Expected: $200. Which users drove this? What were their individual values BEFORE aggregation?</li>
+<li><strong>Without pre-aggregation checkpoint:</strong> Cannot decompose the average. Cannot identify which users had extreme values. Cannot tell if it's 1 user at $100K dragging the mean, or 100 users all inflated by a join bug. The aggregation destroyed the row-level detail you need.</li>
+<li><strong>The JOIN amplification variant:</strong> Step 3 joins users to transactions. A user with 50 transactions gets 50 rows. Step 4 averages their spend. But if the checkpoint is only at step 5 (after averaging), you can't tell whether the join was correct. Was it 50 unique transactions, or 5 transactions counted 10× each?</li>
+<li><strong>The general principle:</strong> Every aggregation step (SUM, AVG, COUNT, GROUP BY) is a lossy compression. Post-aggregation, the individual rows that produced the aggregate are gone. If you don't save them before the aggregation, you can never inspect them.</li>
+</ul>
+</td><td><canvas id="c3" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 4: Partial Re-run Requires Checkpoints as Starting Points</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Fix Step 3, Re-Run Steps 3-5. But Without Step 2 Output, You Must Start From Step 1.</div>
+<ul>
+<li><strong>The scenario:</strong> You identify the bug is in step 3 (join logic). You fix it. Now you need to re-run steps 3-5 with the fix. What's the input to step 3? It's the OUTPUT of step 2.</li>
+<li><strong>Without step 2 checkpoint:</strong> Must re-run steps 1-2 first just to produce step 3's input. Step 1 is a 4-hour full data scan. Step 2 is 2 hours of cleaning. Total: 6 hours just to GET TO the step you fixed.</li>
+<li><strong>With step 2 checkpoint:</strong> Start directly from step 2 output. Re-run steps 3-5 only. Total: 1 hour. 6× faster recovery.</li>
+<li><strong>At scale:</strong> Enterprise pipeline with 10 steps, each taking 1-3 hours. Bug in step 7. Without checkpoints: re-run steps 1-6 (12 hours) just to set up step 7's input. With checkpoints: start from step 6 output (0 hours setup). This is the difference between "fixed by EOD" and "fixed in 2 days."</li>
+<li><strong>The experimentation cost:</strong> "Let me try a different join key in step 3." Without step 2 checkpoint: 6 hours per experiment. You try 2 things per day. With checkpoint: 30 minutes per experiment. You try 12 things per day. Debugging velocity is directly proportional to checkpoint density.</li>
+</ul>
+</td><td><canvas id="c4" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 5: The Storage Excuse vs The Calendar Cost Reality</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">"We Don't Checkpoint Because Storage Is Expensive"</div>
+<ul>
+<li><strong>The math:</strong> 1TB of intermediate checkpoints stored for 30 days. S3 cost: ~$23/month. One engineer debugging for 2 weeks without checkpoints: ~$8,000 in salary alone. Plus the opportunity cost of not shipping. Plus the cost of downstream models training on wrong data during those 2 weeks.</li>
+<li><strong>The calendar argument:</strong> In data work, time is the constraint. A 2-week debugging delay can mean a missed market window, a late model refresh, a stakeholder who loses confidence. $23/month in storage BUYS calendar time — the one resource you cannot manufacture.</li>
+<li><strong>Retention policy:</strong> You don't need to keep checkpoints forever. Keep last 7 days at full granularity (for active debugging). Keep weekly snapshots for 3 months (for regression detection). Purge after. Cost: minimal. Value: enormous.</li>
+<li><strong>The compromise that fails:</strong> "We'll checkpoint on demand when something goes wrong." By then the data that would have been checkpointed is gone. The point of a checkpoint is that it exists BEFORE you need it. If you could predict when you'd need it, you wouldn't need it.</li>
+</ul>
+</td><td><canvas id="c5" width="720" height="280"></canvas></td></tr>
+</table>
+
+<h2>Real-World Examples</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">home-buying platform's $500M Loss (2021)</div>
+<ul>
+<li>automated home-buying platform used an ML model to price homes for automated buying. The pricing pipeline had multiple transformation steps: comparable sales selection → feature engineering → model scoring → offer generation.</li>
+<li>Intermediate data between "comps selected" and "final offer price" was not checkpointed in a way that allowed after-the-fact audit. When offers started systematically overpaying, they couldn't rapidly pinpoint which step diverged — was it the comps selection pulling stale data? The feature transforms applying wrong seasonality adjustments? The model drifting?</li>
+<li>By the time the systematic overpayment was caught, home-buying platform had already purchased thousands of homes at inflated prices. They shut down the entire division. Lost ~$500M. Wrote off 25% of inventory value.</li>
+<li><strong>With full checkpoints:</strong> Could have inspected "which comps did the model see for THIS house?" and "what features were computed?" within days of the first few bad purchases, not months later after thousands.</li>
+</ul>
+</td><td>
+<div class="obj-title">a trading firm — $440M in 45 Minutes (2012)</div>
+<ul>
+<li>a trading firm deployed new trading software. An old, dead code path was accidentally activated. This code path executed trades based on stale parameters from a retired system.</li>
+<li>The pipeline: market data → strategy signals → order generation → execution. No checkpoint of "what signals did the strategy module produce?" existed at runtime. Only input (market data) and output (executed trades) were recorded.</li>
+<li>In 45 minutes, the system executed $7B in erroneous trades. By the time humans noticed the output was wrong, $440M was lost.</li>
+<li><strong>With signal-level checkpoints:</strong> A real-time checkpoint showing "strategy module is generating 1000× normal order volume from parameters that don't match today's config" would have been visible in seconds, not 45 minutes.</li>
+</ul>
+</td></tr>
+<tr><td>
+<div class="obj-title">social network's 2019 Ad Metrics Bug</div>
+<ul>
+<li>social network disclosed that video view metrics had been inflated for over a year due to a calculation error in an intermediate aggregation step.</li>
+<li>The pipeline: raw view events → dedup → time-threshold filtering → aggregation → reported metric. The bug was in time-threshold filtering (counting 3-second views as 10-second views in certain cases).</li>
+<li>Because only raw events and final aggregates were retained (not the post-filter/pre-aggregation data), it took months to identify the exact step and scope of overcount. Advertisers who had shifted millions in budget based on video performance couldn't get accurate historical numbers.</li>
+<li><strong>With post-filter checkpoint:</strong> "View events after threshold filter" would have shown the inflated count immediately when compared to raw event volume ratios.</li>
+</ul>
+</td><td>
+<div class="obj-title">government enrollment portal Launch Failure (2013)</div>
+<ul>
+<li>The enrollment pipeline had steps: identity verification → plan eligibility → subsidy calculation → enrollment confirmation. Data was passed between steps but not checkpointed.</li>
+<li>When enrollments failed silently (users thought they enrolled but the downstream step never received the data), there was no intermediate checkpoint to show "identity verified successfully, handed to eligibility step" vs "identity verified, but eligibility step never received it."</li>
+<li>Debugging required replaying individual user journeys manually across multiple systems. Took weeks to understand the scope. Many users were enrolled in wrong plans or not enrolled at all.</li>
+<li><strong>With per-step checkpoints:</strong> Could have immediately identified "4,000 users passed identity verification but don't appear in eligibility queue" — a 5-minute query, not a 3-week investigation.</li>
+</ul>
+</td></tr>
+<tr><td>
+<div class="obj-title">music platform's "Discover Weekly" Retraining Issue (reported in engineering blog)</div>
+<ul>
+<li>music platform's recommendation pipeline: user listening history → feature computation → collaborative filtering → candidate generation → ranking → playlist. Multiple transformation steps each with their own logic.</li>
+<li>When recommendation quality degraded, the team needed to identify whether the issue was in feature computation (were features stale?), the CF model (did it train on corrupted data?), or ranking (did a config change alter the output?).</li>
+<li>Without intermediate data saved at each step, the team described spending "days" narrowing down issues that would be "immediately obvious" if they could diff the output of each stage against historical runs.</li>
+<li><strong>Lesson they shared:</strong> They moved to checkpointing each transformation stage and comparing distribution stats between current run and last-N runs. Debugging time dropped from "days" to "hours."</li>
+</ul>
+</td><td>
+<div class="obj-title">Every ETL Pipeline That Joins Fact + Dimension Tables</div>
+<ul>
+<li>This isn't one incident — it's the most common class of silent corruption in enterprise data. Fact table has 10M rows. Dimension table has 50K rows. JOIN produces 10M rows (correct) or 15M rows (dimension had duplicates from a bad merge).</li>
+<li>If you only save the final joined/aggregated output, you can't tell whether 15M rows means "legitimate data growth" or "dimension table duplication." The only way to know is to inspect the pre-join row counts and the dimension table state at join time.</li>
+<li><strong>Real frequency:</strong> At any company with >5 data engineers, this happens monthly. Every single time, the investigation starts with "I wish we had saved the intermediate state." Every single time, the fix includes "now we save the intermediate state."</li>
+<li>Companies learn this lesson one pipeline at a time, each incident costing 1-3 weeks. The ones who checkpoint from day one skip this entire class of incident.</li>
+</ul>
+</td></tr>
+</table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    return {ctx:ctx, w:w, h:h};
+}
+
+// Chart 1: Pipeline with vs without checkpoints
+(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+
+ctx.fillStyle='#1a5276';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+ctx.fillText('5-step pipeline: where is the data saved?',w/2,22);
+
+var margin={left:30,right:30,top:50,bottom:70};
+var steps=['Raw','Clean','Join','Aggregate','Model Input'];
+var stepW=(w-margin.left-margin.right)/steps.length;
+var stepH=50;
+
+// Top: without checkpoints
+var topY=margin.top;
+ctx.fillStyle='#e74c3c';ctx.font='bold 12px sans-serif';ctx.textAlign='left';
+ctx.fillText('Without checkpoints (typical):',margin.left,topY-8);
+
+steps.forEach(function(step,i){
+    var x=margin.left+i*stepW;
+    var saved=(i===0||i===4);
+    ctx.fillStyle=saved?'rgba(39,174,96,0.25)':'rgba(231,76,60,0.1)';
+    ctx.fillRect(x+4,topY,stepW-8,stepH);
+    ctx.strokeStyle=saved?'#27ae60':'#e74c3c';ctx.lineWidth=saved?2.5:1.5;
+    ctx.strokeRect(x+4,topY,stepW-8,stepH);
+
+    ctx.fillStyle='#333';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
+    ctx.fillText(step,x+stepW/2,topY+22);
+    ctx.fillStyle=saved?'#27ae60':'#e74c3c';ctx.font='bold 10px sans-serif';
+    ctx.fillText(saved?'✓ SAVED':'✗ EPHEMERAL',x+stepW/2,topY+40);
+
+    // Arrow
+    if(i<steps.length-1){
+        ctx.strokeStyle='#999';ctx.lineWidth=1.5;
+        ctx.beginPath();ctx.moveTo(x+stepW-4,topY+stepH/2);ctx.lineTo(x+stepW+4,topY+stepH/2);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(x+stepW+1,topY+stepH/2-4);ctx.lineTo(x+stepW+5,topY+stepH/2);ctx.lineTo(x+stepW+1,topY+stepH/2+4);ctx.closePath();ctx.fillStyle='#999';ctx.fill();
+    }
+});
+
+// Bottom: with checkpoints
+var botY=topY+stepH+50;
+ctx.fillStyle='#27ae60';ctx.font='bold 12px sans-serif';ctx.textAlign='left';
+ctx.fillText('With checkpoints at every step:',margin.left,botY-8);
+
+steps.forEach(function(step,i){
+    var x=margin.left+i*stepW;
+    ctx.fillStyle='rgba(39,174,96,0.25)';
+    ctx.fillRect(x+4,botY,stepW-8,stepH);
+    ctx.strokeStyle='#27ae60';ctx.lineWidth=2.5;
+    ctx.strokeRect(x+4,botY,stepW-8,stepH);
+
+    ctx.fillStyle='#333';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
+    ctx.fillText(step,x+stepW/2,botY+22);
+    ctx.fillStyle='#27ae60';ctx.font='bold 10px sans-serif';
+    ctx.fillText('✓ SAVED',x+stepW/2,botY+40);
+
+    if(i<steps.length-1){
+        ctx.strokeStyle='#999';ctx.lineWidth=1.5;
+        ctx.beginPath();ctx.moveTo(x+stepW-4,botY+stepH/2);ctx.lineTo(x+stepW+4,botY+stepH/2);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(x+stepW+1,botY+stepH/2-4);ctx.lineTo(x+stepW+5,botY+stepH/2);ctx.lineTo(x+stepW+1,botY+stepH/2+4);ctx.closePath();ctx.fillStyle='#999';ctx.fill();
+    }
+});
+
+// Bug indicator
+ctx.fillStyle='#e74c3c';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
+var bugX=margin.left+2*stepW+stepW/2;
+ctx.fillText('↑ Bug here',bugX,botY+stepH+16);
+
+// Comparison
+ctx.fillStyle='#e74c3c';ctx.font='12px sans-serif';ctx.textAlign='center';
+ctx.fillText('Without: have step 1 and step 5. Steps 2-4 are gone. Must re-run.',w/2,h-32);
+ctx.fillStyle='#27ae60';
+ctx.fillText('With: inspect step 2→3 diff directly. No re-run needed.',w/2,h-14);
+})();
+
+// Chart 2: Temporal impossibility
+(function(){var s=setup('c2');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+
+ctx.fillStyle='#1a5276';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+ctx.fillText('Source data mutates — past pipeline state is unrecoverable',w/2,22);
+
+var margin={left:50,right:30,top:55,bottom:50};
+var plotW=w-margin.left-margin.right;
+
+// Timeline
+var timelineY=margin.top+40;
+ctx.strokeStyle='#333';ctx.lineWidth=2;
+ctx.beginPath();ctx.moveTo(margin.left,timelineY);ctx.lineTo(margin.left+plotW,timelineY);ctx.stroke();
+
+// Events on timeline
+var events=[
+    {x:0.1,label:'Pipeline runs\n(3am Tuesday)',color:'#3498db',above:true},
+    {x:0.3,label:'Source DB\nupdated',color:'#e67e22',above:false},
+    {x:0.5,label:'More source\nupdates',color:'#e67e22',above:false},
+    {x:0.75,label:'Problem detected\n(9am Thursday)',color:'#e74c3c',above:true},
+    {x:0.9,label:'Investigation\nstarts',color:'#e74c3c',above:true}
+];
+
+events.forEach(function(ev){
+    var x=margin.left+ev.x*plotW;
+    ctx.strokeStyle=ev.color;ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(x,timelineY-8);ctx.lineTo(x,timelineY+8);ctx.stroke();
+
+    ctx.fillStyle=ev.color;ctx.font='10px sans-serif';ctx.textAlign='center';
+    var lines=ev.label.split('\n');
+    var baseY=ev.above?timelineY-16:timelineY+18;
+    lines.forEach(function(line,i){
+        ctx.fillText(line,x,baseY+(ev.above?-i*12:i*12));
+    });
+});
+
+// The gap
+var gapStartX=margin.left+0.1*plotW;
+var gapEndX=margin.left+0.75*plotW;
+ctx.fillStyle='rgba(231,76,60,0.08)';
+ctx.fillRect(gapStartX,timelineY+30,gapEndX-gapStartX,80);
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=1;ctx.setLineDash([4,4]);
+ctx.strokeRect(gapStartX,timelineY+30,gapEndX-gapStartX,80);
+ctx.setLineDash([]);
+
+ctx.fillStyle='#e74c3c';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
+ctx.fillText('This window is GONE',gapStartX+(gapEndX-gapStartX)/2,timelineY+55);
+ctx.fillStyle='#555';ctx.font='11px sans-serif';
+ctx.fillText('Source mutated. Intermediate state never saved. Cannot reconstruct.',gapStartX+(gapEndX-gapStartX)/2,timelineY+75);
+ctx.fillText('Query source NOW → get different data than pipeline saw Tuesday.',gapStartX+(gapEndX-gapStartX)/2,timelineY+92);
+
+ctx.fillStyle='#555';ctx.font='italic 12px sans-serif';ctx.textAlign='center';
+ctx.fillText('Checkpoints are snapshots of what the pipeline ACTUALLY SAW at each step. Without them, that state is lost.',w/2,h-10);
+})();
+
+// Chart 3: Aggregation destroys detail
+(function(){var s=setup('c3');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+
+ctx.fillStyle='#1a5276';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+ctx.fillText('Aggregation is lossy — can\'t decompose without pre-aggregation data',w/2,22);
+
+var margin={left:30,right:30,top:50,bottom:40};
+
+// Left: pre-aggregation rows
+var lx=margin.left+20,ly=margin.top;
+ctx.fillStyle='#1a5276';ctx.font='bold 12px sans-serif';ctx.textAlign='left';
+ctx.fillText('Step 3 output (row-level):',lx,ly);
+
+var rows=[
+    'user_1  $50   purchase',
+    'user_1  $50   purchase (dupe!)',
+    'user_1  $50   purchase (dupe!)',
+    'user_2  $80   purchase',
+    'user_3  $120  purchase'
+];
+rows.forEach(function(row,i){
+    var y=ly+16+i*22;
+    ctx.fillStyle=i>0&&i<3?'rgba(231,76,60,0.15)':'rgba(39,174,96,0.1)';
+    ctx.fillRect(lx,y,240,18);
+    ctx.fillStyle=i>0&&i<3?'#e74c3c':'#333';ctx.font='11px monospace';
+    ctx.fillText(row,lx+4,y+13);
+});
+
+// Arrow
+var arrowX=lx+260;
+ctx.strokeStyle='#333';ctx.lineWidth=2;
+ctx.beginPath();ctx.moveTo(arrowX,ly+70);ctx.lineTo(arrowX+40,ly+70);ctx.stroke();
+ctx.fillStyle='#333';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
+ctx.fillText('GROUP BY',arrowX+20,ly+58);
+ctx.fillText('AVG()',arrowX+20,ly+86);
+
+// Right: post-aggregation
+var rx=arrowX+60;
+ctx.fillStyle='#1a5276';ctx.font='bold 12px sans-serif';ctx.textAlign='left';
+ctx.fillText('Step 4 output (aggregated):',rx,ly);
+
+ctx.fillStyle='rgba(231,76,60,0.1)';
+ctx.fillRect(rx,ly+16,200,22);
+ctx.fillStyle='#333';ctx.font='11px monospace';
+ctx.fillText('avg_spend = $70',rx+4,ly+31);
+
+ctx.fillStyle='#e74c3c';ctx.font='11px sans-serif';ctx.textAlign='left';
+ctx.fillText('Expected: $83',rx+4,ly+55);
+ctx.fillText('Got: $70 (dupes diluted avg)',rx+4,ly+72);
+ctx.fillText('',rx+4,ly+92);
+ctx.font='bold 11px sans-serif';
+ctx.fillText('Without step 3 data: can\'t see the dupes',rx+4,ly+105);
+ctx.fillText('Only see wrong aggregate, not WHY',rx+4,ly+122);
+
+// Bottom
+ctx.fillStyle='#555';ctx.font='italic 12px sans-serif';ctx.textAlign='center';
+ctx.fillText('Every GROUP BY / SUM / AVG destroys row-level evidence. Save BEFORE aggregating.',w/2,h-10);
+})();
+
+// Chart 4: Re-run cost
+(function(){var s=setup('c4');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+
+ctx.fillStyle='#1a5276';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+ctx.fillText('Bug in step 3: how long to get back to testing the fix?',w/2,22);
+
+var margin={left:180,right:40,top:55,bottom:40};
+var barH=60,gap=40;
+var maxW=w-margin.left-margin.right;
+
+// Without: must re-run 1-2 to get input for 3
+var y1=margin.top;
+ctx.fillStyle='#1a5276';ctx.font='12px sans-serif';ctx.textAlign='right';
+ctx.fillText('Without step 2',margin.left-12,y1+20);
+ctx.fillText('checkpoint:',margin.left-12,y1+34);
+
+var segments1=[
+    {label:'Re-run step 1 (4hr)',frac:0.44,color:'#e74c3c'},
+    {label:'Re-run step 2 (2hr)',frac:0.22,color:'#e67e22'},
+    {label:'Run fix (1hr)',frac:0.11,color:'#27ae60'}
+];
+var x=margin.left;
+segments1.forEach(function(seg){
+    var bw=seg.frac*maxW;
+    ctx.fillStyle=seg.color;ctx.fillRect(x,y1,bw,barH);
+    ctx.strokeStyle='#333';ctx.lineWidth=1;ctx.strokeRect(x,y1,bw,barH);
+    ctx.fillStyle='#fff';ctx.font='bold 10px sans-serif';ctx.textAlign='center';
+    if(bw>80) ctx.fillText(seg.label,x+bw/2,y1+barH/2+4);
+    x+=bw;
+});
+ctx.fillStyle='#e74c3c';ctx.font='bold 12px sans-serif';ctx.textAlign='left';
+ctx.fillText('7 hours',x+10,y1+barH/2+4);
+
+// With: start from step 2 checkpoint
+var y2=y1+barH+gap;
+ctx.fillStyle='#1a5276';ctx.font='12px sans-serif';ctx.textAlign='right';
+ctx.fillText('With step 2',margin.left-12,y2+20);
+ctx.fillText('checkpoint:',margin.left-12,y2+34);
+
+var bw2=0.11*maxW;
+ctx.fillStyle='#27ae60';ctx.fillRect(margin.left,y2,bw2,barH);
+ctx.strokeStyle='#333';ctx.lineWidth=1;ctx.strokeRect(margin.left,y2,bw2,barH);
+ctx.fillStyle='#fff';ctx.font='bold 10px sans-serif';ctx.textAlign='center';
+ctx.fillText('Run fix (1hr)',margin.left+bw2/2,y2+barH/2+4);
+ctx.fillStyle='#27ae60';ctx.font='bold 12px sans-serif';ctx.textAlign='left';
+ctx.fillText('1 hour',margin.left+bw2+10,y2+barH/2+4);
+
+// Ratio
+ctx.fillStyle='#555';ctx.font='bold 13px sans-serif';ctx.textAlign='center';
+ctx.fillText('7× faster debugging. 12 experiments/day vs 2 experiments/day.',w/2,h-12);
+})();
+
+// Chart 5: Storage cost vs debugging cost
+(function(){var s=setup('c5');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+
+ctx.fillStyle='#1a5276';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+ctx.fillText('Cost: checkpoints vs no checkpoints',w/2,22);
+
+var margin={left:200,right:60,top:55,bottom:40};
+var barH=55,gap=40;
+var maxW=w-margin.left-margin.right;
+
+// Checkpoint storage cost
+var y1=margin.top;
+ctx.fillStyle='#1a5276';ctx.font='12px sans-serif';ctx.textAlign='right';
+ctx.fillText('Checkpoint storage',margin.left-12,y1+20);
+ctx.fillText('(1TB × 30 days):',margin.left-12,y1+34);
+
+var bw1=0.003*maxW; // tiny
+ctx.fillStyle='#27ae60';ctx.fillRect(margin.left,y1,Math.max(bw1,8),barH);
+ctx.strokeStyle='#333';ctx.lineWidth=1;ctx.strokeRect(margin.left,y1,Math.max(bw1,8),barH);
+ctx.fillStyle='#27ae60';ctx.font='bold 12px sans-serif';ctx.textAlign='left';
+ctx.fillText('$23/month',margin.left+16,y1+barH/2+4);
+
+// Debugging without checkpoints
+var y2=y1+barH+gap;
+ctx.fillStyle='#1a5276';ctx.font='12px sans-serif';ctx.textAlign='right';
+ctx.fillText('2 weeks debugging',margin.left-12,y2+20);
+ctx.fillText('without checkpoints:',margin.left-12,y2+34);
+
+var bw2=0.8*maxW;
+ctx.fillStyle='#e74c3c';ctx.fillRect(margin.left,y2,bw2,barH);
+ctx.strokeStyle='#333';ctx.lineWidth=1;ctx.strokeRect(margin.left,y2,bw2,barH);
+ctx.fillStyle='#fff';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
+ctx.fillText('$8,000+ engineer time + weeks of models training on bad data',margin.left+bw2/2,y2+barH/2+4);
+
+ctx.fillStyle='#555';ctx.font='italic 12px sans-serif';ctx.textAlign='center';
+ctx.fillText('$23/month buys time-travel debugging. The "storage is expensive" excuse costs 350× more.',w/2,h-10);
+})();
+</script>
+</body>
+</html>

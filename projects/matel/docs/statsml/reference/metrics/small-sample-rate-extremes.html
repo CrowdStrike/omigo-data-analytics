@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Small-Sample Rate Extremes — Lucky Sale & Low-N Metrics</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 20px 10px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.3em; margin: 30px 0 12px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 6px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 40%; }
+.obj-table td:last-child { width: 60%; text-align: center; }
+.obj-table tr:nth-child(even) td { background: #fafcfe; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+</style>
+</head>
+<body>
+
+<h1>Small-Sample Rate Extremes — Lucky Sale &amp; Low-N Metrics</h1>
+<p class="subtitle">When items have few impressions, rate metrics (CTR, conversion rate, sales/impression) become noise masquerading as signal. One lucky event creates an extreme rate that the system treats as truth.</p>
+
+<h2>1. The Lucky Sale — 1 Impression, 100% Conversion</h2>
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Someone buys a cheap item on first view — sales/impression = 1.0</div>
+<ul>
+<li><strong>The scenario:</strong> Item shown once → user buys it (often cheap, impulse). Conversion rate = 100%. System sees this as the highest-performing item in the catalog.</li>
+<li><strong>Why it's wrong:</strong> The "rate" is meaningless at n=1. The 95% confidence interval for a 1/1 success is [2.5%, 100%]. The point estimate tells you nothing.</li>
+<li><strong>The damage:</strong> If the system uses raw conversion rate to rank → this item gets boosted → gets more impressions → now its true rate (maybe 3%) emerges → rankings oscillate wildly.</li>
+<li><strong>Where it happens:</strong> E-commerce conversion optimization. Ad CTR for new creatives. App install rates for new campaigns. Any rate metric on fresh items.</li>
+</ul>
+<p><strong>Fix:</strong> Bayesian shrinkage (beta-binomial prior). Minimum impression threshold before rate is trusted. Wilson score interval instead of point estimate. Blend toward population mean at low n.</p>
+</td><td><canvas id="ca1" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>2. Confidence Interval Width at Low N</h2>
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">At n=5, your 95% CI is wider than the entire metric range</div>
+<ul>
+<li><strong>The math:</strong> Observed 2/5 = 40% CTR. Wilson interval: [11.8%, 73.6%]. The item's "true CTR" could be anywhere from terrible to excellent. You literally know nothing.</li>
+<li><strong>At n=50:</strong> Same observed rate (20/50 = 40%). Wilson interval: [27.0%, 54.4%]. Starting to be informative.</li>
+<li><strong>At n=500:</strong> 200/500 = 40%. Wilson interval: [35.7%, 44.4%]. Now you can trust it.</li>
+<li><strong>The mistake:</strong> Teams treat the point estimate the same regardless of sample size. "40% conversion" at n=5 looks identical to "40% conversion" at n=5000 in a dashboard.</li>
+</ul>
+<p><strong>Fix:</strong> Always display confidence intervals alongside rates. Gray out / flag metrics below minimum n. Sort by lower confidence bound (pessimistic estimate), not point estimate.</p>
+</td><td><canvas id="ca2" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>3. Bayesian Shrinkage — The Correct Response</h2>
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Blend extreme observations toward the population mean proportional to uncertainty</div>
+<ul>
+<li><strong>The principle:</strong> At n=1, your best guess is the population average (prior). At n=10000, your best guess is the observed rate (data dominates). In between, it's a weighted blend.</li>
+<li><strong>Beta-binomial:</strong> Prior: Beta(α, β) from population. Posterior: Beta(α + successes, β + failures). Point estimate = (α + successes) / (α + β + n). Shrinks extreme rates toward the mean.</li>
+<li><strong>Effect:</strong> The "lucky sale" item with 1/1 gets pulled from 100% down toward ~5% (population average). An item with 500/1000 stays near 50% because data dominates.</li>
+</ul>
+<p><strong>Fix:</strong> Use empirical Bayes (estimate prior from catalog-wide rates). Apply to all rate metrics before ranking. The stronger your prior, the more data you need to override it.</p>
+</td><td><canvas id="ca3" width="720" height="300"></canvas></td></tr>
+</table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    return {ctx:ctx, w:w, h:h};
+}
+
+// 1. Lucky sale — items by conversion rate vs impressions
+(function(){var s=setup('ca1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 14px -apple-system';ctx.textAlign='center';
+ctx.fillText('Conversion Rate vs Impressions — Low-N Extremes',w/2,20);
+var m={left:70,right:40,top:50,bottom:45};var pw=w-m.left-m.right,ph=h-m.top-m.bottom;
+// Items: impressions (log scale), conversion rate
+var items=[
+{imp:1,cvr:100,label:'Lucky sale'},{imp:2,cvr:50},{imp:3,cvr:66},{imp:5,cvr:60},
+{imp:8,cvr:37},{imp:12,cvr:25},{imp:20,cvr:15},{imp:45,cvr:8},
+{imp:100,cvr:5.2},{imp:200,cvr:4.8},{imp:500,cvr:4.1},{imp:1000,cvr:3.9},
+{imp:2000,cvr:4.0},{imp:5000,cvr:3.8},{imp:10000,cvr:4.2}
+];
+var maxLogImp=Math.log10(10000),maxCvr=100;
+items.forEach(function(it){
+var x=m.left+(Math.log10(it.imp)/maxLogImp)*pw;
+var y=m.top+ph-(it.cvr/maxCvr)*ph;
+var radius=it.imp<10?8:it.imp<100?5:3;
+ctx.beginPath();ctx.arc(x,y,radius,0,2*Math.PI);
+ctx.fillStyle=it.imp<10?'rgba(231,76,60,0.7)':'rgba(26,82,118,0.4)';ctx.fill();
+if(it.label){ctx.fillStyle='#e74c3c';ctx.font='bold 11px -apple-system';ctx.textAlign='left';
+ctx.fillText(it.label,x+10,y+4);}
+});
+// True rate line
+ctx.strokeStyle='#27ae60';ctx.lineWidth=2;ctx.setLineDash([5,3]);ctx.beginPath();
+var trueY=m.top+ph-(4/maxCvr)*ph;
+ctx.moveTo(m.left,trueY);ctx.lineTo(m.left+pw,trueY);ctx.stroke();ctx.setLineDash([]);
+ctx.fillStyle='#27ae60';ctx.font='11px -apple-system';ctx.textAlign='right';
+ctx.fillText('True population rate ~4%',m.left+pw,trueY-8);
+// Axes
+ctx.fillStyle='#666';ctx.font='11px -apple-system';ctx.textAlign='center';
+ctx.fillText('Impressions (log scale)',w/2,h-8);
+ctx.save();ctx.translate(15,h/2);ctx.rotate(-Math.PI/2);ctx.fillText('Conversion Rate %',0,0);ctx.restore();
+ctx.fillStyle='#e74c3c';ctx.font='bold 11px -apple-system';ctx.textAlign='center';
+ctx.fillText('Low-N items dominate leaderboards. Noise looks like signal.',w/2,h-22);
+})();
+
+// 2. CI width by sample size
+(function(){var s=setup('ca2');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 14px -apple-system';ctx.textAlign='center';
+ctx.fillText('95% Confidence Interval Width at Observed Rate = 40%',w/2,20);
+var m={left:100,right:60,top:55,bottom:40};var pw=w-m.left-m.right,ph=h-m.top-m.bottom;
+var samples=[
+{n:5,lo:11.8,hi:73.6},{n:10,lo:16.8,hi:67.7},{n:20,lo:21.3,hi:61.3},
+{n:50,lo:27.0,hi:54.4},{n:100,lo:30.5,hi:50.1},{n:500,lo:35.7,hi:44.4},{n:2000,lo:37.9,hi:42.2}
+];
+var barH=28,gap=8;
+samples.forEach(function(s2,i){
+var y=m.top+i*(barH+gap);
+var loX=m.left+(s2.lo/100)*pw;var hiX=m.left+(s2.hi/100)*pw;
+var midX=m.left+(40/100)*pw;
+// CI bar
+ctx.fillStyle=s2.n<20?'rgba(231,76,60,0.3)':s2.n<100?'rgba(230,126,34,0.3)':'rgba(39,174,96,0.3)';
+ctx.fillRect(loX,y,hiX-loX,barH);
+ctx.strokeStyle=s2.n<20?'#e74c3c':s2.n<100?'#e67e22':'#27ae60';
+ctx.lineWidth=1.5;ctx.strokeRect(loX,y,hiX-loX,barH);
+// Center line
+ctx.strokeStyle='#1a5276';ctx.lineWidth=2;ctx.beginPath();
+ctx.moveTo(midX,y);ctx.lineTo(midX,y+barH);ctx.stroke();
+// Labels
+ctx.fillStyle='#333';ctx.font='11px -apple-system';ctx.textAlign='right';
+ctx.fillText('n='+s2.n,m.left-10,y+barH/2+4);
+ctx.textAlign='left';
+ctx.fillText(s2.lo+'%–'+s2.hi+'%',hiX+8,y+barH/2+4);
+});
+ctx.fillStyle='#1a5276';ctx.font='bold 11px -apple-system';ctx.textAlign='center';
+ctx.fillText('40%',m.left+(40/100)*pw,m.top-8);
+ctx.fillStyle='#e74c3c';ctx.font='bold 11px -apple-system';
+ctx.fillText('At n=5: "40% CTR" actually means "somewhere between 12% and 74%"',w/2,h-8);
+})();
+
+// 3. Bayesian shrinkage — raw vs shrunk estimates
+(function(){var s=setup('ca3');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 14px -apple-system';ctx.textAlign='center';
+ctx.fillText('Raw Rate vs Bayesian Shrinkage Estimate',w/2,20);
+var m={left:120,right:60,top:50,bottom:35};var pw=w-m.left-m.right,ph=h-m.top-m.bottom;
+var items=[
+{label:'1/1 (lucky sale)',raw:100,shrunk:8.3,n:1},
+{label:'2/3',raw:66.7,shrunk:12.5,n:3},
+{label:'5/10',raw:50,shrunk:18.8,n:10},
+{label:'20/50',raw:40,shrunk:28.6,n:50},
+{label:'200/500',raw:40,shrunk:37.5,n:500},
+{label:'2000/5000',raw:40,shrunk:39.6,n:5000}
+];
+var barH=30,gap=10,maxRate=100;
+items.forEach(function(it,i){
+var y=m.top+i*(barH+gap);
+// Raw bar
+var rawW=(it.raw/maxRate)*pw;
+ctx.fillStyle='rgba(231,76,60,0.4)';ctx.fillRect(m.left,y,rawW,barH/2-1);
+// Shrunk bar
+var shrunkW=(it.shrunk/maxRate)*pw;
+ctx.fillStyle='rgba(39,174,96,0.5)';ctx.fillRect(m.left,y+barH/2,shrunkW,barH/2-1);
+// Label
+ctx.fillStyle='#333';ctx.font='11px -apple-system';ctx.textAlign='right';
+ctx.fillText(it.label,m.left-8,y+barH/2+3);
+// Values
+ctx.textAlign='left';ctx.font='10px -apple-system';
+ctx.fillStyle='#e74c3c';ctx.fillText(it.raw.toFixed(0)+'%',m.left+rawW+4,y+barH/4+2);
+ctx.fillStyle='#27ae60';ctx.fillText(it.shrunk.toFixed(1)+'%',m.left+shrunkW+4,y+barH*3/4+2);
+});
+// Population mean line
+var meanX=m.left+(4/maxRate)*pw;
+ctx.strokeStyle='#666';ctx.lineWidth=1;ctx.setLineDash([3,3]);ctx.beginPath();
+ctx.moveTo(meanX,m.top-5);ctx.lineTo(meanX,m.top+items.length*(barH+gap));ctx.stroke();ctx.setLineDash([]);
+ctx.fillStyle='#666';ctx.font='10px -apple-system';ctx.textAlign='center';ctx.fillText('prior mean (4%)',meanX,m.top-10);
+// Legend
+ctx.font='bold 11px -apple-system';ctx.textAlign='left';
+ctx.fillStyle='#e74c3c';ctx.fillText('■ Raw rate',m.left,h-8);
+ctx.fillStyle='#27ae60';ctx.fillText('■ Shrunk estimate',m.left+120,h-8);
+ctx.fillStyle='#666';ctx.font='11px -apple-system';ctx.fillText('(At high n, shrinkage vanishes — data dominates)',m.left+270,h-8);
+})();
+</script>
+</body>
+</html>

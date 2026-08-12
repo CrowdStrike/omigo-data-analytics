@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scatter Plot Analysis via CNN or LLM — Discussion Backlog</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #fff; color: #2c3e50; line-height: 1.6; }
+h1 { color: #1a5276; border-bottom: 3px solid #2980b9; padding-bottom: 10px; }
+h2 { color: #1a5276; margin-top: 0; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { padding: 20px; vertical-align: top; border: 1px solid #2980b9; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-title { color: #1a5276; font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
+ul { margin: 10px 0; padding-left: 20px; }
+li { margin-bottom: 6px; }
+strong { color: #1a5276; }
+code { background: #e8f0f8; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; color: #1a5276; }
+.questions { background: #fff8e1; border-left: 3px solid #f39c12; padding: 10px 15px; margin: 10px 0; font-size: 0.9em; }
+canvas { display: block; margin: 8px auto; max-width: 100%; }
+.nav-link { display: inline-block; margin: 20px 0; color: #2980b9; text-decoration: none; font-weight: bold; }
+.nav-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<h1>Scatter Plot Analysis via CNN or LLM</h1>
+<p>Univariate profiling misses interaction effects. Render colored scatter plots and analyze visually to catch structure invisible in 1D histograms.</p>
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Two Approaches</div>
+<ul>
+<li><strong>Option A — CNN:</strong> Classify structure (linear, clustered, funnel, etc.) with LLM-guided training data generation</li>
+<li><strong>Option B — LLM:</strong> Pass rendered image to vision model, ask it to describe patterns</li>
+</ul>
+<div class="obj-title" style="margin-top: 20px;">What It Catches</div>
+<ul>
+<li>Clusters invisible in 1D histograms</li>
+<li>Non-linear relationships (quadratic, exponential)</li>
+<li>Heteroscedasticity (funnel shapes)</li>
+<li>Outlier subgroups</li>
+</ul>
+<div class="questions">
+<strong>Key Question:</strong> Which pairs to plot? All O(n^2) is expensive. Heuristic: correlation pre-filter, or mutual information ranking?
+</div>
+</td>
+<td>
+<canvas id="c1" width="720" height="280"></canvas>
+<canvas id="c2" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setupCanvas(id) {
+    var c = document.getElementById(id);
+    var w = c.width, h = c.height;
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return {ctx: ctx, w: w, h: h};
+}
+
+// Seeded random for reproducibility
+function seededRandom(seed) {
+    var m = 0x80000000, a = 1103515245, c = 12345;
+    var state = seed;
+    return function() {
+        state = (a * state + c) % m;
+        return state / m;
+    };
+}
+
+// Canvas 1: Three small scatter plots side by side
+(function() {
+    var s = setupCanvas('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var rand = seededRandom(42);
+
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Scatter Plot Structure Types', w/2, 18);
+
+    var plotW = (w - 80) / 3;
+    var plotH = h - 80;
+    var startY = 40;
+    var labels = ['Linear', 'Clustered', 'Funnel'];
+    var colors = ['#1a5276', '#27ae60', '#e67e22'];
+
+    for (var p = 0; p < 3; p++) {
+        var startX = 20 + p * (plotW + 20);
+
+        // Plot border
+        ctx.strokeStyle = '#bdc3c7';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(startX, startY, plotW, plotH);
+
+        // Draw points
+        ctx.fillStyle = colors[p];
+        for (var i = 0; i < 60; i++) {
+            var px, py;
+            if (p === 0) {
+                // Linear
+                px = rand() * plotW;
+                py = plotH - (px / plotW * plotH) + (rand() - 0.5) * 30;
+            } else if (p === 1) {
+                // Clustered - 3 clusters
+                var cluster = Math.floor(rand() * 3);
+                var cx = [0.2, 0.7, 0.5][cluster] * plotW;
+                var cy = [0.3, 0.3, 0.75][cluster] * plotH;
+                px = cx + (rand() - 0.5) * 40;
+                py = cy + (rand() - 0.5) * 35;
+            } else {
+                // Funnel
+                px = rand() * plotW;
+                var spread = (px / plotW) * 80;
+                py = plotH / 2 + (rand() - 0.5) * spread;
+            }
+            px = Math.max(3, Math.min(plotW - 3, px));
+            py = Math.max(3, Math.min(plotH - 3, py));
+            ctx.beginPath();
+            ctx.arc(startX + px, startY + py, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Label
+        ctx.font = 'bold 15px -apple-system, sans-serif';
+        ctx.fillStyle = colors[p];
+        ctx.textAlign = 'center';
+        ctx.fillText(labels[p], startX + plotW / 2, startY + plotH + 18);
+    }
+})();
+
+// Canvas 2: Pipeline flow diagram
+(function() {
+    var s = setupCanvas('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Analysis Pipeline', w/2, 20);
+
+    // Pipeline boxes
+    var boxes = [
+        {label: 'Feature\nPairs', x: 60, color: '#1a5276'},
+        {label: 'Render\nScatter', x: 220, color: '#2980b9'},
+        {label: 'CNN / LLM\nAnalysis', x: 380, color: '#27ae60'},
+        {label: 'Structure\nLabel', x: 540, color: '#e67e22'}
+    ];
+
+    var boxW = 120, boxH = 60, centerY = h / 2 + 10;
+
+    for (var i = 0; i < boxes.length; i++) {
+        var b = boxes[i];
+        var x = b.x - boxW/2;
+        var y = centerY - boxH/2;
+
+        // Box
+        ctx.fillStyle = b.color;
+        ctx.beginPath();
+        ctx.roundRect(x, y, boxW, boxH, 8);
+        ctx.fill();
+
+        // Label
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 15px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        var lines = b.label.split('\n');
+        for (var l = 0; l < lines.length; l++) {
+            ctx.fillText(lines[l], b.x, centerY + (l - 0.5) * 16 + 4);
+        }
+
+        // Arrow to next
+        if (i < boxes.length - 1) {
+            var nextX = boxes[i+1].x - boxW/2;
+            ctx.strokeStyle = '#2c3e50';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(x + boxW + 4, centerY);
+            ctx.lineTo(nextX - 4, centerY);
+            ctx.stroke();
+            // Arrowhead
+            ctx.fillStyle = '#2c3e50';
+            ctx.beginPath();
+            ctx.moveTo(nextX - 4, centerY);
+            ctx.lineTo(nextX - 14, centerY - 5);
+            ctx.lineTo(nextX - 14, centerY + 5);
+            ctx.closePath();
+            ctx.fill();
+        }
+    }
+
+    // Output labels below last box
+    ctx.font = '14px -apple-system, sans-serif';
+    ctx.fillStyle = '#2c3e50';
+    ctx.textAlign = 'center';
+    var outputs = ['linear', 'clustered', 'funnel', 'random', 'quadratic'];
+    for (var i = 0; i < outputs.length; i++) {
+        ctx.fillText(outputs[i], 540, centerY + boxH/2 + 20 + i * 15);
+    }
+
+    // Bracket
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(500, centerY + boxH/2 + 12);
+    ctx.lineTo(500, centerY + boxH/2 + 82);
+    ctx.stroke();
+
+    // Sub-labels for CNN/LLM
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.fillStyle = '#555';
+    ctx.fillText('Option A: Trained CNN classifier', 380, centerY + boxH/2 + 20);
+    ctx.fillText('Option B: Vision LLM (GPT-4V, Claude)', 380, centerY + boxH/2 + 35);
+})();
+</script>
+
+</body>
+</html>

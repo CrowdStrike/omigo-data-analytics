@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Attribution Window Misalignment — A/B Testing Pitfalls</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 20px 10px; line-height: 1.6; }
+h1 { font-size: 1.6em; margin-bottom: 10px; color: #1a5276; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.0em; margin-bottom: 20px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; margin-right: 15px; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 6px 0; }
+strong { color: #1a5276; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 40%; }
+.obj-table td:last-child { width: 60%; text-align: center; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+</style>
+</head>
+<body>
+<h1>Attribution Window Misalignment</h1>
+<p class="subtitle">Timing Flaw — Conversions measured too early (warm-up contamination) or cut off too soon (maturation truncation).</p>
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Warm-Up: Pre-Test Checkouts Attributed to Variants</div>
+<ul>
+<li>User starts checkout Tuesday (pre-test). Test launches Wednesday. User completes Thursday &rarr; credited to variant B.</li>
+<li>Previous test's in-flight conversions bleed into the new test's early data.</li>
+<li>Typical contamination window: 3&ndash;7 days of residual conversions from prior state.</li>
+<li>Higher-consideration purchases (electronics, travel) have longer tails &rarr; worse contamination.</li>
+</ul>
+<p><strong>Fix:</strong> Burn-in period. Discard first 3&ndash;7 days. Only count users whose journey started <em>after</em> test launch.</p>
+<p><strong>The tell:</strong> Day-1 conversion rate is anomalously high or differs wildly between variants before any real exposure effect.</p>
+</td><td><canvas id="c1" width="720" height="340"></canvas></td></tr>
+</table>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Cool-Down: Post-Window Conversions Never Counted</div>
+<ul>
+<li>Test runs 30 days. Results published day 30. But checkout resolution has a 7&ndash;10 day tail (fraud holds, BNPL, cart recovery emails).</li>
+<li>Results keep shifting for a week after "final" read. Typically shift upward (unresolved &rarr; resolved).</li>
+<li>Variant with longer consideration funnel gets disproportionately penalized.</li>
+<li>If variant B targets higher-AOV users (who deliberate longer), its true lift is systematically undercounted.</li>
+</ul>
+<p><strong>Fix:</strong> Maturation window. Wait 7&ndash;10 days after cutoff before reading. Or: only report on users whose full attribution window has closed.</p>
+<p><strong>The tell:</strong> Metrics change &gt;2% after the test is "done." Winning variant flips in the days following the readout.</p>
+</td><td><canvas id="c2" width="720" height="340"></canvas></td></tr>
+</table>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">The Real Calendar Math</div>
+<ul>
+<li>A "30-day test" actually needs ~44 days wall-clock.</li>
+<li>Day 0&ndash;7: Burn-in (discard). Day 7&ndash;37: Clean measurement. Day 37&ndash;44+: Maturation (let conversions resolve).</li>
+<li>Teams that skip this see "unstable results" and lose trust in experimentation.</li>
+<li>Domain-specific: fintech (chargebacks: 45+ days), travel (cancellation window: 14&ndash;30 days), subscriptions (trial-to-paid: 7&ndash;14 days).</li>
+</ul>
+<p><strong>Correct approach:</strong> Define attribution window upfront in the test design doc. Enforce it in the pipeline &mdash; not as a post-hoc analyst decision.</p>
+<p><strong>The tell:</strong> "Can we get results sooner?" pressure from stakeholders leads to premature reads that flip on maturation.</p>
+</td><td><canvas id="c3" width="720" height="340"></canvas></td></tr>
+</table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    return {ctx:ctx, w:w, h:h};
+}
+
+// Canvas 1: Warm-up contamination timeline
+(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+
+ctx.font = 'bold 14px -apple-system, sans-serif';
+ctx.fillStyle = '#1a5276';
+ctx.textAlign = 'center';
+ctx.fillText('Warm-Up Contamination: Pre-Test Journeys Bleed In', w/2, 22);
+
+// Timeline
+var left = 80, right = 640, timeY = 160;
+ctx.strokeStyle = '#999';
+ctx.lineWidth = 2;
+ctx.beginPath();
+ctx.moveTo(left, timeY);
+ctx.lineTo(right, timeY);
+ctx.stroke();
+
+// Test launch marker
+var launchX = left + (right - left) * 0.35;
+ctx.strokeStyle = '#1a5276';
+ctx.lineWidth = 3;
+ctx.beginPath();
+ctx.moveTo(launchX, timeY - 40);
+ctx.lineTo(launchX, timeY + 40);
+ctx.stroke();
+ctx.fillStyle = '#1a5276';
+ctx.font = 'bold 12px -apple-system, sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('TEST LAUNCH', launchX, timeY + 60);
+
+// Pre-test checkout journeys (red dashed arrows crossing the launch line)
+ctx.strokeStyle = '#e74c3c';
+ctx.lineWidth = 2;
+ctx.setLineDash([4, 3]);
+
+// Journey 1: starts before, ends after
+var j1Start = left + (right - left) * 0.15;
+var j1End = left + (right - left) * 0.50;
+ctx.beginPath();
+ctx.moveTo(j1Start, timeY - 25);
+ctx.lineTo(j1End, timeY - 25);
+ctx.stroke();
+ctx.setLineDash([]);
+ctx.beginPath();
+ctx.arc(j1Start, timeY - 25, 5, 0, Math.PI * 2);
+ctx.fillStyle = '#e67e22';
+ctx.fill();
+ctx.beginPath();
+ctx.arc(j1End, timeY - 25, 5, 0, Math.PI * 2);
+ctx.fillStyle = '#e74c3c';
+ctx.fill();
+
+// Journey 2
+ctx.setLineDash([4, 3]);
+ctx.strokeStyle = '#e74c3c';
+var j2Start = left + (right - left) * 0.22;
+var j2End = left + (right - left) * 0.45;
+ctx.beginPath();
+ctx.moveTo(j2Start, timeY - 10);
+ctx.lineTo(j2End, timeY - 10);
+ctx.stroke();
+ctx.setLineDash([]);
+ctx.beginPath();
+ctx.arc(j2Start, timeY - 10, 5, 0, Math.PI * 2);
+ctx.fillStyle = '#e67e22';
+ctx.fill();
+ctx.beginPath();
+ctx.arc(j2End, timeY - 10, 5, 0, Math.PI * 2);
+ctx.fillStyle = '#e74c3c';
+ctx.fill();
+
+// Journey 3
+ctx.setLineDash([4, 3]);
+ctx.strokeStyle = '#e74c3c';
+var j3Start = left + (right - left) * 0.08;
+var j3End = left + (right - left) * 0.55;
+ctx.beginPath();
+ctx.moveTo(j3Start, timeY + 15);
+ctx.lineTo(j3End, timeY + 15);
+ctx.stroke();
+ctx.setLineDash([]);
+ctx.beginPath();
+ctx.arc(j3Start, timeY + 15, 5, 0, Math.PI * 2);
+ctx.fillStyle = '#e67e22';
+ctx.fill();
+ctx.beginPath();
+ctx.arc(j3End, timeY + 15, 5, 0, Math.PI * 2);
+ctx.fillStyle = '#e74c3c';
+ctx.fill();
+
+// Labels
+ctx.font = '11px -apple-system, sans-serif';
+ctx.fillStyle = '#e67e22';
+ctx.textAlign = 'left';
+ctx.fillText('Checkout started', left - 10, timeY + 90);
+ctx.fillStyle = '#e74c3c';
+ctx.fillText('Conversion attributed', left - 10, timeY + 106);
+
+ctx.beginPath();
+ctx.arc(left - 20, timeY + 86, 4, 0, Math.PI * 2);
+ctx.fillStyle = '#e67e22';
+ctx.fill();
+ctx.beginPath();
+ctx.arc(left - 20, timeY + 102, 4, 0, Math.PI * 2);
+ctx.fillStyle = '#e74c3c';
+ctx.fill();
+
+// Burn-in zone
+var burnEnd = left + (right - left) * 0.50;
+ctx.fillStyle = 'rgba(231, 76, 60, 0.08)';
+ctx.fillRect(launchX, timeY - 45, burnEnd - launchX, 90);
+ctx.strokeStyle = '#e74c3c';
+ctx.lineWidth = 1;
+ctx.setLineDash([3, 3]);
+ctx.strokeRect(launchX, timeY - 45, burnEnd - launchX, 90);
+ctx.setLineDash([]);
+
+ctx.fillStyle = '#e74c3c';
+ctx.font = 'bold 11px -apple-system, sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('BURN-IN (discard)', (launchX + burnEnd) / 2, timeY - 50);
+
+// Clean zone
+ctx.fillStyle = 'rgba(39, 174, 96, 0.08)';
+ctx.fillRect(burnEnd, timeY - 45, right - burnEnd, 90);
+ctx.fillStyle = '#27ae60';
+ctx.font = 'bold 11px -apple-system, sans-serif';
+ctx.fillText('CLEAN DATA', (burnEnd + right) / 2, timeY - 50);
+})();
+
+// Canvas 2: Cool-down — metrics shifting after test end
+(function(){var s=setup('c2');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+
+ctx.font = 'bold 14px -apple-system, sans-serif';
+ctx.fillStyle = '#1a5276';
+ctx.textAlign = 'center';
+ctx.fillText('Cool-Down: Conversion Rate Keeps Changing After Test Ends', w/2, 22);
+
+// Axes
+var left = 80, right = 640, top = 50, bottom = 280;
+ctx.strokeStyle = '#999';
+ctx.lineWidth = 1;
+ctx.beginPath();
+ctx.moveTo(left, top);
+ctx.lineTo(left, bottom);
+ctx.lineTo(right, bottom);
+ctx.stroke();
+
+// Y-axis
+ctx.font = '10px -apple-system, sans-serif';
+ctx.fillStyle = '#888';
+ctx.textAlign = 'right';
+var yLabels = [0, 2, 4, 6, 8];
+yLabels.forEach(function(v) {
+    var y = bottom - (v / 8) * (bottom - top);
+    ctx.fillText(v + '%', left - 8, y + 4);
+    ctx.strokeStyle = '#eee';
+    ctx.beginPath();
+    ctx.moveTo(left, y);
+    ctx.lineTo(right, y);
+    ctx.stroke();
+});
+
+// X-axis labels
+ctx.textAlign = 'center';
+ctx.fillStyle = '#888';
+var days = ['Day 28', 'Day 30', 'Day 32', 'Day 34', 'Day 37', 'Day 40'];
+days.forEach(function(d, i) {
+    var x = left + (i / (days.length - 1)) * (right - left);
+    ctx.fillText(d, x, bottom + 15);
+});
+
+ctx.fillStyle = '#666';
+ctx.fillText('Days after test start', (left + right) / 2, bottom + 32);
+
+// Test end marker
+var endX = left + (1 / (days.length - 1)) * (right - left);
+ctx.strokeStyle = '#1a5276';
+ctx.lineWidth = 2;
+ctx.setLineDash([5, 3]);
+ctx.beginPath();
+ctx.moveTo(endX, top);
+ctx.lineTo(endX, bottom);
+ctx.stroke();
+ctx.setLineDash([]);
+ctx.fillStyle = '#1a5276';
+ctx.font = 'bold 11px -apple-system, sans-serif';
+ctx.fillText('Test ends', endX, top - 5);
+
+// Variant A line (rising after test end)
+var dataA = [4.2, 4.5, 4.9, 5.3, 5.5, 5.6];
+ctx.strokeStyle = '#27ae60';
+ctx.lineWidth = 3;
+ctx.beginPath();
+dataA.forEach(function(v, i) {
+    var x = left + (i / (dataA.length - 1)) * (right - left);
+    var y = bottom - (v / 8) * (bottom - top);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+});
+ctx.stroke();
+
+// Variant B line (also rising but more)
+var dataB = [3.8, 4.0, 4.6, 5.2, 5.7, 6.1];
+ctx.strokeStyle = '#e74c3c';
+ctx.lineWidth = 3;
+ctx.beginPath();
+dataB.forEach(function(v, i) {
+    var x = left + (i / (dataB.length - 1)) * (right - left);
+    var y = bottom - (v / 8) * (bottom - top);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+});
+ctx.stroke();
+
+// "Read" marker at day 30
+var readX = endX;
+var readYA = bottom - (4.5 / 8) * (bottom - top);
+var readYB = bottom - (4.0 / 8) * (bottom - top);
+ctx.beginPath();
+ctx.arc(readX, readYA, 5, 0, Math.PI * 2);
+ctx.fillStyle = '#27ae60';
+ctx.fill();
+ctx.beginPath();
+ctx.arc(readX, readYB, 5, 0, Math.PI * 2);
+ctx.fillStyle = '#e74c3c';
+ctx.fill();
+
+// Annotations
+ctx.font = '12px -apple-system, sans-serif';
+ctx.textAlign = 'left';
+ctx.fillStyle = '#27ae60';
+ctx.fillText('Variant A: 4.5% → 5.6%', right - 180, top + 30);
+ctx.fillStyle = '#e74c3c';
+ctx.fillText('Variant B: 4.0% → 6.1%', right - 180, top + 48);
+
+// "Winner flips" annotation
+ctx.fillStyle = '#e74c3c';
+ctx.font = 'bold 12px -apple-system, sans-serif';
+ctx.textAlign = 'center';
+var flipX = left + (4 / (days.length - 1)) * (right - left);
+ctx.fillText('← Winner flips here', flipX + 60, bottom - (5.7 / 8) * (bottom - top) + 18);
+
+// Day-30 read box
+ctx.fillStyle = 'rgba(230, 126, 34, 0.1)';
+ctx.fillRect(endX - 3, top, 6, bottom - top);
+ctx.fillStyle = '#e67e22';
+ctx.font = 'bold 11px -apple-system, sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('"Final" read: A wins', endX + 60, readYA - 12);
+})();
+
+// Canvas 3: True calendar math
+(function(){var s=setup('c3');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+
+ctx.font = 'bold 14px -apple-system, sans-serif';
+ctx.fillStyle = '#1a5276';
+ctx.textAlign = 'center';
+ctx.fillText('Real Calendar: A "30-Day Test" Needs ~44 Days', w/2, 22);
+
+// Timeline bar
+var left = 60, right = 660, barY = 120, barH = 50;
+
+// Burn-in (days 0-7)
+var burnW = (7/44) * (right - left);
+ctx.fillStyle = 'rgba(231, 76, 60, 0.2)';
+ctx.fillRect(left, barY, burnW, barH);
+ctx.strokeStyle = '#e74c3c';
+ctx.lineWidth = 2;
+ctx.strokeRect(left, barY, burnW, barH);
+
+// Clean measurement (days 7-37)
+var cleanStart = left + burnW;
+var cleanW = (30/44) * (right - left);
+ctx.fillStyle = 'rgba(39, 174, 96, 0.2)';
+ctx.fillRect(cleanStart, barY, cleanW, barH);
+ctx.strokeStyle = '#27ae60';
+ctx.lineWidth = 2;
+ctx.strokeRect(cleanStart, barY, cleanW, barH);
+
+// Maturation (days 37-44)
+var matStart = cleanStart + cleanW;
+var matW = (7/44) * (right - left);
+ctx.fillStyle = 'rgba(230, 126, 34, 0.2)';
+ctx.fillRect(matStart, barY, matW, barH);
+ctx.strokeStyle = '#e67e22';
+ctx.lineWidth = 2;
+ctx.strokeRect(matStart, barY, matW, barH);
+
+// Labels inside bars
+ctx.font = 'bold 12px -apple-system, sans-serif';
+ctx.textAlign = 'center';
+ctx.fillStyle = '#e74c3c';
+ctx.fillText('Burn-in', left + burnW/2, barY + barH/2 - 5);
+ctx.font = '10px -apple-system, sans-serif';
+ctx.fillText('(discard)', left + burnW/2, barY + barH/2 + 10);
+
+ctx.font = 'bold 13px -apple-system, sans-serif';
+ctx.fillStyle = '#27ae60';
+ctx.fillText('Clean Measurement Window', cleanStart + cleanW/2, barY + barH/2 - 5);
+ctx.font = '10px -apple-system, sans-serif';
+ctx.fillText('30 days of usable data', cleanStart + cleanW/2, barY + barH/2 + 10);
+
+ctx.font = 'bold 11px -apple-system, sans-serif';
+ctx.fillStyle = '#e67e22';
+ctx.fillText('Mature', matStart + matW/2, barY + barH/2 - 5);
+ctx.font = '10px -apple-system, sans-serif';
+ctx.fillText('(wait)', matStart + matW/2, barY + barH/2 + 10);
+
+// Day markers below
+ctx.font = '11px -apple-system, sans-serif';
+ctx.fillStyle = '#444';
+ctx.textAlign = 'center';
+ctx.fillText('Day 0', left, barY + barH + 20);
+ctx.fillText('Day 7', cleanStart, barY + barH + 20);
+ctx.fillText('Day 37', matStart, barY + barH + 20);
+ctx.fillText('Day 44', right, barY + barH + 20);
+
+// Domain-specific tails below
+var tableTop = 220;
+ctx.font = 'bold 12px -apple-system, sans-serif';
+ctx.fillStyle = '#1a5276';
+ctx.textAlign = 'left';
+ctx.fillText('Domain-Specific Maturation Windows:', left, tableTop);
+
+ctx.font = '12px -apple-system, sans-serif';
+ctx.fillStyle = '#444';
+var domains = [
+    ['Ecommerce (general)', '7–10 days', 'Cart recovery, BNPL resolution'],
+    ['Fintech', '45+ days', 'Chargebacks, dispute resolution'],
+    ['Travel', '14–30 days', 'Cancellation window, rebooking'],
+    ['SaaS (trial)', '7–14 days', 'Trial-to-paid conversion']
+];
+
+domains.forEach(function(row, i) {
+    var y = tableTop + 22 + i * 22;
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px -apple-system, sans-serif';
+    ctx.fillText(row[0], left + 10, y);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.fillText(row[1], left + 190, y);
+    ctx.fillStyle = '#666';
+    ctx.fillText(row[2], left + 280, y);
+});
+})();
+</script>
+</body>
+</html>

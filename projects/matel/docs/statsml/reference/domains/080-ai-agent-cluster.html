@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Agent Cluster Data Pitfalls</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 20px;
+            background: #ffffff;
+            color: #2c3e50;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #1a5276;
+            border-bottom: 3px solid #2980b9;
+            padding-bottom: 10px;
+        }
+        .obj-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        .obj-table td {
+            padding: 20px;
+            vertical-align: top;
+            border: 1px solid #2980b9;
+        }
+        .obj-table td:first-child {
+            width: 45%;
+        }
+        .obj-table td:last-child {
+            width: 55%;
+            text-align: center;
+        }
+        .obj-title {
+            color: #1a5276;
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        ul { margin: 10px 0; padding-left: 20px; }
+        li { margin-bottom: 6px; }
+        .example {
+            background: #f0f4f8;
+            padding: 10px;
+            border-left: 3px solid #2980b9;
+            margin-top: 10px;
+            font-size: 0.95em;
+        }
+        canvas { border: 1px solid #ddd; border-radius: 4px; }
+        .nav-link {
+            display: inline-block;
+            margin: 20px 0;
+            color: #2980b9;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .nav-link:hover { text-decoration: underline; }
+        .intro {
+            background: #f8f9fa;
+            padding: 15px;
+            border-left: 4px solid #1a5276;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>AI Agent Cluster Data Pitfalls</h1>
+
+    <div class="intro">
+        <p>Multi-agent systems promise decomposition of complex tasks into specialized components, but they introduce unique data challenges that single-agent systems never face. When multiple AI agents collaborate, communicate, and compete for resources, the emergent behavior creates statistical and operational pitfalls that are fundamentally non-decomposable. This page explores six critical data pitfalls in AI agent clusters that can silently corrupt your metrics, destabilize learning, and produce unreliable outcomes.</p>
+    </div>
+
+    <table class="obj-table">
+        <tr>
+            <td>
+                <div class="obj-title">1. Credit Assignment Problem</div>
+                <p>When multiple agents collaborate on a task, attributing success or failure to individual agents becomes fundamentally ambiguous. This is not just a technical challenge but a core theoretical problem in multi-agent reinforcement learning.</p>
+                <ul>
+                    <li><strong>Non-Stationarity:</strong> Reward shaping for one agent changes the optimal strategies for all other agents, creating a moving target that prevents convergence</li>
+                    <li><strong>Temporal Credit:</strong> A decision made by Agent A at step 5 might only show consequences at step 50, after 10 other agents have acted</li>
+                    <li><strong>Counterfactual Reasoning:</strong> To measure Agent A's contribution, you need to ask "what would have happened without A?" but you can't rerun the multi-agent system deterministically</li>
+                    <li><strong>Over-attribution:</strong> When measuring individual contributions independently, agents collectively claim more credit than the actual outcome (e.g., each agent claims 60% responsibility, totaling 180%)</li>
+                    <li><strong>Evaluation Instability:</strong> Ranking agents by contribution is non-transitive—A beats B, B beats C, but C beats A in different contexts</li>
+                </ul>
+                <div class="example">
+                    <strong>Example:</strong> In a customer service agent cluster, Agent A does research, Agent B drafts response, Agent C fact-checks. Customer rates 5/5. Agent A claims success for thorough research; Agent B claims success for empathetic writing; Agent C claims success for catching errors. When you sum individual "impact scores" from isolated tests, total is 180%, but reality is 100%. No ground truth exists for the decomposition.
+                </div>
+            </td>
+            <td>
+                <canvas id="canvas1" width="720" height="240"></canvas>
+            </td>
+        </tr>
+
+        <tr>
+            <td>
+                <div class="obj-title">2. Hallucination Propagation</div>
+                <p>In chain-of-agent architectures, one agent's hallucination becomes the next agent's "verified fact." Unlike single-agent hallucinations, multi-agent errors compound and gain false legitimacy through apparent consensus.</p>
+                <ul>
+                    <li><strong>Confidence Amplification:</strong> Each agent in the chain adds its own confidence score, creating an illusion of certainty even as factual accuracy degrades</li>
+                    <li><strong>No Ground Truth Checkpoints:</strong> Intermediate outputs between agents are rarely validated against external sources—agents trust their predecessors</li>
+                    <li><strong>Citation Illusion:</strong> Agent B cites "according to Agent A," giving the hallucination the appearance of a verified citation</li>
+                    <li><strong>Error Accumulation:</strong> Small factual errors (5% drift) at each step compound multiplicatively: 0.95^5 = 77% accuracy by step 5</li>
+                    <li><strong>Correction Resistance:</strong> Later agents are reluctant to contradict earlier agents, especially if earlier agents have higher "authority" scores in the system</li>
+                </ul>
+                <div class="example">
+                    <strong>Example:</strong> Agent 1 (research) misreads "2023 revenue: $2.3M" as "$23M" (95% accuracy). Agent 2 (analysis) uses this to calculate growth rates, adding rounding errors (88%). Agent 3 (summarization) smooths the narrative, introducing slight changes (74%). Agent 4 (formatting) adjusts numbers for presentation consistency (61%). Agent 5 (final review) sees four prior agents agreeing, increases confidence to 95%. Final output: "$23M revenue" stated with 95% confidence, but only 45% accuracy.
+                </div>
+            </td>
+            <td>
+                <canvas id="canvas2" width="720" height="240"></canvas>
+            </td>
+        </tr>
+
+        <tr>
+            <td>
+                <div class="obj-title">3. Communication Bottleneck O(N²)</div>
+                <p>As agent count grows, pairwise communication scales quadratically. The message overhead can exceed useful computation, and bandwidth constraints force lossy summarization that degrades shared context.</p>
+                <ul>
+                    <li><strong>Quadratic Scaling:</strong> With N agents, there are N(N-1)/2 potential communication channels. At 64 agents, that's 2,016 channels</li>
+                    <li><strong>Message Overhead:</strong> Each message requires serialization, network transfer, deserialization, and queue management—often exceeding the computational cost of the actual agent work</li>
+                    <li><strong>Synchronization Tax:</strong> Broadcast messages to all agents create synchronization points that stall the entire system waiting for the slowest agent</li>
+                    <li><strong>Lossy Summarization:</strong> To reduce bandwidth, agents summarize context, but each summarization loses information critical to downstream agents</li>
+                    <li><strong>Priority Inversion:</strong> High-priority agent messages get stuck behind low-priority broadcast spam in shared queues</li>
+                </ul>
+                <div class="example">
+                    <strong>Example:</strong> A 32-agent content moderation system processes 1,000 items/sec with 8 agents. Scaling to 32 agents for 4x throughput, each agent now broadcasts decisions to 31 others (496 pairwise channels). Message overhead grows from 28 msgs/sec (8 agents) to 992 msgs/sec (32 agents)—a 35x increase for only 4x more agents. Network saturation occurs at 800 msgs/sec, causing 20% packet loss and forcing lossy summarization.
+                </div>
+            </td>
+            <td>
+                <canvas id="canvas3" width="720" height="240"></canvas>
+            </td>
+        </tr>
+
+        <tr>
+            <td>
+                <div class="obj-title">4. Emergent Behavior Unpredictability</div>
+                <p>Multi-agent systems exhibit phase transitions where small parameter changes cause qualitative behavior shifts. Testing individual agents in isolation tells you nothing about collective behavior because failure modes are non-decomposable.</p>
+                <ul>
+                    <li><strong>Non-Compositionality:</strong> System performance is not a function of individual agent performance. Five 90%-accurate agents can produce 20% system accuracy</li>
+                    <li><strong>Phase Transitions:</strong> Small changes (e.g., temperature 0.7→0.8) can cause sudden qualitative shifts—from collaborative to adversarial, or stable to chaotic</li>
+                    <li><strong>Feedback Loops:</strong> Agents respond to each other's outputs, creating reinforcement cycles that amplify small biases into dominant behaviors</li>
+                    <li><strong>Mode Collapse:</strong> Agent diversity collapses as agents converge on a shared but suboptimal strategy (e.g., all agents defaulting to conservative responses)</li>
+                    <li><strong>Rare Interactions:</strong> Critical failures occur only when specific agents interact in specific sequences, making them invisible in unit tests</li>
+                </ul>
+                <div class="example">
+                    <strong>Example:</strong> Each of 5 agents scores 88-92% on individual benchmarks. Combined system scores 31% on end-to-end tasks. Root cause: Agent A outputs structured JSON, Agent B expects narrative text. Agent B's parser fails silently, returning empty context. Agent C detects empty context and triggers "hallucination prevention mode," refusing to answer. Agent D interprets refusal as "uncertain," and generates a hedge. Agent E sees 4 prior agents producing minimal output and concludes the task is impossible, returning "insufficient data."
+                </div>
+            </td>
+            <td>
+                <canvas id="canvas4" width="720" height="240"></canvas>
+            </td>
+        </tr>
+
+        <tr>
+            <td>
+                <div class="obj-title">5. Resource Contention & Deadlocks</div>
+                <p>Agents competing for shared resources (API rate limits, database connections, tool access, memory) create invisible bottlenecks. Priority inversion and deadlocks are extremely hard to detect in async multi-agent pipelines.</p>
+                <ul>
+                    <li><strong>API Rate Limit Starvation:</strong> One agent's retry loop can consume all available API quota, starving other agents and causing cascading timeouts</li>
+                    <li><strong>Deadlock Detection Failure:</strong> Classic deadlock detection assumes synchronous locks. Async agent systems use promises/futures, making circular waits invisible</li>
+                    <li><strong>Priority Inversion:</strong> Low-priority agent holds a database lock, high-priority agent waits indefinitely because the scheduler doesn't preempt async operations</li>
+                    <li><strong>Invisible Queueing:</strong> Shared tool (e.g., web search API) becomes bottleneck, but agents don't report "waiting for tool" in their status—they just appear slow</li>
+                    <li><strong>Resource Leak Accumulation:</strong> Agents don't release resources on timeout/error, leading to gradual resource exhaustion that looks like performance degradation</li>
+                </ul>
+                <div class="example">
+                    <strong>Example:</strong> Agent A acquires database lock, then waits for Agent B's search result. Agent B tries to acquire database lock to cache search results. Deadlock. In async system, both agents show status "working" with no error. After 30sec timeout, both retry—recreating the same deadlock. In a 4-agent system with 10 tasks, Agent 3 and Agent 4 deadlock on 40% of tasks. Effective throughput: 60% of single-agent baseline. Total idle time: 35%, but reported as "high utilization."
+                </div>
+            </td>
+            <td>
+                <canvas id="canvas5" width="720" height="240"></canvas>
+            </td>
+        </tr>
+
+        <tr>
+            <td>
+                <div class="obj-title">6. Evaluation Paradox (Stochastic Results)</div>
+                <p>Multi-agent outputs are non-deterministic even with temperature=0 due to race conditions, message ordering, and tool call timing. Running the same prompt 10 times yields 10 different answers. Traditional evaluation metrics break down when ground truth is a distribution, not a point.</p>
+                <ul>
+                    <li><strong>Race Condition Non-Determinism:</strong> Agent B's decision depends on whether Agent A's message arrives before or after Agent C's—purely based on network timing</li>
+                    <li><strong>Async Ordering:</strong> Tool calls return in unpredictable order. Agent behavior differs based on which tool result arrives first, even with identical inputs</li>
+                    <li><strong>Bimodal Distributions:</strong> System either succeeds brilliantly (85%) or fails catastrophically (40%) with little middle ground—mean score (62%) is misleading</li>
+                    <li><strong>Single-Run Reporting Bias:</strong> Teams run eval once, get 82%, report that as "system performance." But 82% might be in the top 10% of the distribution's tail</li>
+                    <li><strong>Eval/Prod Mismatch:</strong> Eval runs with 10 attempts, reports best-of-10 (90%). Production runs once per user request, experiences the full distribution (65% median)</li>
+                </ul>
+                <div class="example">
+                    <strong>Example:</strong> A customer support agent cluster runs 50 times on identical input: "Process refund for order #12345." Results: 23 runs return full refund (score 0.85), 19 runs return partial refund (score 0.40), 8 runs fail with error (score 0.0). Mean=0.51, median=0.52, but the distribution is bimodal. Team runs eval once, gets 0.82, reports "82% accuracy." In production, users experience 0.52 median. Reported score was in the 88th percentile of actual distribution—not representative.
+                </div>
+            </td>
+            <td>
+                <canvas id="canvas6" width="720" height="240"></canvas>
+            </td>
+        </tr>
+    </table>
+
+    <script>
+    // Canvas 1: Credit Assignment Problem
+    (function() {
+        const canvas = document.getElementById('canvas1');
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = 720 * dpr;
+        canvas.height = 240 * dpr;
+        canvas.style.width = '720px';
+        canvas.style.height = '240px';
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        const W = 720, H = 240;
+
+        // Draw title
+        ctx.font = 'bold 17px sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.fillText('Credit Assignment Problem: Over-Attribution', 20, 25);
+
+        // Draw 5 agent nodes in a circle pattern
+        const agents = [
+            {x: 160, y: 80, label: 'Agent A\n(Research)'},
+            {x: 260, y: 60, label: 'Agent B\n(Drafting)'},
+            {x: 340, y: 80, label: 'Agent C\n(Review)'},
+            {x: 300, y: 140, label: 'Agent D\n(Format)'},
+            {x: 200, y: 140, label: 'Agent E\n(QA)'}
+        ];
+
+        // Outcome box
+        const outcomeX = 250, outcomeY = 195;
+        ctx.fillStyle = '#27ae60';
+        ctx.fillRect(outcomeX - 70, outcomeY - 15, 140, 30);
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(outcomeX - 70, outcomeY - 15, 140, 30);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 15px sans-serif';
+        ctx.fillText('Outcome: Success', outcomeX - 60, outcomeY + 5);
+
+        // Draw connections with question marks
+        ctx.strokeStyle = '#2980b9';
+        ctx.lineWidth = 2;
+        agents.forEach(agent => {
+            ctx.beginPath();
+            ctx.moveTo(agent.x, agent.y + 20);
+            ctx.lineTo(outcomeX, outcomeY - 15);
+            ctx.stroke();
+
+            // Question mark on connection
+            const midX = (agent.x + outcomeX) / 2;
+            const midY = (agent.y + 20 + outcomeY - 15) / 2;
+            ctx.fillStyle = '#e67e22';
+            ctx.font = 'bold 20px sans-serif';
+            ctx.fillText('?', midX - 5, midY + 5);
+        });
+
+        // Draw agent nodes
+        agents.forEach(agent => {
+            ctx.fillStyle = '#1a5276';
+            ctx.beginPath();
+            ctx.arc(agent.x, agent.y, 18, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#2980b9';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Agent label
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = '11px sans-serif';
+            const lines = agent.label.split('\n');
+            lines.forEach((line, i) => {
+                ctx.fillText(line, agent.x - 25, agent.y - 25 - (lines.length - 1 - i) * 12);
+            });
+        });
+
+        // Credit bar chart on right
+        const barX = 450;
+        ctx.font = '15px sans-serif';
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillText('Claimed Credit:', barX, 30);
+
+        // Actual (100%)
+        ctx.fillStyle = '#27ae60';
+        ctx.fillRect(barX, 50, 100, 25);
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(barX, 50, 100, 25);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 14px sans-serif';
+        ctx.fillText('100%', barX + 25, 68);
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '13px sans-serif';
+        ctx.fillText('Actual Result', barX + 110, 68);
+
+        // Claimed (180%)
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillRect(barX, 90, 180, 25);
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(barX, 90, 180, 25);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 14px sans-serif';
+        ctx.fillText('180%', barX + 65, 108);
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '13px sans-serif';
+        ctx.fillText('Sum of Individual', barX + 190, 100);
+        ctx.fillText('Claims', barX + 190, 113);
+
+        // Individual contributions
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '12px sans-serif';
+        const contributions = ['A: 45%', 'B: 40%', 'C: 35%', 'D: 30%', 'E: 30%'];
+        contributions.forEach((contrib, i) => {
+            ctx.fillText(contrib, barX, 145 + i * 16);
+        });
+
+        // Warning annotation
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(barX + 180, 102);
+        ctx.lineTo(barX + 220, 102);
+        ctx.lineTo(barX + 215, 97);
+        ctx.moveTo(barX + 220, 102);
+        ctx.lineTo(barX + 215, 107);
+        ctx.stroke();
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.fillText('Over-attribution!', barX + 225, 107);
+    })();
+
+    // Canvas 2: Hallucination Propagation
+    (function() {
+        const canvas = document.getElementById('canvas2');
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = 720 * dpr;
+        canvas.height = 240 * dpr;
+        canvas.style.width = '720px';
+        canvas.style.height = '240px';
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        const W = 720, H = 240;
+
+        // Title
+        ctx.font = 'bold 17px sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.fillText('Hallucination Propagation: Confidence ↑ Accuracy ↓', 20, 25);
+
+        // Agent chain
+        const agents = [
+            {x: 60, accuracy: 95, confidence: 0.70, label: 'Agent 1\nResearch'},
+            {x: 180, accuracy: 88, confidence: 0.80, label: 'Agent 2\nAnalysis'},
+            {x: 300, accuracy: 74, confidence: 0.85, label: 'Agent 3\nSummary'},
+            {x: 420, accuracy: 61, confidence: 0.90, label: 'Agent 4\nFormat'},
+            {x: 540, accuracy: 45, confidence: 0.95, label: 'Agent 5\nReview'}
+        ];
+
+        const baseY = 140;
+        const barHeight = 50;
+
+        agents.forEach((agent, i) => {
+            // Draw agent circle
+            ctx.fillStyle = '#1a5276';
+            ctx.beginPath();
+            ctx.arc(agent.x, 60, 15, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Agent label
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = '11px sans-serif';
+            const lines = agent.label.split('\n');
+            lines.forEach((line, j) => {
+                ctx.fillText(line, agent.x - 20, 30 + j * 12);
+            });
+
+            // Arrow to next agent
+            if (i < agents.length - 1) {
+                ctx.strokeStyle = '#2980b9';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(agent.x + 15, 60);
+                ctx.lineTo(agents[i + 1].x - 15, 60);
+                ctx.stroke();
+                // Arrow head
+                ctx.beginPath();
+                ctx.moveTo(agents[i + 1].x - 15, 60);
+                ctx.lineTo(agents[i + 1].x - 23, 55);
+                ctx.lineTo(agents[i + 1].x - 23, 65);
+                ctx.closePath();
+                ctx.fillStyle = '#2980b9';
+                ctx.fill();
+            }
+
+            // Accuracy bar (red, decreasing)
+            const accuracyHeight = (agent.accuracy / 100) * barHeight;
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillRect(agent.x - 15, baseY - accuracyHeight, 12, accuracyHeight);
+            ctx.strokeStyle = '#1a5276';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(agent.x - 15, baseY - accuracyHeight, 12, accuracyHeight);
+
+            // Confidence bar (green, increasing)
+            const confidenceHeight = agent.confidence * barHeight;
+            ctx.fillStyle = '#27ae60';
+            ctx.fillRect(agent.x + 3, baseY - confidenceHeight, 12, confidenceHeight);
+            ctx.strokeStyle = '#1a5276';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(agent.x + 3, baseY - confidenceHeight, 12, confidenceHeight);
+
+            // Values
+            ctx.fillStyle = '#e74c3c';
+            ctx.font = 'bold 12px sans-serif';
+            ctx.fillText(agent.accuracy + '%', agent.x - 18, baseY - accuracyHeight - 5);
+            ctx.fillStyle = '#27ae60';
+            ctx.fillText((agent.confidence * 100).toFixed(0) + '%', agent.x + 1, baseY - confidenceHeight - 5);
+        });
+
+        // Legend
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillRect(600, 100, 15, 15);
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '13px sans-serif';
+        ctx.fillText('Accuracy', 620, 112);
+
+        ctx.fillStyle = '#27ae60';
+        ctx.fillRect(600, 125, 15, 15);
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillText('Confidence', 620, 137);
+
+        // Base line
+        ctx.strokeStyle = '#34495e';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(30, baseY);
+        ctx.lineTo(570, baseY);
+        ctx.stroke();
+
+        // Annotations
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 14px sans-serif';
+        ctx.fillText('Accuracy Cascade', 350, 175);
+        ctx.fillStyle = '#27ae60';
+        ctx.fillText('False Confidence', 350, 195);
+
+        // Y-axis labels
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '11px sans-serif';
+        ctx.fillText('100%', 10, baseY - 50);
+        ctx.fillText('50%', 15, baseY - 25);
+        ctx.fillText('0%', 20, baseY + 5);
+    })();
+
+    // Canvas 3: Communication Bottleneck O(N²)
+    (function() {
+        const canvas = document.getElementById('canvas3');
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = 720 * dpr;
+        canvas.height = 240 * dpr;
+        canvas.style.width = '720px';
+        canvas.style.height = '240px';
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        const W = 720, H = 240;
+
+        // Title
+        ctx.font = 'bold 17px sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.fillText('Communication Bottleneck: O(N²) Scaling', 20, 25);
+
+        // Axes
+        const marginLeft = 60, marginBottom = 40, marginTop = 50;
+        const chartWidth = W - marginLeft - 40;
+        const chartHeight = H - marginTop - marginBottom;
+
+        ctx.strokeStyle = '#34495e';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(marginLeft, marginTop);
+        ctx.lineTo(marginLeft, marginTop + chartHeight);
+        ctx.lineTo(marginLeft + chartWidth, marginTop + chartHeight);
+        ctx.stroke();
+
+        // Y-axis label
+        ctx.save();
+        ctx.translate(15, marginTop + chartHeight / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '14px sans-serif';
+        ctx.fillText('Messages per Step', -70, 0);
+        ctx.restore();
+
+        // X-axis label
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '14px sans-serif';
+        ctx.fillText('Number of Agents', marginLeft + chartWidth / 2 - 60, H - 5);
+
+        // Data points
+        const data = [
+            {agents: 2, messages: 1},
+            {agents: 4, messages: 6},
+            {agents: 8, messages: 28},
+            {agents: 16, messages: 120},
+            {agents: 32, messages: 496},
+            {agents: 64, messages: 2016}
+        ];
+
+        const maxAgents = 64;
+        const maxMessages = 2500;
+
+        // Useful computation threshold
+        const threshold = 800;
+        const thresholdY = marginTop + chartHeight - (threshold / maxMessages) * chartHeight;
+        ctx.strokeStyle = '#e67e22';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(marginLeft, thresholdY);
+        ctx.lineTo(marginLeft + chartWidth, thresholdY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#e67e22';
+        ctx.font = '12px sans-serif';
+        ctx.fillText('Useful Computation Threshold', marginLeft + chartWidth - 200, thresholdY - 5);
+
+        // Shade overhead region (above threshold)
+        ctx.fillStyle = 'rgba(231, 76, 60, 0.15)';
+        ctx.fillRect(marginLeft, marginTop, chartWidth, thresholdY - marginTop);
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.fillText('Overhead Region', marginLeft + 20, marginTop + 20);
+
+        // Plot O(N²) curve
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        data.forEach((point, i) => {
+            const x = marginLeft + (point.agents / maxAgents) * chartWidth;
+            const y = marginTop + chartHeight - (point.messages / maxMessages) * chartHeight;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+
+        // Plot data points
+        data.forEach(point => {
+            const x = marginLeft + (point.agents / maxAgents) * chartWidth;
+            const y = marginTop + chartHeight - (point.messages / maxMessages) * chartHeight;
+
+            ctx.fillStyle = point.messages > threshold ? '#e74c3c' : '#27ae60';
+            ctx.beginPath();
+            ctx.arc(x, y, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#1a5276';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            // Labels
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = '11px sans-serif';
+            ctx.fillText(point.messages, x - 10, y - 10);
+        });
+
+        // X-axis ticks
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '12px sans-serif';
+        [2, 4, 8, 16, 32, 64].forEach(agents => {
+            const x = marginLeft + (agents / maxAgents) * chartWidth;
+            ctx.fillText(agents, x - 5, marginTop + chartHeight + 18);
+        });
+
+        // Y-axis ticks
+        [0, 500, 1000, 1500, 2000].forEach(msgs => {
+            const y = marginTop + chartHeight - (msgs / maxMessages) * chartHeight;
+            ctx.fillText(msgs, marginLeft - 40, y + 5);
+        });
+
+        // Crossover point annotation
+        const crossoverX = marginLeft + (32 / maxAgents) * chartWidth;
+        const crossoverY = thresholdY;
+        ctx.strokeStyle = '#e67e22';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(crossoverX, crossoverY, 8, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = '#e67e22';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText('Crossover: 32 agents', crossoverX - 70, crossoverY + 25);
+    })();
+
+    // Canvas 4: Emergent Behavior Unpredictability
+    (function() {
+        const canvas = document.getElementById('canvas4');
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = 720 * dpr;
+        canvas.height = 240 * dpr;
+        canvas.style.width = '720px';
+        canvas.style.height = '240px';
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        const W = 720, H = 240;
+
+        // Title
+        ctx.font = 'bold 17px sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.fillText('Emergent Behavior: Non-Compositionality', 20, 25);
+
+        // Axes
+        const marginLeft = 80, marginBottom = 50, marginTop = 50;
+        const chartWidth = W - marginLeft - 60;
+        const chartHeight = H - marginTop - marginBottom;
+
+        ctx.strokeStyle = '#34495e';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(marginLeft, marginTop);
+        ctx.lineTo(marginLeft, marginTop + chartHeight);
+        ctx.lineTo(marginLeft + chartWidth, marginTop + chartHeight);
+        ctx.stroke();
+
+        // Y-axis label
+        ctx.save();
+        ctx.translate(15, marginTop + chartHeight / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '14px sans-serif';
+        ctx.fillText('System Score (%)', -55, 0);
+        ctx.restore();
+
+        // X-axis label
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '14px sans-serif';
+        ctx.fillText('Individual Agent Score (%)', marginLeft + chartWidth / 2 - 80, H - 10);
+
+        // Expected diagonal line (if composable)
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(marginLeft, marginTop + chartHeight);
+        ctx.lineTo(marginLeft + chartWidth, marginTop);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#27ae60';
+        ctx.font = '12px sans-serif';
+        ctx.fillText('Expected if', marginLeft + chartWidth - 100, marginTop + 30);
+        ctx.fillText('composable', marginLeft + chartWidth - 100, marginTop + 45);
+
+        // Data points (agents clustered at 85-95% individually, but system scattered)
+        const dataPoints = [
+            {individual: 88, system: 31}, {individual: 90, system: 45}, {individual: 87, system: 25},
+            {individual: 92, system: 52}, {individual: 89, system: 38}, {individual: 91, system: 28},
+            {individual: 93, system: 63}, {individual: 86, system: 42}, {individual: 90, system: 35},
+            {individual: 88, system: 48}, {individual: 91, system: 58}, {individual: 89, system: 33},
+            {individual: 87, system: 41}, {individual: 92, system: 67}, {individual: 90, system: 39},
+            {individual: 88, system: 44}, {individual: 91, system: 51}, {individual: 89, system: 36},
+            {individual: 93, system: 72}, {individual: 87, system: 29}
+        ];
+
+        dataPoints.forEach(point => {
+            const x = marginLeft + ((point.individual - 85) / 10) * chartWidth;
+            const y = marginTop + chartHeight - (point.system / 100) * chartHeight;
+
+            ctx.fillStyle = '#e74c3c';
+            ctx.beginPath();
+            ctx.arc(x, y, 4, 0, Math.PI * 2);
+            ctx.fill();
+        });
+
+        // Emergence penalty annotation
+        const sampleX = marginLeft + ((90 - 85) / 10) * chartWidth;
+        const expectedY = marginTop + chartHeight - (90 / 100) * chartHeight;
+        const actualY = marginTop + chartHeight - (45 / 100) * chartHeight;
+
+        ctx.strokeStyle = '#e67e22';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(sampleX, expectedY);
+        ctx.lineTo(sampleX, actualY);
+        ctx.stroke();
+
+        // Arrow heads
+        ctx.beginPath();
+        ctx.moveTo(sampleX, actualY);
+        ctx.lineTo(sampleX - 5, actualY - 8);
+        ctx.lineTo(sampleX + 5, actualY - 8);
+        ctx.closePath();
+        ctx.fillStyle = '#e67e22';
+        ctx.fill();
+
+        ctx.fillStyle = '#e67e22';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.fillText('Emergence', sampleX + 10, (expectedY + actualY) / 2 - 10);
+        ctx.fillText('Penalty', sampleX + 10, (expectedY + actualY) / 2 + 5);
+        ctx.fillText('-45%', sampleX + 10, (expectedY + actualY) / 2 + 20);
+
+        // X-axis ticks
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '12px sans-serif';
+        for (let i = 85; i <= 95; i += 2) {
+            const x = marginLeft + ((i - 85) / 10) * chartWidth;
+            ctx.fillText(i, x - 8, marginTop + chartHeight + 18);
+        }
+
+        // Y-axis ticks
+        for (let i = 0; i <= 100; i += 20) {
+            const y = marginTop + chartHeight - (i / 100) * chartHeight;
+            ctx.fillText(i, marginLeft - 30, y + 5);
+        }
+
+        // Legend
+        ctx.fillStyle = '#e74c3c';
+        ctx.beginPath();
+        ctx.arc(marginLeft + 20, marginTop + 15, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '11px sans-serif';
+        ctx.fillText('Actual system', marginLeft + 30, marginTop + 18);
+    })();
+
+    // Canvas 5: Resource Contention & Deadlocks
+    (function() {
+        const canvas = document.getElementById('canvas5');
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = 720 * dpr;
+        canvas.height = 240 * dpr;
+        canvas.style.width = '720px';
+        canvas.style.height = '240px';
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        const W = 720, H = 240;
+
+        // Title
+        ctx.font = 'bold 17px sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.fillText('Resource Contention: Timeline with Deadlock', 20, 25);
+
+        // Gantt chart setup
+        const startX = 100, startY = 60;
+        const timeWidth = 500, rowHeight = 35;
+        const agents = ['Agent 1', 'Agent 2', 'Agent 3', 'Agent 4'];
+
+        // Time axis
+        ctx.strokeStyle = '#34495e';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(startX, startY - 10);
+        ctx.lineTo(startX + timeWidth, startY - 10);
+        ctx.stroke();
+
+        // Time labels
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '11px sans-serif';
+        for (let t = 0; t <= 10; t += 2) {
+            const x = startX + (t / 10) * timeWidth;
+            ctx.fillText(t + 's', x - 5, startY - 15);
+        }
+
+        // Draw agent rows
+        agents.forEach((agent, i) => {
+            const y = startY + i * rowHeight;
+
+            // Agent label
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = '13px sans-serif';
+            ctx.fillText(agent, 10, y + 18);
+
+            // Row background
+            ctx.strokeStyle = '#ddd';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(startX, y, timeWidth, rowHeight);
+        });
+
+        // Task blocks
+        const tasks = [
+            // Agent 1: working, then waiting
+            {agent: 0, start: 0, duration: 4, type: 'working'},
+            {agent: 0, start: 4, duration: 6, type: 'waiting'},
+
+            // Agent 2: working, waiting, working
+            {agent: 1, start: 0, duration: 2, type: 'working'},
+            {agent: 1, start: 2, duration: 3, type: 'waiting'},
+            {agent: 1, start: 5, duration: 5, type: 'working'},
+
+            // Agent 3: working, deadlocked
+            {agent: 2, start: 0, duration: 3.5, type: 'working'},
+            {agent: 2, start: 3.5, duration: 6.5, type: 'deadlock'},
+
+            // Agent 4: working, deadlocked
+            {agent: 3, start: 0, duration: 3, type: 'working'},
+            {agent: 3, start: 3, duration: 7, type: 'deadlock'}
+        ];
+
+        tasks.forEach(task => {
+            const y = startY + task.agent * rowHeight;
+            const x = startX + (task.start / 10) * timeWidth;
+            const w = (task.duration / 10) * timeWidth;
+
+            let color;
+            switch (task.type) {
+                case 'working': color = '#27ae60'; break;
+                case 'waiting': color = '#e67e22'; break;
+                case 'deadlock': color = '#e74c3c'; break;
+            }
+
+            ctx.fillStyle = color;
+            ctx.fillRect(x, y + 3, w, rowHeight - 6);
+            ctx.strokeStyle = '#1a5276';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x, y + 3, w, rowHeight - 6);
+        });
+
+        // Deadlock annotation (circular arrows between Agent 3 and 4)
+        const deadlockX = startX + (6.5 / 10) * timeWidth;
+        const agent3Y = startY + 2 * rowHeight + rowHeight / 2;
+        const agent4Y = startY + 3 * rowHeight + rowHeight / 2;
+
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        // Arrow from Agent 3 to Agent 4
+        ctx.beginPath();
+        ctx.moveTo(deadlockX, agent3Y);
+        ctx.lineTo(deadlockX + 20, agent3Y);
+        ctx.lineTo(deadlockX + 20, agent4Y);
+        ctx.lineTo(deadlockX + 10, agent4Y);
+        ctx.stroke();
+        // Arrow head
+        ctx.beginPath();
+        ctx.moveTo(deadlockX + 10, agent4Y);
+        ctx.lineTo(deadlockX + 15, agent4Y - 4);
+        ctx.lineTo(deadlockX + 15, agent4Y + 4);
+        ctx.closePath();
+        ctx.fillStyle = '#e74c3c';
+        ctx.fill();
+
+        // Arrow from Agent 4 to Agent 3
+        ctx.beginPath();
+        ctx.moveTo(deadlockX + 40, agent4Y);
+        ctx.lineTo(deadlockX + 60, agent4Y);
+        ctx.lineTo(deadlockX + 60, agent3Y);
+        ctx.lineTo(deadlockX + 50, agent3Y);
+        ctx.stroke();
+        // Arrow head
+        ctx.beginPath();
+        ctx.moveTo(deadlockX + 50, agent3Y);
+        ctx.lineTo(deadlockX + 55, agent3Y - 4);
+        ctx.lineTo(deadlockX + 55, agent3Y + 4);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText('Circular', deadlockX + 22, (agent3Y + agent4Y) / 2 - 5);
+        ctx.fillText('Wait', deadlockX + 27, (agent3Y + agent4Y) / 2 + 8);
+
+        // Legend
+        const legendX = 620, legendY = 70;
+        ctx.fillStyle = '#27ae60';
+        ctx.fillRect(legendX, legendY, 20, 12);
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '11px sans-serif';
+        ctx.fillText('Working', legendX + 25, legendY + 10);
+
+        ctx.fillStyle = '#e67e22';
+        ctx.fillRect(legendX, legendY + 20, 20, 12);
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillText('Waiting', legendX + 25, legendY + 30);
+
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillRect(legendX, legendY + 40, 20, 12);
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillText('Deadlock', legendX + 25, legendY + 50);
+
+        // Idle time percentage
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 14px sans-serif';
+        ctx.fillText('Total Idle Time: 35%', legendX - 10, legendY + 80);
+    })();
+
+    // Canvas 6: Evaluation Paradox (Stochastic Results)
+    (function() {
+        const canvas = document.getElementById('canvas6');
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = 720 * dpr;
+        canvas.height = 240 * dpr;
+        canvas.style.width = '720px';
+        canvas.style.height = '240px';
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        const W = 720, H = 240;
+
+        // Title
+        ctx.font = 'bold 17px sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.fillText('Evaluation Paradox: Bimodal Distribution (50 runs)', 20, 25);
+
+        // Axes
+        const marginLeft = 70, marginBottom = 40, marginTop = 50;
+        const chartWidth = W - marginLeft - 50;
+        const chartHeight = H - marginTop - marginBottom;
+
+        ctx.strokeStyle = '#34495e';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(marginLeft, marginTop);
+        ctx.lineTo(marginLeft, marginTop + chartHeight);
+        ctx.lineTo(marginLeft + chartWidth, marginTop + chartHeight);
+        ctx.stroke();
+
+        // Y-axis label
+        ctx.save();
+        ctx.translate(15, marginTop + chartHeight / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '14px sans-serif';
+        ctx.fillText('Frequency', -30, 0);
+        ctx.restore();
+
+        // X-axis label
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '14px sans-serif';
+        ctx.fillText('Score on Same Task', marginLeft + chartWidth / 2 - 60, H - 5);
+
+        // Bimodal distribution data
+        const bins = [];
+        for (let i = 0; i <= 100; i += 5) {
+            let frequency = 0;
+            // First peak at 40%
+            if (i >= 35 && i <= 45) {
+                frequency = 8 - Math.abs(i - 40) / 5 * 3;
+            }
+            // Second peak at 85%
+            if (i >= 80 && i <= 90) {
+                frequency = 10 - Math.abs(i - 85) / 5 * 4;
+            }
+            // Some noise in between
+            if (i > 45 && i < 80) {
+                frequency = Math.random() * 1.5;
+            }
+            bins.push({score: i, frequency});
+        }
+
+        const maxFrequency = Math.max(...bins.map(b => b.frequency));
+
+        // Draw histogram
+        bins.forEach(bin => {
+            const x = marginLeft + (bin.score / 100) * chartWidth;
+            const barWidth = chartWidth / bins.length * 0.8;
+            const barHeight = (bin.frequency / maxFrequency) * chartHeight;
+            const y = marginTop + chartHeight - barHeight;
+
+            ctx.fillStyle = '#1a5276';
+            ctx.fillRect(x, y, barWidth, barHeight);
+            ctx.strokeStyle = '#2980b9';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x, y, barWidth, barHeight);
+        });
+
+        // Mean line
+        const mean = 0.65;
+        const meanX = marginLeft + mean * chartWidth;
+        ctx.strokeStyle = '#e67e22';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(meanX, marginTop);
+        ctx.lineTo(meanX, marginTop + chartHeight);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#e67e22';
+        ctx.font = '12px sans-serif';
+        ctx.fillText('Mean: 0.65', meanX + 5, marginTop + 15);
+
+        // Annotations for peaks
+        const peak1X = marginLeft + 0.40 * chartWidth;
+        const peak2X = marginLeft + 0.85 * chartWidth;
+
+        // Arrows pointing to peaks
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(peak1X, marginTop + 30);
+        ctx.lineTo(peak1X, marginTop + 50);
+        ctx.lineTo(peak1X - 5, marginTop + 45);
+        ctx.moveTo(peak1X, marginTop + 50);
+        ctx.lineTo(peak1X + 5, marginTop + 45);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(peak2X, marginTop + 30);
+        ctx.lineTo(peak2X, marginTop + 50);
+        ctx.lineTo(peak2X - 5, marginTop + 45);
+        ctx.moveTo(peak2X, marginTop + 50);
+        ctx.lineTo(peak2X + 5, marginTop + 45);
+        ctx.stroke();
+
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.fillText('Peak 1', peak1X - 20, marginTop + 25);
+        ctx.fillText('40%', peak1X - 12, marginTop + 65);
+
+        ctx.fillText('Peak 2', peak2X - 20, marginTop + 25);
+        ctx.fillText('85%', peak2X - 12, marginTop + 65);
+
+        // Single-run reported score
+        const reportedScore = 0.82;
+        const reportedX = marginLeft + reportedScore * chartWidth;
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(reportedX, marginTop + chartHeight);
+        ctx.lineTo(reportedX, marginTop + chartHeight + 10);
+        ctx.stroke();
+
+        // Arrow pointing up
+        ctx.beginPath();
+        ctx.moveTo(reportedX, marginTop + chartHeight);
+        ctx.lineTo(reportedX - 5, marginTop + chartHeight + 5);
+        ctx.lineTo(reportedX + 5, marginTop + chartHeight + 5);
+        ctx.closePath();
+        ctx.fillStyle = '#27ae60';
+        ctx.fill();
+
+        ctx.fillStyle = '#27ae60';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText('Single-run', reportedX - 30, H - 23);
+        ctx.fillText('report: 0.82', reportedX - 35, H - 10);
+
+        // Warning annotation
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.fillText('Which is "true" performance?', marginLeft + chartWidth / 2 - 80, marginTop + chartHeight - 10);
+
+        // X-axis ticks
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '11px sans-serif';
+        for (let i = 0; i <= 100; i += 20) {
+            const x = marginLeft + (i / 100) * chartWidth;
+            ctx.fillText((i / 100).toFixed(1), x - 10, marginTop + chartHeight + 18);
+        }
+
+        // Y-axis ticks
+        for (let i = 0; i <= maxFrequency; i += 2) {
+            const y = marginTop + chartHeight - (i / maxFrequency) * chartHeight;
+            ctx.fillText(i, marginLeft - 25, y + 5);
+        }
+    })();
+    </script>
+</body>
+</html>

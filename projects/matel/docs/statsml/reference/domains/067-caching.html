@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Caching - Domain-Specific Pitfalls</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 20px; background: #f8f9fa; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 14px; }
+.nav a:hover { text-decoration: underline; }
+h1 { color: #1a5276; margin-bottom: 10px; }
+.subtitle { color: #555; margin-bottom: 30px; font-size: 15px; }
+.obj-table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden; }
+.obj-table td { padding: 16px; border: 1px solid #2980b9; vertical-align: top; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-title { font-weight: bold; color: #1a5276; font-size: 16px; margin-bottom: 8px; }
+.pitfall-desc { color: #333; font-size: 14px; line-height: 1.6; }
+canvas { border: 1px solid #eee; border-radius: 4px; }
+</style>
+</head>
+<body>
+<h1>Caching</h1>
+<p class="subtitle">Statistical pitfalls in caching systems — the false comfort of hit rates, thundering herds, and consistency impossibilities.</p>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">1. Hit Rate ≠ Correctness</div>
+<div class="pitfall-desc">
+Cache hit rate = 99.5% — sounds great. But 0.5% misses + 0.1% stale hits serving <strong>WRONG data</strong>. High hit rate with stale data = confidently wrong. Hit rate doesn't measure accuracy of cached values. A 99.5% hit rate tells you nothing about whether those hits are returning correct, current data. The metric everyone watches is orthogonal to the metric that matters.
+</div>
+</td>
+<td><canvas id="canvas1" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">2. TTL Goldilocks Problem</div>
+<div class="pitfall-desc">
+TTL too short: constant cache misses, no benefit, backend hammered. TTL too long: serving data minutes/hours stale. There's no universal "right TTL" — it depends on how fast the underlying data changes and how much staleness is tolerable. Every TTL is a tradeoff between freshness and performance, and the optimal value shifts as your data's change rate shifts.
+</div>
+</td>
+<td><canvas id="canvas2" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">3. Thundering Herd on Expiry</div>
+<div class="pitfall-desc">
+Popular key expires → 10,000 simultaneous requests hit backend → backend overwhelmed → timeout → all 10,000 retry → amplified storm. Cache expiry of hot keys = potential outage trigger. The more popular the key, the worse the thundering herd. The very success of caching (concentrating load on few keys) creates the vulnerability.
+</div>
+</td>
+<td><canvas id="canvas3" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">4. Cache Poisoning Persists</div>
+<div class="pitfall-desc">
+Attacker poisons DNS cache or CDN cache with wrong response → cached for TTL duration → EVERY user served wrong/malicious content. One successful poison = duration × users affected. Stale malicious data = worse than no cache. The cache amplifies the attack by serving the poisoned response at scale for the entire TTL window.
+</div>
+</td>
+<td><canvas id="canvas4" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">5. Cold Start After Deployment</div>
+<div class="pitfall-desc">
+Deploy new version → all caches empty → backend absorbs 100% of traffic → backend designed for 5% of traffic (the miss rate) → instant overload → cascade failure. The transition from "warm" to "cold" is a cliff. Your backend's true capacity requirement is hidden by the cache — until the cache disappears and reality arrives all at once.
+</div>
+</td>
+<td><canvas id="canvas5" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">6. Write-Through vs Write-Behind Consistency</div>
+<div class="pitfall-desc">
+Write-through: slow writes but cache = source of truth. Write-behind: fast writes but cache can lose data on crash. Read-after-write consistency depends on which you choose. Distributed cache + distributed DB = eventual consistency nightmares. Neither strategy eliminates the consistency problem — they just move it to different failure modes.
+</div>
+</td>
+<td><canvas id="canvas6" width="720" height="300"></canvas></td>
+</tr>
+</table>
+
+<script>
+function setupCanvas(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = 720 * dpr;
+    canvas.height = 200 * dpr;
+    canvas.style.width = '720px';
+    canvas.style.height = '200px';
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    return ctx;
+}
+
+// Canvas 1: Hit Rate Breakdown Bar
+(function() {
+    var ctx = setupCanvas('canvas1');
+    var barY = 70, barH = 50;
+    var totalW = 620, startX = 50;
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Cache Hit Rate Breakdown (99.5% "hits")', 360, 30);
+
+    // 99.4% correct hits - green
+    var correctW = totalW * 0.994;
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(startX, barY, correctW, barH);
+
+    // 0.1% stale/wrong hits - red
+    var staleW = totalW * 0.001 * 10; // exaggerated for visibility
+    staleW = Math.max(staleW, 12);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(startX + correctW, barY, staleW, barH);
+
+    // 0.5% misses - gray
+    var missW = totalW - correctW - staleW;
+    ctx.fillStyle = '#95a5a6';
+    ctx.fillRect(startX + correctW + staleW, barY, missW, barH);
+
+    // Labels
+    ctx.font = '14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'white';
+    ctx.fillText('99.4% Correct Hits', startX + correctW / 2, barY + 30);
+
+    // Arrow pointing to red section
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    var redCenterX = startX + correctW + staleW / 2;
+    ctx.fillText('0.1% WRONG', redCenterX + 10, barY - 10);
+    ctx.beginPath();
+    ctx.moveTo(redCenterX + 10, barY - 5);
+    ctx.lineTo(redCenterX, barY);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Miss label
+    ctx.fillStyle = '#7f8c8d';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('0.5% Miss', startX + correctW + staleW + missW / 2, barY + 30);
+
+    // Bottom warning
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('"Serving wrong data confidently" — hit rate hides correctness failures', 360, barY + barH + 35);
+
+    // Legend
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#27ae60'; ctx.fillRect(50, 170, 12, 12);
+    ctx.fillStyle = '#333'; ctx.fillText('Correct Hits', 67, 181);
+    ctx.fillStyle = '#e74c3c'; ctx.fillRect(180, 170, 12, 12);
+    ctx.fillStyle = '#333'; ctx.fillText('Stale/Wrong (serving bad data)', 197, 181);
+    ctx.fillStyle = '#95a5a6'; ctx.fillRect(430, 170, 12, 12);
+    ctx.fillStyle = '#333'; ctx.fillText('Misses', 447, 181);
+})();
+
+// Canvas 2: TTL Goldilocks Curve
+(function() {
+    var ctx = setupCanvas('canvas2');
+    var chartL = 80, chartR = 650, chartT = 45, chartB = 155;
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('TTL Trade-off: Miss Rate vs Staleness', 360, 25);
+
+    // Axes
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(chartL, chartT);
+    ctx.lineTo(chartL, chartB);
+    ctx.lineTo(chartR, chartB);
+    ctx.stroke();
+
+    // X-axis label
+    ctx.fillStyle = '#555';
+    ctx.font = '14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('TTL Duration →', (chartL + chartR) / 2, chartB + 30);
+    ctx.fillText('Short', chartL + 30, chartB + 15);
+    ctx.fillText('Long', chartR - 30, chartB + 15);
+
+    // Y-axis label
+    ctx.save();
+    ctx.translate(25, (chartT + chartB) / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Problem Severity', 0, 0);
+    ctx.restore();
+
+    // Miss rate curve (high at low TTL, drops)
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (var i = 0; i <= 100; i++) {
+        var x = chartL + (chartR - chartL) * i / 100;
+        var y = chartB - (chartB - chartT) * Math.exp(-i / 15) * 0.9;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Staleness curve (low at low TTL, rises)
+    ctx.strokeStyle = '#8e44ad';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (var i = 0; i <= 100; i++) {
+        var x = chartL + (chartR - chartL) * i / 100;
+        var y = chartB - (chartB - chartT) * (1 - Math.exp(-i / 25)) * 0.85;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Sweet spot region
+    var sweetL = chartL + (chartR - chartL) * 0.25;
+    var sweetR = chartL + (chartR - chartL) * 0.45;
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.15)';
+    ctx.fillRect(sweetL, chartT, sweetR - sweetL, chartB - chartT);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.strokeRect(sweetL, chartT, sweetR - sweetL, chartB - chartT);
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Sweet Spot', (sweetL + sweetR) / 2, chartT - 5);
+
+    // Legend
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#e74c3c'; ctx.fillRect(chartR - 200, chartT, 12, 12);
+    ctx.fillStyle = '#333'; ctx.fillText('Miss Rate (backend load)', chartR - 183, chartT + 11);
+    ctx.fillStyle = '#8e44ad'; ctx.fillRect(chartR - 200, chartT + 18, 12, 12);
+    ctx.fillStyle = '#333'; ctx.fillText('Data Staleness', chartR - 183, chartT + 29);
+})();
+
+// Canvas 3: Thundering Herd Timeline
+(function() {
+    var ctx = setupCanvas('canvas3');
+    var chartL = 80, chartR = 660, chartT = 45, chartB = 150;
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Thundering Herd: Key Expiry → Backend Overload', 360, 25);
+
+    // Axes
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(chartL, chartT);
+    ctx.lineTo(chartL, chartB);
+    ctx.lineTo(chartR, chartB);
+    ctx.stroke();
+
+    // X-axis
+    ctx.fillStyle = '#555';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Time →', (chartL + chartR) / 2, chartB + 30);
+
+    // Y-axis
+    ctx.save();
+    ctx.translate(30, (chartT + chartB) / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Backend Load', 0, 0);
+    ctx.restore();
+
+    // Normal load line (flat, low)
+    var expiryX = chartL + (chartR - chartL) * 0.3;
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(chartL, chartB - 15);
+    ctx.lineTo(expiryX, chartB - 15);
+    ctx.stroke();
+
+    // Expiry marker
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(expiryX, chartT);
+    ctx.lineTo(expiryX, chartB);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('Key Expires', expiryX, chartB + 15);
+
+    // Spike
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(expiryX, chartB - 15);
+    ctx.lineTo(expiryX + 5, chartT + 5);
+    ctx.lineTo(expiryX + 30, chartT + 5);
+    ctx.stroke();
+
+    // 10,000 requests label
+    ctx.fillStyle = '#c0392b';
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('10,000 requests!', expiryX + 70, chartT + 10);
+
+    // Backend fails, retries amplify
+    var retryX = expiryX + 80;
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(expiryX + 30, chartT + 5);
+    ctx.lineTo(retryX, chartT + 20);
+    ctx.lineTo(retryX + 20, chartT);
+    ctx.lineTo(retryX + 60, chartT + 10);
+    ctx.stroke();
+
+    // Retry label
+    ctx.fillStyle = '#8e44ad';
+    ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('Retries amplify!', retryX + 60, chartT + 5);
+
+    // Timeout/failure zone
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.1)';
+    ctx.fillRect(expiryX, chartT, chartR - expiryX - 100, chartB - chartT);
+
+    // Capacity line
+    ctx.strokeStyle = '#f39c12';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 3]);
+    ctx.beginPath();
+    ctx.moveTo(chartL, chartB - 40);
+    ctx.lineTo(chartR, chartB - 40);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#f39c12';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('Backend Capacity', chartR, chartB - 43);
+
+    // Recovery
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.textAlign = 'center';
+    ctx.beginPath();
+    ctx.moveTo(chartR - 80, chartT + 25);
+    ctx.lineTo(chartR - 20, chartB - 20);
+    ctx.stroke();
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('Recovery', chartR - 50, chartB - 5);
+})();
+
+// Canvas 4: Cache Poisoning Timeline
+(function() {
+    var ctx = setupCanvas('canvas4');
+    var chartL = 80, chartR = 660, chartT = 50, chartB = 150;
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Cache Poisoning: One Injection → Mass Impact', 360, 25);
+
+    // Timeline axis
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(chartL, chartB);
+    ctx.lineTo(chartR, chartB);
+    ctx.stroke();
+
+    // Time labels
+    ctx.fillStyle = '#555';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Time →', (chartL + chartR) / 2, chartB + 30);
+
+    // Poison injection point
+    var poisonX = chartL + 60;
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath();
+    ctx.arc(poisonX, chartB, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('Poison Injected', poisonX, chartB + 18);
+
+    // TTL window (poisoned zone)
+    var ttlEnd = chartR - 80;
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.15)';
+    ctx.fillRect(poisonX, chartT, ttlEnd - poisonX, chartB - chartT);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 3]);
+    ctx.strokeRect(poisonX, chartT, ttlEnd - poisonX, chartB - chartT);
+    ctx.setLineDash([]);
+
+    // TTL label
+    ctx.fillStyle = '#c0392b';
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('← TTL Window: Every request gets poisoned response →', (poisonX + ttlEnd) / 2, chartT - 8);
+
+    // Affected users accumulating (rising line)
+    ctx.strokeStyle = '#8e44ad';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (var i = 0; i <= 100; i++) {
+        var x = poisonX + (ttlEnd - poisonX) * i / 100;
+        var y = chartB - 10 - (chartB - chartT - 20) * (i / 100);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Users affected label
+    ctx.fillStyle = '#8e44ad';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('Users affected', ttlEnd + 5, chartT + 20);
+    ctx.fillText('(cumulative)', ttlEnd + 5, chartT + 36);
+
+    // TTL expires marker
+    ctx.fillStyle = '#27ae60';
+    ctx.beginPath();
+    ctx.arc(ttlEnd, chartB, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.textAlign = 'center';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('TTL Expires', ttlEnd, chartB + 18);
+
+    // Request markers in poisoned zone
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    for (var i = 0; i < 8; i++) {
+        var rx = poisonX + 30 + i * ((ttlEnd - poisonX - 40) / 8);
+        ctx.textAlign = 'center';
+        ctx.fillText('✕', rx, chartB - 15);
+    }
+
+    // Bottom note
+    ctx.fillStyle = '#c0392b';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Impact = TTL duration × request rate', (chartL + chartR) / 2, 190);
+})();
+
+// Canvas 5: Cold Start After Deployment
+(function() {
+    var ctx = setupCanvas('canvas5');
+    var chartL = 80, chartR = 660, chartT = 45, chartB = 155;
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Cold Start: Deployment Empties Cache → Overload', 360, 25);
+
+    // Axes
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(chartL, chartT);
+    ctx.lineTo(chartL, chartB);
+    ctx.lineTo(chartR, chartB);
+    ctx.stroke();
+
+    // Y-axis labels
+    ctx.fillStyle = '#555';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('100%', chartL - 8, chartT + 5);
+    ctx.fillText('5%', chartL - 8, chartB - 5);
+    ctx.fillText('20%', chartL - 8, chartB - (chartB - chartT) * 0.2 + 4);
+
+    // X-axis label
+    ctx.textAlign = 'center';
+    ctx.fillText('Time →', (chartL + chartR) / 2, chartB + 30);
+
+    // Deployment point
+    var deployX = chartL + (chartR - chartL) * 0.4;
+
+    // Steady state at 5% (warm cache)
+    var steadyY = chartB - (chartB - chartT) * 0.05;
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(chartL, steadyY);
+    ctx.lineTo(deployX, steadyY);
+    ctx.stroke();
+
+    // Label for steady state
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('Warm cache: 5% load', chartL + 10, steadyY - 10);
+
+    // Spike to 100%
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(deployX, steadyY);
+    ctx.lineTo(deployX + 3, chartT + 5);
+    ctx.lineTo(deployX + 80, chartT + 10);
+    ctx.lineTo(deployX + 200, chartB - (chartB - chartT) * 0.15);
+    ctx.lineTo(chartR - 20, steadyY);
+    ctx.stroke();
+
+    // Deploy marker
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(deployX, chartT);
+    ctx.lineTo(deployX, chartB);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Deploy', deployX, chartB + 15);
+    ctx.fillText('(cache cleared)', deployX, chartB + 28);
+
+    // Designed capacity line at 20%
+    var capY = chartB - (chartB - chartT) * 0.2;
+    ctx.strokeStyle = '#f39c12';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 3]);
+    ctx.beginPath();
+    ctx.moveTo(chartL, capY);
+    ctx.lineTo(chartR, capY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#f39c12';
+    ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('Designed Capacity (20%)', chartR, capY - 5);
+
+    // Overload zone
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.08)';
+    ctx.fillRect(deployX, chartT, chartR - deployX, capY - chartT);
+
+    // 100% label at spike
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('100% traffic → backend!', deployX + 20, chartT + 25);
+})();
+
+// Canvas 6: Write-Through vs Write-Behind
+(function() {
+    var ctx = setupCanvas('canvas6');
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Write-Through vs Write-Behind Consistency', 360, 22);
+
+    // Left diagram: Write-Through
+    ctx.fillStyle = '#2980b9';
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Write-Through', 180, 45);
+
+    // Boxes
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2;
+    // App
+    ctx.fillStyle = '#eaf2f8';
+    ctx.fillRect(80, 55, 70, 30);
+    ctx.strokeRect(80, 55, 70, 30);
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('App', 115, 74);
+
+    // Arrow to Cache
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(150, 70);
+    ctx.lineTo(170, 70);
+    ctx.lineTo(166, 66);
+    ctx.moveTo(170, 70);
+    ctx.lineTo(166, 74);
+    ctx.stroke();
+
+    // Cache
+    ctx.fillStyle = '#eaf2f8';
+    ctx.strokeStyle = '#2980b9';
+    ctx.fillRect(172, 55, 70, 30);
+    ctx.strokeRect(172, 55, 70, 30);
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('Cache', 207, 74);
+
+    // Arrow to DB (synchronous)
+    ctx.strokeStyle = '#27ae60';
+    ctx.beginPath();
+    ctx.moveTo(242, 70);
+    ctx.lineTo(265, 70);
+    ctx.lineTo(261, 66);
+    ctx.moveTo(265, 70);
+    ctx.lineTo(261, 74);
+    ctx.stroke();
+
+    // DB
+    ctx.fillStyle = '#eaf2f8';
+    ctx.strokeStyle = '#2980b9';
+    ctx.fillRect(267, 55, 55, 30);
+    ctx.strokeRect(267, 55, 55, 30);
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('DB', 294, 74);
+
+    // Properties
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('✓ Consistent', 80, 105);
+    ctx.fillText('✓ No data loss on crash', 80, 120);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('✕ Slow writes (synchronous)', 80, 135);
+
+    // Divider line
+    ctx.strokeStyle = '#bdc3c7';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(360, 38);
+    ctx.lineTo(360, 155);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Right diagram: Write-Behind
+    ctx.fillStyle = '#8e44ad';
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Write-Behind', 540, 45);
+
+    // App
+    ctx.fillStyle = '#f4ecf7';
+    ctx.strokeStyle = '#8e44ad';
+    ctx.lineWidth = 2;
+    ctx.fillRect(440, 55, 70, 30);
+    ctx.strokeRect(440, 55, 70, 30);
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('App', 475, 74);
+
+    // Arrow to Cache
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(510, 70);
+    ctx.lineTo(530, 70);
+    ctx.lineTo(526, 66);
+    ctx.moveTo(530, 70);
+    ctx.lineTo(526, 74);
+    ctx.stroke();
+
+    // Cache
+    ctx.fillStyle = '#f4ecf7';
+    ctx.strokeStyle = '#8e44ad';
+    ctx.fillRect(532, 55, 70, 30);
+    ctx.strokeRect(532, 55, 70, 30);
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('Cache', 567, 74);
+
+    // Async arrow to DB (dashed)
+    ctx.strokeStyle = '#f39c12';
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(602, 70);
+    ctx.lineTo(625, 70);
+    ctx.lineTo(621, 66);
+    ctx.moveTo(625, 70);
+    ctx.lineTo(621, 74);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // DB
+    ctx.fillStyle = '#f4ecf7';
+    ctx.strokeStyle = '#8e44ad';
+    ctx.fillRect(627, 55, 55, 30);
+    ctx.strokeRect(627, 55, 55, 30);
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('DB', 654, 74);
+
+    // "async" label
+    ctx.fillStyle = '#f39c12';
+    ctx.font = 'italic 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('async', 613, 62);
+
+    // Properties
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('✓ Fast writes', 440, 105);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('✕ Data loss on crash!', 440, 120);
+    ctx.fillText('✕ Inconsistent reads possible', 440, 135);
+
+    // Crash event in write-behind
+    ctx.beginPath();
+    ctx.moveTo(567, 88);
+    ctx.lineTo(560, 100);
+    ctx.lineTo(575, 95);
+    ctx.lineTo(567, 108);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('CRASH', 567, 118);
+
+    // Bottom summary
+    ctx.fillStyle = '#c0392b';
+    ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Neither eliminates consistency problems — they trade speed for safety', 360, 165);
+})();
+</script>
+</body>
+</html>

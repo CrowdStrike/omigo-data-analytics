@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>79. Elastic Computing / Auto-Scaling</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 20px 10px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 40%; }
+.obj-table td:last-child { width: 60%; text-align: center; }
+.obj-table tr:nth-child(even) td { background: #fafcfe; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+</style>
+</head>
+<body>
+
+<h1>Elastic Computing / Auto-Scaling</h1>
+<p class="subtitle">Systems that grow and shrink with demand — but the growing takes minutes while the demand spike takes seconds. The data you collect during scale-up events is non-representative: elevated latency, dropped requests, timeout errors, and degraded feature computation all contaminate your pipeline.</p>
+
+<h2>Pitfall 1: Scale-Up Lag — Traffic Arrives Before Capacity</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">3-5 Minutes to Scale. Spike Lasts 30 Seconds.</div>
+<ul>
+<li><strong>The sequence:</strong> Traffic spike arrives → auto-scaler detects (30s) → provisions VM (60s) → boots OS (30s) → deploys app (60s) → warm-up (30s). Total: 3-5 minutes. The spike was 30 seconds.</li>
+<li><strong>The data impact:</strong> During those 3 minutes: requests queue, timeouts increase, latency spikes 10×. Models that use "response_time" as a feature see corrupted values. Features computed server-side return defaults/nulls because the computation timed out.</li>
+<li><strong>The false signal:</strong> ML model sees: "users who experience high latency have lower conversion." Correct, but the CAUSE is infrastructure, not user behavior. Model learns to use latency as a predictor — which works during normal operation but fails during scaling events (latency is high but conversion should be normal once capacity catches up).</li>
+</ul>
+</td><td><canvas id="c1" width="720" height="240"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 2: Scale-Down Oscillation — Hysteresis as Noise Generator</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Scale Down → Latency Rises → Scale Up → Latency Drops → Scale Down → Repeat</div>
+<ul>
+<li><strong>The cycle:</strong> Load drops → scale down → reduced capacity → latency rises → health check fails → scale up → load handled → latency drops → scale down → repeat. Oscillating between states.</li>
+<li><strong>The data impact:</strong> Metrics oscillate: latency is 50ms then 500ms then 50ms then 500ms. Time-series models see this as a "pattern" and try to predict it. It's not a pattern — it's a control system artifact. Training on oscillation data teaches the model to expect periodic degradation that shouldn't exist.</li>
+<li><strong>The false seasonality:</strong> Oscillation period happens to align with a time window (e.g., 10-minute cycles). Model learns "every 10 minutes, latency spikes." Deploys. Hysteresis settings change. Pattern disappears. Model predictions wrong.</li>
+</ul>
+</td><td><canvas id="c2" width="720" height="240"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 3: Cold Start Penalty — First Request Data Is Garbage</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">New Instance: First Request Takes 2-10 Seconds. Subsequent: 50ms.</div>
+<ul>
+<li><strong>The problem:</strong> Serverless/container cold start: first request loads code, initializes connections, warms caches. Response time: 2-10 seconds. All subsequent requests: 50ms. User who hits a cold instance has a completely different experience.</li>
+<li><strong>The data contamination:</strong> Your latency distribution is bimodal: 95% at 50ms, 5% at 3000ms. Average: 195ms (meaningless). If you use average latency in features or A/B test metrics, cold starts pollute the signal. A "winning" variant might just have fewer cold starts due to different traffic routing.</li>
+<li><strong>The model serving problem:</strong> ML model runs in a container. Cold start: model weights load from S3 (4 seconds). First prediction: 4.2 seconds. User already left. Feature "model_score" returns NULL for cold-start users → downstream model sees NULL → treats as missing → fallback logic activates. 5% of users always get the fallback experience.</li>
+</ul>
+</td><td><canvas id="c3" width="720" height="240"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 4: Spot Eviction — Computation Interrupted Mid-Pipeline</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">2-Minute Warning → Checkpoint → Lose 5 Min of Work → Reschedule</div>
+<ul>
+<li><strong>The scenario:</strong> Training job running on spot instances (70% cheaper). Provider reclaims instance: 2-minute warning. Must checkpoint current state. State is 50GB. Can't transfer 50GB in 2 minutes. Partial checkpoint. Reschedule. Reload from last FULL checkpoint (30 minutes ago). Lost 30 minutes of compute.</li>
+<li><strong>The data pipeline impact:</strong> ETL job running on spot. Evicted mid-JOIN. Partial results written to output table (rows 1-50K of 100K). Downstream job reads the partial table. Aggregates computed on 50% of data. No error — just wrong numbers. Row count check: "expected ~100K, got 50K" — is that an eviction artifact or real data loss? Hard to distinguish.</li>
+<li><strong>The non-reproducibility:</strong> Pipeline ran on spot, got evicted, retried, produced slightly different result (non-deterministic operations like sampling, hash partitioning). Model trained on run A vs run B has different weights. Which one is "correct"? Neither — both are artifacts of infrastructure instability.</li>
+</ul>
+</td><td><canvas id="c4" width="720" height="240"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 5: Cost ≠ Utilization — Competing Objectives in Data Collection</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">10 Instances at 20% CPU: Expensive but Safe. 2 Instances at 90%: Cheap but Fragile.</div>
+<ul>
+<li><strong>The tradeoff:</strong> High utilization = cost efficient but no headroom. Sudden feature computation request takes 3 seconds instead of 0.3 seconds because CPU is saturated. Data arrives late. Real-time features computed from stale data.</li>
+<li><strong>The data quality issue:</strong> Feature pipeline configured for "real-time" computation. Under high utilization: features computed with 30-second lag instead of 1-second lag. Model trained on 1-second-fresh features, serving gets 30-second-stale features. Training-serving skew from infrastructure pressure.</li>
+<li><strong>The cost-driven data loss:</strong> "Reduce costs by 40%." How: sample incoming events (keep 60%). Or: reduce retention (delete after 7 days instead of 30). Or: reduce compute (run feature pipeline every hour instead of every minute). Each "cost optimization" is a data quality degradation in disguise.</li>
+</ul>
+</td><td><canvas id="c5" width="720" height="240"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 6: Capacity Planning From Non-Stationary Demand</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Last Year's Pattern ≠ This Year's. Until It Suddenly Is Again.</div>
+<ul>
+<li><strong>The problem:</strong> Demand prediction for capacity planning uses historical patterns. Product launch → unprecedented traffic. Viral event → 10× normal. Competitor outage → 3× refugee traffic. None of these were in training data.</li>
+<li><strong>Under-provisioning:</strong> Data collection system overwhelmed → drops events → training data has gaps during high-traffic periods. Model never sees peak-load behavior. Deployed model fails precisely during peak load (when it matters most).</li>
+<li><strong>Over-provisioning:</strong> Idle capacity costs money. Pressure to reduce → right-sizing → barely enough for normal → fails at first unexpected spike. Cycle repeats every quarter.</li>
+</ul>
+</td><td><canvas id="c6" width="720" height="240"></canvas></td></tr>
+</table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    return {ctx:ctx, w:w, h:h};
+}
+
+// Chart 1: Traffic spike vs capacity response
+(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+var margin={left:50,right:60,top:30,bottom:40};
+var plotW=w-margin.left-margin.right,plotH=h-margin.top-margin.bottom;
+ctx.strokeStyle='#333';ctx.lineWidth=1.5;
+ctx.beginPath();ctx.moveTo(margin.left,margin.top);ctx.lineTo(margin.left,margin.top+plotH);ctx.lineTo(margin.left+plotW,margin.top+plotH);ctx.stroke();
+
+var n=100;
+for(var i=0;i<n;i++){
+    var t=i/n;
+    var traffic=20;
+    if(t>=0.18&&t<=0.35)traffic=20+75*Math.sin((t-0.18)/0.17*Math.PI);
+    var capacity=30;
+    if(t>=0.30&&t<=0.55)capacity=30+50*(1-Math.exp(-3*(t-0.30)/0.25));
+    else if(t>0.55&&t<=0.75)capacity=75;
+    else if(t>0.75)capacity=75-40*(t-0.75)/0.25;
+
+    var x=margin.left+(i/n)*plotW;
+    var ty2=margin.top+plotH-(traffic/100)*plotH;
+    var cy2=margin.top+plotH-(capacity/100)*plotH;
+
+    if(i===0){ctx.beginPath();ctx.moveTo(x,ty2);}else ctx.lineTo(x,ty2);
+}
+ctx.strokeStyle='#2471a3';ctx.lineWidth=2.5;ctx.stroke();
+
+for(var i=0;i<n;i++){
+    var t=i/n;
+    var capacity=30;
+    if(t>=0.30&&t<=0.55)capacity=30+50*(1-Math.exp(-3*(t-0.30)/0.25));
+    else if(t>0.55&&t<=0.75)capacity=75;
+    else if(t>0.75)capacity=75-40*(t-0.75)/0.25;
+    var x=margin.left+(i/n)*plotW;
+    var cy2=margin.top+plotH-(capacity/100)*plotH;
+    if(i===0){ctx.beginPath();ctx.moveTo(x,cy2);}else ctx.lineTo(x,cy2);
+}
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=2.5;ctx.setLineDash([6,3]);ctx.stroke();ctx.setLineDash([]);
+
+// Lag annotation
+var spikeX=margin.left+plotW*0.25,respX=margin.left+plotW*0.40;
+ctx.strokeStyle='#666';ctx.lineWidth=1;
+ctx.beginPath();ctx.moveTo(spikeX,margin.top+8);ctx.lineTo(respX,margin.top+8);ctx.stroke();
+ctx.fillStyle='#666';ctx.font='10px sans-serif';ctx.textAlign='center';
+ctx.fillText('3-5 min lag',(spikeX+respX)/2,margin.top+4);
+
+// Legend
+ctx.font='11px sans-serif';ctx.textAlign='left';
+ctx.strokeStyle='#2471a3';ctx.lineWidth=2.5;ctx.setLineDash([]);
+ctx.beginPath();ctx.moveTo(w-130,margin.top+10);ctx.lineTo(w-110,margin.top+10);ctx.stroke();
+ctx.fillStyle='#2471a3';ctx.fillText('Traffic',w-105,margin.top+14);
+ctx.strokeStyle='#e74c3c';ctx.setLineDash([6,3]);
+ctx.beginPath();ctx.moveTo(w-130,margin.top+28);ctx.lineTo(w-110,margin.top+28);ctx.stroke();ctx.setLineDash([]);
+ctx.fillStyle='#e74c3c';ctx.fillText('Capacity',w-105,margin.top+32);
+
+ctx.fillStyle='#555';ctx.font='italic 11px sans-serif';ctx.textAlign='center';
+ctx.fillText('Capacity arrives after spike is over. Errors during gap corrupt data.',w/2,h-8);
+})();
+
+// Chart 2: Oscillation
+(function(){var s=setup('c2');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+var margin={left:50,right:30,top:30,bottom:40};
+var plotW=w-margin.left-margin.right,plotH=h-margin.top-margin.bottom;
+ctx.strokeStyle='#333';ctx.lineWidth=1.5;
+ctx.beginPath();ctx.moveTo(margin.left,margin.top);ctx.lineTo(margin.left,margin.top+plotH);ctx.lineTo(margin.left+plotW,margin.top+plotH);ctx.stroke();
+
+// Square-wave-ish oscillation
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=2.5;ctx.beginPath();
+for(var i=0;i<200;i++){
+    var t=i/200;
+    var v=50+40*Math.sin(t*Math.PI*8)*Math.exp(-t*0.5);
+    var x=margin.left+t*plotW,y=margin.top+plotH-(v/100)*plotH;
+    if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+}
+ctx.stroke();
+
+ctx.fillStyle='#1a5276';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
+ctx.fillText('Latency oscillation from scale-up/scale-down cycling',w/2,margin.top+10);
+ctx.fillStyle='#555';ctx.font='italic 11px sans-serif';
+ctx.fillText('Model sees periodic spikes. It\'s a control system artifact, not a real pattern.',w/2,h-8);
+})();
+
+// Chart 3: Bimodal cold start
+(function(){var s=setup('c3');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+var margin={left:50,right:30,top:30,bottom:40};
+var plotW=w-margin.left-margin.right,plotH=h-margin.top-margin.bottom;
+ctx.strokeStyle='#333';ctx.lineWidth=1.5;
+ctx.beginPath();ctx.moveTo(margin.left,margin.top);ctx.lineTo(margin.left,margin.top+plotH);ctx.lineTo(margin.left+plotW,margin.top+plotH);ctx.stroke();
+
+// Bimodal: big spike at 50ms, small spike at 3000ms
+function gauss(x,mean,sd){return Math.exp(-0.5*Math.pow((x-mean)/sd,2));}
+ctx.fillStyle='rgba(39,174,96,0.3)';ctx.strokeStyle='#27ae60';ctx.lineWidth=2;
+ctx.beginPath();ctx.moveTo(margin.left,margin.top+plotH);
+for(var x=0;x<=100;x++){
+    var v=0.95*gauss(x,8,3)+0.05*gauss(x,70,8);
+    var px=margin.left+(x/100)*plotW,py=margin.top+plotH-v*plotH*0.9;
+    ctx.lineTo(px,py);
+}
+ctx.lineTo(margin.left+plotW,margin.top+plotH);ctx.closePath();ctx.fill();ctx.stroke();
+
+ctx.fillStyle='#27ae60';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
+ctx.fillText('95%: 50ms (warm)',margin.left+plotW*0.12,margin.top+20);
+ctx.fillStyle='#e74c3c';ctx.font='bold 11px sans-serif';
+ctx.fillText('5%: 3000ms (cold start)',margin.left+plotW*0.72,margin.top+50);
+ctx.fillStyle='#555';ctx.font='italic 11px sans-serif';
+ctx.fillText('Average: 195ms (meaningless). Distribution is bimodal. p50 and p99 tell different stories.',w/2,h-8);
+})();
+
+// Chart 4: Spot eviction timeline
+(function(){var s=setup('c4');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+ctx.fillStyle='#1a5276';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
+ctx.fillText('Spot instance eviction: work lost, partial data written',w/2,16);
+
+var margin={left:30,right:30,top:40,bottom:30};
+var timelineY=margin.top+50;
+ctx.strokeStyle='#333';ctx.lineWidth=2;
+ctx.beginPath();ctx.moveTo(margin.left,timelineY);ctx.lineTo(w-margin.right,timelineY);ctx.stroke();
+
+var events=[
+    {x:0.1,label:'Start job',color:'#27ae60'},
+    {x:0.4,label:'Processing...',color:'#3498db'},
+    {x:0.6,label:'⚠ 2min warning',color:'#e67e22'},
+    {x:0.65,label:'Checkpoint\n(partial)',color:'#e67e22'},
+    {x:0.7,label:'EVICTED',color:'#e74c3c'},
+    {x:0.8,label:'Reschedule\n+ reload',color:'#8e44ad'},
+    {x:0.95,label:'Resume\n(30min lost)',color:'#3498db'}
+];
+events.forEach(function(ev){
+    var x=margin.left+ev.x*(w-margin.left-margin.right);
+    ctx.strokeStyle=ev.color;ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(x,timelineY-10);ctx.lineTo(x,timelineY+10);ctx.stroke();
+    ctx.fillStyle=ev.color;ctx.font='9px sans-serif';ctx.textAlign='center';
+    var lines=ev.label.split('\n');
+    lines.forEach(function(l,i){ctx.fillText(l,x,timelineY+24+i*11);});
+});
+
+ctx.fillStyle='#555';ctx.font='italic 11px sans-serif';ctx.textAlign='center';
+ctx.fillText('Partial data in output table. Downstream reads 50K rows instead of 100K. No error thrown.',w/2,h-8);
+})();
+
+// Chart 5: Cost vs quality tradeoff
+(function(){var s=setup('c5');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+ctx.fillStyle='#1a5276';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
+ctx.fillText('Cost optimization = data quality degradation',w/2,16);
+
+var items=[
+    {label:'Sample events (keep 60%)',cost:'-40% cost',quality:'40% of events missing',costColor:'#27ae60',qualColor:'#e74c3c'},
+    {label:'Reduce retention (7d vs 30d)',cost:'-30% storage',quality:'Can\'t retrain on >7d data',costColor:'#27ae60',qualColor:'#e74c3c'},
+    {label:'Hourly pipeline (vs per-minute)',cost:'-50% compute',quality:'Features 60× staler',costColor:'#27ae60',qualColor:'#e74c3c'}
+];
+var margin={left:220,right:30,top:45,bottom:30};
+var barH=45,gap=15;
+
+items.forEach(function(item,i){
+    var y=margin.top+i*(barH+gap);
+    ctx.fillStyle='#1a5276';ctx.font='11px sans-serif';ctx.textAlign='right';
+    ctx.fillText(item.label,margin.left-10,y+barH/2+4);
+
+    var halfW=(w-margin.left-margin.right)/2-10;
+    ctx.fillStyle=item.costColor;ctx.fillRect(margin.left,y,halfW,barH/2-2);
+    ctx.fillStyle=item.qualColor;ctx.fillRect(margin.left,y+barH/2,halfW,barH/2-2);
+
+    ctx.fillStyle='#fff';ctx.font='bold 10px sans-serif';ctx.textAlign='center';
+    ctx.fillText(item.cost,margin.left+halfW/2,y+barH/4+3);
+    ctx.fillText(item.quality,margin.left+halfW/2,y+barH*3/4+3);
+});
+
+ctx.fillStyle='#555';ctx.font='italic 11px sans-serif';ctx.textAlign='center';
+ctx.fillText('Every cost cut trades money for data quality. The tradeoff is hidden until model degrades.',w/2,h-8);
+})();
+
+// Chart 6: Non-stationary demand
+(function(){var s=setup('c6');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+var margin={left:50,right:30,top:30,bottom:40};
+var plotW=w-margin.left-margin.right,plotH=h-margin.top-margin.bottom;
+ctx.strokeStyle='#333';ctx.lineWidth=1.5;
+ctx.beginPath();ctx.moveTo(margin.left,margin.top);ctx.lineTo(margin.left,margin.top+plotH);ctx.lineTo(margin.left+plotW,margin.top+plotH);ctx.stroke();
+
+// Historical pattern (smooth seasonal)
+ctx.strokeStyle='#3498db';ctx.lineWidth=2;ctx.setLineDash([5,5]);ctx.beginPath();
+for(var i=0;i<100;i++){
+    var t=i/100;var v=40+15*Math.sin(t*Math.PI*4);
+    var x=margin.left+t*plotW,y=margin.top+plotH-(v/100)*plotH;
+    if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+}
+ctx.stroke();ctx.setLineDash([]);
+
+// Actual (with unexpected spikes)
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=2.5;ctx.beginPath();
+for(var i=0;i<100;i++){
+    var t=i/100;var v=40+15*Math.sin(t*Math.PI*4);
+    if(t>0.3&&t<0.4)v+=50; // viral event
+    if(t>0.7&&t<0.75)v+=35; // competitor outage
+    var x=margin.left+t*plotW,y=margin.top+plotH-(v/100)*plotH;
+    if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+}
+ctx.stroke();
+
+ctx.fillStyle='#e74c3c';ctx.font='bold 10px sans-serif';ctx.textAlign='center';
+ctx.fillText('Viral event',margin.left+plotW*0.35,margin.top+10);
+ctx.fillText('Competitor outage',margin.left+plotW*0.72,margin.top+25);
+
+ctx.font='11px sans-serif';ctx.textAlign='left';
+ctx.strokeStyle='#3498db';ctx.lineWidth=2;ctx.setLineDash([5,5]);
+ctx.beginPath();ctx.moveTo(w-160,margin.top+10);ctx.lineTo(w-140,margin.top+10);ctx.stroke();ctx.setLineDash([]);
+ctx.fillStyle='#3498db';ctx.fillText('Expected',w-135,margin.top+14);
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=2.5;
+ctx.beginPath();ctx.moveTo(w-160,margin.top+28);ctx.lineTo(w-140,margin.top+28);ctx.stroke();
+ctx.fillStyle='#e74c3c';ctx.fillText('Actual',w-135,margin.top+32);
+
+ctx.fillStyle='#555';ctx.font='italic 11px sans-serif';ctx.textAlign='center';
+ctx.fillText('Under-provision during spikes → data collection drops events. Model never sees peak behavior.',w/2,h-8);
+})();
+</script>
+</body>
+</html>

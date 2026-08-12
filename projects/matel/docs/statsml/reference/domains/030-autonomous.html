@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>30. Autonomous Systems / Robotics — Domain Pitfalls</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 40px 20px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; }
+.nav a:hover { text-decoration: underline; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-table tr:nth-child(even) td { background: #fafcfe; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+</style>
+</head>
+<body>
+
+
+<h1>Autonomous Systems / Robotics</h1>
+<p class="subtitle">Data pitfalls unique to self-driving vehicles, drones, and robotic systems operating in uncontrolled environments.</p>
+
+<div class="philosophy">
+Autonomous systems face a fundamental challenge: they must operate safely in an open world using models trained on a closed dataset. The real world is infinitely varied, sensors are imperfect, and the cost of failure can be fatal. Every pitfall here stems from this gap between training and deployment reality.
+</div>
+
+<h2 id="sim-to-real">1. Sim-to-Real Gap</h2>
+<table class="obj-table"><tr>
+<td>
+<div class="obj-title">Simulator performance does not transfer to reality</div>
+<ul>
+<li>Simulator: perfect roads, consistent lighting, no weather variation, predictable physics</li>
+<li>Real world: potholes, rain, sun glare, unexpected objects, variable surfaces</li>
+<li>Models trained in simulation achieve near-perfect scores that collapse in deployment</li>
+<li>Performance gap typically ranges from 30-50% degradation</li>
+<li>Domain randomization helps but cannot fully close the gap</li>
+</ul>
+<p><strong>Impact:</strong> Teams celebrate 98% simulator accuracy, then face 60% real-world performance. The gap is not a bug — it reflects fundamental differences between synthetic and real environments that no amount of simulation fidelity fully resolves.</p>
+</td>
+<td><canvas id="c1" width="720" height="300"></canvas></td>
+</tr></table>
+
+<h2 id="long-tail">2. Long-Tail Edge Cases</h2>
+<table class="obj-table"><tr>
+<td>
+<div class="obj-title">Rare scenarios dominate failure modes</div>
+<ul>
+<li>99.9% of driving is routine: lane following, normal traffic, standard intersections</li>
+<li>The 0.1% includes: construction zones, animals crossing, unusual vehicles, fallen debris</li>
+<li>Each edge case is unique — never appears in training data because it happened once</li>
+<li>Standard datasets cannot capture infinite variety of rare events</li>
+<li>These rare scenarios are precisely where accidents and failures occur</li>
+</ul>
+<p><strong>Impact:</strong> You cannot test for what you have never seen. The long tail is where fatalities happen, yet it is statistically invisible in training data and aggregate metrics.</p>
+</td>
+<td><canvas id="c2" width="720" height="300"></canvas></td>
+</tr></table>
+
+<h2 id="sensor-fusion">3. Sensor Fusion Timestamp Alignment</h2>
+<table class="obj-table"><tr>
+<td>
+<div class="obj-title">Multi-sensor data arrives at different times</div>
+<ul>
+<li>Camera frame: 30ms old by the time it is processed</li>
+<li>Lidar scan: 50ms old due to sweep time and computation</li>
+<li>Radar return: 10ms old, fastest but lowest resolution</li>
+<li>At 60mph, 30ms of latency = 2.6 feet of object movement</li>
+<li>Naive fusion places the same object at three different positions</li>
+</ul>
+<p><strong>Impact:</strong> Without precise temporal alignment, sensor fusion creates ghost objects, mislocates real ones, or fails to associate detections across modalities. A 2.6-foot error at highway speed can mean the difference between stopping and collision.</p>
+</td>
+<td><canvas id="c3" width="720" height="300"></canvas></td>
+</tr></table>
+
+<h2 id="asymmetric-cost">4. Safety-Critical Asymmetric Cost</h2>
+<table class="obj-table"><tr>
+<td>
+<div class="obj-title">False negatives and false positives have vastly different consequences</div>
+<ul>
+<li>False negative (missed pedestrian): potential fatality — irreversible</li>
+<li>False positive (phantom braking): brief inconvenience — recoverable</li>
+<li>Cost ratio is effectively infinity to one</li>
+<li>Must operate at extreme recall, accepting many false positives</li>
+<li>Standard accuracy, F1, or balanced metrics are dangerously wrong here</li>
+</ul>
+<p><strong>Impact:</strong> Optimizing for standard metrics kills people. The system must be tuned to never miss a real obstacle, even if it means braking for shadows, plastic bags, and sensor noise dozens of times per trip.</p>
+</td>
+<td><canvas id="c4" width="720" height="300"></canvas></td>
+</tr></table>
+
+<h2 id="distributional-shift">5. Distributional Shift in Deployment</h2>
+<table class="obj-table"><tr>
+<td>
+<div class="obj-title">Training geography and culture do not generalize</div>
+<ul>
+<li>Trained in California: sunshine, wide roads, grid street layout, predictable drivers</li>
+<li>Deployed in Boston: snow, narrow streets, irregular intersections, aggressive drivers</li>
+<li>Or trained on US driving behavior, deployed in India: completely different driving culture</li>
+<li>Lane markings, sign styles, road rules, pedestrian behavior all shift</li>
+<li>Model confidence stays high even when predictions are wrong</li>
+</ul>
+<p><strong>Impact:</strong> A model cannot know what it has not seen. Deploying across geographies without retraining creates silent failures — the model confidently makes wrong decisions because the world no longer matches its training distribution.</p>
+</td>
+<td><canvas id="c5" width="720" height="300"></canvas></td>
+</tr></table>
+
+<h2 id="sensor-failure">6. Rare but Critical Sensor Failures</h2>
+<table class="obj-table"><tr>
+<td>
+<div class="obj-title">The system must detect when its own sensors break</div>
+<ul>
+<li>Lidar gets wet or dirty: returns garbage point clouds</li>
+<li>Camera lens cracked or fogged: partial or full occlusion</li>
+<li>Radar calibration drifts: reports phantom objects or misses real ones</li>
+<li>Model must detect its OWN sensor failure and switch to degraded mode</li>
+<li>Training data almost never includes examples of broken sensor input</li>
+</ul>
+<p><strong>Impact:</strong> A model that cannot recognize bad input will confidently act on corrupted data. Without self-diagnosis, a single sensor failure cascades into catastrophic decisions because the system trusts garbage as if it were truth.</p>
+</td>
+<td><canvas id="c6" width="720" height="300"></canvas></td>
+</tr></table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id);
+    if (!c) return null;
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return {ctx: ctx, w: w, h: h};
+}
+
+// Chart 1: Sim-to-Real Gap
+(function() {
+    var s = setup('c1'); if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Sim-to-Real Performance Gap', w/2, 25);
+
+    // Simulator bar
+    var barX = 80, barW = 200, barH = 50;
+    var simY = 60, realY = 170;
+
+    ctx.font = '15px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#333';
+    ctx.fillText('Simulator', barX, simY - 8);
+
+    // Sim bar background
+    ctx.fillStyle = '#e8f5e9';
+    ctx.fillRect(barX, simY, barW, barH);
+    // Sim bar fill (98%)
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(barX, simY, barW * 0.98, barH);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('98% Accuracy', barX + barW * 0.49, simY + 32);
+
+    // Real world bar
+    ctx.font = '15px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#333';
+    ctx.fillText('Real World', barX, realY - 8);
+
+    // Real bar background
+    ctx.fillStyle = '#ffebee';
+    ctx.fillRect(barX, realY, barW, barH);
+    // Real bar fill (62%)
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(barX, realY, barW * 0.62, barH);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('62% Accuracy', barX + barW * 0.31, realY + 32);
+
+    // Gap arrow and label
+    var arrowX = barX + barW + 40;
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 3]);
+    ctx.beginPath();
+    ctx.moveTo(arrowX, simY + barH/2);
+    ctx.lineTo(arrowX, realY + barH/2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // Arrow heads
+    ctx.beginPath();
+    ctx.moveTo(arrowX - 6, simY + barH/2 + 10);
+    ctx.lineTo(arrowX, simY + barH/2);
+    ctx.lineTo(arrowX + 6, simY + barH/2 + 10);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(arrowX - 6, realY + barH/2 - 10);
+    ctx.lineTo(arrowX, realY + barH/2);
+    ctx.lineTo(arrowX + 6, realY + barH/2 - 10);
+    ctx.stroke();
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('30-50%', arrowX + 12, (simY + realY + barH) / 2 - 5);
+    ctx.fillText('degradation', arrowX + 12, (simY + realY + barH) / 2 + 12);
+
+    // Environmental factors between bars
+    var factorsX = 450, factorsY = 80;
+    ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#555';
+    ctx.textAlign = 'left';
+    ctx.fillText('Real-world factors:', factorsX, factorsY);
+
+    // Rain drops
+    ctx.fillStyle = '#3498db';
+    ctx.font = '22px serif';
+    ctx.fillText('\u{1F327}', factorsX, factorsY + 30);
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.fillStyle = '#555';
+    ctx.fillText('Rain', factorsX + 35, factorsY + 30);
+
+    // Sun glare
+    ctx.fillStyle = '#f39c12';
+    ctx.font = '22px serif';
+    ctx.fillText('\u{2600}', factorsX, factorsY + 60);
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.fillStyle = '#555';
+    ctx.fillText('Sun glare', factorsX + 35, factorsY + 60);
+
+    // Potholes
+    ctx.fillStyle = '#795548';
+    ctx.font = '22px serif';
+    ctx.fillText('\u{26A0}', factorsX, factorsY + 90);
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.fillStyle = '#555';
+    ctx.fillText('Potholes', factorsX + 35, factorsY + 90);
+
+    // Unexpected objects
+    ctx.fillStyle = '#9b59b6';
+    ctx.font = '22px serif';
+    ctx.fillText('\u{2753}', factorsX, factorsY + 120);
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.fillStyle = '#555';
+    ctx.fillText('Unexpected objects', factorsX + 35, factorsY + 120);
+
+    // Bottom note
+    ctx.font = 'italic 13px -apple-system, sans-serif';
+    ctx.fillStyle = '#888';
+    ctx.textAlign = 'center';
+    ctx.fillText('Sim performance ≠ Real performance', w/2, h - 20);
+})();
+
+// Chart 2: Long-Tail Edge Cases
+(function() {
+    var s = setup('c2'); if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Long-Tail Distribution of Driving Scenarios', w/2, 25);
+
+    var baseY = h - 50, startX = 60, chartW = w - 120, chartH = 180;
+
+    // Axes
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(startX, baseY);
+    ctx.lineTo(startX + chartW, baseY);
+    ctx.moveTo(startX, baseY);
+    ctx.lineTo(startX, baseY - chartH);
+    ctx.stroke();
+
+    // Y-axis label
+    ctx.save();
+    ctx.translate(20, baseY - chartH/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.fillStyle = '#555';
+    ctx.textAlign = 'center';
+    ctx.fillText('Frequency', 0, 0);
+    ctx.restore();
+
+    // X-axis label
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.fillStyle = '#555';
+    ctx.textAlign = 'center';
+    ctx.fillText('Scenario type (sorted by frequency)', startX + chartW/2, baseY + 35);
+
+    // Main routine bar (99.9%)
+    var routineW = 80, routineH = chartH * 0.95;
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(startX + 20, baseY - routineH, routineW, routineH);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('99.9%', startX + 20 + routineW/2, baseY - routineH + 25);
+    ctx.fillText('Routine', startX + 20 + routineW/2, baseY - routineH + 43);
+
+    // Long tail bars (decreasing height)
+    var tailStart = startX + 120;
+    var tailBars = 25;
+    var tailW = (chartW - 140) / tailBars;
+    for (var i = 0; i < tailBars; i++) {
+        var barH = Math.max(3, chartH * 0.15 * Math.exp(-i * 0.2));
+        var x = tailStart + i * tailW;
+        ctx.fillStyle = i < 5 ? '#f39c12' : '#e74c3c';
+        ctx.fillRect(x, baseY - barH, tailW - 2, barH);
+    }
+
+    // "Where crashes happen" annotation
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(tailStart + 5 * tailW, baseY - chartH * 0.4);
+    ctx.lineTo(tailStart + chartW - 160, baseY - chartH * 0.4);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Red dots for crash locations
+    ctx.fillStyle = '#e74c3c';
+    for (var i = 6; i < tailBars; i += 3) {
+        var x = tailStart + i * tailW + tailW/2;
+        ctx.beginPath();
+        ctx.arc(x, baseY - chartH * 0.35, 5, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Label
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 14px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('← Where crashes happen →', tailStart + (chartW - 140) * 0.6, baseY - chartH * 0.5);
+
+    // Label for routine area
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.fillText('Safe', startX + 60, baseY - chartH - 5);
+})();
+
+// Chart 3: Sensor Fusion Timestamp Alignment
+(function() {
+    var s = setup('c3'); if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Sensor Timestamp Misalignment at 60 mph', w/2, 25);
+
+    var timelineStart = 180, timelineEnd = w - 40;
+    var timelineW = timelineEnd - timelineStart;
+    var sensors = [
+        {name: 'Radar', lag: 10, color: '#27ae60', y: 75},
+        {name: 'Camera', lag: 30, color: '#2980b9', y: 140},
+        {name: 'Lidar', lag: 50, color: '#8e44ad', y: 205}
+    ];
+
+    // Time axis
+    ctx.strokeStyle = '#aaa';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(timelineStart, h - 35);
+    ctx.lineTo(timelineEnd, h - 35);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Time labels
+    ctx.font = '12px -apple-system, sans-serif';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    ctx.fillText('50ms ago', timelineStart, h - 20);
+    ctx.fillText('30ms ago', timelineStart + timelineW * 0.4, h - 20);
+    ctx.fillText('10ms ago', timelineStart + timelineW * 0.8, h - 20);
+    ctx.fillText('NOW', timelineEnd, h - 20);
+
+    // True position line (NOW)
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(timelineEnd, 45);
+    ctx.lineTo(timelineEnd, h - 40);
+    ctx.stroke();
+    ctx.font = 'bold 13px -apple-system, sans-serif';
+    ctx.fillStyle = '#333';
+    ctx.textAlign = 'center';
+    ctx.fillText('TRUE Position', timelineEnd, 55);
+
+    for (var i = 0; i < sensors.length; i++) {
+        var sensor = sensors[i];
+        var lagFraction = sensor.lag / 50;
+        var reportX = timelineEnd - lagFraction * timelineW;
+
+        // Sensor label
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillStyle = sensor.color;
+        ctx.textAlign = 'right';
+        ctx.fillText(sensor.name + ' (' + sensor.lag + 'ms)', timelineStart - 10, sensor.y + 5);
+
+        // Timeline bar
+        ctx.fillStyle = '#f0f0f0';
+        ctx.fillRect(timelineStart, sensor.y - 12, timelineW, 24);
+
+        // Reported position marker
+        ctx.fillStyle = sensor.color;
+        ctx.beginPath();
+        ctx.arc(reportX, sensor.y, 10, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Dashed line to true position
+        ctx.strokeStyle = sensor.color;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(reportX + 10, sensor.y);
+        ctx.lineTo(timelineEnd - 5, sensor.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Distance label
+        var dist = (sensor.lag / 30 * 2.6).toFixed(1);
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = sensor.color;
+        ctx.textAlign = 'center';
+        ctx.fillText(dist + ' ft error', (reportX + timelineEnd) / 2, sensor.y - 16);
+    }
+
+    // Bottom annotation
+    ctx.font = 'italic 13px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('At 60 mph: 30ms = 2.6 ft of movement. Fusion must time-align all sensors.', w/2, h - 3);
+})();
+
+// Chart 4: Safety-Critical Asymmetric Cost
+(function() {
+    var s = setup('c4'); if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Asymmetric Cost: Confusion Matrix', w/2, 25);
+
+    // 2x2 matrix
+    var matX = 100, matY = 55, cellW = 200, cellH = 90;
+
+    // Headers
+    ctx.font = 'bold 14px -apple-system, sans-serif';
+    ctx.fillStyle = '#555';
+    ctx.textAlign = 'center';
+    ctx.fillText('Predicted: No Object', matX + cellW/2, matY - 10);
+    ctx.fillText('Predicted: Object', matX + cellW + cellW/2, matY - 10);
+
+    ctx.save();
+    ctx.translate(matX - 30, matY + cellH/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillText('Actual: Object', 0, 0);
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(matX - 30, matY + cellH + cellH/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillText('Actual: No Object', 0, 0);
+    ctx.restore();
+
+    // FN: Missed pedestrian - FATALITY (top-left: Actual Object, Predicted No Object)
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(matX, matY, cellW, cellH);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 18px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('FALSE NEGATIVE', matX + cellW/2, matY + 35);
+    ctx.font = 'bold 22px -apple-system, sans-serif';
+    ctx.fillText('☠ FATALITY', matX + cellW/2, matY + 65);
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.fillText('Cost: ∞', matX + cellW/2, matY + 83);
+
+    // TP: Correctly detected (top-right: Actual Object, Predicted Object)
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(matX + cellW, matY, cellW, cellH);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 16px -apple-system, sans-serif';
+    ctx.fillText('TRUE POSITIVE', matX + cellW + cellW/2, matY + 35);
+    ctx.font = '14px -apple-system, sans-serif';
+    ctx.fillText('✓ Correct detection', matX + cellW + cellW/2, matY + 60);
+    ctx.fillText('Cost: 0', matX + cellW + cellW/2, matY + 80);
+
+    // TN: Correctly ignored (bottom-left: Actual No Object, Predicted No Object)
+    ctx.fillStyle = '#dff0d8';
+    ctx.fillRect(matX, matY + cellH, cellW, cellH);
+    ctx.fillStyle = '#333';
+    ctx.font = 'bold 16px -apple-system, sans-serif';
+    ctx.fillText('TRUE NEGATIVE', matX + cellW/2, matY + cellH + 35);
+    ctx.font = '14px -apple-system, sans-serif';
+    ctx.fillText('✓ Correct clear', matX + cellW/2, matY + cellH + 60);
+    ctx.fillText('Cost: 0', matX + cellW/2, matY + cellH + 80);
+
+    // FP: Phantom braking (bottom-right: Actual No Object, Predicted Object)
+    ctx.fillStyle = '#fff3cd';
+    ctx.fillRect(matX + cellW, matY + cellH, cellW, cellH);
+    ctx.fillStyle = '#856404';
+    ctx.font = 'bold 16px -apple-system, sans-serif';
+    ctx.fillText('FALSE POSITIVE', matX + cellW + cellW/2, matY + cellH + 35);
+    ctx.font = '14px -apple-system, sans-serif';
+    ctx.fillText('Phantom braking', matX + cellW + cellW/2, matY + cellH + 60);
+    ctx.fillText('Cost: Minor', matX + cellW + cellW/2, matY + cellH + 80);
+
+    // Cost ratio annotation
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Cost ratio:  ∞ : 1  (FN vs FP)', w/2, h - 25);
+
+    ctx.font = '12px -apple-system, sans-serif';
+    ctx.fillStyle = '#888';
+    ctx.fillText('Standard metrics optimize for balance — deadly wrong here', w/2, h - 8);
+})();
+
+// Chart 5: Distributional Shift in Deployment
+(function() {
+    var s = setup('c5'); if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Distributional Shift: Training vs Deployment', w/2, 25);
+
+    // California section (left)
+    var calX = 50, calY = 50, boxW = 260, boxH = 170;
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(calX, calY, boxW, boxH);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 15px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('TRAINING: California', calX + boxW/2, calY + 20);
+
+    // Draw grid roads
+    ctx.strokeStyle = '#bbb';
+    ctx.lineWidth = 1.5;
+    for (var i = 0; i < 4; i++) {
+        ctx.beginPath();
+        ctx.moveTo(calX + 30 + i * 55, calY + 40);
+        ctx.lineTo(calX + 30 + i * 55, calY + boxH - 20);
+        ctx.stroke();
+    }
+    for (var i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.moveTo(calX + 30, calY + 60 + i * 40);
+        ctx.lineTo(calX + boxW - 30, calY + 60 + i * 40);
+        ctx.stroke();
+    }
+
+    // Sun icon
+    ctx.fillStyle = '#f39c12';
+    ctx.beginPath();
+    ctx.arc(calX + boxW - 40, calY + 45, 15, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Confidence bar
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(calX + 30, calY + boxH - 15, boxW - 60, 10);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 9px -apple-system, sans-serif';
+    ctx.fillText('95% Confidence', calX + boxW/2, calY + boxH - 7);
+
+    // Boston section (right)
+    var bosX = 380, bosY = 50;
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(bosX, bosY, boxW, boxH);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 15px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('DEPLOYMENT: Boston', bosX + boxW/2, bosY + 20);
+
+    // Draw winding roads
+    ctx.strokeStyle = '#bbb';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(bosX + 30, bosY + 60);
+    ctx.bezierCurveTo(bosX + 80, bosY + 40, bosX + 120, bosY + 100, bosX + 160, bosY + 70);
+    ctx.bezierCurveTo(bosX + 200, bosY + 40, bosX + 220, bosY + 120, bosX + boxW - 30, bosY + 90);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(bosX + 40, bosY + 110);
+    ctx.bezierCurveTo(bosX + 100, bosY + 140, bosX + 130, bosY + 90, bosX + 180, bosY + 130);
+    ctx.bezierCurveTo(bosX + 210, bosY + 155, bosX + 230, bosY + 100, bosX + boxW - 40, bosY + 140);
+    ctx.stroke();
+    // Narrow irregular intersection
+    ctx.beginPath();
+    ctx.moveTo(bosX + 130, bosY + 45);
+    ctx.lineTo(bosX + 150, bosY + boxH - 25);
+    ctx.stroke();
+
+    // Snow icon
+    ctx.fillStyle = '#5dade2';
+    ctx.font = '24px serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('❄', bosX + boxW - 35, bosY + 50);
+
+    // Confidence bar (lower)
+    ctx.fillStyle = '#e74c3c';
+    var confW = (boxW - 60) * 0.63;
+    ctx.fillRect(bosX + 30, bosY + boxH - 15, confW, 10);
+    ctx.fillStyle = '#f0f0f0';
+    ctx.fillRect(bosX + 30 + confW, bosY + boxH - 15, (boxW - 60) - confW, 10);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 9px -apple-system, sans-serif';
+    ctx.fillText('60% Confidence', bosX + 30 + confW/2, bosY + boxH - 7);
+
+    // Arrow between them
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(calX + boxW + 10, calY + boxH/2);
+    ctx.lineTo(bosX - 10, bosY + boxH/2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(bosX - 10, bosY + boxH/2);
+    ctx.lineTo(bosX - 20, bosY + boxH/2 - 6);
+    ctx.moveTo(bosX - 10, bosY + boxH/2);
+    ctx.lineTo(bosX - 20, bosY + boxH/2 + 6);
+    ctx.stroke();
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '12px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Deploy', (calX + boxW + bosX) / 2, calY + boxH/2 - 10);
+
+    // Bottom note
+    ctx.font = 'italic 13px -apple-system, sans-serif';
+    ctx.fillStyle = '#888';
+    ctx.textAlign = 'center';
+    ctx.fillText('Model confidence stays high even when predictions are wrong in new geography', w/2, h - 15);
+
+    // Confidence drop label
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 15px -apple-system, sans-serif';
+    ctx.fillText('95% → 60% confidence drop', w/2, h - 35);
+})();
+
+// Chart 6: Rare but Critical Sensor Failures
+(function() {
+    var s = setup('c6'); if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Sensor Failure Detection & Degraded Mode', w/2, 25);
+
+    var signalY = 130, signalH = 60;
+    var startX = 50, endX = w - 50;
+    var totalW = endX - startX;
+    var failPoint = startX + totalW * 0.45;
+    var detectPoint = startX + totalW * 0.65;
+
+    // Phase labels
+    ctx.font = 'bold 13px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('Normal Operation', (startX + failPoint) / 2, 50);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Sensor Corrupted', (failPoint + detectPoint) / 2, 50);
+    ctx.fillStyle = '#f39c12';
+    ctx.fillText('Degraded Mode', (detectPoint + endX) / 2, 50);
+
+    // Clean signal (sine wave)
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (var x = startX; x < failPoint; x++) {
+        var t = (x - startX) / 30;
+        var y = signalY + Math.sin(t) * 25 + Math.sin(t * 0.3) * 10;
+        if (x === startX) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Garbage signal (noise) - use seeded pseudo-random for consistency
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    var seed = 42;
+    function pseudoRandom() {
+        seed = (seed * 1664525 + 1013904223) & 0xFFFFFFFF;
+        return (seed >>> 0) / 0xFFFFFFFF;
+    }
+    var firstNoise = true;
+    for (var x = Math.floor(failPoint); x < detectPoint; x++) {
+        var y = signalY + (pseudoRandom() - 0.5) * signalH * 1.5;
+        if (firstNoise) { ctx.moveTo(x, y); firstNoise = false; }
+        else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Degraded signal (reduced, careful)
+    ctx.strokeStyle = '#f39c12';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 3]);
+    ctx.beginPath();
+    for (var x = Math.floor(detectPoint); x < endX; x++) {
+        var t = (x - detectPoint) / 40;
+        var y = signalY + Math.sin(t) * 10;
+        if (x === Math.floor(detectPoint)) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Vertical dividers
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(failPoint, 55);
+    ctx.lineTo(failPoint, signalY + 50);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.strokeStyle = '#f39c12';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(detectPoint, 55);
+    ctx.lineTo(detectPoint, signalY + 50);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Failure event label
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '12px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('⚠ Sensor fails', failPoint, signalY + 65);
+
+    // Detection point label
+    ctx.fillStyle = '#f39c12';
+    ctx.font = 'bold 12px -apple-system, sans-serif';
+    ctx.fillText('✓ Failure detected', detectPoint, signalY + 65);
+    ctx.fillText('Switch to backup', detectPoint, signalY + 80);
+
+    // Decision box
+    var boxX = detectPoint - 50, boxY = signalY + 85, boxW2 = 100, boxH2 = 35;
+    ctx.fillStyle = '#fff3cd';
+    ctx.strokeStyle = '#f39c12';
+    ctx.lineWidth = 2;
+    ctx.fillRect(boxX, boxY, boxW2, boxH2);
+    ctx.strokeRect(boxX, boxY, boxW2, boxH2);
+    ctx.fillStyle = '#856404';
+    ctx.font = 'bold 11px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('SELF-DIAGNOSIS', detectPoint, boxY + 14);
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.fillText('Engage fallback', detectPoint, boxY + 28);
+
+    // Signal quality meter
+    var meterY = h - 55, meterH = 15;
+    ctx.font = '12px -apple-system, sans-serif';
+    ctx.fillStyle = '#555';
+    ctx.textAlign = 'left';
+    ctx.fillText('Signal Quality:', startX, meterY - 5);
+
+    // Green section
+    var greenW = (failPoint - startX - 100);
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(startX + 100, meterY, greenW, meterH);
+    // Red section
+    var redW = (detectPoint - failPoint);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(startX + 100 + greenW, meterY, redW, meterH);
+    // Yellow section
+    var yellowW = (endX - detectPoint);
+    ctx.fillStyle = '#f39c12';
+    ctx.fillRect(startX + 100 + greenW + redW, meterY, yellowW, meterH);
+
+    ctx.font = '10px -apple-system, sans-serif';
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.fillText('GOOD', startX + 100 + greenW/2, meterY + 12);
+    ctx.fillText('GARBAGE', startX + 100 + greenW + redW/2, meterY + 12);
+    ctx.fillText('REDUCED', startX + 100 + greenW + redW + yellowW/2, meterY + 12);
+
+    // Bottom note
+    ctx.font = 'italic 13px -apple-system, sans-serif';
+    ctx.fillStyle = '#888';
+    ctx.textAlign = 'center';
+    ctx.fillText('Training data rarely includes "my own sensor is broken" — yet the system must recognize it', w/2, h - 8);
+})();
+</script>
+
+</body>
+</html>

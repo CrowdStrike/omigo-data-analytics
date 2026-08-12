@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Robotics — Domain-Specific Pitfalls</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #f8f9fa;
+            color: #2c3e50;
+            padding: 30px;
+            line-height: 1.6;
+        }
+
+        h1 {
+            color: #1a5276;
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 24px;
+            color: #2980b9;
+            text-decoration: none;
+            font-size: 0.95em;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        .obj-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+            background: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+        }
+
+        .obj-table th {
+            background: #1a5276;
+            color: #fff;
+            padding: 14px 18px;
+            text-align: left;
+            font-size: 1em;
+        }
+
+        .obj-table td {
+            padding: 18px;
+            border-bottom: 1px solid #2980b9;
+            vertical-align: top;
+        }
+
+        .obj-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .obj-table td:first-child {
+            width: 45%;
+        }
+
+        .obj-table td:last-child {
+            width: 55%;
+        }
+
+        .obj-title {
+            font-weight: 700;
+            color: #1a5276;
+            font-size: 1.1em;
+            margin-bottom: 8px;
+        }
+
+        .pitfall-desc {
+            color: #34495e;
+            font-size: 0.95em;
+            line-height: 1.7;
+        }
+
+        canvas {
+            display: block;
+            border: 1px solid #d5dbdb;
+            border-radius: 4px;
+            background: #fdfefe;
+        }
+    </style>
+</head>
+<body>
+    <h1>Robotics — Domain-Specific Pitfalls</h1>
+
+    <table class="obj-table">
+        <thead>
+            <tr>
+                <th>Pitfall</th>
+                <th>Visualization</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>
+                    <div class="obj-title">1. Sim-to-Real Transfer Gap</div>
+                    <div class="pitfall-desc">
+                        The simulator provides perfect physics: no friction variation, no mechanical wear, no cable sag, no sensor noise beyond Gaussian assumptions. Every surface has a known coefficient of friction, every joint responds identically to commands. A policy trained in this pristine environment achieves 100% task success. But deploy that same policy on real hardware and performance drops to roughly 60%. Every real joint is slightly different due to manufacturing tolerances. Friction is state-dependent and changes with temperature. Air resistance, cable tension, and backlash create dynamics the simulator never modeled. The gap is not a bug — it is a fundamental mismatch between the simplified physics engine and the complexity of the physical world. Domain randomization and system identification help but never fully close this gap.
+                    </div>
+                </td>
+                <td>
+                    <canvas id="canvas1" style="width:720px;height:200px;"></canvas>
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    <div class="obj-title">2. Proprioception Noise/Drift</div>
+                    <div class="pitfall-desc">
+                        Joint encoders drift over extended operation as thermal expansion shifts reference points. Torque sensors saturate under high loads, clipping the signal and losing information about contact forces. The IMU accumulates gyroscope bias error at roughly 0.01–0.1 degrees per second — after 10 minutes, the robot's internal estimate of its orientation may be off by several degrees. Strain gauges in force-torque sensors exhibit creep under sustained load. The robot's own sense of its body — proprioception — degrades continuously over a session. Without constant recalibration (homing sequences, known contact points, visual-inertial fusion), the internal model diverges from reality. A policy that relies on accurate joint positions will fail as the session progresses, even if no external disturbance occurs.
+                    </div>
+                </td>
+                <td>
+                    <canvas id="canvas2" style="width:720px;height:200px;"></canvas>
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    <div class="obj-title">3. Actuator Wear Changes Dynamics</div>
+                    <div class="pitfall-desc">
+                        A motor at month 1 has tight gears, fresh lubricant, and consistent torque output. By month 6, gear teeth have worn microscopically, backlash has increased from 0.1 to 0.3 degrees, and lubricant has degraded. By month 12, friction coefficients have shifted significantly, the torque-speed curve has flattened, and dead-band zones have grown. The robot's physics literally CHANGE as it ages. A model trained on data from the new robot — or even a model that was working perfectly three months ago — begins to fail as the mechanical properties drift. This is not a software bug or a sensor issue: the actual plant dynamics have changed. Adaptive control or periodic system re-identification is essential, but rarely implemented in learning-based systems. Most research ignores this entirely because papers use brand-new hardware.
+                    </div>
+                </td>
+                <td>
+                    <canvas id="canvas3" style="width:720px;height:200px;"></canvas>
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    <div class="obj-title">4. Environment Non-Stationarity</div>
+                    <div class="pitfall-desc">
+                        Real environments never stay the same between episodes. The table was moved 2cm when someone bumped it. The overhead light was replaced with a different color temperature. A new object appeared in the workspace. The human moved the coffee cup. The floor was mopped and is now slightly more slippery. Temperature changed and affected material properties. Between Monday's data collection and Friday's deployment, dozens of small changes accumulate. A policy that memorizes spatial positions fails when anything shifts. Visual policies break when lighting changes. Grasp policies fail when a new object occludes the target. Unlike simulation where you can reset to an exact state, reality has no reset button — every episode starts from a slightly different world state, and that variance compounds over days and weeks.
+                    </div>
+                </td>
+                <td>
+                    <canvas id="canvas4" style="width:720px;height:200px;"></canvas>
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    <div class="obj-title">5. Human-in-the-Loop Correction Bias</div>
+                    <div class="pitfall-desc">
+                        A human teleoperator corrects the robot's trajectory during data collection. The robot learns from these corrections via imitation learning or DAgger-style algorithms. But human corrections are systematically biased: humans are conservative (they slow down near obstacles more than necessary), they have preferred styles (always approach from the left), they have reaction time delays (corrections arrive 200–400ms late), and they optimize for comfort rather than efficiency. The learned policy inherits all these suboptimalities. Worse, different operators introduce different biases, creating multimodal and inconsistent training data. The resulting policy is not the optimal policy — it is an average of multiple suboptimal human strategies, often performing worse than any individual operator because it blends incompatible approaches.
+                    </div>
+                </td>
+                <td>
+                    <canvas id="canvas5" style="width:720px;height:200px;"></canvas>
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    <div class="obj-title">6. Multi-Modal Sensor Alignment</div>
+                    <div class="pitfall-desc">
+                        The camera runs at 30fps (33ms between frames), the tactile sensor array samples at 1000Hz (1ms intervals), joint encoders report at 500Hz (2ms intervals), and the force-torque sensor operates at 200Hz. All run on different clocks with different latencies: the camera has 15ms of processing delay, USB introduces 1–5ms of jitter, and network timestamps may not use the same time source. Fusing these streams requires precise temporal alignment. A 10ms misalignment between the camera frame and the force reading means the robot associates the wrong visual state with the wrong contact force — leading to incorrect grasp force predictions. At 1m/s hand speed, 10ms corresponds to 1cm of position error. Hardware synchronization (trigger lines, PTP clocks) helps, but software timestamps remain unreliable. Most learning pipelines naively stack the latest reading from each sensor, ignoring that they represent different moments in time.
+                    </div>
+                </td>
+                <td>
+                    <canvas id="canvas6" style="width:720px;height:200px;"></canvas>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+
+    <script>
+        const chartFont = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+        const dpr = window.devicePixelRatio || 1;
+
+        function setupCanvas(id) {
+            const canvas = document.getElementById(id);
+            canvas.width = 720 * dpr;
+            canvas.height = 200 * dpr;
+            canvas.style.width = '720px';
+            canvas.style.height = '200px';
+            const ctx = canvas.getContext('2d');
+            ctx.scale(dpr, dpr);
+            ctx.font = chartFont;
+            return ctx;
+        }
+
+        // Canvas 1: Sim-to-Real Transfer Gap
+        (function() {
+            const ctx = setupCanvas('canvas1');
+            const w = 720, h = 200;
+
+            ctx.fillStyle = '#fdfefe';
+            ctx.fillRect(0, 0, w, h);
+
+            // Title
+            ctx.fillStyle = '#1a5276';
+            ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Performance: Simulation vs Real Hardware', w / 2, 25);
+
+            // Draw bars
+            const barWidth = 80;
+            const maxBarHeight = 130;
+            const baseY = 175;
+
+            // Sim bar
+            const simHeight = maxBarHeight * 1.0;
+            ctx.fillStyle = '#27ae60';
+            ctx.fillRect(180, baseY - simHeight, barWidth, simHeight);
+            ctx.fillStyle = '#1a5276';
+            ctx.font = chartFont;
+            ctx.textAlign = 'center';
+            ctx.fillText('Simulation', 220, baseY + 18);
+            ctx.fillStyle = '#27ae60';
+            ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('100%', 220, baseY - simHeight - 8);
+
+            // Real bar
+            const realHeight = maxBarHeight * 0.6;
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillRect(420, baseY - realHeight, barWidth, realHeight);
+            ctx.fillStyle = '#1a5276';
+            ctx.font = chartFont;
+            ctx.textAlign = 'center';
+            ctx.fillText('Real Robot', 460, baseY + 18);
+            ctx.fillStyle = '#e74c3c';
+            ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('60%', 460, baseY - realHeight - 8);
+
+            // Gap bracket and label
+            ctx.strokeStyle = '#e67e22';
+            ctx.lineWidth = 2;
+            const gapTop = baseY - simHeight + 2;
+            const gapBot = baseY - realHeight;
+            ctx.beginPath();
+            ctx.moveTo(270, gapTop);
+            ctx.lineTo(280, gapTop);
+            ctx.moveTo(270, gapBot);
+            ctx.lineTo(280, gapBot);
+            ctx.moveTo(275, gapTop);
+            ctx.lineTo(275, gapBot);
+            ctx.stroke();
+
+            ctx.fillStyle = '#e67e22';
+            ctx.font = 'bold 16px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText('40% Gap', 288, gapTop + (gapBot - gapTop) / 2 + 6);
+
+            // Factors on the right
+            ctx.fillStyle = '#7f8c8d';
+            ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText('Friction variation', 560, 60);
+            ctx.fillText('Mechanical wear', 560, 80);
+            ctx.fillText('Sensor noise', 560, 100);
+            ctx.fillText('Cable dynamics', 560, 120);
+            ctx.fillText('Thermal effects', 560, 140);
+
+            ctx.textAlign = 'start';
+        })();
+
+        // Canvas 2: Proprioception Noise/Drift
+        (function() {
+            const ctx = setupCanvas('canvas2');
+            const w = 720, h = 200;
+
+            ctx.fillStyle = '#fdfefe';
+            ctx.fillRect(0, 0, w, h);
+
+            ctx.fillStyle = '#1a5276';
+            ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Sensor Reading Drift Over Session Time', w / 2, 22);
+
+            const marginL = 70, marginR = 30, marginT = 40, marginB = 35;
+            const plotW = w - marginL - marginR;
+            const plotH = h - marginT - marginB;
+
+            // Axes
+            ctx.strokeStyle = '#2c3e50';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(marginL, marginT);
+            ctx.lineTo(marginL, marginT + plotH);
+            ctx.lineTo(marginL + plotW, marginT + plotH);
+            ctx.stroke();
+
+            // Axis labels
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Session Time (minutes)', marginL + plotW / 2, h - 5);
+            ctx.save();
+            ctx.translate(15, marginT + plotH / 2);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillText('Angle (deg)', 0, 0);
+            ctx.restore();
+
+            // Time ticks
+            ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+            for (let i = 0; i <= 5; i++) {
+                const x = marginL + (plotW / 5) * i;
+                ctx.fillText(String(i * 2), x, marginT + plotH + 15);
+                ctx.strokeStyle = '#ecf0f1';
+                ctx.lineWidth = 0.5;
+                ctx.beginPath();
+                ctx.moveTo(x, marginT);
+                ctx.lineTo(x, marginT + plotH);
+                ctx.stroke();
+            }
+
+            // True value line (flat at center)
+            const trueY = marginT + plotH * 0.5;
+            ctx.strokeStyle = '#27ae60';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.moveTo(marginL, trueY);
+            ctx.lineTo(marginL + plotW, trueY);
+            ctx.stroke();
+
+            // Drifting encoder reading (seeded pseudo-random for consistency)
+            function seededRandom(seed) {
+                let s = seed;
+                return function() {
+                    s = (s * 1664525 + 1013904223) & 0xFFFFFFFF;
+                    return (s >>> 0) / 4294967296;
+                };
+            }
+
+            const rand1 = seededRandom(42);
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            const numPoints = 100;
+            let drift = 0;
+            for (let i = 0; i <= numPoints; i++) {
+                const x = marginL + (plotW / numPoints) * i;
+                drift += 0.4 + rand1() * 0.15;
+                const noise = (rand1() - 0.5) * 4;
+                const y = trueY - drift * 0.7 + noise;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+
+            // IMU drift (different rate)
+            const rand2 = seededRandom(123);
+            ctx.strokeStyle = '#8e44ad';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 4]);
+            ctx.beginPath();
+            drift = 0;
+            for (let i = 0; i <= numPoints; i++) {
+                const x = marginL + (plotW / numPoints) * i;
+                drift += 0.25 + Math.sin(i * 0.05) * 0.1;
+                const noise = (rand2() - 0.5) * 3;
+                const y = trueY + drift * 0.5 + noise;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Legend
+            ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.textAlign = 'left';
+
+            ctx.fillStyle = '#27ae60';
+            ctx.fillRect(marginL + plotW - 200, marginT + 5, 20, 3);
+            ctx.fillText('True Value', marginL + plotW - 175, marginT + 12);
+
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillRect(marginL + plotW - 200, marginT + 22, 20, 3);
+            ctx.fillText('Encoder Reading', marginL + plotW - 175, marginT + 28);
+
+            ctx.fillStyle = '#8e44ad';
+            ctx.fillRect(marginL + plotW - 200, marginT + 39, 20, 3);
+            ctx.fillText('IMU Estimate', marginL + plotW - 175, marginT + 45);
+        })();
+
+        // Canvas 3: Actuator Wear Changes Dynamics
+        (function() {
+            const ctx = setupCanvas('canvas3');
+            const w = 720, h = 200;
+
+            ctx.fillStyle = '#fdfefe';
+            ctx.fillRect(0, 0, w, h);
+
+            ctx.fillStyle = '#1a5276';
+            ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Motor Torque Curves at Different Ages', w / 2, 22);
+
+            const marginL = 80, marginR = 30, marginT = 40, marginB = 35;
+            const plotW = w - marginL - marginR;
+            const plotH = h - marginT - marginB;
+
+            // Axes
+            ctx.strokeStyle = '#2c3e50';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(marginL, marginT);
+            ctx.lineTo(marginL, marginT + plotH);
+            ctx.lineTo(marginL + plotW, marginT + plotH);
+            ctx.stroke();
+
+            // Axis labels
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Motor Speed (RPM)', marginL + plotW / 2, h - 5);
+            ctx.save();
+            ctx.translate(18, marginT + plotH / 2);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillText('Torque (Nm)', 0, 0);
+            ctx.restore();
+
+            // Speed ticks
+            ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+            const speeds = [0, 500, 1000, 1500, 2000, 2500];
+            speeds.forEach(function(s, i) {
+                const x = marginL + (plotW / (speeds.length - 1)) * i;
+                ctx.fillText(String(s), x, marginT + plotH + 15);
+            });
+
+            // Torque curves
+            function drawTorqueCurve(color, lineWidth, dashPattern, decay, deadband) {
+                ctx.strokeStyle = color;
+                ctx.lineWidth = lineWidth;
+                ctx.setLineDash(dashPattern);
+                ctx.beginPath();
+                var numPts = 80;
+                for (var i = 0; i <= numPts; i++) {
+                    var t = i / numPts;
+                    var x = marginL + plotW * t;
+                    var torque = 1.0 - decay * t * t;
+                    if (t < deadband) torque *= (t / deadband);
+                    torque = Math.max(0, torque);
+                    var y = marginT + plotH - plotH * torque * 0.85;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            drawTorqueCurve('#27ae60', 2.5, [], 0.7, 0.02);
+            drawTorqueCurve('#e67e22', 2.5, [8, 4], 0.85, 0.06);
+            drawTorqueCurve('#e74c3c', 2.5, [4, 4], 1.05, 0.12);
+
+            // Legend
+            ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.textAlign = 'left';
+            var legX = marginL + 15, legY = marginT + 10;
+
+            ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 2.5; ctx.setLineDash([]);
+            ctx.beginPath(); ctx.moveTo(legX, legY + 5); ctx.lineTo(legX + 25, legY + 5); ctx.stroke();
+            ctx.fillStyle = '#27ae60'; ctx.fillText('Month 1 (new)', legX + 30, legY + 10);
+
+            ctx.strokeStyle = '#e67e22'; ctx.setLineDash([8, 4]);
+            ctx.beginPath(); ctx.moveTo(legX, legY + 22); ctx.lineTo(legX + 25, legY + 22); ctx.stroke();
+            ctx.fillStyle = '#e67e22'; ctx.setLineDash([]); ctx.fillText('Month 6 (worn)', legX + 30, legY + 27);
+
+            ctx.strokeStyle = '#e74c3c'; ctx.setLineDash([4, 4]);
+            ctx.beginPath(); ctx.moveTo(legX, legY + 39); ctx.lineTo(legX + 25, legY + 39); ctx.stroke();
+            ctx.fillStyle = '#e74c3c'; ctx.setLineDash([]); ctx.fillText('Month 12 (degraded)', legX + 30, legY + 44);
+
+            // Annotation
+            ctx.fillStyle = '#7f8c8d';
+            ctx.font = 'italic 12px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText('Increased deadband + reduced peak torque', marginL + plotW - 5, marginT + plotH - 5);
+        })();
+
+        // Canvas 4: Environment Non-Stationarity
+        (function() {
+            const ctx = setupCanvas('canvas4');
+            const w = 720, h = 200;
+
+            ctx.fillStyle = '#fdfefe';
+            ctx.fillRect(0, 0, w, h);
+
+            ctx.fillStyle = '#1a5276';
+            ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Environment State Variance Across Episodes', w / 2, 22);
+
+            const marginL = 70, marginR = 30, marginT = 42, marginB = 35;
+            const plotW = w - marginL - marginR;
+            const plotH = h - marginT - marginB;
+
+            // Axes
+            ctx.strokeStyle = '#2c3e50';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(marginL, marginT);
+            ctx.lineTo(marginL, marginT + plotH);
+            ctx.lineTo(marginL + plotW, marginT + plotH);
+            ctx.stroke();
+
+            // Labels
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Episode Number', marginL + plotW / 2, h - 5);
+            ctx.save();
+            ctx.translate(18, marginT + plotH / 2);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillText('State Deviation', 0, 0);
+            ctx.restore();
+
+            // Draw expanding envelope (variance increasing)
+            const numEpisodes = 50;
+            const centerY = marginT + plotH * 0.5;
+
+            // Variance envelope fill
+            ctx.fillStyle = 'rgba(231, 76, 60, 0.15)';
+            ctx.beginPath();
+            ctx.moveTo(marginL, centerY);
+            for (var i = 0; i <= numEpisodes; i++) {
+                var x = marginL + (plotW / numEpisodes) * i;
+                var spread = (i / numEpisodes) * plotH * 0.42;
+                ctx.lineTo(x, centerY - spread);
+            }
+            for (var i = numEpisodes; i >= 0; i--) {
+                var x = marginL + (plotW / numEpisodes) * i;
+                var spread = (i / numEpisodes) * plotH * 0.42;
+                ctx.lineTo(x, centerY + spread);
+            }
+            ctx.closePath();
+            ctx.fill();
+
+            // Envelope border
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([4, 3]);
+            ctx.beginPath();
+            for (var i = 0; i <= numEpisodes; i++) {
+                var x = marginL + (plotW / numEpisodes) * i;
+                var spread = (i / numEpisodes) * plotH * 0.42;
+                if (i === 0) ctx.moveTo(x, centerY - spread);
+                else ctx.lineTo(x, centerY - spread);
+            }
+            ctx.stroke();
+            ctx.beginPath();
+            for (var i = 0; i <= numEpisodes; i++) {
+                var x = marginL + (plotW / numEpisodes) * i;
+                var spread = (i / numEpisodes) * plotH * 0.42;
+                if (i === 0) ctx.moveTo(x, centerY + spread);
+                else ctx.lineTo(x, centerY + spread);
+            }
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Individual episode dots (seeded random)
+            function seededRandom(seed) {
+                var s = seed;
+                return function() {
+                    s = (s * 1664525 + 1013904223) & 0xFFFFFFFF;
+                    return (s >>> 0) / 4294967296;
+                };
+            }
+            var rand = seededRandom(99);
+            ctx.fillStyle = '#2980b9';
+            for (var i = 0; i < numEpisodes; i++) {
+                var x = marginL + (plotW / numEpisodes) * (i + 0.5);
+                var maxSpread = (i / numEpisodes) * plotH * 0.38;
+                var y = centerY + (rand() - 0.5) * 2 * maxSpread;
+                ctx.beginPath();
+                ctx.arc(x, y, 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Expected state line
+            ctx.strokeStyle = '#27ae60';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(marginL, centerY);
+            ctx.lineTo(marginL + plotW, centerY);
+            ctx.stroke();
+
+            // Annotations
+            ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillStyle = '#27ae60';
+            ctx.textAlign = 'left';
+            ctx.fillText('Expected state', marginL + 5, centerY - 6);
+            ctx.fillStyle = '#e74c3c';
+            ctx.textAlign = 'right';
+            ctx.fillText('Variance envelope', marginL + plotW - 5, marginT + 12);
+        })();
+
+        // Canvas 5: Human-in-the-Loop Correction Bias
+        (function() {
+            const ctx = setupCanvas('canvas5');
+            const w = 720, h = 200;
+
+            ctx.fillStyle = '#fdfefe';
+            ctx.fillRect(0, 0, w, h);
+
+            ctx.fillStyle = '#1a5276';
+            ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Trajectory Comparison: Optimal vs Human vs Learned', w / 2, 22);
+
+            const marginL = 50, marginR = 50, marginT = 40, marginB = 30;
+            const plotW = w - marginL - marginR;
+            const plotH = h - marginT - marginB;
+
+            // Start and goal markers
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('START', marginL + 20, marginT + plotH / 2 + 30);
+            ctx.fillText('GOAL', marginL + plotW - 20, marginT + plotH / 2 + 30);
+
+            // Start dot
+            ctx.fillStyle = '#2c3e50';
+            ctx.beginPath();
+            ctx.arc(marginL + 20, marginT + plotH / 2, 6, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Goal dot
+            ctx.beginPath();
+            ctx.arc(marginL + plotW - 20, marginT + plotH / 2, 6, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Obstacle
+            ctx.fillStyle = 'rgba(149, 165, 166, 0.4)';
+            ctx.strokeStyle = '#7f8c8d';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(marginL + plotW * 0.5, marginT + plotH * 0.4, 25, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = '#7f8c8d';
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('obstacle', marginL + plotW * 0.5, marginT + plotH * 0.4 + 4);
+
+            // Optimal trajectory (smooth, efficient, close to obstacle)
+            var startX = marginL + 20, startY = marginT + plotH / 2;
+            var endX = marginL + plotW - 20, endY = marginT + plotH / 2;
+
+            ctx.strokeStyle = '#27ae60';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            ctx.bezierCurveTo(
+                marginL + plotW * 0.3, marginT + plotH * 0.65,
+                marginL + plotW * 0.6, marginT + plotH * 0.7,
+                endX, endY
+            );
+            ctx.stroke();
+
+            // Human-corrected trajectory (conservative, wide avoidance)
+            ctx.strokeStyle = '#e67e22';
+            ctx.lineWidth = 2.5;
+            ctx.setLineDash([8, 4]);
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            ctx.bezierCurveTo(
+                marginL + plotW * 0.25, marginT + plotH * 0.9,
+                marginL + plotW * 0.65, marginT + plotH * 0.95,
+                endX, endY
+            );
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Learned policy (blend of both, suboptimal)
+            ctx.strokeStyle = '#8e44ad';
+            ctx.lineWidth = 2.5;
+            ctx.setLineDash([4, 3]);
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            ctx.bezierCurveTo(
+                marginL + plotW * 0.28, marginT + plotH * 0.78,
+                marginL + plotW * 0.62, marginT + plotH * 0.83,
+                endX, endY
+            );
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Legend
+            ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.textAlign = 'left';
+            var legX = marginL + plotW - 195, legY = marginT + 2;
+
+            ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 2.5;
+            ctx.beginPath(); ctx.moveTo(legX, legY + 5); ctx.lineTo(legX + 20, legY + 5); ctx.stroke();
+            ctx.fillStyle = '#27ae60'; ctx.fillText('Optimal', legX + 25, legY + 10);
+
+            ctx.strokeStyle = '#e67e22'; ctx.setLineDash([8, 4]);
+            ctx.beginPath(); ctx.moveTo(legX, legY + 22); ctx.lineTo(legX + 20, legY + 22); ctx.stroke();
+            ctx.fillStyle = '#e67e22'; ctx.setLineDash([]); ctx.fillText('Human-corrected', legX + 25, legY + 27);
+
+            ctx.strokeStyle = '#8e44ad'; ctx.setLineDash([4, 3]);
+            ctx.beginPath(); ctx.moveTo(legX, legY + 39); ctx.lineTo(legX + 20, legY + 39); ctx.stroke();
+            ctx.fillStyle = '#8e44ad'; ctx.setLineDash([]); ctx.fillText('Learned policy', legX + 25, legY + 44);
+        })();
+
+        // Canvas 6: Multi-Modal Sensor Alignment
+        (function() {
+            const ctx = setupCanvas('canvas6');
+            const w = 720, h = 200;
+
+            ctx.fillStyle = '#fdfefe';
+            ctx.fillRect(0, 0, w, h);
+
+            ctx.fillStyle = '#1a5276';
+            ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Multi-Modal Sensor Streams with Temporal Misalignment', w / 2, 22);
+
+            const marginL = 90, marginR = 30, marginT = 38, marginB = 25;
+            const plotW = w - marginL - marginR;
+            const plotH = h - marginT - marginB;
+
+            // Time axis
+            ctx.strokeStyle = '#2c3e50';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(marginL, marginT + plotH);
+            ctx.lineTo(marginL + plotW, marginT + plotH);
+            ctx.stroke();
+
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Time (ms)', marginL + plotW / 2, h - 5);
+
+            // Time ticks
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+            for (var t = 0; t <= 100; t += 10) {
+                var x = marginL + (plotW / 100) * t;
+                ctx.beginPath();
+                ctx.moveTo(x, marginT + plotH);
+                ctx.lineTo(x, marginT + plotH + 4);
+                ctx.stroke();
+                ctx.fillText(String(t), x, marginT + plotH + 15);
+            }
+
+            // Sensor rows
+            var sensors = [
+                { name: 'Camera (30fps)', color: '#2980b9', interval: 33, offset: 15, y: marginT + 15 },
+                { name: 'Joint (500Hz)', color: '#27ae60', interval: 2, offset: 1, y: marginT + 50 },
+                { name: 'Tactile (1kHz)', color: '#8e44ad', interval: 1, offset: 0, y: marginT + 85 },
+                { name: 'F/T (200Hz)', color: '#e67e22', interval: 5, offset: 3, y: marginT + 120 }
+            ];
+
+            sensors.forEach(function(sensor) {
+                // Label
+                ctx.fillStyle = sensor.color;
+                ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+                ctx.textAlign = 'right';
+                ctx.fillText(sensor.name, marginL - 8, sensor.y + 5);
+
+                // Draw tick marks for each sample
+                ctx.strokeStyle = sensor.color;
+                ctx.lineWidth = 2;
+                var timeSpan = 100;
+                for (var t = sensor.offset; t <= timeSpan; t += sensor.interval) {
+                    var x = marginL + (plotW / timeSpan) * t;
+                    ctx.beginPath();
+                    ctx.moveTo(x, sensor.y - 5);
+                    ctx.lineTo(x, sensor.y + 10);
+                    ctx.stroke();
+                }
+
+                // Draw horizontal line
+                ctx.strokeStyle = sensor.color;
+                ctx.lineWidth = 0.5;
+                ctx.globalAlpha = 0.3;
+                ctx.beginPath();
+                ctx.moveTo(marginL, sensor.y + 2);
+                ctx.lineTo(marginL + plotW, sensor.y + 2);
+                ctx.stroke();
+                ctx.globalAlpha = 1.0;
+            });
+
+            // Highlight misalignment zones
+            var alignX = marginL + (plotW / 100) * 33;
+            ctx.fillStyle = 'rgba(231, 76, 60, 0.12)';
+            ctx.fillRect(alignX - 8, marginT, 16, plotH);
+
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([3, 2]);
+            ctx.beginPath();
+            ctx.moveTo(alignX, marginT);
+            ctx.lineTo(alignX, marginT + plotH);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Misalignment annotation
+            ctx.fillStyle = '#e74c3c';
+            ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText('~10ms', alignX + 10, marginT + plotH - 15);
+            ctx.fillText('misalign', alignX + 10, marginT + plotH - 3);
+
+            // Second highlight
+            var alignX2 = marginL + (plotW / 100) * 66;
+            ctx.fillStyle = 'rgba(231, 76, 60, 0.12)';
+            ctx.fillRect(alignX2 - 8, marginT, 16, plotH);
+
+            ctx.strokeStyle = '#e74c3c';
+            ctx.setLineDash([3, 2]);
+            ctx.beginPath();
+            ctx.moveTo(alignX2, marginT);
+            ctx.lineTo(alignX2, marginT + plotH);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            ctx.fillStyle = '#e74c3c';
+            ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('~10ms', alignX2 + 10, marginT + plotH - 15);
+            ctx.fillText('misalign', alignX2 + 10, marginT + plotH - 3);
+        })();
+    </script>
+</body>
+</html>

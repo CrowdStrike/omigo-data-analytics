@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monads: Composable Effect Tracking for Pipelines — Discussion Backlog</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #fff; color: #2c3e50; line-height: 1.6; }
+h1 { color: #1a5276; border-bottom: 3px solid #2980b9; padding-bottom: 10px; }
+h2 { color: #1a5276; margin-top: 30px; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { padding: 20px; vertical-align: top; border: 1px solid #2980b9; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; }
+.obj-title { color: #1a5276; font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
+ul { margin: 10px 0; padding-left: 20px; }
+li { margin-bottom: 6px; }
+strong { color: #1a5276; }
+code { background: #e8f0f8; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; color: #1a5276; }
+.questions { background: #fff8e1; border-left: 3px solid #f39c12; padding: 10px 15px; margin: 10px 0; font-size: 0.9em; }
+.danger { background: #fdecea; border-left: 3px solid #e74c3c; padding: 10px 15px; margin: 10px 0; font-size: 0.9em; }
+.status { display: inline-block; background: #e8f0f8; color: #1a5276; padding: 3px 10px; border-radius: 12px; font-size: 0.85em; font-weight: bold; margin-bottom: 20px; }
+</style>
+</head>
+<body>
+
+<h1>Monads: Composable Effect Tracking for Pipelines</h1>
+<span class="status">Discussion — Design Pattern</span>
+
+<p><strong>Core idea:</strong> Monads aren't just academic Haskell — they're a design pattern for composing operations that have "something extra" (failure, missing data, multiple results, side effects) while keeping the composition clean. Data pipelines are essentially chains of transforms where each step might fail, produce warnings, need logging, or encounter missing data. Monadic composition makes these concerns explicit and composable rather than scattered as try/catch blocks and null checks.</p>
+
+<h2>The Pipeline Problem Monads Solve</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Without Monads: Scattered Concerns</div>
+<p>Each transform step can:</p>
+<ul>
+<li>Succeed normally</li>
+<li>Fail with an error</li>
+<li>Succeed with warnings</li>
+<li>Encounter missing data</li>
+<li>Need to log what it did</li>
+<li>Produce multiple candidate results</li>
+</ul>
+<p><strong>Result:</strong> try/catch everywhere, null checks everywhere, logging scattered everywhere, error handling inconsistent across steps, no way to compose cleanly.</p>
+</td>
+<td>
+<div class="obj-title">With Monads: Composable Plumbing</div>
+<p>Each concern gets its own monad — a container that handles the "extra stuff" automatically during composition:</p>
+<ul>
+<li><strong>Missing data?</strong> Maybe/Option propagates absence</li>
+<li><strong>Failure?</strong> Either/Result carries error info</li>
+<li><strong>Logging?</strong> Writer accumulates metadata</li>
+<li><strong>Multiple results?</strong> List explores all paths</li>
+<li><strong>Side effects?</strong> IO isolates impurity</li>
+</ul>
+<p><strong>Result:</strong> each step is a pure function returning a wrapped value. The monad handles composition. No scattered try/catch.</p>
+</td>
+</tr>
+</table>
+
+<h2>Key Monads for Data Pipelines</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Maybe / Option</div>
+<p><strong>Handles:</strong> missing data without null checks</p>
+<p>A transform that might not produce output. If step 3 of 10 returns Nothing, the rest of the chain short-circuits gracefully — no NullPointerException mid-pipeline.</p>
+<ul>
+<li>Feature value might be null → Maybe propagates</li>
+<li>Lookup might not find a match → Option.empty</li>
+<li>No need for <code>if x is not None</code> at every step</li>
+</ul>
+</td>
+<td>
+<div class="obj-title">Either / Result</div>
+<p><strong>Handles:</strong> error information (why did this fail?)</p>
+<p>Carries the error context through the chain. When validation fails at step 5, you get a structured error describing what went wrong, what the input was, and which rule was violated — not a cryptic stack trace from step 8.</p>
+<ul>
+<li><code>Right(value)</code> — success, continue</li>
+<li><code>Left(error)</code> — failure, short-circuit with context</li>
+<li>Human-readable error messages vs stack traces</li>
+</ul>
+</td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">Writer</div>
+<p><strong>Handles:</strong> accumulating metadata alongside computation</p>
+<p>Each step produces output AND metadata (logs, row counts, timing, data quality scores). The Writer monad combines the metadata from all steps automatically.</p>
+<ul>
+<li>Pipeline profiling: row counts at each stage</li>
+<li>Data quality: warning counts, anomaly flags</li>
+<li>Transform lineage: record of operations applied</li>
+<li>No global logger, no side-effect logging calls</li>
+</ul>
+</td>
+<td>
+<div class="obj-title">List</div>
+<p><strong>Handles:</strong> multiple possible results</p>
+<p>Represents multiple valid outcomes explored in parallel. Replaces nested loops over candidate configurations.</p>
+<ul>
+<li>Multi-candidate parameter validation</li>
+<li>Multiple valid interpretations of ambiguous data</li>
+<li>Exploring all bin sizes, all normality tests, all thresholds</li>
+<li>Flat composition: List of Lists flattens naturally</li>
+</ul>
+<div class="questions">
+<strong>This is exactly what statsml does</strong> with multi-candidate normality testing — the List monad pattern, implicitly.
+</div>
+</td>
+</tr>
+<tr>
+<td colspan="2">
+<div class="obj-title">IO</div>
+<p><strong>Handles:</strong> isolating side effects from pure computation</p>
+<p>Database reads, file writes, API calls, clock reads — all wrapped in IO. Pure computation stays pure. Side effects are pushed to the edges and explicitly marked. You can test the pure core without mocking anything.</p>
+</td>
+</tr>
+</table>
+
+<h2>Practical Examples in Data Context</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Feature Transform with Maybe</div>
+<p><strong>Without:</strong></p>
+<pre><code>def transform(row):
+    if row['age'] is None:
+        return None
+    if row['income'] is None:
+        return None
+    ratio = row['income'] / row['age']
+    if ratio < 0:
+        return None
+    return log(ratio)</code></pre>
+<p><strong>With Maybe:</strong></p>
+<pre><code>transform = (
+    get('age')
+    .bind(lambda a: get('income')
+    .bind(lambda i: safe_div(i, a)))
+    .bind(safe_log)
+)</code></pre>
+<p>Null propagation is automatic. No manual checks.</p>
+</td>
+<td>
+<div class="obj-title">Validation with Either</div>
+<p><strong>Without:</strong></p>
+<pre><code>try:
+    result = validate(data)
+except ValueError as e:
+    # lost context of which step failed
+    log(f"failed: {e}")
+    return default_value  # silent fallback</code></pre>
+<p><strong>With Either:</strong></p>
+<pre><code>result = (
+    check_not_empty(data)
+    .bind(check_numeric)
+    .bind(check_range(0, 100))
+    .bind(check_normality)
+)
+# result is either Right(valid_data)
+# or Left(ValidationError(step, reason, input))</code></pre>
+<p>Error context preserved. No silent fallbacks.</p>
+</td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">Pipeline Metadata with Writer</div>
+<pre><code>def clean_step(df):
+    removed = df[df.age < 0]
+    result = df[df.age >= 0]
+    return Writer(
+        value=result,
+        log={"rows_removed": len(removed),
+             "reason": "negative_age"}
+    )
+
+# Compose steps: logs merge automatically
+pipeline = (
+    clean_step
+    .bind(normalize_step)
+    .bind(encode_step)
+)
+# Returns: (final_df, [all_logs_combined])</code></pre>
+</td>
+<td>
+<div class="obj-title">Multi-Candidate with List</div>
+<pre><code># List monad: explore all valid combinations
+candidates = (
+    List([5, 10, 20, 50])      # bin counts
+    .bind(lambda b:
+        List(['sturges', 'fd', 'scott'])  # methods
+        .bind(lambda m:
+            evaluate(bins=b, method=m)))
+)
+# Returns: List of ALL (bin, method, score) combos
+# Filter to passing candidates
+valid = candidates.filter(lambda r: r.score > 0.8)</code></pre>
+<p>Replaces nested for-loops with flat composition.</p>
+</td>
+</tr>
+</table>
+
+<h2>Not Just Haskell</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">The Pattern Transcends Language</div>
+<ul>
+<li><strong>Rust:</strong> <code>Result&lt;T, E&gt;</code> and <code>Option&lt;T&gt;</code> with <code>?</code> operator — monadic chaining built into the language</li>
+<li><strong>Scala:</strong> <code>Try</code>, <code>Either</code>, <code>Option</code>, for-comprehensions as monad syntax</li>
+<li><strong>Python:</strong> <code>returns</code> library, or roll your own with <code>@dataclass</code></li>
+<li><strong>Java:</strong> <code>Optional</code>, <code>Stream</code> (limited but monadic)</li>
+<li><strong>TypeScript:</strong> <code>fp-ts</code>, <code>Effect</code> library</li>
+</ul>
+</td>
+<td>
+<div class="obj-title">Railway Oriented Programming</div>
+<p>Scott Wlaschin's framing: same idea, different branding.</p>
+<ul>
+<li>Two tracks: success track and failure track</li>
+<li>Each function is a "switch" that might divert to the failure track</li>
+<li>Composition connects switches end-to-end</li>
+<li>Failure track carries error context all the way to the end</li>
+<li>No try/catch needed — errors are values, not exceptions</li>
+</ul>
+<p>This is exactly Either monad with a visual metaphor that's more accessible than category theory.</p>
+</td>
+</tr>
+</table>
+
+<h2>Connection to statsml</h2>
+
+<div class="questions">
+<strong>The statsml pipeline already uses monadic patterns implicitly:</strong>
+<ul>
+<li><strong>Multi-candidate validation</strong> (multiple normality tests, multiple bin sizes) = List monad</li>
+<li><strong>Feature might not be classifiable</strong> = Maybe/Option pattern</li>
+<li><strong>Validation that carries reason for failure</strong> = Either pattern</li>
+<li><strong>Profiling metadata accumulated alongside computation</strong> = Writer pattern</li>
+</ul>
+Making these explicit gives us: composition for free, consistent error handling, testability of the pure logic without mocking.
+</div>
+
+<h2>Key Discussion Points</h2>
+
+<div class="questions">
+<ul>
+<li>Is monadic composition overkill for a Python-based pipeline? Or does it prevent the "error handling spaghetti" problem?</li>
+<li>How does this interact with pandas/numpy which don't use monadic patterns? (NaN propagation is a broken Maybe monad)</li>
+<li>Can we get monadic benefits without the Haskell vocabulary? (Result types, Railway-oriented programming)</li>
+<li>Relationship to Railway Oriented Programming (Scott Wlaschin) — same idea, different branding</li>
+<li>Performance overhead: wrapping every value in a container vs letting NaN propagate natively</li>
+</ul>
+</div>
+
+
+</body>
+</html>

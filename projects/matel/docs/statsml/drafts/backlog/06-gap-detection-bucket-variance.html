@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gap Detection via Adjacent Bucket Variance — Discussion Backlog</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #fff; color: #2c3e50; line-height: 1.6; }
+h1 { color: #1a5276; border-bottom: 3px solid #2980b9; padding-bottom: 10px; }
+h2 { color: #1a5276; margin-top: 0; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { padding: 20px; vertical-align: top; border: 1px solid #2980b9; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-title { color: #1a5276; font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
+ul { margin: 10px 0; padding-left: 20px; }
+li { margin-bottom: 6px; }
+strong { color: #1a5276; }
+code { background: #e8f0f8; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; color: #1a5276; }
+.questions { background: #fff8e1; border-left: 3px solid #f39c12; padding: 10px 15px; margin: 10px 0; font-size: 0.9em; }
+canvas { display: block; margin: 8px auto; max-width: 100%; }
+.nav-link { display: inline-block; margin: 20px 0; color: #2980b9; text-decoration: none; font-weight: bold; }
+.nav-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<h1>Gap Detection via Adjacent Bucket Variance</h1>
+<p>Empty bin between sparse tails = noise. Empty bin between dense, tight clusters = real gap. The key insight: context around the gap determines confidence.</p>
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Core Idea</div>
+<ul>
+<li><strong>High confidence:</strong> adjacent buckets have many observations + tight variance</li>
+<li><strong>Low confidence:</strong> adjacent buckets sparse or high variance</li>
+<li><strong>Combine:</strong> count + within-bucket variance + gap width</li>
+</ul>
+<div class="obj-title" style="margin-top: 20px;">Confidence Formula</div>
+<ul>
+<li>Gap confidence = f(left_count, right_count, left_var, right_var, gap_width)</li>
+<li>Higher counts on both sides → higher confidence</li>
+<li>Lower within-bucket variance → tighter clusters → higher confidence</li>
+<li>Wider gap (more empty bins) → higher confidence</li>
+</ul>
+<div class="questions">
+<strong>Key Question:</strong> Immediate neighbors only, or a window of 2-3 buckets on each side?
+</div>
+</td>
+<td>
+<canvas id="c1" width="720" height="280"></canvas>
+<canvas id="c2" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setupCanvas(id) {
+    var c = document.getElementById(id);
+    var w = c.width, h = c.height;
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return {ctx: ctx, w: w, h: h};
+}
+
+// Canvas 1: Real gap — dense clusters on both sides
+(function() {
+    var s = setupCanvas('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var margin = {top: 40, right: 30, bottom: 50, left: 50};
+    var pw = w - margin.left - margin.right;
+    var ph = h - margin.top - margin.bottom;
+
+    // Title
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Real Gap — Dense Clusters on Both Sides', w/2, 20);
+
+    // Data: two dense clusters with a clear gap
+    var bins = [2, 5, 18, 42, 55, 48, 35, 0, 0, 0, 38, 50, 52, 40, 15, 4, 1];
+    var maxVal = 60;
+    var barW = pw / bins.length;
+
+    // Draw axes
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(margin.left, margin.top);
+    ctx.lineTo(margin.left, margin.top + ph);
+    ctx.lineTo(margin.left + pw, margin.top + ph);
+    ctx.stroke();
+
+    // Draw bars
+    for (var i = 0; i < bins.length; i++) {
+        var barH = (bins[i] / maxVal) * ph;
+        var x = margin.left + i * barW;
+        var y = margin.top + ph - barH;
+
+        if (bins[i] === 0) {
+            // Empty bin - gap area
+            ctx.fillStyle = 'rgba(231, 76, 60, 0.1)';
+            ctx.fillRect(x + 1, margin.top, barW - 2, ph);
+        } else {
+            ctx.fillStyle = 'rgba(26, 82, 118, 0.35)';
+            ctx.fillRect(x + 1, y, barW - 2, barH);
+            ctx.strokeStyle = '#1a5276';
+            ctx.lineWidth = 0.5;
+            ctx.strokeRect(x + 1, y, barW - 2, barH);
+        }
+    }
+
+    // Highlight gap region
+    var gapStart = margin.left + 7 * barW;
+    var gapEnd = margin.left + 10 * barW;
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 3]);
+    ctx.strokeRect(gapStart, margin.top, gapEnd - gapStart, ph);
+    ctx.setLineDash([]);
+
+    // Label gap
+    ctx.font = 'bold 15px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('GAP', (gapStart + gapEnd) / 2, margin.top + ph / 2);
+
+    // Label clusters
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 14px -apple-system, sans-serif';
+    ctx.fillText('n=200, low var', margin.left + 3.5 * barW, margin.top + ph + 25);
+    ctx.fillText('n=195, low var', margin.left + 12.5 * barW, margin.top + ph + 25);
+
+    // Confidence label
+    ctx.font = 'bold 19px -apple-system, sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('HIGH confidence', w/2, margin.top + ph + 42);
+
+    // Y-axis label
+    ctx.save();
+    ctx.translate(15, margin.top + ph/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.font = '14px -apple-system, sans-serif';
+    ctx.fillStyle = '#2c3e50';
+    ctx.textAlign = 'center';
+    ctx.fillText('Count', 0, 0);
+    ctx.restore();
+})();
+
+// Canvas 2: Noise gap — sparse data with empty bin
+(function() {
+    var s = setupCanvas('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var margin = {top: 40, right: 30, bottom: 50, left: 50};
+    var pw = w - margin.left - margin.right;
+    var ph = h - margin.top - margin.bottom;
+
+    // Title
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Noise Gap — Sparse Data with Empty Bin', w/2, 20);
+
+    // Data: sparse, noisy data with random empty bin
+    var bins = [1, 0, 2, 1, 3, 2, 0, 1, 2, 0, 1, 3, 2, 1, 0, 1, 2];
+    var maxVal = 8;
+    var barW = pw / bins.length;
+
+    // Draw axes
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(margin.left, margin.top);
+    ctx.lineTo(margin.left, margin.top + ph);
+    ctx.lineTo(margin.left + pw, margin.top + ph);
+    ctx.stroke();
+
+    // Draw bars
+    for (var i = 0; i < bins.length; i++) {
+        var barH = (bins[i] / maxVal) * ph;
+        var x = margin.left + i * barW;
+        var y = margin.top + ph - barH;
+
+        if (bins[i] === 0) {
+            ctx.fillStyle = 'rgba(231, 76, 60, 0.1)';
+            ctx.fillRect(x + 1, margin.top, barW - 2, ph);
+        } else {
+            ctx.fillStyle = 'rgba(26, 82, 118, 0.15)';
+            ctx.fillRect(x + 1, y, barW - 2, barH);
+            ctx.strokeStyle = '#1a5276';
+            ctx.lineWidth = 0.5;
+            ctx.strokeRect(x + 1, y, barW - 2, barH);
+        }
+    }
+
+    // Highlight one empty bin
+    var gapX = margin.left + 6 * barW;
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 3]);
+    ctx.strokeRect(gapX, margin.top, barW, ph);
+    ctx.setLineDash([]);
+
+    // Label
+    ctx.font = 'bold 15px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('GAP?', gapX + barW/2, margin.top + ph/2);
+
+    // Label sparse context
+    ctx.fillStyle = '#e67e22';
+    ctx.font = '14px -apple-system, sans-serif';
+    ctx.fillText('n=2, high var', margin.left + 4 * barW, margin.top + ph + 25);
+    ctx.fillText('n=1, high var', margin.left + 9 * barW, margin.top + ph + 25);
+
+    // Confidence label
+    ctx.font = 'bold 19px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('LOW confidence', w/2, margin.top + ph + 42);
+
+    // Y-axis label
+    ctx.save();
+    ctx.translate(15, margin.top + ph/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.font = '14px -apple-system, sans-serif';
+    ctx.fillStyle = '#2c3e50';
+    ctx.textAlign = 'center';
+    ctx.fillText('Count', 0, 0);
+    ctx.restore();
+})();
+</script>
+
+
+</body>
+</html>

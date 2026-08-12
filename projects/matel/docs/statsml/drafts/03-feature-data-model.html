@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Feature Data Model — Statistical ML</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 40px 20px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+code { background: #e8f0f8; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; color: #1a5276; }
+strong { color: #1a5276; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 16px 20px; margin: 30px 0; font-size: 1em; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-table tr:nth-child(even) td { background: #fafcfe; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+.toc { background: #f8fafb; border: 1px solid #e0e0e0; padding: 20px 30px; margin: 20px 0 30px; border-radius: 4px; }
+.toc ol { margin: 10px 0 0 20px; font-size: 0.92em; }
+.toc ol li { margin: 5px 0; }
+.toc ol li a { color: #2980b9; text-decoration: none; }
+.toc ol li a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<h1>Feature Data Model</h1>
+<p class="subtitle">Why we need a rich data model — and what it captures at each stage of the pipeline.</p>
+
+<div class="toc">
+<strong>Table of Contents</strong>
+<ol>
+<li><a href="#pipeline">The Feature Pipeline</a></li>
+<li><a href="#profile">Feature Profile (Core Object)</a></li>
+<li><a href="#candidates">Candidate Models</a></li>
+<li><a href="#expanded">Expanded Features</a></li>
+<li><a href="#conditional">Conditional Distributions</a></li>
+<li><a href="#tests">Test Registry &amp; Selection</a></li>
+<li><a href="#interactions">Interactions &amp; Correlations</a></li>
+<li><a href="#classification">Classification = Reasoning Trace</a></li>
+<li><a href="#lifecycle">Complete Feature Lifecycle</a></li>
+</ol>
+</div>
+
+<h2 id="pipeline">The Feature Pipeline</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">1. Raw → Profiled → Modeled → Validated → Expanded</div>
+<p>Every feature passes through 5 stages. Each stage enriches the data model with new information:</p>
+<ul>
+<li><strong>Raw:</strong> Just numbers in a column. No knowledge.</li>
+<li><strong>Profiled:</strong> Type (continuous/categorical/discrete), shape (bell/skewed/bimodal), ranges, gaps, missing patterns.</li>
+<li><strong>Modeled:</strong> Multiple candidate fits (right_skew, mixture, KDE). Each with fit quality and preconditions met.</li>
+<li><strong>Validated:</strong> Significant ranges identified. Tests applied with verified preconditions. p-values, purity, enrichment.</li>
+<li><strong>Expanded:</strong> Each significant range becomes a binary feature. Fully traceable to source model and test.</li>
+</ul>
+<p>The data model is the single source of truth. No ML model runs without consulting it.</p>
+</td>
+<td>
+<canvas id="c1" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="profile">Feature Profile</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">2. The Core Object — Everything Known About One Feature</div>
+<ul>
+<li><strong>Identity:</strong> name, source path (e.g., <code>patient.labs.cholesterol</code>), type</li>
+<li><strong>Raw stats:</strong> n, missing count, min/max, mean/median, std, skewness, kurtosis, percentiles</li>
+<li><strong>Value map:</strong> populated regions (dense core, sparse tails), gaps, point masses, outlier islands</li>
+<li><strong>Shape:</strong> global shape (right_skewed), regional shapes (normal in [180-270], exponential in [270-603])</li>
+<li><strong>Candidate models:</strong> list of fits that passed quality threshold</li>
+<li><strong>Conditional profiles:</strong> how shape changes when stratified by another feature</li>
+<li><strong>Expanded features:</strong> the derived binary features produced from significant ranges</li>
+</ul>
+<p><strong>Example:</strong> Cholesterol — continuous, n=12505, range [89-603], right-skewed globally, but approximately normal in [180-270]. Mixture model (2 components, fit 0.89) captures the bimodal structure.</p>
+</td>
+<td>
+<canvas id="c2" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="candidates">Candidate Models</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">3. Multiple Fits Per Feature — Keep All Good Candidates</div>
+<p>Each candidate model captures:</p>
+<ul>
+<li><strong>Model type:</strong> e.g., mixture(2 components, means=[198, 268])</li>
+<li><strong>Fit quality:</strong> KS statistic, AIC/BIC, composite fit score (0-1)</li>
+<li><strong>Valid range:</strong> where this model applies</li>
+<li><strong>Preconditions met:</strong> what was verified before fitting (positive values, no zeros, sufficient n)</li>
+<li><strong>Significant ranges:</strong> within this model, which ranges show class separation? Each with: purity, dominant class, enrichment ratio, test used, p-value, preconditions verified</li>
+</ul>
+<p><strong>Key:</strong> Different models find different ranges. Right-skew finds [270-603] via Mann-Whitney. Mixture finds [240-320] via t-test. Both are valid — different lenses on same data.</p>
+</td>
+<td>
+<canvas id="c3" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="expanded">Expanded Features</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">4. One Raw Feature → Many Binary Features</div>
+<p>Each significant range from each candidate model becomes an expanded feature:</p>
+<ul>
+<li><code>cholesterol__right_skew__270_603__pos</code> — fires when value in [270,603], predicts pos, purity 0.76, Mann-Whitney p&lt;0.00001</li>
+<li><code>cholesterol__mixture2__240_320__pos</code> — fires when value in [240,320], predicts pos, purity 0.70, t-test p&lt;0.00000001</li>
+<li><code>cholesterol__mixture2__89_160__neg</code> — fires when value in [89,160], predicts neg, purity 0.92, proportion z-test p&lt;0.0000001</li>
+</ul>
+<p>Overlapping ranges from different models are BOTH kept. If a value hits both, that's stronger evidence (two independent models agree).</p>
+<p><strong>One raw feature → 5 expanded features</strong> (3 unconditional + 2 conditional on gender).</p>
+</td>
+<td>
+<canvas id="c4" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="conditional">Conditional Distributions</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">5. Feature Behavior Changes by Subpopulation</div>
+<p>Cholesterol looks different for men vs women. Weight looks different by age group. The data model captures this:</p>
+<ul>
+<li><strong>Trigger:</strong> KS test between groups shows significantly different distributions</li>
+<li><strong>Per stratum:</strong> own shape, own candidate models, own significant ranges, own valid tests</li>
+<li><strong>Males:</strong> cholesterol is normal in [180-270] → t-test valid. Purity at [280-603] = 0.83</li>
+<li><strong>Females:</strong> cholesterol is still skewed → Mann-Whitney needed. Purity at [260-603] = 0.79</li>
+</ul>
+<p>Without stratification: forced to use Mann-Whitney globally (loses power). With stratification: use t-test where valid, Mann-Whitney where needed. Result: stronger signal, correctly validated.</p>
+</td>
+<td>
+<canvas id="c5" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="tests">Test Registry &amp; Selection</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">6. Every Test Has Preconditions — Selection Is Automatic</div>
+<p>The test registry encodes preconditions explicitly:</p>
+<ul>
+<li><strong>t-test:</strong> needs normality (Shapiro p&gt;0.05) + equal variance (Levene p&gt;0.05) + n≥30</li>
+<li><strong>Welch's t:</strong> needs normality + n≥30 (relaxes equal variance)</li>
+<li><strong>Mann-Whitney:</strong> needs ordinal/continuous + n≥20 per group</li>
+<li><strong>Chi-squared:</strong> needs categorical + all expected cells ≥5</li>
+<li><strong>Fisher's exact:</strong> categorical + small n (fallback when chi-sq fails)</li>
+<li><strong>Proportion z:</strong> needs np≥10 and n(1-p)≥10</li>
+<li><strong>Permutation:</strong> universal fallback — only needs n≥15</li>
+</ul>
+<p><strong>Selection logic:</strong> categorical → chi-sq/Fisher. Continuous + normal → t-test/Welch. Continuous + not normal → Mann-Whitney. Nothing else works → permutation test.</p>
+</td>
+<td>
+<canvas id="c6" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="interactions">Interactions &amp; Correlations</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">7. Features Don't Exist in Isolation</div>
+<ul>
+<li><strong>Correlations:</strong> cholesterol ↔ LDL (r=0.89) → redundant signal, keep the stronger one</li>
+<li><strong>Categorical splits:</strong> gender splits cholesterol into two clean subpopulations (KS p=0.00001). Signal improves +0.15 within strata.</li>
+<li><strong>Pair interactions:</strong> cholesterol + BP together (joint signal=0.89) is much stronger than either alone (0.67 and 0.58). Both high = very strong pos evidence.</li>
+<li><strong>Feature groups:</strong> lipid panel (cholesterol, HDL, LDL, triglycerides) are mathematically related. Don't treat as independent evidence.</li>
+</ul>
+</td>
+<td>
+<canvas id="c7" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="classification">Classification = Reasoning Trace</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">8. Not Just a Label — Full Evidence Chain</div>
+<p>For a patient with cholesterol=285, male, age=58:</p>
+<ul>
+<li>Hits <code>cholesterol__right_skew__270_603__pos</code> (purity 0.76, MW p=0.00001)</li>
+<li>Hits <code>cholesterol__mixture2__240_320__pos</code> (purity 0.70, t-test p=1e-8)</li>
+<li>Hits <code>cholesterol__normal__280_603__pos__IF_gender_M</code> (purity 0.83, t-test p=0.00003)</li>
+<li>Hits <code>bp__mixture__140_plus__pos</code> (purity 0.72, MW p=0.0002)</li>
+</ul>
+<p><strong>Result:</strong> 4 features × 6 expanded hits × all agreeing pos → <strong>predict pos, confidence 0.91</strong></p>
+<p>Every piece of evidence is traceable to: source model → range → test → verified preconditions. Fully auditable.</p>
+</td>
+<td>
+<canvas id="c8" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="lifecycle">Complete Feature Lifecycle</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">9. End-to-End: Cholesterol from Raw to Classification</div>
+<ol style="font-size: 0.9em; margin: 8px 0 8px 20px;">
+<li><strong>Ingest:</strong> nested JSON → extract <code>patient.labs.cholesterol</code></li>
+<li><strong>Type:</strong> unique_ratio=0.068 → continuous. Range [89-603].</li>
+<li><strong>Shape:</strong> globally right-skewed. Regional: normal in [180-270], exponential decay in [270-603].</li>
+<li><strong>Models:</strong> right_skew (0.84) ✓, mixture-2 (0.89) ✓, normal (0.62) ✗</li>
+<li><strong>Ranges:</strong> [270-603] pos via MW; [240-320] pos via t-test; [89-160] neg via z-test</li>
+<li><strong>Conditional:</strong> stratify by gender → males normal → t-test valid; females skewed → MW</li>
+<li><strong>Expand:</strong> 1 raw feature → 5 validated binary features</li>
+<li><strong>Classify:</strong> patient hits 3 expanded features → all pos → confidence 0.91</li>
+</ol>
+</td>
+<td>
+<canvas id="c9" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<div class="philosophy">
+<strong>The Principle:</strong> The data model is not documentation — it's the operating system. Every decision (which test, which range, which model) is answered by consulting this structure. Nothing is assumed. Everything is verified, recorded, and traceable.
+</div>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setupCanvas(id) {
+    var c = document.getElementById(id);
+    var w = c.width, h = c.height;
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return {ctx: ctx, w: w, h: h};
+}
+
+// 1. Pipeline stages
+(function() {
+    var s = setupCanvas('c1'), ctx = s.ctx, w = s.w, h = s.h;
+    var stages = [
+        {label: 'Raw', sub: 'numbers', color: '#bdc3c7'},
+        {label: 'Profiled', sub: 'type, shape', color: '#3498db'},
+        {label: 'Modeled', sub: 'candidates', color: '#8e44ad'},
+        {label: 'Validated', sub: 'p-values', color: '#e67e22'},
+        {label: 'Expanded', sub: 'binary features', color: '#27ae60'}
+    ];
+    var boxW = 110, gap = 22, totalW = stages.length * boxW + (stages.length-1) * gap;
+    var startX = (w - totalW) / 2, cy = h/2;
+
+    stages.forEach(function(st, i) {
+        var x = startX + i * (boxW + gap);
+        ctx.fillStyle = st.color;
+        ctx.beginPath(); ctx.roundRect(x, cy-30, boxW, 60, 8); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText(st.label, x + boxW/2, cy - 4);
+        ctx.font = '17px -apple-system';
+        ctx.fillText(st.sub, x + boxW/2, cy + 18);
+        if (i < stages.length - 1) {
+            ctx.strokeStyle = '#999'; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(x + boxW + 3, cy); ctx.lineTo(x + boxW + gap - 3, cy); ctx.stroke();
+            ctx.fillStyle = '#999'; ctx.beginPath();
+            ctx.moveTo(x+boxW+gap-7, cy-4); ctx.lineTo(x+boxW+gap-1, cy); ctx.lineTo(x+boxW+gap-7, cy+4); ctx.fill();
+        }
+    });
+    ctx.fillStyle = '#555'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Each stage enriches the data model — nothing is lost', w/2, h-20);
+})();
+
+// 2. Feature profile card
+(function() {
+    var s = setupCanvas('c2'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#f8fafb'; ctx.fillRect(30, 15, w-60, h-30);
+    ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 3; ctx.strokeRect(30, 15, w-60, h-30);
+    ctx.fillStyle = '#1a5276'; ctx.fillRect(30, 15, w-60, 32);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 17px SF Mono, monospace'; ctx.textAlign = 'left';
+    ctx.fillText('cholesterol_mg_dl', 50, 36);
+
+    var fields = [
+        'type: continuous | n: 12505 | missing: 342',
+        'range: [89, 603] | skew: 0.82 | kurt: 1.34',
+        'global_shape: right_skewed',
+        'regions: [89-180] sparse, [180-270] dense, [270-603] tail',
+        'candidates: mixture_2(0.89)',
+        'significant: [270-603] pos p<0.00001, [240-320] pos p<1e-8'
+    ];
+    var y = 65;
+    fields.forEach(function(f) {
+        ctx.fillStyle = '#333'; ctx.font = '17px SF Mono, monospace'; ctx.textAlign = 'left';
+        ctx.fillText(f, 50, y); y += 30;
+    });
+})();
+
+// 3. Multiple candidate models
+(function() {
+    var s = setupCanvas('c3'), ctx = s.ctx, w = s.w, h = s.h;
+    var data = [2,5,10,18,28,35,38,32,22,14,8,5,4,6,10,8,5,3,2,1];
+    var max = 40, bw = (w-100)/data.length, ox = 50;
+
+    ctx.fillStyle = 'rgba(26,82,118,0.2)';
+    data.forEach(function(v,i) { ctx.fillRect(ox+i*bw, h-50-(v/max)*(h-100), bw-2, (v/max)*(h-100)); });
+
+    // Right-skew curve
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    var lnPts = [4,10,20,32,36,34,28,20,14,10,7,5,3,2,2,1,1,1,0,0];
+    lnPts.forEach(function(v,i) { var x = ox+i*bw+bw/2, y = h-50-(v/max)*(h-100); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
+    ctx.stroke();
+
+    // Mixture curve
+    ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    var mixPts = [3,6,12,20,28,34,37,30,20,12,7,4,4,7,11,9,5,3,2,1];
+    mixPts.forEach(function(v,i) { var x = ox+i*bw+bw/2, y = h-50-(v/max)*(h-100); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
+    ctx.stroke();
+
+    ctx.font = '17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillStyle = '#e74c3c'; ctx.fillText('Right-skew (fit=0.84)', w-240, 30);
+    ctx.fillStyle = '#27ae60'; ctx.fillText('Mixture-2 (fit=0.89)', w-240, 52);
+    ctx.fillStyle = '#555'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Different models find different significant ranges', w/2, h-16);
+})();
+
+// 4. Expanded features
+(function() {
+    var s = setupCanvas('c4'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('1 raw feature → 5 expanded binary features', w/2, 24);
+
+    var features = [
+        {name: 'chol__lognorm__270_603__pos', purity: '76%', test: 'MW', color: '#27ae60'},
+        {name: 'chol__mix2__240_320__pos', purity: '70%', test: 't-test', color: '#27ae60'},
+        {name: 'chol__mix2__89_160__neg', purity: '92%', test: 'z-test', color: '#e74c3c'},
+        {name: 'chol__norm__280_603__pos|M', purity: '83%', test: 't-test', color: '#2980b9'},
+        {name: 'chol__lognorm__260_603__pos|F', purity: '79%', test: 'MW', color: '#8e44ad'}
+    ];
+
+    var y = 50;
+    features.forEach(function(f) {
+        ctx.fillStyle = f.color; ctx.globalAlpha = 0.12;
+        ctx.fillRect(40, y, w-80, 36); ctx.globalAlpha = 1;
+        ctx.strokeStyle = f.color; ctx.lineWidth = 1.5; ctx.strokeRect(40, y, w-80, 36);
+        ctx.fillStyle = '#333'; ctx.font = '17px SF Mono, monospace'; ctx.textAlign = 'left';
+        ctx.fillText(f.name, 55, y+23);
+        ctx.fillStyle = f.color; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'right';
+        ctx.fillText(f.purity + ' | ' + f.test, w-55, y+23);
+        y += 42;
+    });
+})();
+
+// 5. Conditional distributions
+(function() {
+    var s = setupCanvas('c5'), ctx = s.ctx, w = s.w, h = s.h;
+    var halfW = w/2 - 30;
+
+    // Male: normal bell
+    var male = [1,3,8,16,28,38,42,38,28,16,8,3,1];
+    var max = 44, bw = halfW/male.length;
+    ctx.fillStyle = 'rgba(41,128,185,0.4)';
+    male.forEach(function(v,i) { ctx.fillRect(20+i*bw, h-55-(v/max)*(h-100), bw-1, (v/max)*(h-100)); });
+    ctx.fillStyle = '#2980b9'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Males: normal → t-test valid', 20 + halfW/2, 20);
+    ctx.font = '17px -apple-system'; ctx.fillStyle = '#555';
+    ctx.fillText('purity 0.83 at [280-603]', 20 + halfW/2, h-25);
+
+    // Female: skewed
+    var female = [1,2,5,12,22,30,28,20,14,10,8,6,4];
+    ctx.fillStyle = 'rgba(142,68,173,0.4)';
+    female.forEach(function(v,i) { ctx.fillRect(halfW+40+i*bw, h-55-(v/max)*(h-100), bw-1, (v/max)*(h-100)); });
+    ctx.fillStyle = '#8e44ad'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Females: skewed → Mann-Whitney', halfW+40+halfW/2, 20);
+    ctx.font = '17px -apple-system'; ctx.fillStyle = '#555';
+    ctx.fillText('purity 0.79 at [260-603]', halfW+40+halfW/2, h-25);
+
+    ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(w/2, 35); ctx.lineTo(w/2, h-35); ctx.stroke();
+})();
+
+// 6. Test selection flow
+(function() {
+    var s = setupCanvas('c6'), ctx = s.ctx, w = s.w, h = s.h;
+    var items = [
+        {shape: 'Categorical?', test: 'Chi-sq / Fisher', color: '#8e44ad'},
+        {shape: 'Normal + equal var?', test: 't-test', color: '#27ae60'},
+        {shape: 'Normal + unequal var?', test: 'Welch\'s t', color: '#2980b9'},
+        {shape: 'Not normal?', test: 'Mann-Whitney', color: '#e67e22'},
+        {shape: 'Nothing else works?', test: 'Permutation', color: '#e74c3c'}
+    ];
+    var rowH = 46, startY = 20;
+    items.forEach(function(item, i) {
+        var y = startY + i*rowH;
+        ctx.fillStyle = '#f0f4f8'; ctx.fillRect(40, y, 250, 36);
+        ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1; ctx.strokeRect(40, y, 250, 36);
+        ctx.fillStyle = item.color; ctx.fillRect(440, y, 220, 36);
+        ctx.fillStyle = '#1a5276'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText(item.shape, 165, y+24);
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 17px -apple-system';
+        ctx.fillText(item.test, 550, y+24);
+        ctx.strokeStyle = '#aaa'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(295, y+18); ctx.lineTo(435, y+18); ctx.stroke();
+        ctx.fillStyle = '#aaa'; ctx.beginPath();
+        ctx.moveTo(430, y+14); ctx.lineTo(438, y+18); ctx.lineTo(430, y+22); ctx.fill();
+    });
+})();
+
+// 7. Interactions — correlation + joint signal
+(function() {
+    var s = setupCanvas('c7'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Feature Interactions', w/2, 22);
+
+    // Three boxes
+    var boxes = [
+        {label: 'Redundant', sub: 'chol ↔ LDL\nr=0.89', color: '#e74c3c', action: 'Keep stronger only'},
+        {label: 'Conditional', sub: 'chol | gender\nKS p<0.00001', color: '#2980b9', action: 'Stratify'},
+        {label: 'Joint Signal', sub: 'chol + BP\n0.67+0.58→0.89', color: '#27ae60', action: 'Combine'}
+    ];
+    var boxW = 200, gap = 20, startX = (w - 3*boxW - 2*gap)/2;
+    boxes.forEach(function(b, i) {
+        var x = startX + i*(boxW+gap);
+        ctx.fillStyle = b.color; ctx.globalAlpha = 0.1;
+        ctx.fillRect(x, 45, boxW, 150); ctx.globalAlpha = 1;
+        ctx.strokeStyle = b.color; ctx.lineWidth = 3; ctx.strokeRect(x, 45, boxW, 150);
+        ctx.fillStyle = b.color; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText(b.label, x+boxW/2, 72);
+        ctx.fillStyle = '#333'; ctx.font = '17px -apple-system';
+        var lines = b.sub.split('\n');
+        ctx.fillText(lines[0], x+boxW/2, 105);
+        ctx.fillText(lines[1], x+boxW/2, 125);
+        ctx.fillStyle = b.color; ctx.font = 'bold 17px -apple-system';
+        ctx.fillText(b.action, x+boxW/2, 168);
+    });
+    ctx.fillStyle = '#555'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Don\'t count the same signal twice. Do combine complementary signals.', w/2, h-15);
+})();
+
+// 8. Classification reasoning trace
+(function() {
+    var s = setupCanvas('c8'), ctx = s.ctx, w = s.w, h = s.h;
+    var lines = [
+        {t: 'Input: cholesterol=285, male, age=58, BP=148', c: '#1a5276', bold: true},
+        {t: '→ chol__lognorm__270_603__pos: purity=0.76, MW p=0.00001', c: '#27ae60', bold: false},
+        {t: '→ chol__mix2__240_320__pos: purity=0.70, t-test p=1e-8', c: '#27ae60', bold: false},
+        {t: '→ chol__norm__280_603__pos|M: purity=0.83, t-test p=0.00003', c: '#27ae60', bold: false},
+        {t: '→ bp__mix__140+__pos: purity=0.72, MW p=0.0002', c: '#27ae60', bold: false},
+        {t: 'Verdict: POSITIVE (confidence 0.91) — 4 features, 6 hits, all agree', c: '#1a5276', bold: true}
+    ];
+    var y = 35;
+    lines.forEach(function(l) {
+        ctx.fillStyle = l.c; ctx.font = (l.bold?'bold ':'') + '17px SF Mono, monospace';
+        ctx.textAlign = 'left'; ctx.fillText(l.t, 30, y); y += 38;
+    });
+    ctx.fillStyle = '#555'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Every prediction = auditable evidence chain', w/2, h-12);
+})();
+
+// 9. Lifecycle stages
+(function() {
+    var s = setupCanvas('c9'), ctx = s.ctx, w = s.w, h = s.h;
+    var steps = [
+        {n: '1', label: 'Ingest', detail: 'JSON extract'},
+        {n: '2', label: 'Type', detail: 'continuous'},
+        {n: '3', label: 'Shape', detail: 'right_skew'},
+        {n: '4', label: 'Models', detail: '2 candidates'},
+        {n: '5', label: 'Ranges', detail: '3 significant'},
+        {n: '6', label: 'Stratify', detail: 'by gender'},
+        {n: '7', label: 'Expand', detail: '5 features'},
+        {n: '8', label: 'Classify', detail: 'conf=0.91'}
+    ];
+    var boxW = 72, gap = 12, totalW = steps.length*boxW + (steps.length-1)*gap;
+    var startX = (w-totalW)/2, cy = h/2;
+
+    steps.forEach(function(st, i) {
+        var x = startX + i*(boxW+gap);
+        var color = i < 3 ? '#3498db' : (i < 6 ? '#8e44ad' : '#27ae60');
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.arc(x+boxW/2, cy-20, 18, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText(st.n, x+boxW/2, cy-14);
+        ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system';
+        ctx.fillText(st.label, x+boxW/2, cy+16);
+        ctx.fillStyle = '#555'; ctx.font = '17px -apple-system';
+        ctx.fillText(st.detail, x+boxW/2, cy+36);
+        if (i < steps.length-1) {
+            ctx.strokeStyle = '#ccc'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(x+boxW/2+20, cy-20); ctx.lineTo(x+boxW+gap/2, cy-20); ctx.stroke();
+        }
+    });
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Cholesterol: from nested JSON → auditable classification evidence', w/2, h-15);
+})();
+</script>
+
+</body>
+</html>

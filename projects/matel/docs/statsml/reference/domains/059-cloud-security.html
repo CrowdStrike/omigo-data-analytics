@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cloud Security Pitfalls</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; padding: 20px; background: #f5f7fa; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 14px; }
+.nav a:hover { text-decoration: underline; }
+h1 { color: #1a5276; border-bottom: 3px solid #2980b9; padding-bottom: 10px; }
+.obj-table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
+.obj-table td { padding: 15px; border: 1px solid #2980b9; vertical-align: top; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-title { font-weight: bold; color: #1a5276; font-size: 16px; margin-bottom: 8px; }
+.pitfall-desc { color: #333; font-size: 14px; line-height: 1.6; }
+canvas { max-width: 100%; }
+</style>
+</head>
+<body>
+<h1>Cloud Security Pitfalls</h1>
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">1. Ephemeral Workloads</div>
+<div class="pitfall-desc">Container runs for 5 minutes and is gone. By the time the alert fires, the container has already terminated and evidence is destroyed. You cannot do forensics on a workload that no longer exists. You must capture at runtime or lose everything.</div>
+</td>
+<td><canvas id="canvas1"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">2. IAM Policy Explosion</div>
+<div class="pitfall-desc">cloud provider account with 2000 IAM roles, 500 policies, nested assume-role chains. Effective permissions are nearly impossible to compute. "Least privilege" is a theoretical goal but an operational nightmare. One misconfigured role equals account compromise.</div>
+</td>
+<td><canvas id="canvas2"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">3. Multi-Account Blast Radius</div>
+<div class="pitfall-desc">Organization with 200 cloud provider accounts. Cross-account role allows Account A to access Account B. Compromise of one account means potential access to all. The "blast radius" of a single credential leak is undefined without full graph analysis.</div>
+</td>
+<td><canvas id="canvas3"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">4. Shared Responsibility Confusion</div>
+<div class="pitfall-desc">cloud provider secures the infrastructure; you secure your configuration. But the boundary is unclear &mdash; is a misconfigured S3 bucket cloud provider's fault or yours? Neither party monitors the gap between their responsibilities.</div>
+</td>
+<td><canvas id="canvas4"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">5. IaC Drift from Deployed State</div>
+<div class="pitfall-desc">Terraform says "security group allows port 443 only." Someone clicked in the console and added port 22. Terraform state and reality diverge. Security reviews the IaC (wrong) not the deployed state (actual).</div>
+</td>
+<td><canvas id="canvas5"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">6. Serverless Visibility Gap</div>
+<div class="pitfall-desc">Lambda function runs with no OS to install an agent on, no process monitoring, no file system to scan. Traditional security tools designed for VMs and containers simply do not work. New execution model equals blind spots.</div>
+</td>
+<td><canvas id="canvas6"></canvas></td>
+</tr>
+</table>
+<script>
+function setupCanvas(canvas, width, height) {
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = width + 'px';
+    canvas.style.height = height + 'px';
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return ctx;
+}
+
+// Chart 1: Ephemeral Workloads - Timeline showing container lifecycle vs alert timing
+(function() {
+    const canvas = document.getElementById('canvas1');
+    const ctx = setupCanvas(canvas, 720, 200);
+    const w = 720, h = 200;
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Container Lifecycle vs Alert Timeline', w/2, 25);
+
+    // Timeline base
+    const tlY = 100;
+    const tlStart = 60;
+    const tlEnd = 680;
+    ctx.strokeStyle = '#bbb';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(tlStart, tlY);
+    ctx.lineTo(tlEnd, tlY);
+    ctx.stroke();
+
+    // Time markers
+    ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    var times = ['0 min', '1 min', '2 min', '3 min', '4 min', '5 min', '6 min', '7 min', '8 min'];
+    for (var i = 0; i < times.length; i++) {
+        var x = tlStart + i * (tlEnd - tlStart) / 8;
+        ctx.beginPath();
+        ctx.moveTo(x, tlY - 5);
+        ctx.lineTo(x, tlY + 5);
+        ctx.stroke();
+        ctx.fillText(times[i], x, tlY + 22);
+    }
+
+    // Container lifespan (0-5 min)
+    var containerEnd = tlStart + 5 * (tlEnd - tlStart) / 8;
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.3)';
+    ctx.fillRect(tlStart, tlY - 40, containerEnd - tlStart, 35);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(tlStart, tlY - 40, containerEnd - tlStart, 35);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '15px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Container Running', (tlStart + containerEnd) / 2, tlY - 18);
+
+    // Container terminated marker
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('TERMINATED', containerEnd + 5, tlY - 30);
+    ctx.beginPath();
+    ctx.moveTo(containerEnd, tlY - 40);
+    ctx.lineTo(containerEnd, tlY + 5);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 3]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Alert fires (at ~7 min)
+    var alertX = tlStart + 7 * (tlEnd - tlStart) / 8;
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.2)';
+    ctx.fillRect(alertX - 30, tlY - 40, 60, 35);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.strokeRect(alertX - 30, tlY - 40, 60, 35);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('ALERT!', alertX, tlY - 18);
+
+    // Evidence gap
+    ctx.fillStyle = '#c0392b';
+    ctx.font = '15px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('Evidence Gap: No forensics possible', w/2, tlY + 55);
+
+    // Arrow showing gap
+    ctx.strokeStyle = '#c0392b';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(containerEnd + 10, tlY + 42);
+    ctx.lineTo(alertX - 10, tlY + 42);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(alertX - 10, tlY + 42);
+    ctx.lineTo(alertX - 18, tlY + 38);
+    ctx.lineTo(alertX - 18, tlY + 46);
+    ctx.closePath();
+    ctx.fill();
+
+    // Legend
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'left';
+    ctx.fillText('Runtime capture window missed = total evidence loss', 100, h - 10);
+})();
+
+// Chart 2: IAM Policy Explosion - Complexity visualization
+(function() {
+    const canvas = document.getElementById('canvas2');
+    const ctx = setupCanvas(canvas, 720, 200);
+    const w = 720, h = 200;
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('IAM Complexity Growth', w/2, 25);
+
+    // Bar chart showing explosion of combinations
+    var labels = ['Roles', 'Policies', 'Assume-Role\nChains', 'Effective\nPermissions'];
+    var values = [2000, 500, 8000, 'Unknown'];
+    var colors = ['#3498db', '#2ecc71', '#e67e22', '#e74c3c'];
+    var barW = 100;
+    var gap = 50;
+    var startX = 100;
+    var baseY = 165;
+    var maxBarH = 110;
+
+    // Normalize to max (8000)
+    var numericMax = 8000;
+
+    for (var i = 0; i < 4; i++) {
+        var x = startX + i * (barW + gap);
+        var barH;
+        if (i === 3) {
+            barH = maxBarH;
+            // Draw with question mark pattern
+            ctx.fillStyle = 'rgba(231, 76, 60, 0.3)';
+            ctx.fillRect(x, baseY - barH, barW, barH);
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            ctx.strokeRect(x, baseY - barH, barW, barH);
+            ctx.setLineDash([]);
+            ctx.fillStyle = '#e74c3c';
+            ctx.font = 'bold 28px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('?', x + barW/2, baseY - barH/2 + 10);
+            ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('Uncomputable', x + barW/2, baseY - barH - 5);
+        } else {
+            barH = (values[i] / numericMax) * maxBarH;
+            ctx.fillStyle = colors[i];
+            ctx.fillRect(x, baseY - barH, barW, barH);
+            ctx.fillStyle = '#333';
+            ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(values[i].toLocaleString(), x + barW/2, baseY - barH - 5);
+        }
+        // Labels
+        ctx.fillStyle = '#333';
+        ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.textAlign = 'center';
+        var labelParts = labels[i].split('\n');
+        for (var p = 0; p < labelParts.length; p++) {
+            ctx.fillText(labelParts[p], x + barW/2, baseY + 15 + p * 14);
+        }
+    }
+
+    // Arrow showing exponential growth
+    ctx.strokeStyle = '#c0392b';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(startX + barW + 20, 70);
+    ctx.quadraticCurveTo(startX + 2 * (barW + gap), 40, startX + 3 * (barW + gap) + barW/2, 50);
+    ctx.stroke();
+    ctx.fillStyle = '#c0392b';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('Complexity explosion', startX + 2 * (barW + gap) + 20, 40);
+})();
+
+// Chart 3: Multi-Account Blast Radius - Network graph
+(function() {
+    const canvas = document.getElementById('canvas3');
+    const ctx = setupCanvas(canvas, 720, 200);
+    const w = 720, h = 200;
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Blast Radius: Single Credential Leak', w/2, 22);
+
+    // Draw accounts as nodes in a network
+    var centerX = 360, centerY = 115;
+    var radius = 65;
+    var nodeCount = 10;
+    var nodes = [];
+
+    for (var i = 0; i < nodeCount; i++) {
+        var angle = (2 * Math.PI / nodeCount) * i - Math.PI/2;
+        nodes.push({
+            x: centerX + radius * Math.cos(angle),
+            y: centerY + radius * Math.sin(angle)
+        });
+    }
+
+    // Add outer ring
+    var outerNodes = [];
+    for (var i = 0; i < 14; i++) {
+        var angle = (2 * Math.PI / 14) * i;
+        outerNodes.push({
+            x: centerX + (radius + 55) * Math.cos(angle),
+            y: centerY + (radius + 55) * Math.sin(angle)
+        });
+    }
+
+    // Draw cross-account connections (showing blast radius) - deterministic
+    ctx.strokeStyle = 'rgba(231, 76, 60, 0.3)';
+    ctx.lineWidth = 1;
+    for (var i = 0; i < nodes.length; i++) {
+        for (var j = i + 1; j < nodes.length; j++) {
+            if ((i + j) % 2 === 0) {
+                ctx.beginPath();
+                ctx.moveTo(nodes[i].x, nodes[i].y);
+                ctx.lineTo(nodes[j].x, nodes[j].y);
+                ctx.stroke();
+            }
+        }
+    }
+
+    // Connect inner to outer
+    for (var i = 0; i < outerNodes.length; i++) {
+        var innerIdx = Math.floor(i * nodes.length / outerNodes.length);
+        ctx.beginPath();
+        ctx.moveTo(nodes[innerIdx].x, nodes[innerIdx].y);
+        ctx.lineTo(outerNodes[i].x, outerNodes[i].y);
+        ctx.stroke();
+    }
+
+    // Draw compromised node (first one, highlighted)
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath();
+    ctx.arc(nodes[0].x, nodes[0].y, 12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'white';
+    ctx.font = 'bold 10px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('!!!', nodes[0].x, nodes[0].y + 4);
+
+    // Draw other inner nodes
+    for (var i = 1; i < nodes.length; i++) {
+        ctx.fillStyle = 'rgba(231, 76, 60, 0.6)';
+        ctx.beginPath();
+        ctx.arc(nodes[i].x, nodes[i].y, 9, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Draw outer nodes
+    for (var i = 0; i < outerNodes.length; i++) {
+        ctx.fillStyle = 'rgba(231, 76, 60, 0.35)';
+        ctx.beginPath();
+        ctx.arc(outerNodes[i].x, outerNodes[i].y, 7, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Labels
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('Compromised', 30, 45);
+    ctx.fillStyle = '#666';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('1 credential leak', 30, 62);
+    ctx.fillText('= 200 accounts at risk', 30, 79);
+
+    // Right side legend
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#c0392b';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('Cross-account roles create', w - 30, 170);
+    ctx.fillText('undefined blast radius', w - 30, 186);
+})();
+
+// Chart 4: Shared Responsibility Confusion - Gap diagram
+(function() {
+    const canvas = document.getElementById('canvas4');
+    const ctx = setupCanvas(canvas, 720, 200);
+    const w = 720, h = 200;
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Shared Responsibility Model: The Unmonitored Gap', w/2, 25);
+
+    // cloud provider side (left block)
+    var blockY = 50;
+    var blockH = 100;
+    var awsX = 50;
+    var awsW = 250;
+    ctx.fillStyle = 'rgba(255, 153, 0, 0.15)';
+    ctx.fillRect(awsX, blockY, awsW, blockH);
+    ctx.strokeStyle = '#ff9900';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(awsX, blockY, awsW, blockH);
+    ctx.fillStyle = '#ff9900';
+    ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('cloud provider Responsibility', awsX + awsW/2, blockY + 25);
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#666';
+    ctx.fillText('Physical infrastructure', awsX + awsW/2, blockY + 48);
+    ctx.fillText('Network backbone', awsX + awsW/2, blockY + 65);
+    ctx.fillText('Hypervisor', awsX + awsW/2, blockY + 82);
+
+    // Customer side (right block)
+    var custX = 420;
+    var custW = 250;
+    ctx.fillStyle = 'rgba(52, 152, 219, 0.15)';
+    ctx.fillRect(custX, blockY, custW, blockH);
+    ctx.strokeStyle = '#3498db';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(custX, blockY, custW, blockH);
+    ctx.fillStyle = '#3498db';
+    ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Customer Responsibility', custX + custW/2, blockY + 25);
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#666';
+    ctx.fillText('Data encryption', custX + custW/2, blockY + 48);
+    ctx.fillText('IAM configuration', custX + custW/2, blockY + 65);
+    ctx.fillText('S3 bucket policies', custX + custW/2, blockY + 82);
+
+    // The GAP in between
+    var gapX = awsX + awsW;
+    var gapW = custX - gapX;
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.2)';
+    ctx.fillRect(gapX, blockY, gapW, blockH);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.strokeRect(gapX, blockY, gapW, blockH);
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('GAP', gapX + gapW/2, blockY + blockH/2 - 5);
+    ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('Unmonitored', gapX + gapW/2, blockY + blockH/2 + 12);
+
+    // Bottom label
+    ctx.fillStyle = '#c0392b';
+    ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Neither party monitors the boundary between their responsibilities', w/2, blockY + blockH + 30);
+
+    // Arrows pointing to gap
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(gapX + gapW/2 - 20, blockY + blockH + 5);
+    ctx.lineTo(gapX + gapW/2, blockY + blockH + 15);
+    ctx.lineTo(gapX + gapW/2 + 20, blockY + blockH + 5);
+    ctx.stroke();
+})();
+
+// Chart 5: IaC Drift - Divergence visualization
+(function() {
+    const canvas = document.getElementById('canvas5');
+    const ctx = setupCanvas(canvas, 720, 200);
+    const w = 720, h = 200;
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('IaC State vs Deployed Reality', w/2, 25);
+
+    // Two parallel timelines showing drift
+    var startX = 80, endX = 650;
+    var iacY = 75, deployY = 145;
+
+    // IaC line label
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('Terraform', startX - 10, iacY + 5);
+    ctx.fillText('State', startX - 10, iacY + 20);
+
+    // Deployed line label
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'right';
+    ctx.fillText('Deployed', startX - 10, deployY + 5);
+    ctx.fillText('Reality', startX - 10, deployY + 20);
+
+    // IaC line (straight, consistent)
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(startX, iacY);
+    ctx.lineTo(endX, iacY);
+    ctx.stroke();
+
+    // Security group boxes on IaC line
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    var iacLabels = ['443', '443', '443', '443'];
+    for (var i = 0; i < iacLabels.length; i++) {
+        var x = startX + (i + 1) * (endX - startX) / 5;
+        ctx.fillStyle = 'rgba(39, 174, 96, 0.2)';
+        ctx.fillRect(x - 20, iacY - 15, 40, 20);
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x - 20, iacY - 15, 40, 20);
+        ctx.fillStyle = '#27ae60';
+        ctx.fillText('Port ' + iacLabels[i], x, iacY - 2);
+    }
+
+    // Deployed line (diverges after manual change)
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(startX, deployY);
+    ctx.lineTo(endX, deployY);
+    ctx.stroke();
+
+    // Security group boxes on deployed line (shows drift)
+    var deployLabels = ['443', '443', '443, 22', '443, 22'];
+    var deployColors = ['#27ae60', '#27ae60', '#e74c3c', '#e74c3c'];
+    for (var i = 0; i < deployLabels.length; i++) {
+        var x = startX + (i + 1) * (endX - startX) / 5;
+        var c = deployColors[i];
+        ctx.fillStyle = c === '#e74c3c' ? 'rgba(231, 76, 60, 0.2)' : 'rgba(39, 174, 96, 0.2)';
+        ctx.fillRect(x - 30, deployY - 15, 60, 20);
+        ctx.strokeStyle = c;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x - 30, deployY - 15, 60, 20);
+        ctx.fillStyle = c;
+        ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Port ' + deployLabels[i], x, deployY - 2);
+    }
+
+    // Manual console click marker
+    var driftPoint = startX + 2 * (endX - startX) / 5;
+    var clickX = startX + 2.5 * (endX - startX) / 5;
+    ctx.fillStyle = '#e67e22';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Console click: +port 22', clickX, deployY + 30);
+    ctx.beginPath();
+    ctx.moveTo(clickX, deployY + 5);
+    ctx.lineTo(clickX, deployY + 18);
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Drift indicator
+    ctx.strokeStyle = '#c0392b';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(driftPoint + 50, iacY + 8);
+    ctx.lineTo(driftPoint + 50, deployY - 18);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#c0392b';
+    ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('DRIFT', driftPoint + 50, (iacY + deployY) / 2 + 4);
+
+    // Security reviews wrong source
+    ctx.fillStyle = '#c0392b';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Security audits IaC (green) but reality is red', w/2, h - 8);
+})();
+
+// Chart 6: Serverless Visibility Gap - Comparison diagram
+(function() {
+    const canvas = document.getElementById('canvas6');
+    const ctx = setupCanvas(canvas, 720, 200);
+    const w = 720, h = 200;
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Security Visibility by Execution Model', w/2, 25);
+
+    // Three columns: VM, Container, Serverless
+    var colW = 190;
+    var gap = 30;
+    var startX = 60;
+    var colY = 45;
+    var colH = 130;
+    var models = ['VM / EC2', 'Container', 'Serverless / Lambda'];
+    var colColors = ['#27ae60', '#f39c12', '#e74c3c'];
+    var bgColors = ['rgba(39, 174, 96, 0.1)', 'rgba(243, 156, 18, 0.1)', 'rgba(231, 76, 60, 0.1)'];
+
+    // Visibility items for each
+    var itemStatus = [
+        [true, true, true, true],
+        [true, true, true, false],
+        [false, false, false, false]
+    ];
+
+    for (var col = 0; col < 3; col++) {
+        var x = startX + col * (colW + gap);
+
+        // Column background
+        ctx.fillStyle = bgColors[col];
+        ctx.fillRect(x, colY, colW, colH);
+        ctx.strokeStyle = colColors[col];
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, colY, colW, colH);
+
+        // Column header
+        ctx.fillStyle = colColors[col];
+        ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(models[col], x + colW/2, colY + 20);
+
+        // Items
+        ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+        var itemLabels = ['OS Agent', 'Process Mon.', 'File Scanner', 'Network Tap'];
+        for (var i = 0; i < 4; i++) {
+            var iy = colY + 40 + i * 22;
+            if (itemStatus[col][i]) {
+                ctx.fillStyle = '#27ae60';
+                ctx.textAlign = 'left';
+                ctx.fillText('✓ ' + itemLabels[i], x + 15, iy);
+            } else {
+                ctx.fillStyle = '#e74c3c';
+                ctx.textAlign = 'left';
+                ctx.fillText('✗ ' + itemLabels[i], x + 15, iy);
+            }
+        }
+    }
+
+    // Visibility percentage labels
+    ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('100% visibility', startX + colW/2, colY + colH + 20);
+    ctx.fillStyle = '#f39c12';
+    ctx.fillText('~60% visibility', startX + (colW + gap) + colW/2, colY + colH + 20);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('~0% visibility', startX + 2 * (colW + gap) + colW/2, colY + colH + 20);
+
+    // Bottom label
+    ctx.fillStyle = '#c0392b';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Traditional tools fail completely in serverless: no OS, no filesystem, no processes', w/2, h - 5);
+})();
+</script>
+</body>
+</html>

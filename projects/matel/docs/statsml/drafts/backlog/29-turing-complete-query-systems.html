@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Turing Complete Languages & Query Systems — Discussion Backlog</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #fff; color: #2c3e50; line-height: 1.6; }
+h1 { color: #1a5276; border-bottom: 3px solid #2980b9; padding-bottom: 10px; }
+h2 { color: #1a5276; margin-top: 30px; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { padding: 20px; vertical-align: top; border: 1px solid #2980b9; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; }
+.obj-title { color: #1a5276; font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
+ul { margin: 10px 0; padding-left: 20px; }
+li { margin-bottom: 6px; }
+strong { color: #1a5276; }
+code { background: #e8f0f8; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; color: #1a5276; }
+.questions { background: #fff8e1; border-left: 3px solid #f39c12; padding: 10px 15px; margin: 10px 0; font-size: 0.9em; }
+.danger { background: #fdecea; border-left: 3px solid #e74c3c; padding: 10px 15px; margin: 10px 0; font-size: 0.9em; }
+.status { display: inline-block; background: #e8f0f8; color: #1a5276; padding: 3px 10px; border-radius: 12px; font-size: 0.85em; font-weight: bold; margin-bottom: 20px; }
+</style>
+</head>
+<body>
+
+<h1>Turing Complete Languages & Query Systems</h1>
+<span class="status">Discussion — Computational Theory Applied</span>
+
+<p><strong>Core idea:</strong> SQL is intentionally NOT Turing complete (in its pure form) — it's declarative, terminating, and analyzable. Adding UDFs, stored procedures, recursive CTEs without bounds, or embedding queries in general-purpose languages makes the system Turing complete — gaining expressiveness but losing guarantees about termination, resource usage, optimization, and determinism.</p>
+
+<h2>The Power / Safety Tradeoff</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Declarative (Constrained)</div>
+<ul>
+<li><strong>Examples:</strong> SQL, Datalog, regular expressions, CSS selectors</li>
+<li><strong>Properties you get:</strong> guaranteed termination, predictable resource usage, global optimization possible, can prove correctness properties</li>
+<li><strong>What you lose:</strong> can't express all computations, sometimes awkward to write, limited control flow</li>
+<li><strong>Key insight:</strong> constraints enable reasoning. If the optimizer KNOWS a query terminates, it can rewrite it freely.</li>
+</ul>
+</td>
+<td>
+<div class="obj-title">Turing Complete (Unconstrained)</div>
+<ul>
+<li><strong>Examples:</strong> Python, Java, PL/pgSQL with loops, recursive CTEs without bounds</li>
+<li><strong>Properties you get:</strong> can express ANY computation, familiar imperative patterns, full generality</li>
+<li><strong>What you lose:</strong> can't guarantee termination (halting problem), can't predict resource usage, optimizer can't reason about opaque code, can't safely cache/parallelize</li>
+<li><strong>Key insight:</strong> freedom prevents reasoning. If the system can't see inside your code, it can't help you.</li>
+</ul>
+</td>
+</tr>
+</table>
+
+<h2>Where Query Systems Become Turing Complete</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Explicit Escapes</div>
+<ul>
+<li><strong>UDFs in Python/Java</strong> — arbitrary code embedded in query execution</li>
+<li><strong>Stored procedures</strong> — PL/pgSQL, T-SQL with WHILE loops and conditionals</li>
+<li><strong>External function calls</strong> — Snowflake external functions, BigQuery remote functions</li>
+<li><strong>Custom Hive SerDes</strong> — arbitrary Java in serialization/deserialization</li>
+<li><strong>Spark UDFs</strong> — Python/Scala closures passed to the executor</li>
+</ul>
+</td>
+<td>
+<div class="obj-title">Subtle Escapes</div>
+<ul>
+<li><strong>Recursive CTEs without LIMIT</strong> — unbounded recursion = Turing complete</li>
+<li><strong>dbt Jinja macros</strong> — SQL-only by design, but Jinja is Turing complete (loops, conditionals, recursion)</li>
+<li><strong>Dynamic SQL generation</strong> — <code>EXECUTE IMMEDIATE</code> with computed strings</li>
+<li><strong>Trigger cascades</strong> — triggers calling triggers, potentially non-terminating</li>
+<li><strong>Window functions with complex PARTITION BY</strong> — combinatorial explosion in practice if not bounded</li>
+</ul>
+</td>
+</tr>
+</table>
+
+<h2>What You Lose</h2>
+
+<div class="danger">
+<strong>When UDFs enter the picture:</strong>
+<ul>
+<li><strong>Optimizer blindness</strong> — query planner can't push predicates through UDFs, can't reorder around them, can't eliminate dead columns inside them</li>
+<li><strong>Parallelization risk</strong> — can't safely parallelize if UDF has hidden state or side effects</li>
+<li><strong>Resource unpredictability</strong> — UDF might allocate unbounded memory, loop forever, or call external services</li>
+<li><strong>Termination uncertainty</strong> — halting problem: can't prove a general program terminates</li>
+<li><strong>Caching invalidation</strong> — can't deterministically cache if UDF behavior depends on hidden state</li>
+</ul>
+</div>
+
+<h2>Concrete Examples</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">SQL → SQL + Python UDF</div>
+<p>Pure SQL: optimizer sees the full plan, pushes filters, eliminates columns, chooses join order globally.</p>
+<p>Add Python UDF: optimizer treats it as a black box. Can't push a WHERE clause past it. Can't eliminate input columns the UDF doesn't use (it might use them via reflection). Can't predict memory or time.</p>
+<p><strong>Result:</strong> 10x slower queries because the optimizer gives up.</p>
+</td>
+<td>
+<div class="obj-title">Spark DataFrame → .mapPartitions</div>
+<p>DataFrame API: Catalyst optimizer sees logical plan, fuses operations, predicts shuffle sizes, generates efficient code.</p>
+<p><code>.mapPartitions(arbitrary_python_function)</code>: Catalyst stops. Everything after is a black box. No predicate pushdown, no column pruning, no code generation.</p>
+<p><strong>Result:</strong> Lost all Catalyst optimization for everything downstream of the escape hatch.</p>
+</td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">dbt: SQL-only → Complex Jinja</div>
+<p>dbt philosophy: SQL-only transforms. Analyzable, testable, deterministic.</p>
+<p>Complex Jinja macros: loops generating dynamic SQL, conditionals based on runtime variables, recursive macro calls. You've rebuilt a bad programming language on top of SQL.</p>
+<p><strong>Result:</strong> Lost the simplicity that was the whole point of dbt.</p>
+</td>
+<td>
+<div class="obj-title">Design Implication for statsml</div>
+<p>The statsml pipeline should prefer <strong>declarative specifications</strong> of transforms (what to compute) over imperative implementations (how to compute it).</p>
+<p>This enables: optimization (reorder steps), parallelization (independent steps run concurrently), verification (can prove properties of declarative specs), reproducibility (declarative = deterministic).</p>
+<p><strong>Rule:</strong> imperative code at the edges, declarative specifications in the core.</p>
+</td>
+</tr>
+</table>
+
+<h2>The "Just Expressive Enough" Design Space</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Sub-Turing Languages That Work</div>
+<ul>
+<li><strong>SQL (pure)</strong> — relational algebra + aggregation, no general recursion</li>
+<li><strong>Datalog (stratified)</strong> — recursive but stratified negation guarantees termination</li>
+<li><strong>Regular expressions</strong> — finite automata, always terminate, O(n) matching</li>
+<li><strong>Total functional languages</strong> — all programs provably terminate (Agda, Idris)</li>
+<li><strong>Linear types</strong> — guarantee resources are used exactly once</li>
+</ul>
+</td>
+<td>
+<div class="obj-title">Could We Design One for Feature Transforms?</div>
+<ul>
+<li>Input: column references, arithmetic, aggregations, window functions</li>
+<li>Control: pattern matching on types (not general conditionals)</li>
+<li>Composition: pipe outputs of one transform into another</li>
+<li>No loops, no recursion, no external calls, no mutable state</li>
+<li>Escape hatch: explicitly marked "custom transform" that opts out of guarantees</li>
+</ul>
+<div class="questions">
+<strong>Question:</strong> Is this just SQL with a different syntax? Or is there a sweet spot between SQL and Python that gives us more expressiveness without losing analyzability?
+</div>
+</td>
+</tr>
+</table>
+
+<h2>Handling the Inevitable Escape Hatch</h2>
+
+<div class="questions">
+<strong>When imperative code is needed</strong> (and it will be), isolate it behind well-defined interfaces:
+<ul>
+<li><strong>Contract:</strong> input schema → output schema (typed, validated at boundaries)</li>
+<li><strong>Guarantee:</strong> terminates within timeout (enforced externally)</li>
+<li><strong>Constraint:</strong> no side effects (or declared side effects, verified by sandbox)</li>
+<li><strong>Testing:</strong> property-based tests verifying the contract holds for generated inputs</li>
+<li><strong>Monitoring:</strong> runtime tracking of resource usage, alerting on anomalies</li>
+</ul>
+</div>
+
+<h2>Key Discussion Points</h2>
+
+<div class="questions">
+<ul>
+<li>Where should the pipeline use declarative DSLs vs general-purpose code?</li>
+<li>Can we design a "just expressive enough" language for feature transforms that's NOT Turing complete?</li>
+<li>How to handle the inevitable escape hatch (custom transforms) while maintaining system properties?</li>
+<li>Is the Spark DataFrame API the right model? (Declarative until you need .map, then explicit opt-out)</li>
+</ul>
+</div>
+
+
+</body>
+</html>

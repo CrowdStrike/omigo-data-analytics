@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Query Determinism & Time-Sensitive Queries — Discussion Backlog</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #fff; color: #2c3e50; line-height: 1.6; }
+h1 { color: #1a5276; border-bottom: 3px solid #2980b9; padding-bottom: 10px; }
+h2 { color: #1a5276; margin-top: 30px; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { padding: 20px; vertical-align: top; border: 1px solid #2980b9; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; }
+.obj-title { color: #1a5276; font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
+ul { margin: 10px 0; padding-left: 20px; }
+li { margin-bottom: 6px; }
+strong { color: #1a5276; }
+code { background: #e8f0f8; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; color: #1a5276; }
+.questions { background: #fff8e1; border-left: 3px solid #f39c12; padding: 10px 15px; margin: 10px 0; font-size: 0.9em; }
+.danger { background: #fdecea; border-left: 3px solid #e74c3c; padding: 10px 15px; margin: 10px 0; font-size: 0.9em; }
+.status { display: inline-block; background: #e8f0f8; color: #1a5276; padding: 3px 10px; border-radius: 12px; font-size: 0.85em; font-weight: bold; margin-bottom: 20px; }
+</style>
+</head>
+<body>
+
+<h1>Query Determinism & Time-Sensitive Queries</h1>
+<span class="status">TO DISCUSS</span>
+
+<p>Data pipelines that use relative time expressions (<code>last 1 hour</code>, <code>now() - interval 7 days</code>) produce different results every time they run. This is an anti-pattern for any system that needs reproducibility, debugging, or consistent analysis.</p>
+
+<h2>The Anti-Pattern: Relative Time in Queries</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">What Goes Wrong</div>
+<div class="danger"><code>SELECT * FROM events WHERE ts > NOW() - INTERVAL '1 hour'</code><br><br>Run at 10:00 → gets 9:00–10:00 data.<br>Run at 10:05 (retry after partial failure) → gets 9:05–10:05 data.<br>Different results. Same query. No error. Pipeline reports "success."</div>
+<p><strong>The most common trigger isn't deliberate reruns — it's automatic recovery from partial failures.</strong> Pipeline crashes mid-write, scheduler retries 5 minutes later, the time window silently shifts. Nobody notices because the retry "succeeded." The data is just slightly wrong, forever.</p>
+<ul>
+<li><strong>Non-deterministic output:</strong> pipeline produces different results on retry, rerun, or backfill</li>
+<li><strong>Silent recovery corruption:</strong> automatic retries after partial failures shift the window — the "fix" introduces inconsistency</li>
+<li><strong>Unreproducible analysis:</strong> "I ran this yesterday and got X" — can never reproduce X again</li>
+<li><strong>Race conditions:</strong> two pipeline stages run seconds apart, see different "last 1 hour" windows</li>
+<li><strong>Late-arriving data:</strong> events from 50 minutes ago arrive after the query runs — permanently missed</li>
+<li><strong>Debugging impossible:</strong> can't rerun a failed pipeline step and get the same data it originally saw</li>
+</ul>
+</td>
+<td>
+<div class="obj-title">The Fix: Pre-Constructed Absolute Ranges</div>
+<p>Compute the time range <strong>once</strong>, store it, pass it as parameters:</p>
+<ul>
+<li><code>window_start = '2026-08-03T09:00:00Z'</code></li>
+<li><code>window_end = '2026-08-03T10:00:00Z'</code></li>
+<li><code>SELECT * FROM events WHERE ts >= :window_start AND ts < :window_end</code></li>
+</ul>
+<p>Now:</p>
+<ul>
+<li>Retry produces identical results</li>
+<li>Backfill uses the same window boundaries</li>
+<li>Multiple pipeline stages share the same parameters</li>
+<li>Audit log records exactly what data was queried</li>
+<li>Debugging: replay with same parameters = same output</li>
+</ul>
+<div class="questions">The scheduler or orchestrator computes the window boundaries. The query is a pure function of its parameters. Separate "when to run" from "what time range to query."</div>
+</td>
+</tr>
+</table>
+
+<h2>Broader Query System Concerns</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Other Sources of Non-Determinism</div>
+<ul>
+<li><strong>Unordered results:</strong> <code>SELECT ... LIMIT 100</code> without <code>ORDER BY</code> — different rows each run depending on storage engine state</li>
+<li><strong>Concurrent writes:</strong> query runs mid-ingestion — partial batch visible, next run sees full batch</li>
+<li><strong>Snapshot isolation:</strong> different database isolation levels give different visibility guarantees</li>
+<li><strong>Eventual consistency:</strong> distributed DBs (Cassandra, DynamoDB) may serve stale reads from replicas</li>
+<li><strong>Schema evolution:</strong> a column added mid-pipeline changes NULLability for historical rows</li>
+<li><strong>Partition pruning:</strong> query planner uses different partitions depending on available statistics at runtime</li>
+</ul>
+</td>
+<td>
+<div class="obj-title">Time-Related Anti-Patterns Catalog</div>
+<ul>
+<li><strong><code>WHERE date = CURDATE()</code>:</strong> fails if pipeline runs past midnight; backfill impossible</li>
+<li><strong><code>ORDER BY ts DESC LIMIT 1</code>:</strong> "latest record" changes every second — non-deterministic join key</li>
+<li><strong><code>DATEDIFF(NOW(), created_at) < 30</code>:</strong> "active users" definition drifts continuously</li>
+<li><strong>Cron at :00 queries "last hour":</strong> if cron fires at :00:03 due to load, 3 seconds of data from previous window leak in</li>
+<li><strong>Event time vs processing time:</strong> <code>WHERE processed_at > X</code> misses reprocessed events; <code>WHERE event_time > X</code> catches them but duplicates on replay</li>
+<li><strong>Timezone-naive timestamps:</strong> "last 24 hours" crosses DST boundary — actually 23 or 25 hours</li>
+</ul>
+</td>
+</tr>
+</table>
+
+<h2>Design Principles for Deterministic Queries</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Rules</div>
+<ul>
+<li><strong>Parameterize all time boundaries:</strong> no function calls that depend on wall clock inside the query</li>
+<li><strong>Separate scheduling from windowing:</strong> "run every hour" ≠ "query last hour." The scheduler decides WHEN; the config decides WHAT range.</li>
+<li><strong>Idempotent writes:</strong> re-running a pipeline step with same parameters overwrites/upserts same output — no duplicates</li>
+<li><strong>Watermarks for late data:</strong> don't close a window until you're confident no more events will arrive (grace period)</li>
+<li><strong>Explicit ORDER BY:</strong> every query that feeds a pipeline must have deterministic sort order</li>
+<li><strong>Log the parameters:</strong> every pipeline run records its exact window boundaries, query hash, row count</li>
+</ul>
+</td>
+<td>
+<div class="obj-title">Frameworks That Get This Right</div>
+<ul>
+<li><strong>Apache Airflow:</strong> <code>execution_date</code> is a fixed logical timestamp, not "now." Tasks receive their window as parameters.</li>
+<li><strong>Apache Flink:</strong> event-time processing with watermarks — explicitly handles late data and window closure.</li>
+<li><strong>dbt:</strong> incremental models use <code>this.run_started_at</code> but best practice is explicit <code>var('start_date')</code> parameters.</li>
+<li><strong>Spark Structured Streaming:</strong> watermark-based window triggers — window boundaries are data-driven, not wall-clock.</li>
+</ul>
+<div class="questions">The common pattern: the system computes a deterministic window boundary, passes it as a value, and the query is a pure function. "When did this run" is metadata, not a query filter.</div>
+</td>
+</tr>
+</table>
+
+<h2>Key Discussion Points</h2>
+
+<ul>
+<li>Should the pipeline lint queries for non-deterministic functions (NOW(), CURDATE(), RANDOM()) and warn?</li>
+<li>How to handle the tension between "freshest possible data" (dashboards) vs "reproducible" (pipelines)?</li>
+<li>Late-arriving data: close the window and accept gaps, or reprocess? Each has different determinism guarantees.</li>
+<li>How does this interact with our monitoring (#22) — if the monitoring query itself is non-deterministic, alerts are unreliable</li>
+<li>Relationship to backfill: a deterministic query can be replayed for any historical window; a relative one cannot</li>
+</ul>
+
+
+</body>
+</html>

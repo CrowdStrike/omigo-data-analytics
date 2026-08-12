@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meta-Distribution: Y-Axis Projection</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 40px 20px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; }
+.nav a:hover { text-decoration: underline; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-table tr:nth-child(even) td { background: #fafcfe; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+.toc { background: #f8fafb; border: 1px solid #e0e0e0; padding: 20px 30px; margin: 20px 0 30px; border-radius: 4px; }
+.toc ol { margin: 10px 0 0 20px; font-size: 0.92em; }
+.toc ol li { margin: 5px 0; }
+.toc ol li a { color: #2980b9; text-decoration: none; }
+.toc ol li a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<h1>Meta-Distribution: Y-Axis Projection</h1>
+<p class="subtitle">Take a histogram. Make a histogram of the bin heights. What does that second-order distribution tell you?</p>
+
+<div class="toc">
+<strong>Table of Contents</strong>
+<ol>
+<li><a href="#idea">The Idea</a></li>
+<li><a href="#two-methods">Two Projection Methods</a></li>
+<li><a href="#what-it-encodes">What It Encodes</a></li>
+<li><a href="#metrics">Useful Metrics from Y-Projection</a></li>
+<li><a href="#ex-income">Example: Income (Right-Skewed → Spiky Meta)</a></li>
+<li><a href="#ex-age">Example: Age (Near-Uniform → Flat Meta)</a></li>
+<li><a href="#ex-capital">Example: Capital Gain (Extreme Spike → Long-Tail Meta)</a></li>
+<li><a href="#ex-hours">Example: Hours/Week (Spike-at-Mode → Bimodal Meta)</a></li>
+<li><a href="#summary">Shape → Meta-Shape Mapping</a></li>
+<li><a href="#unique">What Meta Catches That Others Miss</a></li>
+</ol>
+</div>
+
+<h2 id="idea">1. The Idea</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Histogram of Histogram Heights = Meta-Distribution</div>
+<ul>
+<li>Take a feature, bin it into 20-30 bins → get bin heights [h₁, h₂, ... h₂₀]</li>
+<li>Now treat those heights as data points. What's THEIR distribution?</li>
+<li>A histogram of those heights = the meta-distribution (Y-axis projection)</li>
+<li>This tells you how "concentrated" vs "spread" the density is</li>
+</ul>
+<p><strong>Intuition:</strong> If most bins are near-zero and one bin is massive → meta has a long tail → original is spiky. If all bins are similar height → meta is a spike → original is uniform.</p>
+<p><strong>It's cheap:</strong> Just compute stats on 20-30 numbers (the bin heights). No new data needed — derived entirely from the histogram you already have.</p>
+</td>
+<td>
+<canvas id="c1" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="two-methods">2. Two Projection Methods</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Method A: Frontier Points (Bar Top Heights)</div>
+<ul>
+<li>Take the height of each bar as a data point. 20 bars → 20 values.</li>
+<li>Empty bars contribute height = 0 (important signal — means a gap exists)</li>
+<li>Then make a histogram of those 20 height values</li>
+<li><strong>Detects:</strong> Concentration inequality, spike severity, gaps (zeros in the meta)</li>
+</ul>
+<p><strong>Key property:</strong> Zero-valued bins show up explicitly. A bimodal original with a deep valley produces zeros in the frontier → meta has a cluster at zero = "there are empty regions."</p>
+</td>
+<td>
+<canvas id="c_methodA" width="720" height="240"></canvas>
+</td>
+</tr>
+</table>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Method B: Horizontal Slices (Occupancy Profile)</div>
+<ul>
+<li>Draw 10 horizontal lines at evenly-spaced density levels (10%, 20%, ... 100% of max)</li>
+<li>At each level, count how many bars reach that height or above</li>
+<li>Result: a monotonically DECREASING sequence [20, 18, 14, 10, 7, 4, 3, 2, 1, 1]</li>
+<li>Lower levels always have more bars (all non-empty bars pass level 1)</li>
+<li><strong>Detects:</strong> How quickly density drops off — the "steepness of concentration"</li>
+</ul>
+<p><strong>Key property:</strong> Always non-zero at lower levels (unlike frontier). The SHAPE of the occupancy curve encodes concentration:</p>
+<ul>
+<li><strong>Uniform original → flat occupancy:</strong> [20, 20, 20, 20, ...] (all bars at same height)</li>
+<li><strong>Bell → gentle decline:</strong> [20, 18, 14, 10, 6, 4, 2, 1, 1, 1]</li>
+<li><strong>Spike → steep cliff:</strong> [20, 2, 1, 1, 1, 1, 1, 1, 1, 1] (only spike bar reaches level 2+)</li>
+</ul>
+</td>
+<td>
+<canvas id="c_methodB" width="720" height="240"></canvas>
+</td>
+</tr>
+</table>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Comparison: Different Signals from Each</div>
+<ul>
+<li><strong>Frontier (A) is better at:</strong> Detecting gaps (zeros), counting spikes, distinguishing "one tall bar" from "three medium bars" (different meta shapes)</li>
+<li><strong>Occupancy (B) is better at:</strong> Measuring RATE of drop-off, distinguishing "sharp peak + empty" from "broad plateau + thin tails" (same max height but different occupancy curves)</li>
+<li><strong>Combined:</strong> Frontier Gini + Occupancy slope = two complementary numbers. High Gini + steep slope = isolated spike. High Gini + gentle slope = heavy tail (many bins at moderate height, one very high).</li>
+</ul>
+<p><strong>Example:</strong> Bell and right-skew may have similar max/mean ratios. But occupancy curves differ: bell declines symmetrically (both tails lose bars equally), right-skew declines asymmetrically (right tail loses bars faster).</p>
+</td>
+<td>
+<canvas id="c_compare" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="what-it-encodes">3. What It Encodes</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">The Meta-Distribution Encodes Concentration</div>
+<ul>
+<li><strong>Uniform original → spike meta:</strong> All bins same height → meta is concentrated at one value</li>
+<li><strong>Bell original → right-skewed meta:</strong> Many low tail bins, few high peak bins → meta skews right</li>
+<li><strong>Spike original → extreme long-tail meta:</strong> One bin dominates → meta has an outlier</li>
+<li><strong>Bimodal original → bimodal meta:</strong> Bin heights cluster at two levels (peak heights vs valley)</li>
+</ul>
+<p><strong>Key insight:</strong> The tail weight of the meta-distribution directly measures spikiness/concentration of the original. A feature where the meta has kurtosis > 10 is extremely concentrated — probably needs point-mass isolation.</p>
+</td>
+<td>
+<canvas id="c2" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="metrics">3. Useful Metrics from Y-Projection</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Cheap Second-Order Statistics</div>
+<ul>
+<li><strong>Gini coefficient of bin heights:</strong> 0 = all bins equal (uniform). 1 = all mass in one bin (spike). Measures relative inequality.</li>
+<li><strong>Variance / Std of heights:</strong> How much bin counts deviate from the mean count. Measures absolute magnitude of imbalance. Low std = uniform. High std = some bins dominate.</li>
+<li><strong>CV of heights:</strong> std / mean. Scale-free — combines variance with sample size normalization. CV < 0.3 = uniform. CV > 1.5 = concentrated. CV > 3 = extreme spike.</li>
+<li><strong>Max/mean ratio:</strong> Tallest bin ÷ average bin. Uniform → ≈1. Spike → 10-50×. Bell → 2-4×.</li>
+<li><strong>Entropy of heights:</strong> -Σ(pᵢ log pᵢ) where pᵢ = hᵢ/Σh. High = uniform. Low = concentrated.</li>
+<li><strong>Fraction of bins above mean:</strong> Uniform → 50%. Right-skew → 30-40%. Spike → 5-10%.</li>
+<li><strong>Number of zero bins:</strong> Directly counts gaps. Zero in a 20-bin histogram = 5% of range is empty.</li>
+</ul>
+<p><strong>Gini vs Variance — when they diverge:</strong> Heights [100, 200, 300, 400, 500, 600] have HIGH variance but MODERATE Gini (evenly spaced). Heights [1, 1, 1, 1, 1, 100] have HIGH variance AND high Gini. Gini = relative inequality. Variance = absolute scale of imbalance. Use both.</p>
+<p><strong>All O(k) where k = number of bins.</strong> No iteration over raw data needed.</p>
+</td>
+<td>
+<canvas id="c3" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="ex-income">4. Example: Income (Right-Skewed)</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Income → Right-Skewed Meta</div>
+<p><strong>Original:</strong> Right-skewed. Peak near $30k, long tail to $500k.</p>
+<p><strong>Bin heights (20 bins):</strong> [1850, 1200, 680, 420, 280, 180, 120, 80, 55, 40, 30, 22, 15, 10, 7, 5, 3, 2, 1, 0]</p>
+<p><strong>Meta-distribution of heights:</strong> Most heights are small (0-100 range), a few are large (1000+). Meta is right-skewed.</p>
+<ul>
+<li>Gini: 0.72 (high inequality)</li>
+<li>Max/mean: 1850/245 = 7.6×</li>
+<li>Entropy: 2.4 (moderate)</li>
+<li>CV: 1.45</li>
+<li>Bins above mean: 5/20 = 25%</li>
+</ul>
+<p><strong>What this tells you:</strong> Density is concentrated in a small region — 75% of bins are below average height. The feature has most of its information packed into the left portion.</p>
+</td>
+<td>
+<canvas id="c4" width="720" height="250"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="ex-age">5. Example: Age (Near-Uniform)</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Age → Nearly Flat Meta</div>
+<p><strong>Original:</strong> Roughly uniform from 17-90 with mild working-age bulge.</p>
+<p><strong>Bin heights (20 bins):</strong> [180, 220, 280, 310, 340, 350, 360, 350, 330, 310, 290, 270, 250, 230, 200, 180, 150, 120, 90, 60]</p>
+<p><strong>Meta-distribution of heights:</strong> Heights range from 60 to 360 — moderate spread. Meta looks like a mild left-skew (most bins are mid-height).</p>
+<ul>
+<li>Gini: 0.22 (low inequality)</li>
+<li>Max/mean: 360/245 = 1.5×</li>
+<li>Entropy: 4.1 (high — near-uniform)</li>
+<li>CV: 0.35</li>
+<li>Bins above mean: 10/20 = 50%</li>
+</ul>
+<p><strong>What this tells you:</strong> Density is spread evenly — no dominant region. Standard binning works fine. No spike isolation needed.</p>
+</td>
+<td>
+<canvas id="c5" width="720" height="250"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="ex-capital">6. Example: Capital Gain (Extreme Spike)</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Capital Gain → Extreme Long-Tail Meta</div>
+<p><strong>Original:</strong> 95% at zero, scattered non-zero values, spike at cap (99999).</p>
+<p><strong>Bin heights (20 bins):</strong> [30913, 878, 157, 360, 38, 49, 5, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 159]</p>
+<p><strong>Meta-distribution of heights:</strong> 14 bins at zero/near-zero, then a few scattered, then one extreme outlier (30913). Meta has extreme long tail.</p>
+<ul>
+<li>Gini: 0.95 (extreme inequality)</li>
+<li>Max/mean: 30913/1628 = 19×</li>
+<li>Entropy: 1.1 (very low — concentrated)</li>
+<li>CV: 4.7</li>
+<li>Bins above mean: 2/20 = 10%</li>
+</ul>
+<p><strong>What this tells you:</strong> Gini > 0.9 is a screaming signal for point-mass isolation. The meta long-tail says "one bin dominates everything" — standard analysis on the full range is meaningless without separating the spike first.</p>
+</td>
+<td>
+<canvas id="c6" width="720" height="250"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="ex-hours">7. Example: Hours/Week (Spike at Mode)</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Hours/Week → Bimodal Meta</div>
+<p><strong>Original:</strong> Spike at 40, continuous tails on both sides.</p>
+<p><strong>Bin heights (20 bins):</strong> [205, 531, 645, 1547, 1015, 1302, 1635, 16100, 2442, 677, 3036, 841, 1519, 277, 365, 83, 182, 20, 34, 105]</p>
+<p><strong>Meta-distribution of heights:</strong> Most heights cluster 100-2000, but one outlier at 16100. Meta is bimodal: {low cluster of normal bins} + {one spike bin}.</p>
+<ul>
+<li>Gini: 0.62 (moderate-high)</li>
+<li>Max/mean: 16100/1628 = 9.9×</li>
+<li>Entropy: 2.8</li>
+<li>CV: 2.1</li>
+<li>Bins above mean: 5/20 = 25%</li>
+</ul>
+<p><strong>What this tells you:</strong> Max/mean close to 10× but not as extreme as capital gain (19×). The spike is dominant but there's real continuous structure around it — not just empty bins. Suggests: isolate spike, profile remainder (unlike capital gain where remainder is too sparse).</p>
+</td>
+<td>
+<canvas id="c7" width="720" height="250"></canvas>
+</td>
+</tr>
+</table>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Example E: SalePrice (Ames Housing) — Bell-ish with Tail</div>
+<p><strong>Original:</strong> Roughly bell-shaped with a right tail (expensive homes). Most prices cluster $100k-$250k.</p>
+<p><strong>Bin heights:</strong> [11, 135, 451, 882, 565, 343, 210, 119, 88, 46, 35, 16, 11, 3, 6, 3, 4, 0, 0, 2]</p>
+<ul>
+<li>Gini: 0.58 (moderate — one dominant bin but others have mass)</li>
+<li>Occupancy: gentle decline (many bins are moderate height)</li>
+</ul>
+<p><strong>What meta tells you:</strong> Not extreme enough for spike isolation (Gini < 0.6), but adaptive bins will help since the peak bin has 5× the average.</p>
+</td>
+<td>
+<canvas id="c_sale" width="720" height="250"></canvas>
+</td>
+</tr>
+</table>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Example F: Education-Num (Adult Census) — Discrete with Spikes</div>
+<p><strong>Original:</strong> Integer values 1-16. Not smooth — specific values (9, 10, 13) have disproportionate counts.</p>
+<p><strong>Bin heights:</strong> [50, 160, 330, 640, 1200, 7300, 10500, 5400, 1700, 1100, 730, 580, 430, 200, 150, 80]</p>
+<ul>
+<li>Gini: 0.55 (moderate — dominated by bins 6-7 but others non-trivial)</li>
+<li>Occupancy: two-step (big cluster of low bars + 2 tall bars)</li>
+</ul>
+<p><strong>What meta tells you:</strong> The occupancy two-step reveals that this isn't smooth — there are "popular" education levels (HS grad, some college) creating discrete spikes within the continuous range.</p>
+</td>
+<td>
+<canvas id="c_edu" width="720" height="250"></canvas>
+</td>
+</tr>
+</table>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Example G: Lot Frontage (Ames) — Sparse with Zeros</div>
+<p><strong>Original:</strong> Many missing/zero values (no frontage), then a bell-shaped cluster for actual frontage values.</p>
+<p><strong>Bin heights:</strong> [490, 0, 12, 45, 120, 280, 420, 380, 250, 140, 70, 35, 18, 8, 4, 2, 1, 0, 0, 0]</p>
+<ul>
+<li>Gini: 0.68 (high — the zero-spike bin dominates + many empty bins)</li>
+<li>Occupancy: steep initial drop then plateau at 1</li>
+</ul>
+<p><strong>What meta tells you:</strong> The combination of Gini=0.68 + zeros in frontier = structural feature (point mass + gaps + continuous). Needs: isolate zero-bin, skip gaps, profile remainder. More complex than just "right-skewed."</p>
+</td>
+<td>
+<canvas id="c_lot" width="720" height="250"></canvas>
+</td>
+</tr>
+</table>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Example H: Garage Area (Ames) — Zero-Inflated Bell</div>
+<p><strong>Original:</strong> ~5% at exactly 0 (no garage), rest forms a clean bell around 400-500 sqft.</p>
+<p><strong>Bin heights:</strong> [150, 20, 45, 90, 180, 320, 480, 520, 450, 310, 180, 90, 45, 20, 10, 5, 3, 2, 1, 0]</p>
+<ul>
+<li>Gini: 0.42 (moderate — one somewhat-tall bin but overall spread is even)</li>
+<li>Occupancy: smooth decline (looks like a proper bell's occupancy)</li>
+</ul>
+<p><strong>What meta tells you:</strong> Gini is LOWER than capital gain (0.42 vs 0.95) even though both have a zero spike — because the continuous part here is well-populated. The meta says "mild concentration" which means: yes, isolate the zero but the remainder is well-behaved.</p>
+</td>
+<td>
+<canvas id="c_garage" width="720" height="250"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="summary">8. Shape → Meta-Shape Mapping</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Quick Reference: What Meta Tells You</div>
+<ul>
+<li><strong>Meta is a spike (Gini<0.2):</strong> Original is uniform → standard binning works, no special treatment</li>
+<li><strong>Meta is mild right-skew (Gini 0.3-0.6):</strong> Original is bell or mild skew → normal pipeline</li>
+<li><strong>Meta is heavy right-skew (Gini 0.6-0.85):</strong> Original has significant concentration → adaptive bins needed, possible tail isolation</li>
+<li><strong>Meta has extreme tail (Gini>0.85):</strong> Original has point mass domination → MUST isolate spike before any analysis</li>
+<li><strong>Meta is bimodal:</strong> Original has a spike-at-mode + continuous structure → spike isolation + profile remainder</li>
+</ul>
+<p><strong>Actionable thresholds:</strong></p>
+<ul>
+<li>Max/mean > 15× → point mass isolation mandatory</li>
+<li>Max/mean 5-15× → investigate, likely needs adaptive treatment</li>
+<li>Max/mean < 3× → standard pipeline is fine</li>
+</ul>
+</td>
+<td>
+<canvas id="c8" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<div class="philosophy">
+<strong>The meta-distribution is a cheap, second-order signal.</strong> It answers: "how concentrated is the density itself?" — a question that summary statistics (mean, skewness) don't directly address. High Gini/long-tail meta = the feature needs structural treatment (spike isolation, adaptive bins) before any statistical test makes sense. It's a 1-line computation that can route the entire pipeline.
+</div>
+
+<h2 id="unique">9. What Meta Catches That Others Miss</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Hard for Histogram / CNN / Algos — Easy for Meta</div>
+<ul>
+<li><strong>Spike buried in a dense region:</strong> A histogram shows a tall bar, but if surrounding bars are also tall, the CNN may classify it as "bell." Meta detects it: one bin height is 3× the next highest → max/mean ratio jumps. The CNN sees shape; meta sees concentration inequality.</li>
+<li><strong>Uniform-with-one-hole vs uniform:</strong> A histogram with 19 equal bars and 1 empty bar looks "nearly uniform" to CNN. Meta immediately shows it: one zero in an otherwise constant vector → the min/max ratio and zero-bin count are anomalous.</li>
+<li><strong>Degree of spikiness (quantitative):</strong> CNN says "spike" for both 60% concentration and 99% concentration — same class label. Meta gives you the NUMBER: Gini 0.7 vs 0.98. This determines whether you need point-mass isolation (0.98) or just adaptive bins (0.7).</li>
+<li><strong>Multiple small spikes vs one big spike:</strong> A feature with 3 values each at 15% (and rest spread) gets CNN label "multimodal" or "spike." Meta sees it differently: 3 bins at similar high values → low variance among the top heights → "distributed concentration" (not single-point-mass).</li>
+<li><strong>Flat tail vs dying tail:</strong> A histogram where the last 8 bins are [5,5,4,5,4,5,5,4] (flat tail) vs [8,6,5,3,2,1,0,0] (dying tail) — same count roughly, but meta sees that flat-tail has LOW variance in the tail heights. This signals a different population in the tail (cluster) vs genuine decay.</li>
+<li><strong>Bin-count sensitivity detector:</strong> Run meta at 20 bins and 40 bins. If Gini changes dramatically → the feature is resolution-sensitive (structure depends on binning). If Gini is stable → robust feature that doesn't need multi-resolution treatment.</li>
+</ul>
+</td>
+<td>
+<canvas id="c9" width="720" height="340"></canvas>
+</td>
+</tr>
+</table>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Comparison: What Each Method Detects Well</div>
+<ul>
+<li><strong>Histogram:</strong> Visual shape, peaks, valleys. Misses: quantitative concentration degree.</li>
+<li><strong>CNN:</strong> Shape class (bell, spike, bimodal). Misses: severity within a class, subtle structural anomalies.</li>
+<li><strong>Summary stats:</strong> Mean, skew, kurtosis. Misses: multi-modality, structural holes.</li>
+<li><strong>KS test:</strong> Departure from reference. Misses: WHERE and HOW much concentration.</li>
+<li><strong>Meta-distribution:</strong> Concentration inequality, spike severity, structural anomalies (holes, flat tails, distributed spikes). Misses: spatial information (which bins are tall — left or right?).</li>
+</ul>
+<p><strong>Meta's weakness:</strong> It throws away positional information. It knows "one bin dominates" but not WHERE that bin is. That's why it complements (not replaces) the histogram/CNN — they know where, meta knows how much.</p>
+</td>
+<td>
+<canvas id="c10" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id);
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return {ctx: ctx, w: w, h: h};
+}
+
+function drawHist(ctx, bins, x, y, w, h, color, label) {
+    var maxB = Math.max.apply(null, bins);
+    var bW = w / bins.length;
+    ctx.fillStyle = color;
+    bins.forEach(function(v, i) {
+        var barH = (v / maxB) * h;
+        if (v > 0) ctx.fillRect(x + i*bW, y + h - barH, bW - 1, barH);
+    });
+    if (label) {
+        ctx.fillStyle = '#333'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText(label, x + w/2, y + h + 18);
+    }
+}
+
+function drawMeta(ctx, bins, x, y, w, h, color, label) {
+    // Create histogram of bin heights
+    var maxH = Math.max.apply(null, bins);
+    var nMeta = 10;
+    var metaBinW = maxH / nMeta;
+    var meta = new Array(nMeta).fill(0);
+    bins.forEach(function(v) {
+        var idx = Math.min(nMeta - 1, Math.floor(v / metaBinW));
+        meta[idx]++;
+    });
+    drawHist(ctx, meta, x, y, w, h, color, label);
+}
+
+// 1. The idea — show original → project → meta
+(function() {
+    var s = setup('c1'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Original Histogram → Y-Projection → Meta-Distribution', 40, 22);
+
+    // Original
+    var bins = [5, 20, 45, 60, 50, 35, 22, 14, 8, 5, 3, 2, 1, 1, 0];
+    drawHist(ctx, bins, 30, 45, 250, 150, 'rgba(41,128,185,0.4)', 'Original (bell-ish)');
+
+    // Arrow
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(295, 120); ctx.lineTo(335, 120); ctx.stroke();
+    ctx.fillStyle = '#333'; ctx.beginPath();
+    ctx.moveTo(331, 117); ctx.lineTo(337, 120); ctx.lineTo(331, 123); ctx.fill();
+    ctx.fillStyle = '#666'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('histogram', 315, 108);
+    ctx.fillText('of heights', 315, 125);
+
+    // Meta-distribution
+    drawMeta(ctx, bins, 350, 45, 250, 150, 'rgba(230,126,34,0.5)', 'Meta (right-skewed)');
+
+    ctx.fillStyle = '#555'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Most bins are short (tails) → meta skews right. Few bins are tall (peak) → meta tail.', w/2, h - 10);
+})();
+
+// Method A: Frontier points
+(function() {
+    var s = setup('c_methodA'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Method A: Take Bar Top Heights as Data Points', 40, 22);
+
+    var bins = [5, 20, 45, 60, 50, 35, 22, 14, 8, 0, 0, 3, 15, 30, 25, 12, 5, 2, 0, 0];
+    var maxB = 62;
+    var m = {left: 40, right: 30, top: 45, bottom: 50};
+    var pw = w - m.left - m.right, ph = h - m.top - m.bottom;
+    var bW = pw / bins.length;
+
+    // Draw bars
+    bins.forEach(function(v, i) {
+        ctx.fillStyle = v === 0 ? 'rgba(231,76,60,0.15)' : 'rgba(41,128,185,0.35)';
+        var barH = v > 0 ? (v/maxB)*ph : 3;
+        ctx.fillRect(m.left + i*bW, m.top + ph - barH, bW - 1, barH);
+    });
+
+    // Highlight the frontier points (dots at bar tops)
+    ctx.fillStyle = '#e74c3c';
+    bins.forEach(function(v, i) {
+        var x = m.left + (i + 0.5) * bW;
+        var y = m.top + ph - (v/maxB)*ph;
+        ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI*2); ctx.fill();
+    });
+
+    // Arrow showing "these points become data"
+    ctx.fillStyle = '#e74c3c'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('● = height values: [5, 20, 45, 60, ... 0, 0] → histogram THESE → meta', w/2, h - 12);
+    ctx.fillStyle = '#27ae60'; ctx.fillText('zeros = gaps detected!', w - 120, m.top + 10);
+})();
+
+// Method B: Horizontal slices (occupancy)
+(function() {
+    var s = setup('c_methodB'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Method B: Horizontal Slices — Count Bars Reaching Each Level', 40, 22);
+
+    var bins = [5, 20, 45, 60, 50, 35, 22, 14, 8, 5, 3, 2, 1, 1, 0];
+    var maxB = 62;
+    var m = {left: 40, right: 350, top: 45, bottom: 30};
+    var pw = w - m.left - m.right, ph = h - m.top - m.bottom;
+    var bW = pw / bins.length;
+
+    // Draw bars
+    ctx.fillStyle = 'rgba(41,128,185,0.3)';
+    bins.forEach(function(v, i) {
+        var barH = (v/maxB)*ph;
+        if (v > 0) ctx.fillRect(m.left + i*bW, m.top + ph - barH, bW - 1, barH);
+    });
+
+    // Draw horizontal level lines
+    var nLevels = 5;
+    for (var lev = 1; lev <= nLevels; lev++) {
+        var threshold = (lev / nLevels) * maxB;
+        var y = m.top + ph - (threshold/maxB)*ph;
+        ctx.strokeStyle = 'rgba(230,126,34,0.5)'; ctx.lineWidth = 1; ctx.setLineDash([3,3]);
+        ctx.beginPath(); ctx.moveTo(m.left, y); ctx.lineTo(m.left + pw, y); ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Count bars at or above this level
+        var count = 0;
+        bins.forEach(function(v) { if (v >= threshold) count++; });
+        ctx.fillStyle = '#e67e22'; ctx.font = '17px -apple-system'; ctx.textAlign = 'left';
+        ctx.fillText(count + ' bars', m.left + pw + 8, y + 4);
+    }
+
+    // Occupancy curve on right side
+    var occX = w - 280, occW = 230, occH = ph;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Occupancy Profile', occX + occW/2, m.top - 5);
+
+    var occupancy = [];
+    for (var lev = 1; lev <= 10; lev++) {
+        var threshold = (lev / 10) * maxB;
+        var count = 0;
+        bins.forEach(function(v) { if (v >= threshold) count++; });
+        occupancy.push(count);
+    }
+    var occBW = occW / occupancy.length;
+    var occMax = Math.max.apply(null, occupancy);
+    ctx.fillStyle = 'rgba(230,126,34,0.4)';
+    occupancy.forEach(function(v, i) {
+        var barH = (v/occMax) * occH;
+        ctx.fillRect(occX + i*occBW, m.top + occH - barH, occBW - 2, barH);
+    });
+    ctx.fillStyle = '#666'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('level →', occX + occW/2, h - 5);
+    ctx.fillText('low', occX + 10, h - 5);
+    ctx.fillText('high', occX + occW - 10, h - 5);
+})();
+
+// Comparison of both methods
+(function() {
+    var s = setup('c_compare'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Same Data — Different Signal from Each Method', 40, 22);
+
+    // Two cases side by side: spike vs broad plateau (same max height)
+    // Case 1: spike (one tall bar, rest short)
+    var spike = [5, 3, 2, 80, 2, 3, 2, 1, 1, 1];
+    // Case 2: plateau (several medium-tall bars)
+    var plateau = [10, 35, 50, 60, 65, 60, 55, 40, 20, 5];
+
+    var halfW = (w - 60) / 2;
+
+    // Draw spike
+    var maxB = 82;
+    var bW = (halfW - 20) / spike.length;
+    ctx.fillStyle = 'rgba(142,68,173,0.4)';
+    spike.forEach(function(v, i) {
+        ctx.fillRect(30 + i*bW, 60 + 100 - (v/maxB)*100, bW-1, (v/maxB)*100);
+    });
+    ctx.fillStyle = '#8e44ad'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Spike: one tall bar', 30 + (halfW-20)/2, 55);
+
+    // Draw plateau
+    ctx.fillStyle = 'rgba(39,174,96,0.4)';
+    plateau.forEach(function(v, i) {
+        ctx.fillRect(halfW + 40 + i*bW, 60 + 100 - (v/maxB)*100, bW-1, (v/maxB)*100);
+    });
+    ctx.fillStyle = '#27ae60'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Plateau: several medium bars', halfW + 40 + (halfW-20)/2, 55);
+
+    // Comparison text below
+    var y = 185;
+    ctx.fillStyle = '#333'; ctx.font = '17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Frontier (A):', 30, y);
+    ctx.fillStyle = '#8e44ad'; ctx.fillText('Gini=0.88 (extreme inequality)', 150, y);
+    ctx.fillStyle = '#27ae60'; ctx.fillText('Gini=0.35 (moderate spread)', halfW + 80, y);
+
+    ctx.fillStyle = '#333'; ctx.fillText('Occupancy (B):', 30, y + 25);
+    ctx.fillStyle = '#8e44ad'; ctx.fillText('Cliff: [10, 1, 1, 1, 1, ...]', 160, y + 25);
+    ctx.fillStyle = '#27ae60'; ctx.fillText('Gentle: [10, 9, 8, 6, 4, 2, 1, ...]', halfW + 80, y + 25);
+
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Frontier: HOW UNEQUAL are heights. Occupancy: HOW FAST does density drop off.', w/2, h - 10);
+})();
+
+// 2. What it encodes — 4 shape→meta pairs
+(function() {
+    var s = setup('c2'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Shape → Meta-Shape Correspondence', 40, 22);
+
+    var pairs = [
+        {bins: [20,20,20,20,20,20,20,20,20,20], label: 'Uniform→Spike meta', metaLabel: 'Gini≈0'},
+        {bins: [2,8,20,40,55,40,20,8,2,1], label: 'Bell→Right-skew meta', metaLabel: 'Gini≈0.5'},
+        {bins: [90,5,2,1,1,0,0,0,0,1], label: 'Spike→Long-tail meta', metaLabel: 'Gini≈0.95'}
+    ];
+
+    pairs.forEach(function(p, i) {
+        var ox = 30 + i * 240, oy = 45;
+        drawHist(ctx, p.bins, ox, oy, 100, 80, 'rgba(41,128,185,0.4)', '');
+        // Arrow
+        ctx.strokeStyle = '#e67e22'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(ox+105, oy+40); ctx.lineTo(ox+120, oy+40); ctx.stroke();
+        // Meta
+        drawMeta(ctx, p.bins, ox + 125, oy, 100, 80, 'rgba(230,126,34,0.5)', '');
+        ctx.fillStyle = '#333'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText(p.label, ox + 112, oy + 100);
+        ctx.fillStyle = '#e67e22'; ctx.font = 'bold 17px -apple-system';
+        ctx.fillText(p.metaLabel, ox + 112, oy + 118);
+    });
+
+    ctx.fillStyle = '#555'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Meta tail length = original spikiness. Gini is the single-number summary.', w/2, h - 10);
+})();
+
+// 3. Metrics
+(function() {
+    var s = setup('c3'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Meta-Metrics: Gini, Variance, CV, Max/Mean, Entropy', 40, 22);
+
+    var metrics = [
+        {name: 'Gini', uniform: '0.0', bell: '0.45', skew: '0.72', spike: '0.95'},
+        {name: 'Std', uniform: '12', bell: '165', skew: '430', spike: '7200'},
+        {name: 'CV', uniform: '0.05', bell: '0.65', skew: '1.45', spike: '4.7'},
+        {name: 'Max/Mean', uniform: '1.0×', bell: '2.5×', skew: '7.6×', spike: '19×'},
+        {name: 'Entropy', uniform: '4.3', bell: '3.2', skew: '2.4', spike: '1.1'},
+        {name: 'Zero bins', uniform: '0', bell: '0', skew: '1', spike: '14'}
+    ];
+
+    var cols = [{x: 60, label: ''}, {x: 200, label: 'Uniform'}, {x: 320, label: 'Bell'}, {x: 440, label: 'Right-Skew'}, {x: 580, label: 'Spike'}];
+
+    // Header
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    cols.forEach(function(c) { if (c.label) ctx.fillText(c.label, c.x, 50); });
+    ctx.textAlign = 'left';
+    ctx.fillText('Metric', 60, 50);
+
+    metrics.forEach(function(m, i) {
+        var y = 72 + i * 32;
+        ctx.fillStyle = i % 2 === 0 ? '#f8f9fa' : '#fff';
+        ctx.fillRect(40, y - 10, w - 80, 28);
+        ctx.fillStyle = '#333'; ctx.font = '17px -apple-system'; ctx.textAlign = 'left';
+        ctx.fillText(m.name, 60, y + 8);
+        ctx.fillStyle = '#27ae60'; ctx.textAlign = 'center'; ctx.fillText(m.uniform, 200, y + 8);
+        ctx.fillStyle = '#2980b9'; ctx.fillText(m.bell, 320, y + 8);
+        ctx.fillStyle = '#e67e22'; ctx.fillText(m.skew, 440, y + 8);
+        ctx.fillStyle = '#e74c3c'; ctx.fillText(m.spike, 580, y + 8);
+    });
+
+    ctx.fillStyle = '#555'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Gini=relative inequality. Std/CV=absolute scale. Both needed. Zero bins=structural gaps.', w/2, h - 10);
+})();
+
+// Helper: draw original + frontier meta + occupancy in one canvas (3-panel)
+function drawTriple(id, bins, title, color, gini, maxMean, occShape) {
+    var s = setup(id), ctx = s.ctx, w = s.w, h = s.h;
+    var thirdW = (w - 60) / 3;
+    var m = {top: 40, bottom: 40};
+    var ph = h - m.top - m.bottom;
+
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText(title, 20, 20);
+
+    // Panel 1: Original histogram
+    var maxB = Math.max.apply(null, bins);
+    var bW = thirdW / bins.length;
+    // Use log scale if max is extreme
+    var usedBins = maxB > 5000 ? bins.map(function(v) { return v > 0 ? Math.log(v+1) : 0; }) : bins;
+    var usedMax = Math.max.apply(null, usedBins);
+    ctx.fillStyle = color;
+    usedBins.forEach(function(v, i) {
+        var barH = (v / usedMax) * ph;
+        if (v > 0) ctx.fillRect(20 + i*bW, m.top + ph - barH, bW-1, barH);
+    });
+    ctx.fillStyle = '#333'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Original', 20 + thirdW/2, h - 10);
+    if (maxB > 5000) { ctx.fillStyle = '#999'; ctx.fillText('(log scale)', 20 + thirdW/2, h - 25); }
+
+    // Panel 2: Frontier meta (histogram of heights)
+    var ox2 = 30 + thirdW;
+    var nMeta = 10;
+    var metaBinW = maxB / nMeta;
+    var meta = new Array(nMeta).fill(0);
+    bins.forEach(function(v) {
+        var idx = Math.min(nMeta - 1, Math.floor(v / (metaBinW || 1)));
+        meta[idx]++;
+    });
+    var metaMax = Math.max.apply(null, meta);
+    var mBW = thirdW / nMeta;
+    ctx.fillStyle = 'rgba(230,126,34,0.5)';
+    meta.forEach(function(v, i) {
+        var barH = (v / metaMax) * ph;
+        ctx.fillRect(ox2 + i*mBW, m.top + ph - barH, mBW-1, barH);
+    });
+    ctx.fillStyle = '#e67e22'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Frontier Meta', ox2 + thirdW/2, h - 10);
+    ctx.fillStyle = '#333'; ctx.font = '17px -apple-system';
+    ctx.fillText('Gini=' + gini, ox2 + thirdW/2, h - 25);
+
+    // Panel 3: Occupancy profile — use log-spaced levels for extreme data
+    var ox3 = 40 + thirdW * 2;
+    var nLevels = 10;
+    var occupancy = [];
+    // Sort bins to find non-zero values for level spacing
+    var sortedBins = bins.slice().filter(function(v) { return v > 0; }).sort(function(a,b) { return a-b; });
+    var useLogLevels = (maxB / (sortedBins[0] || 1)) > 100; // extreme range → use log levels
+
+    for (var lev = 1; lev <= nLevels; lev++) {
+        var threshold;
+        if (useLogLevels && sortedBins.length > 0) {
+            // Log-spaced levels between min non-zero and max
+            var logMin = Math.log(sortedBins[0] || 1);
+            var logMax = Math.log(maxB);
+            threshold = Math.exp(logMin + (lev / nLevels) * (logMax - logMin));
+        } else {
+            threshold = (lev / nLevels) * maxB;
+        }
+        var count = 0;
+        bins.forEach(function(v) { if (v >= threshold) count++; });
+        occupancy.push(count);
+    }
+    var occMax = Math.max.apply(null, occupancy) || 1;
+    var oBW = thirdW / nLevels;
+    ctx.fillStyle = 'rgba(39,174,96,0.5)';
+    occupancy.forEach(function(v, i) {
+        var barH = (v / occMax) * ph;
+        ctx.fillRect(ox3 + i*oBW, m.top + ph - barH, oBW-1, barH);
+    });
+    ctx.fillStyle = '#27ae60'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Occupancy Profile', ox3 + thirdW/2, h - 10);
+    ctx.fillStyle = '#333'; ctx.font = '17px -apple-system';
+    ctx.fillText(occShape, ox3 + thirdW/2, h - 25);
+
+    // Separator lines
+    ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(25 + thirdW, m.top - 5); ctx.lineTo(25 + thirdW, m.top + ph + 5); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(35 + thirdW*2, m.top - 5); ctx.lineTo(35 + thirdW*2, m.top + ph + 5); ctx.stroke();
+}
+
+// 4. Income
+(function() {
+    drawTriple('c4',
+        [1850, 1200, 680, 420, 280, 180, 120, 80, 55, 40, 30, 22, 15, 10, 7, 5, 3, 2, 1, 0],
+        'Income: right-skewed → right-skewed meta → gentle occupancy decline',
+        'rgba(41,128,185,0.4)', '0.72', '7.6×', 'gentle slope');
+})();
+
+// 5. Age
+(function() {
+    drawTriple('c5',
+        [180, 220, 280, 310, 340, 350, 360, 350, 330, 310, 290, 270, 250, 230, 200, 180, 150, 120, 90, 60],
+        'Age: near-uniform → flat meta → very flat occupancy',
+        'rgba(39,174,96,0.4)', '0.22', '1.5×', 'flat (all bars similar)');
+})();
+
+// 6. Capital Gain
+(function() {
+    drawTriple('c6',
+        [30913, 878, 157, 360, 38, 49, 5, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 159],
+        'Capital Gain: extreme spike → long-tail meta → cliff occupancy',
+        'rgba(142,68,173,0.4)', '0.95', '19×', 'cliff (drops to 1 at level 2)');
+})();
+
+// 7. Hours/week
+(function() {
+    drawTriple('c7',
+        [205, 531, 645, 1547, 1015, 1302, 1635, 16100, 2442, 677, 3036, 841, 1519, 277, 365, 83, 182, 20, 34, 105],
+        'Hours/Week (Adult): spike-at-mode → bimodal meta → step occupancy',
+        'rgba(230,126,34,0.4)', '0.62', '9.9×', 'step (drops then plateau)');
+})();
+
+// E. SalePrice (Ames)
+(function() {
+    drawTriple('c_sale',
+        [11, 135, 451, 882, 565, 343, 210, 119, 88, 46, 35, 16, 11, 3, 6, 3, 4, 0, 0, 2],
+        'SalePrice (Ames): bell + tail → moderate meta → gentle occupancy',
+        'rgba(41,128,185,0.4)', '0.58', '5.1×', 'gentle decline');
+})();
+
+// F. Education-Num (Adult)
+(function() {
+    drawTriple('c_edu',
+        [50, 160, 330, 640, 1200, 7300, 10500, 5400, 1700, 1100, 730, 580, 430, 200, 150, 80],
+        'Education-Num (Adult): discrete spikes → two-step meta → stepped occupancy',
+        'rgba(142,68,173,0.4)', '0.55', '6.8×', 'two-step (popular levels)');
+})();
+
+// G. Lot Frontage (Ames)
+(function() {
+    drawTriple('c_lot',
+        [490, 0, 12, 45, 120, 280, 420, 380, 250, 140, 70, 35, 18, 8, 4, 2, 1, 0, 0, 0],
+        'Lot Frontage (Ames): zeros + bell → high Gini meta → steep occupancy',
+        'rgba(231,76,60,0.4)', '0.68', '8.2×', 'steep (spike + zeros)');
+})();
+
+// H. Garage Area (Ames)
+(function() {
+    drawTriple('c_garage',
+        [150, 20, 45, 90, 180, 320, 480, 520, 450, 310, 180, 90, 45, 20, 10, 5, 3, 2, 1, 0],
+        'Garage Area (Ames): zero-inflated bell → mild meta → smooth occupancy',
+        'rgba(39,174,96,0.4)', '0.42', '3.4×', 'smooth decline');
+})();
+
+// 8. Summary mapping
+(function() {
+    var s = setup('c8'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Meta-Distribution → Pipeline Action', 40, 22);
+
+    var rows = [
+        {meta: 'Spike (Gini < 0.2)', action: 'Standard pipeline — uniform density', color: '#27ae60'},
+        {meta: 'Mild skew (Gini 0.3-0.6)', action: 'Normal pipeline, maybe adaptive bins', color: '#2980b9'},
+        {meta: 'Heavy skew (Gini 0.6-0.85)', action: 'Adaptive bins mandatory, tail investigation', color: '#e67e22'},
+        {meta: 'Extreme tail (Gini > 0.85)', action: 'MUST isolate point mass before any analysis', color: '#e74c3c'},
+        {meta: 'Bimodal meta', action: 'Spike-at-mode: isolate spike + profile remainder', color: '#8e44ad'}
+    ];
+
+    rows.forEach(function(r, i) {
+        var y = 48 + i * 42;
+        ctx.fillStyle = r.color; ctx.globalAlpha = 0.1;
+        ctx.fillRect(40, y, w - 80, 35); ctx.globalAlpha = 1;
+        ctx.strokeStyle = r.color; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.roundRect(40, y, w - 80, 35, 4); ctx.stroke();
+        ctx.fillStyle = r.color; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+        ctx.fillText(r.meta, 60, y + 22);
+        ctx.fillStyle = '#333'; ctx.font = '17px -apple-system';
+        ctx.fillText('→  ' + r.action, 310, y + 22);
+    });
+})();
+
+// 9. What meta catches — examples of hard cases
+(function() {
+    var s = setup('c9'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Hard for CNN — Easy for Meta', 40, 22);
+
+    // Case 1: Spike buried in dense region
+    var case1 = [30, 35, 32, 28, 95, 30, 28, 25, 20, 15]; // bin 5 is a spike but context is dense
+    drawHist(ctx, case1, 30, 50, 200, 100, 'rgba(41,128,185,0.4)', '');
+    ctx.fillStyle = '#e74c3c'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('CNN: "bell" (shape is bell-like)', 130, 170);
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('Meta: max/mean=2.8× (hidden spike!)', 130, 190);
+
+    // Case 2: 60% spike vs 99% spike — CNN says "spike" for both
+    var case2a = [60, 8, 7, 6, 5, 4, 3, 3, 2, 2];
+    var case2b = [99, 0, 0, 0, 0, 0, 0, 0, 0, 1];
+    drawHist(ctx, case2a, 270, 50, 90, 100, 'rgba(142,68,173,0.4)', '');
+    drawHist(ctx, case2b, 380, 50, 90, 100, 'rgba(142,68,173,0.4)', '');
+    ctx.fillStyle = '#8e44ad'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('CNN: both = "spike"', 360, 170);
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('Meta: Gini 0.7 vs 0.98', 360, 190);
+    ctx.fillText('(different treatment!)', 360, 208);
+
+    // Case 3: Flat tail vs dying tail
+    var case3a = [40, 35, 25, 15, 5, 5, 5, 5, 5, 5]; // flat tail
+    var case3b = [40, 35, 25, 15, 8, 5, 3, 1, 0, 0]; // dying tail
+    drawHist(ctx, case3a, 520, 50, 90, 100, 'rgba(230,126,34,0.4)', '');
+    drawHist(ctx, case3b, 620, 50, 90, 100, 'rgba(230,126,34,0.4)', '');
+    ctx.fillStyle = '#e67e22'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('CNN: both = "right_skew"', 610, 170);
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('Meta: flat tail has low', 610, 190);
+    ctx.fillText('variance (=hidden cluster!)', 610, 208);
+
+    ctx.fillStyle = '#555'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Meta detects DEGREE and ANOMALIES that categorical shape labels miss', w/2, h - 10);
+})();
+
+// 10. Comparison table — what each method detects
+(function() {
+    var s = setup('c10'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Method Strengths: Each Catches Different Things', 40, 22);
+
+    var methods = [
+        {name: 'Histogram', detects: 'Visual shape, peaks, valleys', misses: 'Concentration degree', color: '#2980b9'},
+        {name: 'CNN', detects: 'Shape class (11 labels)', misses: 'Severity within class', color: '#f39c12'},
+        {name: 'Stats', detects: 'Mean, skew, kurtosis', misses: 'Multi-modality, holes', color: '#8e44ad'},
+        {name: 'Meta', detects: 'Concentration inequality, spike severity', misses: 'Position (where)', color: '#27ae60'}
+    ];
+
+    methods.forEach(function(m, i) {
+        var y = 50 + i * 52;
+        ctx.fillStyle = m.color; ctx.globalAlpha = 0.1;
+        ctx.fillRect(30, y, w - 60, 44); ctx.globalAlpha = 1;
+        ctx.strokeStyle = m.color; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.roundRect(30, y, w - 60, 44, 4); ctx.stroke();
+
+        ctx.fillStyle = m.color; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+        ctx.fillText(m.name, 50, y + 18);
+        ctx.fillStyle = '#333'; ctx.font = '17px -apple-system';
+        ctx.fillText('✓ ' + m.detects, 150, y + 18);
+        ctx.fillStyle = '#999';
+        ctx.fillText('✗ ' + m.misses, 150, y + 36);
+    });
+
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Meta complements (not replaces): knows HOW MUCH, others know WHERE', w/2, h - 10);
+})();
+</script>
+</body>
+</html>

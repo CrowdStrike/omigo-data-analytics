@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Type Distribution Drives Bucket Boundaries — Discussion Backlog</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #fff; color: #2c3e50; line-height: 1.6; }
+h1 { color: #1a5276; border-bottom: 3px solid #2980b9; padding-bottom: 10px; }
+h2 { color: #1a5276; margin-top: 0; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { padding: 20px; vertical-align: top; border: 1px solid #2980b9; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-title { color: #1a5276; font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
+ul { margin: 10px 0; padding-left: 20px; }
+li { margin-bottom: 6px; }
+strong { color: #1a5276; }
+code { background: #e8f0f8; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; color: #1a5276; }
+.questions { background: #fff8e1; border-left: 3px solid #f39c12; padding: 10px 15px; margin: 10px 0; font-size: 0.9em; }
+canvas { display: block; margin: 8px auto; max-width: 100%; }
+.nav-link { display: inline-block; margin: 20px 0; color: #2980b9; text-decoration: none; font-weight: bold; }
+.nav-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<h1>Data Type Distribution Drives Bucket Boundaries</h1>
+<p>The column's type classification should inform WHERE bucket boundaries are placed. Integer data needs integer boundaries; fractional boundaries on integer data create artifacts.</p>
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Rules by Type</div>
+<ul>
+<li><strong>int_num columns:</strong> Bucket boundaries must fall on integer values. [3,7] makes sense; [3.2, 6.8] splits integers awkwardly</li>
+<li><strong>flt_num columns:</strong> Boundaries can be fractional, placed at natural breakpoints</li>
+<li><strong>int_cat columns:</strong> Each unique integer value gets its own bucket (1-to-1 mapping)</li>
+<li><strong>Mixed columns:</strong> If int_num=0.85, flt_num=0.15, treat as integer and round boundaries</li>
+</ul>
+<div class="obj-title" style="margin-top: 15px;">Why It Matters</div>
+<ul>
+<li>Equal-width bins on integer data create unequal counts</li>
+<li>Fractional boundaries confuse interpretation</li>
+<li>Integer boundaries preserve natural groupings</li>
+</ul>
+<div class="questions">
+<strong>Key Questions:</strong><br>
+(1) For int_num with large range, how to pick integer boundaries?<br>
+(2) Threshold for integer-boundary mode?<br>
+(3) int_cat cardinality switch point?
+</div>
+</td>
+<td>
+<canvas id="c1" width="720" height="280"></canvas>
+<canvas id="c2" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setupCanvas(id) {
+    var c = document.getElementById(id);
+    var w = c.width, h = c.height;
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return {ctx: ctx, w: w, h: h};
+}
+
+// Canvas 1: BAD — fractional bin boundaries on integer data
+(function() {
+    var s = setupCanvas('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var margin = {top: 45, right: 30, bottom: 55, left: 50};
+    var pw = w - margin.left - margin.right;
+    var ph = h - margin.top - margin.bottom;
+
+    // Title with BAD label
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('BAD: Fractional Boundaries on Integer Data', w/2, 20);
+
+    // Integer data values: 1,2,3,4,5,6,7,8,9,10
+    // Fractional bins: [0.5, 3.5], [3.5, 6.0], [6.0, 8.5], [8.5, 11.0]
+    // This creates unequal bin widths and awkward grouping
+    var boundaries = [0.5, 3.5, 6.0, 8.5, 11.0];
+    var binCounts = [15, 12, 18, 10]; // counts per bin
+    var maxVal = 22;
+    var dataRange = 11.0 - 0.5;
+
+    // Axes
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(margin.left, margin.top);
+    ctx.lineTo(margin.left, margin.top + ph);
+    ctx.lineTo(margin.left + pw, margin.top + ph);
+    ctx.stroke();
+
+    // Draw bins with fractional boundaries
+    for (var i = 0; i < binCounts.length; i++) {
+        var x1 = margin.left + ((boundaries[i] - 0.5) / dataRange) * pw;
+        var x2 = margin.left + ((boundaries[i+1] - 0.5) / dataRange) * pw;
+        var barH = (binCounts[i] / maxVal) * ph;
+        var y = margin.top + ph - barH;
+
+        ctx.fillStyle = 'rgba(231, 76, 60, 0.2)';
+        ctx.fillRect(x1, y, x2 - x1, barH);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x1, y, x2 - x1, barH);
+    }
+
+    // Draw boundary lines (dashed red)
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    for (var i = 0; i < boundaries.length; i++) {
+        var x = margin.left + ((boundaries[i] - 0.5) / dataRange) * pw;
+        ctx.beginPath();
+        ctx.moveTo(x, margin.top);
+        ctx.lineTo(x, margin.top + ph + 5);
+        ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    // Boundary labels
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    for (var i = 0; i < boundaries.length; i++) {
+        var x = margin.left + ((boundaries[i] - 0.5) / dataRange) * pw;
+        ctx.fillText(boundaries[i].toFixed(1), x, margin.top + ph + 18);
+    }
+
+    // Show integer data points on x-axis
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = 'bold 13px -apple-system, sans-serif';
+    for (var v = 1; v <= 10; v++) {
+        var x = margin.left + ((v - 0.5) / dataRange) * pw;
+        ctx.beginPath();
+        ctx.arc(x, margin.top + ph + 32, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillText(v, x, margin.top + ph + 46);
+    }
+
+    // Problem annotation
+    ctx.font = 'italic 11px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'left';
+    ctx.fillText('3.5 splits between 3 and 4 — confusing!', margin.left + 10, margin.top + 15);
+})();
+
+// Canvas 2: GOOD — integer bin boundaries on same data
+(function() {
+    var s = setupCanvas('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var margin = {top: 45, right: 30, bottom: 55, left: 50};
+    var pw = w - margin.left - margin.right;
+    var ph = h - margin.top - margin.bottom;
+
+    // Title with GOOD label
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText('GOOD: Integer Boundaries on Integer Data', w/2, 20);
+
+    // Integer bins: [1,3], [4,6], [7,8], [9,10]
+    var boundaries = [1, 4, 7, 9, 11];
+    var binCounts = [15, 12, 18, 10];
+    var maxVal = 22;
+    var dataRange = 10;
+
+    // Axes
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(margin.left, margin.top);
+    ctx.lineTo(margin.left, margin.top + ph);
+    ctx.lineTo(margin.left + pw, margin.top + ph);
+    ctx.stroke();
+
+    // Draw bins with integer boundaries
+    for (var i = 0; i < binCounts.length; i++) {
+        var x1 = margin.left + ((boundaries[i] - 1) / dataRange) * pw;
+        var x2 = margin.left + ((boundaries[i+1] - 1) / dataRange) * pw;
+        var barH = (binCounts[i] / maxVal) * ph;
+        var y = margin.top + ph - barH;
+
+        ctx.fillStyle = 'rgba(39, 174, 96, 0.2)';
+        ctx.fillRect(x1, y, x2 - x1, barH);
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x1, y, x2 - x1, barH);
+    }
+
+    // Draw boundary lines (dashed green)
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    for (var i = 0; i < boundaries.length; i++) {
+        var x = margin.left + ((boundaries[i] - 1) / dataRange) * pw;
+        ctx.beginPath();
+        ctx.moveTo(x, margin.top);
+        ctx.lineTo(x, margin.top + ph + 5);
+        ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    // Boundary labels
+    ctx.font = 'bold 13px -apple-system, sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    for (var i = 0; i < boundaries.length; i++) {
+        var x = margin.left + ((boundaries[i] - 1) / dataRange) * pw;
+        var label = boundaries[i] < 11 ? boundaries[i].toString() : '';
+        ctx.fillText(label, x, margin.top + ph + 18);
+    }
+
+    // Show integer data points on x-axis
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = 'bold 13px -apple-system, sans-serif';
+    for (var v = 1; v <= 10; v++) {
+        var x = margin.left + ((v - 0.5) / dataRange) * pw;
+        ctx.beginPath();
+        ctx.arc(x, margin.top + ph + 32, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillText(v, x, margin.top + ph + 46);
+    }
+
+    // Bin labels
+    ctx.font = 'italic 11px -apple-system, sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    var binLabels = ['[1-3]', '[4-6]', '[7-8]', '[9-10]'];
+    for (var i = 0; i < binLabels.length; i++) {
+        var x1 = margin.left + ((boundaries[i] - 1) / dataRange) * pw;
+        var x2 = margin.left + ((boundaries[i+1] - 1) / dataRange) * pw;
+        ctx.fillText(binLabels[i], (x1 + x2) / 2, margin.top + 15);
+    }
+})();
+</script>
+
+</body>
+</html>

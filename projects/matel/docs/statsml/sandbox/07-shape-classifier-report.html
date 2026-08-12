@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Shape Classifier — Results Report</title>
+<style>
+body { font-family: -apple-system, sans-serif; margin: 40px; padding: 0; color: #2c3e50; background: #f8f9fa; }
+h1 { color: #1a5276; border-bottom: 3px solid #1a5276; padding-bottom: 10px; }
+h2 { color: #1a5276; margin-top: 30px; border-bottom: 2px solid #2980b9; padding-bottom: 6px; id: attr; }
+.two-col { width: 100%; border-collapse: separate; border-spacing: 12px; margin: 10px 0; }
+.two-col td { vertical-align: top; padding: 16px; background: #fff; border: 1px solid #ddd; border-radius: 8px; }
+.two-col td:first-child { width: 40%; }
+.two-col td:last-child { width: 60%; }
+canvas { width: 100%; }
+.note { background: #d6eaf8; border: 1px solid #85c1e9; border-radius: 8px; padding: 12px 16px; margin: 10px 0; font-size: 0.88em; }
+.note-warn { background: #fef9e7; border: 1px solid #f9e79f; }
+.metric { font-weight: 600; color: #1a5276; }
+ul { padding-left: 18px; line-height: 1.8; font-size: 0.9em; }
+table.data { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 0.82em; }
+table.data th { background: #1a5276; color: #fff; padding: 7px 10px; text-align: left; }
+table.data td { padding: 6px 10px; border-bottom: 1px solid #eee; }
+table.data tr:hover { background: #f0f8ff; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75em; font-weight: bold; }
+.badge-green { background: #d4efdf; color: #1e8449; }
+.badge-orange { background: #fdebd0; color: #d35400; }
+</style>
+</head>
+<body>
+
+<h1>Shape Classifier — Results Report</h1>
+
+<div class="note">
+11-class generative model (independent sigmoid heads). Same 64×64 grayscale + SE band input. Discriminative companion achieves 93.3% top-1 with 95.9% agreement.
+</div>
+
+<!-- Section 1: Summary -->
+<h2 id="s1">1. Summary</h2>
+<table class="two-col"><tr>
+<td>
+<ul>
+<li><span class="metric">11 classes</span> — bell, right_skew, left_skew, heavy_tail, bimodal, multimodal, u_shaped, spike, descending, ascending, zero_inflated</li>
+<li><span class="metric">890K parameters</span></li>
+<li><span class="metric">96.6% mean recall</span>, 0.966 mean F1</li>
+<li>Input: 64×64 grayscale, 23 bins, SE bands</li>
+<li>Multi-label: each head fires independently</li>
+</ul>
+</td>
+<td>
+<canvas id="chart-f1" height="280"></canvas>
+</td>
+</tr></table>
+
+<!-- Section 2: Confusion -->
+<h2 id="s2">2. Recall &amp; False Positives</h2>
+<table class="two-col"><tr>
+<td>
+<ul>
+<li><strong>Perfect:</strong> u_shaped (100%), ascending (99.9%), multimodal (99.9%)</li>
+<li><strong>Strong:</strong> zero_inflated (99.2%), heavy_tail (98.6%), spike (98.4%)</li>
+<li><strong>Weakest:</strong> bell (88.4%) — cross-activates with right_skew/heavy_tail by design</li>
+</ul>
+<p style="font-size:0.82em;color:#666;margin-top:12px;">Highest FP rates are between structurally related shapes (bell↔heavy_tail, spike↔heavy_tail, zero_inflated↔multimodal) — expected and informative for routing.</p>
+</td>
+<td>
+<canvas id="chart-recall-fp" height="280"></canvas>
+</td>
+</tr></table>
+
+<!-- Section 3: Real data -->
+<h2 id="s3">3. Real Data Validation</h2>
+<table class="two-col"><tr>
+<td>
+<p style="font-size:0.88em;">Selected features from Ames Housing (n=2930) and Adult Census (n=48842). No retraining — model sees real histograms for the first time.</p>
+<table class="data">
+<tr><th>Feature</th><th>Top-1</th><th>Check</th></tr>
+<tr><td>SalePrice</td><td>right_skew (100%)</td><td><span class="badge badge-green">✓</span></td></tr>
+<tr><td>Lot Area</td><td>heavy_tail (97%)</td><td><span class="badge badge-green">✓</span></td></tr>
+<tr><td>Year Built</td><td>ascending (100%)</td><td><span class="badge badge-green">✓</span></td></tr>
+<tr><td>2nd Flr SF</td><td>zero_inflated (100%)</td><td><span class="badge badge-green">✓</span></td></tr>
+<tr><td>Garage Area</td><td>bell (100%)</td><td><span class="badge badge-green">✓</span></td></tr>
+<tr><td>Capital_Gain</td><td>zero_inflated (100%)</td><td><span class="badge badge-green">✓</span></td></tr>
+<tr><td>Hours/week</td><td>spike (100%)</td><td><span class="badge badge-green">✓</span></td></tr>
+<tr><td>Education_Num</td><td>multimodal (91%)</td><td><span class="badge badge-green">✓</span></td></tr>
+</table>
+</td>
+<td>
+<canvas id="chart-samples" height="280"></canvas>
+</td>
+</tr></table>
+
+<!-- Section 4: Key observations -->
+<h2 id="s4">4. Key Observations</h2>
+<table class="two-col"><tr>
+<td>
+<div class="note">
+<strong>Biggest win:</strong> zero_inflated vs spike distinction. The old 3-class model conflated both as "spike." Now the pipeline knows: zero_inflated → split off zeros first; spike → model the concentration directly.
+</div>
+<div class="note note-warn">
+<strong>Known FP:</strong> bell↔heavy_tail (47% cross-activation). By design — heavy_tail IS bell-shaped in center. Pipeline rule: if both fire, prefer heavy_tail.
+</div>
+<div class="note">
+<strong>Discrete ordinals:</strong> Features like Overall Qual activate spike+multimodal. The type classifier (int_cat) should gate these away from shape analysis.
+</div>
+</td>
+<td>
+<canvas id="chart-comparison" height="280"></canvas>
+</td>
+</tr></table>
+
+<script>
+function setup(id, w, h) {
+    const c = document.getElementById(id);
+    const dpr = window.devicePixelRatio || 1;
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    const ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return ctx;
+}
+
+// Color palette
+const C = {
+    bell: '#2980b9', right_skew: '#27ae60', left_skew: '#1abc9c', heavy_tail: '#8e44ad',
+    bimodal: '#e67e22', multimodal: '#d35400', u_shaped: '#c0392b',
+    spike: '#f39c12', descending: '#16a085', ascending: '#2c3e50', zero_inflated: '#e74c3c'
+};
+const classOrder = ['bell','right_skew','left_skew','heavy_tail','bimodal','multimodal','u_shaped','spike','descending','ascending','zero_inflated'];
+const shortNames = ['bell','r_skew','l_skew','h_tail','bimod','multi','u_shape','spike','desc','asc','zero_infl'];
+
+// Chart 1: F1 scores horizontal bars
+(function() {
+    const W = 420, H = 280;
+    const ctx = setup('chart-f1', W, H);
+    const f1 = [0.929, 0.926, 0.945, 0.959, 0.974, 0.982, 0.994, 0.980, 0.968, 0.972, 0.996];
+    const ml = 70, mt = 24, barH = 20, gap = 3, chartW = W - ml - 50;
+
+    ctx.font = 'bold 11px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('Per-Class F1 Score', W/2, 14);
+
+    classOrder.forEach((cls, i) => {
+        const y = mt + i * (barH + gap);
+        const bw = (f1[i] / 1.0) * chartW;
+        ctx.fillStyle = C[cls]; ctx.globalAlpha = 0.75;
+        ctx.fillRect(ml, y, bw, barH);
+        ctx.globalAlpha = 1;
+        ctx.font = '9px -apple-system, sans-serif';
+        ctx.fillStyle = '#333'; ctx.textAlign = 'right';
+        ctx.fillText(shortNames[i], ml - 5, y + barH/2 + 3);
+        ctx.textAlign = 'left'; ctx.font = 'bold 9px -apple-system, sans-serif';
+        ctx.fillStyle = f1[i] >= 0.96 ? '#27ae60' : '#e67e22';
+        ctx.fillText(f1[i].toFixed(3), ml + bw + 4, y + barH/2 + 3);
+    });
+
+    // 0.95 ref line
+    const rx = ml + 0.95 * chartW;
+    ctx.strokeStyle = '#aaa'; ctx.setLineDash([3,3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(rx, mt - 4); ctx.lineTo(rx, mt + 11*(barH+gap)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = '8px sans-serif'; ctx.fillStyle = '#999'; ctx.textAlign = 'center';
+    ctx.fillText('0.95', rx, mt - 6);
+})();
+
+// Chart 2: Recall vs Max FP
+(function() {
+    const W = 420, H = 280;
+    const ctx = setup('chart-recall-fp', W, H);
+    const recall = [88.4, 96.5, 98.3, 98.6, 97.2, 99.9, 100.0, 98.4, 96.2, 99.9, 99.2];
+    const maxFP = [46.5, 34.8, 6.5, 46.9, 9.4, 15.1, 2.5, 44.7, 20.2, 0.9, 40.4];
+    const ml = 50, mt = 28, mb = 40, mr = 20;
+    const pw = W - ml - mr, ph = H - mt - mb;
+    const groupW = pw / 11, barW = groupW * 0.38;
+
+    ctx.font = 'bold 11px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('Recall vs Max FP', W/2, 14);
+
+    // Y grid
+    ctx.strokeStyle = '#eee'; ctx.lineWidth = 1;
+    for (let p = 0; p <= 100; p += 25) {
+        const y = mt + ph - (p/100)*ph;
+        ctx.beginPath(); ctx.moveTo(ml, y); ctx.lineTo(ml+pw, y); ctx.stroke();
+        ctx.fillStyle = '#999'; ctx.font = '8px sans-serif'; ctx.textAlign = 'right';
+        ctx.fillText(p+'%', ml-4, y+3);
+    }
+
+    classOrder.forEach((cls, i) => {
+        const gx = ml + i * groupW;
+        // Recall bar
+        ctx.fillStyle = '#27ae60'; ctx.globalAlpha = 0.7;
+        const rH = (recall[i]/100)*ph;
+        ctx.fillRect(gx+2, mt+ph-rH, barW, rH);
+        // FP bar
+        ctx.fillStyle = '#e74c3c';
+        const fH = (maxFP[i]/100)*ph;
+        ctx.fillRect(gx+barW+3, mt+ph-fH, barW, fH);
+        ctx.globalAlpha = 1;
+        // Label
+        ctx.save();
+        ctx.translate(gx + groupW/2, mt + ph + 6);
+        ctx.rotate(Math.PI/5);
+        ctx.fillStyle = '#333'; ctx.font = '7px -apple-system, sans-serif'; ctx.textAlign = 'left';
+        ctx.fillText(shortNames[i], 0, 0);
+        ctx.restore();
+    });
+
+    // Legend
+    ctx.globalAlpha = 0.7;
+    ctx.fillStyle = '#27ae60'; ctx.fillRect(W-110, 24, 10, 10);
+    ctx.fillStyle = '#e74c3c'; ctx.fillRect(W-110, 38, 10, 10);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#333'; ctx.font = '9px sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('Recall', W-96, 33);
+    ctx.fillText('Max FP', W-96, 47);
+})();
+
+// Chart 3: Sample histograms for real features
+(function() {
+    const W = 420, H = 280;
+    const ctx = setup('chart-samples', W, H);
+
+    ctx.font = 'bold 11px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('Sample Shapes (synthetic examples)', W/2, 14);
+
+    const shapes = [
+        { label: 'bell', color: C.bell, fn: i => Math.exp(-0.5*((i-11)/4)**2) },
+        { label: 'right_skew', color: C.right_skew, fn: i => i < 3 ? 0 : Math.exp(-0.3*(i-4)) * (i > 3 ? 1 : 0) },
+        { label: 'bimodal', color: C.bimodal, fn: i => Math.exp(-0.5*((i-6)/2)**2) + Math.exp(-0.5*((i-17)/2)**2) },
+        { label: 'spike', color: C.spike, fn: i => i === 10 ? 1 : 0.05 },
+        { label: 'u_shaped', color: C.u_shaped, fn: i => Math.exp(-0.3*(i-1)) + Math.exp(-0.3*(22-i)) },
+        { label: 'zero_inflated', color: C.zero_inflated, fn: i => i === 0 ? 1 : 0.08*Math.exp(-0.3*i) }
+    ];
+
+    const cols = 3, rows = 2, pw = 120, ph = 80, gapX = 18, gapY = 30;
+    const startX = 30, startY = 30;
+
+    shapes.forEach((s, si) => {
+        const col = si % cols, row = Math.floor(si / cols);
+        const ox = startX + col * (pw + gapX);
+        const oy = startY + row * (ph + gapY);
+
+        // Background
+        ctx.fillStyle = '#f7f9fb';
+        ctx.fillRect(ox, oy, pw, ph);
+        ctx.strokeStyle = '#ddd'; ctx.strokeRect(ox, oy, pw, ph);
+
+        // Bars
+        const vals = []; for (let i = 0; i < 23; i++) vals.push(s.fn(i));
+        const mx = Math.max(...vals);
+        const bw = pw / 23;
+        for (let i = 0; i < 23; i++) {
+            const h = (vals[i] / mx) * (ph - 6);
+            ctx.fillStyle = s.color; ctx.globalAlpha = 0.75;
+            ctx.fillRect(ox + i*bw, oy + ph - h - 3, bw - 0.5, h);
+        }
+        ctx.globalAlpha = 1;
+
+        // Label
+        ctx.font = '9px -apple-system, sans-serif';
+        ctx.fillStyle = s.color; ctx.textAlign = 'center';
+        ctx.fillText(s.label, ox + pw/2, oy + ph + 12);
+    });
+})();
+
+// Chart 4: 3-class vs 11-class comparison
+(function() {
+    const W = 420, H = 280;
+    const ctx = setup('chart-comparison', W, H);
+
+    ctx.font = 'bold 11px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('3-Class PoC → 11-Class: Key Upgrades', W/2, 14);
+
+    const items = [
+        { feature: 'SalePrice', old: 'mountain', new_: 'right_skew', gain: 'Skew direction' },
+        { feature: 'Lot Area', old: 'mountain', new_: 'heavy_tail', gain: 'Outlier behavior' },
+        { feature: 'Year Built', old: 'valley', new_: 'ascending', gain: 'Monotone trend' },
+        { feature: '2nd Flr SF', old: 'spike', new_: 'zero_inflated', gain: 'Zero mechanism' },
+        { feature: 'Capital_Gain', old: 'spike', new_: 'zero_inflated', gain: 'Zero mechanism' },
+        { feature: 'Garage Area', old: 'mountain', new_: 'bell', gain: 'Symmetry confirmed' },
+    ];
+
+    const mt = 32, rowH = 38, ml = 10;
+    ctx.font = '9px -apple-system, sans-serif';
+
+    // Header
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 9px -apple-system, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('Feature', ml + 5, mt);
+    ctx.fillText('3-class', ml + 90, mt);
+    ctx.fillText('→', ml + 155, mt);
+    ctx.fillText('11-class', ml + 175, mt);
+    ctx.fillText('Insight gained', ml + 290, mt);
+
+    items.forEach((item, i) => {
+        const y = mt + 14 + i * rowH;
+        // Alternating bg
+        if (i % 2 === 0) { ctx.fillStyle = '#f7f9fb'; ctx.fillRect(ml, y - 10, W - 2*ml, rowH - 2); }
+
+        ctx.font = '9px -apple-system, sans-serif';
+        ctx.fillStyle = '#333'; ctx.textAlign = 'left';
+        ctx.fillText(item.feature, ml + 5, y + 5);
+
+        // Old class pill
+        ctx.fillStyle = '#ddd';
+        ctx.fillRect(ml + 85, y - 4, 60, 16);
+        ctx.fillStyle = '#666'; ctx.textAlign = 'center';
+        ctx.fillText(item.old, ml + 115, y + 6);
+
+        // Arrow
+        ctx.fillStyle = '#1a5276'; ctx.fillText('→', ml + 160, y + 6);
+
+        // New class pill
+        const nc = C[item.new_] || '#333';
+        ctx.fillStyle = nc; ctx.globalAlpha = 0.15;
+        ctx.fillRect(ml + 175, y - 4, 80, 16);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = nc; ctx.textAlign = 'center';
+        ctx.font = 'bold 9px -apple-system, sans-serif';
+        ctx.fillText(item.new_, ml + 215, y + 6);
+
+        // Gain
+        ctx.font = '9px -apple-system, sans-serif';
+        ctx.fillStyle = '#27ae60'; ctx.textAlign = 'left';
+        ctx.fillText(item.gain, ml + 290, y + 5);
+    });
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Object Detection - Domain-Specific Pitfalls</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #f8f9fa;
+            color: #2c3e50;
+            padding: 40px 20px;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: #1a5276;
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: #5d6d7e;
+            font-size: 15px;
+            margin-bottom: 30px;
+        }
+
+        .obj-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 40px;
+            background: #ffffff;
+            border: 2px solid #2980b9;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .obj-table thead th {
+            background: #1a5276;
+            color: #ffffff;
+            padding: 12px 16px;
+            text-align: left;
+            font-size: 14px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+
+        .obj-table thead th:first-child {
+            width: 45%;
+        }
+
+        .obj-table thead th:last-child {
+            width: 55%;
+        }
+
+        .obj-table tbody tr {
+            border-bottom: 1px solid #2980b9;
+        }
+
+        .obj-table tbody tr:last-child {
+            border-bottom: none;
+        }
+
+        .obj-table tbody tr:nth-child(even) {
+            background: #f0f8ff;
+        }
+
+        .obj-table tbody td {
+            padding: 14px 16px;
+            vertical-align: top;
+            font-size: 14px;
+            border-right: 1px solid #2980b9;
+        }
+
+        .obj-table tbody td:last-child {
+            border-right: none;
+        }
+
+        .obj-table tbody td:first-child {
+            font-weight: 600;
+            color: #1a5276;
+        }
+
+        .chart-section {
+            background: #ffffff;
+            border: 2px solid #2980b9;
+            border-radius: 6px;
+            padding: 24px;
+            margin-bottom: 30px;
+        }
+
+        .chart-title {
+            color: #1a5276;
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        canvas {
+            display: block;
+            margin: 0 auto;
+            max-width: 100%;
+        }
+
+        .nav-link {
+            display: inline-block;
+            margin-top: 20px;
+            color: #2980b9;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            padding: 8px 16px;
+            border: 1px solid #2980b9;
+            border-radius: 4px;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        .nav-link:hover {
+            background: #2980b9;
+            color: #ffffff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Real-Time Object Detection</h1>
+        <p class="subtitle">Domain-specific pitfalls for on-device, real-time visual inference systems</p>
+
+        <table class="obj-table">
+            <thead>
+                <tr>
+                    <th>Pitfall</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>16ms Latency Budget</td>
+                    <td>60fps = 16ms per frame for full pipeline: capture &rarr; inference &rarr; render overlay; ANY processing &gt; 16ms = dropped frame = visible lag = nausea on head-mounted; must be fast AND correct</td>
+                </tr>
+                <tr>
+                    <td>Power/Thermal On-Device</td>
+                    <td>Meta glasses: 2W power budget; running YOLO at full resolution = battery dead in 20 min; must trade accuracy for efficiency; smaller model = more errors but device stays alive</td>
+                </tr>
+                <tr>
+                    <td>Training Images &ne; Live Camera</td>
+                    <td>Training: curated datasets, good lighting, centered objects; live: motion blur, partial occlusion, extreme angles, reflections, low light; domain gap between ImageNet and real glasses-cam is enormous</td>
+                </tr>
+                <tr>
+                    <td>Motion Blur at Head-Turn Speed</td>
+                    <td>User turns head &rarr; 50ms exposure &rarr; entire frame is blurred; detector trained on sharp images fails; must either handle blur robustly or only process stable frames (missing 30% of time)</td>
+                </tr>
+                <tr>
+                    <td>Privacy Constraints Limit Processing</td>
+                    <td>Can't store or transmit raw video of bystanders; must detect/blur faces BEFORE any processing; but face detection IS processing; circular constraint; must process to know what not to process</td>
+                </tr>
+                <tr>
+                    <td>Occlusion from Device Geometry</td>
+                    <td>Glasses frame blocks 10% of visual field; nose bridge occludes center-bottom; these dead zones are ALWAYS there; objects partially hidden by your own device = missed detections in predictable locations</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="chart-section">
+            <div class="chart-title">Frame Timing Budget Breakdown &mdash; 16ms Real-Time Constraint</div>
+            <canvas id="timingChart" width="720" height="300"></canvas>
+        </div>
+
+    </div>
+
+    <script>
+        (function() {
+            var canvas = document.getElementById('timingChart');
+            var ctx = canvas.getContext('2d');
+
+            // devicePixelRatio scaling
+            var dpr = window.devicePixelRatio || 1;
+            var cssWidth = 720;
+            var cssHeight = 200;
+            canvas.width = cssWidth * dpr;
+            canvas.height = cssHeight * dpr;
+            canvas.style.width = cssWidth + 'px';
+            canvas.style.height = cssHeight + 'px';
+            ctx.scale(dpr, dpr);
+
+            var chartFontSize = 17;
+            var font = chartFontSize + 'px -apple-system, BlinkMacSystemFont, sans-serif';
+            var smallFont = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+            var tinyFont = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+
+            // Frame budget breakdown (in ms)
+            var stages = [
+                { name: 'Capture', time: 2, color: '#27ae60' },
+                { name: 'Preprocess', time: 1.5, color: '#2ecc71' },
+                { name: 'Inference', time: 8, color: '#e74c3c' },
+                { name: 'Post-process', time: 2, color: '#f39c12' },
+                { name: 'Render', time: 2.5, color: '#2980b9' }
+            ];
+
+            var totalBudget = 16;
+            var totalUsed = stages.reduce(function(s, st) { return s + st.time; }, 0);
+
+            // Draw section title
+            ctx.font = font;
+            ctx.fillStyle = '#1a5276';
+            ctx.textAlign = 'left';
+            ctx.fillText('Pipeline Stage Timing (16ms budget)', 10, 22);
+
+            // Draw stacked horizontal bar
+            var barY = 38;
+            var barHeight = 34;
+            var barMaxWidth = 600;
+            var barX = 80;
+
+            // Background bar (full 16ms budget)
+            ctx.fillStyle = '#ecf0f1';
+            ctx.fillRect(barX, barY, barMaxWidth, barHeight);
+
+            // Draw budget limit line
+            ctx.strokeStyle = '#1a5276';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([4, 3]);
+            ctx.beginPath();
+            ctx.moveTo(barX + barMaxWidth, barY - 5);
+            ctx.lineTo(barX + barMaxWidth, barY + barHeight + 5);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Budget label
+            ctx.font = smallFont;
+            ctx.fillStyle = '#1a5276';
+            ctx.textAlign = 'center';
+            ctx.fillText('16ms limit', barX + barMaxWidth, barY + barHeight + 16);
+
+            // Draw each stage as stacked bar segment
+            var currentX = barX;
+            stages.forEach(function(stage) {
+                var width = (stage.time / totalBudget) * barMaxWidth;
+                ctx.fillStyle = stage.color;
+                ctx.fillRect(currentX, barY, width, barHeight);
+
+                // Stage time label inside bar
+                if (width > 35) {
+                    ctx.font = tinyFont;
+                    ctx.fillStyle = '#ffffff';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(stage.time + 'ms', currentX + width / 2, barY + barHeight / 2 + 4);
+                }
+                currentX += width;
+            });
+
+            // Remaining slack
+            var slackWidth = ((totalBudget - totalUsed) / totalBudget) * barMaxWidth;
+            if (slackWidth > 0) {
+                ctx.fillStyle = '#bdc3c7';
+                ctx.fillRect(currentX, barY, slackWidth, barHeight);
+                ctx.font = tinyFont;
+                ctx.fillStyle = '#2c3e50';
+                ctx.textAlign = 'center';
+                ctx.fillText('slack', currentX + slackWidth / 2, barY + barHeight / 2 + 4);
+            }
+
+            // Y-axis label
+            ctx.save();
+            ctx.font = smallFont;
+            ctx.fillStyle = '#5d6d7e';
+            ctx.textAlign = 'center';
+            ctx.translate(25, barY + barHeight / 2);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillText('Stage', 0, 0);
+            ctx.restore();
+
+            // Legend row
+            var legendY = 92;
+            var legendX = barX;
+            ctx.font = smallFont;
+            stages.forEach(function(stage) {
+                ctx.fillStyle = stage.color;
+                ctx.fillRect(legendX, legendY, 10, 10);
+                ctx.fillStyle = '#2c3e50';
+                ctx.textAlign = 'left';
+                ctx.fillText(stage.name + ' (' + stage.time + 'ms)', legendX + 14, legendY + 9);
+                legendX += 118;
+            });
+
+            // Lower section: Dropped frames at various latencies
+            var chartY2 = 122;
+            ctx.font = font;
+            ctx.fillStyle = '#1a5276';
+            ctx.textAlign = 'left';
+            ctx.fillText('Latency Impact: Frames Dropped per Second', 10, chartY2);
+
+            var latencies = [
+                { ms: 10, dropped: 0, label: '10ms' },
+                { ms: 16, dropped: 0, label: '16ms' },
+                { ms: 20, dropped: 12, label: '20ms' },
+                { ms: 25, dropped: 18, label: '25ms' },
+                { ms: 33, dropped: 27, label: '33ms' },
+                { ms: 50, dropped: 36, label: '50ms' }
+            ];
+
+            var chartX2 = barX;
+            var chartY2Start = chartY2 + 10;
+            var chartHeight2 = 45;
+            var chartWidth2 = barMaxWidth;
+            var barSpacing = chartWidth2 / latencies.length;
+            var barW = 38;
+            var maxDropped = 40;
+
+            // Baseline axis
+            ctx.strokeStyle = '#bdc3c7';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(chartX2, chartY2Start + chartHeight2);
+            ctx.lineTo(chartX2 + chartWidth2, chartY2Start + chartHeight2);
+            ctx.stroke();
+
+            latencies.forEach(function(item, i) {
+                var x = chartX2 + i * barSpacing + (barSpacing - barW) / 2;
+                var h = (item.dropped / maxDropped) * chartHeight2;
+                var y = chartY2Start + chartHeight2 - h;
+
+                // Color severity
+                if (item.dropped === 0) {
+                    ctx.fillStyle = '#27ae60';
+                } else if (item.dropped < 20) {
+                    ctx.fillStyle = '#f39c12';
+                } else {
+                    ctx.fillStyle = '#e74c3c';
+                }
+
+                if (h > 0) {
+                    ctx.fillRect(x, y, barW, h);
+                } else {
+                    // Draw a thin green line to indicate zero
+                    ctx.fillStyle = '#27ae60';
+                    ctx.fillRect(x, chartY2Start + chartHeight2 - 3, barW, 3);
+                }
+
+                // Label below axis
+                ctx.font = tinyFont;
+                ctx.fillStyle = '#2c3e50';
+                ctx.textAlign = 'center';
+                ctx.fillText(item.label, x + barW / 2, chartY2Start + chartHeight2 + 12);
+
+                // Value above bar
+                if (item.dropped > 0) {
+                    ctx.fillStyle = '#e74c3c';
+                    ctx.fillText('-' + item.dropped + ' fps', x + barW / 2, y - 3);
+                } else {
+                    ctx.fillStyle = '#27ae60';
+                    ctx.fillText('OK', x + barW / 2, chartY2Start + chartHeight2 - 7);
+                }
+            });
+
+            // X-axis label
+            ctx.font = smallFont;
+            ctx.fillStyle = '#5d6d7e';
+            ctx.textAlign = 'center';
+            ctx.fillText('Processing Latency per Frame', chartX2 + chartWidth2 / 2, chartY2Start + chartHeight2 + 26);
+        })();
+    </script>
+</body>
+</html>

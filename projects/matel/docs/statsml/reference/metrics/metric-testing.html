@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Metric Testing — Non-Normal Distributions & Alternatives</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 20px 10px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.3em; margin: 35px 0 12px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 40%; }
+.obj-table td:last-child { width: 60%; text-align: center; }
+.obj-table tr:nth-child(even) td { background: #fafcfe; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+</style>
+</head>
+<body>
+
+<h1>Metric Testing — Non-Normal Distributions</h1>
+<p class="subtitle">Most business metrics are NOT normally distributed. Using t-tests on them gives wrong answers. Here's what to use instead.</p>
+
+<h2>1. The Problem: Most Metrics Are Non-Normal</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Revenue Per Session — Right-Skewed with Zero-Inflation</div>
+<ul>
+<li>90% of sessions have $0 revenue (browsed, didn't buy)</li>
+<li>9% have $10-$100 revenue (typical purchases)</li>
+<li>1% have $500-$10,000 revenue (high-value purchases)</li>
+<li>Distribution: massive spike at zero + right-skewed tail. NOT a bell curve.</li>
+<li><strong>t-test assumes normality.</strong> On this data: wrong confidence intervals, wrong p-values, wrong conclusions.</li>
+</ul>
+<p><strong>Also:</strong> High-price purchases don't happen in a single session. A $5000 TV purchase took 5 sessions of research. Attributing to "last session" biases the metric toward impulse/low-price items. The metric itself is biased toward what's easy to measure, not what matters.</p>
+</td><td><canvas id="c1" width="720" height="300"></canvas></td></tr>
+</table>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Conversion Rate — Binomial, Not Normal (Especially at Small n)</div>
+<ul>
+<li>Each session: converts (1) or doesn't (0). Binary outcome.</li>
+<li>At large n (10,000+): CLT makes the AVERAGE approximately normal. t-test is OK.</li>
+<li>At small n (100-500 per variant): binomial intervals needed. t-test CI is wrong by 20-50%.</li>
+<li>At very low conversion rate (0.1%): even at n=10,000, only 10 conversions. Normal approximation fails completely.</li>
+<li><strong>Trap:</strong> A/B test with 200 sessions/variant and 3% conversion = 6 conversions per variant. "Variant B has 50% lift!" = 9 vs 6 conversions. p=0.30. Not significant. But the dashboard shows "+50%" in green.</li>
+</ul>
+</td><td><canvas id="c2" width="720" height="300"></canvas></td></tr>
+</table>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Session Duration — Zero-Inflated + Heavy Tail</div>
+<ul>
+<li>Bounces: 0-3 seconds (40% of sessions). Not a "short session" — user never engaged.</li>
+<li>Normal sessions: 30 seconds to 5 minutes (50%)</li>
+<li>Deep engagement: 10-60+ minutes (10%) — or: user left tab open while at lunch</li>
+<li>Mean session = 3 minutes. Median = 45 seconds. p99 = 47 minutes.</li>
+<li><strong>The mean is a lie.</strong> Nobody has a "3-minute session." You either bounce (0s) or engage (2-5min).</li>
+</ul>
+<p><strong>A/B test on session duration:</strong> If variant B causes fewer bounces → mean goes UP even if engaged users spend less time. The metric conflates "got them in the door" with "kept them engaged." Two different things measured as one number.</p>
+</td><td><canvas id="c3" width="720" height="300"></canvas></td></tr>
+</table>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Latency / Response Time — Log-Normal with Occasional Spikes</div>
+<ul>
+<li>Most requests: 20-100ms (log-normal core)</li>
+<li>GC pauses: 200-500ms spikes every 30 seconds</li>
+<li>Cache misses: 500-2000ms (occasional)</li>
+<li>Timeouts: 30,000ms (reported as "response time" even though it's a failure)</li>
+<li><strong>t-test on latency:</strong> The 30s timeouts dominate the mean, inflate variance, make EVERYTHING "not significant" because variance is enormous.</li>
+</ul>
+<p><strong>Real problem:</strong> You need to detect a 5ms p50 regression. But variance from the tail is 10,000×. t-test power: zero. The signal is tiny relative to the noise — but it affects 100% of users while the tail affects 0.1%.</p>
+</td><td><canvas id="c4" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>2. Alternatives to t-test for Non-Normal Metrics</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Mann-Whitney U Test (Rank-Based)</div>
+<ul>
+<li>Doesn't assume normality. Compares RANKS not values.</li>
+<li>Tests: "Is the probability that a random observation from A exceeds a random observation from B > 50%?"</li>
+<li>Works for: any continuous distribution, any skewness, any outlier pattern.</li>
+<li><strong>When to use:</strong> Revenue, session duration, latency — any metric with heavy tails or zero-inflation.</li>
+<li><strong>Limitation:</strong> Less powerful than t-test when data IS actually normal. Trades power for robustness.</li>
+</ul>
+<p><strong>Example:</strong> Revenue A/B test. t-test: p=0.23 (one whale in control group inflates variance). Mann-Whitney: p=0.004 (rank-based, whale doesn't dominate). The rank test finds the signal the t-test misses because it's not distracted by extreme values.</p>
+</td><td><canvas id="c5" width="720" height="300"></canvas></td></tr>
+</table>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Bootstrap Confidence Intervals</div>
+<ul>
+<li>Resample your data 10,000 times (with replacement). Compute the metric each time. The distribution of resampled metrics = your CI.</li>
+<li>Makes ZERO assumptions about underlying distribution. Works for means, medians, percentiles, ratios — anything.</li>
+<li>Computationally expensive but universally applicable.</li>
+<li><strong>When to use:</strong> Complex metrics (ratio of ratios, weighted averages, percentile differences), small samples, unknown distributions.</li>
+</ul>
+<p><strong>Example:</strong> "Revenue per converted user" in A/B test. Can't use t-test (non-normal). Can't use Mann-Whitney easily (it's a ratio). Bootstrap: resample users, compute ratio each time, get CI directly. p-value = fraction of bootstrap samples where difference crosses zero.</p>
+</td><td><canvas id="c6" width="720" height="300"></canvas></td></tr>
+</table>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Permutation Test (Exact, Distribution-Free)</div>
+<ul>
+<li>Shuffle the group labels (A/B) randomly 10,000 times. For each shuffle: compute the test statistic. Your ACTUAL difference: how extreme is it compared to the shuffled distribution?</li>
+<li>Exact Type I error control. No distributional assumptions. Works with any sample size.</li>
+<li><strong>When to use:</strong> Small samples (n<100 per group), very non-normal data, when you need EXACT p-values not approximations.</li>
+<li><strong>Limitation:</strong> Computationally intensive. At n=10,000 per group: 10K permutations still fast. At n=1M: use bootstrap instead.</li>
+</ul>
+<p><strong>Example:</strong> A/B test with 50 users per variant (new feature rollout to small segment). Revenue is bimodal (some convert, most don't). t-test: invalid (non-normal, small n). Permutation test: exact p-value from all possible label shuffles. Trustworthy at any n.</p>
+</td><td><canvas id="c7" width="720" height="300"></canvas></td></tr>
+</table>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Delta Method / Ratio Metrics</div>
+<ul>
+<li>Many metrics are RATIOS: revenue/session, conversions/visitors, clicks/impressions.</li>
+<li>The ratio of two random variables has a complex distribution — even if numerator and denominator are both normal, the ratio is NOT.</li>
+<li><strong>Delta method:</strong> Approximates the variance of a ratio using Taylor expansion. Gives approximate CI for ratio metrics.</li>
+<li><strong>When to use:</strong> CTR, conversion rate, ARPU, any "X per Y" metric in A/B tests where both X and Y vary.</li>
+</ul>
+<p><strong>Example:</strong> Revenue per session A/B test. Control: $50,000 revenue / 10,000 sessions = $5.00. Treatment: $48,000 / 9,000 sessions = $5.33. Is +$0.33 significant? Can't just t-test the per-session values (zero-inflated). Delta method: accounts for variance in both revenue AND session count.</p>
+</td><td><canvas id="c8" width="720" height="300"></canvas></td></tr>
+</table>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Quantile Regression / Percentile Tests</div>
+<ul>
+<li>Instead of testing "did the MEAN change?" → test "did the MEDIAN change?" or "did p90 change?"</li>
+<li>Median is robust to outliers (one whale doesn't move it). p90/p99 captures tail experience.</li>
+<li>Tests exist for quantile differences (Koenker's quantile regression, bootstrap on quantiles).</li>
+<li><strong>When to use:</strong> Latency (care about p99), revenue (median more meaningful than mean), any bimodal metric where mean is meaningless.</li>
+</ul>
+<p><strong>Example:</strong> Latency A/B test. Mean latency: variant A = 150ms, variant B = 145ms. "Not significant" (p=0.4) because variance from timeouts. p50 test: A = 45ms, B = 42ms (p=0.001). p99 test: A = 2100ms, B = 1800ms (p=0.03). The MEAN test missed signal that QUANTILE tests found — because you asked the right question ("did typical experience improve?") not the wrong one ("did the average shift?").</p>
+</td><td><canvas id="c9" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>3. Decision Guide: Which Test for Which Metric?</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Quick Reference</div>
+<ul>
+<li><strong>Conversion rate (binary):</strong> Proportion test (z-test for proportions) at large n. Fisher's exact at small n. NOT t-test.</li>
+<li><strong>Revenue (zero-inflated, skewed):</strong> Mann-Whitney OR bootstrap. Split: test "did conversion change?" (proportion test) + "did average order value change for converters?" (t-test on converters only, which IS more normal).</li>
+<li><strong>Session duration (zero-inflated):</strong> Exclude bounces → test engaged sessions separately. Or: Mann-Whitney on full data. Or: two metrics (bounce rate + engaged duration).</li>
+<li><strong>Latency (log-normal + spikes):</strong> Test on log(latency) with t-test (log-normal → normal after log). Or: test percentiles directly (bootstrap on p50, p99).</li>
+<li><strong>Count metrics (page views, clicks):</strong> Poisson or negative binomial regression. NOT t-test (counts aren't continuous).</li>
+<li><strong>Any ratio metric (X per Y):</strong> Delta method or bootstrap. Never just "divide then t-test."</li>
+<li><strong>Don't know the distribution:</strong> Bootstrap or permutation test. Always valid. No assumptions needed.</li>
+</ul>
+<p><strong>Rule of thumb:</strong> If your metric's histogram looks like a bell → t-test is fine. If it looks like ANYTHING ELSE (spike at zero, heavy tail, bimodal, discrete) → use an alternative. When in doubt: bootstrap.</p>
+</td><td><canvas id="c10" width="720" height="240"></canvas></td></tr>
+</table>
+
+<div class="philosophy">
+<strong>The meta-problem:</strong> Most A/B testing platforms default to t-test. Most business metrics violate t-test assumptions. Result: thousands of A/B tests worldwide reaching wrong conclusions every day — shipping non-improvements and missing real improvements — because the default statistical test doesn't match the data's distribution. Checking the SHAPE of your metric before choosing a test is not optional — it's the difference between science and theater.
+</div>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    return {ctx:ctx, w:w, h:h};
+}
+
+// 1. Revenue per session: zero-inflated + skewed
+(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Revenue/Session: 90% Zero + Right-Skewed Tail (NOT Normal)',w/2,20);
+var bins=[90,0,3,4,5,6,5,4,3,2,2,1,1,1,0,0,0,0,0,1];
+var maxB=92;var m={left:50,right:30,top:40,bottom:35};var pw=w-m.left-m.right,ph=h-m.top-m.bottom;
+var bW=pw/bins.length;
+bins.forEach(function(v,i){
+    ctx.fillStyle=i===0?'rgba(142,68,173,0.5)':'rgba(41,128,185,0.4)';
+    if(v>0)ctx.fillRect(m.left+i*bW,m.top+ph-(v/maxB)*ph,bW-1,(v/maxB)*ph);
+});
+ctx.fillStyle='#8e44ad';ctx.font='17px -apple-system';ctx.textAlign='left';
+ctx.fillText('90% = $0 (spike)',m.left+5,m.top+20);
+ctx.fillStyle='#2980b9';ctx.textAlign='right';
+ctx.fillText('1% = $500+ (tail drives revenue)',w-40,m.top+20);
+ctx.fillStyle='#e74c3c';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('t-test assumes bell curve. This is NOT a bell curve. t-test = wrong answer.',w/2,h-8);
+})();
+
+// 2. Conversion rate binomial
+(function(){var s=setup('c2');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Conversion: Binary (0 or 1). At Small n: NOT Normal',w/2,20);
+// Show: at n=200, 3% conv = 6 events. CI is huge.
+ctx.fillStyle='#333';ctx.font='17px -apple-system';ctx.textAlign='left';
+ctx.fillText('A/B test: n=200/variant, 3% conversion rate',50,55);
+ctx.fillText('Control: 6 conversions / 200 = 3.0%',50,80);
+ctx.fillText('Variant:  9 conversions / 200 = 4.5%',50,105);
+ctx.fillStyle='#27ae60';ctx.font='bold 17px -apple-system';
+ctx.fillText('Dashboard: "+50% lift!" (GREEN!)',50,135);
+ctx.fillStyle='#e74c3c';ctx.font='bold 17px -apple-system';
+ctx.fillText('Reality: p=0.30, CI includes zero. Not significant.',50,160);
+ctx.fillText('9 vs 6 conversions = NOISE, not signal.',50,182);
+})();
+
+// 3. Session duration
+(function(){var s=setup('c3');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Session Duration: Zero-Inflated (Bounces) + Heavy Tail (Left Tab Open)',w/2,20);
+var bins=[40,5,8,12,15,12,8,5,3,2,1,1,1,0,0,0,0,0,0,2];
+var maxB=42;var m={left:50,right:30,top:40,bottom:30};var pw=w-m.left-m.right,ph=h-m.top-m.bottom;var bW=pw/bins.length;
+bins.forEach(function(v,i){
+    var color=i===0?'rgba(231,76,60,0.5)':(i<10?'rgba(41,128,185,0.4)':'rgba(230,126,34,0.4)');
+    ctx.fillStyle=color;if(v>0)ctx.fillRect(m.left+i*bW,m.top+ph-(v/maxB)*ph,bW-1,(v/maxB)*ph);
+});
+ctx.fillStyle='#e74c3c';ctx.font='17px -apple-system';ctx.textAlign='left';ctx.fillText('Bounces (0-3s)',m.left,h-8);
+ctx.fillStyle='#2980b9';ctx.textAlign='center';ctx.fillText('Real sessions',w/2,h-8);
+ctx.fillStyle='#e67e22';ctx.textAlign='right';ctx.fillText('Left tab open?',w-40,h-8);
+})();
+
+// 4. Latency log-normal
+(function(){var s=setup('c4');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Latency: Log-Normal Core + GC Spikes + Timeouts',w/2,20);
+var m={left:50,right:30,top:45,bottom:30};var pw=w-m.left-m.right,ph=h-m.top-m.bottom;
+// Draw log-normal core
+ctx.strokeStyle='#2980b9';ctx.lineWidth=2.5;ctx.beginPath();
+for(var i=0;i<40;i++){var x=m.left+(i/39)*pw*0.5;var v=Math.exp(-0.5*Math.pow((i-8)/4,2));
+var y=m.top+ph-v*ph*0.9;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.stroke();
+// GC spikes
+ctx.fillStyle='rgba(231,76,60,0.5)';
+ctx.fillRect(m.left+pw*0.55,m.top+ph*0.4,pw*0.03,ph*0.5);
+ctx.fillRect(m.left+pw*0.62,m.top+ph*0.5,pw*0.02,ph*0.4);
+// Timeout spike at far right
+ctx.fillStyle='rgba(142,68,173,0.5)';
+ctx.fillRect(m.left+pw*0.92,m.top+ph*0.7,pw*0.04,ph*0.25);
+ctx.fillStyle='#2980b9';ctx.font='17px -apple-system';ctx.textAlign='center';ctx.fillText('p50=45ms',m.left+pw*0.2,h-8);
+ctx.fillStyle='#e74c3c';ctx.fillText('GC: 200-500ms',m.left+pw*0.58,m.top+20);
+ctx.fillStyle='#8e44ad';ctx.fillText('Timeout: 30s',m.left+pw*0.92,m.top+20);
+})();
+
+// 5. Mann-Whitney
+(function(){var s=setup('c5');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Mann-Whitney: Ignores Outlier Magnitude, Focuses on Rank Order',w/2,20);
+ctx.fillStyle='#333';ctx.font='17px -apple-system';ctx.textAlign='left';
+ctx.fillText('Revenue A/B test with one "whale" ($50K purchase in control):',50,55);
+ctx.fillStyle='#e74c3c';ctx.fillText('t-test: p = 0.23 (whale inflates variance → can\'t detect signal)',50,85);
+ctx.fillStyle='#27ae60';ctx.fillText('Mann-Whitney: p = 0.004 (ranks: whale = rank #1 but only 1 rank)',50,115);
+ctx.fillStyle='#555';ctx.font='17px -apple-system';
+ctx.fillText('The whale is rank #1 in both tests. But in t-test: its VALUE ($50K) dominates variance.',50,150);
+ctx.fillText('In Mann-Whitney: it\'s just "the biggest" — same contribution as the #2 rank.',50,172);
+})();
+
+// 6. Bootstrap
+(function(){var s=setup('c6');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Bootstrap: Resample 10,000× → Distribution of Your Metric → CI',w/2,20);
+var m={left:60,right:40,top:45,bottom:30};var pw=w-m.left-m.right,ph=h-m.top-m.bottom;
+// Draw bootstrap distribution (bell-shaped from CLT on resampled means)
+ctx.strokeStyle='#27ae60';ctx.lineWidth=2.5;ctx.beginPath();
+for(var i=0;i<50;i++){var x=m.left+(i/49)*pw;var v=Math.exp(-0.5*Math.pow((i-25)/8,2));
+var y=m.top+ph-v*ph*0.85;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.stroke();
+// CI bounds
+var ciL=m.left+0.2*pw,ciR=m.left+0.8*pw;
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=2;ctx.setLineDash([4,3]);
+ctx.beginPath();ctx.moveTo(ciL,m.top);ctx.lineTo(ciL,m.top+ph);ctx.stroke();
+ctx.beginPath();ctx.moveTo(ciR,m.top);ctx.lineTo(ciR,m.top+ph);ctx.stroke();ctx.setLineDash([]);
+ctx.fillStyle='#e74c3c';ctx.font='17px -apple-system';ctx.textAlign='center';
+ctx.fillText('2.5%',ciL,m.top+ph+15);ctx.fillText('97.5%',ciR,m.top+ph+15);
+ctx.fillStyle='#27ae60';ctx.fillText('95% CI from 10K resamples',w/2,m.top-5);
+ctx.fillStyle='#555';ctx.font='17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Works for ANY distribution. Zero assumptions. Just resample.',w/2,h-8);
+})();
+
+// 7. Permutation test
+(function(){var s=setup('c7');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Permutation: Shuffle Labels → Null Distribution → Where Does Your Result Fall?',w/2,20);
+var m={left:60,right:40,top:45,bottom:30};var pw=w-m.left-m.right,ph=h-m.top-m.bottom;
+// Null distribution from shuffles
+ctx.fillStyle='rgba(150,150,150,0.3)';
+for(var i=0;i<30;i++){var barH=(Math.exp(-0.5*Math.pow((i-15)/5,2)))*ph*0.8;
+ctx.fillRect(m.left+i*(pw/30),m.top+ph-barH,pw/30-1,barH);}
+// Actual result (far right = significant)
+ctx.fillStyle='rgba(231,76,60,0.6)';
+ctx.fillRect(m.left+26*(pw/30),m.top+ph*0.3,pw/30-1,ph*0.6);
+ctx.fillStyle='#e74c3c';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('YOUR result',m.left+26.5*(pw/30),m.top+20);
+ctx.fillStyle='#999';ctx.font='17px -apple-system';
+ctx.fillText('Shuffled null distribution',m.left+pw*0.4,m.top+15);
+ctx.fillStyle='#555';ctx.textAlign='center';
+ctx.fillText('p-value = fraction of shuffled results MORE extreme than yours',w/2,h-8);
+})();
+
+// 8. Delta method
+(function(){var s=setup('c8');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Delta Method: Proper CI for Ratio Metrics (X/Y)',w/2,20);
+ctx.fillStyle='#333';ctx.font='17px -apple-system';ctx.textAlign='left';
+ctx.fillText('Control: $50,000 / 10,000 sessions = $5.00/session',50,55);
+ctx.fillText('Treatment: $48,000 / 9,000 sessions = $5.33/session',50,80);
+ctx.fillText('Naive: "$5.33 > $5.00, significant!" — but variance in BOTH numerator AND denominator matters.',50,110);
+ctx.fillStyle='#27ae60';ctx.font='bold 17px -apple-system';
+ctx.fillText('Delta method accounts for: Var(revenue) + Var(sessions) + Cov(revenue, sessions)',50,145);
+ctx.fillStyle='#555';ctx.font='17px -apple-system';
+ctx.fillText('Result: CI = [$4.85, $5.81] — includes $5.00 → NOT significant despite +$0.33 point estimate.',50,175);
+})();
+
+// 9. Quantile tests
+(function(){var s=setup('c9');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Quantile Tests Find Signal the Mean Test Misses',w/2,20);
+var tests=[{name:'Mean test',pA:'150ms',pB:'145ms',p:'p=0.40',sig:false},
+           {name:'p50 test',pA:'45ms',pB:'42ms',p:'p=0.001',sig:true},
+           {name:'p99 test',pA:'2100ms',pB:'1800ms',p:'p=0.03',sig:true}];
+tests.forEach(function(t,i){var y=50+i*50;
+    ctx.fillStyle=t.sig?'rgba(39,174,96,0.1)':'rgba(231,76,60,0.1)';
+    ctx.fillRect(40,y,w-80,40);
+    ctx.strokeStyle=t.sig?'#27ae60':'#e74c3c';ctx.lineWidth=1.5;ctx.strokeRect(40,y,w-80,40);
+    ctx.fillStyle='#333';ctx.font='bold 17px -apple-system';ctx.textAlign='left';
+    ctx.fillText(t.name,60,y+25);
+    ctx.fillStyle='#333';ctx.font='17px -apple-system';
+    ctx.fillText('A='+t.pA+' B='+t.pB,200,y+25);
+    ctx.fillStyle=t.sig?'#27ae60':'#e74c3c';ctx.font='bold 17px -apple-system';ctx.textAlign='right';
+    ctx.fillText(t.p+(t.sig?' ✓':' ✗'),w-60,y+25);
+});
+ctx.fillStyle='#e74c3c';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Mean missed it. Percentiles found it. Ask the RIGHT question.',w/2,h-8);
+})();
+
+// 10. Decision guide
+(function(){var s=setup('c10');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Decision Guide: Metric Shape → Correct Test',w/2,20);
+var guide=[
+    {metric:'Conversion (binary)',test:'Proportion z-test / Fisher exact',color:'#2980b9'},
+    {metric:'Revenue (zero-inflated)',test:'Mann-Whitney OR bootstrap',color:'#27ae60'},
+    {metric:'Duration (zero + tail)',test:'Exclude bounces + separate test',color:'#e67e22'},
+    {metric:'Latency (log-normal)',test:'Test on log(x) OR quantile test',color:'#8e44ad'},
+    {metric:'Counts (discrete)',test:'Poisson / neg-binomial regression',color:'#2980b9'},
+    {metric:'Any ratio (X/Y)',test:'Delta method or bootstrap',color:'#e67e22'},
+    {metric:'Unknown distribution',test:'Bootstrap or permutation (always safe)',color:'#27ae60'}
+];
+guide.forEach(function(g,i){var y=42+i*27;
+    ctx.fillStyle=g.color;ctx.globalAlpha=0.1;ctx.fillRect(30,y,w-60,23);ctx.globalAlpha=1;
+    ctx.fillStyle=g.color;ctx.font='bold 17px -apple-system';ctx.textAlign='left';
+    ctx.fillText(g.metric,50,y+16);
+    ctx.fillStyle='#333';ctx.font='17px -apple-system';ctx.textAlign='left';
+    ctx.fillText('→ '+g.test,280,y+16);
+});
+ctx.fillStyle='#e74c3c';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Default t-test is WRONG for 6 of 7 common metric types.',w/2,h-8);
+})();
+</script>
+</body>
+</html>

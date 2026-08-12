@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>25. cloud provider Cloud Infrastructure — Domain Pitfalls</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 40px 20px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; }
+.nav a:hover { text-decoration: underline; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-table tr:nth-child(even) td { background: #fafcfe; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+</style>
+</head>
+<body>
+
+
+<h1>cloud provider Cloud Infrastructure — Domain Pitfalls</h1>
+<p class="subtitle">Six critical data pitfalls when working with cloud provider services and infrastructure telemetry</p>
+
+<div class="philosophy">cloud provider infrastructure generates massive volumes of operational data across regions, services, and accounts. Each layer introduces subtle data quality issues that compound when building analytics or ML pipelines on top of cloud telemetry.</div>
+
+<h2 id="multi-region">1. Multi-Region Data Residency</h2>
+<table class="obj-table"><tr>
+<td>
+<div class="obj-title">Data in eu-west-1 ≠ us-east-1</div>
+<ul>
+<li>Joining cross-region data introduces latency AND legal issues</li>
+<li>GDPR prevents certain cross-region flows (EU → US without adequacy decision)</li>
+<li>Same schema, same table name, fundamentally different legal status</li>
+<li>Cross-region replication lag creates temporal inconsistency</li>
+</ul>
+<p><strong>Impact:</strong> A join that works in dev (single region) silently violates compliance in production, or introduces 50-200ms latency per query that compounds in pipelines.</p>
+</td>
+<td><canvas id="c1" width="720" height="300"></canvas></td>
+</tr></table>
+
+<h2 id="cloudwatch">2. cloud monitoring Metric Sampling</h2>
+<table class="obj-table"><tr>
+<td>
+<div class="obj-title">Standard resolution = 5-min aggregation hides reality</div>
+<ul>
+<li>Spikes within 5-minute windows are invisible at standard resolution</li>
+<li>High-resolution metrics (1-min) cost 10x more</li>
+<li>Most dashboards show smoothed averages — presenting lies as truth</li>
+<li>P99 latency at 5-min resolution can miss 100% of actual tail events</li>
+</ul>
+<p><strong>Impact:</strong> You see "healthy" metrics while users experience timeouts. The data says everything is fine because the data resolution is too coarse to capture the problem.</p>
+</td>
+<td><canvas id="c2" width="720" height="300"></canvas></td>
+</tr></table>
+
+<h2 id="cost-anomaly">3. Cost Anomaly vs Usage Anomaly</h2>
+<table class="obj-table"><tr>
+<td>
+<div class="obj-title">Same cost spike, four different root causes</div>
+<ul>
+<li>More usage (legitimate growth)</li>
+<li>Pricing change (cloud provider updated rates)</li>
+<li>Reserved Instance expiration (fell back to on-demand)</li>
+<li>Marketplace charge (third-party subscription renewal)</li>
+</ul>
+<p><strong>Impact:</strong> All four look identical in billing data. Without root cause decomposition, you either over-alert (every cost change = incident) or miss real anomalies buried in expected changes.</p>
+</td>
+<td><canvas id="c3" width="720" height="300"></canvas></td>
+</tr></table>
+
+<h2 id="spot-interruption">4. Spot Instance Interruption</h2>
+<table class="obj-table"><tr>
+<td>
+<div class="obj-title">2-minute warning, then your work is gone</div>
+<ul>
+<li>Workload must be checkpoint-able or progress is lost entirely</li>
+<li>Model training on spot: lost progress on interruption (hours of GPU time)</li>
+<li>Surviving jobs have survivorship bias in training time metrics</li>
+<li>Reported "average training time" excludes all failed/interrupted runs</li>
+</ul>
+<p><strong>Impact:</strong> Your training time estimates are biased downward — you only measure runs that survived. The true cost includes invisible wasted compute from interrupted runs.</p>
+</td>
+<td><canvas id="c4" width="720" height="300"></canvas></td>
+</tr></table>
+
+<h2 id="throttling">5. Service Limit Throttling as Hidden Feature</h2>
+<table class="obj-table"><tr>
+<td>
+<div class="obj-title">API returns 429 → backoff → retry → success</div>
+<ul>
+<li>From data perspective: unexplained latency spike</li>
+<li>Cause is invisible unless you log throttle events separately</li>
+<li>SDK auto-retry hides the 429 from application-level metrics</li>
+<li>Throttling is intermittent — happens under load, invisible in tests</li>
+</ul>
+<p><strong>Impact:</strong> You see "slow API calls" in your latency data but the root cause (throttling) lives in a completely separate log stream that most teams never correlate.</p>
+</td>
+<td><canvas id="c5" width="720" height="300"></canvas></td>
+</tr></table>
+
+<h2 id="retention">6. Log Group Retention Mismatch</h2>
+<table class="obj-table"><tr>
+<td>
+<div class="obj-title">Different teams, different retention = asymmetric history</div>
+<ul>
+<li>Team A: 30-day retention. Team B: 90-day retention.</li>
+<li>Joining data across teams: systematically missing older data from Team A</li>
+<li>No error raised — the join succeeds, just with fewer rows</li>
+<li>Any trend analysis beyond 30 days is biased toward Team B's perspective</li>
+</ul>
+<p><strong>Impact:</strong> Historical analyses silently become single-source after the shorter retention window. No warning, no error — just progressively more biased results the further back you look.</p>
+</td>
+<td><canvas id="c6" width="720" height="300"></canvas></td>
+</tr></table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id);
+    if (!c) return null;
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return {ctx: ctx, w: w, h: h};
+}
+
+// Canvas 1: Multi-region data residency with GDPR block
+(function() {
+    var s = setup('c1');
+    if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    // EU Region box
+    ctx.fillStyle = '#eaf2f8';
+    ctx.fillRect(40, 40, 200, 200);
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(40, 40, 200, 200);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('eu-west-1', 140, 70);
+    ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#333';
+    ctx.fillText('Users Table', 140, 110);
+    ctx.fillText('Orders Table', 140, 140);
+    ctx.fillText('PII Data', 140, 170);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('GDPR Protected', 140, 210);
+
+    // US Region box
+    ctx.fillStyle = '#fef9e7';
+    ctx.fillRect(480, 40, 200, 200);
+    ctx.strokeStyle = '#f39c12';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(480, 40, 200, 200);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('us-east-1', 580, 70);
+    ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#333';
+    ctx.fillText('Analytics Table', 580, 110);
+    ctx.fillText('ML Features', 580, 140);
+    ctx.fillText('Aggregates', 580, 170);
+
+    // GDPR Block barrier
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(310, 50, 100, 180);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('GDPR', 360, 120);
+    ctx.fillText('BLOCK', 360, 145);
+    ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('No PII transfer', 360, 175);
+
+    // Arrows showing attempted flow (blocked)
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(240, 100);
+    ctx.lineTo(310, 100);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(410, 100);
+    ctx.lineTo(480, 100);
+    ctx.stroke();
+
+    // Allowed flow (aggregates only)
+    ctx.strokeStyle = '#27ae60';
+    ctx.setLineDash([]);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(240, 190);
+    ctx.lineTo(310, 270);
+    ctx.lineTo(480, 270);
+    ctx.lineTo(480, 170);
+    ctx.stroke();
+    // Arrowhead
+    ctx.beginPath();
+    ctx.moveTo(480, 170);
+    ctx.lineTo(475, 180);
+    ctx.lineTo(485, 180);
+    ctx.closePath();
+    ctx.fillStyle = '#27ae60';
+    ctx.fill();
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('Aggregates only (no PII)', 360, 285);
+})();
+
+// Canvas 2: cloud monitoring metric sampling - actual vs smoothed
+(function() {
+    var s = setup('c2');
+    if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    var left = 70, right = w - 30, top = 40, bottom = h - 50;
+    var chartW = right - left, chartH = bottom - top;
+
+    // Axes
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(left, top);
+    ctx.lineTo(left, bottom);
+    ctx.lineTo(right, bottom);
+    ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = '#333';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Time (minutes)', (left + right) / 2, h - 10);
+    ctx.save();
+    ctx.translate(15, (top + bottom) / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Latency (ms)', 0, 0);
+    ctx.restore();
+
+    // Time labels
+    for (var i = 0; i <= 6; i++) {
+        var x = left + (i / 6) * chartW;
+        ctx.fillStyle = '#666';
+        ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText((i * 5) + '', x, bottom + 18);
+    }
+
+    // Actual data (per-second spikes) - use seeded pseudo-random
+    var actualData = [];
+    var seed = 42;
+    function rand() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
+    for (var i = 0; i < 180; i++) {
+        var base = 50 + Math.sin(i / 20) * 15;
+        var spike = 0;
+        if (i > 25 && i < 30) spike = 120;
+        if (i > 70 && i < 73) spike = 150;
+        if (i > 110 && i < 115) spike = 100;
+        if (i > 155 && i < 158) spike = 130;
+        actualData.push(base + spike + rand() * 10);
+    }
+
+    // Draw actual data
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.6;
+    ctx.beginPath();
+    for (var i = 0; i < actualData.length; i++) {
+        var x = left + (i / actualData.length) * chartW;
+        var y = bottom - (actualData[i] / 220) * chartH;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1.0;
+
+    // 5-min averaged data (6 points)
+    var avgData = [];
+    for (var bucket = 0; bucket < 6; bucket++) {
+        var sum = 0, count = 0;
+        for (var j = bucket * 30; j < (bucket + 1) * 30 && j < actualData.length; j++) {
+            sum += actualData[j];
+            count++;
+        }
+        avgData.push(sum / count);
+    }
+
+    // Draw 5-min averaged line
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < avgData.length; i++) {
+        var x = left + ((i + 0.5) / 6) * chartW;
+        var y = bottom - (avgData[i] / 220) * chartH;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Legend
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(left + 20, 22); ctx.lineTo(left + 50, 22); ctx.stroke();
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Actual (per-second)', left + 55, 26);
+
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(left + 250, 22); ctx.lineTo(left + 280, 22); ctx.stroke();
+    ctx.fillStyle = '#2980b9';
+    ctx.fillText('cloud monitoring 5-min avg (what you see)', left + 285, 26);
+
+    // Annotation for hidden spikes
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('← Spikes invisible in dashboard →', left + chartW / 2, top + 15);
+})();
+
+// Canvas 3: Cost anomaly - same total, different causes
+(function() {
+    var s = setup('c3');
+    if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    var left = 80, right = w - 40, top = 50, bottom = h - 60;
+    var chartW = right - left, chartH = bottom - top;
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Same $12K spike — Four Different Root Causes', w / 2, 25);
+
+    // Bars data: [usage, pricing, RI_expiry, marketplace]
+    var months = ['Jan', 'Feb', 'Mar (spike)', 'Apr', 'May'];
+    var data = [
+        [5000, 1000, 0, 500],
+        [5200, 1000, 0, 500],
+        [6000, 2000, 3000, 1000],
+        [5500, 1000, 0, 500],
+        [5300, 1000, 0, 500]
+    ];
+    var colors = ['#3498db', '#f39c12', '#e74c3c', '#9b59b6'];
+    var labels = ['Usage', 'Price Change', 'RI Expiry', 'Marketplace'];
+
+    var barW = chartW / months.length * 0.6;
+    var gap = chartW / months.length;
+    var maxVal = 12000;
+
+    // Y-axis
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(left, top);
+    ctx.lineTo(left, bottom);
+    ctx.lineTo(right, bottom);
+    ctx.stroke();
+
+    // Y labels
+    ctx.fillStyle = '#666';
+    ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'right';
+    for (var i = 0; i <= 4; i++) {
+        var y = bottom - (i / 4) * chartH;
+        var val = (i / 4) * maxVal;
+        ctx.fillText('$' + (val / 1000).toFixed(0) + 'K', left - 8, y + 4);
+        ctx.strokeStyle = '#eee';
+        ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke();
+    }
+
+    // Draw stacked bars
+    for (var m = 0; m < months.length; m++) {
+        var x = left + m * gap + (gap - barW) / 2;
+        var cumY = 0;
+        for (var c = 0; c < 4; c++) {
+            var barH = (data[m][c] / maxVal) * chartH;
+            ctx.fillStyle = colors[c];
+            ctx.fillRect(x, bottom - cumY - barH, barW, barH);
+            cumY += barH;
+        }
+        // Month label
+        ctx.fillStyle = m === 2 ? '#e74c3c' : '#333';
+        ctx.font = m === 2 ? 'bold 12px -apple-system, BlinkMacSystemFont, sans-serif' : '12px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(months[m], x + barW / 2, bottom + 18);
+    }
+
+    // Legend
+    ctx.textAlign = 'left';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+    for (var i = 0; i < 4; i++) {
+        var lx = left + i * 155;
+        ctx.fillStyle = colors[i];
+        ctx.fillRect(lx, bottom + 35, 12, 12);
+        ctx.fillStyle = '#333';
+        ctx.fillText(labels[i], lx + 16, bottom + 46);
+    }
+})();
+
+// Canvas 4: Spot instance interruption - training progress with restarts
+(function() {
+    var s = setup('c4');
+    if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    var left = 70, right = w - 40, top = 45, bottom = h - 50;
+    var chartW = right - left, chartH = bottom - top;
+
+    // Axes
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(left, top);
+    ctx.lineTo(left, bottom);
+    ctx.lineTo(right, bottom);
+    ctx.stroke();
+
+    ctx.fillStyle = '#333';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Time (hours)', (left + right) / 2, h - 10);
+    ctx.save();
+    ctx.translate(15, (top + bottom) / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Training Progress (%)', 0, 0);
+    ctx.restore();
+
+    // Wasted work shading
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.1)';
+    ctx.beginPath();
+    ctx.moveTo(left, bottom);
+    ctx.lineTo(left + chartW * 0.25, bottom - chartH * 0.4);
+    ctx.lineTo(left + chartW * 0.25, bottom);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(left + chartW * 0.30, bottom);
+    ctx.lineTo(left + chartW * 0.60, bottom - chartH * 0.6);
+    ctx.lineTo(left + chartW * 0.60, bottom);
+    ctx.closePath();
+    ctx.fill();
+
+    // Training attempt 1 - interrupted at 40%
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(left, bottom);
+    ctx.lineTo(left + chartW * 0.25, bottom - chartH * 0.4);
+    ctx.stroke();
+
+    // Interruption marker 1
+    var ix1 = left + chartW * 0.25;
+    var iy1 = bottom - chartH * 0.4;
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath();
+    ctx.arc(ix1, iy1, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('X', ix1, iy1 + 4);
+
+    // Training attempt 2 - interrupted at 60%
+    ctx.strokeStyle = '#f39c12';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(left + chartW * 0.30, bottom);
+    ctx.lineTo(left + chartW * 0.60, bottom - chartH * 0.6);
+    ctx.stroke();
+
+    // Interruption marker 2
+    var ix2 = left + chartW * 0.60;
+    var iy2 = bottom - chartH * 0.6;
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath();
+    ctx.arc(ix2, iy2, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('X', ix2, iy2 + 4);
+
+    // Training attempt 3 - succeeds
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(left + chartW * 0.65, bottom);
+    ctx.lineTo(left + chartW * 0.95, bottom - chartH * 0.95);
+    ctx.stroke();
+
+    // Success marker
+    ctx.fillStyle = '#27ae60';
+    ctx.beginPath();
+    ctx.arc(left + chartW * 0.95, bottom - chartH * 0.95, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('✓', left + chartW * 0.95, bottom - chartH * 0.95 + 4);
+
+    // Annotations
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Interrupted!', ix1, iy1 - 18);
+    ctx.fillText('2-min warning', ix1, iy1 - 33);
+    ctx.fillText('Interrupted!', ix2, iy2 - 15);
+
+    // Reported vs actual
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('Reported training time: 3h (survivor only)', left + 10, top + 5);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Actual total GPU time: 8h (incl. lost work)', left + 10, top + 22);
+})();
+
+// Canvas 5: Throttling - latency spikes with hidden 429s
+(function() {
+    var s = setup('c5');
+    if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    var left = 70, right = w - 40, top = 50, bottom = h - 70;
+    var chartW = right - left, chartH = bottom - top;
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('What You See (Latency) vs What Actually Happened (429 Throttle)', w / 2, 25);
+
+    // Axes
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(left, top);
+    ctx.lineTo(left, bottom);
+    ctx.lineTo(right, bottom);
+    ctx.stroke();
+
+    // Generate latency data with spikes at throttle points
+    var points = 60;
+    var latencyData = [];
+    var throttlePoints = [12, 13, 28, 29, 30, 45, 46];
+    var seed2 = 7;
+    function rand2() { seed2 = (seed2 * 1103515245 + 12345) & 0x7fffffff; return seed2 / 0x7fffffff; }
+    for (var i = 0; i < points; i++) {
+        var base = 80 + rand2() * 20;
+        if (throttlePoints.indexOf(i) >= 0) {
+            base = 300 + rand2() * 200;
+        }
+        latencyData.push(base);
+    }
+
+    // Draw latency line
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (var i = 0; i < points; i++) {
+        var x = left + (i / points) * chartW;
+        var y = bottom - (latencyData[i] / 550) * chartH;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Draw hidden 429 events as red bars at bottom
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.7)';
+    for (var i = 0; i < throttlePoints.length; i++) {
+        var x = left + (throttlePoints[i] / points) * chartW;
+        ctx.fillRect(x - 3, bottom + 5, 6, 20);
+    }
+
+    // Labels
+    ctx.fillStyle = '#2980b9';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('● Application latency (visible)', left + 10, top + 12);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('■ HTTP 429 throttle events (hidden in separate log)', left + 10, top + 28);
+
+    // Bottom annotation
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('429 events (only in CloudTrail, not app metrics)', (left + right) / 2, bottom + 40);
+
+    // Arrow connecting spike to 429
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    var tx = left + (13 / points) * chartW;
+    ctx.beginPath();
+    ctx.moveTo(tx, bottom - (latencyData[13] / 550) * chartH);
+    ctx.lineTo(tx, bottom + 5);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#666';
+    ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('cause', tx + 15, bottom - 30);
+
+    // Y-axis label
+    ctx.save();
+    ctx.translate(15, (top + bottom) / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillStyle = '#333';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('Latency (ms)', 0, 0);
+    ctx.restore();
+})();
+
+// Canvas 6: Log retention mismatch - two timelines with missing data
+(function() {
+    var s = setup('c6');
+    if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    var left = 80, right = w - 40, top = 60, bottom = h - 40;
+    var chartW = right - left;
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Log Retention: Team A (30 days) vs Team B (90 days)', w / 2, 25);
+
+    // Timeline for 90 days
+    var dayWidth = chartW / 90;
+
+    // Team B - 90 day timeline (top)
+    var teamBY = 90;
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(left, teamBY, chartW, 40);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Team B: Full 90-day history available', left + chartW / 2, teamBY + 25);
+
+    // Team A - only last 30 days
+    var teamAY = 160;
+    // Missing portion (first 60 days)
+    ctx.fillStyle = '#fadbd8';
+    ctx.fillRect(left, teamAY, dayWidth * 60, 40);
+    // Diagonal lines to show missing
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1;
+    for (var i = 0; i < 60; i += 4) {
+        var x = left + i * dayWidth;
+        ctx.beginPath();
+        ctx.moveTo(x, teamAY);
+        ctx.lineTo(x + dayWidth * 3, teamAY + 40);
+        ctx.stroke();
+    }
+    // Available portion (last 30 days)
+    ctx.fillStyle = '#3498db';
+    ctx.fillRect(left + dayWidth * 60, teamAY, dayWidth * 30, 40);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('Team A: Only 30 days', left + dayWidth * 60 + dayWidth * 15, teamAY + 25);
+
+    // Missing data label
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('MISSING — No Error Raised', left + dayWidth * 30, teamAY + 25);
+
+    // Labels
+    ctx.fillStyle = '#333';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('Team B (90-day retention)', left, teamBY - 8);
+    ctx.fillText('Team A (30-day retention)', left, teamAY - 8);
+
+    // Day markers
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#666';
+    ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+    var markers = [0, 30, 60, 90];
+    var markerLabels = ['90 days ago', '60 days ago', '30 days ago', 'Today'];
+    for (var i = 0; i < markers.length; i++) {
+        var x = left + markers[i] * dayWidth;
+        ctx.fillText(markerLabels[i], x, bottom - 5);
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(x, top);
+        ctx.lineTo(x, bottom - 15);
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
+
+    // Join result warning
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('← JOIN produces biased results (Team A data missing) →', left + dayWidth * 30, 48);
+})();
+</script>
+</body>
+</html>

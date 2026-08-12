@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>29. Payments / Fintech — Domain Pitfalls</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 40px 20px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; }
+.nav a:hover { text-decoration: underline; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-table tr:nth-child(even) td { background: #fafcfe; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+</style>
+</head>
+<body>
+
+
+<h1>Payments / Fintech — Domain Pitfalls</h1>
+<p class="subtitle">Data pitfalls unique to payment processing, fraud detection, and financial technology systems</p>
+
+<div class="philosophy">
+Payment systems operate in adversarial environments where labels arrive late, legitimate behavior mimics fraud, and every intervention has direct revenue consequences. The fundamental tension: catching more fraud means blocking more legitimate customers.
+</div>
+
+<h2 id="chargeback-delay">1. Chargeback Ground Truth Delay</h2>
+<table class="obj-table"><tr>
+<td>
+<div class="obj-title">Transaction today, label arrives months later</div>
+<ul>
+<li>Transaction occurs at Day 0</li>
+<li>Cardholder dispute filed 30-60 days later</li>
+<li>Resolution (true label) at 90-120 days</li>
+<li>Model evaluated at Day 30 sees only partial labels</li>
+<li>Transactions labeled "not fraud" may simply be "not yet disputed"</li>
+</ul>
+<p><strong>Impact:</strong> Model performance measured on incomplete labels appears optimistic. True fraud rate is systematically underestimated because many fraud cases haven't been reported yet at evaluation time.</p>
+</td>
+<td><canvas id="c1" width="720" height="300"></canvas></td>
+</tr></table>
+
+<h2 id="legitimate-high-value">2. Legitimate High-Value ≈ Fraud Pattern</h2>
+<table class="obj-table"><tr>
+<td>
+<div class="obj-title">Good customers look identical to fraudsters</div>
+<ul>
+<li>Customer buys $5000 laptop: high amount, new shipping address, first purchase</li>
+<li>Stolen credit card: high amount, new shipping address, first purchase</li>
+<li>Feature vectors are identical for both cases</li>
+<li>Cannot distinguish without context outside the transaction (customer history, device fingerprint, behavioral signals)</li>
+</ul>
+<p><strong>Impact:</strong> Transaction-level features alone cannot separate legitimate high-value purchases from fraud. Blocking all high-risk-looking transactions means rejecting your best customers.</p>
+</td>
+<td><canvas id="c2" width="720" height="300"></canvas></td>
+</tr></table>
+
+<h2 id="cross-border-currency">3. Cross-Border Currency + Timezone</h2>
+<table class="obj-table"><tr>
+<td>
+<div class="obj-title">Same transaction, different amounts and dates</div>
+<ul>
+<li>Purchase in EUR, settled in USD, reported in GBP</li>
+<li>Exchange rate at authorization vs. settlement vs. reporting differs</li>
+<li>Timezone of "transaction date" varies by system (merchant local, UTC, issuer timezone)</li>
+<li>Amount looks different in every system</li>
+<li>Reconciliation across systems becomes a nightmare</li>
+</ul>
+<p><strong>Impact:</strong> Aggregations, velocity checks, and amount thresholds break when the same transaction appears as different amounts. Duplicate detection fails when dates don't match across systems.</p>
+</td>
+<td><canvas id="c3" width="720" height="300"></canvas></td>
+</tr></table>
+
+<h2 id="card-testing">4. Card Testing Attacks</h2>
+<table class="obj-table"><tr>
+<td>
+<div class="obj-title">Individual transactions look normal, pattern is anomalous</div>
+<ul>
+<li>Attacker tries 1000 small charges ($0.50) to find valid cards</li>
+<li>Each individual transaction: small amount, common merchant category</li>
+<li>Pattern: same merchant, sequential card numbers, identical amounts, rapid succession</li>
+<li>Per-transaction model scores each as low risk</li>
+<li>Must detect VELOCITY, not individual transaction features</li>
+</ul>
+<p><strong>Impact:</strong> Transaction-level fraud models completely miss card testing attacks. Requires aggregate/velocity features computed across transactions — a fundamentally different detection paradigm.</p>
+</td>
+<td><canvas id="c4" width="720" height="300"></canvas></td>
+</tr></table>
+
+<h2 id="decline-reasons">5. Decline ≠ Fraud</h2>
+<table class="obj-table"><tr>
+<td>
+<div class="obj-title">Multiple causes collapse into one status code</div>
+<ul>
+<li>Insufficient funds (customer is broke, not a fraudster)</li>
+<li>Expired card (needs to update payment method)</li>
+<li>Wrong CVV (typo, not theft)</li>
+<li>Velocity limit (issuer-side risk rule triggered)</li>
+<li>Actual fraud flag (issuer detected compromise)</li>
+<li>All show as "DECLINED" in merchant system</li>
+</ul>
+<p><strong>Impact:</strong> Training a model where "declined = fraud" contaminates labels with 80-90% non-fraud cases. Different decline reasons need different merchant responses (retry, re-authenticate, block) but look identical.</p>
+</td>
+<td><canvas id="c5" width="720" height="300"></canvas></td>
+</tr></table>
+
+<h2 id="3ds-friction">6. 3D Secure / SCA Friction</h2>
+<table class="obj-table"><tr>
+<td>
+<div class="obj-title">Anti-fraud measure that may cost more than the fraud</div>
+<ul>
+<li>Adding 3D Secure authentication reduces fraud by 60-80%</li>
+<li>But also reduces conversion rate by 10-30%</li>
+<li>Lost revenue from abandoned carts may exceed fraud savings</li>
+<li>Strong Customer Authentication (SCA) mandated in EU regardless</li>
+<li>Optimization: apply 3DS selectively to high-risk transactions only</li>
+</ul>
+<p><strong>Impact:</strong> Net revenue impact of fraud prevention is not always positive. Must model the full funnel: fraud prevented minus conversions lost. The "safest" policy (authenticate everything) is often the most expensive.</p>
+</td>
+<td><canvas id="c6" width="720" height="300"></canvas></td>
+</tr></table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id);
+    if (!c) return null;
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return {ctx: ctx, w: w, h: h};
+}
+
+// Chart 1: Chargeback Ground Truth Delay Timeline
+(function() {
+    var s = setup('c1'); if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.font = font;
+
+    var timelineY = 140;
+    var startX = 60, endX = w - 40;
+    var totalDays = 130;
+
+    // Draw timeline axis
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(startX, timelineY);
+    ctx.lineTo(endX, timelineY);
+    ctx.stroke();
+
+    // Arrow at end
+    ctx.beginPath();
+    ctx.moveTo(endX - 8, timelineY - 6);
+    ctx.lineTo(endX, timelineY);
+    ctx.lineTo(endX - 8, timelineY + 6);
+    ctx.fill();
+
+    function dayToX(day) {
+        return startX + (day / totalDays) * (endX - startX);
+    }
+
+    // Day markers
+    var markers = [
+        {day: 0, label: 'Day 0', sublabel: 'Transaction'},
+        {day: 30, label: 'Day 30', sublabel: 'Model Eval'},
+        {day: 60, label: 'Day 60', sublabel: 'Dispute Filed'},
+        {day: 120, label: 'Day 120', sublabel: 'Resolution'}
+    ];
+
+    markers.forEach(function(m) {
+        var x = dayToX(m.day);
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x, timelineY - 10);
+        ctx.lineTo(x, timelineY + 10);
+        ctx.stroke();
+
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold ' + font;
+        ctx.textAlign = 'center';
+        ctx.fillText(m.label, x, timelineY + 30);
+        ctx.font = font;
+        ctx.fillStyle = '#555';
+        ctx.fillText(m.sublabel, x, timelineY + 50);
+    });
+
+    // "Model evaluated here" callout at Day 30
+    var evalX = dayToX(30);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(evalX, timelineY - 12);
+    ctx.lineTo(evalX, timelineY - 60);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Model evaluated here', evalX, timelineY - 68);
+    ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('(only partial labels available)', evalX, timelineY - 52);
+
+    // Shaded region: "labels incomplete"
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.1)';
+    ctx.fillRect(dayToX(0), timelineY + 60, dayToX(120) - dayToX(0), 40);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(dayToX(0), timelineY + 60, dayToX(120) - dayToX(0), 40);
+
+    // Labels incomplete text
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Labels incomplete — "not fraud" just means "not yet reported"', (dayToX(0) + dayToX(120)) / 2, timelineY + 84);
+
+    // "True label" arrow at Day 120
+    var resX = dayToX(120);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(resX, timelineY - 12);
+    ctx.lineTo(resX, timelineY - 50);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('True label available', resX, timelineY - 56);
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold ' + font;
+    ctx.textAlign = 'left';
+    ctx.fillText('Chargeback Ground Truth Timeline', startX, 30);
+})();
+
+// Chart 2: Legitimate vs Fraud - Identical Profiles
+(function() {
+    var s = setup('c2'); if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.font = font;
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold ' + font;
+    ctx.textAlign = 'center';
+    ctx.fillText('Transaction Feature Comparison', w / 2, 28);
+
+    // Two profile boxes
+    var boxW = 260, boxH = 200;
+    var gap = 60;
+    var leftX = (w - 2 * boxW - gap) / 2;
+    var rightX = leftX + boxW + gap;
+    var topY = 50;
+
+    // Legitimate buyer box
+    ctx.fillStyle = '#eafaf1';
+    ctx.fillRect(leftX, topY, boxW, boxH);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(leftX, topY, boxW, boxH);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 16px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Legitimate Buyer', leftX + boxW / 2, topY + 25);
+
+    // Fraudster box
+    ctx.fillStyle = '#fdedec';
+    ctx.fillRect(rightX, topY, boxW, boxH);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(rightX, topY, boxW, boxH);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 16px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('Stolen Card Fraud', rightX + boxW / 2, topY + 25);
+
+    // Features (identical for both)
+    var features = [
+        'Amount: $5,000',
+        'New shipping address',
+        'First purchase',
+        'Electronics category',
+        'Expedited shipping'
+    ];
+
+    ctx.font = '15px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'left';
+    features.forEach(function(f, i) {
+        var y = topY + 55 + i * 30;
+        ctx.fillStyle = '#333';
+        ctx.fillText('• ' + f, leftX + 20, y);
+        ctx.fillText('• ' + f, rightX + 20, y);
+    });
+
+    // Equals sign between boxes
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 40px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('=', leftX + boxW + gap / 2, topY + boxH / 2 + 10);
+
+    // Bottom note
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Identical feature vectors — model cannot distinguish', w / 2, topY + boxH + 30);
+})();
+
+// Chart 3: Cross-border Currency/Timezone
+(function() {
+    var s = setup('c3'); if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold ' + font;
+    ctx.textAlign = 'center';
+    ctx.fillText('Same Transaction in 3 Systems', w / 2, 28);
+
+    // Three system boxes
+    var systems = [
+        {name: 'Merchant (EUR)', amount: '€4,100', date: 'Jan 15, 23:45 CET', color: '#2980b9'},
+        {name: 'Processor (USD)', amount: '$4,500', date: 'Jan 15, 17:45 EST', color: '#27ae60'},
+        {name: 'Reporting (GBP)', amount: '£3,800', date: 'Jan 16, 04:45 GMT', color: '#8e44ad'}
+    ];
+
+    var boxW = 190, boxH = 140;
+    var totalW = 3 * boxW + 2 * 20;
+    var startX = (w - totalW) / 2;
+    var topY = 55;
+
+    systems.forEach(function(sys, i) {
+        var x = startX + i * (boxW + 20);
+        ctx.fillStyle = '#f8f9fa';
+        ctx.fillRect(x, topY, boxW, boxH);
+        ctx.strokeStyle = sys.color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, topY, boxW, boxH);
+
+        ctx.fillStyle = sys.color;
+        ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(sys.name, x + boxW / 2, topY + 25);
+
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 22px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillText(sys.amount, x + boxW / 2, topY + 65);
+
+        ctx.fillStyle = '#666';
+        ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillText(sys.date, x + boxW / 2, topY + 95);
+
+        // Draw connecting arrows
+        if (i < 2) {
+            var arrowStartX = x + boxW + 2;
+            var arrowEndX = x + boxW + 18;
+            var arrowY = topY + boxH / 2;
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(arrowStartX, arrowY);
+            ctx.lineTo(arrowEndX, arrowY);
+            ctx.stroke();
+            ctx.fillStyle = '#e74c3c';
+            ctx.font = 'bold 16px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('≠', arrowStartX + 8, arrowY - 8);
+        }
+    });
+
+    // Warning box at bottom
+    var warnY = topY + boxH + 20;
+    ctx.fillStyle = '#fef9e7';
+    ctx.fillRect(startX, warnY, totalW, 50);
+    ctx.strokeStyle = '#f39c12';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(startX, warnY, totalW, 50);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('⚠ Amount differs by ±15%, date differs by ±1 day', w / 2, warnY + 22);
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#666';
+    ctx.fillText('Velocity checks, amount thresholds, and dedup all break', w / 2, warnY + 42);
+})();
+
+// Chart 4: Card Testing - Velocity Pattern
+(function() {
+    var s = setup('c4'); if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold ' + font;
+    ctx.textAlign = 'center';
+    ctx.fillText('Card Testing Attack Pattern', w / 2, 25);
+
+    // Chart area
+    var chartLeft = 80, chartRight = w - 40, chartTop = 50, chartBottom = h - 60;
+    var chartW = chartRight - chartLeft, chartH = chartBottom - chartTop;
+
+    // Axes
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(chartLeft, chartTop);
+    ctx.lineTo(chartLeft, chartBottom);
+    ctx.lineTo(chartRight, chartBottom);
+    ctx.stroke();
+
+    // Y-axis label
+    ctx.save();
+    ctx.translate(25, chartTop + chartH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillStyle = '#555';
+    ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Transaction Amount ($)', 0, 0);
+    ctx.restore();
+
+    // X-axis label
+    ctx.fillStyle = '#555';
+    ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Time (minutes)', chartLeft + chartW / 2, h - 10);
+
+    // Y-axis scale (0 to $100)
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#666';
+    for (var y = 0; y <= 100; y += 25) {
+        var yPos = chartBottom - (y / 100) * chartH;
+        ctx.fillText('$' + y, chartLeft - 8, yPos + 4);
+        ctx.strokeStyle = '#eee';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(chartLeft, yPos);
+        ctx.lineTo(chartRight, yPos);
+        ctx.stroke();
+    }
+
+    // Normal transactions (scattered, varied amounts)
+    var normalTx = [
+        {t: 2, amt: 45}, {t: 5, amt: 78}, {t: 12, amt: 22}, {t: 18, amt: 55},
+        {t: 25, amt: 90}, {t: 35, amt: 33}, {t: 42, amt: 67}, {t: 50, amt: 12},
+        {t: 58, amt: 85}, {t: 72, amt: 41}, {t: 80, amt: 95}, {t: 88, amt: 28}
+    ];
+
+    ctx.fillStyle = '#2980b9';
+    normalTx.forEach(function(tx) {
+        var x = chartLeft + (tx.t / 95) * chartW;
+        var yp = chartBottom - (tx.amt / 100) * chartH;
+        ctx.beginPath();
+        ctx.arc(x, yp, 5, 0, Math.PI * 2);
+        ctx.fill();
+    });
+
+    // Card testing cluster (many $0.50 transactions in rapid succession at t=60-70)
+    ctx.fillStyle = '#e74c3c';
+    for (var i = 0; i < 30; i++) {
+        var t = 60 + (i * 0.33);
+        var amt = 0.5 + Math.random() * 0.2;
+        var x = chartLeft + (t / 95) * chartW;
+        var yp = chartBottom - (amt / 100) * chartH;
+        ctx.beginPath();
+        ctx.arc(x, yp, 4, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Highlight the cluster
+    var clusterLeft = chartLeft + (59 / 95) * chartW;
+    var clusterRight = chartLeft + (71 / 95) * chartW;
+    var clusterTop = chartBottom - (3 / 100) * chartH;
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 3]);
+    ctx.strokeRect(clusterLeft, clusterTop, clusterRight - clusterLeft, chartBottom - clusterTop - 2);
+    ctx.setLineDash([]);
+
+    // Labels
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Card testing: 30 x $0.50', (clusterLeft + clusterRight) / 2, clusterTop - 8);
+    ctx.fillText('in 10 minutes', (clusterLeft + clusterRight) / 2, clusterTop - 8 + 16);
+
+    ctx.fillStyle = '#2980b9';
+    ctx.textAlign = 'left';
+    ctx.fillText('● Normal transactions', chartLeft + 10, chartTop + 15);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('● Card testing attack', chartLeft + 200, chartTop + 15);
+})();
+
+// Chart 5: Decline Reasons Pie Chart
+(function() {
+    var s = setup('c5'); if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold ' + font;
+    ctx.textAlign = 'center';
+    ctx.fillText('Decline Reasons (Reality vs. What Merchant Sees)', w / 2, 25);
+
+    // Pie chart (left side)
+    var cx = 180, cy = 165, r = 100;
+    var slices = [
+        {pct: 0.40, color: '#3498db', label: 'Insufficient funds (40%)'},
+        {pct: 0.20, color: '#e67e22', label: 'Expired card (20%)'},
+        {pct: 0.15, color: '#9b59b6', label: 'Velocity limit (15%)'},
+        {pct: 0.15, color: '#1abc9c', label: 'Wrong CVV (15%)'},
+        {pct: 0.10, color: '#e74c3c', label: 'Fraud flag (10%)'}
+    ];
+
+    var startAngle = -Math.PI / 2;
+    slices.forEach(function(slice) {
+        var endAngle = startAngle + slice.pct * 2 * Math.PI;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, r, startAngle, endAngle);
+        ctx.closePath();
+        ctx.fillStyle = slice.color;
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        startAngle = endAngle;
+    });
+
+    // Label: "Issuer's View"
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText("Issuer's View", cx, cy + r + 25);
+
+    // Arrow pointing to collapsed view
+    var arrowStartX = 300, arrowEndX = 400, arrowY = 165;
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(arrowStartX, arrowY);
+    ctx.lineTo(arrowEndX, arrowY);
+    ctx.lineTo(arrowEndX - 10, arrowY - 6);
+    ctx.moveTo(arrowEndX, arrowY);
+    ctx.lineTo(arrowEndX - 10, arrowY + 6);
+    ctx.stroke();
+
+    ctx.fillStyle = '#666';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('collapses to', (arrowStartX + arrowEndX) / 2, arrowY - 12);
+
+    // Single "DECLINED" block (right side)
+    var blockX = 420, blockY = 115, blockW = 250, blockH = 100;
+    ctx.fillStyle = '#fdedec';
+    ctx.fillRect(blockX, blockY, blockW, blockH);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(blockX, blockY, blockW, blockH);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 28px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('DECLINED', blockX + blockW / 2, blockY + 45);
+
+    ctx.fillStyle = '#666';
+    ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('(no reason code)', blockX + blockW / 2, blockY + 70);
+    ctx.fillText("Merchant's View", blockX + blockW / 2, blockY + blockH + 20);
+
+    // Legend
+    ctx.textAlign = 'left';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+    slices.forEach(function(slice, i) {
+        var lx = 420, ly = 240 + i * 16;
+        ctx.fillStyle = slice.color;
+        ctx.fillRect(lx, ly - 8, 10, 10);
+        ctx.fillStyle = '#333';
+        ctx.fillText(slice.label, lx + 14, ly);
+    });
+})();
+
+// Chart 6: 3D Secure Friction - Revenue Comparison
+(function() {
+    var s = setup('c6'); if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold ' + font;
+    ctx.textAlign = 'center';
+    ctx.fillText('3D Secure: Fraud Saved vs. Revenue Lost', w / 2, 25);
+
+    // Chart dimensions
+    var chartLeft = 120, chartRight = w - 60, chartTop = 55, chartBottom = h - 55;
+    var chartH = chartBottom - chartTop;
+    var barW = 100;
+
+    // Two groups: Without 3DS and With 3DS
+    var groupCenterLeft = chartLeft + (chartRight - chartLeft) * 0.28;
+    var groupCenterRight = chartLeft + (chartRight - chartLeft) * 0.72;
+
+    // Scale: $0 to $1M
+    var maxVal = 1000;
+
+    function valToY(v) {
+        return chartBottom - (v / maxVal) * chartH;
+    }
+
+    // Y-axis
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(chartLeft, chartTop);
+    ctx.lineTo(chartLeft, chartBottom);
+    ctx.lineTo(chartRight, chartBottom);
+    ctx.stroke();
+
+    // Y-axis labels
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#666';
+    for (var v = 0; v <= 1000; v += 200) {
+        var yp = valToY(v);
+        ctx.fillText('$' + v + 'K', chartLeft - 8, yp + 4);
+        ctx.strokeStyle = '#eee';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(chartLeft, yp);
+        ctx.lineTo(chartRight, yp);
+        ctx.stroke();
+    }
+
+    // Without 3DS
+    // Revenue bar (high)
+    var rev1 = 900;
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(groupCenterLeft - barW / 2, valToY(rev1), barW, chartBottom - valToY(rev1));
+    ctx.strokeStyle = '#1e8449';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(groupCenterLeft - barW / 2, valToY(rev1), barW, chartBottom - valToY(rev1));
+
+    // Fraud loss overlay
+    var fraud1 = 150;
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.7)';
+    ctx.fillRect(groupCenterLeft - barW / 2, valToY(fraud1), barW, chartBottom - valToY(fraud1));
+
+    // With 3DS
+    // Revenue bar (lower due to conversion loss)
+    var rev2 = 680;
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(groupCenterRight - barW / 2, valToY(rev2), barW, chartBottom - valToY(rev2));
+    ctx.strokeStyle = '#1e8449';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(groupCenterRight - barW / 2, valToY(rev2), barW, chartBottom - valToY(rev2));
+
+    // Fraud loss overlay (much smaller)
+    var fraud2 = 30;
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.7)';
+    ctx.fillRect(groupCenterRight - barW / 2, valToY(fraud2), barW, chartBottom - valToY(fraud2));
+
+    // Labels
+    ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('Without 3DS', groupCenterLeft, chartBottom + 20);
+    ctx.fillText('With 3DS', groupCenterRight, chartBottom + 20);
+
+    // Values on bars
+    ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#fff';
+    ctx.fillText('Revenue: $900K', groupCenterLeft, valToY(rev1) + 20);
+    ctx.fillStyle = '#fff';
+    ctx.fillText('Revenue: $680K', groupCenterRight, valToY(rev2) + 20);
+
+    ctx.fillStyle = '#fff';
+    ctx.fillText('Fraud: $150K', groupCenterLeft, chartBottom - 15);
+    ctx.fillText('Fraud: $30K', groupCenterRight, chartBottom - 15);
+
+    // Net revenue comparison
+    var netLeft = 380;
+    var netTop = 60;
+    ctx.fillStyle = '#f0f4f8';
+    ctx.fillRect(netLeft, netTop, 250, 70);
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(netLeft, netTop, 250, 70);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Net Revenue', netLeft + 125, netTop + 20);
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('Without 3DS: $900K - $150K = $750K', netLeft + 125, netTop + 42);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('With 3DS: $680K - $30K = $650K', netLeft + 125, netTop + 60);
+
+    // Legend
+    ctx.textAlign = 'left';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(chartLeft, chartTop - 5, 12, 12);
+    ctx.fillStyle = '#333';
+    ctx.fillText('Gross Revenue', chartLeft + 16, chartTop + 5);
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.7)';
+    ctx.fillRect(chartLeft + 140, chartTop - 5, 12, 12);
+    ctx.fillStyle = '#333';
+    ctx.fillText('Fraud Loss', chartLeft + 156, chartTop + 5);
+})();
+</script>
+
+</body>
+</html>

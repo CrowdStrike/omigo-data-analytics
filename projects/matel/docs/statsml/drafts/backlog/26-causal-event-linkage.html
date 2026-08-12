@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Causal Event Linkage — Discussion Backlog</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #fff; color: #2c3e50; line-height: 1.6; }
+h1 { color: #1a5276; border-bottom: 3px solid #2980b9; padding-bottom: 10px; }
+h2 { color: #1a5276; margin-top: 30px; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { padding: 20px; vertical-align: top; border: 1px solid #2980b9; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; }
+.obj-title { color: #1a5276; font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
+ul { margin: 10px 0; padding-left: 20px; }
+li { margin-bottom: 6px; }
+strong { color: #1a5276; }
+code { background: #e8f0f8; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; color: #1a5276; }
+.questions { background: #fff8e1; border-left: 3px solid #f39c12; padding: 10px 15px; margin: 10px 0; font-size: 0.9em; }
+.status { display: inline-block; background: #e8f0f8; color: #1a5276; padding: 3px 10px; border-radius: 12px; font-size: 0.85em; font-weight: bold; margin-bottom: 20px; }
+.danger { background: #fdecea; border-left: 3px solid #e74c3c; padding: 10px 15px; margin: 10px 0; font-size: 0.9em; }
+</style>
+</head>
+<body>
+
+<h1>Causal Event Linkage: Source/Target ID over Timestamp Ordering</h1>
+<span class="status">TO DISCUSS</span>
+
+<p>When event B was <em>caused by</em> event A, the logging system must record that explicit link (source_event_id → target_event_id). Relying on timestamp proximity alone to reconstruct causal chains is fragile — events arrive out of order, share timestamps at millisecond granularity, or get batched and delayed.</p>
+
+<h2>Motivating Example: E-commerce Search → View</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">The Causal Chain</div>
+<p>User searches "running shoes" → sees results → clicks product → views product page.</p>
+<p>The product view was <strong>caused by</strong> a specific search result impression. This is not just "two events close in time" — it's a directed link:</p>
+<ul>
+<li><code>search_event_id: s_123</code> → produced <code>impression_id: imp_456</code></li>
+<li><code>impression_id: imp_456</code> → caused <code>product_view_id: pv_789</code></li>
+<li>Each hop has a <strong>source_id</strong> and <strong>target_id</strong> — the chain is explicit</li>
+</ul>
+<div class="questions">Without this linkage: "user searched then viewed" could mean they searched, gave up, browsed homepage, and clicked a recommendation. Timestamp says the same thing — the causal path is completely different.</div>
+</td>
+<td>
+<div class="obj-title">What Timestamp-Only Gets Wrong</div>
+<ul>
+<li><strong>Out-of-order delivery:</strong> product_view event logged before search event (async pipelines, different service latencies)</li>
+<li><strong>Batched writes:</strong> 50 events arrive with identical timestamps from a batch flush</li>
+<li><strong>Concurrent actions:</strong> user has two tabs open — search in tab A, browse in tab B. Timestamps interleave, causality doesn't cross tabs</li>
+<li><strong>Clock skew:</strong> client-side timestamp from phone is 3 seconds behind server timestamp from search service</li>
+<li><strong>Retry storms:</strong> same event logged 5 times with slightly different timestamps — which is the "real" one?</li>
+</ul>
+<div class="danger"><strong>The risk:</strong> Analysis that assumes search→view based on timestamp proximity builds false funnels, miscalculates conversion rates, and attributes revenue to the wrong source.</div>
+</td>
+</tr>
+</table>
+
+<h2>More Domains Where Explicit Linkage Matters</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Where Timestamp Ordering Fails</div>
+<ul>
+<li><strong>Ad click → conversion:</strong> Click happened on day 1, purchase on day 14. Timestamp gap is huge — only a <code>click_id</code> on the conversion event ties them. Without it, attribution is guesswork.</li>
+<li><strong>Alert → investigation → remediation (security):</strong> Analyst opens 5 alerts from a queue. Investigation of alert #3 starts before they close alert #1. Timestamp says #1 was remediated after #3 — wrong causal order.</li>
+<li><strong>API request → downstream calls:</strong> Microservice A calls B calls C. Response from C arrives before B's span closes. Distributed tracing (trace_id, span_id, parent_span_id) exists precisely because timestamps don't preserve call trees.</li>
+<li><strong>Medical: order → lab draw → result:</strong> Lab result timestamp is when the system processed it, not when blood was drawn, not when doctor ordered it. Three different timestamps, one causal chain — only order_id links them.</li>
+<li><strong>CI/CD: commit → build → test → deploy:</strong> Build might start before previous commit's test finishes. Pipeline DAG defines causality, not wall clock.</li>
+<li><strong>Financial: trade → settlement → confirmation:</strong> Settlement is T+2. Confirmation might arrive out of order. Only trade_id links the lifecycle.</li>
+</ul>
+</td>
+<td>
+<div class="obj-title">The Structural Problem</div>
+<p>Timestamp ordering gives you a <strong>total order</strong> of events. But causality is a <strong>partial order</strong> (DAG). You cannot reconstruct a DAG from a total order without additional information.</p>
+<ul>
+<li>Events A and B might be <strong>concurrent</strong> (no causal link) — timestamp picks an arbitrary winner</li>
+<li>Event C might <strong>cause</strong> event D despite D's timestamp being earlier (network delay, clock skew)</li>
+<li>Two events at the same timestamp might be <strong>causally linked</strong> (sub-ms causality) or <strong>completely independent</strong></li>
+</ul>
+<div class="questions">This is Lamport clocks 101 — "happened before" is not the same as "has earlier timestamp." Distributed systems solved this decades ago. Data analytics still pretends ORDER BY timestamp is causality.</div>
+</td>
+</tr>
+</table>
+
+<h2>What Good Linkage Looks Like</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Explicit Causal Fields</div>
+<ul>
+<li><code>event_id</code> — unique identifier for this event</li>
+<li><code>caused_by_event_id</code> — the event that triggered this one (nullable if root cause / user-initiated)</li>
+<li><code>correlation_id</code> — groups all events in a single logical flow (like trace_id)</li>
+<li><code>sequence_number</code> — monotonic counter within a flow (clock-independent ordering)</li>
+</ul>
+</td>
+<td>
+<div class="obj-title">What This Enables for Analysis</div>
+<ul>
+<li><strong>True funnel construction:</strong> follow the chain, not the clock</li>
+<li><strong>Accurate attribution:</strong> which search/ad/recommendation actually caused the purchase</li>
+<li><strong>Latency measurement:</strong> time between cause and effect, not between arbitrary events</li>
+<li><strong>Anomaly detection:</strong> broken chains (effect without cause) = logging bug or system failure</li>
+<li><strong>Counterfactual analysis:</strong> what happens to downstream events when you remove a cause</li>
+</ul>
+</td>
+</tr>
+</table>
+
+<h2>Key Discussion Points</h2>
+
+<ul>
+<li>How does the pipeline detect when an analysis is relying on timestamp proximity to infer causality? (Signal: assumed sequence breaks under reordering)</li>
+<li>When explicit linkage doesn't exist in the data — can we reconstruct probable causal chains? (Probabilistic matching by key + time window + constraints)</li>
+<li>What metadata should a logging system capture to make causal analysis possible downstream?</li>
+<li>Relationship to entity key granularity (#25): the "right key" for a causal chain is the chain itself, not any single entity</li>
+<li>How does this interact with temporal dataset handling (#17)? Temporal ordering is necessary but not sufficient for causality</li>
+</ul>
+
+
+</body>
+</html>

@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>137. Curse of Big Data — Multimodality Is the Default</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 20px 10px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 40%; }
+.obj-table td:last-child { width: 60%; text-align: center; }
+.obj-table tr:nth-child(even) td { background: #fafcfe; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+</style>
+</head>
+<body>
+
+<h1>Curse of Big Data — Multimodality Is the Default</h1>
+<p class="subtitle">It's very hard for a single distribution to stay the same over long time periods and at big scale. The bigger the data, the more time it spans, the more sources it covers — the more certain it is that the generating process has changed. Multimodality isn't a bug — it's the inevitable result of stationarity being impossible at scale.</p>
+
+<div class="philosophy">
+<strong>The core insight:</strong> A single generating process can't stay stable for long. Markets shift, user bases grow, products change, regions expand, policies update. Big data is big BECAUSE it spans enough time and scale for the process to have changed multiple times. Each change adds a mode. By the time you have "big data," the stationarity assumption is already violated — and with it, every statistical method that assumes a single stable distribution.
+</div>
+
+<h2>Pitfall 1: More Rows = More Sub-Populations Mixed Together</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">10K Users: Unimodal. 10M Users: 5+ Modes Hiding in Every Feature</div>
+<ul>
+<li><strong>Small startup:</strong> 10K users, all from Product Hunt launch. Same demographic (tech-savvy, US, 25-35). Session duration: roughly normal, mean 8 min. You can run a t-test. Life is good.</li>
+<li><strong>Scale to 10M users:</strong> Now includes: mobile-first users (2 min sessions), power users (45 min), bot traffic (0.1s), enterprise users (30 min work sessions), international users with different usage patterns. Session duration is now a 5-mode mixture. The "mean" of 8 min describes NO actual user.</li>
+<li><strong>The math:</strong> If you have K distinct user segments with different behaviors, each feature has AT LEAST K modes. With 10M users you easily have 5-20 segments. Every feature → 5-20 mode mixture. Mean, variance, t-test, correlation — all assume unimodality. All wrong.</li>
+<li><strong>Real example — e-commerce order value:</strong> At 1K orders/day (one market): roughly log-normal, mean $45. At 1M orders/day (global): mode at $5 (developing markets), mode at $20 (impulse buys), mode at $50 (planned purchases), mode at $200 (premium), mode at $2000 (B2B accidentally mixed in). Five completely different buying behaviors in one "order value" column.</li>
+</ul>
+</td><td><canvas id="c1" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 2: More Columns = More Features That Are Mixtures</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">500 Features × Big Data = 500 Multimodal Distributions</div>
+<ul>
+<li><strong>The multiplication:</strong> Each feature independently becomes multimodal as data grows. With 500 features, you have 500 mixture distributions. Feature interactions create COMBINATORIAL multimodality — feature A has 3 modes × feature B has 4 modes = 12 joint modes. Your 500-dimensional space has astronomical mode count.</li>
+<li><strong>Why columns grow with rows:</strong> Big data means joining tables. Customer table + transaction table + clickstream + support tickets + marketing touches. Each join adds 10-50 columns. Each new source brings its OWN population structure. "Page load time" from mobile vs desktop isn't the same distribution. Now it's one column.</li>
+<li><strong>PCA on multimodal data:</strong> PCA finds directions of maximum variance. In multimodal data, the largest variance is BETWEEN modes, not within them. PC1 just separates the modes. You think you found "the main signal" — you found "there are different user types." That's not insight, it's structure you should have known about.</li>
+<li><strong>Correlation becomes meaningless:</strong> Pearson correlation assumes linear relationship in unimodal data. Two features each with 3 modes → 9 clusters in 2D. Pearson r could be 0, +0.5, or -0.3 depending on which modes happen to align. The correlation coefficient is an ARTIFACT of the mode mixture, not a real relationship.</li>
+</ul>
+</td><td><canvas id="c2" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 3: "Average" Describes Nobody</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">The Mean of a Multimodal Distribution Is Between the Modes — Where No Data Lives</div>
+<ul>
+<li><strong>Bimodal session time:</strong> Mode 1 at 30 seconds (bouncers). Mode 2 at 12 minutes (engaged). Mean: 4.5 minutes. NOBODY has a 4.5 minute session. You optimized your product for a user that doesn't exist.</li>
+<li><strong>Salary in a company:</strong> Mode 1: $60K (engineers). Mode 2: $150K (senior staff). Mode 3: $400K (executives). Mean: $130K. Median: $85K. Neither describes any actual role. Reporting "average salary $130K" is technically correct and completely misleading.</li>
+<li><strong>Response time SLA:</strong> "Average response time 200ms." Reality: 70% of requests at 50ms (cache hit), 30% at 550ms (cache miss). Nobody gets 200ms. Your SLA target is in the GAP between the modes. You'll never hit it consistently because it's not where any request lands.</li>
+<li><strong>A/B test on average:</strong> Test changes the MIX between modes (more users bounce → average drops) without changing either mode's behavior. Or: improves the small mode (power users get faster) but doesn't affect the large mode (casual users unchanged). Average "improves" by 2% but 90% of users saw no change.</li>
+</ul>
+</td><td><canvas id="c3" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 4: Statistical Tests Assume Unimodality (And Silently Fail)</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">T-Test, ANOVA, Regression — All Assume What Big Data Violates</div>
+<ul>
+<li><strong>T-test:</strong> Assumes samples from normal (or at least unimodal) distributions. Compares means. If both groups are multimodal mixtures, the "means" are meaningless (between modes). The t-test might say "no significant difference in means" while the distributions are COMPLETELY different in shape.</li>
+<li><strong>Linear regression:</strong> Assumes Y = βX + ε where ε ~ N(0, σ²). If Y is multimodal, residuals are multimodal. The regression line passes between clusters, fitting NONE of them well. R² might be 0.3 — is that "weak signal" or "multiple strong signals mixed together"?</li>
+<li><strong>ANOVA:</strong> Tests if group means differ. But if each group is multimodal, the "group mean" is fiction. You could have identical group means with completely different distributions within each group. ANOVA says "no effect" when the effect is to shift the MODE PROPORTIONS, not the mean.</li>
+<li><strong>Confidence intervals:</strong> CI = x̄ ± t×SE. This assumes the sampling distribution of the mean is approximately normal (CLT). With multimodal data and heavy tails between modes, CLT convergence is SLOW. Your 95% CI might actually be 80% CI. You need much more data for CLT to kick in on mixtures.</li>
+</ul>
+</td><td><canvas id="c4" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 5: Every Join Creates Multimodality</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Data Warehouse = Mode Factory</div>
+<ul>
+<li><strong>User table + transaction table:</strong> Users who never transact (mode at $0), occasional buyers (mode at $30), regulars (mode at $200/month). JOIN creates a "monthly_spend" column that's trimodal. Every downstream model sees this as one feature. None asks "which mode am I predicting for?"</li>
+<li><strong>Clickstream + purchase:</strong> Pages/session for browsers (mode at 3), for researchers (mode at 15), for comparison shoppers (mode at 8). JOIN with purchase gives "pages before purchase" which is a different mixture than "pages before bounce." If you don't split by outcome FIRST, the feature is garbage multimodal noise.</li>
+<li><strong>Multi-geography join:</strong> US price points (mode at $9.99, $19.99, $49.99). India price points (mode at ₹99, ₹499, ₹999 → $1.20, $6, $12). JOIN into one "price" column: 6+ modes. "Average price" = $18. Means nothing in either market. Linear model on price: fitting between two completely different pricing structures.</li>
+<li><strong>Time-series join:</strong> Pre-COVID behavior (mode A) + COVID lockdown (mode B) + post-COVID (mode C). JOIN across time: trimodal. Your 3-year training window has 3 regimes. Model learns the AVERAGE of 3 regimes. Performs poorly in ALL of them because it optimizes for the gaps.</li>
+</ul>
+</td><td><canvas id="c5" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 6: Correlation That's Only Real Within a Mode</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Simpson's Paradox: Correlation Reverses When You Separate Modes</div>
+<ul>
+<li><strong>Overall r = +0.6:</strong> Income vs spending. Looks strong! But: it's actually 3 clusters (students, workers, retirees). Within students: r = -0.2 (more income → save more). Within workers: r = +0.3. Within retirees: r = +0.1. The +0.6 is an ARTIFACT of the between-cluster difference (workers earn AND spend more than students). The real within-group relationships are weak/negative.</li>
+<li><strong>Feature selection based on overall correlation:</strong> "Feature X correlates 0.7 with target." Great, use it! But: the correlation exists only because feature X separates two populations that have different target rates. It's a proxy for "which population are you in" — not a causal/predictive signal WITHIN either population.</li>
+<li><strong>Regression coefficient flip:</strong> Y ~ X gives β = +2.3 (overall). Add segment indicator: Y ~ X + segment gives β = -0.8 for X. The sign FLIPPED. The overall positive relationship was entirely due to confounding by segment. Big data with more segments = more ways this can happen silently.</li>
+<li><strong>Why big data makes this worse:</strong> Small data, one population → correlation is "real" (within that population). Big data, many populations mixed → correlation is between-group artifact. MORE data = MORE populations mixed = MORE spurious correlations that are just mode separation in disguise.</li>
+</ul>
+</td><td><canvas id="c6" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 7: Everything Becomes "Significant" (p-Value Worthless)</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">With 10M Rows, Every Test Rejects the Null — Regardless of Effect Size</div>
+<ul>
+<li><strong>The math:</strong> p-value depends on effect size AND sample size. With n = 10M, even a 0.01% difference has p < 0.001. A meaningless correlation of r = 0.003 is "highly significant" at p < 10⁻⁸. The p-value tells you NOTHING about whether the effect MATTERS — only that it's non-zero.</li>
+<li><strong>Combined with multimodality:</strong> Every feature pair has some non-zero correlation (because modes create structure). With big n, ALL of these tiny structural artifacts become "statistically significant." Your feature selection picks ALL features as significant. Your model has 500 "significant" predictors that are mostly mode-separation artifacts.</li>
+<li><strong>Multiple testing explosion:</strong> 500 features = 124,750 pairwise correlations. With n = 10M, literally ALL 124,750 are significant at p < 0.001. Even after Bonferroni correction, 99%+ remain significant. Statistical significance becomes a useless filter — it can't separate signal from the structural noise of multimodality.</li>
+<li><strong>What you need instead:</strong> Effect size thresholds (Cohen's d > 0.2, correlation > 0.1). Practical significance. Segmented analysis (is the effect real WITHIN each mode?). Predictive validation (does this feature help in holdout, or just overfit the mode structure?).</li>
+</ul>
+</td><td><canvas id="c7" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 8: Clustering Finds Modes, Not "Segments"</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">K-Means on Big Data: Discovering What You Should Have Known Exists</div>
+<ul>
+<li><strong>The ritual:</strong> Take big dataset. Run k-means. "We found 5 customer segments!" No — you found the 5 modes of the multimodal mixture. These aren't insights. They're the populations you mixed together when you built the data warehouse. Mobile users, desktop users, bots, enterprise, international — the JOIN created them, k-means rediscovered them.</li>
+<li><strong>Elbow method is mode counting:</strong> "The elbow says k=4." That's because there are 4 dominant modes in the mixture. Increasing k beyond 4 starts splitting real modes (diminishing returns). You're not "choosing k" — you're estimating the number of populations that got mixed. This should be known from the business context, not discovered from the data.</li>
+<li><strong>Why this wastes time:</strong> Team spends 2 weeks clustering. Presents "Segment 1: young mobile users. Segment 2: desktop power users. Segment 3: international low-bandwidth." PM says "we already knew that." Of course — the modes are the populations you combined. The cluster analysis is an expensive confirmation that JOINs mix different populations.</li>
+<li><strong>What's actually useful:</strong> Cluster WITHIN a known segment to find SUB-structure you didn't know about. Cluster residuals after accounting for known modes. Don't cluster the raw mixture — you'll just rediscover the mixture components.</li>
+</ul>
+</td><td><canvas id="c8" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 9: Outlier Detection Fails (Outliers Are Just Other Modes)</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">"Outlier" = Data Point From a Mode You Didn't Model</div>
+<ul>
+<li><strong>IQR method:</strong> Points beyond Q1-1.5×IQR or Q3+1.5×IQR are "outliers." In multimodal data: the small mode IS beyond the IQR of the large mode. You're removing an entire population and calling them "outliers." 20% of your data isn't "extreme values" — it's a different user type.</li>
+<li><strong>Z-score > 3:</strong> "Remove points more than 3σ from mean." But the mean is between modes. And σ is inflated by multimodality. A perfectly normal data point in Mode 2 might be 4σ from the overall mean. You remove it. You just deleted your most interesting segment.</li>
+<li><strong>Real example — fraud detection:</strong> Transaction amounts: Mode at $20 (regular), mode at $500 (legitimate large purchases), tail at $5000+ (actual fraud). IQR-based outlier detection flags ALL $500 purchases as outliers. You filter 15% of legitimate transactions, pissing off high-value customers.</li>
+<li><strong>What to do:</strong> Fit a mixture model FIRST (GMM, or even just segment by business logic). Then detect outliers WITHIN each component. A $5000 transaction from a user whose mode is $500 is a 3σ event (suspicious). A $5000 transaction from a user whose mode is $3000 is normal.</li>
+</ul>
+</td><td><canvas id="c9" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 10: The Paradox — More Data Makes Simple Models WORSE</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Adding Data From New Populations Degrades Model Performance</div>
+<ul>
+<li><strong>The expectation:</strong> "More data = better model." True IF the new data is from the same distribution. False if new data adds a new mode. Adding users from a new market doesn't give you "more examples" — it gives you a DIFFERENT PROBLEM mixed into your existing problem.</li>
+<li><strong>Real example — recommendation:</strong> Model trained on US users (1M). Accuracy: 92%. Add 5M international users. Accuracy drops to 78%. The model tries to learn ONE preference structure for 6M users with 3+ cultural taste modes. It fits the average of modes — which is good for nobody.</li>
+<li><strong>Linear model on growing data:</strong> Train on 10K (one segment): R² = 0.85. Retrain on 1M (5 segments mixed): R² = 0.35. "Model got worse!" No — the PROBLEM got harder. One line can't fit 5 clusters. You don't need a better model — you need 5 models, one per segment.</li>
+<li><strong>The fix is not "more complex models":</strong> Deep learning can memorize mode structure, but it's not learning generalizable patterns — it's memorizing which mode each point belongs to. The honest fix: SEGMENT FIRST, then model within segment. Or: explicitly model the mixture (GMM, mixture of experts). Don't pretend multimodal data is one population.</li>
+</ul>
+</td><td><canvas id="c10" width="720" height="300"></canvas></td></tr>
+</table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    return {ctx:ctx, w:w, h:h};
+}
+function gauss(x, mu, sigma) { return Math.exp(-0.5*Math.pow((x-mu)/sigma,2))/(sigma*2.507); }
+
+// 1. Small data unimodal vs big data multimodal
+(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Session Duration: 10K Users vs 10M Users',w/2,20);
+// Small data: one bell curve
+ctx.strokeStyle='#27ae60';ctx.lineWidth=2;ctx.beginPath();
+for(var x=0;x<300;x++){var v=gauss(x,150,30)*300;var px=30+x,py=95-v;
+if(x===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);}ctx.stroke();
+ctx.fillStyle='#27ae60';ctx.font='17px -apple-system';ctx.textAlign='center';
+ctx.fillText('10K users (one segment): unimodal',180,110);
+// Big data: multimodal
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=2;ctx.beginPath();
+for(var x=0;x<300;x++){
+var v=gauss(x,20,8)*80+gauss(x,80,15)*120+gauss(x,150,20)*200+gauss(x,220,25)*100+gauss(x,270,10)*40;
+var px=390+x,py=95-v;if(x===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);}ctx.stroke();
+ctx.fillStyle='#e74c3c';ctx.font='17px -apple-system';ctx.textAlign='center';
+ctx.fillText('10M users (5 segments): 5 modes',540,110);
+// Mean line in big data
+ctx.strokeStyle='#e67e22';ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(540,45);ctx.lineTo(540,95);ctx.stroke();ctx.setLineDash([]);
+ctx.fillStyle='#e67e22';ctx.font='17px -apple-system';ctx.fillText('← "mean" (nobody lives here)',600,75);
+ctx.fillStyle='#555';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('More rows = more populations mixed = more modes per feature',w/2,145);
+ctx.fillStyle='#333';ctx.font='17px -apple-system';
+ctx.fillText('Every feature that was unimodal at 10K becomes multimodal at 10M.',w/2,170);
+ctx.fillText('Mean, variance, t-test — all assume what big data violates.',w/2,190);
+})();
+
+// 2. More columns = combinatorial modes
+(function(){var s=setup('c2');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Feature A (3 modes) × Feature B (4 modes) = 12 Joint Modes',w/2,20);
+// Draw scatter with clusters
+var clusters=[{x:100,y:60},{x:200,y:60},{x:300,y:60},{x:100,y:100},{x:200,y:100},{x:300,y:100},
+{x:100,y:140},{x:200,y:140},{x:300,y:140},{x:150,y:80},{x:250,y:120},{x:350,y:80}];
+clusters.forEach(function(cl,i){
+ctx.fillStyle='rgba(41,128,185,0.3)';ctx.beginPath();ctx.arc(cl.x,cl.y,18,0,Math.PI*2);ctx.fill();
+ctx.fillStyle='#2980b9';ctx.beginPath();ctx.arc(cl.x,cl.y,3,0,Math.PI*2);ctx.fill();
+});
+// Regression line through mess
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=2;ctx.setLineDash([5,5]);
+ctx.beginPath();ctx.moveTo(60,130);ctx.lineTo(380,70);ctx.stroke();ctx.setLineDash([]);
+ctx.fillStyle='#e74c3c';ctx.font='17px -apple-system';ctx.textAlign='left';
+ctx.fillText('Regression line: fits NONE of the clusters',390,90);
+ctx.fillStyle='#333';ctx.font='17px -apple-system';ctx.textAlign='left';
+ctx.fillText('Pearson r = 0.3? Artifact of cluster positions.',390,115);
+ctx.fillText('R² = 0.1? Not "weak signal" — wrong model class.',390,135);
+ctx.fillStyle='#555';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('500 features × 3 modes each = 3⁵⁰⁰ potential joint modes. Linear models: hopeless.',w/2,175);
+ctx.fillStyle='#333';ctx.font='17px -apple-system';
+ctx.fillText('PCA on this: PC1 just separates clusters. "Main variance" = mode separation, not signal.',w/2,195);
+})();
+
+// 3. Mean describes nobody
+(function(){var s=setup('c3');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('"Average Session = 4.5 min" — Nobody Has a 4.5 min Session',w/2,20);
+// Bimodal distribution
+ctx.fillStyle='rgba(41,128,185,0.3)';ctx.beginPath();
+for(var x=0;x<600;x++){var v=gauss(x,60,20)*200+gauss(x,450,60)*150;var px=60+x,py=130-v;
+if(x===0){ctx.moveTo(px,py);}else{ctx.lineTo(px,py);}}
+ctx.lineTo(660,130);ctx.lineTo(60,130);ctx.fill();
+ctx.strokeStyle='#2980b9';ctx.lineWidth=2;ctx.beginPath();
+for(var x=0;x<600;x++){var v=gauss(x,60,20)*200+gauss(x,450,60)*150;var px=60+x,py=130-v;
+if(x===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);}ctx.stroke();
+// Mean line in the gap
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=2.5;ctx.setLineDash([6,4]);
+ctx.beginPath();ctx.moveTo(250,40);ctx.lineTo(250,130);ctx.stroke();ctx.setLineDash([]);
+ctx.fillStyle='#e74c3c';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Mean = 4.5 min',250,145);
+// Mode labels
+ctx.fillStyle='#27ae60';ctx.font='17px -apple-system';
+ctx.fillText('Bouncers: 30s',120,155);
+ctx.fillText('Engaged: 12 min',500,155);
+ctx.fillStyle='#e74c3c';ctx.font='17px -apple-system';ctx.textAlign='center';
+ctx.fillText('← ZERO users here',250,168);
+ctx.fillStyle='#555';ctx.font='bold 17px -apple-system';
+ctx.fillText('Optimized for 4.5 min? You serve neither bouncers NOR engaged users.',w/2,190);
+})();
+
+// 4. Statistical tests assume unimodal
+(function(){var s=setup('c4');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('T-Test on Multimodal Data: "No Difference" When Distributions Differ Completely',w/2,20);
+// Group A: bimodal
+ctx.strokeStyle='#2980b9';ctx.lineWidth=2;ctx.beginPath();
+for(var x=0;x<280;x++){var v=gauss(x,70,25)*120+gauss(x,200,30)*100;var px=40+x,py=110-v;
+if(x===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);}ctx.stroke();
+ctx.fillStyle='#2980b9';ctx.font='17px -apple-system';ctx.textAlign='center';ctx.fillText('Group A',180,125);
+// Group B: different bimodal, same mean
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=2;ctx.beginPath();
+for(var x=0;x<280;x++){var v=gauss(x,50,15)*80+gauss(x,220,20)*140;var px=400+x,py=110-v;
+if(x===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);}ctx.stroke();
+ctx.fillStyle='#e74c3c';ctx.font='17px -apple-system';ctx.textAlign='center';ctx.fillText('Group B',540,125);
+// Both means around same spot
+ctx.strokeStyle='#e67e22';ctx.setLineDash([3,3]);ctx.lineWidth=1.5;
+ctx.beginPath();ctx.moveTo(170,50);ctx.lineTo(170,110);ctx.stroke();
+ctx.beginPath();ctx.moveTo(535,50);ctx.lineTo(535,110);ctx.stroke();ctx.setLineDash([]);
+ctx.fillStyle='#e67e22';ctx.font='17px -apple-system';ctx.textAlign='center';
+ctx.fillText('mean A',170,140);ctx.fillText('≈ mean B',535,140);
+ctx.fillStyle='#e74c3c';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('T-test: p=0.82. "No significant difference." Distributions are COMPLETELY different.',w/2,170);
+ctx.fillStyle='#555';ctx.font='17px -apple-system';
+ctx.fillText('Same means ≠ same distributions. T-test only compares means. Useless for multimodal.',w/2,192);
+})();
+
+// 5. JOINs create multimodality
+(function(){var s=setup('c5');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Each JOIN Adds Modes: Data Warehouse = Mode Factory',w/2,20);
+// Show tables joining
+var tables=[{name:'US orders',x:50,modes:2},{name:'+ India',x:200,modes:4},{name:'+ B2B',x:370,modes:6},{name:'+ Returns',x:540,modes:8}];
+tables.forEach(function(t,i){
+ctx.fillStyle='rgba(41,128,185,0.2)';ctx.fillRect(t.x,45,120,35);
+ctx.strokeStyle='#2980b9';ctx.strokeRect(t.x,45,120,35);
+ctx.fillStyle='#1a5276';ctx.font='17px -apple-system';ctx.textAlign='center';
+ctx.fillText(t.name,t.x+60,67);
+// Draw small multimodal below
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=1.5;ctx.beginPath();
+for(var x=0;x<100;x++){var v=0;
+for(var m=0;m<t.modes;m++){v+=gauss(x,15+m*(80/t.modes),6)*40;}
+var px=t.x+10+x,py=140-v;if(x===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);}ctx.stroke();
+ctx.fillStyle='#e74c3c';ctx.font='17px -apple-system';ctx.textAlign='center';
+ctx.fillText(t.modes+' modes',t.x+60,155);
+// Arrow
+if(i<tables.length-1){ctx.fillStyle='#666';ctx.font='17px -apple-system';ctx.fillText('→',t.x+135,65);}
+});
+ctx.fillStyle='#555';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Every table you JOIN adds populations you didn\'t model. "Price" after 4 JOINs has 8 modes.',w/2,180);
+})();
+
+// 6. Correlation reversal within modes
+(function(){var s=setup('c6');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Overall r=+0.6. Within Each Mode: r=-0.2',w/2,20);
+// Three clusters with negative internal slope but positive overall
+var clusters=[{cx:120,cy:130,color:'#e74c3c'},{cx:300,cy:85,color:'#2980b9'},{cx:500,cy:50,color:'#27ae60'}];
+clusters.forEach(function(cl){
+ctx.fillStyle=cl.color;ctx.globalAlpha=0.15;ctx.beginPath();ctx.arc(cl.cx,cl.cy,40,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;
+// Within-cluster negative slope
+ctx.strokeStyle=cl.color;ctx.lineWidth=1.5;ctx.beginPath();
+ctx.moveTo(cl.cx-30,cl.cy-10);ctx.lineTo(cl.cx+30,cl.cy+10);ctx.stroke();
+});
+// Overall positive trend line
+ctx.strokeStyle='#e67e22';ctx.lineWidth=2.5;ctx.setLineDash([6,4]);
+ctx.beginPath();ctx.moveTo(80,145);ctx.lineTo(560,35);ctx.stroke();ctx.setLineDash([]);
+ctx.fillStyle='#e67e22';ctx.font='bold 17px -apple-system';ctx.textAlign='left';
+ctx.fillText('Overall: r = +0.6',420,145);
+ctx.fillStyle='#e74c3c';ctx.font='17px -apple-system';ctx.textAlign='left';
+ctx.fillText('Within modes: r = -0.2 each',420,165);
+ctx.fillStyle='#555';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('The +0.6 is between-mode artifact. Real within-mode relationship is NEGATIVE.',w/2,192);
+})();
+
+// 7. Everything significant
+(function(){var s=setup('c7');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('n=10M: Even r=0.003 Has p < 10⁻⁸',w/2,20);
+// Effect size vs significance at different n
+ctx.fillStyle='#333';ctx.font='17px -apple-system';ctx.textAlign='left';
+ctx.fillText('n = 100:    r = 0.20 → p = 0.05 (meaningful + significant)',60,55);
+ctx.fillText('n = 10K:    r = 0.02 → p = 0.05 (tiny + significant)',60,80);
+ctx.fillStyle='#e74c3c';ctx.font='bold 17px -apple-system';
+ctx.fillText('n = 10M:    r = 0.003 → p < 0.001 (nothing + "highly significant")',60,108);
+ctx.fillStyle='#333';ctx.font='17px -apple-system';
+ctx.fillText('500 features → 124,750 pairs. At n=10M, ALL are significant.',60,140);
+ctx.fillStyle='#e74c3c';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('p-value is useless at scale. Use effect size thresholds + within-segment analysis.',w/2,170);
+ctx.fillStyle='#555';ctx.font='17px -apple-system';
+ctx.fillText('Statistical significance ≠ practical significance. Big n guarantees the former for everything.',w/2,192);
+})();
+
+// 8. K-means rediscovers the obvious
+(function(){var s=setup('c8');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('K-Means on Mixed Data: "Discovering" What JOINs Created',w/2,20);
+// Clusters with labels
+var segs=[{name:'Mobile',x:100,y:70,r:35,color:'#3498db'},{name:'Desktop',x:280,y:90,r:30,color:'#27ae60'},
+{name:'Bot',x:180,y:150,r:20,color:'#e74c3c'},{name:'Enterprise',x:450,y:60,r:25,color:'#8e44ad'},
+{name:'International',x:400,y:140,r:30,color:'#f39c12'}];
+segs.forEach(function(seg){
+ctx.fillStyle=seg.color;ctx.globalAlpha=0.2;ctx.beginPath();ctx.arc(seg.x,seg.y,seg.r,0,Math.PI*2);ctx.fill();
+ctx.globalAlpha=1;ctx.strokeStyle=seg.color;ctx.lineWidth=2;ctx.beginPath();ctx.arc(seg.x,seg.y,seg.r,0,Math.PI*2);ctx.stroke();
+ctx.fillStyle=seg.color;ctx.font='17px -apple-system';ctx.textAlign='center';ctx.fillText(seg.name,seg.x,seg.y+5);
+});
+ctx.fillStyle='#555';ctx.font='17px -apple-system';ctx.textAlign='left';
+ctx.fillText('Team: "We ran k-means and found 5 segments!"',480,85);
+ctx.fillText('PM: "Those are the 5 data sources we JOINed."',480,108);
+ctx.fillText('Team: "...oh."',480,131);
+ctx.fillStyle='#e74c3c';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Cluster WITHIN segments to find real sub-structure. Don\'t cluster the mixture.',w/2,190);
+})();
+
+// 9. Outliers are other modes
+(function(){var s=setup('c9');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('"Outlier" Removal = Deleting an Entire Population',w/2,20);
+// Distribution with two modes
+ctx.fillStyle='rgba(41,128,185,0.3)';ctx.beginPath();
+for(var x=0;x<500;x++){var v=gauss(x,100,30)*200+gauss(x,380,40)*80;var px=60+x,py=130-v;
+if(x===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);}
+ctx.lineTo(560,130);ctx.lineTo(60,130);ctx.fill();
+// IQR box on main mode
+ctx.strokeStyle='#27ae60';ctx.lineWidth=2;ctx.strokeRect(100,50,160,80);
+ctx.fillStyle='#27ae60';ctx.font='17px -apple-system';ctx.textAlign='center';ctx.fillText('IQR of Mode 1',180,145);
+// "Outlier" zone
+ctx.fillStyle='rgba(231,76,60,0.15)';ctx.fillRect(340,40,220,100);
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=2;ctx.setLineDash([5,5]);ctx.strokeRect(340,40,220,100);ctx.setLineDash([]);
+ctx.fillStyle='#e74c3c';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('"Outliers" — actually Mode 2 (20% of users)',450,155);
+ctx.fillStyle='#555';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('IQR/z-score outlier detection REMOVES entire sub-populations from multimodal data.',w/2,180);
+})();
+
+// 10. More data makes simple models worse
+(function(){var s=setup('c10');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Adding Data From New Populations DEGRADES Model Accuracy',w/2,20);
+// Accuracy line going DOWN as data grows
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=2.5;ctx.beginPath();
+var points=[{n:'10K',acc:92},{n:'100K',acc:88},{n:'1M',acc:81},{n:'10M',acc:74},{n:'100M',acc:71}];
+points.forEach(function(p,i){var x=100+i*140,y=55+(100-p.acc)*2.5;
+if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});ctx.stroke();
+// Points and labels
+points.forEach(function(p,i){var x=100+i*140,y=55+(100-p.acc)*2.5;
+ctx.fillStyle='#e74c3c';ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fill();
+ctx.fillStyle='#333';ctx.font='17px -apple-system';ctx.textAlign='center';
+ctx.fillText(p.n,x,155);ctx.fillText(p.acc+'%',x,y-12);
+});
+// Annotation
+ctx.fillStyle='#e74c3c';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('"More data = better" is FALSE when new data adds new populations.',w/2,180);
+ctx.fillStyle='#27ae60';ctx.font='17px -apple-system';
+ctx.fillText('Fix: segment first, then model per segment. Or: mixture of experts.',w/2,197);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Firewall/Policy Pitfalls</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 0; padding: 20px; background: #f5f7fa; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 14px; }
+.nav a:hover { text-decoration: underline; }
+h1 { color: #1a5276; border-bottom: 3px solid #2980b9; padding-bottom: 10px; }
+.obj-table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
+.obj-table td { padding: 15px; border: 1px solid #2980b9; vertical-align: top; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-title { font-weight: bold; color: #1a5276; font-size: 16px; margin-bottom: 8px; }
+.pitfall-desc { color: #333; font-size: 14px; line-height: 1.6; }
+canvas { max-width: 100%; }
+</style>
+</head>
+<body>
+<h1>Firewall/Policy Pitfalls</h1>
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">1. Rule Order Matters (First-Match-Wins)</div>
+<div class="pitfall-desc">
+Firewall rules are evaluated top-down with first-match-wins semantics. Rule 50 says "allow traffic X"; rule 200 says "deny traffic X" &mdash; rule 200 is NEVER hit because rule 50 already matched. This is a <strong>shadow rule</strong>. Reordering rules changes the entire security posture without changing any individual rule's definition. The same set of rules in a different order produces a completely different security policy.
+</div>
+</td>
+<td><canvas id="canvas1"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">2. Shadow/Dead Rules</div>
+<div class="pitfall-desc">
+Studies show <strong>25&ndash;40% of firewall rules are never triggered</strong>. They are leftovers from decommissioned servers, old projects, temporary exceptions that became permanent. Nobody knows if removing them will break something, so they accumulate indefinitely. Each dead rule increases complexity, slows processing, and makes auditing nearly impossible. The ruleset becomes archaeological sediment &mdash; layers of forgotten intent.
+</div>
+</td>
+<td><canvas id="canvas2"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">3. Overly Permissive Rules Impossible to Tighten</div>
+<div class="pitfall-desc">
+A rule says "allow any-to-any on port 443." It should be tightened to specific IPs, but <strong>500 services MIGHT use it</strong>. You can't determine actual usage without monitoring. Monitoring generates <strong>10TB/day</strong> of logs. You can't store or analyze 10TB/day. So the overly permissive rule stays. It's a one-way ratchet: easy to loosen, practically impossible to tighten.
+</div>
+</td>
+<td><canvas id="canvas3"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">4. Log Asymmetry</div>
+<div class="pitfall-desc">
+Denied traffic is logged (because it's an "event"). Allowed traffic is often <strong>NOT logged</strong> (too much volume). Your data shows ONLY the blocked attacks, not what got through. You're analyzing <em>failures-to-penetrate</em>, not successes. This is survivorship bias applied to security: you see what was stopped but are blind to what succeeded. Your "threat landscape" is actually your "things-we-already-handle landscape."
+</div>
+</td>
+<td><canvas id="canvas4"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">5. Policy Drift from Exceptions</div>
+<div class="pitfall-desc">
+Security says "deny all." Business says "we need this one exception." After <strong>100 individually justified exceptions</strong>, the policy is swiss cheese. Each exception was reasonable in isolation, but collectively they gutted the security posture. Nobody tracks the cumulative effect. The original "deny all" intent is still documented, but the effective policy is "allow most."
+</div>
+</td>
+<td><canvas id="canvas5"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">6. Multi-Vendor Policy Inconsistency</div>
+<div class="pitfall-desc">
+Palo Alto at perimeter, cloud provider Security Groups in cloud, Kubernetes NetworkPolicies in containers. <strong>Three different syntaxes, three different models, no unified view.</strong> Each vendor has different defaults (deny-all vs allow-all), different granularity, different logging. The gap BETWEEN them is unprotected &mdash; traffic that leaves one domain and enters another may match no policy in the transition.
+</div>
+</td>
+<td><canvas id="canvas6"></canvas></td>
+</tr>
+</table>
+<script>
+function setupCanvas(canvas, width, height) {
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = width + 'px';
+    canvas.style.height = height + 'px';
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return ctx;
+}
+
+// Chart 1: Rule Order Matters - show first-match-wins flow
+(function() {
+    const canvas = document.getElementById('canvas1');
+    const ctx = setupCanvas(canvas, 720, 200);
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    // Draw packet flow
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('Packet: src=10.0.0.5, dst=web, port=443', 20, 25);
+
+    // Rule boxes
+    const rules = [
+        { num: 50, text: 'ALLOW any→web:443', color: '#27ae60', hit: true },
+        { num: 100, text: 'ALLOW 10.0.1.0/24→web', color: '#27ae60', hit: false },
+        { num: 200, text: 'DENY 10.0.0.5→web:443', color: '#e74c3c', hit: false }
+    ];
+
+    rules.forEach(function(rule, i) {
+        const x = 30 + i * 230;
+        const y = 50;
+        // Box
+        ctx.strokeStyle = rule.hit ? '#27ae60' : '#bdc3c7';
+        ctx.lineWidth = rule.hit ? 3 : 1.5;
+        ctx.fillStyle = rule.hit ? '#eafaf1' : '#f9f9f9';
+        ctx.fillRect(x, y, 200, 60);
+        ctx.strokeRect(x, y, 200, 60);
+        // Text
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillText('Rule ' + rule.num, x + 10, y + 25);
+        ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillStyle = rule.color;
+        ctx.fillText(rule.text, x + 10, y + 48);
+
+        // Arrow between boxes
+        if (i < 2) {
+            ctx.beginPath();
+            ctx.moveTo(x + 200, y + 30);
+            ctx.lineTo(x + 230, y + 30);
+            ctx.strokeStyle = rule.hit ? '#bdc3c7' : '#7f8c8d';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x + 225, y + 25);
+            ctx.lineTo(x + 230, y + 30);
+            ctx.lineTo(x + 225, y + 35);
+            ctx.stroke();
+        }
+    });
+
+    // MATCH indicator
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('✓ MATCH → Traffic Allowed', 30, 135);
+
+    // Shadow rule indicator
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('✗ Rule 200 NEVER evaluated (shadow rule)', 30, 160);
+
+    // Warning
+    ctx.fillStyle = '#7f8c8d';
+    ctx.font = 'italic 14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('Reordering rules 50↔200 flips allow→deny with zero rule edits', 30, 185);
+})();
+
+// Chart 2: Shadow/Dead Rules - pie chart of rule status
+(function() {
+    const canvas = document.getElementById('canvas2');
+    const ctx = setupCanvas(canvas, 720, 200);
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    const centerX = 160;
+    const centerY = 105;
+    const radius = 75;
+
+    // Pie segments
+    const segments = [
+        { label: 'Active Rules', pct: 0.40, color: '#27ae60' },
+        { label: 'Redundant/Shadowed', pct: 0.20, color: '#f39c12' },
+        { label: 'Decommissioned Servers', pct: 0.15, color: '#e74c3c' },
+        { label: 'Old Projects', pct: 0.12, color: '#9b59b6' },
+        { label: '"Temporary" Exceptions', pct: 0.13, color: '#3498db' }
+    ];
+
+    let startAngle = -Math.PI / 2;
+    segments.forEach(function(seg) {
+        const endAngle = startAngle + seg.pct * 2 * Math.PI;
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+        ctx.closePath();
+        ctx.fillStyle = seg.color;
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        startAngle = endAngle;
+    });
+
+    // Legend
+    ctx.font = '15px -apple-system, BlinkMacSystemFont, sans-serif';
+    const legendX = 290;
+    segments.forEach(function(seg, i) {
+        const y = 30 + i * 34;
+        ctx.fillStyle = seg.color;
+        ctx.fillRect(legendX, y - 10, 14, 14);
+        ctx.fillStyle = '#333';
+        ctx.fillText(seg.label + ' (' + Math.round(seg.pct * 100) + '%)', legendX + 22, y + 2);
+    });
+
+    // Summary
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('60% of rules = dead weight', 460, 100);
+    ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#7f8c8d';
+    ctx.fillText('Nobody dares remove them', 460, 125);
+})();
+
+// Chart 3: Overly Permissive Rules - funnel showing the impossibility
+(function() {
+    const canvas = document.getElementById('canvas3');
+    const ctx = setupCanvas(canvas, 720, 200);
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    // Show the cascade of why tightening fails
+    const steps = [
+        { text: 'Rule: allow any→any:443', w: 680, color: '#e74c3c' },
+        { text: 'Want to restrict to specific IPs', w: 560, color: '#f39c12' },
+        { text: '500 services MIGHT use it', w: 440, color: '#f1c40f' },
+        { text: 'Need monitoring → 10TB/day logs', w: 320, color: '#3498db' },
+        { text: 'Can\'t store/analyze → Rule stays permissive', w: 200, color: '#9b59b6' }
+    ];
+
+    steps.forEach(function(step, i) {
+        const y = 10 + i * 38;
+        const x = (720 - step.w) / 2;
+        ctx.fillStyle = step.color;
+        ctx.globalAlpha = 0.2;
+        ctx.fillRect(x, y, step.w, 30);
+        ctx.globalAlpha = 1.0;
+        ctx.strokeStyle = step.color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, step.w, 30);
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(step.text, 360, y + 20);
+    });
+    ctx.textAlign = 'left';
+})();
+
+// Chart 4: Log Asymmetry - visibility comparison
+(function() {
+    const canvas = document.getElementById('canvas4');
+    const ctx = setupCanvas(canvas, 720, 200);
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    // Two columns: what you see vs what's real
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('What You See (Logged)', 40, 25);
+    ctx.fillText('What Actually Happened', 420, 25);
+
+    // Left: denied/blocked bars
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(40, 40, 280, 25);
+    ctx.fillRect(40, 70, 210, 25);
+    ctx.fillRect(40, 100, 160, 25);
+    ctx.fillRect(40, 130, 120, 25);
+
+    ctx.fillStyle = '#fff';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('DENIED: Brute force (2,840)', 50, 57);
+    ctx.fillText('DENIED: Port scan (1,920)', 50, 87);
+    ctx.fillText('DENIED: SQL inject (1,100)', 50, 117);
+    ctx.fillText('DENIED: Exfil attempt (680)', 50, 147);
+
+    // Right: full picture with allowed (invisible)
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(420, 40, 240, 25);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(420, 70, 180, 25);
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(420, 100, 200, 25);
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(420, 130, 160, 25);
+
+    ctx.fillStyle = '#fff';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('ALLOWED: Lateral move (NOT LOGGED)', 430, 57);
+    ctx.fillText('DENIED: Port scan (logged)', 430, 87);
+    ctx.fillText('ALLOWED: Data exfil (NOT LOGGED)', 430, 117);
+    ctx.fillText('ALLOWED: C2 beacon (NOT LOGGED)', 430, 147);
+
+    // Bottom summary
+    ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('You analyze failures-to-penetrate, not actual breaches', 150, 185);
+})();
+
+// Chart 5: Policy Drift from Exceptions - erosion over time
+(function() {
+    const canvas = document.getElementById('canvas5');
+    const ctx = setupCanvas(canvas, 720, 200);
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    // X axis: time/exceptions
+    const startX = 60;
+    const endX = 660;
+    const topY = 30;
+    const bottomY = 160;
+
+    // Axes
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(startX, bottomY);
+    ctx.lineTo(endX, bottomY);
+    ctx.moveTo(startX, topY);
+    ctx.lineTo(startX, bottomY);
+    ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = '#1a5276';
+    ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('Exceptions Added →', 300, 185);
+    ctx.save();
+    ctx.translate(20, 110);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Security Coverage %', 0, 0);
+    ctx.restore();
+
+    // Y axis labels
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('100%', 25, topY + 5);
+    ctx.fillText('0%', 35, bottomY + 5);
+
+    // Draw decay curve
+    ctx.beginPath();
+    ctx.moveTo(startX, topY + 5);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+
+    for (var i = 0; i <= 100; i++) {
+        var x = startX + (i / 100) * (endX - startX);
+        var coverage = Math.exp(-i * 0.025) * (bottomY - topY);
+        var y = bottomY - coverage;
+        if (i % 5 === 0 && i > 0) y += 2;
+        ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Annotations
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('"Deny All" policy', 70, topY + 20);
+
+    ctx.fillStyle = '#f39c12';
+    ctx.fillText('10 exceptions', 180, 70);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('50 exceptions', 360, 110);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('100 exceptions = "allow most"', 460, 145);
+
+    // Dashed "intended policy" line
+    ctx.setLineDash([5, 5]);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(startX, topY + 5);
+    ctx.lineTo(endX, topY + 5);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('← Documented policy', 565, topY + 10);
+})();
+
+// Chart 6: Multi-Vendor Policy Inconsistency - gap diagram
+(function() {
+    const canvas = document.getElementById('canvas6');
+    const ctx = setupCanvas(canvas, 720, 200);
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+
+    // Three vendor zones with gaps
+    const zones = [
+        { label: 'Palo Alto', sub: 'Perimeter', x: 30, w: 190, color: '#2980b9', rules: 'Zone-based, deny-all default' },
+        { label: 'cloud provider SG', sub: 'Cloud', x: 270, w: 190, color: '#27ae60', rules: 'Stateful, allow-specified' },
+        { label: 'K8s NetPol', sub: 'Containers', x: 510, w: 190, color: '#9b59b6', rules: 'Label-based, ns-scoped' }
+    ];
+
+    zones.forEach(function(zone) {
+        // Zone box
+        ctx.fillStyle = zone.color;
+        ctx.globalAlpha = 0.15;
+        ctx.fillRect(zone.x, 20, zone.w, 120);
+        ctx.globalAlpha = 1.0;
+        ctx.strokeStyle = zone.color;
+        ctx.lineWidth = 2.5;
+        ctx.strokeRect(zone.x, 20, zone.w, 120);
+
+        // Zone label
+        ctx.fillStyle = zone.color;
+        ctx.font = 'bold 16px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(zone.label, zone.x + zone.w / 2, 45);
+        ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillStyle = '#555';
+        ctx.fillText(zone.sub, zone.x + zone.w / 2, 65);
+        ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillStyle = '#777';
+        ctx.fillText(zone.rules, zone.x + zone.w / 2, 90);
+    });
+
+    // Gap indicators (the dangerous parts)
+    ctx.textAlign = 'center';
+    var gaps = [
+        { x: 235, label: 'GAP' },
+        { x: 475, label: 'GAP' }
+    ];
+
+    gaps.forEach(function(gap) {
+        ctx.fillStyle = '#e74c3c';
+        ctx.globalAlpha = 0.3;
+        ctx.fillRect(gap.x - 15, 20, 30, 120);
+        ctx.globalAlpha = 1.0;
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
+        ctx.strokeRect(gap.x - 15, 20, 30, 120);
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillText(gap.label, gap.x, 80);
+
+        // Danger arrow
+        ctx.beginPath();
+        ctx.moveTo(gap.x, 115);
+        ctx.lineTo(gap.x, 140);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(gap.x - 5, 135);
+        ctx.lineTo(gap.x, 142);
+        ctx.lineTo(gap.x + 5, 135);
+        ctx.fillStyle = '#e74c3c';
+        ctx.fill();
+    });
+
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Traffic in transition between domains = NO POLICY APPLIES', 360, 170);
+
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#7f8c8d';
+    ctx.fillText('3 syntaxes × 3 models × 0 unified view = blind spots at boundaries', 360, 192);
+    ctx.textAlign = 'left';
+})();
+</script>
+</body>
+</html>

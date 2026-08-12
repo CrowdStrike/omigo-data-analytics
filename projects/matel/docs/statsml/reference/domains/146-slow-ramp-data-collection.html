@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>146. Slow Feature Ramp & Impact on Data Collection</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 20px 10px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 40%; }
+.obj-table td:last-child { width: 60%; text-align: center; }
+.obj-table tr:nth-child(even) td { background: #fafcfe; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+</style>
+</head>
+<body>
+
+<h1>Slow Feature Ramp & Impact on Data Collection</h1>
+<p class="subtitle">A new feature rolls out at 1% → 5% → 10% → 25% → 50% → 100% over months. During the ramp, you're collecting data from a tiny, non-representative fraction of users. Models trained on ramp-phase data don't generalize to full population. Decisions made on 5% data are applied to 100% of users.</p>
+
+<div class="philosophy">
+<strong>The core problem:</strong> Slow ramps are good engineering practice (limit blast radius). But they're terrible for data science. A feature at 5% ramp generates 20× less data than at 100%. Reaching statistical significance takes 20× longer. The users who get ramped FIRST are often not representative (power users, specific regions, specific platforms). Models built during ramp phase learn the biased subpopulation, not the full population.
+</div>
+
+<h2>Pitfall 1: Insufficient Sample Size During Ramp — Can't Reach Significance</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">5% Ramp = 20× Longer to Reach Statistical Power</div>
+<ul>
+<li><strong>The math:</strong> Need 10,000 events for statistical significance on your metric. At 100% ramp, that's 2 days of data. At 5% ramp, that's 40 days. At 1% ramp, that's 200 days. The feature is "launched" but you can't measure if it works for months.</li>
+<li><strong>The decision pressure:</strong> Leadership asks "is the feature working?" after 2 weeks. At 5% ramp, you have 1/20th the data needed for a confident answer. You either say "we don't know yet" (unsatisfying) or make a call on insufficient data (dangerous).</li>
+<li><strong>Rare events are invisible:</strong> If you're measuring fraud detection or conversion on a rare product, the event rate at 5% ramp may be effectively zero. Feature appears to "do nothing" — but it's just that the signal is too sparse to detect at this sample size.</li>
+<li><strong>The calendar cost:</strong> By the time you have enough data at 5% ramp to be confident, the business context may have changed — seasonality shifted, competitors launched, user behavior evolved. The data you waited 2 months to collect may no longer be relevant.</li>
+</ul>
+</td><td><canvas id="c1" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 2: Ramp Population Is Not Representative</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Who Gets Ramped First ≠ Who Uses the Product</div>
+<ul>
+<li><strong>Engineering-biased ramp:</strong> Often: internal employees first, then a specific region, then a platform (iOS before Android), then gradually broader. Each phase has a different user profile. Data from phase 1 (employees) tells you nothing about phase 5 (general public).</li>
+<li><strong>Power user bias:</strong> Early adopters who get features first tend to be more engaged, more tech-savvy, more tolerant of bugs. Their behavior systematically differs from the 80% of users who get the feature last. Model trained on power users fails on casual users.</li>
+<li><strong>Regional bias:</strong> "Ramp to US first, then EU, then APAC." US data used to train a global model. Cultural differences in behavior make the model worse for EU/APAC when it finally reaches them. But by then, the model is "validated" on US data and shipped globally.</li>
+<li><strong>The survivorship problem:</strong> Users in the ramp who hate the feature churn. Users who stay are the ones who like it. Data at 5% shows only survivors. When you ramp to 100%, the population includes the people who WOULD churn — but you never saw them in your data.</li>
+</ul>
+</td><td><canvas id="c2" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 3: Model Trained on Ramp Data Fails at Full Scale</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">5% Data → Train Model → Deploy to 100% → Model Fails</div>
+<ul>
+<li><strong>The cycle:</strong> Feature at 5% ramp collects data for 2 months. Train model on that data. Model looks great (on the 5% population). Ramp to 100%. Model accuracy drops because it learned the biased subpopulation's patterns, not the full population's.</li>
+<li><strong>Interaction effects:</strong> At 5% ramp, the feature interacts with 5% of the user base. Network effects, social features, recommendation diversity — all behave differently at 5% vs 100%. A recommendation model trained on 5% diversity sees a different item pool than at full scale.</li>
+<li><strong>Load-dependent behavior:</strong> At 5% ramp, infrastructure has plenty of capacity. Latency is low, caches are warm, no contention. At 100%, latency spikes, cache miss rates increase, timeouts occur. Features that depend on real-time signals degrade — but the training data from 5% never showed this degradation.</li>
+<li><strong>The irreversibility:</strong> Once you ramp to 100% and the model fails, you've already served bad predictions to all users. Rolling back to 5% doesn't help — you've already lost trust/revenue during the failed full-ramp period.</li>
+</ul>
+</td><td><canvas id="c3" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 4: Feature Interaction — Other Features Also Ramping</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Multiple Features Ramping Simultaneously Create Data Chaos</div>
+<ul>
+<li><strong>The combinatorial problem:</strong> Feature A at 10% ramp. Feature B at 25% ramp. Feature C at 50% ramp. Users get random combinations. Your data has 8 different population segments (A only, B only, A+B, C only, A+C, B+C, A+B+C, none). Each segment has different data characteristics.</li>
+<li><strong>Attribution impossible:</strong> Metric improved by 3%. Was it Feature A, Feature B, or the interaction? At full ramp you'd have clean A/B test cells. During overlapping ramps, every measurement is confounded by what OTHER features the user also has.</li>
+<li><strong>Data contamination:</strong> Feature A changes user behavior. Feature B's model trains on data that includes Feature A's effect (for 10% of users) and doesn't include it (for 90%). The model learns a mixture of two worlds — neither of which represents the final state where both features are at 100%.</li>
+</ul>
+</td><td><canvas id="c4" width="720" height="280"></canvas></td></tr>
+</table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    return {ctx:ctx, w:w, h:h};
+}
+
+// Chart 1: Time to significance at different ramp %
+(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+ctx.fillStyle='#1a5276';ctx.font='bold 13px sans-serif';ctx.textAlign='center';
+ctx.fillText('Time to statistical significance at different ramp percentages',w/2,20);
+
+var margin={left:140,right:60,top:50,bottom:40};
+var items=[
+    {label:'100% ramp',days:2,color:'#27ae60'},
+    {label:'50% ramp',days:4,color:'#27ae60'},
+    {label:'25% ramp',days:8,color:'#e67e22'},
+    {label:'10% ramp',days:20,color:'#e67e22'},
+    {label:'5% ramp',days:40,color:'#e74c3c'},
+    {label:'1% ramp',days:200,color:'#922b21'}
+];
+var maxDays=200;
+var maxW=w-margin.left-margin.right;
+var barH=32,gap=10;
+
+items.forEach(function(item,i){
+    var y=margin.top+i*(barH+gap);
+    var barW=Math.min(item.days/maxDays,1)*maxW;
+
+    ctx.fillStyle=item.color;ctx.fillRect(margin.left,y,barW,barH);
+    ctx.strokeStyle='#333';ctx.lineWidth=1;ctx.strokeRect(margin.left,y,barW,barH);
+
+    ctx.fillStyle='#1a5276';ctx.font='11px sans-serif';ctx.textAlign='right';
+    ctx.fillText(item.label,margin.left-10,y+barH/2+4);
+
+    ctx.fillStyle='#333';ctx.font='bold 11px sans-serif';ctx.textAlign='left';
+    ctx.fillText(item.days+' days',margin.left+barW+8,y+barH/2+4);
+});
+
+ctx.fillStyle='#555';ctx.font='italic 12px sans-serif';ctx.textAlign='center';
+ctx.fillText('Same feature, same metric. 5% ramp = 20× longer to answer "does it work?"',w/2,h-10);
+})();
+
+// Chart 2: Population bias during ramp
+(function(){var s=setup('c2');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+ctx.fillStyle='#1a5276';ctx.font='bold 13px sans-serif';ctx.textAlign='center';
+ctx.fillText('Ramp phases serve different populations',w/2,20);
+
+var phases=[
+    {label:'Phase 1: Internal',pct:'0.1%',profile:'Tech employees, power users',color:'#8e44ad'},
+    {label:'Phase 2: US-iOS',pct:'5%',profile:'Wealthy, tech-savvy, English',color:'#3498db'},
+    {label:'Phase 3: US-All',pct:'25%',profile:'US demographics only',color:'#e67e22'},
+    {label:'Phase 4: Global',pct:'100%',profile:'Full population diversity',color:'#27ae60'}
+];
+
+var margin={left:30,right:30,top:50,bottom:30};
+var boxW=(w-margin.left-margin.right)/phases.length-10;
+
+phases.forEach(function(p,i){
+    var x=margin.left+i*(boxW+10);
+    var y=margin.top;
+
+    ctx.fillStyle=p.color;ctx.globalAlpha=0.15;ctx.fillRect(x,y,boxW,180);ctx.globalAlpha=1;
+    ctx.strokeStyle=p.color;ctx.lineWidth=2;ctx.strokeRect(x,y,boxW,180);
+
+    ctx.fillStyle=p.color;ctx.font='bold 11px sans-serif';ctx.textAlign='center';
+    ctx.fillText(p.label,x+boxW/2,y+20);
+    ctx.font='bold 14px sans-serif';
+    ctx.fillText(p.pct,x+boxW/2,y+45);
+    ctx.fillStyle='#333';ctx.font='10px sans-serif';
+    // Word wrap profile
+    var words=p.profile.split(', ');
+    words.forEach(function(word,wi){
+        ctx.fillText(word,x+boxW/2,y+70+wi*14);
+    });
+});
+
+// Arrow showing "model trained here"
+ctx.fillStyle='#e74c3c';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
+ctx.fillText('↑ Model trained on this data',margin.left+1*(boxW+10)+boxW/2,margin.top+200);
+ctx.fillText('↑ Deployed to this population',margin.left+3*(boxW+10)+boxW/2,margin.top+200);
+
+ctx.fillStyle='#555';ctx.font='italic 12px sans-serif';ctx.textAlign='center';
+ctx.fillText('Model trained on Phase 2 (wealthy US iOS users) deployed to Phase 4 (everyone). Mismatch.',w/2,h-10);
+})();
+
+// Chart 3: Model accuracy at ramp vs full
+(function(){var s=setup('c3');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+ctx.fillStyle='#1a5276';ctx.font='bold 13px sans-serif';ctx.textAlign='center';
+ctx.fillText('Model accuracy: during ramp vs after full deployment',w/2,20);
+
+var margin={left:50,right:30,top:50,bottom:50};
+var plotW=w-margin.left-margin.right;
+var plotH=h-margin.top-margin.bottom;
+
+// X axis: time/ramp %
+ctx.strokeStyle='#333';ctx.lineWidth=1.5;
+ctx.beginPath();ctx.moveTo(margin.left,margin.top+plotH);ctx.lineTo(margin.left+plotW,margin.top+plotH);ctx.stroke();
+ctx.beginPath();ctx.moveTo(margin.left,margin.top);ctx.lineTo(margin.left,margin.top+plotH);ctx.stroke();
+
+// Ramp phases
+var phases=[{x:0,pct:'1%'},{x:0.15,pct:'5%'},{x:0.3,pct:'10%'},{x:0.5,pct:'25%'},{x:0.7,pct:'50%'},{x:0.85,pct:'100%'}];
+phases.forEach(function(p){
+    var px=margin.left+p.x*plotW;
+    ctx.strokeStyle='#ddd';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(px,margin.top);ctx.lineTo(px,margin.top+plotH);ctx.stroke();
+    ctx.fillStyle='#666';ctx.font='10px sans-serif';ctx.textAlign='center';
+    ctx.fillText(p.pct,px,margin.top+plotH+14);
+});
+
+// Accuracy line (high during ramp, drops at full)
+var points=[[0,0.92],[0.15,0.91],[0.3,0.90],[0.5,0.89],[0.7,0.85],[0.85,0.78],[1.0,0.76]];
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=3;
+ctx.beginPath();
+points.forEach(function(p,i){
+    var px=margin.left+p[0]*plotW;
+    var py=margin.top+plotH-(p[1]-0.7)/(1-0.7)*plotH;
+    if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
+});
+ctx.stroke();
+
+// Annotations
+ctx.fillStyle='#27ae60';ctx.font='bold 11px sans-serif';ctx.textAlign='left';
+ctx.fillText('92% (on biased 5% population)',margin.left+plotW*0.15+10,margin.top+30);
+ctx.fillStyle='#e74c3c';
+ctx.fillText('76% (on real full population)',margin.left+plotW*0.85+10,margin.top+plotH-30);
+
+// Y axis labels
+ctx.fillStyle='#333';ctx.font='10px sans-serif';ctx.textAlign='right';
+ctx.fillText('90%',margin.left-5,margin.top+plotH*0.33);
+ctx.fillText('80%',margin.left-5,margin.top+plotH*0.67);
+
+ctx.fillStyle='#555';ctx.font='italic 12px sans-serif';ctx.textAlign='center';
+ctx.fillText('Accuracy looks great during ramp (biased sample). Drops 16 points at full deployment (real population).',w/2,h-10);
+})();
+
+// Chart 4: Feature interaction chaos
+(function(){var s=setup('c4');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+ctx.fillStyle='#1a5276';ctx.font='bold 13px sans-serif';ctx.textAlign='center';
+ctx.fillText('3 features ramping simultaneously = 8 population segments',w/2,20);
+
+var segments=['None','A only','B only','C only','A+B','A+C','B+C','A+B+C'];
+var sizes=[0.45,0.05,0.15,0.20,0.02,0.04,0.06,0.03];
+var colors=['#ddd','#3498db','#e67e22','#27ae60','#8e44ad','#e74c3c','#f1c40f','#1a5276'];
+
+var margin={left:30,right:30,top:50,bottom:40};
+var barMaxW=w-margin.left-margin.right;
+var x=margin.left;
+var barY=margin.top+20;
+var barH=50;
+
+// Stacked bar
+segments.forEach(function(seg,i){
+    var segW=sizes[i]*barMaxW;
+    ctx.fillStyle=colors[i];ctx.fillRect(x,barY,segW,barH);
+    ctx.strokeStyle='#333';ctx.lineWidth=0.5;ctx.strokeRect(x,barY,segW,barH);
+    if(segW>30){
+        ctx.fillStyle='#fff';ctx.font='bold 9px sans-serif';ctx.textAlign='center';
+        ctx.fillText(seg,x+segW/2,barY+barH/2+3);
+    }
+    x+=segW;
+});
+
+// Legend below
+var lx=margin.left,ly=barY+barH+20;
+segments.forEach(function(seg,i){
+    var col=i%4;var row=Math.floor(i/4);
+    var px=lx+col*170,py=ly+row*18;
+    ctx.fillStyle=colors[i];ctx.fillRect(px,py,12,12);
+    ctx.fillStyle='#333';ctx.font='10px sans-serif';ctx.textAlign='left';
+    ctx.fillText(seg+' ('+Math.round(sizes[i]*100)+'%)',px+16,py+10);
+});
+
+ctx.fillStyle='#e74c3c';ctx.font='italic 12px sans-serif';ctx.textAlign='center';
+ctx.fillText('Each segment has different data. Model trained on this mixture represents no final state.',w/2,h-10);
+})();
+</script>
+</body>
+</html>

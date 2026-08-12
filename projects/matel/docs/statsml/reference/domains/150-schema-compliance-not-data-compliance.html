@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>150. Schema Compliance ≠ Data Compliance</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 20px 10px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 40%; }
+.obj-table td:last-child { width: 60%; text-align: center; }
+.obj-table tr:nth-child(even) td { background: #fafcfe; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+</style>
+</head>
+<body>
+
+<h1>Schema Compliance ≠ Data Compliance</h1>
+<p class="subtitle">Schema matching is rubber-stamping. Necessary but not sufficient. Data types match, formats align, columns exist — and the underlying distributions have shifted completely. New customer segments, new flows, new behaviors silently break every model trained on the old distribution. Nothing "broke" — the data just stopped meaning what it used to mean.</p>
+
+<div class="philosophy">
+<strong>The core problem:</strong> Schema alignment is a necessary but nowhere near sufficient condition for data compatibility. A new feature can follow the exact same schema — same column names, same types, same format — while introducing a completely different population with different distributions, different correlations, and different causal relationships. This is a SILENT failure: no schema validation catches it, no type check flags it, no pipeline errors. The data just quietly becomes non-representative of what the model learned.
+</div>
+
+<h2>Pitfall 1: New Customer Segment Enters — Same Schema, Different Distribution</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Feature Attracts New Users Who Behave Nothing Like Existing Users</div>
+<ul>
+<li><strong>The scenario:</strong> Product adds a free tier. Same events get logged: `signup`, `pageview`, `purchase`. Schema unchanged. But free-tier users have: 10× higher churn, 50× lower conversion, completely different browsing patterns, different geographies, different devices.</li>
+<li><strong>The silent failure:</strong> Model trained on paid-user behavior sees new data that technically fits the schema but comes from a fundamentally different population. Prediction accuracy drops 15% — but no alert fires because the data "looks normal" structurally.</li>
+<li><strong>Why schema checks miss it:</strong> `purchase_amount` is still a float. `session_duration` is still an integer. `country` is still a string. Every type check passes. But the DISTRIBUTION of `purchase_amount` shifted from mean=$45 to mean=$12 because free-tier users who convert buy cheaper items.</li>
+<li><strong>The compounding effect:</strong> Model retrained on mixed old+new data. Now it's optimized for neither segment well. Paid users get worse recommendations (model diluted by free-tier patterns). Free-tier users get irrelevant suggestions (model still biased toward paid-user behavior). Everyone loses.</li>
+</ul>
+</td><td><canvas id="c1" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 2: New Flow Changes the Meaning of Existing Events</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Same Event Name, Completely Different User Intent</div>
+<ul>
+<li><strong>The scenario:</strong> App adds "quick checkout" (one-tap purchase). The `purchase` event still fires with the same schema. But quick-checkout purchases are: lower deliberation, higher regret, higher return rate, different item categories (impulse buys vs researched purchases).</li>
+<li><strong>Before the feature:</strong> `purchase` event meant "user researched, compared, decided, bought." Model learned: purchase = high intent = recommend similar items.</li>
+<li><strong>After the feature:</strong> `purchase` event now ALSO means "user saw button, tapped without thinking, might return it." Same event, different meaning. Model recommends based on impulse purchases as if they were deliberate choices.</li>
+<li><strong>The recommendation poison:</strong> User impulse-buys a novelty item via quick-checkout. Model sees: "user likes novelty items!" Recommends more. User returns the original AND is now annoyed by bad recommendations. Two failures from one event-meaning shift.</li>
+<li><strong>Why it's invisible:</strong> The schema didn't change. The event name didn't change. The data types didn't change. Only the SEMANTICS changed — and no automated check validates semantics.</li>
+</ul>
+</td><td><canvas id="c2" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 3: Feature Changes the Correlation Structure — Model Assumptions Break</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Features That Were Correlated Are No Longer (or Vice Versa)</div>
+<ul>
+<li><strong>Before:</strong> `session_duration` and `pages_viewed` were highly correlated (r=0.85). Users who spent more time viewed more pages. Model used both features — they reinforced each other.</li>
+<li><strong>After new feature (infinite scroll):</strong> Users spend more time but view fewer distinct pages (they scroll one long page). Correlation drops to r=0.2. Model still assumes they move together. Predictions based on "high time + few pages" (now common) land in a region the model never saw during training.</li>
+<li><strong>The multicollinearity shift:</strong> Model used `time` and `pages` as quasi-redundant signals (both meant "engaged"). Now they're independent dimensions. Model needs retraining to learn the new relationship — but nobody triggered retraining because the SCHEMA is unchanged.</li>
+<li><strong>Feature interaction death:</strong> Model had a learned interaction: "high time AND high pages → high purchase probability." New feature breaks this — "high time AND low pages" is now the dominant pattern. The learned interaction is wrong. Purchase prediction drops for infinite-scroll users.</li>
+</ul>
+</td><td><canvas id="c3" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 4: Survivorship Shift — Who You See Changes Without Schema Changing</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">New Feature Retains Different Users — Data "Improves" But It's Selection Bias</div>
+<ul>
+<li><strong>The scenario:</strong> New onboarding flow reduces drop-off. Previously: 40% of signups never returned. Now: only 20% drop off. Your data now has MORE retained users. Schema unchanged. But the users who SURVIVE are different — you're now retaining the less-engaged segment that previously would have left.</li>
+<li><strong>The metrics illusion:</strong> "Average engagement per user went DOWN after the new feature!" Panic. But: you're now including the casual users who previously churned (and were invisible). The engaged users are just as engaged. Your denominator changed, not your numerator.</li>
+<li><strong>The model confusion:</strong> Churn model trained on old data learned: "users with <3 sessions in first week = churn." After new onboarding: many users have <3 sessions but DON'T churn (the onboarding spread sessions over 2 weeks instead of front-loading). Model's feature is now wrong — same signal, different meaning.</li>
+<li><strong>The A/B test contamination:</strong> Running A/B tests after the new feature. Control and treatment BOTH have different base populations than historical data. Your "expected" baseline is from the old population. Everything looks different — but it's the population shift, not your treatment.</li>
+</ul>
+</td><td><canvas id="c4" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 5: The Gradual Drift Nobody Notices</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">New Feature Doesn't Shift Distributions Overnight — It Shifts Them 1% Per Week</div>
+<ul>
+<li><strong>The insidious version:</strong> Feature launches. Day 1: adoption is 2%. Barely affects distributions. Day 30: 15%. Slight shift, within normal variance. Day 90: 45%. Distributions have shifted significantly — but it happened SO GRADUALLY that no single-day monitoring alert fired.</li>
+<li><strong>The boiling frog:</strong> Model accuracy degrades 0.1% per week. Nobody notices 0.1%. After 6 months: 2.4% degradation. Now it's noticeable — but you can't pinpoint WHEN it started because each individual day looked fine. The feature was the cause, but the connection is obscured by the gradual onset.</li>
+<li><strong>The attribution problem:</strong> By month 6, other things also changed — new marketing campaigns, seasonal shifts, other features. Isolating the new feature as the cause of drift is nearly impossible without having tracked feature-specific distribution metrics from day one.</li>
+<li><strong>Why standard drift detection fails:</strong> Drift detectors compare "recent window" to "reference window." If the shift is <1% per day, it never triggers the threshold on any single comparison. But cumulative over months: massive. You need cumulative drift detection, not point-in-time.</li>
+</ul>
+</td><td><canvas id="c5" width="720" height="280"></canvas></td></tr>
+</table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    return {ctx:ctx, w:w, h:h};
+}
+
+// Chart 1: Distribution shift from new segment
+(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+ctx.fillStyle='#1a5276';ctx.font='bold 13px sans-serif';ctx.textAlign='center';
+ctx.fillText('purchase_amount distribution: before vs after free tier',w/2,20);
+
+var margin={left:50,right:30,top:45,bottom:50};
+var plotW=w-margin.left-margin.right,plotH=h-margin.top-margin.bottom;
+ctx.strokeStyle='#333';ctx.lineWidth=1.5;
+ctx.beginPath();ctx.moveTo(margin.left,margin.top);ctx.lineTo(margin.left,margin.top+plotH);
+ctx.lineTo(margin.left+plotW,margin.top+plotH);ctx.stroke();
+
+function gauss(x,mean,sd){return Math.exp(-0.5*Math.pow((x-mean)/sd,2));}
+
+// Old distribution: mean=45, tight
+ctx.strokeStyle='#3498db';ctx.lineWidth=2.5;ctx.beginPath();
+for(var x=0;x<=100;x++){
+    var v=gauss(x,45,12);
+    var px=margin.left+(x/100)*plotW,py=margin.top+plotH-v*plotH*0.85;
+    if(x===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
+}
+ctx.stroke();
+
+// New distribution: bimodal (free tier at 12, paid at 45)
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=2.5;ctx.setLineDash([5,5]);ctx.beginPath();
+for(var x=0;x<=100;x++){
+    var v=0.6*gauss(x,12,8)+0.4*gauss(x,45,12);
+    var px=margin.left+(x/100)*plotW,py=margin.top+plotH-v*plotH*0.85;
+    if(x===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
+}
+ctx.stroke();ctx.setLineDash([]);
+
+// Labels
+ctx.fillStyle='#3498db';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
+ctx.fillText('Before: paid users only (mean $45)',margin.left+plotW*0.55,margin.top+15);
+ctx.fillStyle='#e74c3c';
+ctx.fillText('After: free+paid mixed (bimodal)',margin.left+plotW*0.25,margin.top+plotH*0.35);
+
+ctx.fillStyle='#555';ctx.font='italic 12px sans-serif';ctx.textAlign='center';
+ctx.fillText('Schema unchanged. Types match. Distribution completely different. Model trained on blue, sees red.',w/2,h-10);
+})();
+
+// Chart 2: Same event, different meaning
+(function(){var s=setup('c2');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+ctx.fillStyle='#1a5276';ctx.font='bold 13px sans-serif';ctx.textAlign='center';
+ctx.fillText('"purchase" event — same name, different intent after quick-checkout',w/2,20);
+
+var margin={left:40,right:40,top:50,bottom:40};
+
+// Two boxes showing the same event with different meanings
+var boxW=280,boxH=160;
+var leftX=margin.left,rightX=w-margin.right-boxW;
+var boxY=margin.top+10;
+
+// Before
+ctx.fillStyle='rgba(39,174,96,0.1)';ctx.fillRect(leftX,boxY,boxW,boxH);
+ctx.strokeStyle='#27ae60';ctx.lineWidth=2;ctx.strokeRect(leftX,boxY,boxW,boxH);
+ctx.fillStyle='#27ae60';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
+ctx.fillText('Before: "purchase" meant',leftX+boxW/2,boxY+20);
+ctx.fillStyle='#333';ctx.font='11px sans-serif';ctx.textAlign='left';
+var before=['• Researched product','• Compared alternatives','• Deliberate decision','• Low return rate (5%)','• High intent signal'];
+before.forEach(function(item,i){ctx.fillText(item,leftX+15,boxY+42+i*22);});
+
+// After
+ctx.fillStyle='rgba(231,76,60,0.1)';ctx.fillRect(rightX,boxY,boxW,boxH);
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=2;ctx.strokeRect(rightX,boxY,boxW,boxH);
+ctx.fillStyle='#e74c3c';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
+ctx.fillText('After: "purchase" ALSO means',rightX+boxW/2,boxY+20);
+ctx.fillStyle='#333';ctx.font='11px sans-serif';ctx.textAlign='left';
+var after=['• Saw button, tapped','• Zero deliberation','• Impulse / accident','• High return rate (25%)','• Low/no intent signal'];
+after.forEach(function(item,i){ctx.fillText(item,rightX+15,boxY+42+i*22);});
+
+// Same schema badge
+ctx.fillStyle='#e67e22';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
+ctx.fillText('SAME EVENT NAME',w/2,boxY+boxH/2-5);
+ctx.fillText('SAME SCHEMA',w/2,boxY+boxH/2+10);
+ctx.fillText('DIFFERENT MEANING',w/2,boxY+boxH/2+25);
+
+ctx.fillStyle='#555';ctx.font='italic 12px sans-serif';
+ctx.fillText('No type check, schema check, or format check catches a semantic shift.',w/2,h-10);
+})();
+
+// Chart 3: Correlation structure change
+(function(){var s=setup('c3');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+ctx.fillStyle='#1a5276';ctx.font='bold 13px sans-serif';ctx.textAlign='center';
+ctx.fillText('session_duration vs pages_viewed — correlation breaks after infinite scroll',w/2,20);
+
+var margin={left:50,right:50,top:45,bottom:45};
+var plotW=(w-margin.left-margin.right)/2-20;
+var plotH=h-margin.top-margin.bottom;
+
+// Left scatter: before (high correlation)
+var lx=margin.left,ly=margin.top;
+ctx.strokeStyle='#333';ctx.lineWidth=1;
+ctx.strokeRect(lx,ly,plotW,plotH);
+ctx.fillStyle='#1a5276';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
+ctx.fillText('Before (r=0.85)',lx+plotW/2,ly-5);
+
+for(var i=0;i<60;i++){
+    var x=Math.random()*0.8+0.1;
+    var y=x+Math.random()*0.2-0.1;
+    y=Math.max(0.05,Math.min(0.95,y));
+    ctx.fillStyle='rgba(52,152,219,0.5)';
+    ctx.beginPath();ctx.arc(lx+x*plotW,ly+(1-y)*plotH,3,0,2*Math.PI);ctx.fill();
+}
+
+// Right scatter: after (low correlation)
+var rx=w-margin.right-plotW;
+ctx.strokeRect(rx,ly,plotW,plotH);
+ctx.fillStyle='#e74c3c';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
+ctx.fillText('After infinite scroll (r=0.2)',rx+plotW/2,ly-5);
+
+for(var i=0;i<60;i++){
+    var x=Math.random()*0.8+0.1;
+    var y=Math.random()*0.8+0.1; // no correlation
+    ctx.fillStyle='rgba(231,76,60,0.5)';
+    ctx.beginPath();ctx.arc(rx+x*plotW,ly+(1-y)*plotH,3,0,2*Math.PI);ctx.fill();
+}
+
+// Axis labels
+ctx.fillStyle='#333';ctx.font='10px sans-serif';ctx.textAlign='center';
+ctx.fillText('session_duration →',lx+plotW/2,h-8);
+ctx.fillText('session_duration →',rx+plotW/2,h-8);
+ctx.save();ctx.translate(lx-8,ly+plotH/2);ctx.rotate(-Math.PI/2);ctx.fillText('pages →',0,0);ctx.restore();
+ctx.save();ctx.translate(rx-8,ly+plotH/2);ctx.rotate(-Math.PI/2);ctx.fillText('pages →',0,0);ctx.restore();
+})();
+
+// Chart 4: Survivorship shift
+(function(){var s=setup('c4');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+ctx.fillStyle='#1a5276';ctx.font='bold 13px sans-serif';ctx.textAlign='center';
+ctx.fillText('Who survives changed — metrics look worse but users are the same',w/2,20);
+
+var margin={left:180,right:40,top:55,bottom:40};
+var barH=50,gap=30;
+var maxW=w-margin.left-margin.right;
+
+// Before: only engaged survive (high avg engagement)
+var y1=margin.top;
+ctx.fillStyle='#1a5276';ctx.font='11px sans-serif';ctx.textAlign='right';
+ctx.fillText('Before: only engaged',margin.left-10,y1+15);
+ctx.fillText('users survived (40% churn)',margin.left-10,y1+30);
+
+ctx.fillStyle='#27ae60';ctx.fillRect(margin.left,y1,0.8*maxW,barH);
+ctx.strokeStyle='#333';ctx.lineWidth=1;ctx.strokeRect(margin.left,y1,0.8*maxW,barH);
+ctx.fillStyle='#fff';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
+ctx.fillText('Avg engagement: 8.2 sessions/week',margin.left+0.4*maxW,y1+barH/2+4);
+
+// After: casual users also retained (lower avg)
+var y2=y1+barH+gap;
+ctx.fillStyle='#1a5276';ctx.font='11px sans-serif';ctx.textAlign='right';
+ctx.fillText('After: casuals also retained',margin.left-10,y2+15);
+ctx.fillText('(only 20% churn)',margin.left-10,y2+30);
+
+ctx.fillStyle='#e67e22';ctx.fillRect(margin.left,y2,0.55*maxW,barH);
+ctx.strokeStyle='#333';ctx.lineWidth=1;ctx.strokeRect(margin.left,y2,0.55*maxW,barH);
+ctx.fillStyle='#fff';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
+ctx.fillText('Avg engagement: 5.1 sessions/week',margin.left+0.275*maxW,y2+barH/2+4);
+
+ctx.fillStyle='#e74c3c';ctx.font='bold 12px sans-serif';ctx.textAlign='left';
+ctx.fillText('"Engagement dropped 37%!"',margin.left+0.55*maxW+10,y2+barH/2+4);
+
+ctx.fillStyle='#27ae60';ctx.font='11px sans-serif';ctx.textAlign='center';
+ctx.fillText('Reality: engaged users are the SAME. You just added casual users to the denominator.',w/2,h-20);
+ctx.fillStyle='#555';ctx.font='italic 12px sans-serif';
+ctx.fillText('Population shift masquerading as metric degradation. Schema is identical.',w/2,h-4);
+})();
+
+// Chart 5: Gradual drift
+(function(){var s=setup('c5');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+ctx.fillStyle='#1a5276';ctx.font='bold 13px sans-serif';ctx.textAlign='center';
+ctx.fillText('Feature adoption grows gradually — drift accumulates below alert threshold',w/2,20);
+
+var margin={left:50,right:30,top:50,bottom:50};
+var plotW=w-margin.left-margin.right,plotH=h-margin.top-margin.bottom;
+ctx.strokeStyle='#333';ctx.lineWidth=1.5;
+ctx.beginPath();ctx.moveTo(margin.left,margin.top);ctx.lineTo(margin.left,margin.top+plotH);
+ctx.lineTo(margin.left+plotW,margin.top+plotH);ctx.stroke();
+
+// Drift line (slow linear growth)
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=2.5;ctx.beginPath();
+for(var i=0;i<=180;i++){
+    var x=margin.left+(i/180)*plotW;
+    var drift=i*0.013; // 0.013% per day = 2.4% over 180 days
+    var y=margin.top+plotH-drift/(2.5)*plotH;
+    if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+}
+ctx.stroke();
+
+// Alert threshold (horizontal line)
+ctx.strokeStyle='#27ae60';ctx.lineWidth=2;ctx.setLineDash([5,5]);
+ctx.beginPath();ctx.moveTo(margin.left,margin.top+plotH*0.4);ctx.lineTo(margin.left+plotW,margin.top+plotH*0.4);ctx.stroke();
+ctx.setLineDash([]);
+ctx.fillStyle='#27ae60';ctx.font='11px sans-serif';ctx.textAlign='left';
+ctx.fillText('Alert threshold (per-day comparison)',margin.left+10,margin.top+plotH*0.4-8);
+
+// Daily change markers (all below threshold)
+ctx.fillStyle='#27ae60';ctx.font='10px sans-serif';ctx.textAlign='center';
+for(var d=30;d<=150;d+=30){
+    var x=margin.left+(d/180)*plotW;
+    ctx.fillText('✓ ok',x,margin.top+plotH+14);
+}
+
+// Final cumulative
+ctx.fillStyle='#e74c3c';ctx.font='bold 11px sans-serif';ctx.textAlign='right';
+ctx.fillText('Cumulative: 2.4% drift',margin.left+plotW,margin.top+20);
+ctx.font='10px sans-serif';
+ctx.fillText('(no single day exceeded threshold)',margin.left+plotW,margin.top+34);
+
+ctx.fillStyle='#555';ctx.font='italic 12px sans-serif';ctx.textAlign='center';
+ctx.fillText('Each day: "within normal variance." After 6 months: significant drift. The frog boiled slowly.',w/2,h-8);
+})();
+</script>
+</body>
+</html>

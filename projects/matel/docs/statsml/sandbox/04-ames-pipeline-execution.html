@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>18b. Ames Housing — Pipeline Execution</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 40px 20px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 50px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.92em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; }
+.nav a:hover { text-decoration: underline; }
+canvas { display: block; margin: 15px 0; width: 100%; height: auto; background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 8px; }
+.example { margin: 30px 0; padding: 20px; background: #fafafa; border: 1px solid #e8e8e8; border-radius: 8px; }
+.example h2 { margin-top: 0; }
+.type-line { font-size: 0.88em; color: #555; margin: 6px 0; }
+.type-line code { background: #d4efdf; border: 1px solid #27ae60; padding: 2px 8px; border-radius: 4px; font-size: 0.9em; color: #1a5276; font-weight: bold; }
+.shape-line { font-size: 0.92em; color: #1a5276; font-weight: bold; margin: 6px 0; }
+.summary-text { font-size: 0.9em; color: #333; margin: 10px 0; line-height: 1.7; }
+.result { background: #d4efdf; border: 1px solid #27ae60; border-radius: 6px; padding: 10px 14px; margin: 10px 0; font-size: 0.88em; }
+.skip { background: #fef9e7; border: 1px solid #f4d03f; border-radius: 6px; padding: 10px 14px; margin: 10px 0; font-size: 0.88em; }
+</style>
+</head>
+<body>
+
+<h1>18b. Ames Housing &mdash; Pipeline Execution</h1>
+<p class="subtitle">How 7 numerical features from the Ames Housing dataset flow through the shape classification pipeline.</p>
+
+<!-- ============================== FEATURE 1 ============================== -->
+<div class="example">
+<h2>1. SalePrice &mdash; Right-Skew Numerical (Target)</h2>
+<canvas id="f1-hist" width="960" height="300"></canvas>
+
+<p class="type-line">Type: <code>numerical</code></p>
+<p class="shape-line">Shape: right_skew (97%)</p>
+<p class="summary-text">Strong right-skew with peak around $130k-$180k and long tail to $755k. No gap detected (all bins populated in the main body). No valley detected (single clear peak with monotone decline). Right-skew model fits well; produces 3 range-based extended features.</p>
+<div class="result"><strong>Result:</strong> 1 segment &rarr; right_skew model &rarr; 3 extended features</div>
+</div>
+
+<!-- ============================== FEATURE 2 ============================== -->
+<div class="example">
+<h2>2. Lot Area &mdash; Extreme Right-Skew with Outliers</h2>
+<canvas id="f2-hist" width="960" height="300"></canvas>
+
+<p class="type-line">Type: <code>numerical</code></p>
+<p class="shape-line">Shape: heavy_tail (96%)</p>
+<p class="summary-text">98% of data below 25k sq ft with extreme tail to 215k. Gap detected: empty bins above ~50k separate the main mass from scattered outlier parcels. Main segment (n~2870) fits right_skew; outlier segment (n~60) becomes a binary indicator.</p>
+<div class="result"><strong>Result:</strong> Gap split &rarr; 2 segments &rarr; right_skew on main + binary outlier flag &rarr; 4 extended features</div>
+</div>
+
+<!-- ============================== FEATURE 3 ============================== -->
+<div class="example">
+<h2>3. Year Built &mdash; Left-Skew / Possible Bimodal</h2>
+<canvas id="f3-hist" width="960" height="300"></canvas>
+
+<p class="type-line">Type: <code>numerical</code></p>
+<p class="shape-line">Shape: ascending (100%)</p>
+<p class="summary-text">Ascending distribution with recent builds dominating. No gap (all year ranges populated). Valley borderline: moderate dip in 1930s-1940s between peaks at ~1960s and 2005+. Multi-candidate approach runs both split and no-split paths; whichever produces stronger target associations wins.</p>
+<div class="skip"><strong>Multi-candidate:</strong> Both pipeline paths execute. The one producing more significant range-target associations wins.</div>
+</div>
+
+<!-- ============================== FEATURE 4 ============================== -->
+<div class="example">
+<h2>4. Overall Qual &mdash; Ordinal (1&ndash;10 Scale)</h2>
+<canvas id="f4-hist" width="960" height="300"></canvas>
+
+<p class="type-line">Type: <code>ordinal</code> (dual numerical + categorical)</p>
+<p class="shape-line">Shape: spike (90%)</p>
+<p class="summary-text">10 discrete integer values peaking at 5 (n=825). Alternating zero bins in histogram are artifacts of integer values, not real gaps. Processed on both paths: numerical path detects discrete structure; categorical path tests each quality level against target and finds strong monotone relationship.</p>
+<div class="result"><strong>Result:</strong> Dual-path &rarr; ordinal groupings (low/mid/high/premium) + linear score &rarr; 5 extended features</div>
+</div>
+
+<!-- ============================== FEATURE 5 ============================== -->
+<div class="example">
+<h2>5. 2nd Flr SF &mdash; Zero-Inflated / Gap Split</h2>
+<canvas id="f5-hist" width="960" height="300"></canvas>
+
+<p class="type-line">Type: <code>numerical</code></p>
+<p class="shape-line">Shape: zero_inflated (100%)</p>
+<p class="summary-text">57% of homes have zero (no 2nd floor), creating a massive spike at 0 with a structural gap before the continuous distribution begins at ~200 SF. Gap split separates zeros (n=1678) from non-zero values (n=1252). Non-zero segment is unimodal right-skew, fits right_skew.</p>
+<div class="result"><strong>Result:</strong> Gap split at 0 &rarr; binary indicator + 3 ranges on non-zero segment &rarr; 4 extended features</div>
+</div>
+
+<!-- ============================== FEATURE 6 ============================== -->
+<div class="example">
+<h2>6. Garage Area &mdash; Bell-Shaped with Zeros</h2>
+<canvas id="f6-hist" width="960" height="300"></canvas>
+
+<p class="type-line">Type: <code>numerical</code></p>
+<p class="shape-line">Shape: bell (94%)</p>
+<p class="summary-text">Peak around 400-550 SF, roughly symmetric. Only 5.4% zeros (n=157), below the 20% threshold for triggering a point-mass split. No valley detected. Excluding zeros, normal distribution fits well. Produces binary garage indicator plus 3 size-based ranges.</p>
+<div class="result"><strong>Result:</strong> Borderline zero-inflation (5.4%) &rarr; binary split + bell-shaped main body &rarr; normal model &rarr; 4 extended features</div>
+</div>
+
+<!-- ============================== FEATURE 7 ============================== -->
+<div class="example">
+<h2>7. Pool Area &mdash; Extreme Zero-Inflation (Sparse)</h2>
+<canvas id="f7-hist" width="960" height="300"></canvas>
+
+<p class="type-line">Type: <code>numerical</code> (effectively binary)</p>
+<p class="shape-line">Shape: zero_inflated (100%)</p>
+<p class="summary-text">99.6% zeros (2917 of 2930 homes have no pool). Gap confirmed: completely empty bins between 0 and ~120 SF. Only 13 non-zero observations, far below minimum n=30 for shape classification or model fitting. Pipeline correctly gates further analysis.</p>
+<div class="skip"><strong>Sample sufficiency:</strong> With only 13 non-zero observations, no parametric modeling is justified. Only output: has_pool binary indicator.</div>
+</div>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+
+function setup(id, w, h) {
+    var c = document.getElementById(id);
+    c.width = w * dpr;
+    c.height = h * dpr;
+    c.style.width = '100%';
+    c.style.height = 'auto';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return ctx;
+}
+
+function drawHist(ctx, bins, w, h, opts) {
+    opts = opts || {};
+    var margin = {left: 10, right: 10, top: 15, bottom: 20};
+    var pw = w - margin.left - margin.right;
+    var ph = h - margin.top - margin.bottom;
+    var maxB = Math.max.apply(null, bins);
+    var bW = pw / bins.length;
+    var sigma = 1.2;
+
+    ctx.fillStyle = opts.barColor || 'rgba(26, 82, 118, 0.35)';
+    bins.forEach(function(v, i) {
+        var barH = (v / maxB) * ph;
+        if (v > 0) ctx.fillRect(margin.left + i*bW + 1, margin.top + ph - barH, bW - 2, barH);
+    });
+
+    var sortedBins = bins.slice().sort(function(a,b){return a-b;});
+    var medBin = sortedBins[Math.floor(bins.length/2)] || 1;
+    var capValue = medBin * 4;
+
+    var smoothed = [];
+    for (var i = 0; i < bins.length; i++) {
+        var sum = 0, ww = 0;
+        for (var j = 0; j < bins.length; j++) {
+            var d = i - j;
+            var wt = Math.exp(-0.5 * d*d / (sigma*sigma));
+            var capped = Math.min(bins[j], capValue);
+            sum += capped * wt;
+            ww += wt;
+        }
+        smoothed.push(sum / ww);
+    }
+    for (var i = 0; i < bins.length; i++) {
+        if (bins[i] > capValue) {
+            smoothed[i] = bins[i];
+        }
+    }
+    var maxS = Math.max.apply(null, smoothed);
+
+    var bandUpper = [], bandLower = [];
+    for (var i = 0; i < bins.length; i++) {
+        var effN = 0;
+        for (var j = 0; j < bins.length; j++) {
+            var d = i - j;
+            var wt = Math.exp(-0.5 * d*d / (sigma*sigma));
+            effN += wt * Math.min(bins[j], capValue);
+        }
+        var bandwidth = (effN > 0) ? 1.96 * smoothed[i] / Math.sqrt(effN) : maxS * 0.1;
+        bandwidth = Math.max(bandwidth, maxS * 0.03);
+        bandUpper.push(Math.min(smoothed[i] + bandwidth, maxS * 1.2));
+        bandLower.push(Math.max(smoothed[i] - bandwidth, 0));
+    }
+
+    ctx.beginPath();
+    for (var i = 0; i < bins.length; i++) {
+        var x = margin.left + (i + 0.5) * bW;
+        var y = margin.top + ph - (bandUpper[i] / maxS) * ph;
+        if (i === 0) ctx.moveTo(x, y);
+        else {
+            var px = margin.left + (i - 0.5) * bW;
+            var py = margin.top + ph - (bandUpper[i-1] / maxS) * ph;
+            ctx.quadraticCurveTo((px+x)/2, py, x, y);
+        }
+    }
+    for (var i = bins.length - 1; i >= 0; i--) {
+        var x = margin.left + (i + 0.5) * bW;
+        var y = margin.top + ph - (bandLower[i] / maxS) * ph;
+        if (i === bins.length - 1) ctx.lineTo(x, y);
+        else {
+            var nx = margin.left + (i + 1.5) * bW;
+            var ny = margin.top + ph - (bandLower[i+1] / maxS) * ph;
+            ctx.quadraticCurveTo((nx+x)/2, ny, x, y);
+        }
+    }
+    ctx.closePath();
+    ctx.fillStyle = opts.bandColor || 'rgba(230, 126, 34, 0.25)';
+    ctx.fill();
+
+    ctx.beginPath();
+    for (var i = 0; i < bins.length; i++) {
+        var x = margin.left + (i + 0.5) * bW;
+        var y = margin.top + ph - (smoothed[i] / maxS) * ph;
+        if (i === 0) ctx.moveTo(x, y);
+        else {
+            var px = margin.left + (i - 0.5) * bW;
+            ctx.quadraticCurveTo((px+x)/2, margin.top + ph - (smoothed[i-1]/maxS)*ph, x, y);
+        }
+    }
+    ctx.strokeStyle = opts.lineColor || '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.strokeStyle = '#ccc'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(margin.left, margin.top+ph); ctx.lineTo(margin.left+pw, margin.top+ph); ctx.stroke();
+
+    if (opts.labels) {
+        ctx.fillStyle = '#666'; ctx.font = '11px -apple-system, sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText(opts.labels[0], margin.left+30, h-3);
+        ctx.fillText(opts.labels[1], w/2, h-3);
+        ctx.fillText(opts.labels[2], w-margin.right-30, h-3);
+    }
+    if (opts.title) {
+        ctx.fillStyle = '#1a5276'; ctx.font = 'bold 12px -apple-system, sans-serif'; ctx.textAlign = 'left';
+        ctx.fillText(opts.title, margin.left+5, 12);
+    }
+}
+
+// Feature 1: SalePrice
+(function() {
+    var ctx = setup('f1-hist', 960, 200);
+    ctx.fillStyle = '#f8f9fa'; ctx.fillRect(0,0,960,200);
+    drawHist(ctx, [11,135,451,882,565,343,210,119,88,46,35,16,11,3,6,3,4,0,0,2], 960, 200,
+        {labels: ['$12.8k','$384k','$755k'], title: 'SalePrice (n=2930)'});
+})();
+
+// Feature 2: Lot Area
+(function() {
+    var ctx = setup('f2-hist', 960, 200);
+    ctx.fillStyle = '#f8f9fa'; ctx.fillRect(0,0,960,200);
+    drawHist(ctx, [2301,570,30,11,10,3,1,0,0,0,1,0,0,0,1,1,0,0,0,1], 960, 200,
+        {labels: ['1.3k','108k','215k'], title: 'Lot Area (n=2930)'});
+    var bW = 940/20;
+    ctx.fillStyle = 'rgba(231,76,60,0.1)';
+    ctx.fillRect(10 + 7*bW, 15, 13*bW, 165);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('gap region', 10+13*bW, 12);
+})();
+
+// Feature 3: Year Built
+(function() {
+    var ctx = setup('f3-hist', 960, 200);
+    ctx.fillStyle = '#f8f9fa'; ctx.fillRect(0,0,960,200);
+    drawHist(ctx, [2,9,9,6,37,53,117,122,60,102,70,186,270,258,218,218,76,200,352,565], 960, 200,
+        {labels: ['1872','1941','2010'], title: 'Year Built (n=2930)'});
+    var bW = 940/20;
+    ctx.fillStyle = 'rgba(142,68,173,0.12)';
+    ctx.fillRect(10 + 8*bW, 15, 3*bW, 165);
+    ctx.fillStyle = '#8e44ad'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('possible valley', 10+9.5*bW, 12);
+})();
+
+// Feature 4: Overall Qual
+(function() {
+    var ctx = setup('f4-hist', 960, 200);
+    ctx.fillStyle = '#f8f9fa'; ctx.fillRect(0,0,960,200);
+    drawHist(ctx, [4,0,13,0,40,0,226,0,825,0,0,732,0,602,0,350,0,107,0,31], 960, 200,
+        {labels: ['1','5.5','10'], title: 'Overall Qual (n=2930)'});
+})();
+
+// Feature 5: 2nd Flr SF
+(function() {
+    var ctx = setup('f5-hist', 960, 200);
+    ctx.fillStyle = '#f8f9fa'; ctx.fillRect(0,0,960,200);
+    drawHist(ctx, [1678,8,19,50,99,172,210,199,210,73,70,52,46,22,6,7,1,5,2,1], 960, 200,
+        {labels: ['0','1032','2065'], title: '2nd Flr SF (n=2930)'});
+    var bW = 940/20;
+    ctx.fillStyle = 'rgba(231,76,60,0.15)';
+    ctx.fillRect(10 + 1*bW, 15, 1*bW, 165);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1.5; ctx.setLineDash([4,2]);
+    ctx.strokeRect(10 + 1*bW, 15, 1*bW, 165);
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('gap', 10+1.5*bW, 12);
+})();
+
+// Feature 6: Garage Area
+(function() {
+    var ctx = setup('f6-hist', 960, 200);
+    ctx.fillStyle = '#f8f9fa'; ctx.fillRect(0,0,960,200);
+    drawHist(ctx, [157,1,86,354,271,413,514,477,203,137,111,115,50,14,9,7,4,1,3,2], 960, 200,
+        {labels: ['0','744','1488'], title: 'Garage Area (n=2929)'});
+})();
+
+// Feature 7: Pool Area
+(function() {
+    var ctx = setup('f7-hist', 960, 200);
+    ctx.fillStyle = '#f8f9fa'; ctx.fillRect(0,0,960,200);
+    drawHist(ctx, [2917,0,0,1,0,1,0,0,0,1,0,1,3,1,2,0,1,0,1,1], 960, 200,
+        {labels: ['0','400','800'], title: 'Pool Area (n=2930)'});
+    var bW = 940/20;
+    ctx.fillStyle = 'rgba(231,76,60,0.08)';
+    ctx.fillRect(10 + 1*bW, 15, 19*bW, 165);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('n=13 total in this region', 10+10*bW, 12);
+})();
+</script>
+
+</body>
+</html>

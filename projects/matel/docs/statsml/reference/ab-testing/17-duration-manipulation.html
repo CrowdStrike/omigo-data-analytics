@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duration Manipulation (Stop When Winning) — A/B Testing Pitfalls</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 20px 10px; line-height: 1.6; }
+h1 { font-size: 1.6em; margin-bottom: 10px; color: #1a5276; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.0em; margin-bottom: 20px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; margin-right: 15px; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 6px 0; }
+strong { color: #1a5276; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 40%; }
+.obj-table td:last-child { width: 60%; text-align: center; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+</style>
+</head>
+<body>
+<h1>Duration Manipulation (Stop When Winning)</h1>
+<p class="subtitle">Deliberate — Asymmetric stopping: stop early when ahead, extend when behind.</p>
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Outcome-Dependent Stopping Rules</div>
+<ul>
+<li>Day 7: treatment winning, p=0.04. "We have significance, ship!" If day 7 showed control winning? "Need more data." Stopping rule depends on RESULT, not predetermined plan.</li>
+<li>Advanced: pre-register 2 weeks. At 2 weeks, losing. "Need weekly cycles &mdash; extend to 4." At 4 weeks, still losing. "Monthly billing cycle..." Keep extending until noise favors you.</li>
+</ul>
+<p><strong>Correct approach:</strong> Decide duration BEFORE. Symmetric stopping rule: same decision regardless of who's winning at any checkpoint.</p>
+<p><strong>The tell:</strong> Was duration decided BEFORE or AFTER seeing results? Do extensions always happen when treatment is losing?</p>
+</td><td><canvas id="c1" width="720" height="340"></canvas></td></tr>
+</table>
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    return {ctx:ctx, w:w, h:h};
+}
+(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+var pad = {l:55, r:20, t:30, b:45};
+var pw = w - pad.l - pad.r;
+var ph = h - pad.t - pad.b;
+
+// Axes
+ctx.strokeStyle = '#ccc';
+ctx.lineWidth = 1;
+ctx.beginPath();
+ctx.moveTo(pad.l, pad.t);
+ctx.lineTo(pad.l, pad.t + ph);
+ctx.lineTo(pad.l + pw, pad.t + ph);
+ctx.stroke();
+
+// Y-axis: p-value
+ctx.fillStyle = '#666';
+ctx.font = '16px sans-serif';
+ctx.textAlign = 'right';
+ctx.fillText('0.01', pad.l - 5, pad.t + 10);
+ctx.fillText('0.05', pad.l - 5, pad.t + ph * 0.3);
+ctx.fillText('0.10', pad.l - 5, pad.t + ph * 0.5);
+ctx.fillText('0.50', pad.l - 5, pad.t + ph * 0.85);
+ctx.fillText('p-value', pad.l - 5, pad.t - 5);
+
+// X-axis: days
+ctx.textAlign = 'center';
+for (var d = 0; d <= 28; d += 7) {
+    var x = pad.l + (d / 28) * pw;
+    ctx.fillText('Day ' + d, x, pad.t + ph + 18);
+    ctx.strokeStyle = '#eee';
+    ctx.beginPath();
+    ctx.moveTo(x, pad.t);
+    ctx.lineTo(x, pad.t + ph);
+    ctx.stroke();
+}
+
+// Significance threshold line at p=0.05
+ctx.setLineDash([4, 3]);
+ctx.strokeStyle = '#e74c3c';
+ctx.lineWidth = 1.5;
+var sigY = pad.t + ph * 0.3;
+ctx.beginPath();
+ctx.moveTo(pad.l, sigY);
+ctx.lineTo(pad.l + pw, sigY);
+ctx.stroke();
+ctx.setLineDash([]);
+ctx.fillStyle = '#e74c3c';
+ctx.font = '16px sans-serif';
+ctx.textAlign = 'left';
+ctx.fillText('p = 0.05', pad.l + pw + 3, sigY + 4);
+
+// P-value line (fluctuating, dipping below 0.05 at day 7)
+var pvals = [
+    [0, 0.50], [2, 0.30], [4, 0.12], [7, 0.04],
+    [9, 0.08], [11, 0.15], [14, 0.22], [17, 0.18],
+    [19, 0.25], [21, 0.12], [24, 0.08], [26, 0.06], [28, 0.09]
+];
+
+ctx.beginPath();
+ctx.strokeStyle = '#1a5276';
+ctx.lineWidth = 2.5;
+for (var i = 0; i < pvals.length; i++) {
+    var x = pad.l + (pvals[i][0] / 28) * pw;
+    // log scale approximation for visual
+    var yFrac = pvals[i][1] / 0.55;
+    var y = pad.t + yFrac * ph;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+}
+ctx.stroke();
+
+// Mark at day 7 where p < 0.05
+var stopX = pad.l + (7/28) * pw;
+var stopY = pad.t + (0.04 / 0.55) * ph;
+ctx.beginPath();
+ctx.arc(stopX, stopY, 6, 0, Math.PI * 2);
+ctx.fillStyle = '#27ae60';
+ctx.fill();
+ctx.strokeStyle = '#27ae60';
+ctx.lineWidth = 2;
+ctx.stroke();
+
+// "STOP" label at day 7
+ctx.fillStyle = '#27ae60';
+ctx.font = 'bold 18px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('STOP (winning)', stopX, stopY - 14);
+
+// "EXTEND" label where p > 0.05 later
+var extX = pad.l + (14/28) * pw;
+var extY = pad.t + (0.22 / 0.55) * ph;
+ctx.fillStyle = '#e74c3c';
+ctx.font = 'bold 18px sans-serif';
+ctx.fillText('EXTEND (losing)', extX + 40, extY - 5);
+ctx.beginPath();
+ctx.arc(extX, extY, 5, 0, Math.PI * 2);
+ctx.fillStyle = '#e74c3c';
+ctx.fill();
+
+// Bottom label
+ctx.fillStyle = '#e74c3c';
+ctx.font = 'bold 18px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('Two different rules for the same test depending on who\'s ahead', pad.l + pw/2, pad.t + ph + 38);
+})();
+</script>
+</body>
+</html>

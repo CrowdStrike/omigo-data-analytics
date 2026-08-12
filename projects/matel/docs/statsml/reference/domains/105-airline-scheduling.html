@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>105. Airline Scheduling / Cascading Delays</title>
+<style>
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: 20px 10px;
+    margin: 0;
+    background: #ffffff;
+    color: #333;
+}
+h1 {
+    color: #1a5276;
+    border-bottom: 3px solid #2980b9;
+    padding-bottom: 10px;
+}
+.nav {
+    margin-bottom: 20px;
+}
+.nav a {
+    color: #2980b9;
+    text-decoration: none;
+    font-weight: 500;
+}
+.nav a:hover {
+    text-decoration: underline;
+}
+table.obj-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+table.obj-table th,
+table.obj-table td {
+    border: 1px solid #2980b9;
+    padding: 12px;
+    vertical-align: top;
+    text-align: left;
+}
+table.obj-table th {
+    background: #1a5276;
+    color: #ffffff;
+    font-weight: 600;
+}
+table.obj-table td:first-child {
+    width: 40%;
+}
+table.obj-table td:last-child {
+    width: 60%;
+}
+table.obj-table tr:nth-child(even) {
+    background: #f8f9fa;
+}
+table.obj-table td strong {
+    color: #1a5276;
+}
+canvas {
+    display: block;
+    margin-top: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+</style>
+</head>
+<body>
+
+</div>
+
+<h1>Airline Scheduling / Cascading Delays</h1>
+
+<table class="obj-table">
+<tr>
+    <th>Concept</th>
+    <th>Visualization</th>
+</tr>
+<tr>
+    <td><strong>One Delayed Flight Cascades to 50+</strong><br><br>Aircraft and crew are REUSED across the day. Flight 1 (NYC&rarr;CHI) delayed 90 min &rarr; same plane does Flight 2 (CHI&rarr;LAX): also 90 min late &rarr; Flight 3 (LAX&rarr;SEA): 90 min late. One delay propagates through the entire day's schedule for that aircraft. Multiply by: crew on that first flight also delayed &rarr; their NEXT flight (different aircraft) also delayed. Exponential propagation from single initial event.</td>
+    <td><canvas id="canvas1" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+    <td><strong>Weather at Hub Affects Entire Network</strong><br><br>Thunderstorm at Atlanta (Delta hub): 200 flights delayed/cancelled. But: passengers connecting THROUGH Atlanta from 100 cities to 100 other cities &rarr; 10,000 itineraries disrupted. The HUB topology amplifies local weather into network-wide chaos. Models predicting "will my flight be delayed?" must model EVERY other flight at EVERY hub the route passes through.</td>
+    <td><canvas id="canvas2" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+    <td><strong>Crew Timeout Regulations Force Cancellations</strong><br><br>Pilot legally can't fly after 8-10 hours of duty. Flight delayed 3 hours &rarr; crew "times out" at destination &rarr; no crew for return flight &rarr; cancellation. The delay didn't just shift the schedule &mdash; it REMOVED capacity entirely. AND: replacement crew must be flown in (deadhead) &rarr; occupying a seat on another flight &rarr; reducing available inventory.</td>
+    <td><canvas id="canvas3" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+    <td><strong>Passenger Rebooking Creates Secondary Overload</strong><br><br>200 passengers from cancelled flight rebooked to next 3 flights &rarr; those flights now oversold &rarr; bumps &rarr; more rebookings &rarr; cascade continues for 24-48 hours after initial event. The DATA shows "flight oversold by 40%" &mdash; looks like terrible planning. Actually: consequence of cancellation 6 hours ago on different route.</td>
+    <td><canvas id="canvas4" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+    <td><strong>Maintenance Slot Missed &rarr; Aircraft Out of Service</strong><br><br>Aircraft had scheduled maintenance at midnight in DEN. Delay means it arrives at 2am instead of 11pm. Maintenance window missed (crew went home). Aircraft now out of service until next available slot (18 hours later). One delay &rarr; aircraft removed from service for entire next day &rarr; 4-6 flights cancelled that have NOTHING to do with original delay.</td>
+    <td><canvas id="canvas5" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+    <td><strong>Fuel Tankering Decisions from Stale Weather</strong><br><br>Airline decides at departure: carry extra fuel (heavy, expensive) or refuel at destination (depends on destination fuel price + availability). Decision based on weather forecast from 3 hours ago. If weather changed &rarr; divert &rarr; insufficient fuel for diversion &rarr; emergency. The DATA used for the decision was correct when computed but STALE when executed.</td>
+    <td><canvas id="canvas6" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+    <td><strong>Ground Truth Takes 24-48 Hours to Settle</strong><br><br>"Was this flight delayed?" Seems simple. But: gate departure vs wheels-off vs wheels-on vs gate arrival all different. A flight that left gate on time but sat on taxiway 90 min: "on time" by departure metric, "90 min late" by arrival. DOT metrics use specific definitions &mdash; airlines optimize to the METRIC not the passenger experience. Also: cancellation vs "extreme delay" is a classification decision with financial implications.</td>
+    <td><canvas id="canvas7" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+    <td><strong>Schedule Recovery Optimization = NP-Hard</strong><br><br>After disruption: reassign 500 aircraft, 3000 crew members, 50,000 passengers to minimize total cost. Constraints: crew legalities, aircraft maintenance, passenger connections, gate availability, fuel, curfews. This is a combinatorial optimization that can't be solved optimally in real-time. Every airline uses heuristics &rarr; suboptimal recovery &rarr; some passengers stranded for days (Southwest meltdown Dec 2022: 16,700 flights cancelled over 10 days because recovery algorithm failed).</td>
+    <td><canvas id="canvas8" width="720" height="300"></canvas></td>
+</tr>
+</table>
+
+<script>
+function setupCanvas(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = 720 * dpr;
+    canvas.height = 200 * dpr;
+    canvas.style.width = '720px';
+    canvas.style.height = '200px';
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+    return ctx;
+}
+
+// 1. One Delayed Flight Cascades
+(function() {
+    var ctx = setupCanvas('canvas1');
+    var flights = ['NYC→CHI', 'CHI→LAX', 'LAX→SEA', 'SEA→PDX', 'PDX→SFO'];
+    var delays = [90, 90, 85, 80, 75];
+    var x = 40;
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('Cascade: Single Aircraft Route', 10, 20);
+    for (var i = 0; i < flights.length; i++) {
+        var barWidth = delays[i] * 1.2;
+        ctx.fillStyle = 'rgba(231, 76, 60, ' + (0.5 + i * 0.1) + ')';
+        ctx.fillRect(x, 40 + i * 30, barWidth, 22);
+        ctx.fillStyle = '#333';
+        ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillText(flights[i] + ' (+' + delays[i] + ' min)', x + barWidth + 10, 56 + i * 30);
+        if (i < flights.length - 1) {
+            ctx.strokeStyle = '#e74c3c';
+            ctx.setLineDash([3, 3]);
+            ctx.beginPath();
+            ctx.moveTo(x + barWidth / 2, 62 + i * 30);
+            ctx.lineTo(x + barWidth / 2, 70 + i * 30);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+    }
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Exponential: crew branches create parallel cascades', 350, 170);
+})();
+
+// 2. Weather at Hub
+(function() {
+    var ctx = setupCanvas('canvas2');
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('Hub Topology Amplification', 10, 20);
+    var hubX = 360, hubY = 110;
+    ctx.beginPath();
+    ctx.arc(hubX, hubY, 30, 0, Math.PI * 2);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('ATL', hubX - 14, hubY + 5);
+    var cities = 12;
+    for (var i = 0; i < cities; i++) {
+        var angle = (i / cities) * Math.PI * 2;
+        var cx = hubX + Math.cos(angle) * 80;
+        var cy = hubY + Math.sin(angle) * 70;
+        ctx.beginPath();
+        ctx.moveTo(hubX + Math.cos(angle) * 30, hubY + Math.sin(angle) * 30);
+        ctx.lineTo(cx, cy);
+        ctx.strokeStyle = '#2980b9';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(cx, cy, 8, 0, Math.PI * 2);
+        ctx.fillStyle = '#f39c12';
+        ctx.fill();
+    }
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Storm', hubX - 20, hubY - 40);
+    ctx.fillStyle = '#333';
+    ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('100 origins x 100 destinations = 10,000 disrupted itineraries', 100, 195);
+})();
+
+// 3. Crew Timeout
+(function() {
+    var ctx = setupCanvas('canvas3');
+    ctx.fillStyle = '#1a5276';
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('Crew Duty Time vs. Legal Limit', 10, 20);
+    var y = 80;
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(50, y);
+    ctx.lineTo(680, y);
+    ctx.stroke();
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(50, y - 20, 400, 15);
+    ctx.fillStyle = '#fff';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('Scheduled duty: 7h (within limit)', 60, y - 10);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(50, y + 10, 550, 15);
+    ctx.fillStyle = '#fff';
+    ctx.fillText('Actual duty with 3h delay: 10h (EXCEEDS limit)', 60, y + 20);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.moveTo(500, y - 30);
+    ctx.lineTo(500, y + 40);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('8h LEGAL LIMIT', 505, y - 20);
+    ctx.fillStyle = '#333';
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('Result: Return flight CANCELLED (capacity removed)', 50, 160);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('+ Deadhead crew occupies seat on another flight', 50, 185);
+})();
+
+// 4. Passenger Rebooking Overload
+(function() {
+    var ctx = setupCanvas('canvas4');
+    ctx.fillStyle = '#1a5276';
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('Rebooking Cascade Over Time', 10, 20);
+    var hours = ['0h', '6h', '12h', '18h', '24h', '36h', '48h'];
+    var overload = [200, 150, 120, 80, 50, 20, 5];
+    var barW = 70;
+    var startX = 80;
+    for (var i = 0; i < hours.length; i++) {
+        var h = overload[i] * 0.7;
+        var bx = startX + i * 85;
+        ctx.fillStyle = overload[i] > 100 ? '#e74c3c' : '#f39c12';
+        ctx.fillRect(bx, 170 - h, barW, h);
+        ctx.fillStyle = '#333';
+        ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillText(hours[i], bx + 25, 185);
+        ctx.fillText(overload[i], bx + 25, 165 - h);
+    }
+    ctx.strokeStyle = '#27ae60';
+    ctx.setLineDash([4, 4]);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(70, 170 - 100 * 0.7);
+    ctx.lineTo(690, 170 - 100 * 0.7);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('Normal capacity', 600, 170 - 100 * 0.7 - 5);
+    ctx.fillStyle = '#333';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('Displaced passengers needing rebooking', 200, 45);
+})();
+
+// 5. Maintenance Slot Missed
+(function() {
+    var ctx = setupCanvas('canvas5');
+    ctx.fillStyle = '#1a5276';
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('Maintenance Window Miss', 10, 20);
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(50, 100);
+    ctx.lineTo(680, 100);
+    ctx.stroke();
+    var times = [{x: 150, label: '11pm\nScheduled', color: '#27ae60'},
+                 {x: 250, label: '12am\nMaint Start', color: '#27ae60'},
+                 {x: 400, label: '2am\nActual Arrival', color: '#e74c3c'},
+                 {x: 550, label: '6pm next day\nNext Slot', color: '#f39c12'}];
+    for (var i = 0; i < times.length; i++) {
+        ctx.beginPath();
+        ctx.arc(times[i].x, 100, 8, 0, Math.PI * 2);
+        ctx.fillStyle = times[i].color;
+        ctx.fill();
+        ctx.fillStyle = '#333';
+        ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+        var lines = times[i].label.split('\n');
+        ctx.fillText(lines[0], times[i].x - 20, 125);
+        if (lines[1]) ctx.fillText(lines[1], times[i].x - 25, 140);
+    }
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.15)';
+    ctx.fillRect(400, 60, 150, 30);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('OUT OF SERVICE (18h)', 405, 80);
+    ctx.fillStyle = '#333';
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('4-6 flights cancelled (unrelated to original delay)', 150, 180);
+})();
+
+// 6. Fuel Tankering / Stale Data
+(function() {
+    var ctx = setupCanvas('canvas6');
+    ctx.fillStyle = '#1a5276';
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('Decision Staleness Over Time', 10, 20);
+    ctx.beginPath();
+    ctx.moveTo(80, 150);
+    for (var x = 0; x < 500; x++) {
+        var staleness = Math.pow(x / 100, 1.5) * 10;
+        ctx.lineTo(80 + x, 150 - Math.min(staleness, 110));
+    }
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(80, 150, 8, 0, Math.PI * 2);
+    ctx.fillStyle = '#27ae60';
+    ctx.fill();
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('Decision made (data fresh)', 95, 160);
+    ctx.beginPath();
+    ctx.arc(380, 80, 8, 0, Math.PI * 2);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fill();
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Execution (data 3h stale)', 395, 75);
+    ctx.fillStyle = '#333';
+    ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('Time since forecast →', 250, 190);
+    ctx.save();
+    ctx.translate(30, 120);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Risk ↑', 0, 0);
+    ctx.restore();
+})();
+
+// 7. Ground Truth Settling
+(function() {
+    var ctx = setupCanvas('canvas7');
+    ctx.fillStyle = '#1a5276';
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('Multiple Metrics for Same Flight', 10, 20);
+    var metrics = [
+        {label: 'Gate Departure', val: 0, color: '#27ae60'},
+        {label: 'Wheels Off', val: 5, color: '#f39c12'},
+        {label: 'Wheels On', val: 85, color: '#e67e22'},
+        {label: 'Gate Arrival', val: 92, color: '#e74c3c'}
+    ];
+    var baseX = 100;
+    ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+    for (var i = 0; i < metrics.length; i++) {
+        var y = 55 + i * 35;
+        ctx.fillStyle = '#333';
+        ctx.fillText(metrics[i].label, 10, y + 4);
+        var barLen = Math.max(metrics[i].val * 4, 2);
+        ctx.fillStyle = metrics[i].color;
+        ctx.fillRect(baseX + 60, y - 10, barLen, 20);
+        ctx.fillStyle = '#333';
+        ctx.fillText('+' + metrics[i].val + ' min', baseX + 70 + barLen, y + 4);
+    }
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('"On time" by departure, "90 min late" by arrival', 100, 190);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(baseX + 60 + 15 * 4, 40);
+    ctx.lineTo(baseX + 60 + 15 * 4, 170);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('15 min threshold', baseX + 60 + 15 * 4 + 5, 50);
+})();
+
+// 8. NP-Hard Recovery
+(function() {
+    var ctx = setupCanvas('canvas8');
+    ctx.fillStyle = '#1a5276';
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('Combinatorial Explosion of Recovery Options', 10, 20);
+    function drawTree(x, y, depth, angle, spread) {
+        if (depth === 0) return;
+        var len = 25 - depth * 2;
+        var nx = x + Math.cos(angle) * len;
+        var ny = y + Math.sin(angle) * len;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(nx, ny);
+        ctx.strokeStyle = depth > 3 ? '#2980b9' : '#e74c3c';
+        ctx.lineWidth = depth * 0.5;
+        ctx.stroke();
+        drawTree(nx, ny, depth - 1, angle - spread, spread * 0.8);
+        drawTree(nx, ny, depth - 1, angle + spread, spread * 0.8);
+    }
+    drawTree(100, 50, 6, Math.PI / 2, 0.5);
+    ctx.fillStyle = '#333';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('500 aircraft', 400, 50);
+    ctx.fillText('3,000 crew', 400, 70);
+    ctx.fillText('50,000 passengers', 400, 90);
+    ctx.fillText('= billions of combinations', 400, 110);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('Southwest 2022: 16,700 flights cancelled', 300, 160);
+    ctx.fillText('(recovery algorithm failed)', 350, 185);
+})();
+</script>
+
+</body>
+</html>

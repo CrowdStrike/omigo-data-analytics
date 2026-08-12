@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>28. Observability / Monitoring — Domain Pitfalls</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 40px 20px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; }
+.nav a:hover { text-decoration: underline; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-table tr:nth-child(even) td { background: #fafcfe; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+</style>
+</head>
+<body>
+
+
+<h1>Observability / Monitoring</h1>
+<p class="subtitle">Data pitfalls in monitoring systems, metrics, logs, and traces</p>
+
+<div class="philosophy">Observability tools generate enormous data volumes, but the systems that collect, sample, and aggregate this data introduce subtle biases. What you see in your dashboards is never the full picture — it is a heavily processed summary shaped by engineering trade-offs.</div>
+
+<h2 id="trace-sampling-bias">1. Trace Sampling Bias</h2>
+<table class="obj-table"><tr>
+<td>
+<div class="obj-title">Only 1% of traces kept — the sample is never neutral</div>
+<ul>
+<li>Head-based sampling: random 1% decision at trace start — keeps random subset regardless of outcome</li>
+<li>Tail-based sampling: decision after trace completes — keeps errors and slow requests preferentially</li>
+<li>Head-based: your "normal" sample ≠ actual normal (just random). Rare errors may be missed entirely</li>
+<li>Tail-based: error traces overrepresented. "99% of traces are errors" because you only kept errors</li>
+<li>Neither approach gives an unbiased view of system behavior</li>
+</ul>
+<p><strong>Impact:</strong> Conclusions drawn from sampled traces are systematically biased. You cannot compute accurate error rates, latency percentiles, or throughput from sampled data without correcting for sampling strategy.</p>
+</td>
+<td><canvas id="c1" width="720" height="300"></canvas></td>
+</tr></table>
+
+<h2 id="log-volume-severity">2. Log Volume ≠ Problem Severity</h2>
+<table class="obj-table"><tr>
+<td>
+<div class="obj-title">One chatty microservice generates 90% of logs</div>
+<ul>
+<li>Service A: verbose debug logging, 90% of total log volume — mostly noise</li>
+<li>Service B: minimal logging, 0.1% of volume — but contains a critical database corruption error</li>
+<li>Log-based alerting systems: dominated by Service A's volume patterns</li>
+<li>Actual critical errors in quiet services: buried under noise</li>
+<li>Volume-based anomaly detection triggers on the wrong things</li>
+</ul>
+<p><strong>Impact:</strong> Log volume is not signal. Teams waste time investigating high-volume noise while critical low-volume errors go unnoticed for hours or days.</p>
+</td>
+<td><canvas id="c2" width="720" height="300"></canvas></td>
+</tr></table>
+
+<h2 id="aggregation-hides-spikes">3. Metric Aggregation Hides Spikes</h2>
+<table class="obj-table"><tr>
+<td>
+<div class="obj-title">p50 = 20ms looks healthy while p99 = 2000ms means suffering</div>
+<ul>
+<li>Dashboard shows p50 latency = 20ms — "system is healthy"</li>
+<li>But p99 = 2000ms — 1% of users wait 100x longer</li>
+<li>At 1M requests/day, that is 10,000 users with terrible experience</li>
+<li>Average and median metrics hide the long tail entirely</li>
+<li>5-minute aggregation windows can hide 30-second complete outages</li>
+</ul>
+<p><strong>Impact:</strong> The 1% of users with 100x worse experience are invisible in average metrics. Dashboard shows "healthy" while thousands of customers rage. SLOs must be percentile-based, not average-based.</p>
+</td>
+<td><canvas id="c3" width="720" height="300"></canvas></td>
+</tr></table>
+
+<h2 id="alert-fatigue">4. Alert Fatigue / Threshold Noise</h2>
+<table class="obj-table"><tr>
+<td>
+<div class="obj-title">100 alerts/day means the team ignores them all</div>
+<ul>
+<li>Static threshold: CPU > 80% fires alert. But 80% is normal during batch jobs every night</li>
+<li>Result: 100+ alerts/day, all "expected" — team learns to ignore</li>
+<li>Real incident alert arrives: buried in noise, no one responds for 45 minutes</li>
+<li>Threshold doesn't account for day-of-week pattern: Monday is always "anomalous" vs weekend baseline</li>
+<li>Alert response rate drops from 90% to 5% over 3 months</li>
+</ul>
+<p><strong>Impact:</strong> Alert fatigue is the #1 cause of delayed incident response. When everything is an emergency, nothing is. Static thresholds in dynamic systems generate noise, not signal.</p>
+</td>
+<td><canvas id="c4" width="720" height="300"></canvas></td>
+</tr></table>
+
+<h2 id="cardinality-explosion">5. Cardinality Explosion in Tags</h2>
+<table class="obj-table"><tr>
+<td>
+<div class="obj-title">Adding user_id as a label creates 10M time series</div>
+<ul>
+<li>1 metric × 1 tag (region: 5 values) = 5 time series</li>
+<li>Add endpoint tag (100 values) = 500 time series</li>
+<li>Add user_id tag (10M values) = 5 billion time series — system OOM</li>
+<li>Every tag dimension multiplies storage and query cost</li>
+<li>Must choose: high-cardinality detail OR system stability — cannot have both</li>
+</ul>
+<p><strong>Impact:</strong> Cardinality explosion is the most common way to kill a monitoring system. Prometheus, observability platform, and every TSDB has hard limits. One bad label choice can take down your entire observability stack.</p>
+</td>
+<td><canvas id="c5" width="720" height="300"></canvas></td>
+</tr></table>
+
+<h2 id="meta-monitoring">6. Observability of Observability</h2>
+<table class="obj-table"><tr>
+<td>
+<div class="obj-title">Who watches the watchers? (Quis custodiet ipsos custodes?)</div>
+<ul>
+<li>Your monitoring system goes down</li>
+<li>You don't know your monitoring is down (because your monitoring is what tells you things are down)</li>
+<li>Therefore you don't know your app is down</li>
+<li>Meta-monitoring (monitoring your monitoring) is required but rarely implemented</li>
+<li>Even meta-monitoring needs to be monitored — infinite regress</li>
+</ul>
+<p><strong>Impact:</strong> The most dangerous failure mode: silent monitoring failure. Your dashboards show green (cached/stale) while production burns. External synthetic monitoring from a separate provider is the only reliable solution.</p>
+</td>
+<td><canvas id="c6" width="720" height="300"></canvas></td>
+</tr></table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id);
+    if (!c) return null;
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return {ctx: ctx, w: w, h: h};
+}
+
+// Chart 1: Trace Sampling Bias
+(function() {
+    var s = setup('c1');
+    if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+    ctx.font = '17px -apple-system, sans-serif';
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Trace Sampling: 100 Traces, 1% Kept', w / 2, 25);
+
+    // Left section: Head-based sampling
+    ctx.font = '14px -apple-system, sans-serif';
+    ctx.fillStyle = '#555';
+    ctx.textAlign = 'center';
+    ctx.fillText('Head-Based (Random 1%)', w * 0.25, 50);
+
+    // Draw 50 dots for head-based
+    var dotSize = 8;
+    var startX = 30, startY = 65;
+    var cols = 10, rows = 5;
+    var spacingX = 32, spacingY = 22;
+
+    // Generate traces: some normal (blue), some error (red), some slow (orange)
+    var traces = [];
+    for (var i = 0; i < 50; i++) {
+        var type = 'normal';
+        if (i < 5) type = 'error';
+        else if (i < 10) type = 'slow';
+        traces.push(type);
+    }
+    // Deterministic shuffle using seed
+    var seed = 42;
+    function seededRandom() {
+        seed = (seed * 16807) % 2147483647;
+        return (seed - 1) / 2147483646;
+    }
+    for (var i = traces.length - 1; i > 0; i--) {
+        var j = Math.floor(seededRandom() * (i + 1));
+        var tmp = traces[i]; traces[i] = traces[j]; traces[j] = tmp;
+    }
+
+    // Head-based: random selection (pick index 7 — happens to be normal)
+    var headKept = 7;
+    for (var i = 0; i < 50; i++) {
+        var col = i % cols, row = Math.floor(i / cols);
+        var x = startX + col * spacingX, y = startY + row * spacingY;
+        var color = traces[i] === 'error' ? '#e74c3c' : traces[i] === 'slow' ? '#f39c12' : '#bbb';
+        if (i === headKept) {
+            ctx.fillStyle = traces[i] === 'error' ? '#e74c3c' : traces[i] === 'slow' ? '#f39c12' : '#3498db';
+            ctx.beginPath(); ctx.arc(x, y, dotSize + 2, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = '#2c3e50'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(x, y, dotSize + 4, 0, Math.PI * 2); ctx.stroke();
+        } else {
+            ctx.fillStyle = color;
+            ctx.globalAlpha = 0.4;
+            ctx.beginPath(); ctx.arc(x, y, dotSize, 0, Math.PI * 2); ctx.fill();
+            ctx.globalAlpha = 1.0;
+        }
+    }
+
+    // Right section: Tail-based sampling
+    ctx.font = '14px -apple-system, sans-serif';
+    ctx.fillStyle = '#555';
+    ctx.textAlign = 'center';
+    ctx.fillText('Tail-Based (Errors/Slow Kept)', w * 0.72, 50);
+
+    var startX2 = w * 0.5 + 20;
+    // Tail-based: keep errors and slow traces
+    for (var i = 0; i < 50; i++) {
+        var col = i % cols, row = Math.floor(i / cols);
+        var x = startX2 + col * spacingX, y = startY + row * spacingY;
+        var isKept = (traces[i] === 'error' || traces[i] === 'slow');
+        if (isKept) {
+            ctx.fillStyle = traces[i] === 'error' ? '#e74c3c' : '#f39c12';
+            ctx.beginPath(); ctx.arc(x, y, dotSize + 2, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = '#2c3e50'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(x, y, dotSize + 4, 0, Math.PI * 2); ctx.stroke();
+        } else {
+            ctx.fillStyle = '#bbb';
+            ctx.globalAlpha = 0.4;
+            ctx.beginPath(); ctx.arc(x, y, dotSize, 0, Math.PI * 2); ctx.fill();
+            ctx.globalAlpha = 1.0;
+        }
+    }
+
+    // Legend
+    var ly = h - 60;
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.textAlign = 'left';
+
+    ctx.fillStyle = '#3498db';
+    ctx.beginPath(); ctx.arc(50, ly, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#333'; ctx.fillText('Normal', 62, ly + 4);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath(); ctx.arc(130, ly, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#333'; ctx.fillText('Error', 142, ly + 4);
+
+    ctx.fillStyle = '#f39c12';
+    ctx.beginPath(); ctx.arc(195, ly, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#333'; ctx.fillText('Slow', 207, ly + 4);
+
+    ctx.strokeStyle = '#2c3e50'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(265, ly, 8, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = '#333'; ctx.fillText('= Kept in sample', 278, ly + 4);
+
+    // Bottom note
+    ctx.font = 'italic 13px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('Head-based: random, may miss all errors. Tail-based: overrepresents errors.', w / 2, h - 20);
+    ctx.fillText('Neither gives an unbiased picture of system behavior.', w / 2, h - 5);
+})();
+
+// Chart 2: Log Volume vs Severity
+(function() {
+    var s = setup('c2');
+    if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Log Volume by Service vs. Actual Severity', w / 2, 25);
+
+    var services = ['Auth Svc', 'API GW', 'Chat Svc', 'DB Proxy', 'Payment'];
+    var volumes = [2, 5, 90, 1.5, 1.5]; // percentages
+    var barWidth = 80, gap = 20;
+    var chartLeft = 80, chartBottom = h - 60, chartTop = 55, chartHeight = chartBottom - chartTop;
+    var totalWidth = services.length * (barWidth + gap) - gap;
+    var offsetX = (w - totalWidth) / 2;
+
+    // Y-axis
+    ctx.strokeStyle = '#ccc'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(chartLeft - 10, chartTop); ctx.lineTo(chartLeft - 10, chartBottom); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(chartLeft - 10, chartBottom); ctx.lineTo(w - 30, chartBottom); ctx.stroke();
+
+    // Y-axis labels
+    ctx.font = '12px -apple-system, sans-serif';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'right';
+    for (var i = 0; i <= 4; i++) {
+        var val = i * 25;
+        var y = chartBottom - (val / 100) * chartHeight;
+        ctx.fillText(val + '%', chartLeft - 15, y + 4);
+        ctx.strokeStyle = '#eee'; ctx.lineWidth = 0.5;
+        ctx.beginPath(); ctx.moveTo(chartLeft - 10, y); ctx.lineTo(w - 30, y); ctx.stroke();
+    }
+
+    // Bars
+    var colors = ['#3498db', '#2ecc71', '#e67e22', '#9b59b6', '#1abc9c'];
+    ctx.textAlign = 'center';
+    for (var i = 0; i < services.length; i++) {
+        var x = offsetX + i * (barWidth + gap);
+        var barH = (volumes[i] / 100) * chartHeight;
+        var y = chartBottom - barH;
+
+        ctx.fillStyle = colors[i];
+        ctx.fillRect(x, y, barWidth, barH);
+
+        // Service name
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = '#333';
+        ctx.fillText(services[i], x + barWidth / 2, chartBottom + 15);
+
+        // Volume label
+        ctx.font = '11px -apple-system, sans-serif';
+        if (barH > 20) {
+            ctx.fillStyle = '#fff';
+            ctx.fillText(volumes[i] + '%', x + barWidth / 2, y + barH / 2 + 4);
+        } else {
+            ctx.fillStyle = '#333';
+            ctx.fillText(volumes[i] + '%', x + barWidth / 2, y - 8);
+        }
+    }
+
+    // Critical error star on Payment service (last bar, smallest)
+    var critX = offsetX + 4 * (barWidth + gap) + barWidth / 2;
+    var critY = chartBottom - (volumes[4] / 100) * chartHeight - 25;
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '24px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('★', critX, critY);
+    ctx.font = 'bold 11px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('CRITICAL', critX, critY - 18);
+    ctx.fillText('ERROR HERE', critX, critY - 6);
+
+    // Arrow pointing to chatty service
+    ctx.font = 'italic 12px -apple-system, sans-serif';
+    ctx.fillStyle = '#e67e22';
+    ctx.textAlign = 'center';
+    var chatX = offsetX + 2 * (barWidth + gap) + barWidth / 2;
+    ctx.fillText('90% of all logs', chatX, chartTop + 15);
+    ctx.fillText('(mostly noise)', chatX, chartTop + 30);
+
+    // Bottom note
+    ctx.font = 'italic 13px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('Volume is not signal. Critical error buried in the quietest service.', w / 2, h - 10);
+})();
+
+// Chart 3: Metric Aggregation Hides Spikes
+(function() {
+    var s = setup('c3');
+    if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Latency Distribution: What Dashboards Hide', w / 2, 25);
+
+    var chartLeft = 70, chartRight = w - 40, chartBottom = h - 55, chartTop = 50;
+    var chartWidth = chartRight - chartLeft, chartHeight = chartBottom - chartTop;
+
+    // Draw histogram bars representing latency distribution
+    var buckets = [
+        {range: '5-10', count: 5, ms: 7.5},
+        {range: '10-15', count: 15, ms: 12.5},
+        {range: '15-20', count: 35, ms: 17.5},
+        {range: '20-25', count: 30, ms: 22.5},
+        {range: '25-35', count: 8, ms: 30},
+        {range: '35-50', count: 3, ms: 42},
+        {range: '50-100', count: 2, ms: 75},
+        {range: '100-500', count: 1, ms: 300},
+        {range: '500-1K', count: 0.5, ms: 750},
+        {range: '1K-2K', count: 0.3, ms: 1500},
+        {range: '2000+', count: 0.2, ms: 2500}
+    ];
+
+    var maxCount = 35;
+    var barWidth = chartWidth / buckets.length - 4;
+
+    // Axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(chartLeft, chartBottom); ctx.lineTo(chartRight, chartBottom); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(chartLeft, chartTop); ctx.lineTo(chartLeft, chartBottom); ctx.stroke();
+
+    // Y-axis label
+    ctx.save();
+    ctx.translate(20, chartTop + chartHeight / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.font = '12px -apple-system, sans-serif';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    ctx.fillText('% of Requests', 0, 0);
+    ctx.restore();
+
+    // X-axis label
+    ctx.font = '12px -apple-system, sans-serif';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    ctx.fillText('Latency (ms)', chartLeft + chartWidth / 2, h - 8);
+
+    // Draw bars
+    for (var i = 0; i < buckets.length; i++) {
+        var x = chartLeft + i * (barWidth + 4) + 2;
+        var barH = (buckets[i].count / maxCount) * chartHeight;
+        var y = chartBottom - barH;
+
+        // Color: green for fast, red for slow
+        if (buckets[i].ms <= 25) {
+            ctx.fillStyle = '#27ae60';
+        } else if (buckets[i].ms <= 100) {
+            ctx.fillStyle = '#f39c12';
+        } else {
+            ctx.fillStyle = '#e74c3c';
+        }
+        ctx.fillRect(x, y, barWidth, barH);
+
+        // X labels
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillStyle = '#666';
+        ctx.textAlign = 'center';
+        ctx.save();
+        ctx.translate(x + barWidth / 2, chartBottom + 12);
+        ctx.rotate(Math.PI / 6);
+        ctx.fillText(buckets[i].range, 0, 0);
+        ctx.restore();
+    }
+
+    // p50 marker
+    var p50x = chartLeft + 2 * (barWidth + 4) + barWidth / 2;
+    ctx.strokeStyle = '#2980b9'; ctx.lineWidth = 2;
+    ctx.setLineDash([5, 3]);
+    ctx.beginPath(); ctx.moveTo(p50x, chartTop); ctx.lineTo(p50x, chartBottom); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = 'bold 13px -apple-system, sans-serif';
+    ctx.fillStyle = '#2980b9';
+    ctx.textAlign = 'center';
+    ctx.fillText('p50 = 20ms', p50x, chartTop - 5);
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.fillText('"Dashboard shows this"', p50x + 5, chartTop + 12);
+
+    // p99 marker
+    var p99x = chartLeft + 9 * (barWidth + 4) + barWidth / 2;
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    ctx.setLineDash([5, 3]);
+    ctx.beginPath(); ctx.moveTo(p99x, chartTop + 20); ctx.lineTo(p99x, chartBottom); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = 'bold 13px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('p99 = 2000ms', p99x, chartTop + 15);
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.fillText('"Users experience this"', p99x, chartTop + 30);
+
+    // Annotation
+    ctx.font = 'italic 12px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'right';
+    ctx.fillText('100x worse for 1% = 10,000 users/day', w - 50, h - 25);
+})();
+
+// Chart 4: Alert Fatigue
+(function() {
+    var s = setup('c4');
+    if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Alert Fatigue: Response Rate Over Time', w / 2, 25);
+
+    // Left side: alert grid (60 alerts, one critical buried)
+    var gridLeft = 30, gridTop = 50;
+    var dotSize = 10, spacing = 18;
+    var cols = 10, rows = 6;
+
+    ctx.font = '12px -apple-system, sans-serif';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    ctx.fillText('100 daily alerts', gridLeft + cols * spacing / 2, gridTop - 8);
+
+    // Critical alert position (buried in middle)
+    var critIdx = 47;
+
+    for (var i = 0; i < 60; i++) {
+        var col = i % cols, row = Math.floor(i / cols);
+        var x = gridLeft + col * spacing + 9;
+        var y = gridTop + row * spacing + 9;
+
+        if (i === critIdx) {
+            // Critical alert - red
+            ctx.fillStyle = '#e74c3c';
+            ctx.beginPath(); ctx.arc(x, y, dotSize / 2 + 2, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(x, y, dotSize / 2 + 4, 0, Math.PI * 2); ctx.stroke();
+        } else {
+            // Noise alerts - gray/amber
+            ctx.fillStyle = (i % 7 === 0) ? '#f39c12' : '#ccc';
+            ctx.globalAlpha = 0.6;
+            ctx.beginPath(); ctx.arc(x, y, dotSize / 2, 0, Math.PI * 2); ctx.fill();
+            ctx.globalAlpha = 1.0;
+        }
+    }
+
+    // Arrow to critical
+    ctx.font = 'bold 11px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'left';
+    ctx.fillText('← REAL INCIDENT', gridLeft + cols * spacing + 5, gridTop + 4 * spacing + 12);
+    ctx.fillText('   (buried in noise)', gridLeft + cols * spacing + 5, gridTop + 4 * spacing + 26);
+
+    // Right side: Response rate chart declining
+    var chartLeft = w * 0.5, chartRight = w - 40, chartBottom = h - 50, chartTop = 60;
+    var chartWidth = chartRight - chartLeft, chartHeight = chartBottom - chartTop;
+
+    ctx.font = '12px -apple-system, sans-serif';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    ctx.fillText('Team Response Rate', chartLeft + chartWidth / 2, chartTop - 10);
+
+    // Axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(chartLeft, chartBottom); ctx.lineTo(chartRight, chartBottom); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(chartLeft, chartTop); ctx.lineTo(chartLeft, chartBottom); ctx.stroke();
+
+    // Y-axis labels
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#666';
+    ctx.fillText('100%', chartLeft - 5, chartTop + 4);
+    ctx.fillText('50%', chartLeft - 5, chartTop + chartHeight / 2 + 4);
+    ctx.fillText('0%', chartLeft - 5, chartBottom + 4);
+
+    // X-axis labels
+    ctx.textAlign = 'center';
+    ctx.fillText('Week 1', chartLeft + chartWidth * 0.1, chartBottom + 14);
+    ctx.fillText('Month 1', chartLeft + chartWidth * 0.4, chartBottom + 14);
+    ctx.fillText('Month 3', chartLeft + chartWidth * 0.75, chartBottom + 14);
+
+    // Declining curve
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    var points = [
+        [0, 0.9], [0.1, 0.85], [0.2, 0.7], [0.3, 0.5], [0.4, 0.3],
+        [0.5, 0.2], [0.6, 0.12], [0.7, 0.08], [0.8, 0.06], [0.9, 0.05], [1.0, 0.05]
+    ];
+    for (var i = 0; i < points.length; i++) {
+        var x = chartLeft + points[i][0] * chartWidth;
+        var y = chartBottom - points[i][1] * chartHeight;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Labels on curve
+    ctx.font = 'bold 12px -apple-system, sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'left';
+    ctx.fillText('90%', chartLeft + 10, chartBottom - 0.9 * chartHeight - 8);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('5%', chartLeft + chartWidth * 0.85, chartBottom - 0.05 * chartHeight - 10);
+
+    // Bottom note
+    ctx.font = 'italic 13px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('When everything is an emergency, nothing is.', w / 2, h - 10);
+})();
+
+// Chart 5: Cardinality Explosion
+(function() {
+    var s = setup('c5');
+    if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Cardinality Explosion: Time Series vs. Tag Dimensions', w / 2, 25);
+
+    var chartLeft = 100, chartRight = w - 60, chartBottom = h - 55, chartTop = 50;
+    var chartWidth = chartRight - chartLeft, chartHeight = chartBottom - chartTop;
+
+    // Axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(chartLeft, chartBottom); ctx.lineTo(chartRight, chartBottom); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(chartLeft, chartTop); ctx.lineTo(chartLeft, chartBottom); ctx.stroke();
+
+    // Y-axis (log scale): 1, 100, 10K, 1M, 10M, 1B
+    var yLabels = ['1', '100', '10K', '1M', '10M', '1B'];
+    var yPositions = [0, 0.2, 0.4, 0.6, 0.8, 1.0];
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'right';
+    for (var i = 0; i < yLabels.length; i++) {
+        var y = chartBottom - yPositions[i] * chartHeight;
+        ctx.fillText(yLabels[i], chartLeft - 10, y + 4);
+        ctx.strokeStyle = '#eee'; ctx.lineWidth = 0.5;
+        ctx.beginPath(); ctx.moveTo(chartLeft, y); ctx.lineTo(chartRight, y); ctx.stroke();
+    }
+
+    // X-axis labels (tag dimensions)
+    var xLabels = ['base\nmetric', '+ region\n(5)', '+ endpoint\n(100)', '+ status\n(5)', '+ user_id\n(10M)'];
+    var xPositions = [0.1, 0.3, 0.5, 0.7, 0.9];
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.fillStyle = '#333';
+    ctx.textAlign = 'center';
+    for (var i = 0; i < xLabels.length; i++) {
+        var x = chartLeft + xPositions[i] * chartWidth;
+        var lines = xLabels[i].split('\n');
+        for (var l = 0; l < lines.length; l++) {
+            ctx.fillText(lines[l], x, chartBottom + 14 + l * 12);
+        }
+    }
+
+    // Data points (log scale values mapped to 0-1)
+    var dataY = [0.0, 0.14, 0.45, 0.6, 1.05];
+    var dataLabels = ['1', '5', '500', '2,500', '25 Billion'];
+
+    // Draw exponential curve
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < 5; i++) {
+        var x = chartLeft + xPositions[i] * chartWidth;
+        var yVal = Math.min(dataY[i], 1.0);
+        var y = chartBottom - yVal * chartHeight;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Data points
+    for (var i = 0; i < 5; i++) {
+        var x = chartLeft + xPositions[i] * chartWidth;
+        var yVal = Math.min(dataY[i], 1.0);
+        var y = chartBottom - yVal * chartHeight;
+        ctx.fillStyle = i < 4 ? '#2980b9' : '#e74c3c';
+        ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill();
+
+        // Value label
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillStyle = i < 4 ? '#2980b9' : '#e74c3c';
+        ctx.textAlign = 'center';
+        ctx.fillText(dataLabels[i], x, y - 12);
+    }
+
+    // OOM line
+    var oomY = chartBottom - 0.85 * chartHeight;
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    ctx.setLineDash([8, 4]);
+    ctx.beginPath(); ctx.moveTo(chartLeft, oomY); ctx.lineTo(chartRight, oomY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = 'bold 13px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'right';
+    ctx.fillText('SYSTEM OOM', chartRight, oomY - 8);
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.fillText('Monitoring crashes here', chartRight, oomY + 14);
+
+    // Bottom annotation
+    ctx.font = 'italic 12px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('Each dimension MULTIPLIES total series count', w / 2, h - 10);
+})();
+
+// Chart 6: Meta-Monitoring (Observability of Observability)
+(function() {
+    var s = setup('c6');
+    if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Who Watches the Watchers?', w / 2, 25);
+
+    // Draw nested boxes from outside in
+    var centerX = w / 2, centerY = h / 2 + 10;
+
+    // Outermost: ???
+    var box4w = 620, box4h = 200;
+    ctx.strokeStyle = '#bbb'; ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.strokeRect(centerX - box4w / 2, centerY - box4h / 2, box4w, box4h);
+    ctx.setLineDash([]);
+    ctx.font = 'bold 16px -apple-system, sans-serif';
+    ctx.fillStyle = '#999';
+    ctx.textAlign = 'center';
+    ctx.fillText('??? (who monitors this?)', centerX, centerY - box4h / 2 - 8);
+
+    // Meta-Monitor box
+    var box3w = 480, box3h = 150;
+    ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 2;
+    ctx.fillStyle = '#f0fff0';
+    ctx.fillRect(centerX - box3w / 2, centerY - box3h / 2, box3w, box3h);
+    ctx.strokeRect(centerX - box3w / 2, centerY - box3h / 2, box3w, box3h);
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'left';
+    ctx.fillText('Meta-Monitor', centerX - box3w / 2 + 10, centerY - box3h / 2 + 16);
+
+    // Monitor box (crossed out - DOWN)
+    var box2w = 320, box2h = 100;
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3;
+    ctx.fillStyle = '#fff5f5';
+    ctx.fillRect(centerX - box2w / 2, centerY - box2h / 2, box2w, box2h);
+    ctx.strokeRect(centerX - box2w / 2, centerY - box2h / 2, box2w, box2h);
+    ctx.font = 'bold 14px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'left';
+    ctx.fillText('Monitor (DOWN!)', centerX - box2w / 2 + 10, centerY - box2h / 2 + 18);
+
+    // X through monitor box
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 4; ctx.globalAlpha = 0.6;
+    ctx.beginPath();
+    ctx.moveTo(centerX - box2w / 2, centerY - box2h / 2);
+    ctx.lineTo(centerX + box2w / 2, centerY + box2h / 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(centerX + box2w / 2, centerY - box2h / 2);
+    ctx.lineTo(centerX - box2w / 2, centerY + box2h / 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1.0;
+
+    // App box (innermost)
+    var box1w = 150, box1h = 55;
+    ctx.strokeStyle = '#2980b9'; ctx.lineWidth = 2;
+    ctx.fillStyle = '#f0f8ff';
+    ctx.fillRect(centerX - box1w / 2, centerY - box1h / 2 + 5, box1w, box1h);
+    ctx.strokeRect(centerX - box1w / 2, centerY - box1h / 2 + 5, box1w, box1h);
+    ctx.font = 'bold 14px -apple-system, sans-serif';
+    ctx.fillStyle = '#2980b9';
+    ctx.textAlign = 'center';
+    ctx.fillText('Your App', centerX, centerY + 10);
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.fillText('(maybe down?)', centerX, centerY + 26);
+
+    // Annotation: cannot watch
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '12px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('✖ cannot watch (down)', centerX, centerY + box1h / 2 + 25);
+
+    // Bottom note
+    ctx.font = 'italic 11px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('Monitor down → No alerts → App down undetected → Customer impact', w / 2, h - 12);
+})();
+</script>
+
+</body>
+</html>

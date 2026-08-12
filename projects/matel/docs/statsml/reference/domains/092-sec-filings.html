@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SEC Filings Data Pitfalls</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 20px;
+            background: #ffffff;
+            color: #2c3e50;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #1a5276;
+            border-bottom: 3px solid #2980b9;
+            padding-bottom: 10px;
+            font-size: 2em;
+            margin-bottom: 20px;
+        }
+        .obj-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .obj-table td {
+            padding: 20px;
+            vertical-align: top;
+            border: 1px solid #2980b9;
+            background: #ffffff;
+        }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; text-align: center; }
+        .obj-title {
+            color: #1a5276;
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        li {
+            margin-bottom: 6px;
+            color: #34495e;
+        }
+        .example {
+            background: #f0f4f8;
+            padding: 10px;
+            border-left: 3px solid #2980b9;
+            margin-top: 10px;
+            font-size: 0.95em;
+            color: #2c3e50;
+        }
+        canvas {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: #ffffff;
+        }
+        .nav-link {
+            display: inline-block;
+            margin: 20px 0;
+            color: #2980b9;
+            text-decoration: none;
+            font-weight: bold;
+            transition: color 0.3s ease;
+        }
+        .nav-link:hover {
+            text-decoration: underline;
+            color: #1a5276;
+        }
+        p {
+            color: #34495e;
+            font-size: 1.05em;
+            margin-bottom: 20px;
+        }
+        strong {
+            color: #1a5276;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>SEC Filings &amp; Regulatory Data Pitfalls</h1>
+
+    <p>
+        SEC filings (10-K, 10-Q, 8-K, Form 4) are fundamental data sources for financial analysis, but they present unique challenges
+        that make them surprisingly unreliable for quantitative models. Filing delays, amendments that overwrite history, inconsistent
+        tagging standards, and deliberate obfuscation create a minefield for data scientists. The regulatory data that appears pristine
+        on the surface is often stale, inconsistent, and laden with hidden traps. Understanding these pitfalls is critical for anyone
+        building models on SEC data.
+    </p>
+
+    <table class="obj-table">
+        <tr>
+            <td>
+                <div class="obj-title">1. Filing Delay (60 Days Post-Quarter)</div>
+                <ul>
+                    <li><strong>10-K filings are due 60 days</strong> after fiscal year-end for large accelerated filers, while 10-Q reports are due 40 days after quarter-end, creating substantial information lag</li>
+                    <li><strong>Markets price in earnings immediately</strong> from press releases and earnings calls that occur 3-4 weeks after period end, making SEC filing data stale on arrival</li>
+                    <li><strong>Information value decay is exponential:</strong> by the time detailed financial statements appear in EDGAR, 90-95% of the informational advantage has already been captured</li>
+                    <li><strong>Models using filing dates as signals</strong> are effectively trading on 60+ day old information, competing against traders who acted 5-6 weeks earlier</li>
+                    <li><strong>API and data vendor delays</strong> add another 3-5 days for parsing, validation, and distribution, extending the staleness window further</li>
+                </ul>
+                <div class="example">
+                    <strong>Example:</strong> A company with fiscal year ending December 31st must file its 10-K by March 1st (60 days). However,
+                    it held an earnings call on January 25th. By the time the 10-K appears in your data pipeline (March 5th), the stock has
+                    already moved 12% based on the earnings announcement. Any "alpha" from the detailed financial statements was priced in
+                    38 days ago. Your quantitative model is analyzing information that the market fully digested over a month prior.
+                </div>
+            </td>
+            <td>
+                <canvas id="canvas1" width="720" height="240"></canvas>
+            </td>
+        </tr>
+
+        <tr>
+            <td>
+                <div class="obj-title">2. Amendment/Restatement Overwrites History</div>
+                <ul>
+                    <li><strong>10-K/A and 10-Q/A amendments</strong> replace original filings in EDGAR, making the original version difficult or impossible to retrieve through standard APIs</li>
+                    <li><strong>Restatements can alter revenue by 10-50%</strong> retroactively, completely invalidating historical trend analysis built on "current" data snapshots</li>
+                    <li><strong>Survivorship bias is severe:</strong> backtests that use only the most recent filing version see a sanitized history that never existed in real-time</li>
+                    <li><strong>Material errors disappear from record</strong> unless you maintain point-in-time archives; companies that nearly went bankrupt appear stable in hindsight</li>
+                    <li><strong>Fraud detection models fail</strong> because the fraudulent numbers are retroactively corrected, removing the very signals that would have predicted malfeasance</li>
+                </ul>
+                <div class="example">
+                    <strong>Example:</strong> In 2019, Company XYZ originally reported $2.3B in revenue for Q3 2018. In March 2020, after an
+                    accounting review, they filed a 10-K/A restating Q3 2018 revenue to $1.6B (a 30% reduction). Today's EDGAR API returns
+                    only the amended $1.6B figure. A backtested model trained on "historical" data never sees the original $2.3B error,
+                    creating an artificial picture of smooth growth. The model cannot learn to detect the revenue recognition problems
+                    because the problematic data has been erased from the official record.
+                </div>
+            </td>
+            <td>
+                <canvas id="canvas2" width="720" height="240"></canvas>
+            </td>
+        </tr>
+
+        <tr>
+            <td>
+                <div class="obj-title">3. XBRL Tagging Inconsistency</div>
+                <ul>
+                    <li><strong>Companies can choose from 14,000+ XBRL tags</strong> in the US GAAP taxonomy, leading to massive variation in how identical concepts are labeled</li>
+                    <li><strong>Revenue alone has 50+ valid tag options:</strong> Revenues, SalesRevenueNet, RevenueFromContractWithCustomerExcludingAssessedTax, RevenueFromContractWithCustomerIncludingAssessedTax, etc.</li>
+                    <li><strong>Custom extensions are unlimited:</strong> companies create proprietary tags when standard taxonomy doesn't fit, making cross-company comparison nearly impossible without extensive mapping</li>
+                    <li><strong>Tag choice affects data coverage:</strong> querying for "Revenues" might return data for only 40% of companies, while "SalesRevenueNet" captures a different 35%, with minimal overlap</li>
+                    <li><strong>Concept reconciliation requires expert knowledge</strong> of accounting standards and manual mapping tables that must be maintained as taxonomy evolves annually</li>
+                </ul>
+                <div class="example">
+                    <strong>Example:</strong> Building a peer comparison of five tech companies, you query for "Revenue" in their XBRL filings.
+                    Company A uses "Revenues", Company B uses "SalesRevenueNet", Company C uses "RevenueFromContractWithCustomerExcludingAssessedTax",
+                    Company D uses a custom extension "TotalRevenueIncludingSubscriptionAndServices", and Company E uses "SalesRevenueGoodsNet".
+                    A naive query for any single tag returns at most 20% of your sample. You need a mapping table with 50+ revenue variants,
+                    and even then you're uncertain if all definitions are truly comparable (e.g., does one include assessed taxes while another excludes them?).
+                </div>
+            </td>
+            <td>
+                <canvas id="canvas3" width="720" height="240"></canvas>
+            </td>
+        </tr>
+
+        <tr>
+            <td>
+                <div class="obj-title">4. Boilerplate Drowns Signal</div>
+                <ul>
+                    <li><strong>10-K filings average 180-220 pages</strong> but only 5-10% contains materially new information; the rest is legally mandated boilerplate repeated annually</li>
+                    <li><strong>Risk factors sections are 95% copy-paste</strong> from prior years, listing generic risks ("we face competition", "cybersecurity threats") that haven't changed and carry no signal</li>
+                    <li><strong>NLP sentiment analysis is polluted</strong> by static legal language that dominates word frequency; "uncertainty", "risk", "may", "could" appear hundreds of times in boilerplate</li>
+                    <li><strong>Signal-to-noise ratio degrades over time:</strong> as regulatory requirements expand, filings grow longer while actual new disclosure remains constant, diluting information density</li>
+                    <li><strong>Machine learning models trained on full text</strong> learn to predict boilerplate patterns rather than material business changes, achieving high accuracy but zero alpha</li>
+                </ul>
+                <div class="example">
+                    <strong>Example:</strong> A 10-K filing contains 200 pages. Pages 1-80 are boilerplate: standard business descriptions,
+                    regulatory environment, competition landscape that hasn't changed in 5 years. Pages 81-150 contain financial statements
+                    and MD&amp;A, 70% of which is repeated from prior quarters. Pages 151-190 are risk factors, 95% identical to last year.
+                    The actual new, material information — a change in revenue recognition policy, new legal exposure, strategic pivot —
+                    appears in 8-10 pages scattered throughout. An NLP sentiment model trained on the full 200 pages is fitting 95% noise,
+                    learning to classify legal boilerplate rather than business reality.
+                </div>
+            </td>
+            <td>
+                <canvas id="canvas4" width="720" height="240"></canvas>
+            </td>
+        </tr>
+
+        <tr>
+            <td>
+                <div class="obj-title">5. Form 4 Insider Trading Timing Manipulation</div>
+                <ul>
+                    <li><strong>Insiders have 2 business days to report</strong> stock transactions on Form 4, but this deadline is loosely enforced and frequently missed without penalty</li>
+                    <li><strong>10b5-1 trading plans allow pre-programmed sales</strong> set up 3-6 months in advance, making it impossible to distinguish planned sales from informed trading based on filing date alone</li>
+                    <li><strong>Blackout period clustering creates artificial patterns:</strong> insiders cannot trade around earnings, so sells cluster immediately after announcements, producing false signals</li>
+                    <li><strong>60-80% of insider sales are pre-planned</strong> through 10b5-1 plans and carry zero informational content, but filings don't consistently flag which trades are pre-planned</li>
+                    <li><strong>Late filings and amendments</strong> mean the "reported date" can be weeks after the transaction date, and corrections appear months later, making real-time analysis unreliable</li>
+                </ul>
+                <div class="example">
+                    <strong>Example:</strong> An insider at TechCorp sells $5M of stock on February 3rd, filing Form 4 on February 5th.
+                    This appears alarming until you discover it's part of a 10b5-1 plan established 6 months earlier. Meanwhile, three
+                    other insiders sell a combined $12M on January 26th (immediately after the earnings blackout period ends), which looks
+                    like coordinated selling but is simply the first allowable trading window. A naive model flagging "insider sell volume
+                    spike" would trigger on both patterns, despite one being scheduled sales and the other being regulatory timing artifacts,
+                    neither providing useful information about company prospects.
+                </div>
+            </td>
+            <td>
+                <canvas id="canvas5" width="720" height="240"></canvas>
+            </td>
+        </tr>
+
+        <tr>
+            <td>
+                <div class="obj-title">6. Footnote Burial Strategy</div>
+                <ul>
+                    <li><strong>Critical disclosures are deliberately buried</strong> in footnotes on pages 80-150, where automated parsers and casual readers are unlikely to look</li>
+                    <li><strong>Litigation exposure, contingent liabilities, and off-balance-sheet entities</strong> appear only in footnotes, often in dense legal language designed to obscure rather than clarify</li>
+                    <li><strong>Revenue recognition changes that materially affect comparability</strong> are disclosed in footnote 3, not highlighted in MD&amp;A, making year-over-year analysis misleading</li>
+                    <li><strong>Related-party transactions worth billions</strong> appear in a single paragraph in footnote 18, providing insufficient detail to assess arms-length pricing or conflict of interest</li>
+                    <li><strong>Automated financial statement parsers focus on primary tables</strong> (balance sheet, income statement, cash flow) and typically ignore or inadequately parse footnotes, missing material information</li>
+                </ul>
+                <div class="example">
+                    <strong>Example:</strong> Your automated parser extracts clean financial statements showing revenue growth of 15% YoY.
+                    The primary tables are pristine. However, buried in Footnote 11 on page 112, a single paragraph discloses an $800M
+                    contingent liability from ongoing litigation that has a "reasonably possible" chance of resulting in loss. Footnote 18
+                    on page 127 mentions a $2.1B related-party transaction with the CEO's family trust. Footnote 3 notes a change in revenue
+                    recognition timing that adds 4% to current year revenue but isn't comparable to prior periods. None of this appears in
+                    your model's feature set because your parser didn't read beyond the primary financial statements. Your model sees clean
+                    15% growth; the reality is 11% comparable growth plus $2.9B in hidden risk exposure.
+                </div>
+            </td>
+            <td>
+                <canvas id="canvas6" width="720" height="240"></canvas>
+            </td>
+        </tr>
+    </table>
+
+    <script>
+        // Canvas 1: Filing Delay Timeline
+        (function() {
+            const canvas = document.getElementById('canvas1');
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width;
+            const h = canvas.height;
+
+            // Clear canvas
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, w, h);
+
+            // Title
+            ctx.font = 'bold 17px -apple-system, sans-serif';
+            ctx.fillStyle = '#1a5276';
+            ctx.fillText('Information Value Decay: Quarter End to Filing Date', 20, 30);
+
+            // Timeline setup
+            const timelineY = 100;
+            const startX = 80;
+            const endX = 680;
+            const timelineLength = endX - startX;
+
+            // Draw main timeline
+            ctx.strokeStyle = '#2c3e50';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(startX, timelineY);
+            ctx.lineTo(endX, timelineY);
+            ctx.stroke();
+
+            // Key dates on timeline
+            const dates = [
+                { label: 'Q4 Ends\n(Dec 31)', x: startX, day: 0, color: '#1a5276' },
+                { label: 'Earnings Call\n(Jan 25)', x: startX + (timelineLength * 25/65), day: 25, color: '#e67e22' },
+                { label: '10-K Filed\n(Mar 1)', x: startX + (timelineLength * 60/65), day: 60, color: '#e74c3c' },
+                { label: 'Data in API\n(Mar 5)', x: endX, day: 65, color: '#e74c3c' }
+            ];
+
+            // Draw date markers
+            dates.forEach(date => {
+                ctx.beginPath();
+                ctx.arc(date.x, timelineY, 8, 0, Math.PI * 2);
+                ctx.fillStyle = date.color;
+                ctx.fill();
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Date labels
+                ctx.font = '14px -apple-system, sans-serif';
+                ctx.fillStyle = '#2c3e50';
+                ctx.textAlign = 'center';
+                const lines = date.label.split('\n');
+                lines.forEach((line, i) => {
+                    ctx.fillText(line, date.x, timelineY + 25 + (i * 16));
+                });
+
+                // Day count
+                ctx.font = 'bold 12px monospace';
+                ctx.fillStyle = date.color;
+                ctx.fillText(`+${date.day}d`, date.x, timelineY - 15);
+            });
+
+            // Information value decay curve
+            const curveStartY = 150;
+            const curveHeight = 60;
+            ctx.strokeStyle = '#27ae60';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+
+            for (let i = 0; i <= 100; i++) {
+                const x = startX + (timelineLength * i / 100);
+                // Exponential decay: 100% at start, 5% at end
+                const value = 100 * Math.pow(0.05, i / 100);
+                const y = curveStartY + curveHeight - (value / 100 * curveHeight);
+
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            ctx.stroke();
+
+            // Shade "already priced in" zone
+            ctx.fillStyle = 'rgba(231, 76, 60, 0.15)';
+            ctx.beginPath();
+            ctx.moveTo(startX + (timelineLength * 25/65), timelineY + 15);
+            ctx.lineTo(endX, timelineY + 15);
+            ctx.lineTo(endX, curveStartY + curveHeight);
+            ctx.lineTo(startX + (timelineLength * 25/65), curveStartY + curveHeight);
+            ctx.closePath();
+            ctx.fill();
+
+            // Value curve labels
+            ctx.font = '14px -apple-system, sans-serif';
+            ctx.fillStyle = '#27ae60';
+            ctx.textAlign = 'left';
+            ctx.fillText('Information Value', startX - 5, curveStartY - 5);
+
+            ctx.font = 'bold 13px -apple-system, sans-serif';
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillText('100%', startX - 35, curveStartY + 5);
+            ctx.fillText('5%', startX - 35, curveStartY + curveHeight);
+
+            // Key annotation
+            ctx.font = 'bold 15px -apple-system, sans-serif';
+            ctx.fillStyle = '#e74c3c';
+            ctx.textAlign = 'center';
+            ctx.fillText('By filing date, 95% of information value is gone', w/2, 225);
+
+            // Reset text align
+            ctx.textAlign = 'left';
+        })();
+
+        // Canvas 2: Amendment/Restatement Timeline Comparison
+        (function() {
+            const canvas = document.getElementById('canvas2');
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width;
+            const h = canvas.height;
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, w, h);
+
+            // Title
+            ctx.font = 'bold 17px -apple-system, sans-serif';
+            ctx.fillStyle = '#1a5276';
+            ctx.fillText('Historical Data: Database View vs. Reality', 20, 30);
+
+            // Timeline quarters
+            const quarters = ['Q1 2018', 'Q2 2018', 'Q3 2018', 'Q4 2018', 'Q1 2019'];
+            const startX = 120;
+            const endX = 680;
+            const spacing = (endX - startX) / (quarters.length - 1);
+
+            // Top timeline: "What the database shows today"
+            ctx.font = 'bold 14px -apple-system, sans-serif';
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillText('What the database shows today (amended):', 20, 70);
+
+            const topY = 95;
+            const revenueData = [450, 480, 520, 550, 580]; // Clean progression
+            const scale = 0.3;
+
+            // Draw smooth line
+            ctx.strokeStyle = '#27ae60';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            quarters.forEach((q, i) => {
+                const x = startX + (i * spacing);
+                const y = topY + 50 - (revenueData[i] - 400) * scale;
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            });
+            ctx.stroke();
+
+            // Data points
+            quarters.forEach((q, i) => {
+                const x = startX + (i * spacing);
+                const y = topY + 50 - (revenueData[i] - 400) * scale;
+
+                ctx.beginPath();
+                ctx.arc(x, y, 5, 0, Math.PI * 2);
+                ctx.fillStyle = '#27ae60';
+                ctx.fill();
+
+                ctx.font = '12px monospace';
+                ctx.fillStyle = '#2c3e50';
+                ctx.textAlign = 'center';
+                ctx.fillText(`$${revenueData[i]}M`, x, y - 12);
+            });
+
+            // Bottom timeline: "What actually happened"
+            ctx.font = 'bold 14px -apple-system, sans-serif';
+            ctx.fillStyle = '#2c3e50';
+            ctx.textAlign = 'left';
+            ctx.fillText('What actually happened (original filings):', 20, 145);
+
+            const bottomY = 170;
+            const originalData = [450, 480, 720, 550, 580]; // Q3 had inflated revenue
+            const correctedData = [450, 480, 520, 550, 580]; // After restatement
+
+            // Draw original line (with error)
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 3;
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            quarters.forEach((q, i) => {
+                const x = startX + (i * spacing);
+                const y = bottomY + 50 - (originalData[i] - 400) * scale;
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            });
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Draw corrected line
+            ctx.strokeStyle = '#27ae60';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            quarters.forEach((q, i) => {
+                const x = startX + (i * spacing);
+                const y = bottomY + 50 - (correctedData[i] - 400) * scale;
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            });
+            ctx.stroke();
+
+            // Highlight restatement point (Q3 2018)
+            const restateIdx = 2;
+            const restateX = startX + (restateIdx * spacing);
+            const originalY = bottomY + 50 - (originalData[restateIdx] - 400) * scale;
+            const correctedY = bottomY + 50 - (correctedData[restateIdx] - 400) * scale;
+
+            // Shade discrepancy zone
+            ctx.fillStyle = 'rgba(231, 76, 60, 0.2)';
+            ctx.fillRect(restateX - 40, originalY, 80, correctedY - originalY);
+
+            // Original data point
+            ctx.beginPath();
+            ctx.arc(restateX, originalY, 6, 0, Math.PI * 2);
+            ctx.fillStyle = '#e74c3c';
+            ctx.fill();
+
+            ctx.font = '12px monospace';
+            ctx.fillStyle = '#e74c3c';
+            ctx.textAlign = 'center';
+            ctx.fillText('$720M', restateX, originalY - 12);
+            ctx.fillText('(original)', restateX, originalY - 24);
+
+            // Corrected data point
+            ctx.beginPath();
+            ctx.arc(restateX, correctedY, 5, 0, Math.PI * 2);
+            ctx.fillStyle = '#27ae60';
+            ctx.fill();
+
+            ctx.fillStyle = '#27ae60';
+            ctx.fillText('$520M', restateX, correctedY + 18);
+            ctx.fillText('(amended)', restateX, correctedY + 30);
+
+            // Restatement arrow
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(restateX + 50, originalY + 10);
+            ctx.lineTo(restateX + 50, correctedY - 10);
+            ctx.stroke();
+
+            // Arrow head
+            ctx.beginPath();
+            ctx.moveTo(restateX + 50, correctedY - 10);
+            ctx.lineTo(restateX + 45, correctedY - 18);
+            ctx.lineTo(restateX + 55, correctedY - 18);
+            ctx.closePath();
+            ctx.fillStyle = '#e74c3c';
+            ctx.fill();
+
+            ctx.font = 'bold 13px -apple-system, sans-serif';
+            ctx.fillStyle = '#e74c3c';
+            ctx.textAlign = 'left';
+            ctx.fillText('Restatement', restateX + 60, (originalY + correctedY) / 2);
+            ctx.fillText('-28% revenue', restateX + 60, (originalY + correctedY) / 2 + 15);
+
+            // Quarter labels at bottom
+            ctx.font = '12px -apple-system, sans-serif';
+            ctx.fillStyle = '#2c3e50';
+            ctx.textAlign = 'center';
+            quarters.forEach((q, i) => {
+                const x = startX + (i * spacing);
+                ctx.fillText(q, x, bottomY + 70);
+            });
+
+            ctx.textAlign = 'left';
+        })();
+
+        // Canvas 3: XBRL Tagging Inconsistency
+        (function() {
+            const canvas = document.getElementById('canvas3');
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width;
+            const h = canvas.height;
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, w, h);
+
+            // Title
+            ctx.font = 'bold 17px -apple-system, sans-serif';
+            ctx.fillStyle = '#1a5276';
+            ctx.fillText('XBRL Revenue Tag Variations Across Companies', 20, 30);
+
+            // Company rows
+            const companies = [
+                { name: 'Company A', tag: 'Revenues', color: '#1a5276' },
+                { name: 'Company B', tag: 'SalesRevenueNet', color: '#2980b9' },
+                { name: 'Company C', tag: 'RevenueFromContract...ExcludingTax', color: '#27ae60' },
+                { name: 'Company D', tag: 'TotalRevenue (custom extension)', color: '#e67e22' },
+                { name: 'Company E', tag: 'SalesRevenueGoodsNet', color: '#e74c3c' }
+            ];
+
+            const rowHeight = 22;
+            const startY = 55;
+            const labelWidth = 110;
+            const tagStartX = labelWidth + 20;
+
+            companies.forEach((company, i) => {
+                const y = startY + (i * rowHeight);
+
+                // Company name
+                ctx.font = '13px -apple-system, sans-serif';
+                ctx.fillStyle = '#2c3e50';
+                ctx.textAlign = 'right';
+                ctx.fillText(company.name, labelWidth, y + 14);
+
+                // Tag box
+                const tagWidth = Math.min(company.tag.length * 7.5, 400);
+                ctx.fillStyle = company.color;
+                ctx.fillRect(tagStartX, y, tagWidth, 18);
+
+                // Tag text
+                ctx.font = '11px monospace';
+                ctx.fillStyle = '#ffffff';
+                ctx.textAlign = 'left';
+                ctx.fillText(company.tag, tagStartX + 5, y + 13);
+            });
+
+            // Query results comparison
+            ctx.font = 'bold 14px -apple-system, sans-serif';
+            ctx.fillStyle = '#1a5276';
+            ctx.textAlign = 'left';
+            ctx.fillText('Query Results: Companies Found by Tag Choice', 40, 175);
+
+            // Bar chart of coverage
+            const queries = [
+                { tag: 'Revenues', coverage: 42, color: '#1a5276' },
+                { tag: 'SalesRevenueNet', coverage: 38, color: '#2980b9' },
+                { tag: 'RevenueFrom...', coverage: 22, color: '#27ae60' },
+                { tag: 'Custom extensions', coverage: 18, color: '#e67e22' },
+                { tag: 'Combined (all)', coverage: 85, color: '#27ae60' }
+            ];
+
+            const barStartY = 195;
+            const barHeight = 6;
+            const barSpacing = 8;
+            const maxBarWidth = 300;
+
+            queries.forEach((query, i) => {
+                const y = barStartY + (i * barSpacing);
+                const barWidth = (query.coverage / 100) * maxBarWidth;
+
+                // Query tag label
+                ctx.font = '12px monospace';
+                ctx.fillStyle = '#2c3e50';
+                ctx.textAlign = 'right';
+                ctx.fillText(query.tag, 170, y + 5);
+
+                // Bar
+                ctx.fillStyle = query.color;
+                ctx.fillRect(180, y, barWidth, barHeight);
+
+                // Percentage
+                ctx.font = 'bold 12px -apple-system, sans-serif';
+                ctx.fillStyle = query.color;
+                ctx.textAlign = 'left';
+                ctx.fillText(`${query.coverage}%`, 180 + barWidth + 8, y + 5);
+            });
+
+            // Annotation
+            ctx.font = 'bold 13px -apple-system, sans-serif';
+            ctx.fillStyle = '#e74c3c';
+            ctx.textAlign = 'center';
+            ctx.fillText('Single tag queries miss 60-80% of companies', w/2, 230);
+
+            ctx.textAlign = 'left';
+        })();
+
+        // Canvas 4: Boilerplate Signal-to-Noise
+        (function() {
+            const canvas = document.getElementById('canvas4');
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width;
+            const h = canvas.height;
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, w, h);
+
+            // Title
+            ctx.font = 'bold 17px -apple-system, sans-serif';
+            ctx.fillStyle = '#1a5276';
+            ctx.fillText('10-K Filing Content Breakdown (200 pages typical)', 20, 30);
+
+            // Stacked bar representing the filing
+            const barX = 100;
+            const barY = 70;
+            const barWidth = 550;
+            const barHeight = 80;
+
+            const sections = [
+                { label: 'Boilerplate / Legal', pct: 40, color: '#95a5a6', pages: 80 },
+                { label: 'Repeated from Prior Year', pct: 30, color: '#e67e22', pages: 60 },
+                { label: 'Standard Updates', pct: 20, color: '#f39c12', pages: 40 },
+                { label: 'Materially New Info', pct: 7, color: '#27ae60', pages: 14 },
+                { label: 'Actual Signal', pct: 3, color: '#2ecc71', pages: 6 }
+            ];
+
+            let currentX = barX;
+            sections.forEach(section => {
+                const sectionWidth = (section.pct / 100) * barWidth;
+
+                ctx.fillStyle = section.color;
+                ctx.fillRect(currentX, barY, sectionWidth, barHeight);
+
+                // Section label
+                if (sectionWidth > 40) {
+                    ctx.font = '11px -apple-system, sans-serif';
+                    ctx.fillStyle = section.pct < 10 ? '#2c3e50' : '#ffffff';
+                    ctx.textAlign = 'center';
+
+                    const lines = section.label.split(' ');
+                    const midX = currentX + sectionWidth / 2;
+
+                    if (lines.length > 2) {
+                        ctx.fillText(lines.slice(0, 2).join(' '), midX, barY + 28);
+                        ctx.fillText(lines.slice(2).join(' '), midX, barY + 42);
+                    } else {
+                        ctx.fillText(section.label, midX, barY + 32);
+                    }
+
+                    ctx.font = 'bold 13px -apple-system, sans-serif';
+                    ctx.fillText(`${section.pct}%`, midX, barY + 58);
+                    ctx.font = '10px -apple-system, sans-serif';
+                    ctx.fillText(`(${section.pages}pg)`, midX, barY + 70);
+                }
+
+                currentX += sectionWidth;
+            });
+
+            // Border
+            ctx.strokeStyle = '#2c3e50';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(barX, barY, barWidth, barHeight);
+
+            // Signal-to-noise annotation
+            ctx.font = 'bold 14px -apple-system, sans-serif';
+            ctx.fillStyle = '#1a5276';
+            ctx.textAlign = 'left';
+            ctx.fillText('NLP Model Trained on Full Text:', 100, 180);
+
+            // Pie chart showing noise dominance
+            const pieX = 180;
+            const pieY = 210;
+            const pieRadius = 25;
+
+            const noiseAngle = (95 / 100) * 2 * Math.PI;
+
+            // Noise slice
+            ctx.beginPath();
+            ctx.moveTo(pieX, pieY);
+            ctx.arc(pieX, pieY, pieRadius, 0, noiseAngle);
+            ctx.closePath();
+            ctx.fillStyle = '#95a5a6';
+            ctx.fill();
+
+            // Signal slice
+            ctx.beginPath();
+            ctx.moveTo(pieX, pieY);
+            ctx.arc(pieX, pieY, pieRadius, noiseAngle, 2 * Math.PI);
+            ctx.closePath();
+            ctx.fillStyle = '#27ae60';
+            ctx.fill();
+
+            ctx.strokeStyle = '#2c3e50';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(pieX, pieY, pieRadius, 0, 2 * Math.PI);
+            ctx.stroke();
+
+            // Labels
+            ctx.font = 'bold 13px -apple-system, sans-serif';
+            ctx.fillStyle = '#95a5a6';
+            ctx.textAlign = 'left';
+            ctx.fillText('95% Noise/Boilerplate', pieX + pieRadius + 10, pieY - 5);
+
+            ctx.fillStyle = '#27ae60';
+            ctx.fillText('5% Signal', pieX + pieRadius + 10, pieY + 15);
+
+            // Signal decay over document sections
+            ctx.font = 'bold 14px -apple-system, sans-serif';
+            ctx.fillStyle = '#1a5276';
+            ctx.textAlign = 'left';
+            ctx.fillText('Information Density by Section:', 380, 180);
+
+            const graphX = 380;
+            const graphY = 195;
+            const graphW = 310;
+            const graphH = 40;
+
+            const densityData = [
+                { label: 'Bus. Desc.', density: 8, x: 0 },
+                { label: 'Risk', density: 5, x: 1 },
+                { label: 'MD&A', density: 25, x: 2 },
+                { label: 'Financials', density: 45, x: 3 },
+                { label: 'Notes', density: 55, x: 4 },
+                { label: 'Controls', density: 3, x: 5 }
+            ];
+
+            const colWidth = graphW / densityData.length;
+
+            densityData.forEach((section, i) => {
+                const colHeight = (section.density / 60) * graphH;
+                const x = graphX + (i * colWidth);
+                const y = graphY + graphH - colHeight;
+
+                // Bar
+                const color = section.density > 40 ? '#27ae60' : section.density > 20 ? '#e67e22' : '#95a5a6';
+                ctx.fillStyle = color;
+                ctx.fillRect(x, y, colWidth - 2, colHeight);
+
+                // Label
+                ctx.font = '9px -apple-system, sans-serif';
+                ctx.fillStyle = '#2c3e50';
+                ctx.textAlign = 'center';
+                ctx.fillText(section.label, x + colWidth/2, graphY + graphH + 12);
+
+                // Value
+                ctx.font = 'bold 10px -apple-system, sans-serif';
+                ctx.fillText(`${section.density}%`, x + colWidth/2, y - 3);
+            });
+
+            ctx.textAlign = 'left';
+        })();
+
+        // Canvas 5: Form 4 Insider Trading Timing
+        (function() {
+            const canvas = document.getElementById('canvas5');
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width;
+            const h = canvas.height;
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, w, h);
+
+            // Title
+            ctx.font = 'bold 17px -apple-system, sans-serif';
+            ctx.fillStyle = '#1a5276';
+            ctx.fillText('Insider Sell Volume Throughout Year (Timing Artifacts)', 20, 30);
+
+            // Month labels
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const graphX = 70;
+            const graphY = 60;
+            const graphW = 620;
+            const graphH = 120;
+            const colWidth = graphW / months.length;
+
+            // Earnings blackout periods (shade)
+            const blackoutPeriods = [
+                { start: 0.5, end: 1.5 }, // Late Jan to late Feb (Q4 earnings)
+                { start: 3.5, end: 4.5 }, // Late Apr to late May (Q1 earnings)
+                { start: 6.5, end: 7.5 }, // Late Jul to late Aug (Q2 earnings)
+                { start: 9.5, end: 10.5 }  // Late Oct to late Nov (Q3 earnings)
+            ];
+
+            blackoutPeriods.forEach(period => {
+                const startX = graphX + (period.start * colWidth);
+                const width = (period.end - period.start) * colWidth;
+
+                ctx.fillStyle = 'rgba(52, 73, 94, 0.15)';
+                ctx.fillRect(startX, graphY, width, graphH);
+
+                ctx.font = '10px -apple-system, sans-serif';
+                ctx.fillStyle = '#2c3e50';
+                ctx.textAlign = 'center';
+                ctx.fillText('Blackout', startX + width/2, graphY + 10);
+            });
+
+            // Simulated sell volume data (clusters after blackouts)
+            const sellVolume = [
+                { month: 0, planned: 4, discretionary: 1 },   // Jan (spike after Q4 blackout)
+                { month: 1, planned: 18, discretionary: 5 },  // Feb (major spike)
+                { month: 2, planned: 5, discretionary: 2 },   // Mar
+                { month: 3, planned: 3, discretionary: 1 },   // Apr
+                { month: 4, planned: 12, discretionary: 4 },  // May (spike after Q1 blackout)
+                { month: 5, planned: 4, discretionary: 1 },   // Jun
+                { month: 6, planned: 3, discretionary: 1 },   // Jul
+                { month: 7, planned: 15, discretionary: 6 },  // Aug (spike after Q2 blackout)
+                { month: 8, planned: 5, discretionary: 2 },   // Sep
+                { month: 9, planned: 4, discretionary: 1 },   // Oct
+                { month: 10, planned: 13, discretionary: 5 }, // Nov (spike after Q3 blackout)
+                { month: 11, planned: 4, discretionary: 1 }   // Dec
+            ];
+
+            const maxVolume = 24;
+
+            // Draw bars
+            sellVolume.forEach(data => {
+                const x = graphX + (data.month * colWidth) + colWidth * 0.15;
+                const barWidth = colWidth * 0.7;
+
+                // Planned sales (gray)
+                const plannedHeight = (data.planned / maxVolume) * graphH;
+                const plannedY = graphY + graphH - plannedHeight;
+                ctx.fillStyle = '#95a5a6';
+                ctx.fillRect(x, plannedY, barWidth, plannedHeight);
+
+                // Discretionary sales (red, stacked on top)
+                const discHeight = (data.discretionary / maxVolume) * graphH;
+                const discY = plannedY - discHeight;
+                ctx.fillStyle = '#e74c3c';
+                ctx.fillRect(x, discY, barWidth, discHeight);
+
+                // Month label
+                ctx.font = '12px -apple-system, sans-serif';
+                ctx.fillStyle = '#2c3e50';
+                ctx.textAlign = 'center';
+                ctx.fillText(months[data.month], x + barWidth/2, graphY + graphH + 15);
+            });
+
+            // Y-axis
+            ctx.strokeStyle = '#2c3e50';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(graphX, graphY);
+            ctx.lineTo(graphX, graphY + graphH);
+            ctx.lineTo(graphX + graphW, graphY + graphH);
+            ctx.stroke();
+
+            ctx.font = '11px -apple-system, sans-serif';
+            ctx.fillStyle = '#2c3e50';
+            ctx.textAlign = 'right';
+            ctx.fillText('$M', graphX - 5, graphY + 5);
+
+            // Legend
+            const legendY = 205;
+
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillRect(120, legendY, 20, 12);
+            ctx.font = '13px -apple-system, sans-serif';
+            ctx.fillStyle = '#2c3e50';
+            ctx.textAlign = 'left';
+            ctx.fillText('Discretionary sales (potential signal)', 145, legendY + 10);
+
+            ctx.fillStyle = '#95a5a6';
+            ctx.fillRect(380, legendY, 20, 12);
+            ctx.fillText('10b5-1 planned sales (no signal)', 405, legendY + 10);
+
+            // Key annotation
+            ctx.font = 'bold 14px -apple-system, sans-serif';
+            ctx.fillStyle = '#e67e22';
+            ctx.textAlign = 'center';
+            ctx.fillText('90% of "alarming" spikes are pre-planned trades clustered at blackout boundaries', w/2, 230);
+
+            ctx.textAlign = 'left';
+        })();
+
+        // Canvas 6: Footnote Burial (Iceberg)
+        (function() {
+            const canvas = document.getElementById('canvas6');
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width;
+            const h = canvas.height;
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, w, h);
+
+            // Title
+            ctx.font = 'bold 17px -apple-system, sans-serif';
+            ctx.fillStyle = '#1a5276';
+            ctx.fillText('The Footnote Iceberg: What Automated Parsers Miss', 20, 30);
+
+            // Water line
+            const waterY = 90;
+
+            // Draw water
+            ctx.fillStyle = '#e8f4f8';
+            ctx.fillRect(0, waterY, w, h - waterY);
+
+            // Iceberg above water (small)
+            const icebergX = 250;
+            const aboveWidth = 180;
+            const aboveHeight = 45;
+
+            ctx.fillStyle = '#ecf0f1';
+            ctx.beginPath();
+            ctx.moveTo(icebergX, waterY);
+            ctx.lineTo(icebergX - aboveWidth/2, waterY);
+            ctx.lineTo(icebergX - aboveWidth/3, waterY - aboveHeight);
+            ctx.lineTo(icebergX + aboveWidth/3, waterY - aboveHeight);
+            ctx.lineTo(icebergX + aboveWidth/2, waterY);
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = '#95a5a6';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Above water label
+            ctx.font = 'bold 13px -apple-system, sans-serif';
+            ctx.fillStyle = '#1a5276';
+            ctx.textAlign = 'center';
+            ctx.fillText('Primary Financial', icebergX, waterY - 30);
+            ctx.fillText('Statements', icebergX, waterY - 15);
+
+            // Iceberg below water (much larger)
+            const belowWidth = 280;
+            const belowHeight = 120;
+
+            ctx.fillStyle = '#bdc3c7';
+            ctx.beginPath();
+            ctx.moveTo(icebergX - aboveWidth/2, waterY);
+            ctx.lineTo(icebergX + aboveWidth/2, waterY);
+            ctx.lineTo(icebergX + belowWidth/2, waterY + belowHeight);
+            ctx.lineTo(icebergX - belowWidth/2, waterY + belowHeight);
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = '#7f8c8d';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Footnotes list (critical items buried)
+            const footnotes = [
+                { text: 'Footnote 3: Revenue recognition change', severity: 'orange', y: 15 },
+                { text: 'Footnote 7: Segment reclassification', severity: 'orange', y: 35 },
+                { text: 'Footnote 11: $800M contingent liability', severity: 'red', y: 55 },
+                { text: 'Footnote 14: Lease obligation $450M', severity: 'orange', y: 75 },
+                { text: 'Footnote 18: Related-party $2.1B', severity: 'red', y: 95 },
+                { text: 'Footnote 21: Stock-based comp change', severity: 'orange', y: 115 }
+            ];
+
+            const severityColors = {
+                'red': '#e74c3c',
+                'orange': '#e67e22'
+            };
+
+            footnotes.forEach(fn => {
+                const y = waterY + fn.y;
+
+                // Severity indicator
+                ctx.fillStyle = severityColors[fn.severity];
+                ctx.beginPath();
+                ctx.arc(icebergX - 120, y, 5, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Footnote text
+                ctx.font = '12px -apple-system, sans-serif';
+                ctx.fillStyle = '#2c3e50';
+                ctx.textAlign = 'left';
+                ctx.fillText(fn.text, icebergX - 110, y + 4);
+            });
+
+            // Below water label
+            ctx.font = 'bold 14px -apple-system, sans-serif';
+            ctx.fillStyle = '#1a5276';
+            ctx.textAlign = 'center';
+            ctx.fillText('Footnotes', icebergX, waterY + belowHeight + 20);
+            ctx.font = '11px -apple-system, sans-serif';
+            ctx.fillText('(Material disclosures buried on pages 80-150)', icebergX, waterY + belowHeight + 35);
+
+            // Parser annotation (right side)
+            const arrowX = 520;
+            const arrowStartY = 65;
+            const arrowEndY = 50;
+
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(arrowX, arrowStartY);
+            ctx.lineTo(arrowX, arrowEndY);
+            ctx.stroke();
+
+            // Arrow head
+            ctx.beginPath();
+            ctx.moveTo(arrowX, arrowEndY);
+            ctx.lineTo(arrowX - 6, arrowEndY + 10);
+            ctx.lineTo(arrowX + 6, arrowEndY + 10);
+            ctx.closePath();
+            ctx.fillStyle = '#e74c3c';
+            ctx.fill();
+
+            ctx.font = 'bold 12px -apple-system, sans-serif';
+            ctx.fillStyle = '#e74c3c';
+            ctx.textAlign = 'left';
+            ctx.fillText('Most automated', arrowX + 10, arrowEndY + 5);
+            ctx.fillText('tools parse', arrowX + 10, arrowEndY + 20);
+            ctx.fillText('only this', arrowX + 10, arrowEndY + 35);
+
+            // Risk summary (bottom right)
+            ctx.font = 'bold 13px -apple-system, sans-serif';
+            ctx.fillStyle = '#1a5276';
+            ctx.textAlign = 'left';
+            ctx.fillText('Hidden Exposure:', 480, 140);
+
+            ctx.font = '12px -apple-system, sans-serif';
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillText('$800M contingent liability', 480, 160);
+            ctx.fillText('$2.1B related-party transaction', 480, 175);
+            ctx.fillText('$450M off-balance sheet lease', 480, 190);
+
+            ctx.font = 'bold 14px -apple-system, sans-serif';
+            ctx.fillText('Total: $3.35B unmodeled risk', 480, 210);
+
+            // Legend
+            ctx.fillStyle = '#e74c3c';
+            ctx.beginPath();
+            ctx.arc(485, 227, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.font = '11px -apple-system, sans-serif';
+            ctx.fillStyle = '#2c3e50';
+            ctx.textAlign = 'left';
+            ctx.fillText('Material', 495, 230);
+
+            ctx.fillStyle = '#e67e22';
+            ctx.beginPath();
+            ctx.arc(555, 227, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillText('Concerning', 565, 230);
+
+            ctx.textAlign = 'left';
+        })();
+    </script>
+</body>
+</html>

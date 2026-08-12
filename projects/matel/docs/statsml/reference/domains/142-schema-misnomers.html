@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>142. Schema Misnomers & Semantic Traps</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 20px 10px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 40%; }
+.obj-table td:last-child { width: 60%; text-align: center; }
+.obj-table tr:nth-child(even) td { background: #fafcfe; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+</style>
+</head>
+<body>
+
+<h1>Schema Misnomers & Semantic Traps</h1>
+<p class="subtitle">Field names that say one thing and mean another. The schema becomes a source of silent wrong interpretation — not because the data is bad, but because the NAME misleads everyone who reads it.</p>
+
+<div class="philosophy">
+<strong>The core problem:</strong> A field named `revenue` might mean gross, net, projected, or recognized — depending on who created it and when. Everyone reads the name, assumes the obvious meaning, and builds analysis on a wrong interpretation. The data is correct. The interpretation is wrong. The name is the bug.
+</div>
+
+<h2>Pitfall 1: Overloaded Names — Same Word, Different Meaning Per Context</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">`amount` Means 5 Different Things in 5 Tables</div>
+<ul>
+<li><strong>Table A:</strong> `amount` = USD total (e.g., $42.50)</li>
+<li><strong>Table B:</strong> `amount` = cents integer (e.g., 4250)</li>
+<li><strong>Table C:</strong> `amount` = quantity of items (e.g., 3 units)</li>
+<li><strong>Table D:</strong> `amount` = percentage expressed as decimal (e.g., 0.15 = 15%)</li>
+<li><strong>Table E:</strong> `amount` = delta from previous value (can be negative)</li>
+<li><strong>The damage:</strong> JOIN tables A and B on a shared key, sum the `amount` column → adding dollars to cents. Off by 100×. No error thrown. Dashboard shows "revenue up 9,800%." Nobody questions it for weeks because the number is directionally plausible ("we grew!").</li>
+<li><strong>Why it persists:</strong> Each team named their field reasonably in isolation. No one enforced a global naming standard. By the time you have 200 tables, renaming is a breaking change nobody wants to own.</li>
+</ul>
+</td><td><canvas id="c1" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 2: Temporal Ambiguity — When Did This Number Become True?</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">`created_at` — When the Event Happened or When We Recorded It?</div>
+<ul>
+<li><strong>`created_at`:</strong> Does it mean when the user performed the action? When the event hit the server? When the row was inserted into the warehouse? These can differ by seconds, hours, or days (batch ingestion).</li>
+<li><strong>`updated_at`:</strong> Last update to the row — but was the update a data correction, a status change, or a reprocessing artifact? If you filter by `updated_at > yesterday` you might get rows whose CONTENT didn't change, just their ETL timestamp.</li>
+<li><strong>`date`:</strong> The most dangerous field name. Date of what? The transaction? The settlement? The reporting period? In finance, transaction_date vs settlement_date can differ by T+2 days. Using the wrong one shifts your entire revenue curve by 2 days.</li>
+<li><strong>The analysis mistake:</strong> "Revenue by day" using `created_at` (ETL insert time) instead of `transaction_date` (when money moved). Monday's batch inserts weekend events → Monday looks 3× higher than Tuesday. Real pattern: uniform. Measured pattern: massive Monday spike.</li>
+</ul>
+</td><td><canvas id="c2" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 3: Status Fields With Undocumented Historical Semantics</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">`status = 3` — What Does That Mean?</div>
+<ul>
+<li><strong>The enum graveyard:</strong> Status field has values 0-14. Values 0, 1, 2 are documented. Values 3-14 were added over 5 years by different engineers, some no longer at the company. No enum definition exists. Code comments say "// legacy, don't touch."</li>
+<li><strong>Semantic drift:</strong> `status=5` meant "churned" in 2019. In 2021, product added a "paused" state and reused value 5 for existing users who didn't log in for 30 days. Now `status=5` means two different things depending on when the row was created. Filtering by `status=5` mixes churned users (real churn) with paused users (will return). Churn model accuracy: garbage.</li>
+<li><strong>The "active" trap:</strong> "Give me all active users." Which statuses count as active? 1? 1 and 2? 1, 2, and 7 (trial)? Different dashboards use different definitions. Each shows a different "active user count." Leadership sees contradicting numbers. Nobody knows which is right because the field name doesn't encode the semantics.</li>
+<li><strong>Boolean fields that aren't:</strong> `is_deleted = true` but the row still appears in queries because the app uses soft-delete but some pipelines don't filter on it. `is_active` was true when the account was created but never gets set to false — it's a creation flag, not a current-state flag.</li>
+</ul>
+</td><td><canvas id="c3" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 4: Unit Ambiguity — The Number Is Right, the Scale Is Wrong</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Dollars vs Cents vs Basis Points vs Percentage</div>
+<ul>
+<li><strong>The Mars Climate Orbiter problem:</strong> One system sends meters, another expects feet. Spacecraft crashes. In data: one pipeline writes milliseconds, downstream reads seconds. Latency looks 1000× worse. Alert fires. On-call wakes up at 3am. Finds: unit mismatch. Not a real incident.</li>
+<li><strong>Currency fields:</strong> `price` = is it USD? EUR? The user's local currency? If local, is it pre- or post-conversion? A global dashboard summing `price` across regions adds JPY (≈150 per USD) to USD to GBP. Total is meaningless. But it's a number, so it gets graphed.</li>
+<li><strong>Rate fields:</strong> `conversion_rate = 0.03` — is that 3% or 0.03%? If it's a probability (0 to 1), then 0.03 = 3%. If it's already a percentage, then 0.03 = 0.03%. Multiply by the wrong factor and your revenue projection is off by 100×.</li>
+<li><strong>Duration fields:</strong> `duration = 3600` — seconds (1 hour)? Milliseconds (3.6 seconds)? Minutes (60 hours)? Name doesn't say. Analyst assumes seconds. Dashboard shows "average session: 1 hour." Real value: 3.6 seconds. Product team panics about "why are users spending an hour on checkout?"</li>
+</ul>
+</td><td><canvas id="c4" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 5: Naming Creates False Equivalence Across Systems</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">`user_id` in System A ≠ `user_id` in System B</div>
+<ul>
+<li><strong>Identity fragmentation:</strong> Marketing's `user_id` = email hash. Product's `user_id` = account UUID. Analytics' `user_id` = cookie ID. Same name. Different entity. JOIN them → one person becomes three. Three people become one. User count is simultaneously inflated and deflated.</li>
+<li><strong>The attribution disaster:</strong> "User who saw ad also purchased." But marketing's user (cookie) ≠ product's user (account). The cookie saw the ad on a phone. The purchase happened on a laptop with a different cookie. Attribution model says: "ad didn't convert." Reality: it did. The identity stitching failed because both systems call their identifier `user_id` and someone assumed they're the same thing.</li>
+<li><strong>Granularity mismatch:</strong> System A's `transaction_id` is one row per order. System B's `transaction_id` is one row per line item. JOIN them → order with 5 items appears 5× in system B. Revenue looks 5× higher. Or: aggregate system B first, then join — but which aggregation? SUM? MAX? Depends on what `amount` means in each system (see Pitfall 1).</li>
+</ul>
+</td><td><canvas id="c5" width="720" height="280"></canvas></td></tr>
+</table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    return {ctx:ctx, w:w, h:h};
+}
+
+// Chart 1: Same field name, different meaning
+(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+
+ctx.fillStyle='#1a5276';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+ctx.fillText('"amount" field across 5 tables',w/2,22);
+
+var tables=[
+    {name:'orders',meaning:'USD ($42.50)',value:42.50,unit:'$'},
+    {name:'payments',meaning:'cents (4250)',value:4250,unit:'¢'},
+    {name:'inventory',meaning:'quantity (3)',value:3,unit:'units'},
+    {name:'tax_rates',meaning:'decimal (0.15)',value:0.15,unit:'%'},
+    {name:'adjustments',meaning:'delta (-5.00)',value:-5,unit:'Δ$'}
+];
+
+var margin={left:20,right:20,top:44,bottom:40};
+var colW=(w-margin.left-margin.right)/tables.length;
+
+tables.forEach(function(t,i){
+    var x=margin.left+i*colW;
+    var cx=x+colW/2;
+
+    // Table box
+    ctx.fillStyle='rgba(26,82,118,0.08)';
+    ctx.fillRect(x+5,margin.top,colW-10,160);
+    ctx.strokeStyle='#1a5276';ctx.lineWidth=1.5;
+    ctx.strokeRect(x+5,margin.top,colW-10,160);
+
+    // Table name
+    ctx.fillStyle='#1a5276';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
+    ctx.fillText(t.name,cx,margin.top+20);
+
+    // Field name (same for all)
+    ctx.fillStyle='#e74c3c';ctx.font='bold 13px sans-serif';
+    ctx.fillText('amount',cx,margin.top+50);
+
+    // Actual meaning
+    ctx.fillStyle='#555';ctx.font='11px sans-serif';
+    ctx.fillText('= '+t.meaning,cx,margin.top+75);
+
+    // Value
+    ctx.fillStyle='#333';ctx.font='bold 16px sans-serif';
+    ctx.fillText(String(t.value),cx,margin.top+110);
+    ctx.font='11px sans-serif';ctx.fillStyle='#999';
+    ctx.fillText(t.unit,cx,margin.top+128);
+});
+
+// Warning
+ctx.fillStyle='#e74c3c';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
+ctx.fillText('SUM(amount) across tables = 42.50 + 4250 + 3 + 0.15 + (-5) = 4290.65 ← meaningless',w/2,h-12);
+})();
+
+// Chart 2: Temporal ambiguity
+(function(){var s=setup('c2');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+
+ctx.fillStyle='#1a5276';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+ctx.fillText('"Revenue by day" — using ETL timestamp vs transaction timestamp',w/2,22);
+
+var margin={left:60,right:20,top:50,bottom:50};
+var plotW=w-margin.left-margin.right;
+var plotH=h-margin.top-margin.bottom;
+
+var days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+// ETL timestamp (batch on Monday inserts weekend)
+var etl=[300,100,100,100,100,20,20];
+// Actual transaction time (uniform)
+var real=[100,100,100,100,100,100,100];
+
+var maxVal=320;
+var barW=plotW/days.length;
+
+// Axes
+ctx.strokeStyle='#333';ctx.lineWidth=1.5;
+ctx.beginPath();ctx.moveTo(margin.left,margin.top);ctx.lineTo(margin.left,margin.top+plotH);
+ctx.lineTo(margin.left+plotW,margin.top+plotH);ctx.stroke();
+
+days.forEach(function(day,i){
+    var x=margin.left+i*barW;
+    var etlH=(etl[i]/maxVal)*plotH;
+    var realH=(real[i]/maxVal)*plotH;
+
+    // ETL bar (red, misleading)
+    ctx.fillStyle='rgba(231,76,60,0.4)';
+    ctx.fillRect(x+8,margin.top+plotH-etlH,barW/2-10,etlH);
+    ctx.strokeStyle='#e74c3c';ctx.lineWidth=1;
+    ctx.strokeRect(x+8,margin.top+plotH-etlH,barW/2-10,etlH);
+
+    // Real bar (green, truth)
+    ctx.fillStyle='rgba(39,174,96,0.4)';
+    ctx.fillRect(x+barW/2+2,margin.top+plotH-realH,barW/2-10,realH);
+    ctx.strokeStyle='#27ae60';ctx.lineWidth=1;
+    ctx.strokeRect(x+barW/2+2,margin.top+plotH-realH,barW/2-10,realH);
+
+    // Day label
+    ctx.fillStyle='#333';ctx.font='11px sans-serif';ctx.textAlign='center';
+    ctx.fillText(day,x+barW/2,margin.top+plotH+16);
+});
+
+// Legend
+ctx.fillStyle='rgba(231,76,60,0.4)';ctx.fillRect(margin.left+20,h-38,14,14);
+ctx.fillStyle='#333';ctx.font='11px sans-serif';ctx.textAlign='left';
+ctx.fillText('By ETL created_at (misleading Monday spike)',margin.left+40,h-28);
+ctx.fillStyle='rgba(39,174,96,0.4)';ctx.fillRect(margin.left+20,h-20,14,14);
+ctx.fillStyle='#333';
+ctx.fillText('By transaction_date (real: uniform)',margin.left+40,h-10);
+})();
+
+// Chart 3: Status enum confusion
+(function(){var s=setup('c3');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+
+ctx.fillStyle='#1a5276';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+ctx.fillText('Status field: what counts as "active"?',w/2,22);
+
+var statuses=[
+    {val:0,label:'new',active:[true,true,true]},
+    {val:1,label:'confirmed',active:[true,true,true]},
+    {val:2,label:'subscribed',active:[true,true,true]},
+    {val:3,label:'trial',active:[false,true,true]},
+    {val:4,label:'paused',active:[false,false,true]},
+    {val:5,label:'churned/paused?',active:[false,false,false]},
+    {val:6,label:'deleted',active:[false,false,false]}
+];
+
+var dashboards=['Dashboard A','Dashboard B','Dashboard C'];
+var colors=['#3498db','#e67e22','#8e44ad'];
+
+var margin={left:120,right:20,top:50,bottom:60};
+var rowH=30;
+var colW=80;
+var startX=margin.left+100;
+
+// Headers
+ctx.fillStyle='#1a5276';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
+dashboards.forEach(function(d,i){
+    ctx.fillStyle=colors[i];
+    ctx.fillText(d,startX+i*colW+colW/2,margin.top-5);
+});
+ctx.fillStyle='#1a5276';ctx.font='bold 11px sans-serif';ctx.textAlign='left';
+ctx.fillText('Status',margin.left,margin.top-5);
+
+statuses.forEach(function(s,si){
+    var y=margin.top+si*rowH;
+
+    // Status label
+    ctx.fillStyle='#333';ctx.font='11px sans-serif';ctx.textAlign='left';
+    ctx.fillText(s.val+' = '+s.label,margin.left,y+18);
+
+    // Checkmarks per dashboard
+    s.active.forEach(function(a,di){
+        var cx=startX+di*colW+colW/2;
+        ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+        if(a){
+            ctx.fillStyle='#27ae60';ctx.fillText('✓',cx,y+18);
+        } else {
+            ctx.fillStyle='#e74c3c';ctx.fillText('✗',cx,y+18);
+        }
+    });
+});
+
+// Result
+ctx.fillStyle='#1a5276';ctx.font='bold 11px sans-serif';ctx.textAlign='left';
+var ry=margin.top+statuses.length*rowH+10;
+ctx.fillText('"Active users"',margin.left,ry+12);
+ctx.fillStyle=colors[0];ctx.textAlign='center';
+ctx.fillText('12,400',startX+colW/2,ry+12);
+ctx.fillStyle=colors[1];
+ctx.fillText('15,800',startX+colW+colW/2,ry+12);
+ctx.fillStyle=colors[2];
+ctx.fillText('18,200',startX+2*colW+colW/2,ry+12);
+
+ctx.fillStyle='#e74c3c';ctx.font='italic 12px sans-serif';ctx.textAlign='center';
+ctx.fillText('Same data, same field, 3 different "active user" counts. Name doesn\'t encode definition.',w/2,h-12);
+})();
+
+// Chart 4: Unit confusion
+(function(){var s=setup('c4');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+
+ctx.fillStyle='#1a5276';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+ctx.fillText('Same number, different unit interpretation',w/2,22);
+
+var scenarios=[
+    {field:'duration = 3600',readings:[
+        {interp:'seconds → 1 hour',visual:0.25,color:'#27ae60'},
+        {interp:'milliseconds → 3.6 sec',visual:0.015,color:'#e74c3c'},
+        {interp:'minutes → 60 hours',visual:1.0,color:'#e67e22'}
+    ]},
+    {field:'rate = 0.03',readings:[
+        {interp:'probability → 3%',visual:0.5,color:'#27ae60'},
+        {interp:'already percentage → 0.03%',visual:0.005,color:'#e74c3c'}
+    ]}
+];
+
+var margin={left:20,right:20,top:50,bottom:30};
+var sectionH=110;
+
+scenarios.forEach(function(sc,si){
+    var baseY=margin.top+si*sectionH;
+    ctx.fillStyle='#1a5276';ctx.font='bold 12px sans-serif';ctx.textAlign='left';
+    ctx.fillText(sc.field,margin.left+10,baseY+10);
+
+    var barMaxW=380;
+    sc.readings.forEach(function(r,ri){
+        var y=baseY+20+ri*28;
+        var barW=r.visual*barMaxW;
+
+        ctx.fillStyle=r.color;
+        ctx.fillRect(margin.left+200,y,Math.max(barW,4),20);
+
+        ctx.fillStyle='#333';ctx.font='11px sans-serif';ctx.textAlign='left';
+        ctx.fillText(r.interp,margin.left+210+barW,y+14);
+    });
+});
+
+ctx.fillStyle='#e74c3c';ctx.font='italic 12px sans-serif';ctx.textAlign='center';
+ctx.fillText('Field name doesn\'t encode units. Analyst guesses. Revenue off by 100×.',w/2,h-10);
+})();
+
+// Chart 5: Identity mismatch
+(function(){var s=setup('c5');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+
+ctx.fillStyle='#1a5276';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+ctx.fillText('"user_id" means different things in different systems',w/2,22);
+
+var systems=[
+    {name:'Marketing',type:'cookie_hash',example:'a3f2...',color:'#3498db'},
+    {name:'Product',type:'account_uuid',example:'usr_7x...',color:'#27ae60'},
+    {name:'Analytics',type:'device_id',example:'dev_m3...',color:'#e67e22'}
+];
+
+var cx=w/2, baseY=70;
+var spacing=200;
+
+// Draw each system
+systems.forEach(function(sys,i){
+    var x=cx+(i-1)*spacing;
+    var y=baseY+40;
+
+    ctx.fillStyle=sys.color;
+    ctx.beginPath();ctx.arc(x,y,30,0,2*Math.PI);ctx.fill();
+    ctx.fillStyle='#fff';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
+    ctx.fillText(sys.name,x,y-4);
+    ctx.font='9px sans-serif';
+    ctx.fillText(sys.type,x,y+10);
+
+    // Field label below
+    ctx.fillStyle='#e74c3c';ctx.font='bold 12px sans-serif';
+    ctx.fillText('user_id',x,y+50);
+    ctx.fillStyle='#999';ctx.font='10px sans-serif';
+    ctx.fillText('= '+sys.example,x,y+64);
+});
+
+// Broken join arrows
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=2;ctx.setLineDash([4,4]);
+ctx.beginPath();ctx.moveTo(cx-spacing+35,baseY+40);ctx.lineTo(cx-35,baseY+40);ctx.stroke();
+ctx.beginPath();ctx.moveTo(cx+35,baseY+40);ctx.lineTo(cx+spacing-35,baseY+40);ctx.stroke();
+ctx.setLineDash([]);
+
+// X marks on joins
+ctx.fillStyle='#e74c3c';ctx.font='bold 18px sans-serif';ctx.textAlign='center';
+ctx.fillText('✗',cx-spacing/2,baseY+32);
+ctx.fillText('✗',cx+spacing/2,baseY+32);
+
+// Result
+ctx.fillStyle='#555';ctx.font='12px sans-serif';ctx.textAlign='center';
+ctx.fillText('JOIN on "user_id" across systems → broken identity stitching',w/2,baseY+130);
+ctx.fillText('Same person = 3 rows. Three people = sometimes 1 row (collision).',w/2,baseY+148);
+
+ctx.fillStyle='#e74c3c';ctx.font='italic 12px sans-serif';
+ctx.fillText('Same field name ≠ same entity. The name is a lie.',w/2,h-10);
+})();
+</script>
+</body>
+</html>

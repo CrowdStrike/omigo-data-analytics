@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reproducible Data Pipelines & Deterministic Output — Discussion Backlog</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #fff; color: #2c3e50; line-height: 1.6; }
+h1 { color: #1a5276; border-bottom: 3px solid #2980b9; padding-bottom: 10px; }
+h2 { color: #1a5276; margin-top: 30px; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { padding: 20px; vertical-align: top; border: 1px solid #2980b9; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; }
+.obj-title { color: #1a5276; font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
+ul { margin: 10px 0; padding-left: 20px; }
+li { margin-bottom: 6px; }
+strong { color: #1a5276; }
+code { background: #e8f0f8; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; color: #1a5276; }
+.questions { background: #fff8e1; border-left: 3px solid #f39c12; padding: 10px 15px; margin: 10px 0; font-size: 0.9em; }
+.danger { background: #fdecea; border-left: 3px solid #e74c3c; padding: 10px 15px; margin: 10px 0; font-size: 0.9em; }
+.status { display: inline-block; background: #e8f0f8; color: #1a5276; padding: 3px 10px; border-radius: 12px; font-size: 0.85em; font-weight: bold; margin-bottom: 20px; }
+</style>
+</head>
+<body>
+
+<h1>Reproducible Data Pipelines & Deterministic Output</h1>
+<span class="status">Discussion — Design Philosophy</span>
+
+<p><strong>Core idea:</strong> A data pipeline should produce identical output given identical input, regardless of when it runs, how many times it retries, or what environment it executes in. This is the broader design philosophy that encompasses query determinism (<a href="27-query-determinism.html">#27</a>) but goes further — covering the entire pipeline from ingestion to output.</p>
+
+<h2>What Breaks Reproducibility</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Temporal & Environmental</div>
+<ul>
+<li><strong>Wall-clock dependencies</strong> — <code>NOW()</code>, <code>CURRENT_DATE</code>, time-based partitions that shift</li>
+<li><strong>Floating-point non-determinism</strong> — different hardware (x86 vs ARM, GPU generations) produces different rounding</li>
+<li><strong>Hash randomization</strong> — Python dict ordering pre-3.7, <code>PYTHONHASHSEED</code> changing set iteration order</li>
+<li><strong>External API calls</strong> — third-party services returning different results over time (exchange rates, model endpoints)</li>
+</ul>
+</td>
+<td>
+<div class="obj-title">Execution & Concurrency</div>
+<ul>
+<li><strong>Parallel execution non-determinism</strong> — reducer order in MapReduce, Spark partition shuffles, thread scheduling</li>
+<li><strong>Random seeds not fixed</strong> — sampling, train/test splits, initialization of models</li>
+<li><strong>Model training non-determinism</strong> — GPU thread scheduling, cuDNN non-deterministic algorithms, gradient accumulation order</li>
+<li><strong>Dependency drift</strong> — unpinned library versions, OS-level differences, transitive dependency updates</li>
+</ul>
+</td>
+</tr>
+</table>
+
+<div class="danger">
+<strong>The insidious ones:</strong> Floating-point non-determinism and parallel execution order are especially dangerous because they produce results that look correct — they're just slightly different each time. You won't catch these with eyeball checks; you need bit-for-bit output comparison.
+</div>
+
+<h2>Design Principles</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Referential Transparency</div>
+<ul>
+<li><strong>Same input → same output</strong> — the fundamental contract. If <code>f(x) = y</code> today, then <code>f(x) = y</code> tomorrow.</li>
+<li><strong>Version everything</strong> — code, data, config, dependencies, environment. If any of these change, you have a different pipeline.</li>
+<li><strong>Snapshots over live queries</strong> — read from a frozen snapshot, not a live table that might change mid-execution.</li>
+<li><strong>Explicit side effects</strong> — every write, every external call, every non-deterministic operation must be declared and isolated.</li>
+</ul>
+</td>
+<td>
+<div class="obj-title">Content-Addressed Storage</div>
+<ul>
+<li><strong>Hash of input determines output location</strong> — if the input hasn't changed, the output shouldn't be recomputed.</li>
+<li><strong>Enables memoization</strong> — skip stages whose inputs haven't changed since last run.</li>
+<li><strong>Natural deduplication</strong> — same data written twice goes to the same location.</li>
+<li><strong>Audit trail</strong> — can always trace output back to the exact inputs and code that produced it.</li>
+</ul>
+</td>
+</tr>
+</table>
+
+<h2>Practical Techniques</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Environment & Dependencies</div>
+<ul>
+<li>Pinned dependency versions (<code>pip freeze</code>, lockfiles)</li>
+<li>Containerized execution (Docker with pinned base images)</li>
+<li>Fixed random seeds at every non-deterministic call site</li>
+<li>Deterministic serialization (sorted JSON keys, stable Parquet row order)</li>
+<li>Sorted outputs — don't rely on implicit ordering from databases or hash maps</li>
+</ul>
+</td>
+<td>
+<div class="obj-title">Data Versioning</div>
+<ul>
+<li><strong>DVC</strong> — git for data, tracks versions of large files</li>
+<li><strong>LakeFS</strong> — git-like branching for data lakes</li>
+<li><strong>Delta Lake time travel</strong> — query any historical version of a table</li>
+<li><strong>Immutable partitions</strong> — write-once, never overwrite (date-partitioned, append-only)</li>
+<li><strong>Input manifests</strong> — record exact file paths, sizes, checksums consumed by each run</li>
+</ul>
+</td>
+</tr>
+</table>
+
+<h2>The Determinism Spectrum</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Not all stages CAN be deterministic</div>
+<ul>
+<li><strong>Fully deterministic:</strong> SQL transforms, feature engineering, aggregations, data cleaning (pure functions on snapshots)</li>
+<li><strong>Deterministic with effort:</strong> Model training (fix all seeds, use deterministic cuDNN, accept perf hit), sampling (fix seed)</li>
+<li><strong>Inherently non-deterministic:</strong> Real-time API calls, user interaction, live sensor data</li>
+</ul>
+<p>Strategy: isolate non-deterministic stages, checkpoint around them, and accept that the checkpoint itself becomes the reproducible artifact.</p>
+</td>
+<td>
+<div class="obj-title">Cost/Benefit Analysis</div>
+<ul>
+<li><strong>Cost of reproducibility:</strong> snapshotting everything is expensive (storage, complexity, slower iteration)</li>
+<li><strong>Cost of non-reproducibility:</strong> can't debug production issues, can't audit model decisions, can't compare experiments, can't satisfy regulatory requirements</li>
+<li><strong>Pragmatic approach:</strong> full reproducibility for model training and evaluation, best-effort for exploratory/ad-hoc work</li>
+</ul>
+</td>
+</tr>
+</table>
+
+<h2>Relationship to Testing</h2>
+
+<div class="danger">
+<strong>Critical insight:</strong> If a pipeline isn't deterministic, you can't write assertions about its output. Testing requires reproducibility. A non-reproducible pipeline is an untestable pipeline.
+</div>
+
+<ul>
+<li>Unit tests assert exact output for known input — requires determinism</li>
+<li>Integration tests verify end-to-end behavior — requires reproducibility of the full chain</li>
+<li>Regression tests catch unintended changes — requires that "unchanged" actually means "same output"</li>
+<li>If your test passes 99% of the time, you have a non-deterministic pipeline, not a flaky test</li>
+</ul>
+
+<h2>Streaming Systems</h2>
+
+<div class="questions">
+<strong>Open question:</strong> How does this interact with streaming systems where input is inherently unbounded?
+<ul>
+<li>Windowing makes bounded sub-problems — but window boundaries can differ across runs</li>
+<li>Watermarks are heuristic — late data produces different results</li>
+<li>Event-time processing helps but doesn't solve non-deterministic arrival order</li>
+<li>Approach: streaming for freshness, batch replay for correctness — the "lambda architecture" tension</li>
+</ul>
+</div>
+
+<h2>Key Discussion Points</h2>
+
+<div class="questions">
+<ul>
+<li>Where on the spectrum from "fully deterministic" to "best effort" should each pipeline stage sit?</li>
+<li>Cost of reproducibility (snapshotting everything) vs cost of non-reproducibility (can't debug, can't audit)</li>
+<li>How does this interact with streaming systems where input is inherently unbounded?</li>
+<li>Should reproducibility be a hard gate (pipeline fails if non-determinism detected) or a soft metric?</li>
+</ul>
+</div>
+
+
+</body>
+</html>

@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Missing Instrumentation — Common Bad Practices</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 20px 10px; line-height: 1.6; }
+h1 { font-size: 1.6em; margin-bottom: 10px; color: #1a5276; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.0em; margin-bottom: 20px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; margin-right: 15px; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 6px 0; }
+strong { color: #1a5276; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 40%; }
+.obj-table td:last-child { width: 60%; text-align: center; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+</style>
+</head>
+<body>
+
+<h1>Skipping Intermediate Logging</h1>
+<p class="subtitle">Negligent Practice — Not collecting data at every significant pipeline step. When things go wrong, you cannot trace what happened, when it diverged, or why. Debug cost: weeks instead of minutes.</p>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">The Practice</div>
+<ul>
+<li>10-step pipeline logs input and output. Steps 2-9: no intermediate state saved. Model accuracy drops. Which step broke? Nobody knows. Start the 2-week investigation.</li>
+<li>"We'll add logging later when we need it." By the time you need it, the data that would have been logged is gone. You needed it BEFORE the bug occurred.</li>
+<li>Model makes a bad prediction. What features did it see? Not logged. Feature values have since been updated in the source system. Cannot reconstruct the decision context.</li>
+</ul>
+<div class="obj-title" style="margin-top:14px;">Why It's Common</div>
+<ul>
+<li>"Storage costs." — Storage is $0.023/GB/month. One week of engineer debugging time costs $5,000+. The ROI of logging is 100:1.</li>
+<li>"It slows down the pipeline." — Write to a separate async store. Pipeline latency unchanged. Even if it adds 5% latency, that's cheaper than 2 weeks of debugging.</li>
+<li>"We'll know if something breaks from the output." — You'll know THAT something broke. Not WHERE, WHEN, or WHY. Knowing output is wrong without knowing which step caused it is like knowing your car broke down but not whether it's the engine or a flat tire.</li>
+</ul>
+<div class="obj-title" style="margin-top:14px;">The Data-Specific Cost</div>
+<ul>
+<li><strong>Cannot determine blast radius:</strong> Bug found today. When did it start? Without historical intermediate checksums, you don't know. Could be yesterday. Could be 3 months ago. All data in that window is suspect.</li>
+<li><strong>Cannot explain model decisions:</strong> Regulator, business owner, or postmortem asks "why did the system do X?" Answer: "we don't know, we didn't log the inputs." Trust destroyed.</li>
+<li><strong>Same bug recurs:</strong> Without detailed traces, postmortems are guesswork. "Probably" fixed. Returns 3 months later. Same investigation from scratch.</li>
+</ul>
+<div class="obj-title" style="margin-top:14px;">Minimum Viable Instrumentation</div>
+<ul>
+<li>Row count at every step boundary (detects silent drops/fanouts).</li>
+<li>Distribution stats per column at each step (mean, p50, p95, null count).</li>
+<li>Schema checksum (detects upstream schema changes).</li>
+<li>Feature vectors at inference time (enables decision explanation).</li>
+<li>Sample of filtered/dropped rows (detects bias in filtering).</li>
+</ul>
+<p><strong>Why it persists:</strong> Logging feels like overhead when things are working. Its value is only visible during outages. Teams that have never had a major data quality incident don't invest in logging. After the first incident costs them 3 months, they log everything. Proactive teams log from day 1.</p>
+<p><strong>The tell:</strong> Ask: "If step 5 of 10 started producing subtly wrong values today, how long until we'd detect it and which step would we identify first?" If the answer is "weeks" and "we'd have to check each one" — you have an instrumentation problem.</p>
+</td><td><canvas id="c1" width="720" height="380"></canvas></td></tr>
+</table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    return {ctx:ctx, w:w, h:h};
+}
+
+(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+
+ctx.fillStyle='#1a5276';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+ctx.fillText('Cost of logging vs cost of NOT logging',w/2,22);
+
+var margin={left:180,right:50,top:60,bottom:40};
+var barH=60, gap=50;
+
+// With logging
+var withY=margin.top;
+ctx.fillStyle='#1a5276';ctx.font='bold 12px sans-serif';ctx.textAlign='right';
+ctx.fillText('With instrumentation:',margin.left-12,withY+barH/2+4);
+
+var withItems=[
+    {label:'Storage',cost:'$50/mo',width:0.02,color:'#27ae60'},
+    {label:'Debug time',cost:'5 min',width:0.01,color:'#27ae60'}
+];
+var maxW=w-margin.left-margin.right;
+var x=margin.left;
+withItems.forEach(function(item){
+    var barW=Math.max(item.width*maxW,30);
+    ctx.fillStyle=item.color;ctx.fillRect(x,withY,barW,barH);
+    ctx.strokeStyle='#333';ctx.lineWidth=1;ctx.strokeRect(x,withY,barW,barH);
+    ctx.fillStyle='#fff';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
+    ctx.fillText(item.label,x+barW/2,withY+barH/2-4);
+    ctx.fillText(item.cost,x+barW/2,withY+barH/2+10);
+    x+=barW+4;
+});
+
+// Without logging
+var withoutY=margin.top+barH+gap;
+ctx.fillStyle='#1a5276';ctx.font='bold 12px sans-serif';ctx.textAlign='right';
+ctx.fillText('Without instrumentation:',margin.left-12,withoutY+barH/2+4);
+
+var withoutItems=[
+    {label:'Debug time: 2+ weeks',cost:'$10,000+',width:0.4,color:'#e67e22'},
+    {label:'Lost data: months of re-collection',cost:'priceless',width:0.55,color:'#e74c3c'}
+];
+x=margin.left;
+withoutItems.forEach(function(item){
+    var barW=item.width*maxW;
+    ctx.fillStyle=item.color;ctx.fillRect(x,withoutY,barW,barH);
+    ctx.strokeStyle='#333';ctx.lineWidth=1;ctx.strokeRect(x,withoutY,barW,barH);
+    ctx.fillStyle='#fff';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
+    ctx.fillText(item.label,x+barW/2,withoutY+barH/2-4);
+    ctx.fillText(item.cost,x+barW/2,withoutY+barH/2+10);
+    x+=barW+4;
+});
+
+// ROI annotation
+ctx.fillStyle='#e74c3c';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+ctx.fillText('ROI of instrumentation: 100:1 minimum. Often 1000:1.',w/2,h-40);
+ctx.fillStyle='#555';ctx.font='italic 13px sans-serif';
+ctx.fillText('$50/month in storage prevents $10,000+ in debug time and months of lost data.',w/2,h-20);
+})();
+</script>
+</body>
+</html>

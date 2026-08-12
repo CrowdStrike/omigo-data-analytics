@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Banking Operations - Domain-Specific Pitfalls</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 20px; background: #f8f9fa; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 14px; }
+.nav a:hover { text-decoration: underline; }
+h1 { color: #1a5276; margin-bottom: 10px; }
+.subtitle { color: #555; margin-bottom: 30px; font-size: 15px; }
+.obj-table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden; }
+.obj-table td { padding: 16px; border: 1px solid #2980b9; vertical-align: top; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-title { font-weight: bold; color: #1a5276; font-size: 16px; margin-bottom: 8px; }
+.pitfall-desc { color: #333; font-size: 14px; line-height: 1.6; }
+canvas { border: 1px solid #eee; border-radius: 4px; }
+</style>
+</head>
+<body>
+<h1>Banking Operations</h1>
+<p class="subtitle">Statistical pitfalls in banking data systems — settlement timing, regulatory noise, and the gap between displayed and actual state.</p>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">1. Real-time vs Batch Settlement</div>
+<div class="pitfall-desc">Transfer initiated = "pending"; settled = 1-3 days later; balance shown to user ≠ actual settled balance. Two systems see different "truth" at the same moment. Race conditions between real-time display and batch settlement create a danger zone where data is fundamentally inconsistent — neither system is wrong, they just disagree on temporal reality.</div>
+</td>
+<td><canvas id="canvas1" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">2. Anti-money Laundering Over-filing</div>
+<div class="pitfall-desc">SARs (Suspicious Activity Reports) filed defensively: 90%+ are noise to avoid regulatory penalties for under-filing. The "suspicious" label in data = mostly CYA, not actual suspicion. Real signal is buried in defensive noise. Any model trained on SAR labels is learning "what makes compliance officers nervous about regulators" not "what is actually suspicious."</div>
+</td>
+<td><canvas id="canvas2" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">3. Multi-currency Settlement Timing</div>
+<div class="pitfall-desc">Buy EUR Monday, settle Wednesday, report Friday in USD — at which rate? Monday's? Wednesday's? Friday's? The same transaction shows different amounts depending on when you look and which FX rate you apply. Three valid answers to "how much was this transaction?" and none of them agree with each other.</div>
+</td>
+<td><canvas id="canvas3" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">4. KYC Data Staleness</div>
+<div class="pitfall-desc">Customer verified 5 years ago; address, income, employer all changed since. "Verified customer" = verified at a point in time that's long past. Risk assessment based on stale KYC = risk assessment of a ghost. The data decays silently — no flag tells you the customer's life has diverged from what's on file.</div>
+</td>
+<td><canvas id="canvas4" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">5. Check Hold / Provisional Credit</div>
+<div class="pitfall-desc">Bank credits account provisionally; check bounces 3 days later; credit reversed. In between: customer sees a "balance" that's fictional. Any model using "current balance" during the hold period is using lies. The system presents provisional state as fact, and nothing in the data schema distinguishes real money from hope.</div>
+</td>
+<td><canvas id="canvas5" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">6. Regulatory Reporting Consistency</div>
+<div class="pitfall-desc">Report the same number to 3 regulators using 3 different definitions of "exposure." Internal systems don't match ANY of the three. Reconciliation is a permanent state of "approximately right." The concept itself has no single definition — so any single number you pull from the database is both correct and wrong simultaneously.</div>
+</td>
+<td><canvas id="canvas6" width="720" height="300"></canvas></td>
+</tr>
+</table>
+
+<script>
+function setupCanvas(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 200 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return ctx;
+}
+
+// Canvas 1: Real-time vs Batch Settlement Timeline
+(function() {
+    var ctx = setupCanvas('canvas1');
+    var w = 720, h = 200;
+
+    // Background
+    ctx.fillStyle = '#f9f9f9';
+    ctx.fillRect(0, 0, w, h);
+
+    // Timeline base
+    var tlY = 100;
+    var tlStartX = 60;
+    var tlEndX = 680;
+
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(tlStartX, tlY);
+    ctx.lineTo(tlEndX, tlY);
+    ctx.stroke();
+
+    // Arrow at end
+    ctx.beginPath();
+    ctx.moveTo(tlEndX - 8, tlY - 6);
+    ctx.lineTo(tlEndX, tlY);
+    ctx.lineTo(tlEndX - 8, tlY + 6);
+    ctx.stroke();
+
+    // Time markers
+    var t0X = 120;
+    var t1X = 200;
+    var t2X = 520;
+
+    // Danger zone highlight
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.15)';
+    ctx.fillRect(t1X, tlY - 45, t2X - t1X, 90);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 3]);
+    ctx.strokeRect(t1X, tlY - 45, t2X - t1X, 90);
+    ctx.setLineDash([]);
+
+    // Danger zone label
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('DANGER ZONE', (t1X + t2X) / 2, tlY - 52);
+    ctx.font = '14px -apple-system, sans-serif';
+    ctx.fillText('Data inconsistent between systems', (t1X + t2X) / 2, tlY + 65);
+
+    // T=0 marker: Initiated
+    ctx.fillStyle = '#2980b9';
+    ctx.beginPath();
+    ctx.arc(t0X, tlY, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('T=0', t0X, tlY + 35);
+    ctx.font = '15px -apple-system, sans-serif';
+    ctx.fillText('Initiated', t0X, tlY - 20);
+
+    // Displayed to user (immediate)
+    ctx.fillStyle = '#27ae60';
+    ctx.beginPath();
+    ctx.arc(t1X, tlY, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('Displayed', t1X, tlY - 20);
+    ctx.font = '14px -apple-system, sans-serif';
+    ctx.fillText('(instant)', t1X, tlY + 35);
+
+    // Actually settled (2 days later)
+    ctx.fillStyle = '#8e44ad';
+    ctx.beginPath();
+    ctx.arc(t2X, tlY, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.fillStyle = '#8e44ad';
+    ctx.fillText('Actually Settled', t2X, tlY - 20);
+    ctx.font = '14px -apple-system, sans-serif';
+    ctx.fillText('(+2 days)', t2X, tlY + 35);
+
+    // Title
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'left';
+    ctx.fillText('Settlement Timeline', 20, 20);
+})();
+
+// Canvas 2: AML Over-filing
+(function() {
+    var ctx = setupCanvas('canvas2');
+    var w = 720, h = 200;
+
+    ctx.fillStyle = '#f9f9f9';
+    ctx.fillRect(0, 0, w, h);
+
+    // Title
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'left';
+    ctx.fillText('SAR Filing Composition', 20, 25);
+
+    // Bar chart
+    var barX = 100;
+    var barY = 50;
+    var barW = 500;
+    var barH = 50;
+
+    // Defensive/noise portion (90%)
+    var noiseW = barW * 0.9;
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(barX, barY, noiseW, barH);
+
+    // Genuine portion (10%)
+    var genuineW = barW * 0.1;
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(barX + noiseW, barY, genuineW, barH);
+
+    // Border
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(barX, barY, barW, barH);
+
+    // Labels on bars
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#fff';
+    ctx.fillText('90% Defensive / CYA Noise', barX + noiseW / 2, barY + 32);
+    ctx.font = '12px -apple-system, sans-serif';
+    ctx.fillText('10%', barX + noiseW + genuineW / 2, barY + 32);
+
+    // Legend
+    var legY = 125;
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(150, legY, 20, 20);
+    ctx.fillStyle = '#333';
+    ctx.font = '17px -apple-system, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('Defensive filings (avoid regulatory penalty)', 180, legY + 16);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(150, legY + 35, 20, 20);
+    ctx.fillStyle = '#333';
+    ctx.fillText('Genuine suspicious activity (~10%)', 180, legY + 51);
+
+    // Annotation
+    ctx.font = 'italic 14px -apple-system, sans-serif';
+    ctx.fillStyle = '#888';
+    ctx.textAlign = 'center';
+    ctx.fillText('Signal is buried in compliance-driven noise', w / 2, 192);
+})();
+
+// Canvas 3: Multi-currency Settlement Timing
+(function() {
+    var ctx = setupCanvas('canvas3');
+    var w = 720, h = 200;
+
+    ctx.fillStyle = '#f9f9f9';
+    ctx.fillRect(0, 0, w, h);
+
+    // Title
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'left';
+    ctx.fillText('Same Transaction, Different FX Rates', 20, 25);
+
+    // Bar chart for 3 days
+    var days = ['Monday (Trade)', 'Wednesday (Settle)', 'Friday (Report)'];
+    var values = [10200, 10350, 10180];
+    var colors = ['#2980b9', '#8e44ad', '#e67e22'];
+    var barW = 130;
+    var gap = 50;
+    var startX = 130;
+    var baseY = 175;
+    var maxVal = 10500;
+    var minVal = 10000;
+    var scaleH = 120;
+
+    // Y axis
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(startX - 20, baseY);
+    ctx.lineTo(startX - 20, baseY - scaleH - 10);
+    ctx.stroke();
+
+    // Y axis labels
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'right';
+    ctx.fillText('$10,000', startX - 25, baseY + 4);
+    ctx.fillText('$10,500', startX - 25, baseY - scaleH + 4);
+
+    for (var i = 0; i < 3; i++) {
+        var x = startX + i * (barW + gap);
+        var barH = ((values[i] - minVal) / (maxVal - minVal)) * scaleH;
+
+        ctx.fillStyle = colors[i];
+        ctx.fillRect(x, baseY - barH, barW, barH);
+
+        // Value label
+        ctx.font = 'bold 17px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = colors[i];
+        ctx.fillText('$' + values[i].toLocaleString(), x + barW / 2, baseY - barH - 8);
+
+        // Day label
+        ctx.font = '14px -apple-system, sans-serif';
+        ctx.fillStyle = '#333';
+        ctx.fillText(days[i], x + barW / 2, baseY + 16);
+    }
+
+    // Inequality signs between bars
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    var midY = baseY - scaleH / 2;
+    ctx.beginPath();
+    ctx.moveTo(startX + barW + 5, midY);
+    ctx.lineTo(startX + barW + gap - 5, midY);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(startX + 2 * barW + gap + 5, midY);
+    ctx.lineTo(startX + 2 * barW + 2 * gap - 5, midY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('≠', startX + barW + gap / 2, midY - 5);
+    ctx.fillText('≠', startX + 2 * barW + gap + gap / 2, midY - 5);
+})();
+
+// Canvas 4: KYC Data Staleness - Decay Curve
+(function() {
+    var ctx = setupCanvas('canvas4');
+    var w = 720, h = 200;
+
+    ctx.fillStyle = '#f9f9f9';
+    ctx.fillRect(0, 0, w, h);
+
+    // Title
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'left';
+    ctx.fillText('KYC Accuracy Decay Over Time', 20, 25);
+
+    // Axes
+    var originX = 80;
+    var originY = 165;
+    var axisW = 580;
+    var axisH = 120;
+
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(originX, originY);
+    ctx.lineTo(originX + axisW, originY);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(originX, originY);
+    ctx.lineTo(originX, originY - axisH - 10);
+    ctx.stroke();
+
+    // Y axis labels
+    ctx.font = '14px -apple-system, sans-serif';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'right';
+    ctx.fillText('100%', originX - 8, originY - axisH + 4);
+    ctx.fillText('60%', originX - 8, originY - axisH * 0.6 + 4);
+    ctx.fillText('40%', originX - 8, originY - axisH * 0.4 + 4);
+    ctx.fillText('0%', originX - 8, originY + 4);
+
+    // X axis labels (years)
+    ctx.textAlign = 'center';
+    for (var yr = 0; yr <= 5; yr++) {
+        var xPos = originX + (yr / 5) * axisW;
+        ctx.fillText(yr + ' yr', xPos, originY + 18);
+        // Tick marks
+        ctx.beginPath();
+        ctx.moveTo(xPos, originY);
+        ctx.lineTo(xPos, originY + 5);
+        ctx.stroke();
+    }
+
+    // Decay curve (exponential decay from 100% to ~40%)
+    ctx.beginPath();
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    for (var t = 0; t <= 100; t++) {
+        var frac = t / 100;
+        var years = frac * 5;
+        // Exponential decay: starts at 100%, approaches ~38% asymptote
+        var accuracy = 0.38 + 0.62 * Math.exp(-0.35 * years);
+        var px = originX + frac * axisW;
+        var py = originY - accuracy * axisH;
+        if (t === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    // Danger threshold line at 60%
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(originX, originY - axisH * 0.6);
+    ctx.lineTo(originX + axisW, originY - axisH * 0.6);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.font = '14px -apple-system, sans-serif';
+    ctx.fillStyle = '#e67e22';
+    ctx.textAlign = 'left';
+    ctx.fillText('Unreliable threshold', originX + axisW - 140, originY - axisH * 0.6 - 8);
+
+    // Start point marker
+    ctx.fillStyle = '#27ae60';
+    ctx.beginPath();
+    ctx.arc(originX, originY - axisH, 6, 0, Math.PI * 2);
+    ctx.fill();
+
+    // End point marker
+    var endAccuracy = 0.38 + 0.62 * Math.exp(-0.35 * 5);
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath();
+    ctx.arc(originX + axisW, originY - endAccuracy * axisH, 6, 0, Math.PI * 2);
+    ctx.fill();
+
+    // End label
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'right';
+    ctx.fillText('~' + Math.round(endAccuracy * 100) + '%', originX + axisW - 5, originY - endAccuracy * axisH - 12);
+
+    // Start label
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'left';
+    ctx.fillText('100%', originX + 10, originY - axisH - 5);
+})();
+
+// Canvas 5: Check Hold / Provisional Credit
+(function() {
+    var ctx = setupCanvas('canvas5');
+    var w = 720, h = 200;
+
+    ctx.fillStyle = '#f9f9f9';
+    ctx.fillRect(0, 0, w, h);
+
+    // Title
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'left';
+    ctx.fillText('Balance Timeline with Provisional Credit', 20, 25);
+
+    // Axes
+    var originX = 80;
+    var originY = 170;
+    var axisW = 580;
+    var axisH = 120;
+
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(originX, originY);
+    ctx.lineTo(originX + axisW, originY);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(originX, originY);
+    ctx.lineTo(originX, originY - axisH - 15);
+    ctx.stroke();
+
+    // Scale: $0 to $4000
+    var maxBal = 4000;
+    function yForBal(bal) { return originY - (bal / maxBal) * axisH; }
+    function xForDay(day) { return originX + (day / 6) * axisW; }
+
+    // Y labels
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'right';
+    ctx.fillText('$4,000', originX - 8, yForBal(4000) + 4);
+    ctx.fillText('$3,500', originX - 8, yForBal(3500) + 4);
+    ctx.fillText('$1,000', originX - 8, yForBal(1000) + 4);
+    ctx.fillText('$0', originX - 8, originY + 4);
+
+    // X labels
+    ctx.textAlign = 'center';
+    var xLabels = ['Day 0', 'Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5'];
+    for (var d = 0; d <= 5; d++) {
+        ctx.fillText(xLabels[d], xForDay(d), originY + 16);
+    }
+
+    // Fictional balance highlight zone (day 1 to day 3)
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.12)';
+    ctx.fillRect(xForDay(1), yForBal(3800), xForDay(3) - xForDay(1), originY - yForBal(3800));
+
+    ctx.font = 'bold 14px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('FICTIONAL BALANCE', (xForDay(1) + xForDay(3)) / 2, yForBal(3700));
+
+    // Balance line
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    // Day 0 to Day 1: $1000
+    ctx.moveTo(xForDay(0), yForBal(1000));
+    ctx.lineTo(xForDay(1), yForBal(1000));
+    ctx.stroke();
+
+    // Jump up to $3500 at Day 1
+    ctx.strokeStyle = '#27ae60';
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(xForDay(1), yForBal(1000));
+    ctx.lineTo(xForDay(1), yForBal(3500));
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Day 1 to Day 3: $3500 (provisional)
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(xForDay(1), yForBal(3500));
+    ctx.lineTo(xForDay(3), yForBal(3500));
+    ctx.stroke();
+
+    // Drop at Day 3 (check bounces)
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(xForDay(3), yForBal(3500));
+    ctx.lineTo(xForDay(3), yForBal(1000));
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Day 3 to Day 5: back to $1000
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(xForDay(3), yForBal(1000));
+    ctx.lineTo(xForDay(5), yForBal(1000));
+    ctx.stroke();
+
+    // Markers
+    ctx.fillStyle = '#2980b9';
+    ctx.beginPath(); ctx.arc(xForDay(0), yForBal(1000), 5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#27ae60';
+    ctx.beginPath(); ctx.arc(xForDay(1), yForBal(3500), 5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath(); ctx.arc(xForDay(3), yForBal(1000), 5, 0, Math.PI * 2); ctx.fill();
+
+    // Annotations
+    ctx.font = '17px -apple-system, sans-serif';
+    ctx.fillStyle = '#2980b9';
+    ctx.textAlign = 'left';
+    ctx.fillText('$1,000', xForDay(0) + 5, yForBal(1000) - 10);
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('+$2,500 credit', xForDay(1) + 5, yForBal(3500) - 10);
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'right';
+    ctx.fillText('Bounced!', xForDay(3) - 5, yForBal(2200));
+})();
+
+// Canvas 6: Regulatory Reporting Consistency
+(function() {
+    var ctx = setupCanvas('canvas6');
+    var w = 720, h = 200;
+
+    ctx.fillStyle = '#f9f9f9';
+    ctx.fillRect(0, 0, w, h);
+
+    // Title
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'left';
+    ctx.fillText('Same "Exposure" — Four Different Numbers', 20, 25);
+
+    // Bar chart - 4 bars
+    var labels = ['Regulator A', 'Regulator B', 'Regulator C', 'Internal'];
+    var values = [142, 158, 137, 151];
+    var colors = ['#2980b9', '#8e44ad', '#e67e22', '#7f8c8d'];
+    var barW = 100;
+    var gap = 45;
+    var startX = 105;
+    var baseY = 170;
+    var maxVal = 180;
+    var scaleH = 110;
+
+    // Gridlines
+    ctx.strokeStyle = '#ddd';
+    ctx.lineWidth = 0.5;
+    for (var g = 0; g <= 4; g++) {
+        var gy = baseY - (g / 4) * scaleH;
+        ctx.beginPath();
+        ctx.moveTo(startX - 20, gy);
+        ctx.lineTo(startX + 4 * barW + 3 * gap + 20, gy);
+        ctx.stroke();
+    }
+
+    // Y axis label
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'right';
+    ctx.fillText('$M', startX - 25, baseY - scaleH / 2);
+
+    for (var i = 0; i < 4; i++) {
+        var x = startX + i * (barW + gap);
+        var barH = (values[i] / maxVal) * scaleH;
+
+        ctx.fillStyle = colors[i];
+        ctx.fillRect(x, baseY - barH, barW, barH);
+
+        // Border
+        ctx.strokeStyle = colors[i];
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x, baseY - barH, barW, barH);
+
+        // Value label
+        ctx.font = 'bold 17px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = colors[i];
+        ctx.fillText('$' + values[i] + 'M', x + barW / 2, baseY - barH - 8);
+
+        // Name label
+        ctx.font = '14px -apple-system, sans-serif';
+        ctx.fillStyle = '#333';
+        ctx.fillText(labels[i], x + barW / 2, baseY + 16);
+    }
+
+    // "All different!" annotation
+    ctx.font = 'italic 14px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('All measuring the same thing — none agree', w / 2, baseY + 32);
+
+    // Inequality signs between bars
+    ctx.font = 'bold 20px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    for (var j = 0; j < 3; j++) {
+        var midX = startX + (j + 0.5) * barW + (j + 0.5) * gap;
+        ctx.fillText('≠', midX + gap / 4, baseY - scaleH / 2);
+    }
+})();
+</script>
+</body>
+</html>

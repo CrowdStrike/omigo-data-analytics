@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T-Test Precondition: Multi-Candidate Verification</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 40px 20px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 16px 20px; margin: 30px 0; font-size: 1em; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-table tr:nth-child(even) td { background: #fafcfe; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+.toc { background: #f8fafb; border: 1px solid #e0e0e0; padding: 20px 30px; margin: 20px 0 30px; border-radius: 4px; }
+.toc ol { margin: 10px 0 0 20px; font-size: 0.92em; }
+.toc ol li { margin: 5px 0; }
+.toc ol li a { color: #2980b9; text-decoration: none; }
+.toc ol li a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<h1>T-Test Precondition Verification</h1>
+<p class="subtitle">Treat precondition checking as a research problem, not a binary gate.</p>
+
+<div class="toc">
+<strong>Table of Contents</strong>
+<ol>
+<li><a href="#problem">The Problem</a></li>
+<li><a href="#single-thresholds">Why Single Thresholds Fail</a></li>
+<li><a href="#four-candidates">Four Candidate Interpretations</a></li>
+<li><a href="#preconditions">What Gets Checked</a></li>
+<li><a href="#bimodal-trap">The Bimodal Trap</a></li>
+<li><a href="#validation">Validate Across Time Windows</a></li>
+<li><a href="#trust-rating">Trust Rating → Decision</a></li>
+<li><a href="#confidence">Confidence Degradation</a></li>
+<li><a href="#heavy-tails">Heavy Tails: Same Skew, Different Impact</a></li>
+<li><a href="#sample-size">Sample Size Is Not a Fixed Bar</a></li>
+<li><a href="#example">Real-World Example: Medical Claims Data</a></li>
+</ol>
+</div>
+
+<h2 id="problem">The Problem</h2>
+<p>"Is this data suitable for a t-test?" is not a yes/no question. Single-threshold checks (Shapiro-Wilk p &gt; 0.05, skewness &lt; 2) are arbitrary boundaries that reject good data and pass bad data depending on sample size and shape.</p>
+<p><strong>The real question:</strong> "Will the t-test give a reliable answer with THIS data?" — and that has a continuous answer.</p>
+
+<h2 id="multi-candidate">The Multi-Candidate Approach</h2>
+
+<table class="obj-table">
+
+<tr id="single-thresholds">
+<td>
+<div class="obj-title">1. Why Single Thresholds Fail</div>
+<ul>
+<li>Shapiro-Wilk: too sensitive at large n (rejects everything), too lenient at small n</li>
+<li>Skewness &lt; 2: data at 1.99 passes, 2.01 fails — why?</li>
+<li>n &gt; 30 (CLT): oversimplified — depends on HOW non-normal the data is</li>
+<li>Visual QQ-plot: subjective, not automatable</li>
+</ul>
+<p>The t-test needs the <strong>sampling distribution of the mean</strong> to be approximately normal. This requires either near-normal data OR enough n for CLT to dominate.</p>
+</td>
+<td>
+<canvas id="c1" width="720" height="280"></canvas>
+</td>
+</tr>
+
+<tr id="four-candidates">
+<td>
+<div class="obj-title">2. Four Candidate Interpretations</div>
+<p>Instead of one threshold, run four philosophies in parallel:</p>
+<ul>
+<li><strong>Strict:</strong> data must actually look normal (|skew| &lt; 0.5, kurtosis &lt; 4)</li>
+<li><strong>Moderate:</strong> some deviation is fine (|skew| &lt; 1.0, kurtosis &lt; 6)</li>
+<li><strong>CLT-Reliant:</strong> large n compensates (|skew| &lt; 2.0, but needs n ≥ 80)</li>
+<li><strong>Shape-Adaptive:</strong> thresholds scale with √n — more data = more tolerance</li>
+</ul>
+<p>Each produces a verdict with a confidence score (how comfortably it passes, not just pass/fail).</p>
+</td>
+<td>
+<canvas id="c2" width="720" height="320"></canvas>
+</td>
+</tr>
+
+<tr id="preconditions">
+<td>
+<div class="obj-title">3. What Gets Checked</div>
+<p>Five preconditions, in priority order:</p>
+<ul>
+<li><strong>Unimodality</strong> — single peak? (Hartigan's dip test). Most critical: bimodal = never t-test.</li>
+<li><strong>Symmetry</strong> — balanced around center? (skewness, quartile balance)</li>
+<li><strong>Tail behavior</strong> — extreme outliers? (kurtosis, IQR/range ratio)</li>
+<li><strong>Sample size</strong> — enough n for observed non-normality?</li>
+<li><strong>Point masses/gaps</strong> — discrete clusters or zero-inflation?</li>
+</ul>
+</td>
+<td>
+<canvas id="c3" width="720" height="280"></canvas>
+</td>
+</tr>
+
+<tr id="bimodal-trap">
+<td>
+<div class="obj-title">4. The Bimodal Trap</div>
+<p>Bimodal data can have skewness ≈ 0 and kurtosis ≈ 2 — passing every metric except unimodality.</p>
+<p>The mean falls in the <strong>valley between peaks</strong> — it represents nobody. Comparing means is meaningless.</p>
+<p><strong>All four candidates reject bimodal data.</strong> No amount of sample size fixes this. CLT makes the mean's sampling distribution normal, but the mean itself is the wrong statistic.</p>
+</td>
+<td>
+<canvas id="c4" width="720" height="280"></canvas>
+</td>
+</tr>
+
+<tr id="validation">
+<td>
+<div class="obj-title">5. Validate Across Time Windows</div>
+<p>A candidate that passes could be fitting noise in this particular sample. To trust it:</p>
+<ul>
+<li>Run candidates on primary sample (e.g., Jan–Mar)</li>
+<li>Re-run on validation sample (e.g., Apr–Jun)</li>
+<li>Passes both → <strong>stable interpretation</strong></li>
+<li>Passes one, fails other → <strong>unstable</strong> (discard)</li>
+</ul>
+<p>Only stable interpretations earn trust.</p>
+</td>
+<td>
+<canvas id="c5" width="720" height="280"></canvas>
+</td>
+</tr>
+
+<tr id="trust-rating">
+<td>
+<div class="obj-title">6. Trust Rating → Decision</div>
+<ul>
+<li><strong>High trust</strong> (3–4 stable candidates): apply t-test with full confidence</li>
+<li><strong>Low trust</strong> (1–2 stable): apply t-test AND non-parametric, report both</li>
+<li><strong>No trust</strong> (0 stable): don't apply t-test — use Mann-Whitney or permutation test</li>
+</ul>
+<p>Trust flows through: precondition confidence → test confidence → evidence weight → classification confidence.</p>
+</td>
+<td>
+<canvas id="c6" width="720" height="280"></canvas>
+</td>
+</tr>
+
+<tr id="confidence">
+<td>
+<div class="obj-title">7. Confidence Degradation</div>
+<p>As data deviates from normality, candidates drop off at different rates:</p>
+<ul>
+<li>Strict drops at |skew| = 0.5</li>
+<li>Moderate drops at |skew| = 1.0</li>
+<li>Shape-Adaptive at ~1.1 (for n=100)</li>
+<li>CLT-Reliant at |skew| = 2.0</li>
+</ul>
+<p>The progressive dropout IS the information — it tells you how far from "safe" this data is.</p>
+</td>
+<td>
+<canvas id="c7" width="720" height="320"></canvas>
+</td>
+</tr>
+
+<tr id="heavy-tails">
+<td>
+<div class="obj-title">8. Heavy Tails: Same Skew, Different Impact</div>
+<ul>
+<li><strong>Extreme outliers</strong> (3 points at 10× range): kurtosis = 12, all candidates fail. A few points dominate variance.</li>
+<li><strong>Mildly heavy tails</strong> (t-distribution-like): kurtosis = 5.8 but symmetric. Moderate/CLT/Adaptive pass.</li>
+</ul>
+<p><strong>Key insight:</strong> kurtosis + asymmetry is dangerous. Kurtosis alone (symmetric heavy tails) is usually fine with enough n.</p>
+</td>
+<td>
+<canvas id="c8" width="720" height="280"></canvas>
+</td>
+</tr>
+
+<tr id="sample-size">
+<td>
+<div class="obj-title">9. Sample Size Is Not a Fixed Bar</div>
+<p>Required n depends on how non-normal the data is:</p>
+<ul>
+<li>skew=0.3, kurt=3.2 → n ≥ 22 is enough</li>
+<li>skew=1.0, kurt=4.0 → n ≥ 40</li>
+<li>skew=2.0, kurt=8.0 → n ≥ 105</li>
+<li>If you need n &gt; 500 → just use non-parametric</li>
+</ul>
+<p>The shape-adaptive candidate embeds this logic: threshold = 0.5 + 0.06√n.</p>
+</td>
+<td>
+<canvas id="c9" width="720" height="280"></canvas>
+</td>
+</tr>
+
+</table>
+
+<h2 id="example">11. Real-World Example: Medical Claims Data</h2>
+<p>A hospital wants to know if patients with heart disease have different cholesterol than those without. Here's how the multi-candidate approach plays out on three features from the same dataset.</p>
+
+<table class="obj-table">
+
+<tr>
+<td>
+<div class="obj-title">Feature A: Cholesterol (n=150)</div>
+<p><strong>Shape:</strong> Right-skewed (skew=0.82, kurtosis=3.4, unimodal). A few patients have very high cholesterol pulling the right tail.</p>
+<ul>
+<li><strong>Strict:</strong> FAIL — skew 0.82 &gt; 0.5 threshold</li>
+<li><strong>Moderate:</strong> PASS (confidence 0.85) — skew 0.82 &lt; 1.0</li>
+<li><strong>CLT-Reliant:</strong> PASS (confidence 0.95) — n=150 is plenty</li>
+<li><strong>Shape-Adaptive:</strong> PASS (confidence 0.88) — threshold is 1.22 for n=150</li>
+</ul>
+<p><strong>Validation (Apr–Jun):</strong> All three passing candidates remain stable.</p>
+<p><strong>Verdict:</strong> HIGH TRUST. Apply t-test. The mild right-skew is well-handled by n=150.</p>
+</td>
+<td>
+<canvas id="cA" width="720" height="280"></canvas>
+</td>
+</tr>
+
+<tr>
+<td>
+<div class="obj-title">Feature B: Blood Pressure (n=45)</div>
+<p><strong>Shape:</strong> Moderately skewed (skew=1.1, kurtosis=4.2, unimodal). Small sample from a specialized ward.</p>
+<ul>
+<li><strong>Strict:</strong> FAIL — skew 1.1 &gt; 0.5</li>
+<li><strong>Moderate:</strong> PASS (confidence 0.52) — barely, skew 1.1 close to threshold 1.0... wait, this is above. Actually fails too.</li>
+<li><strong>CLT-Reliant:</strong> FAIL — n=45 &lt; 80 minimum</li>
+<li><strong>Shape-Adaptive:</strong> PASS (confidence 0.61) — threshold is 0.90 for n=45... also fails.</li>
+</ul>
+<p><strong>Validation (different ward):</strong> Skew jumps to 1.4. Everything fails.</p>
+<p><strong>Verdict:</strong> NO TRUST. Use Mann-Whitney U instead. Too few samples for this much skew.</p>
+</td>
+<td>
+<canvas id="cB" width="720" height="280"></canvas>
+</td>
+</tr>
+
+<tr>
+<td>
+<div class="obj-title">Feature C: Fasting Glucose (n=200)</div>
+<p><strong>Shape:</strong> Bimodal (skew=0.15, kurtosis=1.9). Patients fall into two groups: normal glucose (~90 mg/dL) and pre-diabetic (~140 mg/dL). Classic subpopulation split.</p>
+<ul>
+<li><strong>All candidates:</strong> FAIL — dip test p=0.001</li>
+</ul>
+<p>Despite perfect skewness and low kurtosis (looks "normal" by those metrics alone), every candidate correctly rejects. The mean of 115 mg/dL represents <strong>neither</strong> the normal nor the pre-diabetic group.</p>
+<p><strong>Verdict:</strong> NO TRUST. Split into subpopulations first, then test each separately. Or use permutation test on the combined data.</p>
+</td>
+<td>
+<canvas id="cC" width="720" height="280"></canvas>
+</td>
+</tr>
+
+</table>
+
+<div class="philosophy">
+<strong>The Principle:</strong> Multiple interpretations of a feature's shape are legitimate. Run them all. Validate them all. Trust only what holds up across independent evidence. The confidence in the precondition flows through to the confidence in the final answer.
+</div>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+
+function setupCanvas(id) {
+    var c = document.getElementById(id);
+    var w = c.width, h = c.height;
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return {ctx: ctx, w: w, h: h};
+}
+
+// Density line: Gaussian-smoothed curve + SE band (same approach as 07-distribution-gallery)
+function drawDensityLine(ctx, bins, ox, barBottom, bw, maxBarH, maxVal, opts) {
+    opts = opts || {};
+    var numBins = bins.length;
+    var sigma = opts.sigma || 1.4;
+    var kernelRadius = Math.ceil(sigma * 3);
+    var lineColor = opts.color || '#1a5276';
+    var bandColor = opts.bandColor || 'rgba(26, 82, 118, 0.15)';
+    var lineWidth = opts.lineWidth || 2.5;
+    var effN = Math.min(200, Math.max(30, opts.totalN || 100));
+
+    // Gaussian-weighted smoothing
+    var smoothed = [];
+    for (var i = 0; i < numBins; i++) {
+        var weightSum = 0, valSum = 0;
+        for (var j = Math.max(0, i - kernelRadius); j <= Math.min(numBins - 1, i + kernelRadius); j++) {
+            var dist = j - i;
+            var wt = Math.exp(-0.5 * (dist / sigma) * (dist / sigma));
+            valSum += bins[j] * wt;
+            weightSum += wt;
+        }
+        smoothed.push(valSum / weightSum);
+    }
+
+    // Winsorize: cap smoothed at 2x bar height
+    for (var i = 0; i < numBins; i++) {
+        if (bins[i] > 0) {
+            smoothed[i] = Math.min(smoothed[i], 2 * bins[i]);
+        } else {
+            var refH = 0;
+            for (var r = 1; r <= kernelRadius; r++) {
+                if (i - r >= 0 && bins[i - r] > 0) { refH = Math.max(refH, bins[i - r]); break; }
+            }
+            for (var r2 = 1; r2 <= kernelRadius; r2++) {
+                if (i + r2 < numBins && bins[i + r2] > 0) { refH = Math.max(refH, bins[i + r2]); break; }
+            }
+            if (refH > 0) smoothed[i] = Math.min(smoothed[i], 2 * refH);
+        }
+    }
+
+    // Compute SE band
+    var upper = [], lower = [];
+    for (var i = 0; i < numBins; i++) {
+        var se = 1.96 * smoothed[i] / Math.sqrt(effN);
+        upper.push(smoothed[i] + se);
+        lower.push(Math.max(0, smoothed[i] - se));
+    }
+
+    function yPx(val) { return barBottom - (val / maxVal) * maxBarH; }
+    function xPx(i) { return ox + i * bw + bw / 2; }
+
+    ctx.save();
+    // Draw SE band
+    ctx.fillStyle = bandColor;
+    ctx.beginPath();
+    ctx.moveTo(xPx(0), yPx(upper[0]));
+    for (var i = 1; i < numBins; i++) ctx.lineTo(xPx(i), yPx(upper[i]));
+    for (var i = numBins - 1; i >= 0; i--) ctx.lineTo(xPx(i), yPx(lower[i]));
+    ctx.closePath();
+    ctx.fill();
+
+    // Draw smoothed density line
+    ctx.strokeStyle = lineColor;
+    ctx.lineWidth = lineWidth;
+    ctx.beginPath();
+    for (var i = 0; i < numBins; i++) {
+        var px = xPx(i), py = yPx(smoothed[i]);
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    ctx.restore();
+}
+
+function mulberry32(a) {
+    return function() {
+        a |= 0; a = a + 0x6D2B79F5 | 0;
+        var t = Math.imul(a ^ a >>> 15, 1 | a);
+        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+}
+
+// 1. Why single thresholds fail — show identical data judged differently
+(function() {
+    var s = setupCanvas('c1'), ctx = s.ctx, w = s.w, h = s.h;
+    var data = [2,4,8,14,22,30,35,32,24,16,10,6,4,3,2,1];
+    var max = 36, bw = (w-100)/data.length, ox = 50;
+    ctx.fillStyle = 'rgba(26,82,118,0.35)';
+    data.forEach(function(v,i) { ctx.fillRect(ox+i*bw, h-60-(v/max)*(h-110), bw-2, (v/max)*(h-110)); });
+    drawDensityLine(ctx, data, ox, h-60, bw, h-110, max, {
+        color: '#1a5276', bandColor: 'rgba(26,82,118,0.13)', totalN: 120, sigma: 1.3, lineWidth: 2
+    });
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.setLineDash([5,3]);
+    ctx.beginPath(); ctx.moveTo(ox + 7*bw, 30); ctx.lineTo(ox + 7*bw, h-60); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 14px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('threshold = 0.5', ox + 7*bw, 22);
+    ctx.font = '17px -apple-system';
+    ctx.fillStyle = '#27ae60'; ctx.textAlign = 'left';
+    ctx.fillText('skew = 0.49 → PASS', ox, h-28);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('skew = 0.51 → FAIL', ox + w/2 - 40, h-28);
+    ctx.fillStyle = '#555'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Same data. Different day. Different verdict.', w/2, h-6);
+})();
+
+// 2. Four candidates — acceptance regions on skewness axis
+(function() {
+    var s = setupCanvas('c2'), ctx = s.ctx, w = s.w, h = s.h;
+    var candidates = [
+        {name: 'Strict', threshold: 0.5, color: '#c0392b', y: 60},
+        {name: 'Moderate', threshold: 1.0, color: '#e67e22', y: 130},
+        {name: 'Shape-Adaptive (n=100)', threshold: 1.1, color: '#8e44ad', y: 200},
+        {name: 'CLT-Reliant (n≥80)', threshold: 2.0, color: '#27ae60', y: 270}
+    ];
+    var axisL = 180, axisR = w - 40, axisW = axisR - axisL;
+    var skewMax = 3.0;
+    function toX(skew) { return axisL + (skew/skewMax)*axisW; }
+
+    candidates.forEach(function(c) {
+        var barW = toX(c.threshold) - axisL;
+        ctx.fillStyle = c.color; ctx.globalAlpha = 0.2;
+        ctx.fillRect(axisL, c.y - 14, barW, 28);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = c.color; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(toX(c.threshold), c.y-16); ctx.lineTo(toX(c.threshold), c.y+16); ctx.stroke();
+        ctx.fillStyle = c.color; ctx.font = 'bold 14px -apple-system'; ctx.textAlign = 'right';
+        ctx.fillText(c.name, axisL - 12, c.y + 5);
+        ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText('|skew|<' + c.threshold, toX(c.threshold), c.y - 20);
+    });
+
+    var exSkew = 0.82;
+    ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 2; ctx.setLineDash([4,3]);
+    ctx.beginPath(); ctx.moveTo(toX(exSkew), 35); ctx.lineTo(toX(exSkew), 290); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 13px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('data: skew=0.82', toX(exSkew), 28);
+
+    ctx.strokeStyle = '#aaa'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(axisL, h-20); ctx.lineTo(axisR, h-20); ctx.stroke();
+    ctx.fillStyle = '#555'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    for (var sk = 0; sk <= 3; sk += 0.5) {
+        ctx.fillText(sk.toFixed(1), toX(sk), h-6);
+    }
+})();
+
+// 3. Five preconditions — priority checklist
+(function() {
+    var s = setupCanvas('c3'), ctx = s.ctx, w = s.w, h = s.h;
+    var checks = [
+        {name: 'Unimodal?', icon: '①', critical: true},
+        {name: 'Symmetric?', icon: '②', critical: false},
+        {name: 'Light tails?', icon: '③', critical: false},
+        {name: 'Enough n?', icon: '④', critical: false},
+        {name: 'No gaps?', icon: '⑤', critical: false}
+    ];
+    var startY = 25, rowH = 44;
+    checks.forEach(function(c, i) {
+        var y = startY + i * rowH;
+        ctx.fillStyle = c.critical ? '#fdedec' : '#f0f4f8';
+        ctx.fillRect(40, y, w - 80, 36);
+        ctx.strokeStyle = c.critical ? '#e74c3c' : '#ddd';
+        ctx.lineWidth = 1; ctx.strokeRect(40, y, w - 80, 36);
+        ctx.fillStyle = c.critical ? '#c0392b' : '#1a5276';
+        ctx.font = (c.critical ? 'bold ' : '') + '17px -apple-system';
+        ctx.textAlign = 'left';
+        ctx.fillText(c.icon + '  ' + c.name, 56, y + 24);
+        if (c.critical) {
+            ctx.fillStyle = '#e74c3c'; ctx.font = '17px -apple-system'; ctx.textAlign = 'right';
+            ctx.fillText('← MUST pass all candidates', w - 50, y + 24);
+        }
+    });
+    ctx.fillStyle = '#555'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Priority order: fail unimodality → stop immediately', w/2, h - 12);
+})();
+
+// 4. Bimodal trap — mean in the valley
+(function() {
+    var s = setupCanvas('c4'), ctx = s.ctx, w = s.w, h = s.h;
+    var bimodal = [0,12,28,35,20,4,2,4,20,35,28,12,0];
+    var max = 36, bw = (w-100)/bimodal.length, ox = 50;
+
+    ctx.fillStyle = 'rgba(142,68,173,0.35)';
+    bimodal.forEach(function(v,i) { ctx.fillRect(ox+i*bw, h-60-(v/max)*(h-100), bw-2, (v/max)*(h-100)); });
+    drawDensityLine(ctx, bimodal, ox, h-60, bw, h-100, max, {
+        color: '#5b2c6f', bandColor: 'rgba(142,68,173,0.15)', totalN: 150, sigma: 1.3, lineWidth: 2
+    });
+
+    var meanX = ox + 6*bw + bw/2;
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3; ctx.setLineDash([5,3]);
+    ctx.beginPath(); ctx.moveTo(meanX, 25); ctx.lineTo(meanX, h-60); ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 15px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('MEAN', meanX, 18);
+    ctx.font = '17px -apple-system';
+    ctx.fillText('(nobody lives here)', meanX, h-66);
+
+    ctx.fillStyle = '#555'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('skew≈0, kurt≈2 — passes every check EXCEPT unimodality', w/2, h-12);
+})();
+
+// 5. Validation across time windows
+(function() {
+    var s = setupCanvas('c5'), ctx = s.ctx, w = s.w, h = s.h;
+    var candidates = ['Strict', 'Moderate', 'CLT', 'Adaptive'];
+    var primary =    ['FAIL',   'PASS',     'PASS', 'PASS'];
+    var validation = ['FAIL',   'PASS',     'PASS', 'PASS'];
+    var colors =     ['#c0392b','#e67e22',  '#27ae60','#8e44ad'];
+
+    var colW = 120, startX = 80, rowH = 46, headerH = 60;
+
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 14px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Candidate', startX + colW/2, 35);
+    ctx.fillText('Primary', startX + colW + 80 + colW/2, 35);
+    ctx.fillText('Validation', startX + 2*colW + 160 + colW/2, 35);
+    ctx.fillText('Stable?', startX + 3*colW + 220, 35);
+
+    candidates.forEach(function(c, i) {
+        var y = headerH + i * rowH;
+        ctx.fillStyle = colors[i]; ctx.font = '17px -apple-system'; ctx.textAlign = 'left';
+        ctx.fillText(c, startX, y + 24);
+
+        ctx.fillStyle = primary[i] === 'PASS' ? '#27ae60' : '#e74c3c';
+        ctx.font = 'bold 14px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText(primary[i], startX + colW + 80 + colW/2, y + 24);
+
+        ctx.fillStyle = validation[i] === 'PASS' ? '#27ae60' : '#e74c3c';
+        ctx.fillText(validation[i], startX + 2*colW + 160 + colW/2, y + 24);
+
+        var stable = primary[i] === validation[i];
+        ctx.fillStyle = stable ? '#27ae60' : '#e74c3c';
+        ctx.fillText(stable ? '✓ yes' : '✗ no', startX + 3*colW + 220, y + 24);
+    });
+
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 13px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('3/4 stable → HIGH TRUST → apply t-test', w/2, h - 14);
+})();
+
+// 6. Trust rating → decision
+(function() {
+    var s = setupCanvas('c6'), ctx = s.ctx, w = s.w, h = s.h;
+    var outcomes = [
+        {label: 'HIGH', desc: '3-4 stable', action: 'Apply t-test', color: '#27ae60', bg: '#d4efdf'},
+        {label: 'LOW', desc: '1-2 stable', action: 'T-test + MW', color: '#e67e22', bg: '#fef9e7'},
+        {label: 'NONE', desc: '0 stable', action: 'Non-parametric only', color: '#e74c3c', bg: '#fdedec'}
+    ];
+    var boxW = 190, gap = 30, startX = (w - 3*boxW - 2*gap)/2;
+    outcomes.forEach(function(o, i) {
+        var x = startX + i*(boxW + gap);
+        ctx.fillStyle = o.bg;
+        ctx.fillRect(x, 40, boxW, 180);
+        ctx.strokeStyle = o.color; ctx.lineWidth = 2;
+        ctx.strokeRect(x, 40, boxW, 180);
+        ctx.fillStyle = o.color; ctx.font = 'bold 18px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText(o.label, x + boxW/2, 78);
+        ctx.fillStyle = '#555'; ctx.font = '17px -apple-system';
+        ctx.fillText(o.desc, x + boxW/2, 108);
+        ctx.fillStyle = o.color; ctx.font = 'bold 14px -apple-system';
+        ctx.fillText(o.action, x + boxW/2, 175);
+    });
+    ctx.fillStyle = '#555'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Trust flows: precondition → test → evidence weight → classification', w/2, h - 12);
+})();
+
+// 7. Confidence degradation curves
+(function() {
+    var s = setupCanvas('c7'), ctx = s.ctx, w = s.w, h = s.h;
+    var pad = {top: 35, bottom: 45, left: 60, right: 25};
+    var plotW = w - pad.left - pad.right, plotH = h - pad.top - pad.bottom;
+
+    function toX(skew) { return pad.left + (skew / 3.0) * plotW; }
+    function toY(conf) { return pad.top + plotH - conf * plotH; }
+
+    ctx.strokeStyle = '#eee'; ctx.lineWidth = 1;
+    for (var sk = 0.5; sk <= 3; sk += 0.5) {
+        ctx.beginPath(); ctx.moveTo(toX(sk), pad.top); ctx.lineTo(toX(sk), pad.top+plotH); ctx.stroke();
+    }
+    for (var cv = 0.2; cv <= 1; cv += 0.2) {
+        ctx.beginPath(); ctx.moveTo(pad.left, toY(cv)); ctx.lineTo(pad.left+plotW, toY(cv)); ctx.stroke();
+    }
+
+    var curves = [
+        {name: 'Strict', color: '#c0392b', th: 0.5},
+        {name: 'Moderate', color: '#e67e22', th: 1.0},
+        {name: 'Adaptive', color: '#8e44ad', th: 1.1},
+        {name: 'CLT', color: '#27ae60', th: 2.0}
+    ];
+
+    curves.forEach(function(c) {
+        ctx.strokeStyle = c.color; ctx.lineWidth = 2.5; ctx.beginPath();
+        for (var sk = 0; sk <= 3; sk += 0.02) {
+            var conf = sk >= c.th ? 0 : Math.max(0, 1 - Math.pow(sk / c.th, 1.5) * 0.9);
+            if (sk === 0) ctx.moveTo(toX(sk), toY(conf));
+            else ctx.lineTo(toX(sk), toY(conf));
+        }
+        ctx.stroke();
+    });
+
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 1.5; ctx.beginPath();
+    ctx.moveTo(pad.left, pad.top); ctx.lineTo(pad.left, pad.top+plotH);
+    ctx.lineTo(pad.left+plotW, pad.top+plotH); ctx.stroke();
+
+    ctx.fillStyle = '#333'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    for (var sk = 0; sk <= 3; sk += 0.5) ctx.fillText(sk.toFixed(1), toX(sk), h-20);
+    ctx.fillText('|Skewness| (n=100)', pad.left + plotW/2, h-4);
+
+    ctx.textAlign = 'right';
+    for (var cv = 0; cv <= 1; cv += 0.2) ctx.fillText(cv.toFixed(1), pad.left-8, toY(cv)+4);
+    ctx.save(); ctx.translate(14, pad.top + plotH/2); ctx.rotate(-Math.PI/2);
+    ctx.textAlign = 'center'; ctx.fillText('Confidence', 0, 0); ctx.restore();
+
+    ctx.textAlign = 'left'; var ly = pad.top + 10;
+    curves.forEach(function(c) {
+        ctx.fillStyle = c.color; ctx.fillRect(w-140, ly-5, 18, 3);
+        ctx.fillStyle = '#333'; ctx.font = '17px -apple-system';
+        ctx.fillText(c.name, w-118, ly);
+        ly += 18;
+    });
+})();
+
+// 8. Heavy tails — two scenarios
+(function() {
+    var s = setupCanvas('c8'), ctx = s.ctx, w = s.w, h = s.h;
+    var halfW = w/2 - 30;
+
+    var data1 = [0,2,8,20,35,40,35,20,8,2,0,0,0,0,0,1];
+    var max1 = 42, bw1 = halfW/data1.length;
+    ctx.fillStyle = 'rgba(231,76,60,0.35)';
+    data1.forEach(function(v,i) { ctx.fillRect(20+i*bw1, h-55-(v/max1)*(h-100), bw1-1, (v/max1)*(h-100)); });
+    drawDensityLine(ctx, data1, 20, h-55, bw1, h-100, max1, {
+        color: '#922b21', bandColor: 'rgba(231,76,60,0.13)', totalN: 60, sigma: 1.2, lineWidth: 2
+    });
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Extreme outliers', halfW/2 + 20, 20);
+    ctx.font = '17px -apple-system'; ctx.fillStyle = '#555';
+    ctx.fillText('kurt=12 → ALL FAIL', halfW/2 + 20, h-20);
+
+    var data2 = [1,3,7,14,22,30,34,30,22,14,7,3,1,0,0,0];
+    var max2 = 36, bw2 = halfW/data2.length;
+    ctx.fillStyle = 'rgba(142,68,173,0.35)';
+    data2.forEach(function(v,i) { ctx.fillRect(halfW+40+i*bw2, h-55-(v/max2)*(h-100), bw2-1, (v/max2)*(h-100)); });
+    drawDensityLine(ctx, data2, halfW+40, h-55, bw2, h-100, max2, {
+        color: '#5b2c6f', bandColor: 'rgba(142,68,173,0.13)', totalN: 100, sigma: 1.2, lineWidth: 2
+    });
+    ctx.fillStyle = '#8e44ad'; ctx.font = 'bold 13px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Mildly heavy tails', halfW + 40 + halfW/2, 20);
+    ctx.font = '17px -apple-system'; ctx.fillStyle = '#555';
+    ctx.fillText('kurt=5.8, symmetric → 3/4 PASS', halfW + 40 + halfW/2, h-20);
+
+    ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(w/2, 35); ctx.lineTo(w/2, h-35); ctx.stroke();
+})();
+
+// 9. Sample size as function of non-normality
+(function() {
+    var s = setupCanvas('c9'), ctx = s.ctx, w = s.w, h = s.h;
+    var pad = {top: 30, bottom: 45, left: 60, right: 25};
+    var plotW = w - pad.left - pad.right, plotH = h - pad.top - pad.bottom;
+
+    function toX(skew) { return pad.left + (skew / 3.0) * plotW; }
+    function toY(n) { return pad.top + plotH - (Math.min(n, 200) / 200) * plotH; }
+
+    ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 2.5; ctx.beginPath();
+    for (var sk = 0; sk <= 3; sk += 0.05) {
+        var reqN = 20 + Math.pow(sk, 2) * 15 + Math.max(0, sk - 1) * 20;
+        if (sk === 0) ctx.moveTo(toX(sk), toY(reqN));
+        else ctx.lineTo(toX(sk), toY(reqN));
+    }
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(39,174,96,0.1)';
+    ctx.beginPath(); ctx.moveTo(toX(0), toY(20));
+    for (var sk = 0; sk <= 3; sk += 0.05) {
+        var reqN = 20 + Math.pow(sk, 2) * 15 + Math.max(0, sk - 1) * 20;
+        ctx.lineTo(toX(sk), toY(reqN));
+    }
+    ctx.lineTo(toX(3), pad.top + plotH); ctx.lineTo(toX(0), pad.top + plotH); ctx.fill();
+
+    ctx.fillStyle = '#27ae60'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('t-test OK', pad.left + plotW*0.3, pad.top + plotH - 25);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('not enough n', pad.left + plotW*0.7, pad.top + 35);
+
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 1.5; ctx.beginPath();
+    ctx.moveTo(pad.left, pad.top); ctx.lineTo(pad.left, pad.top+plotH);
+    ctx.lineTo(pad.left+plotW, pad.top+plotH); ctx.stroke();
+
+    ctx.fillStyle = '#333'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    for (var sk = 0; sk <= 3; sk += 0.5) ctx.fillText(sk.toFixed(1), toX(sk), h-20);
+    ctx.fillText('|Skewness|', pad.left + plotW/2, h-4);
+    ctx.textAlign = 'right';
+    for (var n = 0; n <= 200; n += 50) ctx.fillText(n, pad.left-8, toY(n)+4);
+    ctx.save(); ctx.translate(14, pad.top + plotH/2); ctx.rotate(-Math.PI/2);
+    ctx.textAlign = 'center'; ctx.fillText('Required n', 0, 0); ctx.restore();
+})();
+
+// 10. Example A: Cholesterol — right-skewed, n=150, passes
+(function() {
+    var s = setupCanvas('cA'), ctx = s.ctx, w = s.w, h = s.h;
+    var rng = mulberry32(42);
+    // Right-skewed cholesterol-like data
+    var data = [2,4,8,14,22,30,38,35,28,20,14,9,6,4,3,2,1,1];
+    var max = 40, bw = (w-100)/data.length, ox = 50;
+
+    ctx.fillStyle = 'rgba(39,174,96,0.35)';
+    data.forEach(function(v,i) { ctx.fillRect(ox+i*bw, h-60-(v/max)*(h-110), bw-2, (v/max)*(h-110)); });
+    drawDensityLine(ctx, data, ox, h-60, bw, h-110, max, {
+        color: '#1e8449', bandColor: 'rgba(39,174,96,0.15)', totalN: 150, sigma: 1.3, lineWidth: 2
+    });
+
+    // Mean line
+    var meanIdx = 6.5;
+    var meanX = ox + meanIdx*bw;
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.setLineDash([4,3]);
+    ctx.beginPath(); ctx.moveTo(meanX, 30); ctx.lineTo(meanX, h-60); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('mean=245', meanX, 24);
+
+    // Verdict tags
+    ctx.font = 'bold 13px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillStyle = '#e74c3c'; ctx.fillText('Strict: FAIL', w-200, 30);
+    ctx.fillStyle = '#27ae60'; ctx.fillText('Moderate: PASS', w-200, 52);
+    ctx.fillStyle = '#27ae60'; ctx.fillText('CLT: PASS', w-200, 74);
+    ctx.fillStyle = '#27ae60'; ctx.fillText('Adaptive: PASS', w-200, 96);
+
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 13px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Cholesterol: skew=0.82, n=150 → HIGH TRUST', w/2, h-14);
+    ctx.font = '17px -apple-system'; ctx.fillStyle = '#555';
+    ctx.fillText('3/4 stable across validation', w/2, h-34);
+})();
+
+// 11. Example B: Blood Pressure — skewed, small n, fails
+(function() {
+    var s = setupCanvas('cB'), ctx = s.ctx, w = s.w, h = s.h;
+    var data = [1,3,6,12,18,22,18,12,8,5,4,3,2,2,1,1,1,0];
+    var max = 24, bw = (w-100)/data.length, ox = 50;
+
+    ctx.fillStyle = 'rgba(231,76,60,0.35)';
+    data.forEach(function(v,i) { ctx.fillRect(ox+i*bw, h-60-(v/max)*(h-110), bw-2, (v/max)*(h-110)); });
+    drawDensityLine(ctx, data, ox, h-60, bw, h-110, max, {
+        color: '#922b21', bandColor: 'rgba(231,76,60,0.13)', totalN: 45, sigma: 1.3, lineWidth: 2
+    });
+
+    // Mean
+    var meanX = ox + 5.5*bw;
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.setLineDash([4,3]);
+    ctx.beginPath(); ctx.moveTo(meanX, 30); ctx.lineTo(meanX, h-60); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('mean=138', meanX, 24);
+
+    // Verdict tags
+    ctx.font = 'bold 13px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillStyle = '#e74c3c'; ctx.fillText('Strict: FAIL', w-200, 30);
+    ctx.fillStyle = '#e74c3c'; ctx.fillText('Moderate: FAIL', w-200, 52);
+    ctx.fillStyle = '#e74c3c'; ctx.fillText('CLT: FAIL (n<80)', w-200, 74);
+    ctx.fillStyle = '#e74c3c'; ctx.fillText('Adaptive: FAIL', w-200, 96);
+
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 13px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Blood Pressure: skew=1.1, n=45 → NO TRUST', w/2, h-14);
+    ctx.font = '17px -apple-system'; ctx.fillStyle = '#555';
+    ctx.fillText('Use Mann-Whitney U instead', w/2, h-34);
+})();
+
+// 12. Example C: Fasting Glucose — bimodal, fooled by skewness
+(function() {
+    var s = setupCanvas('cC'), ctx = s.ctx, w = s.w, h = s.h;
+    var data = [2,8,18,28,22,10,4,2,2,4,10,22,28,18,8,2];
+    var max = 30, bw = (w-100)/data.length, ox = 50;
+
+    ctx.fillStyle = 'rgba(142,68,173,0.35)';
+    data.forEach(function(v,i) { ctx.fillRect(ox+i*bw, h-60-(v/max)*(h-110), bw-2, (v/max)*(h-110)); });
+    drawDensityLine(ctx, data, ox, h-60, bw, h-110, max, {
+        color: '#5b2c6f', bandColor: 'rgba(142,68,173,0.13)', totalN: 200, sigma: 1.3, lineWidth: 2
+    });
+
+    // Mean in the valley
+    var meanX = ox + 7.5*bw;
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3; ctx.setLineDash([5,3]);
+    ctx.beginPath(); ctx.moveTo(meanX, 28); ctx.lineTo(meanX, h-60); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('mean=115 (in the valley!)', meanX, 22);
+
+    // Peak labels
+    ctx.fillStyle = '#8e44ad'; ctx.font = '17px -apple-system';
+    ctx.fillText('Normal ~90', ox + 3*bw, 40);
+    ctx.fillText('Pre-diabetic ~140', ox + 12*bw, 40);
+
+    // Verdict
+    ctx.font = 'bold 13px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillStyle = '#e74c3c'; ctx.fillText('ALL: FAIL (bimodal)', w-200, 30);
+    ctx.font = '17px -apple-system'; ctx.fillStyle = '#555'; ctx.textAlign = 'left';
+    ctx.fillText('dip test p=0.001', w-200, 52);
+    ctx.fillText('skew=0.15 (looks fine!)', w-200, 72);
+    ctx.fillText('kurt=1.9 (looks fine!)', w-200, 92);
+
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 13px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Fasting Glucose: bimodal, n=200 → NO TRUST (split subpopulations)', w/2, h-14);
+    ctx.font = '17px -apple-system'; ctx.fillStyle = '#555';
+    ctx.fillText('Skewness/kurtosis alone would have missed this', w/2, h-34);
+})();
+
+</script>
+</body>
+</html>

@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Protein Discovery / AlphaFold-Style - Data Pitfalls</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f7fa; color: #2c3e50; line-height: 1.6; }
+.container { max-width: 100%; margin: 0 auto; }
+h1 { color: #1a5276; border-bottom: 3px solid #2980b9; padding-bottom: 10px; }
+.nav-link { display: inline-block; margin-bottom: 20px; color: #2980b9; text-decoration: none; font-weight: 600; }
+.nav-link:hover { text-decoration: underline; }
+.obj-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+.obj-table td { vertical-align: top; padding: 20px; border: 1px solid #2980b9; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-title { color: #1a5276; font-size: 1.3em; margin: 0 0 12px 0; font-weight: 700; }
+ul { margin: 8px 0; padding-left: 20px; }
+li { margin-bottom: 6px; }
+.example { background: #eaf2f8; padding: 10px 14px; border-radius: 6px; margin-top: 10px; font-size: 0.92em; }
+canvas { border: 1px solid #d5dbdb; border-radius: 4px; background: #fff; }
+</style>
+</head>
+<body>
+<div class="container">
+<h1>Protein Discovery / AlphaFold-Style: Data Pitfalls</h1>
+
+<!-- Pitfall 1: Conformational Ensemble Ignored -->
+<table class="obj-table">
+<tr>
+<td>
+<h3 class="obj-title">1. Conformational Ensemble Ignored (Single Structure Bias)</h3>
+<ul>
+<li>One amino acid sequence can fold into MULTIPLE structures depending on conditions, binding partners, pH</li>
+<li>AlphaFold predicts one static structure but reality is a probability distribution over conformations</li>
+<li>The "answer" is a probability cloud (Boltzmann ensemble) not a single point prediction</li>
+<li>Intrinsically disordered proteins (30% of human proteome) have NO single structure</li>
+<li>Drug binding sites often depend on rare conformational states not captured by the dominant fold</li>
+</ul>
+<div class="example"><strong>Example:</strong> Protein kinases switch between active/inactive conformations; AlphaFold picks one, missing the drug-targetable state that exists 5% of the time.</div>
+</td>
+<td>
+<canvas id="canvas1" width="720" height="300"></canvas>
+</td>
+</tr>
+</table>
+
+<!-- Pitfall 2: MSA Depth Bias -->
+<table class="obj-table">
+<tr>
+<td>
+<h3 class="obj-title">2. MSA (Multiple Sequence Alignment) Depth Bias</h3>
+<ul>
+<li>Model performance correlates strongly with number of homologous sequences available (MSA depth)</li>
+<li>Works great for well-studied protein families with 1000+ homologs in sequence databases</li>
+<li>Fails catastrophically for orphan proteins with few or no evolutionary relatives</li>
+<li>Performance gap: >90% accuracy for deep MSAs vs <50% for shallow MSAs</li>
+<li>Viral proteins, de novo designed proteins, and taxonomically isolated organisms have sparse MSAs</li>
+<li>Prediction confidence is really measuring "how studied is this family" not "how hard is this problem"</li>
+</ul>
+<div class="example"><strong>Example:</strong> AlphaFold confidence (pLDDT) drops from 90+ to below 50 when MSA depth goes from 1000 to under 10 sequences — the model literally doesn't know what to do without evolutionary context.</div>
+</td>
+<td>
+<canvas id="canvas2" width="720" height="300"></canvas>
+</td>
+</tr>
+</table>
+
+<!-- Pitfall 3: PDB Training Bias -->
+<table class="obj-table">
+<tr>
+<td>
+<h3 class="obj-title">3. PDB Training Bias (What Gets Solved Gets Learned)</h3>
+<ul>
+<li>Trained on Protein Data Bank structures: biased toward easy-to-crystallize, stable, globular proteins</li>
+<li>Membrane proteins (30% of drug targets) are severely underrepresented (~3% of PDB)</li>
+<li>Intrinsically disordered regions have no crystal structures &rarr; absent from training data</li>
+<li>Large multi-protein complexes are underrepresented due to experimental difficulty</li>
+<li>Model is weakest precisely for the proteins that are most therapeutically important</li>
+<li>Crystallization conditions (pH, temperature, detergents) force proteins into non-physiological states</li>
+</ul>
+<div class="example"><strong>Example:</strong> Only ~1000 unique membrane protein structures in PDB vs ~150,000 soluble proteins. GPCRs (target of 35% of drugs) have fewer than 500 structures despite being the most important drug target class.</div>
+</td>
+<td>
+<canvas id="canvas3" width="720" height="300"></canvas>
+</td>
+</tr>
+</table>
+
+<!-- Pitfall 4: Fitness Landscape Epistasis -->
+<table class="obj-table">
+<tr>
+<td>
+<h3 class="obj-title">4. Fitness Landscape Epistasis (Combinatorial Interactions)</h3>
+<ul>
+<li>Mutation A alone: neutral effect on protein fitness</li>
+<li>Mutation B alone: neutral effect on protein fitness</li>
+<li>Mutations A+B together: catastrophic loss of function (or unexpected gain)</li>
+<li>Single-mutation predictions cannot be composed to predict multi-mutation effects</li>
+<li>The fitness landscape is rugged with epistatic peaks and valleys invisible from single-mutant data</li>
+<li>Combinatorial explosion: for a 300-residue protein, pairs = 300&times;19&times;299&times;19 &asymp; 32 million possible double mutants</li>
+</ul>
+<div class="example"><strong>Example:</strong> In TEM-1 beta-lactamase, mutations M182T and G238S are each mildly deleterious alone (-0.2 fitness) but together provide 1000x antibiotic resistance. No single-mutation model predicts this.</div>
+</td>
+<td>
+<canvas id="canvas4" width="720" height="300"></canvas>
+</td>
+</tr>
+</table>
+
+<!-- Pitfall 5: Experimental Resolution Limits -->
+<table class="obj-table">
+<tr>
+<td>
+<h3 class="obj-title">5. Experimental Resolution Limits (Training on Blurry Labels)</h3>
+<ul>
+<li>X-ray crystallography: 2-3 &Aring; resolution means individual atoms are blurred/uncertain</li>
+<li>Cryo-EM: even worse resolution for flexible regions (4-8 &Aring; in peripheral areas)</li>
+<li>B-factors in crystal structures indicate per-atom positional uncertainty (often 20-80 &Aring;&sup2;)</li>
+<li>Training labels have inherent measurement uncertainty that sets a ceiling on prediction accuracy</li>
+<li>Model cannot exceed the resolution of its training labels — it learns to reproduce blur</li>
+<li>Side-chain positions (critical for drug design) have much higher uncertainty than backbone</li>
+</ul>
+<div class="example"><strong>Example:</strong> At 3 &Aring; resolution, individual water molecules and hydrogen bonds are invisible. A model trained on this data cannot predict hydrogen bonding networks needed for drug design, even if the model architecture could theoretically represent them.</div>
+</td>
+<td>
+<canvas id="canvas5" width="720" height="300"></canvas>
+</td>
+</tr>
+</table>
+
+<!-- Pitfall 6: Distribution Shift Natural to Designed -->
+<table class="obj-table">
+<tr>
+<td>
+<h3 class="obj-title">6. Distribution Shift: Natural &rarr; Designed Proteins</h3>
+<ul>
+<li>Trained on NATURAL proteins that evolved over billions of years with specific evolutionary pressures</li>
+<li>Asked to predict DESIGNED proteins that evolution never explored (different sequence statistics)</li>
+<li>Natural proteins optimize for foldability, stability, evolvability — designed proteins optimize for function only</li>
+<li>Amino acid frequencies in designed sequences differ from natural (more hydrophobic core, fewer historical constraints)</li>
+<li>Extrapolation outside training distribution: designed proteins occupy different regions of sequence space</li>
+<li>Co-evolutionary signals (key to AlphaFold) don't exist for de novo designed proteins with no homologs</li>
+</ul>
+<div class="example"><strong>Example:</strong> De novo designed mini-proteins from Baker lab have 15-30% lower AlphaFold confidence scores than natural proteins of similar size, even when the designed proteins fold perfectly in the lab. The model is uncertain because it hasn't seen these sequence patterns before.</div>
+</td>
+<td>
+<canvas id="canvas6" width="720" height="300"></canvas>
+</td>
+</tr>
+</table>
+
+</div>
+
+<script>
+function setupCanvas(id) {
+    var canvas = document.getElementById(id);
+    var ctx = canvas.getContext('2d');
+    var dpr = window.devicePixelRatio || 1;
+    var w = canvas.width;
+    var h = canvas.height;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+    ctx.scale(dpr, dpr);
+    return { ctx: ctx, w: w, h: h };
+}
+
+// Canvas 1: Conformational Ensemble
+(function() {
+    var c = setupCanvas('canvas1');
+    var ctx = c.ctx, w = c.w, h = c.h;
+
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('One Sequence → Multiple Conformations', 200, 22);
+
+    // Draw protein backbone line on the left
+    var backboneY = h / 2;
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(30, backboneY);
+    ctx.lineTo(150, backboneY);
+    ctx.stroke();
+
+    // Backbone label
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('Amino acid sequence', 40, backboneY + 20);
+
+    // Draw small amino acid circles on backbone
+    ctx.fillStyle = '#2980b9';
+    for (var i = 0; i < 8; i++) {
+        ctx.beginPath();
+        ctx.arc(40 + i * 15, backboneY, 4, 0, 2 * Math.PI);
+        ctx.fill();
+    }
+
+    // Branching arrows to different conformations
+    var conformations = [
+        { y: 30, prob: '60%', color: '#27ae60', label: 'Active (compact)' },
+        { y: 75, prob: '25%', color: '#2980b9', label: 'Inactive (extended)' },
+        { y: 130, prob: '10%', color: '#e67e22', label: 'Partially unfolded' },
+        { y: 170, prob: '5%', color: '#e74c3c', label: 'Rare drug-binding state' }
+    ];
+
+    for (var i = 0; i < conformations.length; i++) {
+        var conf = conformations[i];
+        var startX = 150;
+        var endX = 350;
+        var endY = conf.y;
+
+        // Arrow line
+        ctx.strokeStyle = conf.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(startX, backboneY);
+        ctx.quadraticCurveTo(200, (backboneY + endY) / 2, endX, endY + 10);
+        ctx.stroke();
+
+        // Arrowhead
+        ctx.fillStyle = conf.color;
+        ctx.beginPath();
+        ctx.moveTo(endX, endY + 10);
+        ctx.lineTo(endX - 8, endY + 5);
+        ctx.lineTo(endX - 8, endY + 15);
+        ctx.closePath();
+        ctx.fill();
+
+        // Draw a blob/shape representing the fold
+        ctx.globalAlpha = 0.4;
+        ctx.fillStyle = conf.color;
+        ctx.beginPath();
+        ctx.ellipse(endX + 45, endY + 10, 30, 14, 0, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.globalAlpha = 1.0;
+        ctx.strokeStyle = conf.color;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.ellipse(endX + 45, endY + 10, 30, 14, 0, 0, 2 * Math.PI);
+        ctx.stroke();
+
+        // Probability label
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.fillStyle = conf.color;
+        ctx.fillText(conf.prob, endX + 80, endY + 8);
+
+        // Name label
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillText(conf.label, endX + 80, endY + 20);
+    }
+
+    // AlphaFold annotation pointing to the 60% one
+    ctx.font = 'bold 11px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('AlphaFold picks', 530, 30);
+    ctx.fillText('this one →', 530, 44);
+
+    // Arrow from annotation to 60% shape
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(528, 37);
+    ctx.lineTo(430, 37);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Note at bottom
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.fillStyle = '#8e44ad';
+    ctx.fillText('Reality: Boltzmann ensemble of states, not a single answer', 350, h - 10);
+})();
+
+// Canvas 2: MSA Depth vs Prediction Accuracy
+(function() {
+    var c = setupCanvas('canvas2');
+    var ctx = c.ctx, w = c.w, h = c.h;
+
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('MSA Depth vs Prediction Accuracy', 220, 22);
+
+    // Chart area
+    var left = 70, right = w - 40, top = 40, bottom = h - 35;
+    var chartW = right - left, chartH = bottom - top;
+
+    // Y-axis (accuracy 0-100%)
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(left, top); ctx.lineTo(left, bottom); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(left, bottom); ctx.lineTo(right, bottom); ctx.stroke();
+
+    ctx.font = '10px -apple-system, sans-serif';
+    ctx.fillStyle = '#2c3e50';
+    var yLabels = [0, 20, 40, 60, 80, 100];
+    for (var i = 0; i < yLabels.length; i++) {
+        var y = bottom - (yLabels[i] / 100) * chartH;
+        ctx.fillText(yLabels[i] + '%', left - 30, y + 4);
+        ctx.strokeStyle = '#ecf0f1';
+        ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke();
+    }
+
+    // X-axis (log scale: 1, 10, 100, 1000, 10000)
+    var xLabels = [1, 10, 100, 1000, 10000];
+    var xPositions = [];
+    for (var i = 0; i < xLabels.length; i++) {
+        var x = left + (i / (xLabels.length - 1)) * chartW;
+        xPositions.push(x);
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillText(xLabels[i].toString(), x - 10, bottom + 14);
+        ctx.strokeStyle = '#ecf0f1';
+        ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bottom); ctx.stroke();
+    }
+
+    ctx.font = '10px -apple-system, sans-serif';
+    ctx.fillStyle = '#7f8c8d';
+    ctx.fillText('MSA Depth (log scale)', left + chartW / 2 - 40, h - 5);
+    ctx.save();
+    ctx.translate(12, top + chartH / 2 + 30);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Prediction Accuracy (%)', 0, 0);
+    ctx.restore();
+
+    // Color background regions
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.08)';
+    ctx.fillRect(left, top, chartW * 0.35, chartH);
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.08)';
+    ctx.fillRect(left + chartW * 0.6, top, chartW * 0.4, chartH);
+
+    // Useful threshold line at 70%
+    var threshY = bottom - (70 / 100) * chartH;
+    ctx.strokeStyle = '#8e44ad';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(left, threshY); ctx.lineTo(right, threshY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.fillStyle = '#8e44ad';
+    ctx.fillText('Useful threshold', right - 95, threshY - 6);
+
+    // Data curve (sigmoid-like from ~40% to ~92%)
+    var dataPoints = [
+        [0, 38], [0.15, 42], [0.3, 48], [0.45, 58], [0.55, 68],
+        [0.65, 78], [0.75, 85], [0.85, 89], [0.95, 91], [1.0, 92]
+    ];
+
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < dataPoints.length; i++) {
+        var x = left + dataPoints[i][0] * chartW;
+        var y = bottom - (dataPoints[i][1] / 100) * chartH;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Scatter dots
+    var scatterPts = [
+        [0.05, 35], [0.1, 42], [0.18, 40], [0.25, 45], [0.32, 50],
+        [0.4, 55], [0.48, 62], [0.55, 70], [0.62, 75], [0.68, 80],
+        [0.72, 82], [0.78, 87], [0.82, 86], [0.88, 90], [0.92, 91],
+        [0.97, 93], [0.08, 39], [0.35, 52], [0.6, 72], [0.85, 88]
+    ];
+    for (var i = 0; i < scatterPts.length; i++) {
+        var x = left + scatterPts[i][0] * chartW;
+        var y = bottom - (scatterPts[i][1] / 100) * chartH;
+        var isLow = scatterPts[i][0] < 0.35;
+        ctx.fillStyle = isLow ? '#e74c3c' : '#27ae60';
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, 2 * Math.PI);
+        ctx.fill();
+    }
+
+    // Region labels
+    ctx.font = '10px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Orphan proteins', left + 10, top + 15);
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('Well-studied families', right - 110, top + 15);
+})();
+
+// Canvas 3: PDB Representation vs Biological Reality
+(function() {
+    var c = setupCanvas('canvas3');
+    var ctx = c.ctx, w = c.w, h = c.h;
+
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('PDB Representation vs Biological Reality', 200, 22);
+
+    // Chart area
+    var left = 120, right = w - 30, top = 45, bottom = h - 30;
+    var chartH = bottom - top;
+
+    var categories = ['Soluble/Globular', 'Membrane', 'Disordered', 'Multi-complex'];
+    var pdbPct = [85, 3, 1, 11];
+    var bioPct = [40, 30, 30, 20];
+    var barWidth = 40;
+    var groupWidth = 140;
+
+    // Y-axis
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(left, top); ctx.lineTo(left, bottom); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(left, bottom); ctx.lineTo(right, bottom); ctx.stroke();
+
+    // Y labels
+    ctx.font = '10px -apple-system, sans-serif';
+    ctx.fillStyle = '#2c3e50';
+    for (var v = 0; v <= 100; v += 20) {
+        var y = bottom - (v / 100) * chartH;
+        ctx.fillText(v + '%', left - 30, y + 4);
+        ctx.strokeStyle = '#ecf0f1';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke();
+    }
+
+    // Draw grouped bars
+    for (var i = 0; i < categories.length; i++) {
+        var groupX = left + 20 + i * groupWidth;
+
+        // PDB bar (blue)
+        var pdbH = (pdbPct[i] / 100) * chartH;
+        ctx.fillStyle = 'rgba(41, 128, 185, 0.7)';
+        ctx.fillRect(groupX, bottom - pdbH, barWidth, pdbH);
+        ctx.strokeStyle = '#2980b9';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(groupX, bottom - pdbH, barWidth, pdbH);
+
+        // PDB value
+        ctx.font = 'bold 10px -apple-system, sans-serif';
+        ctx.fillStyle = '#2980b9';
+        ctx.fillText(pdbPct[i] + '%', groupX + 10, bottom - pdbH - 4);
+
+        // Bio bar (orange)
+        var bioH = (bioPct[i] / 100) * chartH;
+        ctx.fillStyle = 'rgba(230, 126, 34, 0.7)';
+        ctx.fillRect(groupX + barWidth + 5, bottom - bioH, barWidth, bioH);
+        ctx.strokeStyle = '#e67e22';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(groupX + barWidth + 5, bottom - bioH, barWidth, bioH);
+
+        // Bio value
+        ctx.font = 'bold 10px -apple-system, sans-serif';
+        ctx.fillStyle = '#e67e22';
+        ctx.fillText(bioPct[i] + '%', groupX + barWidth + 15, bottom - bioH - 4);
+
+        // Category label
+        ctx.font = '9px -apple-system, sans-serif';
+        ctx.fillStyle = '#2c3e50';
+        var labelParts = categories[i].split('/');
+        if (labelParts.length > 1) {
+            ctx.fillText(labelParts[0] + '/', groupX + 5, bottom + 12);
+            ctx.fillText(labelParts[1], groupX + 10, bottom + 22);
+        } else {
+            ctx.fillText(categories[i], groupX + 5, bottom + 12);
+        }
+    }
+
+    // Legend
+    ctx.fillStyle = 'rgba(41, 128, 185, 0.7)';
+    ctx.fillRect(left + 10, top - 5, 14, 10);
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.fillStyle = '#2980b9';
+    ctx.fillText('PDB representation', left + 28, top + 4);
+
+    ctx.fillStyle = 'rgba(230, 126, 34, 0.7)';
+    ctx.fillRect(left + 160, top - 5, 14, 10);
+    ctx.fillStyle = '#e67e22';
+    ctx.fillText('Biological/therapeutic importance', left + 178, top + 4);
+})();
+
+// Canvas 4: Epistasis Non-Additive Mutation Effects
+(function() {
+    var c = setupCanvas('canvas4');
+    var ctx = c.ctx, w = c.w, h = c.h;
+
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('Epistasis: Non-Additive Mutation Effects', 210, 22);
+
+    // 2D grid area
+    var gridLeft = 100, gridRight = 420, gridTop = 45, gridBottom = h - 20;
+    var gridW = gridRight - gridLeft, gridH = gridBottom - gridTop;
+    var centerX = gridLeft + gridW / 2;
+    var centerY = gridTop + gridH / 2;
+
+    // Axes
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(gridLeft, gridBottom); ctx.lineTo(gridRight, gridBottom); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(gridLeft, gridBottom); ctx.lineTo(gridLeft, gridTop); ctx.stroke();
+
+    // Axis labels
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('Mutation A effect', gridLeft + gridW / 2 - 40, h - 5);
+    ctx.save();
+    ctx.translate(gridLeft - 15, gridTop + gridH / 2 + 40);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Mutation B effect', 0, 0);
+    ctx.restore();
+
+    // Axis tick labels
+    ctx.font = '9px -apple-system, sans-serif';
+    ctx.fillText('-1', gridLeft - 5, gridBottom + 12);
+    ctx.fillText('0', centerX - 3, gridBottom + 12);
+    ctx.fillText('+1', gridRight - 10, gridBottom + 12);
+    ctx.fillText('-1', gridLeft - 18, gridBottom);
+    ctx.fillText('0', gridLeft - 12, centerY + 4);
+    ctx.fillText('+1', gridLeft - 18, gridTop + 5);
+
+    // Grid lines (dashed)
+    ctx.strokeStyle = '#ecf0f1';
+    ctx.lineWidth = 0.5;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(centerX, gridTop); ctx.lineTo(centerX, gridBottom); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(gridLeft, centerY); ctx.lineTo(gridRight, centerY); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Red zone in center (where both are ~0 individually but combined is catastrophic)
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.4)';
+    ctx.beginPath();
+    ctx.ellipse(centerX, centerY, 45, 35, 0, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(centerX, centerY, 45, 35, 0, 0, 2 * Math.PI);
+    ctx.stroke();
+
+    // Label inside the red zone
+    ctx.font = 'bold 11px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('A+B: lethal', centerX - 28, centerY + 4);
+
+    // Arrows pointing to neutral zones on axes
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(centerX, gridBottom - 5);
+    ctx.lineTo(centerX, gridBottom - 20);
+    ctx.stroke();
+    ctx.fillStyle = '#27ae60';
+    ctx.beginPath();
+    ctx.moveTo(centerX, gridBottom - 20);
+    ctx.lineTo(centerX - 4, gridBottom - 14);
+    ctx.lineTo(centerX + 4, gridBottom - 14);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.font = '10px -apple-system, sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('A alone: neutral', centerX - 30, gridBottom - 23);
+
+    // B alone neutral (on y-axis at center)
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(gridLeft + 5, centerY);
+    ctx.lineTo(gridLeft + 20, centerY);
+    ctx.stroke();
+    ctx.fillStyle = '#27ae60';
+    ctx.beginPath();
+    ctx.moveTo(gridLeft + 20, centerY);
+    ctx.lineTo(gridLeft + 14, centerY - 4);
+    ctx.lineTo(gridLeft + 14, centerY + 4);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('B alone:', gridLeft + 2, centerY - 12);
+    ctx.fillText('neutral', gridLeft + 2, centerY - 2);
+
+    // Right side annotations
+    var annotX = 450;
+    ctx.font = 'bold 12px -apple-system, sans-serif';
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('Additive model predicts:', annotX, 55);
+
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('A = 0 (neutral)', annotX + 10, 73);
+    ctx.fillText('B = 0 (neutral)', annotX + 10, 89);
+    ctx.fillStyle = '#2980b9';
+    ctx.fillText('A+B = 0 (neutral)', annotX + 10, 105);
+
+    ctx.font = 'bold 12px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Reality (epistasis):', annotX, 130);
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.fillText('A+B = catastrophic!', annotX + 10, 148);
+    ctx.fillText('or 1000x gain', annotX + 10, 164);
+})();
+
+// Canvas 5: Resolution Limits in Training Data
+(function() {
+    var c = setupCanvas('canvas5');
+    var ctx = c.ctx, w = c.w, h = c.h;
+
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('Resolution Limits in Training Data', 230, 22);
+
+    // Three horizontal bands
+    var bands = [
+        { label: '1.5 Å (atomic)', y: 55, blur: 3, desc: 'Individual atoms visible' },
+        { label: '3.0 Å (typical)', y: 105, blur: 10, desc: 'Atoms blurred together' },
+        { label: '6.0 Å (low-res cryo-EM)', y: 155, blur: 22, desc: 'Only overall shape visible' }
+    ];
+
+    for (var i = 0; i < bands.length; i++) {
+        var band = bands[i];
+
+        // Label
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillText(band.label, 20, band.y + 5);
+
+        // Separator line
+        ctx.strokeStyle = '#ecf0f1';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(180, band.y - 15);
+        ctx.lineTo(w - 20, band.y - 15);
+        ctx.stroke();
+
+        // Draw atom representations with increasing blur
+        var atomStartX = 220;
+        for (var a = 0; a < 5; a++) {
+            var ax = atomStartX + a * 55;
+            var radius = band.blur;
+
+            // Fuzzy circle (radial gradient effect via multiple circles)
+            for (var r = radius; r > 0; r -= 1) {
+                var alpha = (1 - r / radius) * 0.4;
+                ctx.fillStyle = 'rgba(41, 128, 185, ' + alpha + ')';
+                ctx.beginPath();
+                ctx.arc(ax, band.y, r, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+            // Center dot
+            ctx.fillStyle = '#2980b9';
+            ctx.beginPath();
+            ctx.arc(ax, band.y, Math.max(1, 4 - i * 1.5), 0, 2 * Math.PI);
+            ctx.fill();
+        }
+
+        // Description
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillStyle = '#7f8c8d';
+        ctx.fillText(band.desc, 510, band.y + 5);
+    }
+
+    // Training data annotation arrow pointing to 3.0 band
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(530, 80);
+    ctx.lineTo(530, 95);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath();
+    ctx.moveTo(530, 95);
+    ctx.lineTo(526, 89);
+    ctx.lineTo(534, 89);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.font = 'bold 11px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Training data', 505, 75);
+    ctx.fillText('resolution', 510, 63);
+
+    // Bottom annotation
+    ctx.font = 'bold 12px -apple-system, sans-serif';
+    ctx.fillStyle = '#8e44ad';
+    ctx.fillText('Model ceiling = label resolution', 260, h - 8);
+})();
+
+// Canvas 6: Distribution Shift Natural vs Designed Sequence Space
+(function() {
+    var c = setupCanvas('canvas6');
+    var ctx = c.ctx, w = c.w, h = c.h;
+
+    ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('Distribution Shift: Natural vs Designed Sequence Space', 140, 22);
+
+    // Natural proteins cluster (large, blue, left)
+    var natCX = 230, natCY = 110, natRX = 140, natRY = 60;
+    ctx.fillStyle = 'rgba(41, 128, 185, 0.15)';
+    ctx.beginPath();
+    ctx.ellipse(natCX, natCY, natRX, natRY, 0, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(natCX, natCY, natRX, natRY, 0, 0, 2 * Math.PI);
+    ctx.stroke();
+
+    // Scatter points inside natural cluster
+    ctx.fillStyle = 'rgba(41, 128, 185, 0.5)';
+    var natPoints = [
+        [-80, -20], [-50, 10], [-30, -30], [0, 15], [20, -10],
+        [40, 20], [-60, 30], [-20, -15], [10, 30], [50, -25],
+        [-40, -5], [30, 5], [-10, 25], [60, 15], [-70, -10],
+        [80, -5], [20, -35], [-20, 35], [0, -25], [45, 30],
+        [-55, -25], [70, 10], [-30, 15], [10, -5], [-80, 10]
+    ];
+    for (var i = 0; i < natPoints.length; i++) {
+        ctx.beginPath();
+        ctx.arc(natCX + natPoints[i][0], natCY + natPoints[i][1], 3, 0, 2 * Math.PI);
+        ctx.fill();
+    }
+
+    // Designed proteins cluster (smaller, orange, right, partially overlapping)
+    var desCX = 520, desCY = 105, desRX = 85, desRY = 50;
+    ctx.fillStyle = 'rgba(230, 126, 34, 0.15)';
+    ctx.beginPath();
+    ctx.ellipse(desCX, desCY, desRX, desRY, 0, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(desCX, desCY, desRX, desRY, 0, 0, 2 * Math.PI);
+    ctx.stroke();
+
+    // Scatter points inside designed cluster
+    ctx.fillStyle = 'rgba(230, 126, 34, 0.6)';
+    var desPoints = [
+        [-30, -10], [-10, 15], [10, -20], [30, 5], [50, -10],
+        [-20, 25], [0, -5], [20, 20], [40, -15], [-40, 0],
+        [15, 10], [-15, -20], [35, 15], [-5, 30], [55, 5]
+    ];
+    for (var i = 0; i < desPoints.length; i++) {
+        ctx.beginPath();
+        ctx.arc(desCX + desPoints[i][0], desCY + desPoints[i][1], 3, 0, 2 * Math.PI);
+        ctx.fill();
+    }
+
+    // Dashed boundary around natural cluster - "Model's learned space"
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.ellipse(natCX, natCY, natRX + 15, natRY + 10, 0, 0, 2 * Math.PI);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Labels
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.fillStyle = '#2980b9';
+    ctx.fillText('Natural proteins', natCX - 40, natCY + natRY + 20);
+    ctx.fillText('(training distribution)', natCX - 50, natCY + natRY + 33);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.fillText('Designed proteins', desCX - 45, desCY + desRY + 20);
+    ctx.fillText('(target distribution)', desCX - 40, desCY + desRY + 33);
+
+    // Model boundary label
+    ctx.font = '10px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText("Model's learned space", natCX - 45, natCY - natRY - 15);
+
+    // Extrapolation arrow from designed back to boundary
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(desCX - desRX + 20, desCY);
+    ctx.lineTo(natCX + natRX + 20, natCY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Arrowhead
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath();
+    ctx.moveTo(natCX + natRX + 20, natCY);
+    ctx.lineTo(natCX + natRX + 28, natCY - 4);
+    ctx.lineTo(natCX + natRX + 28, natCY + 4);
+    ctx.closePath();
+    ctx.fill();
+
+    // Extrapolation label
+    ctx.font = 'bold 12px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Extrapolation!', 380, 75);
+})();
+</script>
+</body>
+</html>

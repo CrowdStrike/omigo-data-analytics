@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Temporal Dataset Handling — Discussion Backlog</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #fff; color: #2c3e50; line-height: 1.6; }
+h1 { color: #1a5276; border-bottom: 3px solid #2980b9; padding-bottom: 10px; }
+h2 { color: #1a5276; margin-top: 0; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { padding: 20px; vertical-align: top; border: 1px solid #2980b9; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-title { color: #1a5276; font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
+ul { margin: 10px 0; padding-left: 20px; }
+li { margin-bottom: 6px; }
+strong { color: #1a5276; }
+code { background: #e8f0f8; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; color: #1a5276; }
+.questions { background: #fff8e1; border-left: 3px solid #f39c12; padding: 10px 15px; margin: 10px 0; font-size: 0.9em; }
+canvas { display: block; margin: 8px auto; max-width: 100%; }
+.nav-link { display: inline-block; margin: 20px 0; color: #2980b9; text-decoration: none; font-weight: bold; }
+.nav-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<h1>Temporal Dataset Handling — Time as a Hidden Dimension</h1>
+<p>Temporal data = feature values + timestamp. Every observation carries a time coordinate that silently invalidates static profiles.</p>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Core Challenges</div>
+<ul>
+<li><strong>Shape drift:</strong> Bell-shaped today → bimodal next quarter</li>
+<li><strong>Bucketing instability:</strong> Boundaries optimized for Q1 cut through peaks in Q3</li>
+<li><strong>Concept drift:</strong> Same values, different meaning. 85% pos last year → 60% now</li>
+<li><strong>Seasonality masquerading as shape:</strong> Mixing summer/winter = artificial multimodality</li>
+<li><strong>Changepoints:</strong> Abrupt regime shifts (COVID, policy changes) make before/after incomparable</li>
+<li><strong>Stationarity assumption:</strong> Every profile implicitly assumes stationarity</li>
+</ul>
+
+<div class="obj-title" style="margin-top: 20px;">How Time Affects Each Pipeline Step</div>
+<ul>
+<li><strong>Shape detection:</strong> Per-window classification needed</li>
+<li><strong>Bucket strategy:</strong> Quantile bins shift as distribution drifts</li>
+<li><strong>Enrichment scores:</strong> Core signal metric decays</li>
+<li><strong>Sample sufficiency:</strong> n=5000 spanning 5 years may be worse than n=500 from last month</li>
+</ul>
+
+<div class="obj-title" style="margin-top: 20px;">Approaches</div>
+<ul>
+<li>Windowed profiling: Profile in time windows, compare via KS test</li>
+<li>Re-profiling triggers: KS rejects, enrichment drops, shape class changes</li>
+<li>Temporal metadata: Every profile carries valid from/to + staleness score</li>
+<li>Seasonal decomposition: Detect periodicity, profile per season</li>
+<li>Decay-weighted profiling: Exponential decay on sample weights</li>
+</ul>
+
+<div class="questions">
+<strong>Key Questions:</strong><br>
+(1) Right window size?<br>
+(2) Distinguish drift from seasonal?<br>
+(3) Re-train CNN per window?<br>
+(4) Per-feature temporal metadata?<br>
+(5) Discard vs tag pre-break data?
+</div>
+</td>
+<td>
+<canvas id="c1" width="720" height="320"></canvas>
+<canvas id="c2" width="720" height="300"></canvas>
+</td>
+</tr>
+</table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setupCanvas(id) {
+    var c = document.getElementById(id);
+    var w = c.width, h = c.height;
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return {ctx: ctx, w: w, h: h};
+}
+
+// Canvas 1: Pipeline steps with issues
+(function() {
+    var s = setupCanvas('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.fillStyle = '#f8f9fa';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('How Time Breaks Each Pipeline Step', w/2, 20);
+
+    // Pipeline boxes (top row)
+    var steps = ['Shape\nDetection', 'Bucket\nStrategy', 'Enrichment\nScoring', 'Sample\nSufficiency'];
+    var issues = ['Seasonal\nmultimodality', 'Boundaries\nshift', 'Signal\ndecays', 'Staleness vs\nvolume'];
+    var boxW = 130, boxH = 50;
+    var startX = 60, topY = 50, issueY = 170;
+
+    steps.forEach(function(step, i) {
+        var x = startX + i * 165;
+        // Step box
+        ctx.fillStyle = '#1a5276';
+        ctx.fillRect(x, topY, boxW, boxH);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 14px sans-serif';
+        var lines = step.split('\n');
+        lines.forEach(function(line, li) {
+            ctx.fillText(line, x + boxW/2, topY + 20 + li * 15);
+        });
+
+        // Arrow down
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x + boxW/2, topY + boxH);
+        ctx.lineTo(x + boxW/2, issueY);
+        ctx.stroke();
+        // Arrowhead
+        ctx.fillStyle = '#e74c3c';
+        ctx.beginPath();
+        ctx.moveTo(x + boxW/2 - 5, issueY - 5);
+        ctx.lineTo(x + boxW/2 + 5, issueY - 5);
+        ctx.lineTo(x + boxW/2, issueY);
+        ctx.closePath();
+        ctx.fill();
+
+        // Issue box (red)
+        ctx.fillStyle = 'rgba(231, 76, 60, 0.1)';
+        ctx.fillRect(x, issueY, boxW, boxH);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(x, issueY, boxW, boxH);
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = '13px sans-serif';
+        var ilines = issues[i].split('\n');
+        ilines.forEach(function(line, li) {
+            ctx.fillText(line, x + boxW/2, issueY + 20 + li * 14);
+        });
+
+        // Connect steps horizontally
+        if (i < steps.length - 1) {
+            ctx.strokeStyle = '#bdc3c7';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(x + boxW, topY + boxH/2);
+            ctx.lineTo(x + 165, topY + boxH/2);
+            ctx.stroke();
+            // Arrow
+            ctx.fillStyle = '#bdc3c7';
+            ctx.beginPath();
+            ctx.moveTo(x + 160, topY + boxH/2 - 4);
+            ctx.lineTo(x + 160, topY + boxH/2 + 4);
+            ctx.lineTo(x + 165, topY + boxH/2);
+            ctx.closePath();
+            ctx.fill();
+        }
+    });
+
+    // Time arrow at bottom
+    var arrowY = 270;
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(40, arrowY);
+    ctx.lineTo(680, arrowY);
+    ctx.stroke();
+    // Arrowhead
+    ctx.fillStyle = '#1a5276';
+    ctx.beginPath();
+    ctx.moveTo(675, arrowY - 6);
+    ctx.lineTo(675, arrowY + 6);
+    ctx.lineTo(685, arrowY);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('TIME', 360, arrowY + 20);
+
+    // Time markers
+    ctx.font = '13px sans-serif';
+    ctx.fillStyle = '#555';
+    var markers = ['Q1 2024', 'Q2 2024', 'Q3 2024', 'Q4 2024', 'Q1 2025'];
+    markers.forEach(function(m, i) {
+        var mx = 80 + i * 145;
+        ctx.fillText(m, mx, arrowY - 8);
+        ctx.beginPath();
+        ctx.moveTo(mx, arrowY - 3);
+        ctx.lineTo(mx, arrowY + 3);
+        ctx.stroke();
+    });
+
+    // Label
+    ctx.font = '12px sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Each step assumes stationarity — time breaks that assumption', 360, 300);
+})();
+
+// Canvas 2: Distribution shift visualization
+(function() {
+    var s = setupCanvas('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.fillStyle = '#f8f9fa';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Distribution Shift: Same Feature, Different Times', w/2, 20);
+
+    // Draw histogram at T1 (bell shape) - left side
+    var histX = 40, histY = 50, histW = 260, histH = 180;
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Time T1 (Bell-shaped)', histX + histW/2, histY - 5);
+
+    // Bell-shaped bars
+    var bellBars = [3, 7, 14, 22, 30, 35, 30, 22, 14, 7, 3];
+    var barW = histW / bellBars.length - 2;
+    var maxBar = 35;
+    bellBars.forEach(function(v, i) {
+        var bh = (v / maxBar) * (histH - 20);
+        var bx = histX + i * (barW + 2);
+        var by = histY + histH - bh;
+        ctx.fillStyle = 'rgba(26, 82, 118, 0.35)';
+        ctx.fillRect(bx, by, barW, bh);
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(bx, by, barW, bh);
+    });
+
+    // Axis
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(histX, histY + histH);
+    ctx.lineTo(histX + histW, histY + histH);
+    ctx.stroke();
+
+    ctx.font = '13px sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('Shape: BELL', histX + histW/2, histY + histH + 18);
+
+    // KS Test arrow in middle
+    var midX = 330;
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 3]);
+    ctx.beginPath();
+    ctx.moveTo(midX, 140);
+    ctx.lineTo(midX + 60, 140);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // Arrowhead
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath();
+    ctx.moveTo(midX + 55, 135);
+    ctx.lineTo(midX + 55, 145);
+    ctx.lineTo(midX + 62, 140);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('KS Test', midX + 30, 125);
+    ctx.font = '13px sans-serif';
+    ctx.fillText('p < 0.001', midX + 30, 160);
+    ctx.fillText('REJECT H0', midX + 30, 175);
+
+    // Draw histogram at T2 (bimodal) - right side
+    var hist2X = 410, hist2Y = 50, hist2W = 260, hist2H = 180;
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Time T2 (Bimodal)', hist2X + hist2W/2, hist2Y - 5);
+
+    // Bimodal bars
+    var bimodalBars = [8, 20, 28, 18, 5, 3, 5, 18, 28, 20, 8];
+    bimodalBars.forEach(function(v, i) {
+        var bh = (v / maxBar) * (hist2H - 20);
+        var bx = hist2X + i * (barW + 2);
+        var by = hist2Y + hist2H - bh;
+        ctx.fillStyle = 'rgba(231, 76, 60, 0.25)';
+        ctx.fillRect(bx, by, barW, bh);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(bx, by, barW, bh);
+    });
+
+    // Axis
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(hist2X, hist2Y + hist2H);
+    ctx.lineTo(hist2X + hist2W, hist2Y + hist2H);
+    ctx.stroke();
+
+    ctx.font = '13px sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Shape: BIMODAL', hist2X + hist2W/2, hist2Y + hist2H + 18);
+
+    // Bottom annotation
+    ctx.font = '14px sans-serif';
+    ctx.fillStyle = '#2c3e50';
+    ctx.textAlign = 'center';
+    ctx.fillText('Profile computed at T1 is INVALID at T2 — re-profiling needed', w/2, 280);
+})();
+</script>
+
+</body>
+</html>

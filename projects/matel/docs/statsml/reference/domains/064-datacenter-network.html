@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Center Network - Domain-Specific Pitfalls</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 20px; background: #f8f9fa; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 14px; }
+.nav a:hover { text-decoration: underline; }
+h1 { color: #1a5276; margin-bottom: 10px; }
+.subtitle { color: #555; margin-bottom: 30px; font-size: 15px; }
+.obj-table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden; }
+.obj-table td { padding: 16px; border: 1px solid #2980b9; vertical-align: top; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-title { font-weight: bold; color: #1a5276; font-size: 16px; margin-bottom: 8px; }
+.pitfall-desc { color: #333; font-size: 14px; line-height: 1.6; }
+canvas { border: 1px solid #eee; border-radius: 4px; }
+</style>
+</head>
+<body>
+<h1>Data Center Network</h1>
+<p class="subtitle">Statistical pitfalls in network telemetry — temporal aliasing, sampling blindness, and the deception of aggregate metrics.</p>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">1. Microbursts Invisible at Polling Interval</div>
+<div class="pitfall-desc">
+SNMP polls every 5 seconds; link shows 30% utilization. Reality: 100% for 200ms every second = packet drops + latency spikes. The problem exists BETWEEN the measurements. Polling frequency creates temporal aliasing — sub-second bursts saturate the link but are averaged away by the 5-second sample window. You see "healthy 30%" while users experience drops.
+</div>
+</td>
+<td><canvas id="canvas1" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">2. ECMP Hash Creates Uneven Load</div>
+<div class="pitfall-desc">
+4 equal-cost paths; hash algorithm sends certain flows always to the same path. One path at 90%, other three at 20%. "Average utilization = 37%" masks one path at failure threshold. ECMP promises equal distribution but hash collisions create persistent imbalance. The average hides that one link is near saturation while others idle.
+</div>
+</td>
+<td><canvas id="canvas2" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">3. Elephant vs Mice Flows</div>
+<div class="pitfall-desc">
+One 10Gbps backup job = elephant flow. 10,000 small API calls = mice flows. The elephant blocks mice in shared buffers. Average throughput looks fine; tail latency for mice = terrible. A single large flow dominates buffer space, starving thousands of latency-sensitive small flows. Must model BY FLOW TYPE not in aggregate.
+</div>
+</td>
+<td><canvas id="canvas3" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">4. Buffer Bloat</div>
+<div class="pitfall-desc">
+Switch buffers large — packets queued not dropped. Link looks "healthy" (no drops) but latency is 50ms instead of 0.1ms. Traditional loss-based congestion signals don't fire. Problem invisible to loss metrics, visible only in latency. Monitoring packet loss alone gives false confidence; must track latency as primary congestion signal.
+</div>
+</td>
+<td><canvas id="canvas4" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">5. Fabric Upgrade Partial-State</div>
+<div class="pitfall-desc">
+Upgrading switches in stages: half network on new firmware, half on old. Routing protocols recalculate; traffic patterns shift during maintenance window. Data collected during upgrade is unrepresentative of steady-state behavior. Must identify and exclude transitional periods from any baseline or capacity analysis.
+</div>
+</td>
+<td><canvas id="canvas5" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">6. Telemetry Sampling at 100Gbps</div>
+<div class="pitfall-desc">
+Can't mirror 100% of 100Gbps traffic for analysis. Sample 1:1000 packets. Rare attack patterns may not appear in ANY sample. Statistical visibility degrades with speed — faster network = worse security visibility. A 1-in-million event at 100Gbps has near-zero probability of appearing in sampled telemetry.
+</div>
+</td>
+<td><canvas id="canvas6" width="720" height="300"></canvas></td>
+</tr>
+</table>
+
+<script>
+function setupCanvas(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 200 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    return ctx;
+}
+
+// Canvas 1: Microbursts Invisible at Polling Interval
+(function() {
+    var ctx = setupCanvas('canvas1');
+    var w = 720, h = 200;
+
+    // Background
+    ctx.fillStyle = '#f9fbfd';
+    ctx.fillRect(0, 0, w, h);
+
+    // Draw axes
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(60, 20);
+    ctx.lineTo(60, 160);
+    ctx.lineTo(690, 160);
+    ctx.stroke();
+
+    // Y-axis labels
+    ctx.fillStyle = '#555';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('100%', 55, 35);
+    ctx.fillText('50%', 55, 92);
+    ctx.fillText('0%', 55, 163);
+
+    // X-axis labels
+    ctx.textAlign = 'center';
+    for (var i = 0; i <= 5; i++) {
+        var x = 60 + i * 126;
+        ctx.fillText(i * 5 + 's', x, 178);
+    }
+
+    // Draw actual microburst pattern (reality)
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.3)';
+    for (var sec = 0; sec < 25; sec++) {
+        var baseX = 60 + (sec / 25) * 630;
+        var burstWidth = 630 * 0.2 / 25;
+        ctx.fillRect(baseX, 30, burstWidth, 130);
+    }
+
+    // Label reality
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('Reality: 100% bursts (200ms each)', 80, 25);
+
+    // Draw SNMP sample points
+    ctx.fillStyle = '#2980b9';
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2;
+    var snmpY = 160 - (0.3 * 140);
+    ctx.beginPath();
+    for (var i = 0; i <= 5; i++) {
+        var x = 60 + i * 126;
+        if (i === 0) ctx.moveTo(x, snmpY);
+        else ctx.lineTo(x, snmpY);
+    }
+    ctx.stroke();
+
+    // SNMP dots
+    for (var i = 0; i <= 5; i++) {
+        var x = 60 + i * 126;
+        ctx.beginPath();
+        ctx.arc(x, snmpY, 6, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // SNMP label
+    ctx.font = '14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#2980b9';
+    ctx.textAlign = 'left';
+    ctx.fillText('SNMP reports: 30%', 400, snmpY - 10);
+
+    // Title
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Temporal Aliasing: Bursts Between Samples', w / 2, 195);
+})();
+
+// Canvas 2: ECMP Hash Creates Uneven Load
+(function() {
+    var ctx = setupCanvas('canvas2');
+    var w = 720, h = 200;
+
+    ctx.fillStyle = '#f9fbfd';
+    ctx.fillRect(0, 0, w, h);
+
+    var paths = [
+        { label: 'Path 1', util: 0.90, color: '#e74c3c' },
+        { label: 'Path 2', util: 0.20, color: '#27ae60' },
+        { label: 'Path 3', util: 0.20, color: '#27ae60' },
+        { label: 'Path 4', util: 0.20, color: '#27ae60' }
+    ];
+
+    var barHeight = 28;
+    var startY = 20;
+    var barStartX = 120;
+    var maxBarWidth = 480;
+
+    for (var i = 0; i < paths.length; i++) {
+        var y = startY + i * 42;
+
+        // Label
+        ctx.fillStyle = '#333';
+        ctx.font = '14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText(paths[i].label, 110, y + 19);
+
+        // Background bar
+        ctx.fillStyle = '#ecf0f1';
+        ctx.fillRect(barStartX, y, maxBarWidth, barHeight);
+
+        // Utilization bar
+        ctx.fillStyle = paths[i].color;
+        ctx.fillRect(barStartX, y, maxBarWidth * paths[i].util, barHeight);
+
+        // Percentage label
+        ctx.fillStyle = '#333';
+        ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(Math.round(paths[i].util * 100) + '%', barStartX + maxBarWidth * paths[i].util + 8, y + 19);
+    }
+
+    // Average line
+    var avgX = barStartX + maxBarWidth * 0.37;
+    ctx.setLineDash([6, 4]);
+    ctx.strokeStyle = '#8e44ad';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(avgX, 15);
+    ctx.lineTo(avgX, 185);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Average label
+    ctx.fillStyle = '#8e44ad';
+    ctx.font = '14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Average = 37%', avgX, 192);
+
+    // Danger label
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('NEAR FAILURE', barStartX + maxBarWidth * 0.90 + 30, 38);
+
+    // Title
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Average Hides Imbalance', w / 2 + 50, 192);
+})();
+
+// Canvas 3: Elephant vs Mice Flows
+(function() {
+    var ctx = setupCanvas('canvas3');
+    var w = 720, h = 200;
+
+    ctx.fillStyle = '#f9fbfd';
+    ctx.fillRect(0, 0, w, h);
+
+    // Buffer visualization
+    var bufX = 60, bufY = 30, bufW = 400, bufH = 120;
+
+    // Buffer outline
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(bufX, bufY, bufW, bufH);
+
+    // Elephant flow (takes 75% of buffer)
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(bufX + 2, bufY + 2, bufW * 0.75 - 2, bufH - 4);
+
+    // Mice flows (squeezed into 25%)
+    ctx.fillStyle = '#3498db';
+    for (var i = 0; i < 8; i++) {
+        var miceX = bufX + bufW * 0.75 + 5 + (i % 4) * 24;
+        var miceY = bufY + 10 + Math.floor(i / 4) * 55;
+        ctx.fillRect(miceX, miceY, 18, 45);
+    }
+
+    // Labels for buffer
+    ctx.fillStyle = '#fff';
+    ctx.font = '15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('ELEPHANT FLOW', bufX + bufW * 0.375, bufY + 55);
+    ctx.fillText('(1 backup job: 10Gbps)', bufX + bufW * 0.375, bufY + 78);
+
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('Mice', bufX + bufW * 0.875, bufY + bufH + 15);
+
+    // Latency indicators on right side
+    var indX = 500, indY = 30;
+    ctx.font = '14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(indX, indY, 12, 12);
+    ctx.fillStyle = '#333';
+    ctx.fillText('Elephant: 2ms latency', indX + 18, indY + 11);
+
+    ctx.fillStyle = '#3498db';
+    ctx.fillRect(indX, indY + 30, 12, 12);
+    ctx.fillStyle = '#333';
+    ctx.fillText('Mice: 85ms latency!', indX + 18, indY + 41);
+
+    // Latency bar comparison
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(indX, indY + 70, 20, 16);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(indX, indY + 95, 180, 16);
+
+    ctx.fillStyle = '#333';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('Expected', indX + 25, indY + 83);
+    ctx.fillText('Actual mice tail latency', indX + 185, indY + 108);
+
+    // Buffer label
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#555';
+    ctx.textAlign = 'center';
+    ctx.fillText('Switch Buffer Space', bufX + bufW / 2, bufY - 10);
+
+    // Title
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Buffer Starvation: Aggregate Hides Per-Flow Pain', w / 2, 190);
+})();
+
+// Canvas 4: Buffer Bloat
+(function() {
+    var ctx = setupCanvas('canvas4');
+    var w = 720, h = 200;
+
+    ctx.fillStyle = '#f9fbfd';
+    ctx.fillRect(0, 0, w, h);
+
+    var chartW = 280, chartH = 120;
+
+    // Left chart: Packet Loss
+    var lx = 60, ly = 40;
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(lx, ly);
+    ctx.lineTo(lx, ly + chartH);
+    ctx.lineTo(lx + chartW, ly + chartH);
+    ctx.stroke();
+
+    // Flat line at 0%
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(lx + 10, ly + chartH - 5);
+    ctx.lineTo(lx + chartW - 10, ly + chartH - 5);
+    ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = '#555';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('5%', lx - 5, ly + 10);
+    ctx.fillText('0%', lx - 5, ly + chartH + 3);
+    ctx.textAlign = 'center';
+    ctx.fillText('Time', lx + chartW / 2, ly + chartH + 18);
+
+    ctx.font = '15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('Packet Loss', lx + chartW / 2, ly - 15);
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('"Looks Healthy"', lx + chartW / 2, ly - 2);
+
+    // Right chart: Latency
+    var rx = 400, ry = 40;
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(rx, ry);
+    ctx.lineTo(rx, ry + chartH);
+    ctx.lineTo(rx + chartW, ry + chartH);
+    ctx.stroke();
+
+    // Rising latency curve
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(rx + 10, ry + chartH - 10);
+    for (var i = 1; i <= 50; i++) {
+        var px = rx + 10 + (i / 50) * (chartW - 20);
+        var py = ry + chartH - 10 - (Math.pow(i / 50, 1.5)) * (chartH - 20);
+        ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = '#555';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('50ms', rx - 5, ry + 10);
+    ctx.fillText('0.1ms', rx - 5, ry + chartH + 3);
+    ctx.textAlign = 'center';
+    ctx.fillText('Time', rx + chartW / 2, ry + chartH + 18);
+
+    ctx.font = '15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Latency', rx + chartW / 2, ry - 15);
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('"Actual Problem"', rx + chartW / 2, ry - 2);
+
+    // Title
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Loss Metrics Deceive: Latency Reveals Truth', w / 2, 190);
+})();
+
+// Canvas 5: Fabric Upgrade Partial-State
+(function() {
+    var ctx = setupCanvas('canvas5');
+    var w = 720, h = 200;
+
+    ctx.fillStyle = '#f9fbfd';
+    ctx.fillRect(0, 0, w, h);
+
+    // Timeline
+    var tlY = 110, tlStartX = 60, tlEndX = 680;
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(tlStartX, tlY);
+    ctx.lineTo(tlEndX, tlY);
+    ctx.stroke();
+
+    // Three zones
+    var zone1End = 240, zone2End = 460;
+
+    // Pre-upgrade: steady signal
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (var x = tlStartX; x < zone1End; x += 2) {
+        var y = tlY - 30 + Math.sin((x - tlStartX) * 0.05) * 8;
+        if (x === tlStartX) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // During upgrade: chaotic signal
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    var seed = 42;
+    for (var x = zone1End; x < zone2End; x += 2) {
+        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+        var noise = ((seed / 0x7fffffff) - 0.5) * 60;
+        var y = tlY - 30 + noise;
+        if (x === zone1End) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Post-upgrade: new steady signal
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (var x = zone2End; x < tlEndX; x += 2) {
+        var y = tlY - 35 + Math.sin((x - zone2End) * 0.04) * 6;
+        if (x === zone2End) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Zone dividers
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = '#7f8c8d';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(zone1End, 25);
+    ctx.lineTo(zone1End, 150);
+    ctx.moveTo(zone2End, 25);
+    ctx.lineTo(zone2End, 150);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Cross out the middle section
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(zone1End + 10, 50);
+    ctx.lineTo(zone2End - 10, 140);
+    ctx.moveTo(zone1End + 10, 140);
+    ctx.lineTo(zone2End - 10, 50);
+    ctx.stroke();
+
+    // Zone labels
+    ctx.font = '14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('Pre-Upgrade', (tlStartX + zone1End) / 2, 25);
+    ctx.fillText('(Steady State)', (tlStartX + zone1End) / 2, 42);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('During Upgrade', (zone1End + zone2End) / 2, 25);
+    ctx.fillText('EXCLUDE', (zone1End + zone2End) / 2, 42);
+
+    ctx.fillStyle = '#2980b9';
+    ctx.fillText('Post-Upgrade', (zone2End + tlEndX) / 2, 25);
+    ctx.fillText('(New Steady State)', (zone2End + tlEndX) / 2, 42);
+
+    // Time labels
+    ctx.fillStyle = '#555';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('Maintenance Window', (zone1End + zone2End) / 2, 160);
+
+    // Title
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Transitional Data Is Not Representative', w / 2, 190);
+})();
+
+// Canvas 6: Telemetry Sampling at 100Gbps
+(function() {
+    var ctx = setupCanvas('canvas6');
+    var w = 720, h = 200;
+
+    ctx.fillStyle = '#f9fbfd';
+    ctx.fillRect(0, 0, w, h);
+
+    // Axes
+    var axX = 80, axY = 25, chartW = 560, chartH = 130;
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(axX, axY);
+    ctx.lineTo(axX, axY + chartH);
+    ctx.lineTo(axX + chartW, axY + chartH);
+    ctx.stroke();
+
+    // Y-axis label
+    ctx.fillStyle = '#555';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('100%', axX - 5, axY + 8);
+    ctx.fillText('50%', axX - 5, axY + chartH / 2 + 4);
+    ctx.fillText('0%', axX - 5, axY + chartH + 4);
+
+    ctx.save();
+    ctx.translate(15, axY + chartH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('Detection Probability', 0, 0);
+    ctx.restore();
+
+    // X-axis labels
+    ctx.textAlign = 'center';
+    var speeds = ['1Gbps', '10Gbps', '40Gbps', '100Gbps', '400Gbps'];
+    for (var i = 0; i < speeds.length; i++) {
+        var x = axX + (i / (speeds.length - 1)) * chartW;
+        ctx.fillText(speeds[i], x, axY + chartH + 18);
+    }
+    ctx.fillText('Link Speed (at 1:1000 sampling)', axX + chartW / 2, axY + chartH + 35);
+
+    // Detection curve - declining as speed increases
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i <= 100; i++) {
+        var t = i / 100;
+        var x = axX + t * chartW;
+        var prob = Math.exp(-t * 3.5) * 0.85 + 0.05;
+        var y = axY + chartH - prob * chartH;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Danger zone shading
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.1)';
+    ctx.fillRect(axX + chartW * 0.5, axY, chartW * 0.5, chartH);
+
+    // Annotations
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('Rare event: ~0.001% of traffic', axX + chartW * 0.4, axY + 15);
+
+    // Arrow pointing to low detection area
+    ctx.fillStyle = '#c0392b';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Effectively blind', axX + chartW * 0.8, axY + chartH - 25);
+    ctx.fillText('to rare attacks', axX + chartW * 0.8, axY + chartH - 10);
+
+    // Title
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Faster Network = Worse Security Visibility', w / 2, 192);
+})();
+</script>
+</body>
+</html>

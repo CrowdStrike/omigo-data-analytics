@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bin Sizing Strategy</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 40px 20px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; }
+.nav a:hover { text-decoration: underline; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-table tr:nth-child(even) td { background: #fafcfe; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+.toc { background: #f8fafb; border: 1px solid #e0e0e0; padding: 20px 30px; margin: 20px 0 30px; border-radius: 4px; }
+.toc ol { margin: 10px 0 0 20px; font-size: 0.92em; }
+.toc ol li { margin: 5px 0; }
+.toc ol li a { color: #2980b9; text-decoration: none; }
+.toc ol li a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+
+<h1>Bin Sizing Strategy</h1>
+<p class="subtitle">How bin width affects shape perception — and why we run at multiple scales.</p>
+
+<div class="toc">
+<strong>Table of Contents</strong>
+<ol>
+<li><a href="#problem">The Bin Size Problem</a></li>
+<li><a href="#formulas">Standard Formulas</a></li>
+<li><a href="#strategies">Two Complementary Strategies</a></li>
+<li><a href="#persistence">Multi-Resolution Persistence</a></li>
+<li><a href="#examples">Real-World Examples</a></li>
+</ol>
+</div>
+
+<h2 id="problem">1. The Bin Size Problem</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Same Data, Different Bin Widths = Different Shapes</div>
+<ul>
+<li><strong>Too few bins (wide):</strong> Smooths out real peaks and valleys. A bimodal distribution looks unimodal.</li>
+<li><strong>Too many bins (narrow):</strong> Noise looks like peaks. A smooth normal appears multimodal.</li>
+<li><strong>The "right" number:</strong> Depends on n, shape, and what you're detecting — which you don't know yet.</li>
+</ul>
+<p><strong>This is not just visualization.</strong> If shape detection runs at the wrong bin width, every downstream decision (test selection, splitting, feature evaluation) inherits the error.</p>
+</td>
+<td>
+<canvas id="c1" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="formulas">2. Standard Formulas</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Each Formula Makes Different Assumptions</div>
+<ul>
+<li><strong>Square root:</strong> √n bins. Simple, no assumptions. Ignores data spread.</li>
+<li><strong>Sturges:</strong> ⌈log₂(n) + 1⌉. Assumes normality. Too few for skewed data.</li>
+<li><strong>Scott:</strong> range / (3.49 × σ × n⁻¹/³). Assumes smooth. Oversmooths tails.</li>
+<li><strong>Freedman-Diaconis:</strong> range / (2 × IQR × n⁻¹/³). Robust to outliers.</li>
+</ul>
+<p><strong>Problem:</strong> Every formula gives ONE answer. No single bin count is correct for all shapes. You can't know which formula's assumptions hold until after you've detected the shape — a chicken-and-egg problem.</p>
+</td>
+<td>
+<canvas id="c2" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="strategies">3. Two Complementary Strategies</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Adaptive (Resolution) + Static (Density)</div>
+<ul>
+<li><strong>Strategy A — Adaptive:</strong> Bin count from formulas (sqrt, Sturges, Scott, FD). Optimizes resolution — finest detail you can resolve. May produce bins with very few observations.</li>
+<li><strong>Strategy B — Static:</strong> bins = n / min_per_bin (50 or 100). Guarantees every bin has enough data for statistical conclusions.</li>
+<li><strong>Combined:</strong> Run shape detection at ALL scales. Trust what persists across resolutions.</li>
+</ul>
+<p><strong>Example (n=1000):</strong> √n=31 bins, Sturges=11, n/50=20, n/100=10. Run all four → if bimodality shows at 11, 20, and 31 bins, it's real.</p>
+</td>
+<td>
+<canvas id="c3" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="persistence">4. Multi-Resolution Persistence</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Real Structure Persists Across Scales; Artifacts Don't</div>
+<ul>
+<li>Run shape detection at 4-6 different bin counts (the "resolution ladder")</li>
+<li><strong>Persistence score</strong> = (resolutions that detect it) / (total resolutions)</li>
+<li>Score 1.0: detected everywhere → definite real structure</li>
+<li>Score 0.67+: detected at most scales → likely real</li>
+<li>Score 0.33-0.66: ambiguous — marginal or artifact</li>
+<li>Score < 0.33: probably noise created by that specific bin width</li>
+</ul>
+<p><strong>Example:</strong> A second peak at 10 bins and 15 bins but not at 20 or 31 → persistence 0.33 → probably noise, not real bimodality.</p>
+</td>
+<td>
+<canvas id="c4" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="examples">5. Real-World Examples</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Income: Bimodality Depends on Resolution</div>
+<ul>
+<li>At 10 bins: looks like single right-skewed hill</li>
+<li>At 30 bins: a dip appears around $45k — potential bimodal?</li>
+<li>At 50 bins: the dip is noise (different position every time)</li>
+<li><strong>Verdict:</strong> Persistence 0.3 → not truly bimodal. Right-skewed unimodal confirmed.</li>
+</ul>
+</td>
+<td>
+<canvas id="c5a" width="720" height="240"></canvas>
+</td>
+</tr>
+</table>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Hours/Week: Spike Persists at All Resolutions</div>
+<ul>
+<li>At 10 bins: massive spike in bin containing 40</li>
+<li>At 20 bins: spike still dominates</li>
+<li>At 50 bins: spike clearly isolated at exactly 40</li>
+<li><strong>Verdict:</strong> Persistence 1.0 → the spike at 40 is undeniable real structure.</li>
+</ul>
+</td>
+<td>
+<canvas id="c5b" width="720" height="240"></canvas>
+</td>
+</tr>
+</table>
+
+<div class="philosophy">
+<strong>The CNN shape classifier uses a fixed 64-bin rendering.</strong> But multi-resolution analysis runs separately to validate: if the CNN says "bimodal" but persistence is low, downgrade confidence. If the CNN says "bell" but persistence reveals a hidden valley, flag for review.
+</div>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id);
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return {ctx: ctx, w: w, h: h};
+}
+
+// 1. Same data different bins
+(function() {
+    var s = setup('c1'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Same Data — 5 Bins vs 15 Bins vs 50 Bins', 40, 22);
+
+    // Underlying bimodal data rendered at 3 resolutions
+    var data5 = [25, 30, 28, 22, 15]; // looks unimodal
+    var data15 = [5, 10, 18, 25, 20, 12, 8, 6, 7, 12, 20, 22, 18, 10, 5]; // bimodal visible
+    var data50 = []; for (var i = 0; i < 50; i++) { // noisy
+        var v = Math.exp(-0.5*Math.pow((i-15)/5,2))*20 + Math.exp(-0.5*Math.pow((i-35)/6,2))*18;
+        data50.push(v + Math.sin(i*1.7)*3);
+    }
+
+    function drawBins(ctx, bins, x, y, w, h, label, maxV) {
+        var bW = w / bins.length;
+        if (!maxV) maxV = Math.max.apply(null, bins);
+        bins.forEach(function(v, i) {
+            var barH = (v / maxV) * (h - 20);
+            ctx.fillStyle = 'rgba(26, 82, 118, 0.4)';
+            ctx.fillRect(x + i*bW, y + h - 20 - barH, bW-1, barH);
+        });
+        ctx.fillStyle = '#666'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText(label, x + w/2, y + h - 2);
+    }
+
+    drawBins(ctx, data5, 30, 40, 200, 200, '5 bins: "unimodal"', 32);
+    drawBins(ctx, data15, 260, 40, 200, 200, '15 bins: bimodal!', 26);
+    drawBins(ctx, data50, 490, 40, 200, 200, '50 bins: noisy mess', 24);
+})();
+
+// 2. Formulas comparison
+(function() {
+    var s = setup('c2'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Bin Count Formulas for n=1000', 40, 22);
+
+    var formulas = [
+        {name: 'Sturges', bins: 11, color: '#e74c3c'},
+        {name: 'n/100 (static)', bins: 10, color: '#e67e22'},
+        {name: 'n/50 (static)', bins: 20, color: '#f39c12'},
+        {name: 'Scott (typical)', bins: 18, color: '#2980b9'},
+        {name: 'Freedman-Diaconis', bins: 24, color: '#8e44ad'},
+        {name: '√n', bins: 31, color: '#27ae60'}
+    ];
+
+    var maxBins = 35;
+    formulas.forEach(function(f, i) {
+        var y = 48 + i * 36;
+        var barW = (f.bins / maxBins) * 400;
+        ctx.fillStyle = f.color; ctx.globalAlpha = 0.3;
+        ctx.fillRect(200, y, barW, 26); ctx.globalAlpha = 1;
+        ctx.strokeStyle = f.color; ctx.lineWidth = 1.5;
+        ctx.strokeRect(200, y, barW, 26);
+        ctx.fillStyle = '#333'; ctx.font = '17px -apple-system'; ctx.textAlign = 'left';
+        ctx.fillText(f.name, 40, y + 18);
+        ctx.fillStyle = f.color; ctx.font = 'bold 17px -apple-system';
+        ctx.fillText(f.bins + ' bins', 200 + barW + 10, y + 18);
+    });
+
+    ctx.fillStyle = '#888'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Range: 10-31 bins. Which is "right"? → Run all of them.', w/2, h - 10);
+})();
+
+// 3. Two strategies
+(function() {
+    var s = setup('c3'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Strategy A (Resolution) + Strategy B (Density)', 40, 22);
+
+    // Left: adaptive
+    ctx.fillStyle = '#2980b9'; ctx.globalAlpha = 0.1;
+    ctx.fillRect(30, 45, 320, 180); ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#2980b9'; ctx.lineWidth = 2;
+    ctx.strokeRect(30, 45, 320, 180);
+    ctx.fillStyle = '#2980b9'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('A: Adaptive (Resolution)', 190, 68);
+    ctx.fillStyle = '#333'; ctx.font = '17px -apple-system';
+    ctx.fillText('√n, Sturges, Scott, FD', 190, 95);
+    ctx.fillText('Goal: finest detail', 190, 120);
+    ctx.fillText('Trade-off: some bins may', 190, 145);
+    ctx.fillText('have very few observations', 190, 165);
+    ctx.fillStyle = '#2980b9'; ctx.fillText('Finds peaks & valleys', 190, 195);
+
+    // Right: static
+    ctx.fillStyle = '#27ae60'; ctx.globalAlpha = 0.1;
+    ctx.fillRect(380, 45, 320, 180); ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 2;
+    ctx.strokeRect(380, 45, 320, 180);
+    ctx.fillStyle = '#27ae60'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('B: Static (Density)', 540, 68);
+    ctx.fillStyle = '#333'; ctx.font = '17px -apple-system';
+    ctx.fillText('n/50, n/100', 540, 95);
+    ctx.fillText('Goal: every bin has n≥50+', 540, 120);
+    ctx.fillText('Trade-off: may miss fine', 540, 145);
+    ctx.fillText('structure (fewer bins)', 540, 165);
+    ctx.fillStyle = '#27ae60'; ctx.fillText('Enables statistics per bin', 540, 195);
+
+    ctx.fillStyle = '#555'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Run BOTH → trust what persists', w/2, h - 12);
+})();
+
+// 4. Persistence scoring
+(function() {
+    var s = setup('c4'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Persistence: Does Structure Survive Across Resolutions?', 40, 22);
+
+    var features = [
+        {name: 'Second peak', resolutions: [0,1,1,1,0,0], score: 0.5, verdict: 'Ambiguous'},
+        {name: 'Right tail', resolutions: [1,1,1,1,1,1], score: 1.0, verdict: 'Real!'},
+        {name: 'Small bump', resolutions: [0,0,1,0,0,0], score: 0.17, verdict: 'Noise'}
+    ];
+
+    var resLabels = ['10', '15', '18', '20', '24', '31'];
+    // Header
+    ctx.fillStyle = '#666'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    resLabels.forEach(function(l, i) { ctx.fillText(l, 230 + i*55, 55); });
+    ctx.fillText('bins →', 180, 55);
+
+    features.forEach(function(f, fi) {
+        var y = 75 + fi * 60;
+        ctx.fillStyle = '#333'; ctx.font = '17px -apple-system'; ctx.textAlign = 'left';
+        ctx.fillText(f.name, 40, y + 20);
+
+        f.resolutions.forEach(function(r, i) {
+            var x = 230 + i*55 - 12;
+            ctx.fillStyle = r ? 'rgba(39,174,96,0.5)' : 'rgba(200,200,200,0.3)';
+            ctx.fillRect(x, y, 24, 30);
+            ctx.strokeStyle = r ? '#27ae60' : '#ddd'; ctx.lineWidth = 1;
+            ctx.strokeRect(x, y, 24, 30);
+            ctx.fillStyle = r ? '#27ae60' : '#ccc'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+            ctx.fillText(r ? '✓' : '·', x + 12, y + 20);
+        });
+
+        var scoreColor = f.score >= 0.67 ? '#27ae60' : (f.score >= 0.34 ? '#e67e22' : '#e74c3c');
+        ctx.fillStyle = scoreColor; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+        ctx.fillText(f.score.toFixed(2) + ' → ' + f.verdict, 570, y + 20);
+    });
+})();
+
+// 5a. Income resolution
+(function() {
+    var s = setup('c5a'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Income: Apparent Dip Doesn\'t Persist → Right-Skewed Confirmed', 40, 22);
+
+    // 10 bins: smooth right skew
+    var d10 = [35, 25, 15, 10, 6, 4, 3, 1, 1, 0];
+    // 30 bins: dip appears
+    var d30 = [15,12,10,9,8,7,6,5,5,4,3,4,3,2,3,2,2,1,1,1,1,1,0,0,1,0,0,0,0,0];
+
+    function mini(ctx, bins, x, y, w, h, label) {
+        var bW = w / bins.length;
+        var maxV = Math.max.apply(null, bins);
+        bins.forEach(function(v, i) {
+            ctx.fillStyle = 'rgba(26,82,118,0.4)';
+            ctx.fillRect(x + i*bW, y + h - (v/maxV)*h, bW-1, (v/maxV)*h);
+        });
+        ctx.fillStyle = '#666'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText(label, x + w/2, y + h + 16);
+    }
+
+    mini(ctx, d10, 40, 50, 300, 140, '10 bins: smooth right-skew');
+    mini(ctx, d30, 390, 50, 300, 140, '30 bins: dip at $45k (noise)');
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Persistence 0.3 → not bimodal', w/2, h - 5);
+})();
+
+// 5b. Hours spike
+(function() {
+    var s = setup('c5b'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Hours/Week: Spike at 40 Persists at Every Resolution', 40, 22);
+
+    var d10 = [3, 5, 8, 12, 50, 15, 5, 2, 1, 0]; // spike in bin 5
+    var d20 = [1,2,3,4,5,6,7,8,50,12,8,5,4,3,2,1,1,1,0,0]; // spike in bin 9
+    var d50 = []; for (var i = 0; i < 50; i++) d50.push(i === 20 ? 50 : (Math.exp(-0.5*Math.pow((i-20)/8,2))*8));
+
+    function mini(ctx, bins, x, y, w, h, label) {
+        var bW = w / bins.length;
+        var maxV = Math.max.apply(null, bins);
+        bins.forEach(function(v, i) {
+            var isSpike = v === maxV;
+            ctx.fillStyle = isSpike ? 'rgba(231,76,60,0.5)' : 'rgba(26,82,118,0.35)';
+            ctx.fillRect(x + i*bW, y + h - (v/maxV)*h, bW-1, (v/maxV)*h);
+        });
+        ctx.fillStyle = '#666'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText(label, x + w/2, y + h + 16);
+    }
+
+    mini(ctx, d10, 30, 50, 200, 130, '10 bins');
+    mini(ctx, d20, 260, 50, 200, 130, '20 bins');
+    mini(ctx, d50, 490, 50, 200, 130, '50 bins');
+
+    ctx.fillStyle = '#27ae60'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Persistence 1.0 → spike is real structure', w/2, h - 5);
+})();
+</script>
+</body>
+</html>

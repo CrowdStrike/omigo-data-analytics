@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>139. Curse of Sampling</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 20px 10px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 40%; }
+.obj-table td:last-child { width: 60%; text-align: center; }
+.obj-table tr:nth-child(even) td { background: #fafcfe; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+</style>
+</head>
+<body>
+
+<h1>Curse of Sampling</h1>
+<p class="subtitle">When data comes from multiple generating distributions (sub-populations, rare classes, geographic/demographic segments), random sampling does NOT capture each distribution proportionally. Rare modes vanish. Stratified sampling fixes one problem but distorts natural rates. There is no free lunch.</p>
+
+<div class="philosophy">
+<strong>The fundamental problem:</strong> Your population is a mixture of K generating distributions. A random sample of size n doesn't give you n/K from each. It gives you samples proportional to each mode's prevalence — so rare modes get 0-2 samples (not enough to estimate anything), and class-based re-sampling to fix this distorts the natural base rates that your model needs to learn. Every sampling strategy helps one thing and hurts another.
+</div>
+
+<h2>Pitfall 1: Rare Class Gets Zero Samples</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Positive Rate 0.1% → Random Sample Almost Certainly Misses It</div>
+<ul>
+<li><strong>The math:</strong> Fraud rate = 0.1% (1 in 1000). You sample 10,000 from 10M transactions. Expected fraud cases in sample: 10. But fraud is clustered (same actor, same day) — if you miss that cluster, you get 0-3 cases. You literally cannot train a model on 3 positive examples.</li>
+<li><strong>It's worse than random:</strong> Rare events often have different patterns than common events. They're at different times (fraud at 3am), different amounts ($0.01 test charges), different locations (new devices). Random sampling over-represents the common pattern and under-represents exactly the tail you're trying to detect.</li>
+<li><strong>Increasing sample size doesn't help linearly:</strong> To get 100 fraud cases at 0.1% rate, you need 100K samples. To get enough to SEGMENT fraud (by type) — you need 100 per type × 5 types = 500 fraud → 500K samples. For rare sub-types (new attack vector, 0.001%), you need your ENTIRE dataset. Sampling is pointless — you need exhaustive collection of the rare class.</li>
+<li><strong>Real case — cancer screening:</strong> Disease prevalence = 0.5%. Clinical trial samples 2000 patients. Expected positive: 10. Need 10+ per subtype (age group × cancer stage × comorbidity). 10 total across ALL subtypes = can't analyze any subgroup reliably. Result: "insufficient data to draw conclusions on subgroups" for the MOST important clinical questions.</li>
+</ul>
+</td><td><canvas id="c1" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 2: Stratified Sampling Distorts Natural Base Rates</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">50/50 Class Balance = Model Learns Wrong Priors</div>
+<ul>
+<li><strong>The "fix":</strong> Fraud is 0.1% of data. You oversample fraud to 50/50 for training. Model now sees equal fraud/legitimate. It learns: P(fraud) ≈ 50%. Deploy to production where P(fraud) = 0.1%. Every prediction's posterior is wildly miscalibrated. Model thinks 40% of transactions are fraud when it's really 0.1%.</li>
+<li><strong>Why calibration breaks:</strong> Model learns P(Y|X) from training distribution where P(Y) = 0.5. In production P(Y) = 0.001. The posterior shifts by: P_real(Y|X) = P_train(Y|X) × (0.001/0.5) / normalization. You can calibrate post-hoc — but most teams forget this step and ship the miscalibrated model directly.</li>
+<li><strong>Threshold becomes meaningless:</strong> "Classify as fraud if P > 0.5" made sense in 50/50 training. In production with real base rate: threshold should be ~0.001 / (false positive cost). Picking threshold on balanced training data → completely wrong operating point in production. Precision/recall from training: fiction.</li>
+<li><strong>The deeper problem:</strong> Oversampling doesn't create NEW information about the rare class. It duplicates existing examples. Model memorizes the 10 fraud cases (overfits). Thinks all fraud looks exactly like those 10 examples. Novel fraud patterns (the ones you actually need to catch): completely missed.</li>
+</ul>
+</td><td><canvas id="c2" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 3: Sub-Populations Disappear in Samples</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">5 Modes in Population → Sample Captures 2-3. Others Vanish.</div>
+<ul>
+<li><strong>The problem:</strong> Feature "income" has 5 modes: students ($0-15K), entry-level ($30-50K), mid-career ($60-90K), senior ($120-180K), executives ($300K+). Population sizes: 20%, 35%, 25%, 15%, 5%. Sample 1000: executives expected = 50. But executives cluster in specific zip codes — if your sample under-represents those zips, you get 5-10 executives. Not enough to characterize their mode.</li>
+<li><strong>Cascading sub-population loss:</strong> Income × Age × Location × Device. 5 × 4 × 10 × 3 = 600 sub-groups. Sample 10,000. Average per group: 17. Many groups: 0-3 observations. The SPECIFIC sub-populations where behavior differs most (elderly on mobile in rural areas) are exactly the ones with fewest samples.</li>
+<li><strong>Multimodal features lose modes:</strong> If a feature is trimodal (3 generating distributions) and the third mode is 5% of population, a 1000-person sample gets ~50 from that mode. Is 50 enough to detect the mode EXISTS? Maybe. Enough to estimate its parameters (mean, spread)? Barely. Enough to model interactions with other features? No.</li>
+<li><strong>Model thinks it's unimodal:</strong> With only 50 points from Mode 3 (out of 1000 total), any histogram/KDE will show it as a tiny bump or noise in the tail. Model treats it as outliers, not as a legitimate population. The sample's shape doesn't represent the population's shape for rare modes.</li>
+</ul>
+</td><td><canvas id="c3" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 4: Geographic Bias — Some Locations Systematically Under-Sampled</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Online Sampling Over-Represents Urban, Young, English-Speaking</div>
+<ul>
+<li><strong>The mechanism:</strong> Online surveys/data collection requires internet access, digital literacy, free time, and willingness to participate. This systematically excludes: rural populations, elderly, non-English speakers, low-income (no smartphone), privacy-conscious (opt out), shift workers (no time). Your "random sample" is random WITHIN the subset that's reachable.</li>
+<li><strong>App usage data:</strong> "We have 50M users, surely that's representative." No — it's representative of people who USE YOUR APP. People who don't use your app (the other 7.9 billion humans) are invisible. Your sample is 100% biased toward app-users. Conclusions about "people" are really conclusions about "your users."</li>
+<li><strong>Health data by location:</strong> Cleveland Clinic data represents Cleveland patients. Mayo Clinic data represents Mayo patients. Neither represents rural Alabama or inner-city Detroit. Models trained on clinic data → deployed to general population → systematic failure for demographics not represented in the training clinic's catchment area.</li>
+<li><strong>The interaction:</strong> Geographic bias × rare disease = catastrophe. Disease prevalent in rural India (malaria subtype). Training data from US/EU hospitals. Disease literally absent from training. Model deployed globally: zero sensitivity for conditions it never saw because the GEOGRAPHY where the condition exists was never sampled.</li>
+</ul>
+</td><td><canvas id="c4" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 5: Age/Demographic Strata Have Different Distributions</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Same Feature, Different Shape Per Age Group — Sample Loses the Structure</div>
+<ul>
+<li><strong>Income by age:</strong> 18-25: mode at $25K (entry). 25-35: bimodal ($45K employed, $0 grad students). 35-50: mode at $80K. 50-65: mode at $110K. 65+: bimodal ($30K retirement, $0 pension-only). Aggregate: 5+ modes. Sample 1000 people equally → get ~200 per age band → only 50-100 per mode within each band. Not enough to fit per-group models.</li>
+<li><strong>The age × feature interaction:</strong> "Feature X predicts Y" overall. But: in 18-25, correlation is +0.4. In 50-65, correlation is -0.2. The overall +0.15 is a Simpson's paradox artifact. With 200 per age group in your sample, you MIGHT detect this — but power is terrible. 5-group interaction → need 1000+ per group → need 5000+ total sample. Most studies have 500.</li>
+<li><strong>Sampling doesn't preserve conditional distributions:</strong> You sample 1000 preserving age proportions (200 young, 300 mid, 500 old). But within "young": do you preserve urban/rural? income levels? education? Each sub-stratification halves your per-cell count. By the time you stratify on 4 dimensions: 2-5 per cell. Meaningless.</li>
+<li><strong>The impossible requirement:</strong> To represent all sub-populations with 30+ observations (minimum for CLT): K sub-populations × 30 = minimum sample size. With 100 sub-populations (5 age × 5 location × 4 income): need 3000 minimum. With intersectional strata (1000+ combinations): need 30,000+. Most datasets "seem big" but are tiny relative to their population structure.</li>
+</ul>
+</td><td><canvas id="c5" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 6: Time-Based Sampling Misses Regime Changes</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Sample From "Last Month" — Miss the Other 11 Months' Patterns</div>
+<ul>
+<li><strong>Seasonal modes vanish:</strong> E-commerce has distinct regimes: Jan (returns/exchanges), Feb-Mar (normal), Apr-May (spring deals), Jun-Aug (summer lull), Sep (back-to-school), Oct-Nov (pre-holiday browsing), Dec (holiday buying frenzy). Sample one month → see ONE regime. Model: "this is how users behave." Deploy year-round: catastrophic drift 11 out of 12 months.</li>
+<li><strong>Day-of-week distribution differs:</strong> Feature "session_length" on weekdays: mode at 3 min (work browsing). Weekends: mode at 15 min (leisure). Sample only weekdays → miss the weekend mode entirely. Sample both → get a bimodal mixture. If you didn't KNOW about day-of-week effect, you'd model it as one distribution and get both wrong.</li>
+<li><strong>Pre/post event:</strong> COVID changed everything. Model trained on 2019 data → 2020 data is a different world. Sample spanning 2019-2020 → bimodal (pre-COVID regime + post-COVID regime). Sample from just 2020 → misses that 2019 behavior WILL return (partially). No single time sample captures the full generating process because the process isn't stationary.</li>
+<li><strong>Rare temporal events:</strong> "Black swan" events (market crash, pandemic, infrastructure outage) happen 1-2 times in 10 years. Any sample shorter than 10 years almost certainly misses them. Model: "this never happens." Reality: it happens every 5-10 years and causes 80% of losses. The MOST important events are the ones sampling misses.</li>
+</ul>
+</td><td><canvas id="c6" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 7: SMOTE and Synthetic Oversampling — Inventing Data That Doesn't Exist</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Interpolating Between Rare Examples Creates Points in Empty Space</div>
+<ul>
+<li><strong>How SMOTE works:</strong> Take minority class example A and nearest neighbor B. Create synthetic point at random position on the line between A and B. Repeat until balanced. Problem: the line between A and B may pass through MAJORITY class territory. You just created a "minority" example that looks exactly like the majority. Model: confused.</li>
+<li><strong>The geometry problem:</strong> Rare class often lives in a complex manifold (thin region of feature space). Interpolating between two points on a curved manifold doesn't stay on the manifold — it cuts through empty space or majority territory. SMOTE assumes linear interpolation is valid. It's not when the class boundary is nonlinear (which it always is for rare classes).</li>
+<li><strong>No new information:</strong> You had 50 real fraud examples. SMOTE gives you 5000 synthetic ones. But all 5000 are linear combinations of the original 50. They contain ZERO new information about fraud patterns. They just make the model more confident about the specific 50 patterns it already knows. Novel fraud: still undetectable.</li>
+<li><strong>Overfitting disguised as coverage:</strong> Model achieves 95% recall on synthetic-balanced test set. Deployed: 40% recall. Why? The synthetic test examples were ALSO generated from the same 50 originals. You tested on interpolations of your training data. Of course it scores well. It learned the synthetic generation process, not real fraud patterns.</li>
+</ul>
+</td><td><canvas id="c7" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 8: Sampling Bias in A/B Tests — Non-Representative Enrollment</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Who Enters the Test ≠ Who Will Use the Feature</div>
+<ul>
+<li><strong>New-user bias:</strong> A/B test runs for 2 weeks. Only users who visit DURING those 2 weeks are enrolled. Heavy users (visit daily) are 100% enrolled. Light users (visit monthly) are 50% enrolled. Your test over-represents heavy users — who behave differently. Result generalizes to heavy users, not your full user base.</li>
+<li><strong>Opt-in bias:</strong> "Users who accept cookies" enter the test. Privacy-conscious users don't. Test population skews younger, less technical, more ad-tolerant. Feature impact measured on this skewed sample → deployed to ALL users → different impact on the unrepresented privacy-conscious segment.</li>
+<li><strong>Geography of deployment:</strong> Test rolled out to US first (internal convenience). US users differ from global users in: spending power, device mix, content preferences, time-of-use patterns. "Test passed in US" → global deployment → underperforms in Asia/Europe where user behavior is fundamentally different.</li>
+<li><strong>Survivor enrollment:</strong> Test runs for 30 days. Day 1 enrollees are measured for full 30 days. Day 25 enrollees are measured for 5 days. Early enrollees over-weighted. But early enrollees are early adopters (different population). Late enrollees (mainstream users) get less measurement time = less precision = drowned out by early adopter signal.</li>
+</ul>
+</td><td><canvas id="c8" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 9: Feature Distribution in Sample ≠ Feature Distribution in Population</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Sample Sees Unimodal. Population Is Multimodal. Model Breaks on Deployment.</div>
+<ul>
+<li><strong>The dangerous scenario:</strong> Training sample happens to come from one dominant mode. Feature looks normal-ish. You assume normality. Build model. Deploy to full population which has 3 modes. Model sees inputs from modes it NEVER saw in training. Predictions: garbage for 30% of population.</li>
+<li><strong>Why this is invisible:</strong> Your validation set was sampled the SAME way as training. Same bias, same missing modes. Validation accuracy: 95%. Production accuracy: 72%. "Model degraded!" No — model was always bad for the modes you never sampled. You just couldn't see it because your test set had the same blind spot.</li>
+<li><strong>Feature engineering on wrong shape:</strong> You log-transform a feature because it "looks right-skewed" in your sample. Population: bimodal (one mode at low values, one at high values). Log-transform on bimodal data: compresses the high mode, but doesn't make it normal. You applied the wrong transformation because you saw the wrong shape because you sampled the wrong slice.</li>
+<li><strong>Statistical tests on sample shape:</strong> Shapiro-Wilk on your 1000-person sample: p = 0.3. "Can't reject normality." Conclusion: feature is normal. Reality: feature is trimodal but your sample only captured the dominant mode. Test has low POWER for detecting multimodality when rare modes are under-sampled. "Can't reject" ≠ "is normal."</li>
+</ul>
+</td><td><canvas id="c9" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Pitfall 10: The Bootstrap Doesn't Fix Representation — It Amplifies Bias</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Resampling From a Biased Sample Gives You Confident Wrong Answers</div>
+<ul>
+<li><strong>Bootstrap promise:</strong> "Resample with replacement to estimate uncertainty." Works IF original sample is representative. If sample misses a mode, bootstrap CANNOT discover it. You get tighter confidence intervals (more resamples) around the WRONG estimate. More bootstrap = more confident in your bias.</li>
+<li><strong>CI width ≠ correctness:</strong> Bootstrap CI for mean income: $55K ± $3K (95% CI). Very precise! But: sample missed executives (mode at $300K+). True population mean: $78K. Your precise CI is precisely wrong. It's OUTSIDE the true value despite being narrow. Precision without representation is dangerous.</li>
+<li><strong>The false comfort:</strong> "We bootstrapped 10,000 times and the result is stable." Stability ≈ your sample's properties are consistent when resampled. It does NOT mean your sample represents the population. A biased sample will give stable (consistently wrong) bootstrap estimates. Stability ≠ accuracy.</li>
+<li><strong>When bootstrap helps vs hurts:</strong> Helps: estimating SE within a well-sampled population. Hurts: when the population has structure (modes, subgroups) that the sample doesn't represent. Big data problems are almost always the latter — multiple generating distributions, some poorly sampled. Bootstrap confidently estimates the well-sampled modes and ignores the rest.</li>
+</ul>
+</td><td><canvas id="c10" width="720" height="300"></canvas></td></tr>
+</table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    return {ctx:ctx, w:w, h:h};
+}
+function gauss(x, mu, sigma) { return Math.exp(-0.5*Math.pow((x-mu)/sigma,2))/(sigma*2.507); }
+
+// 1. Rare class missed
+(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Population: 0.1% Positive. Sample 10K → Expected 10 Positives.',w/2,20);
+// Population distribution
+ctx.fillStyle='rgba(41,128,185,0.3)';ctx.fillRect(50,45,580,30);
+ctx.fillStyle='#2980b9';ctx.font='17px -apple-system';ctx.textAlign='center';
+ctx.fillText('99.9% Negative (millions)',340,65);
+// Tiny positive slice
+ctx.fillStyle='#e74c3c';ctx.fillRect(632,45,15,30);
+ctx.fillStyle='#e74c3c';ctx.font='17px -apple-system';ctx.textAlign='left';ctx.fillText('0.1%',650,65);
+// Sample
+ctx.fillStyle='rgba(41,128,185,0.3)';ctx.fillRect(50,95,580,25);
+ctx.fillStyle='#2980b9';ctx.font='17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Sample 10K: ~9,990 negative',340,112);
+// Positive in sample - tiny or zero
+ctx.fillStyle='#e74c3c';ctx.fillRect(632,95,3,25);
+ctx.fillStyle='#e74c3c';ctx.font='17px -apple-system';ctx.textAlign='left';ctx.fillText('0-10 pos',640,112);
+ctx.fillStyle='#e74c3c';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Can\'t train on 10 examples. Can\'t segment. Can\'t validate. Can\'t deploy.',w/2,145);
+ctx.fillStyle='#555';ctx.font='17px -apple-system';
+ctx.fillText('Need 100K sample for 100 positives. Need 500K to segment by fraud type.',w/2,168);
+ctx.fillText('For rare classes: exhaustive collection, not sampling.',w/2,188);
+})();
+
+// 2. Stratified sampling distortion
+(function(){var s=setup('c2');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Oversampling to 50/50: Model Learns Wrong P(fraud)',w/2,20);
+// Natural distribution bar
+ctx.fillStyle='#2980b9';ctx.fillRect(50,50,560,25);ctx.fillStyle='#e74c3c';ctx.fillRect(610,50,50,25);
+ctx.fillStyle='#333';ctx.font='17px -apple-system';ctx.textAlign='left';ctx.fillText('Real: 99.9% neg / 0.1% pos',50,45);
+// Oversampled bar
+ctx.fillStyle='#2980b9';ctx.fillRect(50,100,330,25);ctx.fillStyle='#e74c3c';ctx.fillRect(380,100,280,25);
+ctx.fillStyle='#333';ctx.font='17px -apple-system';ctx.textAlign='left';ctx.fillText('Training: 50% neg / 50% pos',50,95);
+// Model prediction
+ctx.fillStyle='#e74c3c';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Model learns P(fraud) ≈ 50%. Deploys where P(fraud) = 0.1%.',w/2,148);
+ctx.fillStyle='#555';ctx.font='17px -apple-system';
+ctx.fillText('Result: flags 40% of transactions as "suspicious." False positive rate: catastrophic.',w/2,170);
+ctx.fillText('Calibration broken. Threshold meaningless. Precision/recall from training: fiction.',w/2,192);
+})();
+
+// 3. Sub-populations disappear
+(function(){var s=setup('c3');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Population: 5 Modes. Sample: Captures 2-3, Loses Rest.',w/2,20);
+// Population with 5 modes
+ctx.strokeStyle='#2980b9';ctx.lineWidth=2;ctx.beginPath();
+for(var x=0;x<600;x++){
+var v=gauss(x,60,20)*100+gauss(x,180,25)*150+gauss(x,300,30)*120+gauss(x,420,20)*60+gauss(x,540,15)*30;
+var px=60+x,py=100-v;if(x===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);}ctx.stroke();
+ctx.fillStyle='#2980b9';ctx.font='17px -apple-system';ctx.textAlign='center';ctx.fillText('Population (all 5 modes visible)',w/2,110);
+// Sample - only captures main modes
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=2;ctx.setLineDash([5,5]);ctx.beginPath();
+for(var x=0;x<600;x++){
+var v=gauss(x,60,22)*90+gauss(x,180,28)*140+gauss(x,300,35)*100;
+var px=60+x,py=165-v;if(x===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);}ctx.stroke();ctx.setLineDash([]);
+ctx.fillStyle='#e74c3c';ctx.font='17px -apple-system';ctx.textAlign='center';ctx.fillText('Sample n=1000 (modes 4 & 5: gone or noise)',w/2,175);
+ctx.fillStyle='#e74c3c';ctx.font='bold 17px -apple-system';
+ctx.fillText('Model trained on sample: thinks feature has 3 modes. Deploys to population with 5.',w/2,195);
+})();
+
+// 4. Geographic bias
+(function(){var s=setup('c4');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Online Sample: Who You CAN\'T Reach',w/2,20);
+var groups=[{name:'Urban tech-savvy',pct:25,sampled:70,color:'#27ae60'},
+{name:'Suburban middle',pct:30,sampled:22,color:'#f39c12'},
+{name:'Rural / elderly',pct:25,sampled:5,color:'#e74c3c'},
+{name:'Non-English / low-income',pct:20,sampled:3,color:'#e74c3c'}];
+ctx.fillStyle='#333';ctx.font='bold 17px -apple-system';ctx.textAlign='left';
+ctx.fillText('Group',60,50);ctx.fillText('Population %',280,50);ctx.fillText('In Sample %',450,50);
+groups.forEach(function(g,i){var y=65+i*32;
+ctx.fillStyle='#333';ctx.font='17px -apple-system';ctx.textAlign='left';ctx.fillText(g.name,60,y+15);
+ctx.fillStyle=g.color;ctx.fillRect(280,y+2,g.pct*3,18);
+ctx.fillStyle='#333';ctx.font='17px -apple-system';ctx.fillText(g.pct+'%',280+g.pct*3+5,y+16);
+ctx.fillStyle=g.color;ctx.fillRect(450,y+2,g.sampled*3,18);
+ctx.fillStyle='#333';ctx.fillText(g.sampled+'%',450+g.sampled*3+5,y+16);
+});
+ctx.fillStyle='#e74c3c';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('45% of population gets 8% representation. Model fails for MOST people.',w/2,195);
+})();
+
+// 5. Age strata different distributions
+(function(){var s=setup('c5');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Same Feature, Different Distribution Per Age Group',w/2,20);
+// Mini distributions per age group
+var ages=[{label:'18-25',mu:25,sigma:8,color:'#3498db'},{label:'25-35',mu:45,sigma:12,color:'#27ae60'},
+{label:'35-50',mu:80,sigma:15,color:'#f39c12'},{label:'50-65',mu:110,sigma:20,color:'#e67e22'},
+{label:'65+',mu:30,sigma:10,color:'#8e44ad'}];
+ages.forEach(function(a,i){var ox=30+i*140,baseY=130;
+ctx.strokeStyle=a.color;ctx.lineWidth=1.5;ctx.beginPath();
+for(var x=0;x<120;x++){var v=gauss(x,60,20)*60;var px=ox+x,py=baseY-v;
+if(x===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);}ctx.stroke();
+ctx.fillStyle=a.color;ctx.font='17px -apple-system';ctx.textAlign='center';
+ctx.fillText(a.label,ox+60,145);ctx.fillText('$'+a.mu+'K',ox+60,160);
+});
+ctx.fillStyle='#e74c3c';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Sample 200 per group: 200 per mode → barely enough for means, not for interactions.',w/2,180);
+ctx.fillStyle='#555';ctx.font='17px -apple-system';
+ctx.fillText('100 sub-populations × 30 min per cell = need 3000+ sample. Most studies: 500.',w/2,197);
+})();
+
+// 6. Time-based sampling
+(function(){var s=setup('c6');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Sample One Month → Miss 11 Other Regimes',w/2,20);
+// 12 months with different patterns
+var months=['J','F','M','A','M','J','J','A','S','O','N','D'];
+var values=[30,50,55,60,65,45,40,42,70,80,95,150];
+var bW=(w-120)/12;
+months.forEach(function(m,i){var x=60+i*bW;var barH=values[i]*0.8;
+ctx.fillStyle=i===2?'#e74c3c':'rgba(41,128,185,0.4)';
+ctx.fillRect(x,140-barH,bW-4,barH);
+ctx.fillStyle='#333';ctx.font='17px -apple-system';ctx.textAlign='center';ctx.fillText(m,x+bW/2-2,155);
+});
+// Highlight sampled month
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=2.5;ctx.strokeRect(60+2*bW-2,38,bW,120);
+ctx.fillStyle='#e74c3c';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('↑ Sampled: March',60+2.5*bW,175);
+ctx.fillStyle='#555';ctx.font='17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Missed: holiday spike (Dec), summer lull, back-to-school. Model: "users always behave like March."',w/2,195);
+})();
+
+// 7. SMOTE creates fake points
+(function(){var s=setup('c7');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('SMOTE: Interpolating Through Majority Territory',w/2,20);
+// Majority class cloud
+ctx.fillStyle='rgba(41,128,185,0.15)';ctx.beginPath();ctx.arc(350,100,80,0,Math.PI*2);ctx.fill();
+ctx.fillStyle='#2980b9';ctx.font='17px -apple-system';ctx.textAlign='center';ctx.fillText('Majority class',350,100);
+// Two minority points
+ctx.fillStyle='#e74c3c';ctx.beginPath();ctx.arc(150,70,6,0,Math.PI*2);ctx.fill();
+ctx.beginPath();ctx.arc(550,130,6,0,Math.PI*2);ctx.fill();
+ctx.fillStyle='#e74c3c';ctx.font='17px -apple-system';ctx.textAlign='left';ctx.fillText('Real minority A',160,68);
+ctx.textAlign='right';ctx.fillText('Real minority B',545,128);
+// Line between them goes through majority
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=1.5;ctx.setLineDash([4,4]);
+ctx.beginPath();ctx.moveTo(150,70);ctx.lineTo(550,130);ctx.stroke();ctx.setLineDash([]);
+// Synthetic points on line (in majority territory!)
+ctx.fillStyle='#e67e22';
+ctx.beginPath();ctx.arc(300,90,5,0,Math.PI*2);ctx.fill();
+ctx.beginPath();ctx.arc(380,105,5,0,Math.PI*2);ctx.fill();
+ctx.beginPath();ctx.arc(450,115,5,0,Math.PI*2);ctx.fill();
+ctx.fillStyle='#e67e22';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Synthetic "minority" points — INSIDE majority territory!',w/2,160);
+ctx.fillStyle='#555';ctx.font='17px -apple-system';
+ctx.fillText('SMOTE assumes linear interpolation stays on class manifold. It doesn\'t.',w/2,182);
+})();
+
+// 8. A/B test enrollment bias
+(function(){var s=setup('c8');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Who Enters the A/B Test ≠ Who Uses the Product',w/2,20);
+ctx.fillStyle='#333';ctx.font='17px -apple-system';ctx.textAlign='left';
+ctx.fillText('Test runs 2 weeks. Enrollment by visit frequency:',60,50);
+var types=[{name:'Daily users (power)',freq:'100% enrolled',color:'#27ae60'},
+{name:'Weekly users',freq:'90% enrolled',color:'#f39c12'},
+{name:'Monthly users',freq:'50% enrolled',color:'#e67e22'},
+{name:'Quarterly users',freq:'~0% enrolled',color:'#e74c3c'}];
+types.forEach(function(t,i){var y=62+i*28;
+ctx.fillStyle=t.color;ctx.font='17px -apple-system';ctx.textAlign='left';
+ctx.fillText(t.name,80,y+15);ctx.fillText(t.freq,340,y+15);
+});
+ctx.fillStyle='#e74c3c';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Test over-represents heavy users. Result: "feature works!" for daily users.',w/2,165);
+ctx.fillStyle='#555';ctx.font='17px -apple-system';
+ctx.fillText('Deploy to all → light users (majority of user base) get a feature tested on power users.',w/2,188);
+})();
+
+// 9. Sample shape ≠ population shape
+(function(){var s=setup('c9');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Sample Looks Normal. Population Is Trimodal.',w/2,20);
+// Sample (looks normalish)
+ctx.strokeStyle='#27ae60';ctx.lineWidth=2;ctx.beginPath();
+for(var x=0;x<250;x++){var v=gauss(x,125,40)*100;var px=40+x,py=100-v;
+if(x===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);}ctx.stroke();
+ctx.fillStyle='#27ae60';ctx.font='17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Sample (n=1000)',165,115);ctx.fillText('Shapiro-Wilk: p=0.3 "Normal!"',165,132);
+// Population (trimodal)
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=2;ctx.beginPath();
+for(var x=0;x<250;x++){var v=gauss(x,50,20)*80+gauss(x,125,15)*60+gauss(x,200,20)*50;
+var px=420+x,py=100-v;if(x===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);}ctx.stroke();
+ctx.fillStyle='#e74c3c';ctx.font='17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Population (full)',545,115);ctx.fillText('Actually trimodal!',545,132);
+ctx.fillStyle='#e74c3c';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Log-transform applied (assuming unimodal) → wrong transformation for the real shape.',w/2,158);
+ctx.fillStyle='#555';ctx.font='17px -apple-system';
+ctx.fillText('Validation set has same bias → looks fine. Production: hits modes 2 & 3 → breaks.',w/2,180);
+})();
+
+// 10. Bootstrap amplifies bias
+(function(){var s=setup('c10');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#1a5276';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Bootstrap: Precise Estimate of the WRONG Number',w/2,20);
+// True value
+ctx.strokeStyle='#27ae60';ctx.lineWidth=2;ctx.setLineDash([6,4]);
+ctx.beginPath();ctx.moveTo(450,40);ctx.lineTo(450,130);ctx.stroke();ctx.setLineDash([]);
+ctx.fillStyle='#27ae60';ctx.font='17px -apple-system';ctx.textAlign='center';ctx.fillText('True μ = $78K',450,140);
+// Bootstrap CI - narrow but wrong location
+ctx.fillStyle='#e74c3c';ctx.globalAlpha=0.2;ctx.fillRect(230,70,80,20);ctx.globalAlpha=1;
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=2.5;
+ctx.beginPath();ctx.moveTo(230,80);ctx.lineTo(310,80);ctx.stroke();
+ctx.fillStyle='#e74c3c';ctx.beginPath();ctx.arc(270,80,5,0,Math.PI*2);ctx.fill();
+ctx.fillStyle='#e74c3c';ctx.font='bold 17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Bootstrap CI: $55K ± $3K',270,60);
+ctx.fillText('(precise, confident, WRONG)',270,108);
+ctx.fillStyle='#555';ctx.font='17px -apple-system';ctx.textAlign='center';
+ctx.fillText('Sample missed executives (5% of pop at $300K+). Bootstrap can\'t discover missing modes.',w/2,155);
+ctx.fillStyle='#e74c3c';ctx.font='bold 17px -apple-system';
+ctx.fillText('Tight CI ≠ correct answer. Stability ≠ accuracy. More resamples ≠ less bias.',w/2,180);
+})();
+</script>
+</body>
+</html>

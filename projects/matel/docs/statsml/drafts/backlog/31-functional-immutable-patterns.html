@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Functional Programming & Immutability in Data Systems — Discussion Backlog</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #fff; color: #2c3e50; line-height: 1.6; }
+h1 { color: #1a5276; border-bottom: 3px solid #2980b9; padding-bottom: 10px; }
+h2 { color: #1a5276; margin-top: 30px; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { padding: 20px; vertical-align: top; border: 1px solid #2980b9; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; }
+.obj-title { color: #1a5276; font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
+ul { margin: 10px 0; padding-left: 20px; }
+li { margin-bottom: 6px; }
+strong { color: #1a5276; }
+code { background: #e8f0f8; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; color: #1a5276; }
+.questions { background: #fff8e1; border-left: 3px solid #f39c12; padding: 10px 15px; margin: 10px 0; font-size: 0.9em; }
+.danger { background: #fdecea; border-left: 3px solid #e74c3c; padding: 10px 15px; margin: 10px 0; font-size: 0.9em; }
+.status { display: inline-block; background: #e8f0f8; color: #1a5276; padding: 3px 10px; border-radius: 12px; font-size: 0.85em; font-weight: bold; margin-bottom: 20px; }
+</style>
+</head>
+<body>
+
+<h1>Functional Programming & Immutability in Data Systems</h1>
+<span class="status">Discussion — Design Philosophy</span>
+
+<p><strong>Core idea:</strong> Data pipelines benefit enormously from functional programming principles — pure functions (same input → same output), immutable data (transforms produce new data, don't modify in place), composition (small functions chained together), and referential transparency (can replace any expression with its value). These aren't academic preferences — they directly prevent classes of bugs that plague data systems.</p>
+
+<h2>Why FP Fits Data Pipelines Naturally</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">A Pipeline IS Function Composition</div>
+<ul>
+<li><code>raw → clean → transform → model → output</code></li>
+<li>Each stage is a pure function: input DataFrame → output DataFrame, no side effects</li>
+<li>Composition = can rearrange, parallelize, or skip steps without worrying about hidden state</li>
+<li>Referential transparency = can cache any intermediate result safely</li>
+<li>This isn't forcing FP onto data — data pipelines ARE functional by nature. The imperative style fights this.</li>
+</ul>
+</td>
+<td>
+<div class="obj-title">What Imperative Gets Wrong</div>
+<ul>
+<li><strong>Mutation:</strong> "did step 3 modify what step 2 produced?" — invisible coupling between stages</li>
+<li><strong>Shared state:</strong> global config, database connections, cached values — any of these change and everything breaks</li>
+<li><strong>Ordering dependence:</strong> swap two steps and get different results because of hidden state</li>
+<li><strong>Testing:</strong> need to mock the world to test one function</li>
+<li><strong>Debugging:</strong> "what was the state at step 5?" requires reproducing all prior steps</li>
+</ul>
+</td>
+</tr>
+</table>
+
+<h2>Immutability in Practice</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Code-Level Immutability</div>
+<ul>
+<li><strong>Don't mutate DataFrames</strong> — use <code>.assign()</code> to create new columns, not direct column assignment</li>
+<li><strong>Don't update rows in place</strong> — filter and create new DataFrames</li>
+<li><strong>Don't share mutable state</strong> between pipeline stages — pass immutable snapshots</li>
+<li><strong>Avoid global mutable state</strong> — no module-level variables that change between calls</li>
+</ul>
+<div class="danger">
+<strong>The pandas trap:</strong> <code>df['new_col'] = ...</code> mutates in place. <code>df = df.assign(new_col=...)</code> creates a new DataFrame. The first hides state changes; the second makes them explicit.
+</div>
+</td>
+<td>
+<div class="obj-title">Storage-Level Immutability</div>
+<ul>
+<li><strong>Write-once, read-many</strong> — Parquet files are immutable once written</li>
+<li><strong>Append-only tables</strong> — Delta Lake, Iceberg: new versions are appends, old versions stay</li>
+<li><strong>Event sourcing</strong> — every change is an appended event, current state = replay all events</li>
+<li><strong>Slowly changing dimensions</strong> — don't UPDATE rows, add new versions with timestamps</li>
+<li><strong>Time travel</strong> — Delta Lake, LakeFS: query any historical version</li>
+</ul>
+<div class="danger">
+<strong>Anti-pattern:</strong> "Overwrite yesterday's table with today's results." This is a mutability bug at the storage level. You can't audit what yesterday looked like, can't debug regressions, can't replay.
+</div>
+</td>
+</tr>
+</table>
+
+<h2>Pure Functions in Practice</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">What Makes a Function Pure</div>
+<ul>
+<li>Depends ONLY on its input arguments — not on global state, time, or external calls</li>
+<li>Produces ONLY its return value — no writing to databases, files, or shared variables</li>
+<li>Same input always produces same output — deterministic</li>
+<li>No observable side effects — calling it twice is the same as calling it once and copying</li>
+</ul>
+</td>
+<td>
+<div class="obj-title">What You Get From Purity</div>
+<ul>
+<li><strong>Testability:</strong> known input → assert known output. No mocking needed.</li>
+<li><strong>Memoization:</strong> cache results freely — output only depends on input</li>
+<li><strong>Parallelization:</strong> run pure functions concurrently without locks — no shared state to corrupt</li>
+<li><strong>Retry safety:</strong> if a step fails, re-run it without worrying about partial side effects</li>
+<li><strong>Refactoring:</strong> replace any expression with its value (referential transparency)</li>
+</ul>
+</td>
+</tr>
+</table>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Pure Feature Transform</div>
+<pre><code># Pure: depends only on input columns
+def age_bucket(age: int) -> str:
+    if age < 25: return "young"
+    if age < 65: return "middle"
+    return "senior"
+
+# Impure: depends on external state
+def age_bucket_v2(age: int) -> str:
+    thresholds = db.get("age_thresholds")  # side effect!
+    ...</code></pre>
+<p>If a function reads from a database → it's not pure → isolate it at the boundary, pass the thresholds as input.</p>
+</td>
+<td>
+<div class="obj-title">Impurity at the Edges</div>
+<pre><code># Impure boundary: reads config, files
+config = load_config("pipeline.yaml")  # IO
+raw_data = read_parquet("input.parquet")  # IO
+
+# Pure core: all transforms are pure functions
+clean = remove_nulls(raw_data)
+features = engineer_features(clean, config)
+results = validate(features, config)
+
+# Impure boundary: writes output
+write_parquet(results, "output.parquet")  # IO</code></pre>
+<p><strong>Functional core, imperative shell.</strong></p>
+</td>
+</tr>
+</table>
+
+<h2>Composition Patterns</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Pipe / Chain</div>
+<pre><code># pandas pipe: each step is independent
+result = (
+    df
+    .pipe(remove_outliers)
+    .pipe(normalize_numeric)
+    .pipe(encode_categorical)
+    .pipe(validate_schema)
+)
+
+# Each function: DataFrame → DataFrame
+# Can reorder, skip, or add steps freely
+# Can test each step in isolation</code></pre>
+</td>
+<td>
+<div class="obj-title">Higher-Order Functions</div>
+<pre><code># Apply a transform strategy without hardcoding
+def apply_normalization(df, strategy):
+    """strategy is a function: column → column"""
+    return df.assign(**{
+        col: strategy(df[col])
+        for col in numeric_columns(df)
+    })
+
+# Use different strategies
+result_z = apply_normalization(df, z_score)
+result_mm = apply_normalization(df, min_max)
+result_r = apply_normalization(df, robust_scale)</code></pre>
+<p>Functions as values: pass, return, compose them.</p>
+</td>
+</tr>
+<tr>
+<td colspan="2">
+<div class="obj-title">Map / Filter / Reduce Over Collections</div>
+<pre><code># Instead of loops with accumulators:
+results = []
+for feature in features:
+    if is_numeric(feature):
+        result = profile(feature)
+        results.append(result)
+
+# Functional:
+results = [profile(f) for f in features if is_numeric(f)]
+
+# Or with explicit map/filter:
+results = list(map(profile, filter(is_numeric, features)))</code></pre>
+<p>No mutable accumulator. No loop variable leaking. Intent is clear from the structure.</p>
+</td>
+</tr>
+</table>
+
+<h2>Where Pure FP Breaks Down</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Practical Limitations</div>
+<ul>
+<li><strong>Performance:</strong> immutable copies of 100M row DataFrames — need structural sharing or lazy evaluation</li>
+<li><strong>Integration:</strong> databases, APIs, file systems are inherently stateful — can't make them pure</li>
+<li><strong>Team familiarity:</strong> most data engineers think imperatively — FP has a learning curve</li>
+<li><strong>Debugging:</strong> long composition chains are hard to inspect mid-flow</li>
+<li><strong>Libraries:</strong> pandas, scikit-learn, numpy all assume mutation — fighting the ecosystem is costly</li>
+</ul>
+</td>
+<td>
+<div class="obj-title">The Pragmatic Middle</div>
+<p><strong>"Functional core, imperative shell"</strong> — not "everything must be Haskell" but:</p>
+<ul>
+<li>Core transforms are pure functions (testable, composable, cacheable)</li>
+<li>Boundaries handle IO (file reads, database calls, API requests)</li>
+<li>State is passed explicitly, not hidden in globals</li>
+<li>Mutation is isolated and documented, not sprinkled throughout</li>
+</ul>
+<p>Use immutability where it's cheap (configs, metadata, small DataFrames). Accept controlled mutation where performance demands it (large arrays in numpy). But KNOW which is which.</p>
+</td>
+</tr>
+</table>
+
+<h2>Immutability at Scale</h2>
+
+<div class="questions">
+<strong>How much immutability is practical for large-scale data?</strong>
+<ul>
+<li><strong>Arrow/Polars:</strong> copy-on-write semantics — looks immutable, shares memory until mutation</li>
+<li><strong>Spark RDDs:</strong> immutable by design — transformations create new RDDs, lineage tracks derivation</li>
+<li><strong>Dask:</strong> lazy evaluation — no copies until .compute(), then only materializes what's needed</li>
+<li><strong>DuckDB:</strong> columnar, vectorized — operates on immutable batches internally</li>
+</ul>
+The large-scale systems already chose immutability. It's the small-scale Python scripts that fight it.
+</div>
+
+<h2>Event Sourcing for Data</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">The Concept</div>
+<ul>
+<li>Every mutation is an append (never update/delete)</li>
+<li>Current state = replay all events from the beginning</li>
+<li>Can reconstruct state at any point in time</li>
+<li>Natural audit trail — nothing is ever lost</li>
+<li>Debugging: replay events up to the bug, inspect</li>
+</ul>
+</td>
+<td>
+<div class="obj-title">Is It Overkill or Essential?</div>
+<ul>
+<li><strong>Overkill for:</strong> exploratory analysis, one-off scripts, prototype pipelines</li>
+<li><strong>Essential for:</strong> production ML models (regulatory audit), financial data (compliance), data with corrections (medical records)</li>
+<li><strong>Middle ground:</strong> snapshot key checkpoints, not every micro-operation</li>
+<li><strong>Delta Lake / Iceberg:</strong> event sourcing for tables — practical, not theoretical</li>
+</ul>
+</td>
+</tr>
+</table>
+
+<h2>Key Discussion Points</h2>
+
+<div class="questions">
+<ul>
+<li>How much immutability is practical for large-scale data? (Arrow/Polars do copy-on-write; Spark RDDs are immutable by design)</li>
+<li>Should the statsml pipeline enforce pure-function transforms? How to verify purity?</li>
+<li>"Functional core, imperative shell" — where exactly is the boundary in a data profiling pipeline?</li>
+<li>Event sourcing for data: every mutation is an append. Current state = replay all events. Is this overkill or essential?</li>
+<li>How to get FP benefits in Python without alienating data engineers who think in pandas?</li>
+</ul>
+</div>
+
+
+</body>
+</html>

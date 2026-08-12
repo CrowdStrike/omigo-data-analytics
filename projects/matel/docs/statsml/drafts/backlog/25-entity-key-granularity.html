@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Entity Key Granularity — Discussion Backlog</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #fff; color: #2c3e50; line-height: 1.6; }
+h1 { color: #1a5276; border-bottom: 3px solid #2980b9; padding-bottom: 10px; }
+h2 { color: #1a5276; margin-top: 30px; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { padding: 20px; vertical-align: top; border: 1px solid #2980b9; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; }
+.obj-title { color: #1a5276; font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
+ul { margin: 10px 0; padding-left: 20px; }
+li { margin-bottom: 6px; }
+strong { color: #1a5276; }
+code { background: #e8f0f8; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; color: #1a5276; }
+.questions { background: #fff8e1; border-left: 3px solid #f39c12; padding: 10px 15px; margin: 10px 0; font-size: 0.9em; }
+.status { display: inline-block; background: #e8f0f8; color: #1a5276; padding: 3px 10px; border-radius: 12px; font-size: 0.85em; font-weight: bold; margin-bottom: 20px; }
+</style>
+</head>
+<body>
+
+<h1>Entity Key Granularity: Which Key Combination Defines a Unit?</h1>
+<span class="status">TO DISCUSS</span>
+
+<p>Choosing the wrong key (or too coarse a key) to group and correlate events is one of the most common analysis mistakes. The "obvious" identifier often mixes distinct contexts, inflating noise or creating impossible aggregations.</p>
+
+<h2>Motivating Example: User Behavior Tracking</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">The Problem with user_id Alone</div>
+<p>A single <code>user_id</code> can have:</p>
+<ul>
+<li>Multiple <strong>sessions</strong> active simultaneously (laptop + phone + tablet)</li>
+<li>Multiple <strong>devices</strong> with different usage contexts (work desktop vs personal phone)</li>
+<li>Multiple <strong>people</strong> operating the same account (shared family login, team accounts)</li>
+<li>Multiple <strong>intents</strong> happening in parallel (browsing in one tab, checkout in another)</li>
+</ul>
+<p>Correlating events by <code>user_id</code> alone mixes all of these into one "behavior" — the resulting patterns are a superposition of multiple distinct activities.</p>
+<div class="questions">The correct unit of analysis might be (user_id, session_id), or (user_id, device_id, session_id), or even (user_id, session_id, tab_id) depending on the question being asked.</div>
+</td>
+<td>
+<div class="obj-title">What Goes Wrong</div>
+<ul>
+<li><strong>False sequences:</strong> Event A on phone followed by event B on laptop looks like A→B journey but they're independent</li>
+<li><strong>Inflated session length:</strong> Overlapping sessions counted as one long session</li>
+<li><strong>Mixed intent:</strong> "User searched for X then bought Y" — but X was a different person on the shared account</li>
+<li><strong>Broken funnels:</strong> Conversion funnel assumes linear progression within a key — parallel sessions break this</li>
+<li><strong>Wrong attribution:</strong> Which device/session gets credit for the conversion?</li>
+</ul>
+</td>
+</tr>
+</table>
+
+<h2>Other Domains Where This Bites</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Examples of Key Granularity Mistakes</div>
+<ul>
+<li><strong>Network security:</strong> <code>source_ip</code> alone — NAT means 1000 users share one IP. Need (ip, port, timestamp) or (ip, user_agent) minimum.</li>
+<li><strong>E-commerce:</strong> <code>order_id</code> without <code>line_item_id</code> — aggregating to order level loses product-level signal</li>
+<li><strong>Healthcare:</strong> <code>patient_id</code> without <code>encounter_id</code> — mixing outpatient visit with ICU stay</li>
+<li><strong>Ad tech:</strong> <code>campaign_id</code> without <code>creative_id</code> + <code>placement_id</code> — can't tell if it's the ad or the context</li>
+<li><strong>IoT/manufacturing:</strong> <code>machine_id</code> without <code>shift_id</code> or <code>operator_id</code> — different operators produce different defect rates</li>
+<li><strong>Finance:</strong> <code>account_id</code> without distinguishing joint account holders or authorized signers</li>
+</ul>
+</td>
+<td>
+<div class="obj-title">The General Pattern</div>
+<p>Every analysis question implicitly defines a <strong>unit of observation</strong>. The key combination must uniquely identify that unit — no more (loses power), no less (mixes contexts).</p>
+<ul>
+<li><strong>Too coarse:</strong> groups heterogeneous things → Simpson's paradox, inflated variance, impossible sequences</li>
+<li><strong>Too fine:</strong> every row is unique → no repetition to learn from, sparse features, overfitting</li>
+<li><strong>Just right:</strong> groups things that are genuinely the same context, same actor, same intent</li>
+</ul>
+<div class="questions">Can the pipeline detect when a chosen key produces suspiciously mixed behavior? (e.g., bimodal distributions within a single key value, impossible event sequences, concurrent conflicting states)</div>
+</td>
+</tr>
+</table>
+
+<h2>Key Discussion Points</h2>
+
+<ul>
+<li>How does the pipeline help a user realize their grouping key is too coarse? (statistical signals: bimodality within groups, impossible transitions, variance inflation)</li>
+<li>Should the pipeline suggest key refinements? ("Your user_id groups show 3 distinct behavior clusters — consider adding session_id")</li>
+<li>Relationship to entity resolution: sometimes the "right" key doesn't exist in the data and must be constructed (session stitching, device graph)</li>
+<li>Temporal dimension: a key might be correct at one time granularity but not another (user_id is fine for monthly, broken for per-minute)</li>
+<li>How does this interact with the hierarchical relationships backlog item (#24)? (keys often form a hierarchy: user → session → event)</li>
+</ul>
+
+
+</body>
+</html>

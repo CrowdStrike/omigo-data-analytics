@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stakeholder Query Capture — Common Bad Practices</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 20px 10px; line-height: 1.6; }
+h1 { font-size: 1.6em; margin-bottom: 10px; color: #1a5276; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.0em; margin-bottom: 20px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; margin-right: 15px; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 6px 0; }
+strong { color: #1a5276; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 40%; }
+.obj-table td:last-child { width: 60%; text-align: center; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+</style>
+</head>
+<body>
+
+<h1>Stakeholder Query Capture</h1>
+<p class="subtitle">Exploiting the Boss's Confirmation Bias — Learn which specific example the decision-maker always tests, then optimize for exactly that input. They walk away "validated." The system barely works on everything else.</p>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">The Practice</div>
+<p>Every important stakeholder has a pet query. The VP of Search always types "red shoes size 8." The director of ML always checks "fraud detection on transaction #4471." The CPO always asks "what happens if I search for 'cancel my subscription'?"</p>
+<p>The developer learns these queries — from demo meetings, slack threads, past reviews — and ensures those specific inputs produce flawless results. The stakeholder tests their query, sees it works beautifully, and their prior belief ("this team is delivering") gets confirmed. They stop looking.</p>
+
+<ul>
+<li><strong>Search team:</strong> VP always searches "red shoes size 8." Developer adds a boost rule for that exact query. VP tests in review → perfect results. NDCG on real traffic: 0.41.</li>
+<li><strong>Fraud model:</strong> Director always checks transaction #4471 (a known fraud case from last year's incident). Model correctly flags it every time. But it's in the training set. Novel fraud patterns: 34% recall.</li>
+<li><strong>Chatbot:</strong> CPO always asks "cancel my subscription." Developer hardcodes that intent. CPO is delighted. 200 other cancel-adjacent phrasings: 50% misroute.</li>
+<li><strong>Recommendation engine:</strong> Head of Product always checks their own profile. Developer notices, seeds the rec model with that user's history. Beautiful personalized results. Cold-start users: random garbage.</li>
+</ul>
+
+<p><strong>Why it's worse than demo-driven:</strong> Demo-driven is overt — everyone knows the demo is curated. This is covert. The stakeholder believes they're doing an independent spot-check. They think they're being rigorous. "I tested it myself!" becomes the shield against any criticism. Their confirmation bias (belief that the team delivers) is being weaponized against them.</p>
+
+<p><strong>The feedback loop:</strong> Stakeholder tests their query → works → praises team → team learns which queries to protect → stakeholder's confidence grows → they test less → system rots on everything except the protected queries.</p>
+
+<p><strong>The tell:</strong> Ask: "Which queries does [stakeholder] always check?" If the team can list them instantly, the system is probably optimized for those exact inputs. Run the stakeholder's queries against the same eval set as everything else — if their queries score in the 99th percentile while the median is at the 50th, it's capture.</p>
+
+<p><strong>Defense:</strong> Stakeholders should test with RANDOM inputs they've never seen before. Better: have someone ELSE generate the test queries. Best: automate evaluation so no human's pet query matters.</p>
+</td><td>
+<canvas id="c1" width="720" height="380"></canvas>
+<canvas id="c2" width="720" height="300"></canvas>
+</td></tr>
+</table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    return {ctx:ctx, w:w, h:h};
+}
+
+// C1: The quality gap — stakeholder queries vs everything else
+(function() {
+    var s = setup('c1'); if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var margin = {top: 55, right: 30, bottom: 45, left: 160};
+    var plotW = w - margin.left - margin.right;
+    var plotH = h - margin.top - margin.bottom;
+
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('Quality scores: Stakeholder\'s queries vs. real traffic', margin.left, 18);
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.fillStyle = '#666';
+    ctx.fillText('Same system, same day — wildly different experience', margin.left, 36);
+
+    var systems = [
+        {name: 'Search (VP\'s query)', stakeQ: 0.97, realQ: 0.41},
+        {name: 'Search (real traffic)', stakeQ: null, realQ: 0.41},
+        {name: 'Fraud (Dir\'s case)', stakeQ: 0.99, realQ: 0.34},
+        {name: 'Fraud (novel patterns)', stakeQ: null, realQ: 0.34},
+        {name: 'Chatbot (CPO\'s input)', stakeQ: 0.95, realQ: 0.50},
+        {name: 'Chatbot (real users)', stakeQ: null, realQ: 0.50},
+        {name: 'Recs (HoP\'s profile)', stakeQ: 0.92, realQ: 0.28},
+        {name: 'Recs (cold-start users)', stakeQ: null, realQ: 0.28}
+    ];
+
+    var barH = plotH / systems.length - 5;
+    var maxVal = 1.0;
+
+    // Axis
+    ctx.strokeStyle = '#e0e0e0';
+    ctx.lineWidth = 1;
+    ctx.fillStyle = '#999';
+    ctx.font = '9px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    for (var v = 0; v <= 1.0; v += 0.2) {
+        var x = margin.left + (v / maxVal) * plotW;
+        ctx.beginPath();
+        ctx.moveTo(x, margin.top);
+        ctx.lineTo(x, h - margin.bottom);
+        ctx.stroke();
+        ctx.fillText((v * 100).toFixed(0) + '%', x, h - margin.bottom + 14);
+    }
+
+    for (var i = 0; i < systems.length; i++) {
+        var y = margin.top + i * (plotH / systems.length) + 2;
+        var sys = systems[i];
+        var isStake = sys.stakeQ !== null;
+        var val = isStake ? sys.stakeQ : sys.realQ;
+        var barW = (val / maxVal) * plotW;
+
+        // Alternating background
+        if (isStake) {
+            ctx.fillStyle = 'rgba(39,174,96,0.05)';
+            ctx.fillRect(margin.left - 5, y - 1, plotW + 10, barH + 4);
+        }
+
+        // Label
+        ctx.textAlign = 'right';
+        ctx.fillStyle = isStake ? '#27ae60' : '#e74c3c';
+        ctx.font = (isStake ? 'bold ' : '') + '11px -apple-system, sans-serif';
+        ctx.fillText(sys.name, margin.left - 10, y + barH / 2 + 4);
+
+        // Bar
+        ctx.fillStyle = isStake ? 'rgba(39,174,96,0.5)' : 'rgba(231,76,60,0.3)';
+        ctx.fillRect(margin.left, y + 2, barW, barH - 2);
+        if (isStake) {
+            ctx.strokeStyle = '#27ae60';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(margin.left, y + 2, barW, barH - 2);
+        }
+
+        // Value label
+        ctx.textAlign = 'left';
+        ctx.fillStyle = isStake ? '#27ae60' : '#e74c3c';
+        ctx.font = (isStake ? 'bold ' : '') + '10px -apple-system, sans-serif';
+        ctx.fillText((val * 100).toFixed(0) + '%', margin.left + barW + 5, y + barH / 2 + 4);
+    }
+
+    // Legend
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 10px -apple-system, sans-serif';
+    ctx.fillRect(margin.left, h - 30, 10, 10);
+    ctx.fillText('Stakeholder\'s pet query', margin.left + 15, h - 22);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(margin.left + 180, h - 30, 10, 10);
+    ctx.fillText('Real traffic / novel inputs', margin.left + 195, h - 22);
+
+    // Punchline
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('"I tested it myself!" — the most dangerous sentence in product review', w / 2, h - 5);
+})();
+
+// C2: The feedback loop
+(function() {
+    var s = setup('c2'); if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var cx = w / 2, cy = h / 2 + 10;
+    var radius = 100;
+
+    ctx.font = '13px -apple-system, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('The Capture Feedback Loop', cx, 20);
+
+    // Draw circular arrow loop
+    var steps = [
+        {angle: -90, label: 'Stakeholder tests\ntheir pet query', color: '#1a5276'},
+        {angle: -18, label: 'It works perfectly\n(it was optimized)', color: '#27ae60'},
+        {angle: 54, label: 'Praises team\n"great progress"', color: '#e67e22'},
+        {angle: 126, label: 'Team learns which\nqueries to protect', color: '#e74c3c'},
+        {angle: 198, label: 'Less scrutiny\nfewer random checks', color: '#8e44ad'}
+    ];
+
+    // Draw arcs between nodes
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Arrowheads on the circle (clockwise)
+    for (var i = 0; i < steps.length; i++) {
+        var midAngle = (steps[i].angle + (steps[(i + 1) % steps.length].angle < steps[i].angle ?
+            steps[(i + 1) % steps.length].angle + 360 : steps[(i + 1) % steps.length].angle)) / 2;
+        var rad = midAngle * Math.PI / 180;
+        var ax = cx + radius * Math.cos(rad);
+        var ay = cy + radius * Math.sin(rad);
+        // Small arrow marker
+        ctx.fillStyle = '#999';
+        ctx.beginPath();
+        ctx.arc(ax, ay, 4, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Draw nodes
+    for (var i = 0; i < steps.length; i++) {
+        var rad = steps[i].angle * Math.PI / 180;
+        var nx = cx + (radius + 5) * Math.cos(rad);
+        var ny = cy + (radius + 5) * Math.sin(rad);
+        var labelDist = radius + 50;
+        var lx = cx + labelDist * Math.cos(rad);
+        var ly = cy + labelDist * Math.sin(rad);
+
+        // Node circle
+        ctx.fillStyle = steps[i].color;
+        ctx.beginPath();
+        ctx.arc(nx, ny, 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Label (multi-line)
+        ctx.fillStyle = steps[i].color;
+        ctx.font = 'bold 10px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        var lines = steps[i].label.split('\n');
+        for (var l = 0; l < lines.length; l++) {
+            ctx.fillText(lines[l], lx, ly + l * 13);
+        }
+    }
+
+    // Center label
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('System rots', cx, cy - 8);
+    ctx.fillText('on everything else', cx, cy + 8);
+
+    // Bottom
+    ctx.fillStyle = '#666';
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.fillText('Each cycle strengthens the stakeholder\'s belief while the real system degrades.', cx, h - 15);
+})();
+</script>
+</body>
+</html>

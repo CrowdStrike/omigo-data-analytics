@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Metric Too Far — A/B Testing Pitfalls</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 20px 10px; line-height: 1.6; }
+h1 { font-size: 1.6em; margin-bottom: 10px; color: #1a5276; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.0em; margin-bottom: 20px; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 6px 0; }
+strong { color: #1a5276; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 40%; }
+.obj-table td:last-child { width: 60%; text-align: center; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+</style>
+</head>
+<body>
+
+<h1>Metric Too Far</h1>
+<p class="subtitle">Power — Measuring a micro-feature against a macro-metric guarantees inconclusive results regardless of feature quality.</p>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Causal Dilution</div>
+<ul>
+<li>Each step between a feature change and the top-line metric introduces noise: other features, user behavior variation, and external factors all dilute the signal.</li>
+<li>A feature that perfectly improves tooltip clarity for 3% of users &rarr; those users complete tasks 10% faster &rarr; but only 5% of task completions lead to purchases &rarr; purchase amount varies &plusmn;40% &rarr; GMV signal from this feature: <strong>~0.015% change</strong> in total GMV.</li>
+<li>Detecting 0.015% with p&lt;0.05 and 80% power requires <strong>~70M users in each arm</strong>. That is not feasible.</li>
+<li>The test will <strong>always</strong> come back "no significant difference" — not because the feature failed, but because you asked the wrong question.</li>
+<li>This is a <strong>power problem disguised as an effectiveness problem</strong>. Teams conclude "the feature doesn't work" when in reality the measurement instrument was incapable of detecting it.</li>
+</ul>
+</td>
+<td>
+<canvas id="canvas1" width="720" height="400"></canvas>
+</td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">Metric Proximity Principle</div>
+<ul>
+<li><strong>Rule:</strong> measure the FIRST thing your feature changes, not the LAST thing you hope it eventually affects.</li>
+<li>Feature &rarr; proximate metric (high sensitivity, fast) vs distal metric (low sensitivity, slow, noisy).</li>
+<li>The proxy must be validated: show historically that proxy improvements correlate with top-line improvements (one-time observational study).</li>
+<li>Once validated, individual feature tests measure the proxy. Periodic holdback experiments on bundles of features measure aggregate top-line impact.</li>
+<li><strong>Examples:</strong> Search relevance improvement &rarr; measure ranking position clicks, NOT revenue. Checkout button color &rarr; measure conversion rate at that step, NOT total GMV.</li>
+<li>Connects to pitfall #27 (testing-to-justify): when the metric is impossible to move, the test becomes theater, and teams resort to p-hacking to find "something significant."</li>
+</ul>
+</td>
+<td>
+<canvas id="canvas2" width="720" height="400"></canvas>
+</td>
+</tr>
+</table>
+
+<script>
+(function() {
+    var dpr = window.devicePixelRatio || 1;
+
+    // --- Canvas 1: Causal Dilution Chain ---
+    var c1 = document.getElementById('canvas1');
+    var w1 = 720, h1 = 400;
+    c1.width = w1 * dpr;
+    c1.height = h1 * dpr;
+    c1.style.width = w1 + 'px';
+    c1.style.height = h1 + 'px';
+    var ctx1 = c1.getContext('2d');
+    ctx1.scale(dpr, dpr);
+
+    var nodes = [
+        { label: 'Feature\nChange', x: 70, signal: 1.0 },
+        { label: 'Direct\nEffect', x: 200, signal: 0.7 },
+        { label: 'Behavior\nChange', x: 340, signal: 0.35 },
+        { label: 'Intermediate\nMetric', x: 480, signal: 0.12 },
+        { label: 'Top-Line\nMetric', x: 620, signal: 0.02 }
+    ];
+    var nodeY = 160;
+    var nodeR = 32;
+
+    // Draw title
+    ctx1.font = 'bold 14px -apple-system, sans-serif';
+    ctx1.fillStyle = '#1a5276';
+    ctx1.textAlign = 'center';
+    ctx1.fillText('Signal Dilution Across Causal Chain', w1 / 2, 28);
+
+    // Draw connections with signal amplitude waves
+    for (var i = 0; i < nodes.length - 1; i++) {
+        var x0 = nodes[i].x + nodeR + 4;
+        var x1 = nodes[i + 1].x - nodeR - 4;
+        var midX = (x0 + x1) / 2;
+        var amp = nodes[i].signal * 28;
+        var noiseAmp = (1 - nodes[i + 1].signal) * 14;
+
+        // Draw noise band (grey area)
+        ctx1.beginPath();
+        ctx1.fillStyle = 'rgba(200, 200, 200, 0.3)';
+        for (var px = x0; px <= x1; px++) {
+            var t = (px - x0) / (x1 - x0);
+            var currentNoise = noiseAmp * (0.5 + t * 0.5);
+            if (px === x0) ctx1.moveTo(px, nodeY - currentNoise - amp * (1 - t * 0.5));
+            else ctx1.lineTo(px, nodeY - currentNoise - amp * (1 - t * 0.5));
+        }
+        for (var px = x1; px >= x0; px--) {
+            var t = (px - x0) / (x1 - x0);
+            var currentNoise = noiseAmp * (0.5 + t * 0.5);
+            ctx1.lineTo(px, nodeY + currentNoise + amp * (1 - t * 0.5));
+        }
+        ctx1.closePath();
+        ctx1.fill();
+
+        // Draw signal wave
+        ctx1.beginPath();
+        ctx1.strokeStyle = '#1a5276';
+        ctx1.lineWidth = 2;
+        for (var px = x0; px <= x1; px++) {
+            var t = (px - x0) / (x1 - x0);
+            var currentAmp = amp * (1 - t) + nodes[i + 1].signal * 28 * t;
+            var wave = Math.sin((px - x0) * 0.15) * currentAmp;
+            if (px === x0) ctx1.moveTo(px, nodeY + wave);
+            else ctx1.lineTo(px, nodeY + wave);
+        }
+        ctx1.stroke();
+
+        // Arrow
+        ctx1.beginPath();
+        ctx1.fillStyle = '#1a5276';
+        ctx1.moveTo(x1, nodeY);
+        ctx1.lineTo(x1 - 8, nodeY - 5);
+        ctx1.lineTo(x1 - 8, nodeY + 5);
+        ctx1.closePath();
+        ctx1.fill();
+    }
+
+    // Draw nodes
+    for (var i = 0; i < nodes.length; i++) {
+        var n = nodes[i];
+        var color = i === 0 ? '#27ae60' : (i === nodes.length - 1 ? '#e74c3c' : '#1a5276');
+
+        ctx1.beginPath();
+        ctx1.arc(n.x, nodeY, nodeR, 0, Math.PI * 2);
+        ctx1.fillStyle = color;
+        ctx1.globalAlpha = 0.15;
+        ctx1.fill();
+        ctx1.globalAlpha = 1.0;
+        ctx1.strokeStyle = color;
+        ctx1.lineWidth = 2.5;
+        ctx1.stroke();
+
+        // Node label
+        ctx1.fillStyle = color;
+        ctx1.font = 'bold 11px -apple-system, sans-serif';
+        ctx1.textAlign = 'center';
+        var lines = n.label.split('\n');
+        for (var l = 0; l < lines.length; l++) {
+            ctx1.fillText(lines[l], n.x, nodeY + (l - (lines.length - 1) / 2) * 13);
+        }
+    }
+
+    // Draw signal strength bars below
+    var barY = 260;
+    ctx1.font = '11px -apple-system, sans-serif';
+    ctx1.fillStyle = '#666';
+    ctx1.textAlign = 'center';
+    ctx1.fillText('Signal Strength', w1 / 2, barY - 10);
+
+    for (var i = 0; i < nodes.length; i++) {
+        var n = nodes[i];
+        var barH = n.signal * 80;
+        var barW = 40;
+
+        ctx1.fillStyle = 'rgba(26, 82, 118, 0.35)';
+        ctx1.fillRect(n.x - barW / 2, barY + 80 - barH, barW, barH);
+        ctx1.strokeStyle = '#1a5276';
+        ctx1.lineWidth = 1;
+        ctx1.strokeRect(n.x - barW / 2, barY + 80 - barH, barW, barH);
+
+        ctx1.fillStyle = '#333';
+        ctx1.font = '10px -apple-system, sans-serif';
+        ctx1.fillText((n.signal * 100).toFixed(0) + '%', n.x, barY + 95);
+    }
+
+    // Noise label
+    ctx1.font = 'italic 11px -apple-system, sans-serif';
+    ctx1.fillStyle = '#e74c3c';
+    ctx1.textAlign = 'right';
+    ctx1.fillText('Signal buried in noise', w1 - 30, barY + 115);
+
+    // Bottom annotation
+    ctx1.font = '12px -apple-system, sans-serif';
+    ctx1.fillStyle = '#e74c3c';
+    ctx1.textAlign = 'center';
+    ctx1.fillText('At the top-line metric, the feature\'s signal is undetectable (0.015% in ±40% noise)', w1 / 2, h1 - 15);
+
+
+    // --- Canvas 2: Power Analysis Comparison ---
+    var c2 = document.getElementById('canvas2');
+    var w2 = 720, h2 = 400;
+    c2.width = w2 * dpr;
+    c2.height = h2 * dpr;
+    c2.style.width = w2 + 'px';
+    c2.style.height = h2 + 'px';
+    var ctx2 = c2.getContext('2d');
+    ctx2.scale(dpr, dpr);
+
+    // Title
+    ctx2.font = 'bold 14px -apple-system, sans-serif';
+    ctx2.fillStyle = '#1a5276';
+    ctx2.textAlign = 'center';
+    ctx2.fillText('Same Feature, Different Measurement Points', w2 / 2, 28);
+
+    ctx2.font = '12px -apple-system, sans-serif';
+    ctx2.fillStyle = '#666';
+    ctx2.fillText('Power analysis: p < 0.05, 80% power, identical real effect', w2 / 2, 48);
+
+    // Scenario 1: Measure GMV (top half)
+    var s1Y = 80;
+    var boxH = 130;
+    var boxW = 640;
+    var boxX = 40;
+
+    // Red background box
+    ctx2.fillStyle = 'rgba(231, 76, 60, 0.06)';
+    ctx2.strokeStyle = '#e74c3c';
+    ctx2.lineWidth = 2;
+    ctx2.beginPath();
+    ctx2.roundRect(boxX, s1Y, boxW, boxH, 8);
+    ctx2.fill();
+    ctx2.stroke();
+
+    // Scenario 1 label
+    ctx2.font = 'bold 13px -apple-system, sans-serif';
+    ctx2.fillStyle = '#e74c3c';
+    ctx2.textAlign = 'left';
+    ctx2.fillText('Scenario A: Measure GMV (distal metric)', boxX + 16, s1Y + 24);
+
+    // Stats
+    ctx2.font = '12px -apple-system, sans-serif';
+    ctx2.fillStyle = '#333';
+    var stats1 = [
+        ['Required N per arm:', '70,000,000 users'],
+        ['Test duration:', '~18 months (if even possible)'],
+        ['Effect to detect:', '0.015% GMV change'],
+        ['Noise level:', '±40% variance in purchase amounts']
+    ];
+    for (var i = 0; i < stats1.length; i++) {
+        ctx2.textAlign = 'left';
+        ctx2.fillStyle = '#555';
+        ctx2.fillText(stats1[i][0], boxX + 30, s1Y + 50 + i * 20);
+        ctx2.fillStyle = '#333';
+        ctx2.font = 'bold 12px -apple-system, sans-serif';
+        ctx2.fillText(stats1[i][1], boxX + 210, s1Y + 50 + i * 20);
+        ctx2.font = '12px -apple-system, sans-serif';
+    }
+
+    // Verdict
+    ctx2.font = 'bold 16px -apple-system, sans-serif';
+    ctx2.fillStyle = '#e74c3c';
+    ctx2.textAlign = 'right';
+    ctx2.fillText('INCONCLUSIVE', boxX + boxW - 30, s1Y + 75);
+    ctx2.font = '11px -apple-system, sans-serif';
+    ctx2.fillStyle = '#e74c3c';
+    ctx2.fillText('"No significant difference detected"', boxX + boxW - 30, s1Y + 95);
+
+    // Scenario 2: Measure Proxy (bottom half)
+    var s2Y = 230;
+
+    // Green background box
+    ctx2.fillStyle = 'rgba(39, 174, 96, 0.06)';
+    ctx2.strokeStyle = '#27ae60';
+    ctx2.lineWidth = 2;
+    ctx2.beginPath();
+    ctx2.roundRect(boxX, s2Y, boxW, boxH, 8);
+    ctx2.fill();
+    ctx2.stroke();
+
+    // Scenario 2 label
+    ctx2.font = 'bold 13px -apple-system, sans-serif';
+    ctx2.fillStyle = '#27ae60';
+    ctx2.textAlign = 'left';
+    ctx2.fillText('Scenario B: Measure Proxy — Task Completion Rate (proximate metric)', boxX + 16, s2Y + 24);
+
+    // Stats
+    ctx2.font = '12px -apple-system, sans-serif';
+    ctx2.fillStyle = '#333';
+    var stats2 = [
+        ['Required N per arm:', '50,000 users'],
+        ['Test duration:', '~2 weeks'],
+        ['Effect to detect:', '8.2% improvement in task completion'],
+        ['Noise level:', '±12% variance (binary outcome)']
+    ];
+    for (var i = 0; i < stats2.length; i++) {
+        ctx2.textAlign = 'left';
+        ctx2.fillStyle = '#555';
+        ctx2.fillText(stats2[i][0], boxX + 30, s2Y + 50 + i * 20);
+        ctx2.fillStyle = '#333';
+        ctx2.font = 'bold 12px -apple-system, sans-serif';
+        ctx2.fillText(stats2[i][1], boxX + 210, s2Y + 50 + i * 20);
+        ctx2.font = '12px -apple-system, sans-serif';
+    }
+
+    // Verdict
+    ctx2.font = 'bold 16px -apple-system, sans-serif';
+    ctx2.fillStyle = '#27ae60';
+    ctx2.textAlign = 'right';
+    ctx2.fillText('DETECTED: +8.2%', boxX + boxW - 30, s2Y + 75);
+    ctx2.font = '11px -apple-system, sans-serif';
+    ctx2.fillStyle = '#27ae60';
+    ctx2.fillText('p = 0.003, statistically significant', boxX + boxW - 30, s2Y + 95);
+
+    // Bottom annotation
+    ctx2.font = 'bold 12px -apple-system, sans-serif';
+    ctx2.fillStyle = '#1a5276';
+    ctx2.textAlign = 'center';
+    ctx2.fillText('Same feature. Same real effect. The only difference is where you point the measurement.', w2 / 2, h2 - 15);
+
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPU Cluster - Domain-Specific Pitfalls</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 20px; background: #f8f9fa; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 14px; }
+.nav a:hover { text-decoration: underline; }
+h1 { color: #1a5276; margin-bottom: 10px; }
+.subtitle { color: #555; margin-bottom: 30px; font-size: 15px; }
+.obj-table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden; }
+.obj-table td { padding: 16px; border: 1px solid #2980b9; vertical-align: top; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-title { font-weight: bold; color: #1a5276; font-size: 16px; margin-bottom: 8px; }
+.pitfall-desc { color: #333; font-size: 14px; line-height: 1.6; }
+canvas { border: 1px solid #eee; border-radius: 4px; }
+</style>
+</head>
+<body>
+<h1>GPU Cluster</h1>
+<p class="subtitle">Statistical pitfalls in GPU computing — occupancy lies, memory bottlenecks, and the tyranny of the slowest node.</p>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">1. SM Occupancy ≠ Throughput</div>
+<div class="pitfall-desc">
+GPU shows "95% occupied" but SMs are stalled on memory; actual throughput = 30% of peak. High occupancy with low arithmetic intensity = memory-bound. The utilization metric lies about actual useful work. A kernel can have every warp scheduled yet spend most cycles waiting on global memory fetches. Without measuring arithmetic intensity (FLOPs per byte), occupancy alone is meaningless.
+</div>
+</td>
+<td><canvas id="canvas1" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">2. Memory Bandwidth Bottleneck</div>
+<div class="pitfall-desc">
+GPU compute capability is 100 TFLOPS but memory can only feed 2TB/s. If your model is memory-bound, doubling compute does nothing — the bottleneck is invisible in GPU utilization metrics. The roofline model reveals the truth: operations with low arithmetic intensity (FLOPs/byte &lt; compute/bandwidth ratio) are always memory-limited regardless of how many CUDA cores you add.
+</div>
+</td>
+<td><canvas id="canvas2" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">3. Multi-tenant Interference</div>
+<div class="pitfall-desc">
+Shared GPU cluster: your job runs alongside 3 other tenants. NVLink bandwidth is shared; memory contention on shared L2 cache degrades everyone. Your training is 15% slower and you cannot determine why without cluster-wide visibility. Per-job metrics show no anomaly — the interference is systemic and invisible to isolated monitoring.
+</div>
+</td>
+<td><canvas id="canvas3" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">4. Checkpointing IO Storms</div>
+<div class="pitfall-desc">
+1000-GPU training job checkpoints every 30 minutes. Each checkpoint = 50GB written to shared storage simultaneously. Storage saturates; other jobs on the same storage experience IO latency 100x normal. These periodic storms are invisible in per-GPU metrics — they manifest only in storage-side monitoring that most teams never check.
+</div>
+</td>
+<td><canvas id="canvas4" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">5. Stragglers from Heterogeneous Hardware</div>
+<div class="pitfall-desc">
+A100 and H100 GPUs in the same cluster. Job scheduled across both: A100 nodes finish 30% slower, becoming stragglers. All-reduce waits for the slowest node, so the entire job is limited by the weakest hardware. "Cluster utilization" reads 95% but effective throughput is only 70% — the fast nodes idle waiting for synchronization barriers.
+</div>
+</td>
+<td><canvas id="canvas5" width="720" height="300"></canvas></td>
+</tr>
+<tr>
+<td>
+<div class="obj-title">6. Thermal Throttling Under Sustained Load</div>
+<div class="pitfall-desc">
+Initial performance hits peak. After 15 minutes of sustained compute, the GPU throttles to 85% to manage heat. Benchmarks on a cold GPU do not reflect production performance on a hot GPU. The first 10 minutes of any test are misleading — steady-state performance is always lower than burst performance, yet most benchmarks measure only the initial burst.
+</div>
+</td>
+<td><canvas id="canvas6" width="720" height="300"></canvas></td>
+</tr>
+</table>
+
+<script>
+function setupCanvas(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 200 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    return ctx;
+}
+
+// Canvas 1: SM Occupancy vs Actual Throughput
+(function() {
+    var ctx = setupCanvas('canvas1');
+    var w = 720, h = 200;
+
+    ctx.fillStyle = '#f9fafb';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('SM Occupancy vs Actual Throughput', w / 2, 25);
+
+    var barWidth = 120;
+    var maxBarHeight = 130;
+    var baseY = 175;
+
+    // SM Occupancy bar (95% - green)
+    var occHeight = maxBarHeight * 0.95;
+    var occX = 180;
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(occX, baseY - occHeight, barWidth, occHeight);
+    ctx.fillStyle = '#333';
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('SM Occupancy', occX + barWidth / 2, baseY + 18);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('95%', occX + barWidth / 2, baseY - occHeight - 8);
+
+    // Actual Throughput bar (30% - red)
+    var thrHeight = maxBarHeight * 0.30;
+    var thrX = 420;
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(thrX, baseY - thrHeight, barWidth, thrHeight);
+    ctx.fillStyle = '#333';
+    ctx.font = '17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('Actual Throughput', thrX + barWidth / 2, baseY + 18);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('30%', thrX + barWidth / 2, baseY - thrHeight - 8);
+
+    // Gap annotation lines
+    ctx.strokeStyle = '#e74c3c';
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(occX + barWidth + 10, baseY - thrHeight);
+    ctx.lineTo(thrX - 10, baseY - thrHeight);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(occX + barWidth + 10, baseY - occHeight);
+    ctx.lineTo(thrX - 10, baseY - occHeight);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Gap label and arrow
+    var midX = (occX + barWidth + thrX) / 2;
+    ctx.fillStyle = '#c0392b';
+    ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('memory stalls', midX, baseY - occHeight / 2 - 10);
+
+    ctx.strokeStyle = '#c0392b';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(midX, baseY - occHeight + 5);
+    ctx.lineTo(midX, baseY - thrHeight - 5);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(midX - 5, baseY - thrHeight - 12);
+    ctx.lineTo(midX, baseY - thrHeight - 5);
+    ctx.lineTo(midX + 5, baseY - thrHeight - 12);
+    ctx.fill();
+    ctx.lineWidth = 1;
+})();
+
+// Canvas 2: Memory Bandwidth Bottleneck (funnel)
+(function() {
+    var ctx = setupCanvas('canvas2');
+    var w = 720, h = 200;
+
+    ctx.fillStyle = '#f9fafb';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Compute vs Memory Bandwidth Pipeline', w / 2, 25);
+
+    // Wide compute section
+    var compLeft = 60;
+    var compRight = 280;
+    var compTop = 50;
+    var compBottom = 170;
+
+    ctx.fillStyle = '#2ecc71';
+    ctx.fillRect(compLeft, compTop, compRight - compLeft, compBottom - compTop);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Compute', (compLeft + compRight) / 2, 100);
+    ctx.fillText('100 TFLOPS', (compLeft + compRight) / 2, 125);
+
+    // Funnel narrowing section
+    ctx.fillStyle = '#f39c12';
+    ctx.beginPath();
+    ctx.moveTo(compRight, compTop);
+    ctx.lineTo(compRight + 100, 85);
+    ctx.lineTo(compRight + 100, 135);
+    ctx.lineTo(compRight, compBottom);
+    ctx.closePath();
+    ctx.fill();
+
+    // Narrow bandwidth section
+    var bwLeft = compRight + 100;
+    var bwRight = bwLeft + 140;
+    var bwTop = 85;
+    var bwBottom = 135;
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(bwLeft, bwTop, bwRight - bwLeft, bwBottom - bwTop);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('Memory BW', (bwLeft + bwRight) / 2, 107);
+    ctx.fillText('2 TB/s', (bwLeft + bwRight) / 2, 127);
+
+    // Output section
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(bwRight, bwTop, 60, bwBottom - bwTop);
+
+    // Data flow arrows
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 3]);
+    for (var i = 0; i < 3; i++) {
+        var y = 95 + i * 20;
+        ctx.beginPath();
+        ctx.moveTo(bwRight + 65, y);
+        ctx.lineTo(bwRight + 95, y);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(bwRight + 90, y - 4);
+        ctx.lineTo(bwRight + 95, y);
+        ctx.lineTo(bwRight + 90, y + 4);
+        ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.lineWidth = 1;
+
+    // Bottleneck label
+    ctx.fillStyle = '#c0392b';
+    ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('BOTTLENECK', (bwLeft + bwRight) / 2, bwBottom + 25);
+
+    // Output label
+    ctx.fillStyle = '#555';
+    ctx.font = '14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('Effective', bwRight + 77, 105);
+    ctx.fillText('Output', bwRight + 77, 125);
+})();
+
+// Canvas 3: Multi-tenant Interference
+(function() {
+    var ctx = setupCanvas('canvas3');
+    var w = 720, h = 200;
+
+    ctx.fillStyle = '#f9fafb';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Multi-tenant GPU Resource Contention', w / 2, 25);
+
+    // Shared resources box in center
+    var centerX = w / 2;
+    var centerY = 110;
+
+    ctx.fillStyle = '#f39c12';
+    ctx.fillRect(centerX - 70, centerY - 30, 140, 60);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Shared Resources', centerX, centerY - 8);
+    ctx.fillText('NVLink + L2 Cache', centerX, centerY + 12);
+
+    // 4 jobs around the shared resource
+    var jobs = [
+        { x: 100, y: 65, label: 'Your Job', color: '#2980b9' },
+        { x: 100, y: 145, label: 'Tenant B', color: '#7f8c8d' },
+        { x: 580, y: 65, label: 'Tenant C', color: '#7f8c8d' },
+        { x: 580, y: 145, label: 'Tenant D', color: '#7f8c8d' }
+    ];
+
+    jobs.forEach(function(job) {
+        ctx.fillStyle = job.color;
+        ctx.fillRect(job.x - 50, job.y - 18, 100, 36);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(job.label, job.x, job.y + 5);
+
+        // Connection lines to center
+        ctx.strokeStyle = job.color === '#2980b9' ? '#2980b9' : '#bdc3c7';
+        ctx.lineWidth = job.color === '#2980b9' ? 2 : 1;
+        ctx.beginPath();
+        var toX = job.x < centerX ? centerX - 70 : centerX + 70;
+        ctx.moveTo(job.x < centerX ? job.x + 50 : job.x - 50, job.y);
+        ctx.lineTo(toX, centerY);
+        ctx.stroke();
+    });
+    ctx.lineWidth = 1;
+
+    // Performance degradation label
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 15px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('-15% perf', 20, 185);
+
+    // Arrow to your job
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(90, 182);
+    ctx.lineTo(100, 182);
+    ctx.lineTo(100, 88);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.fillStyle = '#e74c3c';
+    ctx.moveTo(96, 92);
+    ctx.lineTo(100, 83);
+    ctx.lineTo(104, 92);
+    ctx.fill();
+    ctx.lineWidth = 1;
+})();
+
+// Canvas 4: Checkpointing IO Storms
+(function() {
+    var ctx = setupCanvas('canvas4');
+    var w = 720, h = 200;
+
+    ctx.fillStyle = '#f9fafb';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('IO Latency During Checkpoint Storms', w / 2, 25);
+
+    // Axes
+    var leftMargin = 80;
+    var rightMargin = 40;
+    var topMargin = 45;
+    var bottomMargin = 40;
+    var plotW = w - leftMargin - rightMargin;
+    var plotH = h - topMargin - bottomMargin;
+
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(leftMargin, topMargin);
+    ctx.lineTo(leftMargin, topMargin + plotH);
+    ctx.lineTo(leftMargin + plotW, topMargin + plotH);
+    ctx.stroke();
+
+    // Y-axis labels
+    ctx.fillStyle = '#555';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('100ms', leftMargin - 8, topMargin + 10);
+    ctx.fillText('50ms', leftMargin - 8, topMargin + plotH / 2);
+    ctx.fillText('1ms', leftMargin - 8, topMargin + plotH - 5);
+
+    // Y-axis title
+    ctx.save();
+    ctx.translate(15, topMargin + plotH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center';
+    ctx.fillText('IO Latency', 0, 0);
+    ctx.restore();
+
+    // X-axis labels
+    ctx.textAlign = 'center';
+    ctx.fillText('0 min', leftMargin, topMargin + plotH + 20);
+    ctx.fillText('30 min', leftMargin + plotW * 0.33, topMargin + plotH + 20);
+    ctx.fillText('60 min', leftMargin + plotW * 0.66, topMargin + plotH + 20);
+    ctx.fillText('90 min', leftMargin + plotW, topMargin + plotH + 20);
+
+    // Normal and spike Y positions
+    var normalY = topMargin + plotH - 10;
+    var spikeY = topMargin + 5;
+
+    // Spike X positions
+    var spike1X = leftMargin + plotW * 0.33;
+    var spike2X = leftMargin + plotW * 0.66;
+    var spike3X = leftMargin + plotW * 0.99;
+
+    // Draw latency line with spikes
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(leftMargin, normalY);
+    ctx.lineTo(spike1X - 15, normalY);
+    ctx.lineTo(spike1X - 5, spikeY);
+    ctx.lineTo(spike1X + 5, spikeY);
+    ctx.lineTo(spike1X + 15, normalY);
+    ctx.lineTo(spike2X - 15, normalY);
+    ctx.lineTo(spike2X - 5, spikeY);
+    ctx.lineTo(spike2X + 5, spikeY);
+    ctx.lineTo(spike2X + 15, normalY);
+    ctx.lineTo(spike3X - 15, normalY);
+    ctx.lineTo(spike3X - 5, spikeY);
+    ctx.lineTo(spike3X + 5, spikeY);
+    ctx.lineTo(spike3X + 15, normalY);
+    ctx.stroke();
+    ctx.lineWidth = 1;
+
+    // Spike highlight regions
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.15)';
+    ctx.fillRect(spike1X - 15, topMargin, 30, plotH);
+    ctx.fillRect(spike2X - 15, topMargin, 30, plotH);
+    ctx.fillRect(spike3X - 15, topMargin, 30, plotH);
+
+    // Labels on spikes
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('other jobs', spike1X, topMargin + plotH / 2 + 15);
+    ctx.fillText('affected', spike1X, topMargin + plotH / 2 + 30);
+
+    ctx.fillStyle = '#c0392b';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('checkpoint', spike2X, topMargin + plotH / 2 + 20);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillText('100x spike!', spike3X + 50, spikeY + 20);
+})();
+
+// Canvas 5: Stragglers from Heterogeneous Hardware
+(function() {
+    var ctx = setupCanvas('canvas5');
+    var w = 720, h = 200;
+
+    ctx.fillStyle = '#f9fafb';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Straggler Effect: H100 vs A100 in All-Reduce', w / 2, 25);
+
+    var leftMargin = 100;
+    var rowHeight = 30;
+    var startY = 50;
+    var timelineW = 520;
+
+    var h100ComputeEnd = 0.6;
+    var a100ComputeEnd = 0.9;
+    var syncPoint = 0.92;
+
+    // H100 nodes (fast)
+    for (var i = 0; i < 2; i++) {
+        var y = startY + i * rowHeight;
+        ctx.fillStyle = '#333';
+        ctx.font = '14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText('H100 Node ' + (i + 1), leftMargin - 10, y + 18);
+
+        // Compute block (green)
+        ctx.fillStyle = '#27ae60';
+        ctx.fillRect(leftMargin, y + 4, timelineW * h100ComputeEnd, 22);
+
+        // Idle/waiting block (yellow)
+        ctx.fillStyle = '#f1c40f';
+        ctx.fillRect(leftMargin + timelineW * h100ComputeEnd, y + 4, timelineW * (syncPoint - h100ComputeEnd), 22);
+    }
+
+    // A100 nodes (slow stragglers)
+    for (var i = 0; i < 2; i++) {
+        var y = startY + (i + 2) * rowHeight;
+        ctx.fillStyle = '#333';
+        ctx.font = '14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText('A100 Node ' + (i + 1), leftMargin - 10, y + 18);
+
+        // Compute block (orange - slow)
+        ctx.fillStyle = '#e67e22';
+        ctx.fillRect(leftMargin, y + 4, timelineW * a100ComputeEnd, 22);
+
+        // Tiny sync wait
+        ctx.fillStyle = '#f1c40f';
+        ctx.fillRect(leftMargin + timelineW * a100ComputeEnd, y + 4, timelineW * (syncPoint - a100ComputeEnd), 22);
+    }
+
+    // Sync line
+    var syncX = leftMargin + timelineW * syncPoint;
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(syncX, startY);
+    ctx.lineTo(syncX, startY + 4 * rowHeight + 5);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.lineWidth = 1;
+
+    // Sync label
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('all-reduce', syncX, startY + 4 * rowHeight + 22);
+    ctx.fillText('sync', syncX, startY + 4 * rowHeight + 37);
+
+    // Legend
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(leftMargin, h - 22, 14, 14);
+    ctx.fillStyle = '#333';
+    ctx.fillText('H100 compute', leftMargin + 20, h - 10);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.fillRect(leftMargin + 140, h - 22, 14, 14);
+    ctx.fillStyle = '#333';
+    ctx.fillText('A100 compute (30% slower)', leftMargin + 160, h - 10);
+
+    ctx.fillStyle = '#f1c40f';
+    ctx.fillRect(leftMargin + 380, h - 22, 14, 14);
+    ctx.fillStyle = '#333';
+    ctx.fillText('Idle (waiting)', leftMargin + 400, h - 10);
+})();
+
+// Canvas 6: Thermal Throttling Under Sustained Load
+(function() {
+    var ctx = setupCanvas('canvas6');
+    var w = 720, h = 200;
+
+    ctx.fillStyle = '#f9fafb';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 17px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Thermal Throttling: Cold Benchmark vs Hot Production', w / 2, 25);
+
+    // Axes
+    var leftMargin = 70;
+    var rightMargin = 30;
+    var topMargin = 45;
+    var bottomMargin = 45;
+    var plotW = w - leftMargin - rightMargin;
+    var plotH = h - topMargin - bottomMargin;
+
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(leftMargin, topMargin);
+    ctx.lineTo(leftMargin, topMargin + plotH);
+    ctx.lineTo(leftMargin + plotW, topMargin + plotH);
+    ctx.stroke();
+
+    // Y-axis labels
+    ctx.fillStyle = '#555';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('100%', leftMargin - 8, topMargin + 10);
+    ctx.fillText('85%', leftMargin - 8, topMargin + plotH * 0.35 + 5);
+    ctx.fillText('0%', leftMargin - 8, topMargin + plotH);
+
+    // X-axis labels
+    ctx.textAlign = 'center';
+    ctx.fillText('0', leftMargin, topMargin + plotH + 18);
+    ctx.fillText('5 min', leftMargin + plotW * 0.17, topMargin + plotH + 18);
+    ctx.fillText('10 min', leftMargin + plotW * 0.33, topMargin + plotH + 18);
+    ctx.fillText('15 min', leftMargin + plotW * 0.5, topMargin + plotH + 18);
+    ctx.fillText('30 min', leftMargin + plotW * 0.8, topMargin + plotH + 18);
+    ctx.fillText('Time', leftMargin + plotW, topMargin + plotH + 18);
+
+    // Reference level lines (dashed)
+    var peakY = topMargin + 5;
+    var throttledY = topMargin + plotH * 0.35;
+
+    ctx.strokeStyle = '#bdc3c7';
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(leftMargin, peakY);
+    ctx.lineTo(leftMargin + plotW, peakY);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(leftMargin, throttledY);
+    ctx.lineTo(leftMargin + plotW, throttledY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Performance curve
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(leftMargin, peakY);
+
+    var transitionStart = plotW * 0.33;
+    var transitionEnd = plotW * 0.5;
+    ctx.lineTo(leftMargin + transitionStart, peakY);
+
+    // Gradual decline to 85%
+    var steps = 20;
+    for (var i = 0; i <= steps; i++) {
+        var t = i / steps;
+        var x = leftMargin + transitionStart + (transitionEnd - transitionStart) * t;
+        var y = peakY + (throttledY - peakY) * (t * t);
+        ctx.lineTo(x, y);
+    }
+
+    // Flat at throttled level
+    ctx.lineTo(leftMargin + plotW, throttledY);
+    ctx.stroke();
+    ctx.lineWidth = 1;
+
+    // Temperature curve (secondary, dashed orange)
+    ctx.strokeStyle = '#f39c12';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    var tempStartY = topMargin + plotH * 0.7;
+    var tempEndY = topMargin + plotH * 0.1;
+    ctx.moveTo(leftMargin, tempStartY);
+    for (var i = 0; i <= 50; i++) {
+        var t = i / 50;
+        var x = leftMargin + plotW * t;
+        var y = tempStartY + (tempEndY - tempStartY) * (1 - Math.exp(-3 * t));
+        ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.lineWidth = 1;
+
+    // Benchmark window highlight
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.12)';
+    ctx.fillRect(leftMargin, topMargin, transitionStart, plotH);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('benchmark window', leftMargin + transitionStart / 2, topMargin + plotH - 10);
+
+    // Production reality highlight
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.08)';
+    ctx.fillRect(leftMargin + transitionEnd, topMargin, plotW - transitionEnd, plotH);
+    ctx.fillStyle = '#c0392b';
+    ctx.fillText('production reality', leftMargin + transitionEnd + (plotW - transitionEnd) / 2, topMargin + plotH - 10);
+
+    // Legend
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(leftMargin + plotW - 180, topMargin + 15);
+    ctx.lineTo(leftMargin + plotW - 155, topMargin + 15);
+    ctx.stroke();
+    ctx.fillStyle = '#333';
+    ctx.fillText('Performance', leftMargin + plotW - 150, topMargin + 19);
+
+    ctx.strokeStyle = '#f39c12';
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(leftMargin + plotW - 180, topMargin + 32);
+    ctx.lineTo(leftMargin + plotW - 155, topMargin + 32);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillText('Temperature', leftMargin + plotW - 150, topMargin + 36);
+    ctx.lineWidth = 1;
+})();
+</script>
+</body>
+</html>

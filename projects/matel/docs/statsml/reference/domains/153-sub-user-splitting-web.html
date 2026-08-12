@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sub-User Splitting in Web Experiments</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 20px 10px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 40%; }
+.obj-table td:last-child { width: 60%; text-align: center; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+</style>
+</head>
+<body>
+<h1>Sub-User Splitting in Web Experiments</h1>
+<p class="subtitle">Randomizing at session, cookie, device, or GUID level when the decision-making entity is the user. The same person ends up in both arms — independence is an illusion.</p>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">The Core Problem</div>
+<ul>
+<li>A user has a phone, a laptop, a tablet, and maybe a work browser. Each generates a different cookie/session/GUID. Cookie-based splitting assigns each device independently.</li>
+<li>Result: the same person sees Treatment on their phone and Control on their laptop. Their eventual conversion (purchase, signup, subscription) is a single user-level decision — not three independent observations.</li>
+<li>You count 3 "observations" but have 1 independent unit. Variance is underestimated. Correlations within-user are ignored. Everything looks more significant than it is.</li>
+</ul>
+<div class="philosophy"><strong>Key insight:</strong> The unit of analysis must match the unit of decision. If conversion is a user-level event, randomization must be user-level. Anything more granular creates correlated observations masquerading as independent ones.</div>
+</td><td><canvas id="c1" width="720" height="300"></canvas></td></tr>
+</table>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">How It Manifests</div>
+<ul>
+<li><strong>Cookie-based split:</strong> User clears cookies, gets new assignment. Same person oscillates between arms across sessions. Neither arm gets clean exposure.</li>
+<li><strong>Session-level split:</strong> User browses a product page in Treatment (with new recommendation widget), then purchases later in a Control session. Which arm gets the conversion?</li>
+<li><strong>Device-level split:</strong> User researches on mobile (Treatment), converts on desktop (Control). Treatment's contribution is invisible; Control gets false credit.</li>
+<li><strong>GUID/install-ID split:</strong> User reinstalls app, gets fresh GUID. Now in different arm. Prior exposure still influences behavior.</li>
+</ul>
+<p><strong>Consequences:</strong> Effect dilution (same person partially in both arms), attribution confusion (conversion counted in wrong arm), inflated N (3 devices ≠ 3 users), and inconsistent user experience (breaks trust).</p>
+</td><td><canvas id="c2" width="720" height="300"></canvas></td></tr>
+</table>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Fix: Split by Authenticated User ID</div>
+<ul>
+<li><strong>Logged-in users:</strong> Hash user-id + experiment-id to assign variant. Same assignment everywhere, every session, every device.</li>
+<li><strong>Anonymous users:</strong> This is genuinely hard. Options: (1) first-party persistent ID via fingerprinting (privacy concerns), (2) restrict experiment to logged-in users only, (3) accept noise and use session-level with larger N and robust SE.</li>
+<li><strong>Mixed auth states:</strong> User browses anonymously, logs in, then converts. If you assigned at cookie level, the pre-login sessions are in unknown arms. Reconcile by attributing all sessions to the user-id arm post-login.</li>
+<li><strong>Account sharing:</strong> Family Netflix account is one user-id but multiple people. If the decision unit is the household, user-id is correct. If it's the individual viewer, you need profile-level splitting.</li>
+</ul>
+<p><strong>The tell:</strong> Ask "can one human see both variants?" If the answer is yes through any path (multiple devices, cookie churn, reinstall), your split level is below the independence boundary.</p>
+</td><td><canvas id="c3" width="720" height="300"></canvas></td></tr>
+</table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    return {ctx:ctx, w:w, h:h};
+}
+
+// Canvas 1: One user, multiple identities, split both ways
+(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle = '#1a5276';
+ctx.font = 'bold 14px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('One User — Multiple Identities — Inconsistent Assignment', w/2, 18);
+
+// User in center
+ctx.beginPath();
+ctx.arc(w/2, 90, 35, 0, Math.PI * 2);
+ctx.fillStyle = 'rgba(26,82,118,0.1)';
+ctx.fill();
+ctx.strokeStyle = '#1a5276';
+ctx.lineWidth = 3;
+ctx.stroke();
+ctx.fillStyle = '#1a5276';
+ctx.font = '13px sans-serif';
+ctx.fillText('👤 One Person', w/2, 93);
+
+// Devices spreading out below
+var devices = [
+    {x: 110, label: 'Phone\ncookie_7a3', arm: 'A', color: '#27ae60'},
+    {x: 270, label: 'Laptop\ncookie_f91', arm: 'B', color: '#e74c3c'},
+    {x: 430, label: 'Tablet\ncookie_2bd', arm: 'A', color: '#27ae60'},
+    {x: 590, label: 'Work PC\ncookie_e44', arm: 'B', color: '#e74c3c'}
+];
+
+devices.forEach(function(d) {
+    ctx.beginPath();
+    ctx.moveTo(w/2, 125);
+    ctx.lineTo(d.x, 170);
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.fillStyle = d.color === '#27ae60' ? 'rgba(39,174,96,0.15)' : 'rgba(231,76,60,0.15)';
+    ctx.fillRect(d.x - 55, 170, 110, 55);
+    ctx.strokeStyle = d.color;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(d.x - 55, 170, 110, 55);
+
+    var lines = d.label.split('\n');
+    ctx.fillStyle = '#333';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(lines[0], d.x, 188);
+    ctx.fillStyle = '#888';
+    ctx.font = '10px monospace';
+    ctx.fillText(lines[1], d.x, 202);
+    ctx.fillStyle = d.color;
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillText('Arm ' + d.arm, d.x, 218);
+});
+
+ctx.fillStyle = '#e74c3c';
+ctx.font = 'bold 13px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('Same person in both arms → not independent observations', w/2, 260);
+ctx.fillStyle = '#666';
+ctx.font = '12px sans-serif';
+ctx.fillText('System thinks: 4 users, 2 in each arm. Reality: 1 user seeing both.', w/2, 280);
+})();
+
+// Canvas 2: Attribution confusion — conversion in wrong arm
+(function(){var s=setup('c2');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle = '#1a5276';
+ctx.font = 'bold 14px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('Cross-Device Journey — Wrong Attribution', w/2, 18);
+
+// Timeline
+var ty = 130;
+ctx.strokeStyle = '#ccc';
+ctx.lineWidth = 2;
+ctx.beginPath();
+ctx.moveTo(60, ty);
+ctx.lineTo(660, ty);
+ctx.stroke();
+
+// Events on timeline
+var events = [
+    {x: 120, label: 'Browse\n(mobile)', arm: 'Treatment', color: '#27ae60', detail: 'Sees new UI'},
+    {x: 280, label: 'Research\n(laptop)', arm: 'Control', color: '#e74c3c', detail: 'Sees old UI'},
+    {x: 440, label: 'Compare\n(mobile)', arm: 'Treatment', color: '#27ae60', detail: 'Sees new UI'},
+    {x: 600, label: 'Purchase\n(laptop)', arm: 'Control', color: '#e74c3c', detail: '💰 Converts!'}
+];
+
+events.forEach(function(e) {
+    ctx.beginPath();
+    ctx.arc(e.x, ty, 8, 0, Math.PI * 2);
+    ctx.fillStyle = e.color;
+    ctx.fill();
+
+    ctx.fillStyle = '#333';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'center';
+    var lines = e.label.split('\n');
+    ctx.fillText(lines[0], e.x, ty - 30);
+    ctx.fillStyle = '#888';
+    ctx.fillText(lines[1], e.x, ty - 17);
+
+    ctx.fillStyle = e.color;
+    ctx.font = '10px sans-serif';
+    ctx.fillText(e.arm, e.x, ty + 25);
+    ctx.fillStyle = '#555';
+    ctx.font = '11px sans-serif';
+    ctx.fillText(e.detail, e.x, ty + 42);
+});
+
+// Arrow showing wrong attribution
+ctx.strokeStyle = '#e74c3c';
+ctx.lineWidth = 2;
+ctx.setLineDash([4, 3]);
+ctx.beginPath();
+ctx.moveTo(600, ty + 55);
+ctx.lineTo(600, ty + 75);
+ctx.stroke();
+ctx.setLineDash([]);
+
+ctx.fillStyle = '#e74c3c';
+ctx.font = 'bold 13px sans-serif';
+ctx.fillText('Conversion attributed to Control — but Treatment drove the decision', w/2, 240);
+ctx.fillStyle = '#666';
+ctx.font = '12px sans-serif';
+ctx.fillText('Treatment effect is invisible. Control gets false credit.', w/2, 262);
+})();
+
+// Canvas 3: Correct approach — user-id based consistent assignment
+(function(){var s=setup('c3');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle = '#1a5276';
+ctx.font = 'bold 14px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('Fix: hash(user_id + experiment_id) → Consistent Assignment', w/2, 18);
+
+// User
+ctx.beginPath();
+ctx.arc(w/2, 80, 30, 0, Math.PI * 2);
+ctx.fillStyle = 'rgba(39,174,96,0.15)';
+ctx.fill();
+ctx.strokeStyle = '#27ae60';
+ctx.lineWidth = 3;
+ctx.stroke();
+ctx.fillStyle = '#27ae60';
+ctx.font = 'bold 12px sans-serif';
+ctx.fillText('user_4281', w/2, 84);
+
+// Hash function box
+ctx.fillStyle = '#f0f4f8';
+ctx.fillRect(w/2 - 90, 120, 180, 30);
+ctx.strokeStyle = '#2980b9';
+ctx.lineWidth = 1.5;
+ctx.strokeRect(w/2 - 90, 120, 180, 30);
+ctx.fillStyle = '#2980b9';
+ctx.font = '12px monospace';
+ctx.fillText('hash("4281" + "exp_23") % 2 = 0', w/2, 139);
+
+// Arrow down
+ctx.beginPath();
+ctx.moveTo(w/2, 150);
+ctx.lineTo(w/2, 165);
+ctx.strokeStyle = '#27ae60';
+ctx.lineWidth = 2;
+ctx.stroke();
+
+ctx.fillStyle = '#27ae60';
+ctx.font = 'bold 14px sans-serif';
+ctx.fillText('→ Treatment (always)', w/2, 180);
+
+// All devices same arm
+var devs = [
+    {x: 130, label: 'Phone'},
+    {x: 290, label: 'Laptop'},
+    {x: 450, label: 'Tablet'},
+    {x: 610, label: 'Work PC'}
+];
+devs.forEach(function(d) {
+    ctx.beginPath();
+    ctx.moveTo(w/2, 188);
+    ctx.lineTo(d.x, 210);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(39,174,96,0.15)';
+    ctx.fillRect(d.x - 50, 210, 100, 40);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(d.x - 50, 210, 100, 40);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(d.label + ' → A', d.x, 234);
+});
+
+ctx.fillStyle = '#333';
+ctx.font = '13px sans-serif';
+ctx.fillText('Every device, every session → same variant. Clean measurement.', w/2, 280);
+})();
+</script>
+</body>
+</html>

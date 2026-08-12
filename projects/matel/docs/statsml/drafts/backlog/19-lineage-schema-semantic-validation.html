@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lineage-Informed Schema Detection for Semantic Validation — Discussion Backlog</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #fff; color: #2c3e50; line-height: 1.6; }
+h1 { color: #1a5276; border-bottom: 3px solid #2980b9; padding-bottom: 10px; }
+h2 { color: #1a5276; margin-top: 0; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { padding: 20px; vertical-align: top; border: 1px solid #2980b9; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-title { color: #1a5276; font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
+ul { margin: 10px 0; padding-left: 20px; }
+li { margin-bottom: 6px; }
+strong { color: #1a5276; }
+code { background: #e8f0f8; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; color: #1a5276; }
+.questions { background: #fff8e1; border-left: 3px solid #f39c12; padding: 10px 15px; margin: 10px 0; font-size: 0.9em; }
+canvas { display: block; margin: 8px auto; max-width: 100%; }
+.nav-link { display: inline-block; margin: 20px 0; color: #2980b9; text-decoration: none; font-weight: bold; }
+.nav-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<h1>Lineage-Informed Schema Detection for Semantic Validation</h1>
+<p>Data lineage tells you what data MEANS, not just where it came from. When you know a column was produced by a JOIN, aggregation, or code transform, you can infer schema, type, valid range, and semantic role far more accurately.</p>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">How Lineage Improves Schema Detection</div>
+<ul>
+<li><strong>Derived column semantics:</strong> <code>COUNT(*) GROUP BY dept</code> → non-negative integer, bounded by source size</li>
+<li><strong>Join-inherited constraints:</strong> Customer age still 0-120 after join, order amount still positive</li>
+<li><strong>Transform-aware types:</strong> <code>log(income)</code> → float. <code>age > 65</code> → boolean. <code>DATEDIFF</code> → non-negative int with unit</li>
+<li><strong>Aggregation-collapsed cardinality:</strong> GROUP BY state → ≤50 unique values</li>
+<li><strong>Ratio/proportion detection:</strong> positive_count / total_count → known [0,1]</li>
+<li><strong>Feature engineering provenance:</strong> salary/hours = "dollars per hour", weight/height² = BMI</li>
+</ul>
+
+<div class="obj-title" style="margin-top: 20px;">How Better Schema Validates Decision Trees</div>
+<ul>
+<li><strong>Type-aware split constraints:</strong> ratio [0,1] → can't split outside range. Count → integer only</li>
+<li><strong>Propagated NULL semantics:</strong> Structural NULLs (no match) vs missing-data NULLs — different meanings</li>
+<li><strong>Cross-branch dependency:</strong> total_purchases AND avg_purchase_amount both from purchases[] → hidden dependency</li>
+<li><strong>Temporal ordering:</strong> account_age < 1yr AND lifetime_transactions > 10000 → temporal mismatch</li>
+</ul>
+
+<div class="obj-title" style="margin-top: 20px;">Implementation Layers</div>
+<ul>
+<li><strong>Layer 1:</strong> Lineage capture (transform DAG)</li>
+<li><strong>Layer 2:</strong> Schema inference (type, range, cardinality, unit, nullability, granularity)</li>
+<li><strong>Layer 3:</strong> Constraint propagation (forward through DAG)</li>
+<li><strong>Layer 4:</strong> Validation rules (model inputs, tree splits, branch paths, feature interactions)</li>
+</ul>
+
+<div class="questions">
+<strong>Key Questions:</strong><br>
+(1) Auto vs human annotation?<br>
+(2) Opaque code → infer from observed?<br>
+(3) Schema drift handling?<br>
+(4) Hard rejection vs soft warning?<br>
+(5) Replace or supplement doc 25 metadata?<br>
+(6) Ensemble compatibility?
+</div>
+</td>
+<td>
+<canvas id="c1" width="720" height="280"></canvas>
+<canvas id="c2" width="720" height="260"></canvas>
+<canvas id="c3" width="720" height="240"></canvas>
+</td>
+</tr>
+</table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setupCanvas(id) {
+    var c = document.getElementById(id);
+    var w = c.width, h = c.height;
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return {ctx: ctx, w: w, h: h};
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+// Canvas 1: Three-layer flow diagram
+(function() {
+    var s = setupCanvas('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.fillStyle = '#f8f9fa';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Three-Layer Inference: Lineage → Schema → Validation', w/2, 18);
+
+    // Main flow boxes
+    var layers = [
+        {x: 30, y: 45, w: 180, h: 80, title: 'Lineage Record', color: '#27ae60',
+         items: ['source: employees', 'transform: GROUP BY dept', 'params: COUNT(*)']},
+        {x: 260, y: 45, w: 180, h: 80, title: 'Inferred Schema', color: '#2980b9',
+         items: ['type: non-neg integer', 'range: [0, max_employees]', 'granularity: per-dept']},
+        {x: 490, y: 45, w: 200, h: 80, title: 'Validation Rules', color: '#8e44ad',
+         items: ['split must be integer', 'value cannot be negative', 'bounded by source size']}
+    ];
+
+    layers.forEach(function(layer, li) {
+        // Box
+        roundRect(ctx, layer.x, layer.y, layer.w, layer.h, 6);
+        ctx.fillStyle = layer.color;
+        ctx.fill();
+        // Title
+        ctx.font = 'bold 14px sans-serif';
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'center';
+        ctx.fillText(layer.title, layer.x + layer.w/2, layer.y + 18);
+        // Items
+        ctx.font = '9px monospace';
+        layer.items.forEach(function(item, ii) {
+            ctx.fillText(item, layer.x + layer.w/2, layer.y + 36 + ii * 14);
+        });
+
+        // Arrow to next
+        if (li < layers.length - 1) {
+            var next = layers[li + 1];
+            ctx.strokeStyle = '#7f8c8d';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(layer.x + layer.w, layer.y + layer.h/2);
+            ctx.lineTo(next.x, next.y + next.h/2);
+            ctx.stroke();
+            ctx.fillStyle = '#555';
+            ctx.beginPath();
+            ctx.moveTo(next.x, next.y + next.h/2);
+            ctx.lineTo(next.x - 8, next.y + next.h/2 - 5);
+            ctx.lineTo(next.x - 8, next.y + next.h/2 + 5);
+            ctx.closePath();
+            ctx.fill();
+        }
+    });
+
+    // Side panel: Without vs With lineage
+    var panelY = 155;
+    // Without
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.08)';
+    ctx.fillRect(30, panelY, 330, 55);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(30, panelY, 330, 55);
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'left';
+    ctx.fillText('Without Lineage: GUESSES', 40, panelY + 18);
+    ctx.font = '13px sans-serif';
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('dept_count looks numeric → allow float splits, negative values', 40, panelY + 35);
+    ctx.fillText('No idea it came from COUNT(*) → no semantic constraints', 40, panelY + 50);
+
+    // With
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.08)';
+    ctx.fillRect(380, panelY, 320, 55);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(380, panelY, 320, 55);
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'left';
+    ctx.fillText('With Lineage: KNOWS', 390, panelY + 18);
+    ctx.font = '13px sans-serif';
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('dept_count = COUNT(*) → integer, non-negative, bounded', 390, panelY + 35);
+    ctx.fillText('Split at 3.7 flagged as invalid. Value -2 flagged as impossible', 390, panelY + 50);
+
+    // Bottom annotation
+    ctx.font = '13px sans-serif';
+    ctx.fillStyle = '#555';
+    ctx.textAlign = 'center';
+    ctx.fillText('Lineage transforms type detection from observation-only to knowledge-informed', w/2, 265);
+})();
+
+// Canvas 2: Feature table with lineage constraints
+(function() {
+    var s = setupCanvas('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.fillStyle = '#f8f9fa';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Feature Constraints Derived from Lineage', w/2, 18);
+
+    // Table
+    var headers = ['Feature', 'Lineage', 'Constraint', 'Split Rule'];
+    var colX = [20, 130, 330, 540];
+    var colW = [110, 200, 210, 160];
+    var rowH = 30;
+    var startY = 40;
+
+    // Header row
+    ctx.fillStyle = '#1a5276';
+    ctx.fillRect(15, startY, 690, rowH);
+    ctx.font = 'bold 13px sans-serif';
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'left';
+    headers.forEach(function(h, i) {
+        ctx.fillText(h, colX[i], startY + 19);
+    });
+
+    var rows = [
+        ['dept_count', 'COUNT(*) GROUP BY', 'non-neg int, ≤ N', 'integer splits only'],
+        ['avg_salary', 'AVG(salary)', 'float, ≥ 0', 'any float, non-neg'],
+        ['is_active', 'age > 65', 'boolean {0,1}', 'only split at 0.5'],
+        ['bmi', 'weight / height²', 'float [10, 80]', 'bounded by formula'],
+        ['tenure_days', 'DATEDIFF(now, start)', 'non-neg int', 'integer, ≥ 0'],
+        ['pct_positive', 'pos_ct / total_ct', 'float [0, 1]', 'cannot exceed 1.0']
+    ];
+
+    rows.forEach(function(row, ri) {
+        var y = startY + rowH + ri * rowH;
+        ctx.fillStyle = ri % 2 === 0 ? '#fff' : '#eaf2f8';
+        ctx.fillRect(15, y, 690, rowH);
+        ctx.strokeStyle = '#ddd';
+        ctx.strokeRect(15, y, 690, rowH);
+
+        ctx.font = '10px monospace';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'left';
+        ctx.fillText(row[0], colX[0], y + 19);
+
+        ctx.font = '9px monospace';
+        ctx.fillStyle = '#555';
+        ctx.fillText(row[1], colX[1], y + 19);
+
+        ctx.font = '13px sans-serif';
+        ctx.fillStyle = '#27ae60';
+        ctx.fillText(row[2], colX[2], y + 19);
+
+        ctx.fillStyle = '#e67e22';
+        ctx.fillText(row[3], colX[3], y + 19);
+    });
+})();
+
+// Canvas 3: Shared lineage diagram
+(function() {
+    var s = setupCanvas('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.fillStyle = '#f8f9fa';
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Shared Source Detection — Hidden Feature Dependencies', w/2, 18);
+
+    // Source node at top
+    var srcX = 300, srcY = 45, srcW = 120, srcH = 35;
+    roundRect(ctx, srcX, srcY, srcW, srcH, 5);
+    ctx.fillStyle = '#e67e22';
+    ctx.fill();
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.fillText('purchases[]', srcX + srcW/2, srcY + 22);
+
+    // Three derived features
+    var features = [
+        {x: 120, y: 120, label: 'total_purchases\n(COUNT)'},
+        {x: 310, y: 120, label: 'avg_amount\n(AVG)'},
+        {x: 500, y: 120, label: 'max_purchase\n(MAX)'}
+    ];
+    var fW = 130, fH = 40;
+
+    features.forEach(function(f) {
+        roundRect(ctx, f.x, f.y, fW, fH, 5);
+        ctx.fillStyle = '#2980b9';
+        ctx.fill();
+        ctx.font = '13px sans-serif';
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'center';
+        var lines = f.label.split('\n');
+        lines.forEach(function(line, li) {
+            ctx.fillText(line, f.x + fW/2, f.y + 16 + li * 14);
+        });
+
+        // Connection from source
+        ctx.strokeStyle = '#e67e22';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(srcX + srcW/2, srcY + srcH);
+        ctx.lineTo(f.x + fW/2, f.y);
+        ctx.stroke();
+    });
+
+    // Warning box
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.08)';
+    ctx.fillRect(100, 175, 520, 28);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(100, 175, 520, 28);
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('WARNING: SHARED SOURCE — these features are NOT independent!', w/2, 193);
+
+    // Example tree branch showing the problem
+    ctx.font = '13px sans-serif';
+    ctx.fillStyle = '#2c3e50';
+    ctx.textAlign = 'left';
+    ctx.fillText('Example bad tree branch:', 100, 222);
+    ctx.font = '10px monospace';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('IF total_purchases > 5 AND avg_amount < 20 AND max_purchase > 500', 100, 236);
+    ctx.font = '12px sans-serif';
+    ctx.fillStyle = '#555';
+    ctx.textAlign = 'center';
+    ctx.fillText('All three conditions constrain the SAME underlying array — not three independent signals', w/2, 236);
+})();
+</script>
+
+</body>
+</html>
