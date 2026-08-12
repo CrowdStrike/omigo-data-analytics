@@ -1,4 +1,4 @@
-# Statistical ML Documentation
+# Statistical ML Guiding Principles (Work In Progress)
 
 ## What This Is
 
