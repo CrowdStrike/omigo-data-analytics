@@ -44,14 +44,14 @@ class SparkClient(sql_helper.HadoopSqlBase):
         # Execute the query
         pandas_df = self.sql_context.sql(query)
 
-        # convert to tsv
+        # convert to dataframe 
         xdf = dataframe.from_df(pandas_df.toPandas())
 
         # call stop
         self.__stop__()
 
         # return
-        return xtsv.get_columns(), xdf.get_data_fields() 
+        return xdf.get_columns(), xdf.get_data_fields() 
 
     # stop
     def __stop__(self):

@@ -6,13 +6,15 @@ import json
 # env variables
 JIRA_API_USER = "JIRA_API_USER"
 JIRA_API_PASS = "JIRA_API_PASS" # nosec
-JIRA_API_AUTH_TOKEN = "JIRA_API_AUTH_TOKEN"
+JIRA_API_AUTH_TOKEN = "JIRA_API_AUTH_TOKEN" #nosec
 
 # api handler for searching jira
 class JiraSearch:
-    def __init__(self, server = None, username = None, password = None, auth_token = None, proxies = None, verify = True):
+    def __init__(self, server = None, username = None, password = None, auth_token = None, auth_token_env_var = None, proxies = None, verify = True, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "JiraSearch: __init__")
+
         # warn
-        utils.warn_once("JiraSearch: This is work in progress in extensions package. Some of the constants need to be decoupled")
+        utils.warn_once("{}: This is work in progress in extensions package. Some of the constants need to be decoupled".format(dmsg))
 
         # validation
         if (server is None):
@@ -25,11 +27,15 @@ class JiraSearch:
 
         # instantiate and return
         jira_options = {"server": self.server, "verify": verify, "headers": {'content-type': 'application/json'}}
-        utils.info("JiraSearch: instantiating with options: {}".format(jira_options))
+        utils.info("{}: instantiating with options: {}".format(dmsg, jira_options))
 
         # debug
         if (proxies is not None):
-            utils.info("Using proxy: {}".format(proxies))
+            utils.info("{}: Using proxy: {}".format(dmsg, proxies))
+
+        # check for auth_token_env_var
+        if (auth_token_env_var is not None and auth_token_env_var != ""):
+            auth_token = os.environ[auth_token_env_var]
 
         # check for credentials
         if (username is not None and password is not None):
@@ -37,7 +43,7 @@ class JiraSearch:
         elif (auth_token is not None):
             self.jira_instance = JIRA(jira_options, token_auth = auth_token, proxies = proxies)
         else:
-            raise Exception("JiraSearch: No valid authentication mechanism found")
+            raise Exception("{}: No valid authentication mechanism found".format(dmsg))
 
         # build fields mapping
         for field in self.jira_instance.fields():
@@ -145,9 +151,9 @@ class JiraSearch:
                 else:
                     mp_vars = vars(value)
                     mp_value = {}
-                    for k in mp_vars:
-                        if (k.startswith("_") == False):
-                            mp_value[str(k)] = str(mp_vars[k])
+                    for k2 in mp_vars:
+                        if (k2.startswith("_") == False):
+                            mp_value[str(k2)] = str(mp_vars[k2])
                     mp["{}:json_encoded".format(k2)] = json.dumps(mp_value)
 
             # inner transformation function
@@ -170,33 +176,38 @@ class JiraSearch:
             # append raw along with custom field transformation
             mp["raw"] = json.dumps(__raw_json_custom_field_mapping__(search_result.raw))
 
-            # append to tsvs
+            # append to dataframes 
             result_xdfs.append(dataframe.from_maps([mp]))
 
         # merge
-        result = dataframe.merge_union(result_xdfs)
+        result = dataframe.merge_union(result_xdfs, dmsg = dmsg)
 
         # return
         return result
 
 # DF for search jira
 class JiraDF(dataframe.DataFrame):
-    def __init__(self, header, data_fields, jira_search = None, server = None, username = None, password = None, auth_token = None, verify = True):
-        super().__init__(header, data_fields)
+    def __init__(self, header_fields, data_fields, jira_search = None, server = None, username = None, password = None, auth_token = None, auth_token_env_var = None,
+        proxies = None, verify = True):
+        super().__init__(header_fields, data_fields)
 
         # instantiate
-        self.jira_search = jira_search if (jira_search is not None) else JiraSearch(server = server, username = username, password = password, auth_token = auth_token, verify = verify)
+        self.jira_search = jira_search if (jira_search is not None) else JiraSearch(server = server, username = username, password = password, auth_token = auth_token,
+            auth_token_env_var = auth_token_env_var, proxies = None, verify = verify)
 
     def search_issues(self, query_template, prefix, extra_cols = None, max_results = 10, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "JiraDF: search_issues")
 
+        # warning
+        utils.warn_once("{}: max_results should be mandatory".format(dmsg))
+
         def __search_issues_explode_func__(mp):
             # resolve query
             query = utils.replace_template_props(mp, query_template)
-            utils.info("JiraDF: search_issues: resolved query: {}".format(query))
+            utils.info("{}: resolved query: {}".format(dmsg, query))
 
             # call jira search
-            results = self.jira_search.search_issues(query, extra_cols = extra_cols, max_results = max_results, dmsg = dmsg)
+            results = self.jira_search.search_issues(query, max_results = max_results, dmsg = dmsg)
 
             # return
             return results.to_maps()

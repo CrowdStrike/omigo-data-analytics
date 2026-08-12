@@ -11,34 +11,34 @@ class VisualDF(dataframe.DataFrame):
     def __init__(self, header_fields, data_fields):
         super().__init__(header_fields, data_fields)
 
-    def linechart(self, xcol, ycols, ylabel = None, title = None, subplots = False, xfigsize = 25, yfigsize = 5, props = {}, dmsg = ""):
+    def linechart(self, xcol, ycols, ylabel = None, title = None, subplots = False, xfigsize = 25, yfigsize = 5, props = None, dmsg = ""):
         return __pd_linechart__(self, xcol, ycols, ylabel, title, subplots, xfigsize, yfigsize, props, dmsg)
 
-    def linechart_multi_class(self, xcol, ycol, class_col, ylabel = None, title = None, subplots = False, xfigsize = 25, yfigsize = 5, props = {}, dmsg = ""):
+    def linechart_multi_class(self, xcol, ycol, class_col, ylabel = None, title = None, subplots = False, xfigsize = 25, yfigsize = 5, props = None, dmsg = ""):
         return __pd_linechart_multi_class__(self, xcol, ycol, class_col, ylabel, title, subplots, xfigsize, yfigsize, props, dmsg)
 
-    def scatterplot(self, xcol, ycol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10, props = {}, dmsg = ""):
+    def scatterplot(self, xcol, ycol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10, props = None, dmsg = ""):
         return __sns_scatterplot__(self, xcol, ycol, class_col, title, xfigsize, yfigsize, max_rows, max_class_col, props, dmsg)
 
-    def histogram(self, xcol, class_col = None, bins = 10, title = None, binwidth = None, xfigsize = 25, yfigsize = 5, max_class_col = 10, props = {}, dmsg = ""):
+    def histogram(self, xcol, class_col = None, bins = 10, title = None, binwidth = None, xfigsize = 25, yfigsize = 5, max_class_col = 10, props = None, dmsg = ""):
         return __sns_histogram__(self, xcol, class_col, bins, title, binwidth, xfigsize, yfigsize, max_class_col, props, dmsg)
 
-    def ecdf(self, xcol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_class_col = 10, props = {}, dmsg = ""):
+    def ecdf(self, xcol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_class_col = 10, props = None, dmsg = ""):
         return __sns_ecdf__(self, xcol, class_col, title, xfigsize, yfigsize, max_class_col, props, dmsg)
 
-    def density(self, ycols, class_col = None, title = None, xfigsize = 25, yfigsize = 5, props = {}, dmsg = ""):
+    def density(self, ycols, class_col = None, title = None, xfigsize = 25, yfigsize = 5, props = None, dmsg = ""):
         return __sns_density__(self, ycols, class_col, title, xfigsize, yfigsize, props, dmsg)
 
-    def barchart(self, xcol, ycol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10, props = {}, dmsg = ""):
+    def barchart(self, xcol, ycol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10, props = None, dmsg = ""):
         return __sns_barplot__(self, xcol, ycol, class_col, title, xfigsize, yfigsize, max_rows, max_class_col, props, dmsg)
 
-    def boxplot(self, xcol, ycol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10, props = {}, dmsg = ""):
+    def boxplot(self, xcol, ycol, class_col = None, title = None, xfigsize = 25, yfigsize = 5, max_rows = 20, max_class_col = 10, props = None, dmsg = ""):
         return __sns_boxplot__(self, xcol, ycol, class_col, title, xfigsize, yfigsize, max_rows, max_class_col, props, dmsg)
 
-    def corr_heatmap(self, cols, title = None, xfigsize = 25, yfigsize = 5, max_rows = 6, props = {}, dmsg = ""):
+    def corr_heatmap(self, cols, title = None, xfigsize = 25, yfigsize = 5, max_rows = 6, props = None, dmsg = ""):
         return __sns_corr_heatmp__(self, cols, title, xfigsize, yfigsize, max_rows, props, dmsg)
 
-    def pairplot(self, cols, class_col = None, title = None, xfigsize = 5, yfigsize = 5, max_rows = 6, max_class_col = 6, props = {}, dmsg = ""):
+    def pairplot(self, cols, class_col = None, title = None, xfigsize = 5, yfigsize = 5, max_rows = 6, max_class_col = 6, props = None, dmsg = ""):
         return __sns_pairplot__(self, cols, class_col, title, xfigsize, yfigsize, max_rows, max_class_col, props, dmsg)
 
 def __create_data_frame_with_types__(xdf, xcol = None, ycols = None, zcol = None):

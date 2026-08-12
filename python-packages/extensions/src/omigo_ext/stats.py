@@ -2,16 +2,16 @@ from omigo_core import utils
 from scipy import stats
 
 # This is WIP
-def do_ttest(xtsv1, xtsv2, f, n = 10000, alpha = 0.01):
-    xtsv1 = xtsv1.select(f)
-    xtsv2 = xtsv2.select(f)
+def do_ttest(xdf1, xdf2, f, n = 10000, alpha = 0.01):
+    xdf1 = xdf1.select(f)
+    xdf2 = xdf2.select(f)
 
     # find the value of n
-    effective_n = min(n, xtsv1.num_rows(), xtsv2.num_rows())
+    effective_n = min(n, xdf1.num_rows(), xdf2.num_rows())
 
     # perform t-test
-    x_pos_1 = xtsv1.sample_n(effective_n)
-    x_neg_1 = xtsv2.sample_n(effective_n)
+    x_pos_1 = xdf1.sample_n(effective_n)
+    x_neg_1 = xdf2.sample_n(effective_n)
 
     f_pos = x_pos_1.col_as_float_array(f)
     f_neg = x_neg_1.col_as_float_array(f)
@@ -33,8 +33,8 @@ def do_ttest(xtsv1, xtsv2, f, n = 10000, alpha = 0.01):
     mean_pos = sum(f_pos) / len(f_pos)
     mean_neg = sum(f_neg) / len(f_neg)
 
-    print("Org Len: xtsv1: {}, xtsv2: {}".format(xtsv1.num_rows(), xtsv2.num_rows()))
-    print("New Len: xtsv1: {}, xtsv2: {}".format(len(f_pos), len(f_neg)))
-    print("t-test: mean: xtsv1: {}, xtsv2: {}, pvalue: {}, statistic: {}".format(mean_pos, mean_neg, ttest.pvalue, ttest.statistic))
-    print("ks-test pvalue: {}, ks-test statistic: {}, location: {}, sign: {}".format(kstest.pvalue, kstest.statistic, kstest.statistic_location, kstest.statistic_sign))
+    utils.info("Org Len: xdf1: {}, xdf2: {}".format(xdf1.num_rows(), xdf2.num_rows()))
+    utils.info("New Len: xdf1: {}, xdf2: {}".format(len(f_pos), len(f_neg)))
+    utils.info("t-test: mean: xdf1: {}, xdf2: {}, pvalue: {}, statistic: {}".format(mean_pos, mean_neg, ttest.pvalue, ttest.statistic))
+    utils.info("ks-test pvalue: {}, ks-test statistic: {}, location: {}, sign: {}".format(kstest.pvalue, kstest.statistic, kstest.statistic_location, kstest.statistic_sign))
 

@@ -33,7 +33,7 @@ def resolve_time_str(x):
             elif (unit == "s"):
                 diff_sec = count * 1
             else:
-                raise Exception("Unknown time unit:", parts[1])
+                raise Exception("Unknown time unit: {}".format(unit))
 
         # return base_time minus diff
         return timefuncs.utctimestamp_to_datetime_str(int(base_time.timestamp()) - diff_sec)

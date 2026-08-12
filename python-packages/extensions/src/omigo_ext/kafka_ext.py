@@ -59,7 +59,7 @@ class KafkaClient:
                 new_data_fields.append([message.value])
 
             # check if all messages have been received, or time interval has been reached
-            if (n > 0 and len(new_data) >= n):
+            if (n > 0 and len(new_data_fields) >= n):
                 break
 
             # check if max_duration is exceeded
@@ -67,7 +67,7 @@ class KafkaClient:
             if (max_duration_sec > 0 and int(ts_end - ts_start) >= max_duration_sec):
                 break
 
-        # convert json to tsv
+        # convert json to dataframe 
         return dataframe.DataFrame(new_header_fields, new_data_fields) \
             .explode_json(internal_prefix, internal_prefix, excluded_cols = self.excluded_cols, nested_cols = self.nested_cols) \
             .remove_prefix(internal_prefix)

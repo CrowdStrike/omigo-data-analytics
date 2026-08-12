@@ -1,5 +1,6 @@
 from omigo_core import dataframe, utils
 
+import numpy as np
 import pandas as pd
 from bokeh.io import output_notebook, show
 from bokeh.plotting import figure, ColumnDataSource
@@ -37,7 +38,7 @@ class GeoMapDF(dataframe.DataFrame):
         display_cols_mp[lon_col] = "Longitude"
 
         # map ip to latitude and longitude
-        xtsv = self \
+        xdf = self \
             .select(list(display_cols_mp.keys()), dmsg = dmsg) \
             .is_nonempty_str(lat_col) \
             .is_nonempty_str(lon_col) \
@@ -53,7 +54,7 @@ class GeoMapDF(dataframe.DataFrame):
         for k in ks:
              if (k.find(":") != -1):
                  k2 = k.replace(":", "_")
-                 xtsv = xtsv.rename(k, k2)
+                 xdf = xdf.rename(k, k2)
                  display_cols_mp[k2] = display_cols_mp[k]
                  del display_cols_mp[k]
 
@@ -62,7 +63,7 @@ class GeoMapDF(dataframe.DataFrame):
         lon_col = lon_col.replace(":", "_")
 
         # create data frame
-        df = xtsv.to_df(infer_data_types = True)
+        df = xdf.to_df(infer_data_types = True)
 
         # map the lat-long to mercators
         df["{}:coordinates".format(prefix)] = list(zip(df[lat_col], df[lon_col]))

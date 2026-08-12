@@ -60,6 +60,7 @@ class SplunkSearch:
         # initialize parameters
         self.filters = []
         self.cols = []
+        self.max_results = None
         self.start_time = None
 
         # use cache
@@ -123,7 +124,7 @@ class SplunkSearch:
 
         # add select
         if (self.cols != None and len(self.cols) > 0):
-            query = "{} | table {}".format(query, select_str)
+            query = "{} | table {}".format(query, ", ".join(self.cols))
 
         # add max results
         query = "{} | head {}".format(query, self.max_results)
@@ -135,7 +136,7 @@ class SplunkSearch:
     def simple_filter_query(self, include_internal_fields = False):
         # construct query and run job
         query = self.__get_filter_query__()
-        return self.__execute_query__(query, self.start_time, self.end_time, self.cols, self.attempts, include_internal_fields = include_internal_fields)
+        return self.__execute_query__(query, self.start_time, self.end_time, self.attempts, include_internal_fields = include_internal_fields)
 
     def call_search(self, query, start_time, end_time = None, include_internal_fields = False, limit = None, num_par_on_limit = 0, dmsg = ""):
         dmsg = utils.extend_inherit_message(dmsg, "SplunkSearch: call_search")
@@ -329,7 +330,7 @@ class SplunkSearch:
                 # for gateway timeout do a longer wait by default
                 if (str(e).find("HTTP 504 Gateway Time-out") != -1):
                     # call again with a different timeout
-                    attempt_multiplier = int(math.min(self.attempts - attempts_remaining, 10))
+                    attempt_multiplier = int(min(self.attempts - attempts_remaining, 10))
                     utils.info("{}: Gateway timeout: Sleeping for {} seconds before attempting again".format(dmsg, self.attempt_gateway_timeout_sleep_sec * attempt_multiplier))
                     time.sleep(self.attempt_gateway_timeout_sleep_sec * attempt_multiplier)
                 else:
@@ -391,7 +392,7 @@ class SplunkSearch:
                 # for gateway timeout do a longer wait by default
                 if (str(e).find("HTTP 504 Gateway Time-out") != -1):
                     # call again with a different timeout
-                    attempt_multiplier = int(math.min(self.attempts - attempts_remaining, 10))
+                    attempt_multiplier = int(min(self.attempts - attempts_remaining, 10))
                     utils.info("{}: Gateway timeout: Sleeping for {} seconds before attempting again".format(dmsg, self.attempt_gateway_timeout_sleep_sec * attempt_multiplier))
                     time.sleep(self.attempt_gateway_timeout_sleep_sec * attempt_multiplier)
                 else:
@@ -400,7 +401,7 @@ class SplunkSearch:
                     time.sleep(self.attempt_sleep_sec)
 
                 # call again with lesser attempts_remaining
-                return self.__execute_blocking_query__(query, start_time, end_time, attempts_remaining - 1, include_internal_fields, limit, num_par_on_limit)
+                return self.__execute_blocking_query__(query, start_time, end_time, attempts_remaining - 1, include_internal_fields, limit, num_par_on_limit, dmsg = dmsg)
             else:
                 # error
                 utils.error(str(e))

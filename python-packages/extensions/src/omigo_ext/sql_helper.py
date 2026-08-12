@@ -6,18 +6,19 @@ class HadoopSqlBase:
         pass
 
     def execute_query(self, columns = ["*"], table = None, where_clause = "", group_by_cols = None, having_clause = "",
-        order_by_cols = None, sort_order = None, distinct_flag = None, limit = None, map_col = None):
+        order_by_cols = None, sort_order = None, distinct_flag = None, limit = None, map_col = None, dmsg = ""):
+        dmsg = utils.extend_inherit_message(dmsg, "HadoopSqlBase: execute_query")
 
         # warn
-        utils.warn_once("HadoopSqlBase: execute_query: this is provided as reference implementation and should be used carefully in prod to avoid issues with sql")
+        utils.warn_once("{}: this is provided as reference implementation and should be used carefully in prod to avoid issues with sql".format(dmsg))
 
         # some validation
         if (table is None):
-            raise Exception("HadoopSqlBase: execute_query: table can not be none")
+            raise Exception("{}: table can not be none".format(dmsg))
 
         # check for columns. TODO: read the default set of columns from table
         if ("*" in columns):
-            utils.warn_once("HadoopSqlBase: execute_query: select * is not fully supported")
+            utils.warn_once("{}: select * is not fully supported".format(dmsg))
 
         # create effective_columns
         effective_columns = []
@@ -52,7 +53,7 @@ class HadoopSqlBase:
             map_cols.append(map_col)
 
         # do a lowercase on mapcols
-        utils.warn_once("sql_helper: doing lowercase on map_col: {}".format(map_col))
+        utils.warn_once("{}: doing lowercase on map_col: {}".format(dmsg, map_col))
         map_cols = list([v.lower() for v in map_cols])
 
         # base query
@@ -87,7 +88,7 @@ class HadoopSqlBase:
             query = "{} limit {}".format(query, limit)
 
         # debug
-        utils.info("HadoopSqlBase: execute_query: {}".format(query))
+        utils.info("{}: query: {}".format(dmsg, query))
 
         # execute query
         start_ts = timefuncs.get_utctimestamp_sec()
@@ -114,7 +115,7 @@ class HadoopSqlBase:
         time_taken = funclib.get_display_relative_time_str(end_ts - start_ts)
 
         # debug
-        utils.info("HadoopSqlBase: execute_query: num rows: {}, time taken: {}".format(len(result_rows), time_taken))
+        utils.info("{}: num rows: {}, time taken: {}".format(dmsg, len(result_rows), time_taken))
 
         # create data
         data_fields = []
@@ -146,7 +147,7 @@ class HadoopSqlBase:
             # cols_str = ["{}".format(t) for t in result_row]
             data_fields.append(result_row)
 
-        # create tsv. Do a validation as this is an external source
+        # create dataframe. Do a validation as this is an external source
         xdf = dataframe \
             .new_with_cols(output_cols, data_fields = data_fields) \
             .validate()
