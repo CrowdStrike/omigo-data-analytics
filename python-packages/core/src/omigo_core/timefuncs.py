@@ -87,6 +87,7 @@ def datetime_to_utctimestamp(x):
     return datetime_to_utctimestamp_sec(x)
 
 # TODO: Converts seconds format only. Even the original time in milliseconds will return seconds format
+# TODO: doesnt work with fractional timestamp
 def utctimestamp_to_datetime(x):
     # use the string form
     x = str(x)

@@ -82,6 +82,10 @@ def sorted_mkstr(vs):
     vs2 = sorted(list(filter(lambda t: len(t.strip()) > 0, [str(x) for x in vs])))
     return ",".join(vs2)
 
+def mkstr_newline(vs):
+    vs2 = sorted(list(filter(lambda t: len(t.strip()) > 0, [str(x) for x in vs])))
+    return "\n".join(vs2)
+
 def mkstr4f(vs):
     vs2 = list(["{:4f}".format(float(x)) for x in vs])
     return ",".join(vs2)

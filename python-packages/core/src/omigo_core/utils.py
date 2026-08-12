@@ -11,8 +11,9 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 import traceback
 import sys
+import threading
 
-# TODO: these caches dont work in multithreaded env.
+# Message caches with thread safety
 MSG_CACHE_MAX_LEN = 10000
 INFO_MSG_CACHE = {}
 ERROR_MSG_CACHE = {}
@@ -23,6 +24,16 @@ EXCEPTION_AFTER_WARNINGS_MSG_CACHE = {}
 RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE = {}
 NOOP_AFTER_WARNINGS_MSG_CACHE= {}
 DEFAULT_RATE_LIMIT_WAIT_SLEEP_SECS = 0
+
+# Thread locks for cache synchronization
+INFO_MSG_CACHE_LOCK = threading.Lock()
+ERROR_MSG_CACHE_LOCK = threading.Lock()
+WARN_MSG_CACHE_LOCK = threading.Lock()
+DEBUG_MSG_CACHE_LOCK = threading.Lock()
+TRACE_MSG_CACHE_LOCK = threading.Lock()
+EXCEPTION_AFTER_WARNINGS_MSG_CACHE_LOCK = threading.Lock()
+RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE_LOCK = threading.Lock()
+NOOP_AFTER_WARNINGS_MSG_CACHE_LOCK = threading.Lock()
 
 # some env variables
 OMIGO_CRITICAL = "OMIGO_CRITICAL"
@@ -38,6 +49,8 @@ OMIGO_CODE_TODO_WARNING = "OMIGO_CODE_TODO_WARNING"
 OMIGO_BIG_DF_WARN_SIZE_THRESH = "OMIGO_BIG_DF_WARN_SIZE_THRESH"
 OMIGO_RATE_LIMIT_N_WARNINGS = "OMIGO_RATE_LIMIT_N_WARNINGS"
 OMIGO_NOOP_N_WARNINGS = "OMIGO_NOOP_N_WARNINGS"
+OMIGO_MAX_DEBUG_MSG_LEN = int(os.environ.get("OMIGO_MAX_DEBUG_MSG_LEN", "500"))
+OMIGO_MAX_DEBUG_MSG_MULT = float(os.environ.get("OMIGO_MAX_DEBUG_MSG_MULT", "0.8"))
 
 def is_critical():
     return str(os.environ.get(OMIGO_CRITICAL, "1")) == "1"
@@ -80,6 +93,8 @@ def set_big_tsv_warn_size_thresh(thresh):
 
 def trace(msg):
     if (is_trace()):
+        if (len(msg) > OMIGO_MAX_DEBUG_MSG_LEN):
+            msg = msg[0:int(0.2 * OMIGO_MAX_DEBUG_MSG_LEN)] + " ... " + msg[-int(OMIGO_MAX_DEBUG_MSG_MULT * OMIGO_MAX_DEBUG_MSG_LEN):]
         print("[TRACE]: {}".format(msg))
 
 def trace_once(msg):
@@ -89,17 +104,23 @@ def trace_once(msg):
 
     # refer to global variable
     global TRACE_MSG_CACHE
-    # check if msg is already displayed
-    if (msg not in TRACE_MSG_CACHE.keys()):
-        print("[TRACE ONCE ONLY]: " + msg)
-        TRACE_MSG_CACHE[msg] = 1
 
-        # check if the cache has become too big
-        if (len(TRACE_MSG_CACHE) >= MSG_CACHE_MAX_LEN):
-            TRACE_MSG_CACHE = {}
+    # Thread-safe check and update
+    with TRACE_MSG_CACHE_LOCK:
+        # check if msg is already displayed
+        if (msg not in TRACE_MSG_CACHE.keys()):
+            print("[TRACE ONCE ONLY]: " + msg)
+            TRACE_MSG_CACHE[msg] = 1
+
+            # check if the cache has become too big
+            if (len(TRACE_MSG_CACHE) >= MSG_CACHE_MAX_LEN):
+                TRACE_MSG_CACHE = {}
 
 def debug(msg):
     if (is_debug()):
+        if (OMIGO_MAX_DEBUG_MSG_MULT < 1):
+            if (len(msg) > OMIGO_MAX_DEBUG_MSG_LEN):
+                msg = msg[0:int(0.2 * OMIGO_MAX_DEBUG_MSG_LEN)] + " ... " + msg[-int(OMIGO_MAX_DEBUG_MSG_MULT * OMIGO_MAX_DEBUG_MSG_LEN):]
         print("[DEBUG]: {}".format(msg))
 
 def debug_once(msg):
@@ -109,17 +130,25 @@ def debug_once(msg):
 
     # refer to global variable
     global DEBUG_MSG_CACHE
-    # check if msg is already displayed
-    if (msg not in DEBUG_MSG_CACHE.keys()):
-        print("[DEBUG ONCE ONLY]: " + msg)
-        DEBUG_MSG_CACHE[msg] = 1
 
-        # check if the cache has become too big
-        if (len(DEBUG_MSG_CACHE) >= MSG_CACHE_MAX_LEN):
-            DEBUG_MSG_CACHE = {}
+    # Thread-safe check and update
+    with DEBUG_MSG_CACHE_LOCK:
+        # check if msg is already displayed
+        if (msg not in DEBUG_MSG_CACHE.keys()):
+            if (len(msg) > OMIGO_MAX_DEBUG_MSG_LEN):
+                msg = msg[0:int(0.2 * OMIGO_MAX_DEBUG_MSG_LEN)] + " ... " + msg[-int(OMIGO_MAX_DEBUG_MSG_MULT * OMIGO_MAX_DEBUG_MSG_LEN):]
+            print("[DEBUG ONCE ONLY]: " + msg)
+            DEBUG_MSG_CACHE[msg] = 1
+
+            # check if the cache has become too big
+            if (len(DEBUG_MSG_CACHE) >= MSG_CACHE_MAX_LEN):
+                DEBUG_MSG_CACHE = {}
 
 def info(msg):
     if (is_info()):
+        if (OMIGO_MAX_DEBUG_MSG_MULT < 1):
+            if (len(msg) > OMIGO_MAX_DEBUG_MSG_LEN):
+                msg = msg[0:int(0.2 * OMIGO_MAX_DEBUG_MSG_LEN)] + " ... " + msg[-int(OMIGO_MAX_DEBUG_MSG_MULT * OMIGO_MAX_DEBUG_MSG_LEN):]
         print("[INFO]: {}".format(msg))
 
 def info_once(msg):
@@ -129,14 +158,17 @@ def info_once(msg):
 
     # refer to global variable
     global INFO_MSG_CACHE
-    # check if msg is already displayed
-    if (msg not in INFO_MSG_CACHE.keys()):
-        print("[INFO ONCE ONLY]: " + msg)
-        INFO_MSG_CACHE[msg] = 1
 
-        # check if the cache has become too big
-        if (len(INFO_MSG_CACHE) >= MSG_CACHE_MAX_LEN):
-            INFO_MSG_CACHE = {}
+    # Thread-safe check and update
+    with INFO_MSG_CACHE_LOCK:
+        # check if msg is already displayed
+        if (msg not in INFO_MSG_CACHE.keys()):
+            print("[INFO ONCE ONLY]: " + msg)
+            INFO_MSG_CACHE[msg] = 1
+
+            # check if the cache has become too big
+            if (len(INFO_MSG_CACHE) >= MSG_CACHE_MAX_LEN):
+                INFO_MSG_CACHE = {}
 
 def info_without_header(msg):
     # check if enabled
@@ -148,6 +180,8 @@ def info_without_header(msg):
 
 def error(msg):
     if (is_error()):
+        if (len(msg) > OMIGO_MAX_DEBUG_MSG_LEN):
+            msg = msg[0:int(0.2 * OMIGO_MAX_DEBUG_MSG_LEN)] + " ... " + msg[-int(OMIGO_MAX_DEBUG_MSG_MULT * OMIGO_MAX_DEBUG_MSG_LEN):]
         print("[ERROR]: {}".format(msg))
 
 def error_once(msg):
@@ -155,16 +189,21 @@ def error_once(msg):
     if (is_error() == False):
         return
 
-    # check if msg is already displayed
-    if (msg not in ERROR_MSG_CACHE.keys()):
-         print("[ERROR ONCE ONLY]: {}".format(msg))
-         ERROR_MSG_CACHE[msg] = 1
+    # refer to global variable
+    global ERROR_MSG_CACHE
 
-         # clear the cache if it has become too big
-         if (len(ERROR_MSG_CACHE) >= MSG_CACHE_MAX_LEN):
-             ERROR_MSG_CACHE = {}
-    else:
-        trace(msg)
+    # Thread-safe check and update
+    with ERROR_MSG_CACHE_LOCK:
+        # check if msg is already displayed
+        if (msg not in ERROR_MSG_CACHE.keys()):
+             print("[ERROR ONCE ONLY]: {}".format(msg))
+             ERROR_MSG_CACHE[msg] = 1
+
+             # clear the cache if it has become too big
+             if (len(ERROR_MSG_CACHE) >= MSG_CACHE_MAX_LEN):
+                 ERROR_MSG_CACHE = {}
+        else:
+            trace(msg)
 
 def enable_critical_mode():
     os.environ[OMIGO_CRITICAL] = "1"
@@ -219,14 +258,20 @@ def warn_once(msg):
 
     # refer to global variable
     global WARN_MSG_CACHE
-    # check if msg is already displayed
-    if (msg not in WARN_MSG_CACHE.keys()):
-        print("[WARN ONCE ONLY]: " + msg)
-        WARN_MSG_CACHE[msg] = 1
 
-        # check if the cache has become too big
-        if (len(WARN_MSG_CACHE) >= MSG_CACHE_MAX_LEN):
-            WARN_MSG_CACHE = {}
+    # Thread-safe check and update
+    with WARN_MSG_CACHE_LOCK:
+        # check if msg is already displayed
+        if (msg not in WARN_MSG_CACHE.keys()):
+            if (OMIGO_MAX_DEBUG_MSG_MULT < 1):
+                if (len(msg) > OMIGO_MAX_DEBUG_MSG_LEN):
+                    msg = msg[0:int(0.2 * OMIGO_MAX_DEBUG_MSG_LEN)] + " ... " + msg[-int(OMIGO_MAX_DEBUG_MSG_MULT * OMIGO_MAX_DEBUG_MSG_LEN):]
+            print("[WARN ONCE ONLY]: " + msg)
+            WARN_MSG_CACHE[msg] = 1
+
+            # check if the cache has become too big
+            if (len(WARN_MSG_CACHE) >= MSG_CACHE_MAX_LEN):
+                WARN_MSG_CACHE = {}
 
 def simple_print_without_newline(msg):
     print(msg, end = "")
@@ -366,7 +411,7 @@ class ThreadPoolTask:
         self.args = args
         self.kwargs = kwargs
 
-def run_with_thread_pool(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0, dmsg = ""):
+def run_with_thread_pool(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0, raise_on_error = True, dmsg = ""):
     dmsg = extend_inherit_message(dmsg, "run_with_thread_pool")
 
     # debug
@@ -380,12 +425,26 @@ def run_with_thread_pool(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0, d
     if (num_par == 0):
         trace("{}: running in single threaded mode".format(dmsg))
 
-        # iterate
-        for task in tasks:
+        # iterate and collect exceptions
+        exceptions = []
+        for i, task in enumerate(tasks):
             func = task.func
             args = task.args
             kwargs = task.kwargs
-            results.append(func(*args, **kwargs))
+            try:
+                results.append(func(*args, **kwargs))
+            except Exception as e:
+                error("{}: Task {} failed with exception: {}".format(dmsg, i, e))
+                exceptions.append((i, e))
+                results.append(None)
+
+        # if any tasks failed, log summary and re-raise the first exception
+        if len(exceptions) > 0:
+            error("{}: {} task(s) failed out of {}".format(dmsg, len(exceptions), len(tasks)))
+
+            # re-raise the first exception to preserve original type and traceback if raise_on_error is True
+            if raise_on_error:
+                raise exceptions[0][1]
 
         # return
         return results
@@ -417,19 +476,42 @@ def run_with_thread_pool(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0, d
                     info("{}: run_with_thread_pool: finished".format(dmsg))
                     break
 
-            # combine the results
-            for f in future_results:
-                results.append(f.result())
+            # combine the results, collecting all exceptions
+            exceptions = []
+            for i, f in enumerate(future_results):
+                try:
+                    results.append(f.result())
+                except Exception as e:
+                    error("{}: Task {} failed with exception: {}".format(dmsg, i, e))
+                    exceptions.append((i, e))
+                    results.append(None)
 
             # wait for post_wait_sec for mitigating eventual consistency
             if (post_wait_sec > 0):
                 info("{}: sleeping for post_wait_sec: {}".format(dmsg, post_wait_sec))
                 time.sleep(post_wait_sec)
 
+            # if any tasks failed, log summary and re-raise the first exception
+            if len(exceptions) > 0:
+                error("{}: {} task(s) failed out of {}".format(dmsg, len(exceptions), len(future_results)))
+
+                # re-raise the first exception to preserve original type and traceback if raise_on_error is True
+                if raise_on_error:
+                    raise exceptions[0][1]
+
             # return
             return results
 
-def raise_exception_or_warn(msg, ignore_if_missing, max_len = 2000):
+def run_with_thread_pool_failsafe(tasks, num_par = 4, wait_sec = 10, post_wait_sec = 0, dmsg = ""):
+    dmsg = extend_inherit_message(dmsg, "run_with_thread_pool_failsafe")
+
+    # call run_with_thread_pool with raise_on_error=False to get all results without exceptions
+    results = run_with_thread_pool(tasks, num_par = num_par, wait_sec = wait_sec, post_wait_sec = post_wait_sec, raise_on_error = False, dmsg = dmsg)
+
+    # filter out None values (defensive programming)
+    return [r for r in results if r is not None]
+
+def raise_exception_or_warn(msg, ignore_if_missing, max_len = OMIGO_MAX_DEBUG_MSG_LEN):
     # strip the message to max_len
     if (max_len is not None and max_len > 0 and len(msg) > max_len):
         msg = msg[0:max_len] + " ..."
@@ -440,7 +522,7 @@ def raise_exception_or_warn(msg, ignore_if_missing, max_len = 2000):
     else:
         raise Exception(msg)
 
-def error_and_raise_exception(msg, max_len = 2000):
+def error_and_raise_exception(msg, max_len = OMIGO_MAX_DEBUG_MSG_LEN):
     # strip the message to max_len
     if (max_len is not None and max_len > 0 and len(msg) > max_len):
         msg = msg[0:max_len] + " ..."
@@ -454,17 +536,19 @@ def error_and_raise_exception(msg, max_len = 2000):
 def raise_exception_after_n_warnings(msg, num_warnings = 1000):
     global EXCEPTION_AFTER_WARNINGS_MSG_CACHE
 
-    # check if msg is new
-    if (msg not in EXCEPTION_AFTER_WARNINGS_MSG_CACHE.keys()):
-        EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg] = 1
+    # Thread-safe check and update
+    with EXCEPTION_AFTER_WARNINGS_MSG_CACHE_LOCK:
+        # check if msg is new
+        if (msg not in EXCEPTION_AFTER_WARNINGS_MSG_CACHE.keys()):
+            EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg] = 1
 
-    # check the counter
-    if (EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg] < num_warnings):
-        EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg] = EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg] + 1
-        warn_once(msg)
-    else:
-        del EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg]
-        raise Exception(msg)
+        # check the counter
+        if (EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg] < num_warnings):
+            EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg] = EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg] + 1
+            warn_once(msg)
+        else:
+            del EXCEPTION_AFTER_WARNINGS_MSG_CACHE[msg]
+            raise Exception(msg)
 
 def rate_limit_after_n_warnings(msg, num_warnings = None, sleep_secs = DEFAULT_RATE_LIMIT_WAIT_SLEEP_SECS):
     global RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE
@@ -472,17 +556,19 @@ def rate_limit_after_n_warnings(msg, num_warnings = None, sleep_secs = DEFAULT_R
     # resolve num_warnings
     num_warnings = resolve_default_integer_parameter("num_warnings", os.getenv(OMIGO_RATE_LIMIT_N_WARNINGS), "10000", "rate_limit_after_n_warnings")
 
-    # check if msg is new
-    if (msg not in RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE.keys()):
-        RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE[msg] = 1
+    # Thread-safe check and update
+    with RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE_LOCK:
+        # check if msg is new
+        if (msg not in RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE.keys()):
+            RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE[msg] = 1
 
-    # check the counter
-    if (num_warnings == -1 or RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE[msg] < num_warnings):
-        RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE[msg] = RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE[msg] + 1
-        warn_once(msg)
-    else:
-        trace("{}: Sleeping for {} seconds".format(msg, sleep_secs))
-        time.sleep(sleep_secs)
+        # check the counter
+        if (num_warnings == -1 or RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE[msg] < num_warnings):
+            RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE[msg] = RATE_LIMIT_AFTER_WARNINGS_MSG_CACHE[msg] + 1
+            warn_once(msg)
+        else:
+            trace("{}: Sleeping for {} seconds".format(msg, sleep_secs))
+            time.sleep(sleep_secs)
 
 def noop_after_n_warnings(msg, func, *args, **kwargs):
     global NOOP_AFTER_WARNINGS_MSG_CACHE
@@ -490,17 +576,19 @@ def noop_after_n_warnings(msg, func, *args, **kwargs):
     # resolve num_warnings
     num_warnings = resolve_default_integer_parameter("num_warnings", os.getenv(OMIGO_NOOP_N_WARNINGS), "10000", "noop_after_n_warnings")
 
-    # check if msg is new
-    if (msg not in NOOP_AFTER_WARNINGS_MSG_CACHE.keys()):
-        NOOP_AFTER_WARNINGS_MSG_CACHE[msg] = 1
+    # Thread-safe check and update
+    with NOOP_AFTER_WARNINGS_MSG_CACHE_LOCK:
+        # check if msg is new
+        if (msg not in NOOP_AFTER_WARNINGS_MSG_CACHE.keys()):
+            NOOP_AFTER_WARNINGS_MSG_CACHE[msg] = 1
 
-    # check the counter
-    if (num_warnings == -1 or NOOP_AFTER_WARNINGS_MSG_CACHE[msg] < num_warnings):
-        NOOP_AFTER_WARNINGS_MSG_CACHE[msg] = NOOP_AFTER_WARNINGS_MSG_CACHE[msg] + 1
-        func(*args, **kwargs)
-        warn_once(msg)
-    else:
-        trace("{}: noop".format(msg, sleep_secs))
+        # check the counter
+        if (num_warnings == -1 or NOOP_AFTER_WARNINGS_MSG_CACHE[msg] < num_warnings):
+            NOOP_AFTER_WARNINGS_MSG_CACHE[msg] = NOOP_AFTER_WARNINGS_MSG_CACHE[msg] + 1
+            func(*args, **kwargs)
+            warn_once(msg)
+        else:
+            trace("{}: noop".format(msg))
 
 # Deprecated
 def strip_spl_white_spaces(v):
@@ -658,7 +746,7 @@ def extend_inherit_message(old_msg, new_msg):
      # return
      return "{}: {}".format(old_msg, new_msg) if (old_msg is not None and len(old_msg) > 0) else "{}".format(new_msg)
 
-def max_dmsg_str(dmsg, max_len = 300):
+def max_dmsg_str(dmsg, max_len = OMIGO_MAX_DEBUG_MSG_LEN):
     if (dmsg is None or len(dmsg) <= max_len):
         return dmsg
     else:
@@ -865,12 +953,12 @@ def __run_return_func_with_retry_inner__(retry_attempts, retry_wait_seconds, exp
         try:
             return func(*args, **kwargs)
         except Exception as e:
+            retry_attempts = retry_attempts - 1
             if (retry_attempts > 0):
                 error("__run_return_func_with_retry_inner__: Caught Exception: {}, retry_attempts: {}, Retrying after sleeping for {} seconds".format(e,
                     retry_attempts, retry_wait_seconds))
                 traceback.print_exc(file = sys.stdout)
                 time.sleep(retry_wait_seconds)
-                retry_attempts = retry_attempts - 1
 
                 # change wait time based on backoff
                 if (exp_backoff == True):
@@ -884,12 +972,12 @@ def __run_noreturn_func_with_retry_inner__(retry_attempts, retry_wait_seconds, e
             func(*args, **kwargs)
             return
         except Exception as e:
+            retry_attempts = retry_attempts - 1
             if (retry_attempts > 0):
                 error("__run_noreturn_func_with_retry_inner__: Caught Exception: {}, retry_attempts: {}, Retrying after sleeping for {} seconds".format(e,
                     retry_attempts, retry_wait_seconds))
                 traceback.print_exc(file = sys.stdout)
                 time.sleep(retry_wait_seconds)
-                retry_attempts = retry_attempts - 1
 
                 # change wait time based on backoff
                 if (exp_backoff == True):

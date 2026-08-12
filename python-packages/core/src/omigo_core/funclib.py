@@ -315,7 +315,7 @@ def get_display_relative_time_str(v):
 
 def resolve_reference_time(ts):
     # base condition
-    if (ts is None or str(ts) == "" or self.get_detect_ts() == None or self.get_detect_ts() == ""):
+    if (ts is None or str(ts) == ""):
         return ts
 
     # use string
