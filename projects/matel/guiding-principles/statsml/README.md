@@ -2,7 +2,11 @@
 
 ## What This Is
 
-Guiding principles and reference material for designing statistical and ML-based systems — drawn from years of working with big data systems and informed by active areas of research in statistics, ML pipelines, and feature engineering.
+Guiding principles and reference material for designing statistical and ML-based systems — drawn from years of working with big data systems and informed by active
+areas of research in statistics, ML pipelines, and feature engineering.
+
+## Note
+A lot of examples are generated with assistance from AI coding tools like Claude Code.
 
 These docs aim to:
 - Explore design approaches for precondition verification, feature profiling, and distribution analysis
