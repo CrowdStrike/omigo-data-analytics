@@ -6,7 +6,7 @@ if [ $# -ne 1 ]; then
   exit 0
 fi
 
-# Command line arguments  
+# Command line arguments
 CAPABILITIES=$1
 
 # run this in a loop

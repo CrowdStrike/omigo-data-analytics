@@ -20,7 +20,7 @@ REMOTE_HOST="$PROXY_REMOTE_HOST"
 while true; do
   # look for new wf
   for created_wf_id in `python3 ./get-local-created-wf-ids.py $CAPABILITIES`; do
-    if [ ! -v created_wf_ids_map[$created_wf_id] ]; then 
+    if [ ! -v created_wf_ids_map[$created_wf_id] ]; then
       echo "Processing local created wf: created_wf_id: $created_wf_id"
       rsync -a --delete rsync-dir/entities-details/wfs/$created_wf_id $REMOTE_HOST:~/hydra/rsync-dir/entities-details/wfs
       rsync -a --delete rsync-dir/entities-state/wfs/created/$created_wf_id $REMOTE_HOST:~/hydra/rsync-dir/entities-state/wfs/created
@@ -53,7 +53,7 @@ while true; do
 
   # sync the final status for non_created_wf_id
   for non_created_wf_id in `python3 ./get-local-non-created-wf-ids.py $CAPABILITIES`; do
-    if [ ! -v non_created_wf_ids_map[$non_created_wf_id] ]; then 
+    if [ ! -v non_created_wf_ids_map[$non_created_wf_id] ]; then
       echo "Processing non_created_wf_id: $non_created_wf_id"
       # rsync -a --delete $REMOTE_HOST:~/hydra/rsync-dir/entities-details/wfs/$non_created_wf_id rsync-dir/entities-details/wfs
       # rsync -a --delete $REMOTE_HOST:~/hydra/rsync-dir/entities-incoming/wfs/$non_created_wf_id rsync-dir/wfs
@@ -64,11 +64,10 @@ while true; do
       non_created_wf_ids_map[$non_created_wf_id]="1"
 
       # echo "Sleeping for 10 seconds"
-      # sleep 10 
+      # sleep 10
     fi
   done
 
   echo "Sleeping for 10 seconds"
   sleep 10
 done
-

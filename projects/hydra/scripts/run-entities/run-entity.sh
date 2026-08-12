@@ -10,4 +10,4 @@ fi
 ENTITY_TYPE="$1"
 
 # run
-python3 run-entity.py "$ENTITY_TYPE" "CLUSTER_ENTITY"
+python3 run-entity.py "$ENTITY_TYPE" "CLUSTER_ENTITY_V2"

@@ -37,9 +37,9 @@ if __name__ == "__main__":
         cluster_services_v2.run_wf_manager()
     elif (entity_type == "agent"):
         cluster_services_v2.run_agent()
+    elif (entity_type == "message_bus_agent"):
+        cluster_services_v2.run_message_bus_agent()
     elif (entity_type == "worker"):
         cluster_services_v2.run_worker()
     else:
         raise Exception("Invalid entity: {}".format(entity_type))
-
-
