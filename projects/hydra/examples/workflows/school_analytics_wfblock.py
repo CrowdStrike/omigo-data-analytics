@@ -1,6 +1,8 @@
-from omigo_hydra import cluster_services_v2, cluster_common_v2
+from omigo_hydra import cluster_services_v2
 from omigo_hydra import cluster_protocol_v2
 from omigo_hydra.cluster_services_v2 import SWFBuilder
+from omigo_hydra_v2 import cluster_df, cluster_common_v2
+from omigo_hydra_v2.cluster_class_reflection import hydra_class_for
 from omigo_core import utils, dataframe
 import sys, os, argparse
 
@@ -15,13 +17,20 @@ Here, SchoolBlockDF captures those patterns once and each WF becomes 1-2 lines.
 
 Key concepts:
   1. SchoolBlockDF extends dataframe.DataFrame (same pattern as WorkflowBlockDF)
-  2. Each method is a reusable pipeline: takes self (DataFrame), returns DataFrame
-  3. Methods that join with other WFs take ctx to access ctx.read_df()
-  4. Usage: df.extend_class(SchoolBlockDF).method_name(...)
-  5. Blocks compose: filter_active().enrich_with_dept(ctx).summarize_by_dept()
+  2. HydraSchoolBlockDF extends cluster_df.HydraBaseDF with @hydra_class_for decorator
+     — this is the cluster adapter that wraps each block method as a ClusterMapOperation
+  3. Each method is a reusable pipeline: takes self (DataFrame), returns DataFrame
+  4. Methods that join with other WFs take ctx to access ctx.read_df()
+  5. Usage: df.extend_class(SchoolBlockDF).method_name(...)
+  6. Blocks compose: filter_active().enrich_with_dept(ctx).summarize_by_dept()
+
+Two-layer pattern (same as WorkflowBlockDF + HydraWorkflowBlockDF):
+  - SchoolBlockDF: actual logic, runs in local mode via extend_class()
+  - HydraSchoolBlockDF: cluster adapter, registered via @hydra_class_for,
+    wraps each method as ClusterMapOperation for distributed execution
 
 DAG (6 WFs, 3 phases):
-  Phase 0: students, enrollments, courses [roots - inline data]
+  Phase 0: students, enrollments, courses, departments [roots - inline data]
   Phase 1: active_enrolled [join students + enrollments via block]
   Phase 2: dept_summary, course_summary [aggregations via block]
 
@@ -32,7 +41,8 @@ Run:
 
 
 # ============================================================
-# WfBlock: Reusable workflow building blocks for school domain
+# Layer 1: WfBlock — reusable blocks (extends dataframe.DataFrame)
+# This is the actual logic layer. Same pattern as WorkflowBlockDF.
 # ============================================================
 class SchoolBlockDF(dataframe.DataFrame):
     """Reusable school analytics blocks.
@@ -81,6 +91,30 @@ class SchoolBlockDF(dataframe.DataFrame):
         return self \
             .group_count(["dept_code", "dept_name"]) \
             .sort("dept_code")
+
+
+# ============================================================
+# Layer 2: Hydra adapter — cluster execution support
+# This wraps each block method as a ClusterMapOperation so it can
+# run distributed on the Hydra cluster. Same pattern as
+# HydraWorkflowBlockDF in omigo_crwd_wfs/wfblock_cluster_df.py.
+# ============================================================
+@hydra_class_for(SchoolBlockDF)
+class HydraSchoolBlockDF(cluster_df.HydraBaseDF):
+    def __init__(self, header_fields, data_fields, *args, **kwargs):
+        super().__init__(header_fields, data_fields, *args, **kwargs)
+
+    def filter_active_students(self, *args, **kwargs):
+        return cluster_df.HydraHelper.new_hydra_df(self, cluster_common_v2.ClusterMapOperation(SchoolBlockDF.filter_active_students, self.requirements, *args, **kwargs))
+
+    def enrich_with_dept(self, *args, **kwargs):
+        return cluster_df.HydraHelper.new_hydra_df(self, cluster_common_v2.ClusterMapOperation(SchoolBlockDF.enrich_with_dept, self.requirements, *args, **kwargs))
+
+    def enrich_with_course(self, *args, **kwargs):
+        return cluster_df.HydraHelper.new_hydra_df(self, cluster_common_v2.ClusterMapOperation(SchoolBlockDF.enrich_with_course, self.requirements, *args, **kwargs))
+
+    def summarize_by_dept(self, *args, **kwargs):
+        return cluster_df.HydraHelper.new_hydra_df(self, cluster_common_v2.ClusterMapOperation(SchoolBlockDF.summarize_by_dept, self.requirements, *args, **kwargs))
 
 
 # ============================================================

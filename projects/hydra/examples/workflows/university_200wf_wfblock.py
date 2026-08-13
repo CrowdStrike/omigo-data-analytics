@@ -1,6 +1,8 @@
-from omigo_hydra import cluster_services_v2, cluster_common_v2
+from omigo_hydra import cluster_services_v2
 from omigo_hydra import cluster_protocol_v2
 from omigo_hydra.cluster_services_v2 import SWFBuilder
+from omigo_hydra_v2 import cluster_df, cluster_common_v2
+from omigo_hydra_v2.cluster_class_reflection import hydra_class_for
 from omigo_core import utils, dataframe
 import sys, os, argparse
 
@@ -229,6 +231,54 @@ class UniversityBlockDF(dataframe.DataFrame):
         return self \
             .sort(sort_col) \
             .add_seq_num(rank_col)
+
+
+# ============================================================
+# Layer 2: Hydra adapter — cluster execution support
+# This wraps each block method as a ClusterMapOperation so it can
+# run distributed on the Hydra cluster. Same pattern as
+# HydraWorkflowBlockDF in omigo_crwd_wfs/wfblock_cluster_df.py.
+# ============================================================
+@hydra_class_for(UniversityBlockDF)
+class HydraUniversityBlockDF(cluster_df.HydraBaseDF):
+    def __init__(self, header_fields, data_fields, *args, **kwargs):
+        super().__init__(header_fields, data_fields, *args, **kwargs)
+
+    def filter_active_students(self, *args, **kwargs):
+        return cluster_df.HydraHelper.new_hydra_df(self, cluster_common_v2.ClusterMapOperation(UniversityBlockDF.filter_active_students, self.requirements, *args, **kwargs))
+
+    def filter_upper_level(self, *args, **kwargs):
+        return cluster_df.HydraHelper.new_hydra_df(self, cluster_common_v2.ClusterMapOperation(UniversityBlockDF.filter_upper_level, self.requirements, *args, **kwargs))
+
+    def filter_passing(self, *args, **kwargs):
+        return cluster_df.HydraHelper.new_hydra_df(self, cluster_common_v2.ClusterMapOperation(UniversityBlockDF.filter_passing, self.requirements, *args, **kwargs))
+
+    def filter_tenured(self, *args, **kwargs):
+        return cluster_df.HydraHelper.new_hydra_df(self, cluster_common_v2.ClusterMapOperation(UniversityBlockDF.filter_tenured, self.requirements, *args, **kwargs))
+
+    def enrich_with_dept(self, *args, **kwargs):
+        return cluster_df.HydraHelper.new_hydra_df(self, cluster_common_v2.ClusterMapOperation(UniversityBlockDF.enrich_with_dept, self.requirements, *args, **kwargs))
+
+    def enrich_with_course(self, *args, **kwargs):
+        return cluster_df.HydraHelper.new_hydra_df(self, cluster_common_v2.ClusterMapOperation(UniversityBlockDF.enrich_with_course, self.requirements, *args, **kwargs))
+
+    def enrich_with_student(self, *args, **kwargs):
+        return cluster_df.HydraHelper.new_hydra_df(self, cluster_common_v2.ClusterMapOperation(UniversityBlockDF.enrich_with_student, self.requirements, *args, **kwargs))
+
+    def enrich_with_faculty(self, *args, **kwargs):
+        return cluster_df.HydraHelper.new_hydra_df(self, cluster_common_v2.ClusterMapOperation(UniversityBlockDF.enrich_with_faculty, self.requirements, *args, **kwargs))
+
+    def summarize_by_dept(self, *args, **kwargs):
+        return cluster_df.HydraHelper.new_hydra_df(self, cluster_common_v2.ClusterMapOperation(UniversityBlockDF.summarize_by_dept, self.requirements, *args, **kwargs))
+
+    def summarize_by_faculty(self, *args, **kwargs):
+        return cluster_df.HydraHelper.new_hydra_df(self, cluster_common_v2.ClusterMapOperation(UniversityBlockDF.summarize_by_faculty, self.requirements, *args, **kwargs))
+
+    def summarize_by_course(self, *args, **kwargs):
+        return cluster_df.HydraHelper.new_hydra_df(self, cluster_common_v2.ClusterMapOperation(UniversityBlockDF.summarize_by_course, self.requirements, *args, **kwargs))
+
+    def build_ranked_report(self, *args, **kwargs):
+        return cluster_df.HydraHelper.new_hydra_df(self, cluster_common_v2.ClusterMapOperation(UniversityBlockDF.build_ranked_report, self.requirements, *args, **kwargs))
 
 
 # ============================================================
