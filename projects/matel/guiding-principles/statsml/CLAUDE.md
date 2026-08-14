@@ -75,6 +75,7 @@ Additional canvas/chart rules:
 
 ## Layout index
 There is a layout.txt file that has list of all files to quickly understand what all concepts are in this directory.
+DONT update layout.txt. I will do it.
 
 ## TODO
 
