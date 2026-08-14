@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Schema Compliance Without Data Compliance — Common Bad Practices</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 20px 10px; line-height: 1.6; }
+h1 { font-size: 1.6em; margin-bottom: 10px; color: #1a5276; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.0em; margin-bottom: 20px; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 6px 0; }
+strong { color: #1a5276; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 40%; }
+.obj-table td:last-child { width: 60%; text-align: center; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+.example-box { background: #f8fafb; border: 1px solid #e0e0e0; border-radius: 6px; padding: 12px 16px; margin: 10px 0; font-size: 0.88em; }
+.example-box .ex-title { font-weight: 700; color: #1a5276; margin-bottom: 4px; }
+code { background: #f0f0f0; padding: 2px 5px; border-radius: 3px; font-size: 0.85em; }
+</style>
+</head>
+<body>
+
+<h1>Schema Compliance Without Data Compliance</h1>
+<p class="subtitle">Negligence — Data passes structural validation (correct types, non-null, within range) but is semantically incompatible with everything else. Can't JOIN, can't compare, can't integrate. Creates parallel data universes that require custom ETL to bridge.</p>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">The Practice</div>
+<ul>
+<li>New feature launches with its own event naming, timestamp format, granularity, or entity definition.</li>
+<li>Schema validator passes: fields are present, types match, values non-null. ✓</li>
+<li>But: event names don't follow existing conventions, timestamps use a different timezone, user IDs reference a different identity system, granularity is per-session while everything else is per-event.</li>
+<li>Data exists. Data is correct in isolation. Data cannot be combined with anything else without a custom translation layer.</li>
+</ul>
+</td><td><canvas id="c1" width="720" height="300"></canvas></td></tr>
+<tr><td>
+<div class="obj-title">Examples</div>
+<div class="example-box">
+<div class="ex-title">Timestamp Mismatch</div>
+Existing system: UTC timestamps, millisecond precision. New feature: local timezone, second precision. JOIN on timestamp? Off by hours. Aggregate by day? Depends which timezone "day" means. Both pass schema validation.
+</div>
+<div class="example-box">
+<div class="ex-title">Entity Granularity Mismatch</div>
+Existing events: one row per user action (click, view, purchase). New feature: one row per session (aggregated). Want click-through rate per session? Can't compute — new data already collapsed the denominator. Need raw events? Don't exist.
+</div>
+<div class="example-box">
+<div class="ex-title">Naming Convention Drift</div>
+Existing: <code>user_clicked_product</code>, <code>user_viewed_page</code>. New feature: <code>ProductClick</code>, <code>PageView</code>. Same semantics, different names. Every downstream query, dashboard, and model needs to know both conventions. Or: one gets discovered 6 months late.
+</div>
+<div class="example-box">
+<div class="ex-title">Identity System Mismatch</div>
+Platform uses <code>user_id</code> (account-level). New mobile feature uses <code>device_id</code> (device-level). One user, three devices = three "users" in new data. Conversion metrics inflated 3×. JOIN with account-level data? Requires identity resolution layer that doesn't exist.
+</div>
+</td><td><canvas id="c2" width="720" height="340"></canvas></td></tr>
+<tr><td>
+<div class="obj-title">Why It Persists</div>
+<ul>
+<li><strong>Schema validators don't check semantics:</strong> Type = string ✓, non-null ✓, length < 255 ✓. Whether the string MEANS the same thing as another string in another table — not validated.</li>
+<li><strong>Teams work in isolation:</strong> Each team picks conventions that make sense for THEIR feature. Nobody checks cross-team compatibility until integration time.</li>
+<li><strong>"My data works":</strong> The new feature's dashboards look fine. The incompatibility only surfaces when someone tries to combine with historical data — months later.</li>
+<li><strong>No semantic contract enforcement:</strong> Organizations have schema registries but not semantic registries. The types match; the meaning doesn't.</li>
+</ul>
+</td><td><canvas id="c3" width="720" height="300"></canvas></td></tr>
+</table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    return {ctx:ctx, w:w, h:h};
+}
+
+// Canvas 1: Schema check vs Semantic check
+(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+
+ctx.font = 'bold 15px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillStyle = '#1a5276';
+ctx.fillText('What Schema Validation Checks vs What Matters', w/2, 22);
+
+var colW = 280, colH = 200;
+var leftX = 80, rightX = w/2 + 40;
+var topY = 50;
+
+// Left: Schema checks (all green)
+ctx.fillStyle = 'rgba(39,174,96,0.06)';
+ctx.fillRect(leftX, topY, colW, colH);
+ctx.strokeStyle = '#27ae60';
+ctx.lineWidth = 1.5;
+ctx.strokeRect(leftX, topY, colW, colH);
+
+ctx.fillStyle = '#27ae60';
+ctx.font = 'bold 14px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('Schema Validator Says:', leftX+colW/2, topY+20);
+
+ctx.font = '13px sans-serif';
+ctx.textAlign = 'left';
+var checks = ['✓ Fields present', '✓ Types correct', '✓ Non-null', '✓ Within range', '✓ Format valid'];
+for(var i=0;i<checks.length;i++){
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText(checks[i], leftX+20, topY+50+i*26);
+}
+
+ctx.fillStyle = '#27ae60';
+ctx.font = 'bold 18px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('PASS ✓', leftX+colW/2, topY+colH-15);
+
+// Right: Semantic reality (all red)
+ctx.fillStyle = 'rgba(231,76,60,0.06)';
+ctx.fillRect(rightX, topY, colW, colH);
+ctx.strokeStyle = '#e74c3c';
+ctx.lineWidth = 1.5;
+ctx.strokeRect(rightX, topY, colW, colH);
+
+ctx.fillStyle = '#e74c3c';
+ctx.font = 'bold 14px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('Semantic Reality:', rightX+colW/2, topY+20);
+
+ctx.font = '13px sans-serif';
+ctx.textAlign = 'left';
+var reality = ['✗ Can\'t JOIN with existing data', '✗ Different timezone convention', '✗ Different entity granularity', '✗ Naming incompatible', '✗ Identity system mismatch'];
+for(var i=0;i<reality.length;i++){
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText(reality[i], rightX+20, topY+50+i*26);
+}
+
+ctx.fillStyle = '#e74c3c';
+ctx.font = 'bold 18px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('UNUSABLE ✗', rightX+colW/2, topY+colH-15);
+
+ctx.font = 'italic 13px sans-serif';
+ctx.fillStyle = '#666';
+ctx.textAlign = 'center';
+ctx.fillText('Data is structurally valid and semantically isolated. Both statements are simultaneously true.', w/2, h-8);
+})();
+
+// Canvas 2: The parallel universe problem
+(function(){var s=setup('c2');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+
+ctx.font = 'bold 15px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillStyle = '#1a5276';
+ctx.fillText('Parallel Data Universes: Same Company, Incompatible Systems', w/2, 22);
+
+// Draw three disconnected data islands
+var islands = [
+    {x: 120, y: 120, r: 70, label: 'Legacy System', sub: 'UTC • user_id • per-event', color: '#1a5276'},
+    {x: 360, y: 160, r: 65, label: 'Mobile Feature', sub: 'PST • device_id • per-session', color: '#e67e22'},
+    {x: 580, y: 130, r: 60, label: 'New Product', sub: 'ISO-local • account_id • per-day', color: '#8e44ad'}
+];
+
+for(var i=0;i<islands.length;i++){
+    var isl = islands[i];
+    ctx.beginPath();
+    ctx.arc(isl.x, isl.y, isl.r, 0, Math.PI*2);
+    ctx.fillStyle = isl.color + '11';
+    ctx.fill();
+    ctx.strokeStyle = isl.color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = isl.color;
+    ctx.font = 'bold 13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(isl.label, isl.x, isl.y-8);
+    ctx.font = '11px sans-serif';
+    ctx.fillStyle = '#666';
+    ctx.fillText(isl.sub, isl.x, isl.y+10);
+}
+
+// Broken connections between islands
+ctx.setLineDash([4,4]);
+ctx.strokeStyle = '#e74c3c';
+ctx.lineWidth = 2;
+
+// Between 1 and 2
+ctx.beginPath();
+ctx.moveTo(islands[0].x+islands[0].r, islands[0].y);
+ctx.lineTo(islands[1].x-islands[1].r, islands[1].y);
+ctx.stroke();
+
+// Between 2 and 3
+ctx.beginPath();
+ctx.moveTo(islands[1].x+islands[1].r, islands[1].y);
+ctx.lineTo(islands[2].x-islands[2].r, islands[2].y);
+ctx.stroke();
+
+ctx.setLineDash([]);
+
+// X marks on connections
+ctx.fillStyle = '#e74c3c';
+ctx.font = 'bold 18px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('✗', (islands[0].x+islands[1].x)/2, (islands[0].y+islands[1].y)/2 - 15);
+ctx.fillText('✗', (islands[1].x+islands[2].x)/2, (islands[1].y+islands[2].y)/2 - 15);
+
+// Custom ETL needed label
+ctx.fillStyle = '#e74c3c';
+ctx.font = '11px sans-serif';
+ctx.fillText('custom ETL needed', (islands[0].x+islands[1].x)/2, (islands[0].y+islands[1].y)/2 + 5);
+ctx.fillText('custom ETL needed', (islands[1].x+islands[2].x)/2, (islands[1].y+islands[2].y)/2 + 5);
+
+// Bottom: what a query looks like
+ctx.fillStyle = 'rgba(231,76,60,0.06)';
+ctx.fillRect(60, 230, w-120, 70);
+ctx.strokeStyle = '#e74c3c';
+ctx.lineWidth = 1;
+ctx.strokeRect(60, 230, w-120, 70);
+
+ctx.fillStyle = '#333';
+ctx.font = '12px monospace';
+ctx.textAlign = 'left';
+ctx.fillText('-- "Simple" cross-system query:', 80, 250);
+ctx.fillText('SELECT ... FROM legacy l', 80, 266);
+ctx.fillText('JOIN mobile_bridge mb ON l.user_id = mb.mapped_user_id  -- custom mapping table', 80, 282);
+ctx.fillText('JOIN new_product np ON mb.account_id = np.account_id AND convert_tz(...)', 80, 298);
+
+ctx.font = 'italic 13px sans-serif';
+ctx.fillStyle = '#666';
+ctx.textAlign = 'center';
+ctx.fillText('Each new incompatible system requires a dedicated bridge. Bridges multiply combinatorially.', w/2, h-8);
+})();
+
+// Canvas 3: Integration cost growth
+(function(){var s=setup('c3');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+
+ctx.font = 'bold 15px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillStyle = '#1a5276';
+ctx.fillText('ETL Bridge Count as Incompatible Systems Grow', w/2, 22);
+
+var chartL = 100, chartR = w-60, chartBottom = 240, chartTop = 50;
+var chartW = chartR-chartL, chartH = chartBottom-chartTop;
+
+ctx.beginPath();
+ctx.moveTo(chartL, chartBottom); ctx.lineTo(chartR, chartBottom);
+ctx.moveTo(chartL, chartBottom); ctx.lineTo(chartL, chartTop);
+ctx.strokeStyle = '#ccc'; ctx.lineWidth = 1; ctx.stroke();
+
+// n systems → n*(n-1)/2 bridges needed
+var systems = [2, 3, 4, 5, 6, 7, 8];
+var bridges = systems.map(function(n){ return n*(n-1)/2; });
+var maxBridges = 28;
+var stepX = chartW/(systems.length-1);
+
+function yPos(val) { return chartBottom - (val/maxBridges)*chartH; }
+
+// Fill area
+ctx.beginPath();
+ctx.moveTo(chartL, chartBottom);
+for(var i=0;i<systems.length;i++) ctx.lineTo(chartL+i*stepX, yPos(bridges[i]));
+ctx.lineTo(chartL+(systems.length-1)*stepX, chartBottom);
+ctx.closePath();
+ctx.fillStyle = 'rgba(231,76,60,0.12)';
+ctx.fill();
+
+// Line
+ctx.beginPath();
+for(var i=0;i<systems.length;i++){
+    var x = chartL+i*stepX;
+    if(i===0) ctx.moveTo(x, yPos(bridges[i])); else ctx.lineTo(x, yPos(bridges[i]));
+}
+ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3; ctx.stroke();
+
+// Dots with values
+for(var i=0;i<systems.length;i++){
+    var x = chartL+i*stepX;
+    ctx.beginPath(); ctx.arc(x, yPos(bridges[i]), 5, 0, Math.PI*2);
+    ctx.fillStyle = '#e74c3c'; ctx.fill();
+    ctx.fillStyle = '#333';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(bridges[i]+'', x, yPos(bridges[i])-12);
+}
+
+// X labels
+ctx.font = '12px sans-serif';
+ctx.fillStyle = '#666';
+ctx.textAlign = 'center';
+for(var i=0;i<systems.length;i++){
+    ctx.fillText(systems[i]+' systems', chartL+i*stepX, chartBottom+16);
+}
+
+// Y axis
+ctx.textAlign = 'right';
+for(var v=0;v<=28;v+=7){
+    ctx.fillText(v+' bridges', chartL-8, yPos(v)+4);
+}
+
+// Formula
+ctx.fillStyle = '#1a5276';
+ctx.font = 'bold 13px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('Bridges needed = n(n-1)/2', chartR-100, chartTop+15);
+
+ctx.font = 'italic 13px sans-serif';
+ctx.fillStyle = '#666';
+ctx.textAlign = 'center';
+ctx.fillText('Quadratic growth. Each incompatible system makes ALL existing integrations harder.', w/2, h-8);
+})();
+</script>
+</body>
+</html>

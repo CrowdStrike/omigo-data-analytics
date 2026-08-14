@@ -29,6 +29,7 @@ This is a statistical ML library (omigo-data-analytics-statsml) focused on verif
 - Wait for the user to guide the conversation direction
 - Use prior knowledge rather than web search unless asked otherwise
 - Keep responses concise and direct
+- Use professional language that conveys the message but is not offensive.
 
 ## Brainstorming & Design Process
 
@@ -71,6 +72,9 @@ Additional canvas/chart rules:
 - **Grid galleries:** max 3 charts per row, minimum 200px height per chart
 - **devicePixelRatio scaling:** always use `window.devicePixelRatio` for retina
 - **Color palette:** #1a5276 (primary blue), #27ae60 (green), #e74c3c (red), #e67e22 (orange), rgba(26,82,118,0.35) (bar fill)
+
+## Layout index
+There is a layout.txt file that has list of all files to quickly understand what all concepts are in this directory.
 
 ## TODO
 
