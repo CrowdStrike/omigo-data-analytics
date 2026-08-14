@@ -20,7 +20,7 @@ Disagreement is expected and preferred over false agreement. Be direct.
 
 ## Project Context
 
-See `docs/statsml/STATSML.md` for core ideas, principles, architecture, and phases.
+See `./STATSML.md` for core ideas, principles, architecture, and phases.
 
 This is a statistical ML library (omigo-data-analytics-statsml) focused on verifying statistical preconditions before applying tests/models, multi-candidate parameter validation, and feature profiling pipelines.
 
