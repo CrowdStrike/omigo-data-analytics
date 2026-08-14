@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Temporal Dataset Scenarios</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 40px 20px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; }
+.nav a:hover { text-decoration: underline; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-table tr:nth-child(even) td { background: #fafcfe; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+.toc { background: #f8fafb; border: 1px solid #e0e0e0; padding: 20px 30px; margin: 20px 0 30px; border-radius: 4px; }
+.toc ol { margin: 10px 0 0 20px; font-size: 0.92em; }
+.toc ol li { margin: 5px 0; }
+.toc ol li a { color: #2980b9; text-decoration: none; }
+.toc ol li a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+
+<h1>Temporal Dataset Scenarios</h1>
+<p class="subtitle">Distributions aren't static. Data collected over time shifts, drifts, and cycles — here's how to handle it.</p>
+
+<div class="toc">
+<strong>Table of Contents</strong>
+<ol>
+<li><a href="#why">Why Temporal Matters</a></li>
+<li><a href="#drift">Shape Drift</a></li>
+<li><a href="#seasonality">Seasonality</a></li>
+<li><a href="#concept">Concept Drift</a></li>
+<li><a href="#changepoints">Changepoints</a></li>
+<li><a href="#stationarity">Stationarity</a></li>
+<li><a href="#windowed">Windowed Profiling</a></li>
+</ol>
+</div>
+
+<h2 id="why">1. Why Temporal Matters</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">A Static Profile Can Be a Lie</div>
+<ul>
+<li>Profile a feature once → get "right-skewed, mean=45." But that mean was 35 last year and will be 55 next year.</li>
+<li>A bucket that was "92% pos" in Q1 may be "60% pos" in Q3 — same range, different truth.</li>
+<li>Models trained on historical data silently degrade as the world changes.</li>
+<li>Temporal awareness = knowing WHEN your profile was true and when to re-profile.</li>
+</ul>
+<p><strong>Key question:</strong> Is this feature's distribution stable enough that a single profile is valid? Or does time matter?</p>
+</td>
+<td>
+<canvas id="c1" width="720" height="240"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="drift">2. Shape Drift</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">The Distribution Shape Itself Changes Over Time</div>
+<ul>
+<li>Feature looks normal in Year 1, becomes bimodal by Year 3 (new subpopulation entered)</li>
+<li>Right-skew gets heavier over time (wealth concentration, tech adoption curves)</li>
+<li>A spike appears or disappears (new default value introduced, old one retired)</li>
+</ul>
+<p><strong>Example — E-commerce spending:</strong> Pre-2020: right-skewed bell (median $45). Post-2020: bimodal — a new cluster of high-frequency small orders ($5-15 delivery apps) emerged alongside the original distribution. Shape changed from unimodal to bimodal.</p>
+<p><strong>Impact:</strong> Tests valid for the old shape (t-test on bell) become invalid for the new shape (need splitting for bimodal).</p>
+</td>
+<td>
+<canvas id="c2" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="seasonality">3. Seasonality</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Recurring Patterns That Make Static Profiles Misleading</div>
+<ul>
+<li>The "mean" of a seasonal feature is a fiction — nobody experiences the average</li>
+<li>A feature may have high separation in winter but zero separation in summer</li>
+<li>Profiling across all seasons blurs the signal and underestimates peak effects</li>
+</ul>
+<p><strong>Example — Hospital ER admissions:</strong> Summer: right-skewed, peaks at injuries/heat. Winter: bimodal — flu cluster + normal baseline. Annual profile looks "heavy-tailed bell" — missing both the summer spike pattern and winter bimodality.</p>
+<p><strong>Example — Energy consumption:</strong> July: right-skewed (AC load). April: near-uniform (mild weather). Profiling all months together: looks multimodal — an artifact of mixing seasons.</p>
+</td>
+<td>
+<canvas id="c3" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="concept">4. Concept Drift</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">The Relationship Between Features and Target Changes</div>
+<ul>
+<li>Feature distribution may stay the same, but what predicts "pos" shifts</li>
+<li>A range that was 85% pos last year is now 60% pos — same values, different meaning</li>
+<li>New patterns emerge that didn't exist in training data</li>
+</ul>
+<p><strong>Example — Fraud detection:</strong> 2019: large transactions at 3am = fraud signal (enrichment 8x). 2022: same pattern = legitimate crypto trading. The feature value didn't change — the world did. Enrichment dropped from 8x to 1.2x.</p>
+<p><strong>Example — Loan defaults:</strong> Pre-recession: debt-to-income >40% = high risk. During recession: even 25% DTI defaults. The threshold that separated classes moved.</p>
+<p><strong>Detection:</strong> Monitor enrichment scores over time. If a bucket's enrichment decays steadily, flag for re-evaluation.</p>
+</td>
+<td>
+<canvas id="c4" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="changepoints">5. Changepoints</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Abrupt Regime Shifts — Before/After Are Different Worlds</div>
+<ul>
+<li>Not gradual drift — a sudden break where everything changes at once</li>
+<li>Data before the changepoint and after are effectively different datasets</li>
+<li>Profiling across the break produces a meaningless average of two regimes</li>
+</ul>
+<p><strong>Example — COVID (March 2020):</strong> Air travel bookings: pre-COVID bell (mean 2M/day). Post-COVID: collapsed to spike near zero, then slowly recovered with different shape (more leisure, less business). A single profile spanning 2019-2021 is fiction.</p>
+<p><strong>Example — Policy change:</strong> Hospital billing after ICD-10 transition (Oct 2015). Code distributions, claim amounts, denial rates all shifted overnight. Pre/post must be treated as separate populations.</p>
+<p><strong>Detection:</strong> CUSUM or PELT algorithms on rolling statistics. KS test between adjacent windows.</p>
+</td>
+<td>
+<canvas id="c5" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="stationarity">6. Stationarity</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">When a Feature IS Stable Enough for Static Profiling</div>
+<ul>
+<li>Stationary = mean, variance, and shape don't change over time</li>
+<li>Most demographic features are approximately stationary (age distribution, height, blood type)</li>
+<li>Most economic/behavioral features are NOT stationary (spending, engagement, prices)</li>
+<li>Test: KS test between first half and second half of data. If p > 0.05, treat as stationary.</li>
+</ul>
+<p><strong>Examples of stationary features:</strong> Patient height, resting heart rate, hemoglobin (within healthy pop), blood type frequencies, fingerprint patterns.</p>
+<p><strong>Examples of non-stationary:</strong> Stock prices, website traffic, social media engagement, transaction amounts, diagnosis codes, technology adoption rates.</p>
+</td>
+<td>
+<canvas id="c6" width="720" height="240"></canvas>
+</td>
+</tr>
+</table>
+
+<h2 id="windowed">7. Windowed Profiling</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">The Solution: Profile in Time Windows, Compare Across</div>
+<ul>
+<li><strong>Step 1:</strong> Divide data into time windows (monthly, quarterly, yearly — depends on expected change rate)</li>
+<li><strong>Step 2:</strong> Profile each window independently (shape, ranges, enrichment)</li>
+<li><strong>Step 3:</strong> Compare profiles across windows using KS test</li>
+<li><strong>Step 4:</strong> If stable → use full dataset. If drifting → use most recent window only. If seasonal → profile per season.</li>
+</ul>
+<p><strong>Re-profiling triggers:</strong></p>
+<ul>
+<li>KS test between current window and profile-window rejects (p < 0.01)</li>
+<li>Enrichment of any strong bucket drops below 1.5x</li>
+<li>Shape classification changes (bell → bimodal)</li>
+<li>Data volume doubles since last profile</li>
+</ul>
+</td>
+<td>
+<canvas id="c7" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<div class="philosophy">
+<strong>The principle:</strong> Every profile has a shelf life. A model trained on 2019 data making predictions in 2024 is using expired ingredients. Temporal awareness means knowing when your statistical facts were true — and detecting when they stop being true.
+</div>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id);
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return {ctx: ctx, w: w, h: h};
+}
+
+// 1. Why temporal matters — same feature drifting over time
+(function() {
+    var s = setup('c1'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Feature Mean Drifting: Looks Stable in Snapshot, Moving Over Time', 40, 22);
+
+    var m = {left: 60, right: 30, top: 45, bottom: 35};
+    var pw = w - m.left - m.right, ph = h - m.top - m.bottom;
+
+    // Draw a drifting mean line
+    ctx.strokeStyle = '#2980b9'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < 50; i++) {
+        var x = m.left + (i/50) * pw;
+        var y = m.top + ph/2 - (i/50) * ph * 0.4 + Math.sin(i*0.3)*10;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Confidence band
+    ctx.fillStyle = 'rgba(41,128,185,0.15)';
+    ctx.beginPath();
+    for (var i = 0; i < 50; i++) {
+        var x = m.left + (i/50) * pw;
+        var y = m.top + ph/2 - (i/50) * ph * 0.4 + Math.sin(i*0.3)*10 - 20;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    for (var i = 49; i >= 0; i--) {
+        var x = m.left + (i/50) * pw;
+        var y = m.top + ph/2 - (i/50) * ph * 0.4 + Math.sin(i*0.3)*10 + 20;
+        ctx.lineTo(x, y);
+    }
+    ctx.closePath(); ctx.fill();
+
+    // Time labels
+    ctx.fillStyle = '#666'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('2019', m.left, h - 8);
+    ctx.fillText('2020', m.left + pw*0.25, h - 8);
+    ctx.fillText('2021', m.left + pw*0.5, h - 8);
+    ctx.fillText('2022', m.left + pw*0.75, h - 8);
+    ctx.fillText('2023', m.left + pw, h - 8);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = '17px -apple-system'; ctx.textAlign = 'right';
+    ctx.fillText('mean=35', m.left + pw*0.1, m.top + ph - 10);
+    ctx.fillText('mean=55', w - 40, m.top + 20);
+})();
+
+// 2. Shape drift
+(function() {
+    var s = setup('c2'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('E-commerce Spending: Unimodal → Bimodal Over Time', 40, 22);
+
+    function drawMiniHist(ctx, bins, x, y, w, h, label, color) {
+        var maxB = Math.max.apply(null, bins);
+        var bW = w / bins.length;
+        ctx.fillStyle = color;
+        bins.forEach(function(v, i) {
+            var barH = (v/maxB) * h;
+            ctx.fillRect(x + i*bW, y + h - barH, bW-1, barH);
+        });
+        ctx.fillStyle = '#333'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText(label, x + w/2, y + h + 18);
+    }
+
+    // Year 1: right-skewed bell
+    var y1 = [2, 5, 12, 22, 35, 30, 20, 12, 6, 3, 2, 1, 0, 0, 0];
+    drawMiniHist(ctx, y1, 40, 50, 300, 150, 'Pre-2020: Right-skew (single peak at $45)', 'rgba(41,128,185,0.4)');
+
+    // Year 3: bimodal
+    var y3 = [8, 18, 25, 15, 8, 5, 4, 5, 10, 18, 25, 20, 12, 5, 2];
+    drawMiniHist(ctx, y3, 390, 50, 300, 150, 'Post-2020: Bimodal ($12 delivery + $45 regular)', 'rgba(39,174,96,0.4)');
+
+    ctx.fillStyle = '#e67e22'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('→', 360, 130);
+})();
+
+// 3. Seasonality
+(function() {
+    var s = setup('c3'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Energy Consumption: Different Shape Each Season', 40, 22);
+
+    function mini(ctx, bins, x, y, w, h, label, color) {
+        var maxB = Math.max.apply(null, bins);
+        var bW = w / bins.length;
+        ctx.fillStyle = color;
+        bins.forEach(function(v, i) { ctx.fillRect(x + i*bW, y + h - (v/maxB)*h, bW-1, (v/maxB)*h); });
+        ctx.fillStyle = '#333'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText(label, x + w/2, y + h + 16);
+    }
+
+    mini(ctx, [2, 4, 8, 12, 18, 25, 35, 30, 20, 10], 30, 50, 200, 130, 'Summer (AC load)', 'rgba(231,76,60,0.4)');
+    mini(ctx, [8, 10, 12, 14, 13, 12, 11, 10, 9, 8], 260, 50, 200, 130, 'Spring (mild)', 'rgba(39,174,96,0.4)');
+    mini(ctx, [3, 5, 10, 20, 30, 15, 8, 12, 22, 28], 490, 50, 200, 130, 'Winter (heating bimodal)', 'rgba(41,128,185,0.4)');
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Annual profile averages these → looks multimodal (artifact!)', w/2, h - 10);
+})();
+
+// 4. Concept drift
+(function() {
+    var s = setup('c4'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Fraud Signal Decay: Same Feature, Different Meaning Over Time', 40, 22);
+
+    var m = {left: 60, right: 40, top: 50, bottom: 40};
+    var pw = w - m.left - m.right, ph = h - m.top - m.bottom;
+
+    // Enrichment decaying over time
+    var points = [{t:'2019', e:8.0}, {t:'2020', e:6.5}, {t:'2021', e:4.0}, {t:'2022', e:2.0}, {t:'2023', e:1.2}];
+
+    // Line
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    points.forEach(function(p, i) {
+        var x = m.left + (i/(points.length-1)) * pw;
+        var y = m.top + ph - (p.e/9) * ph;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // Points
+    points.forEach(function(p, i) {
+        var x = m.left + (i/(points.length-1)) * pw;
+        var y = m.top + ph - (p.e/9) * ph;
+        ctx.fillStyle = p.e > 2 ? '#e74c3c' : '#bbb';
+        ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#333'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText(p.e + 'x', x, y - 14);
+        ctx.fillStyle = '#666'; ctx.font = '17px -apple-system';
+        ctx.fillText(p.t, x, h - 10);
+    });
+
+    // Threshold line
+    var threshY = m.top + ph - (2.0/9) * ph;
+    ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 1.5; ctx.setLineDash([5,3]);
+    ctx.beginPath(); ctx.moveTo(m.left, threshY); ctx.lineTo(m.left+pw, threshY); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#27ae60'; ctx.font = '17px -apple-system'; ctx.textAlign = 'right';
+    ctx.fillText('min useful (2x)', w - 40, threshY - 5);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = '17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('"Large 3am transactions = fraud" — signal decayed as crypto trading grew', m.left, m.top - 10);
+})();
+
+// 5. Changepoints
+(function() {
+    var s = setup('c5'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Air Travel Bookings: COVID Changepoint (March 2020)', 40, 22);
+
+    var m = {left: 60, right: 30, top: 50, bottom: 35};
+    var pw = w - m.left - m.right, ph = h - m.top - m.bottom;
+
+    // Time series with abrupt break
+    ctx.strokeStyle = '#2980b9'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (var i = 0; i < 25; i++) {
+        var x = m.left + (i/50) * pw;
+        var y = m.top + 30 + Math.sin(i*0.5)*15;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Break
+    var breakX = m.left + 0.5 * pw;
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.setLineDash([5,3]);
+    ctx.beginPath(); ctx.moveTo(breakX, m.top); ctx.lineTo(breakX, m.top + ph); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('BREAK', breakX, m.top - 5);
+
+    // Post-break: collapsed then recovery
+    ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (var i = 25; i < 50; i++) {
+        var x = m.left + (i/50) * pw;
+        var drop = Math.max(0, 1 - (i-25)/25);
+        var y = m.top + ph - 30 - drop * (ph - 60) + Math.sin(i*0.4)*8;
+        if (i === 25) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = '#2980b9'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Pre-COVID: stable bell (2M/day)', m.left + pw*0.25, h - 8);
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('Post-COVID: collapsed → slow recovery (different shape)', m.left + pw*0.75, h - 8);
+})();
+
+// 6. Stationarity
+(function() {
+    var s = setup('c6'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Stationary vs Non-Stationary Features', 40, 22);
+
+    // Stationary: flat line with noise
+    ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (var i = 0; i < 50; i++) {
+        var x = 40 + (i/50) * 300;
+        var y = 100 + Math.sin(i*0.8)*12;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#27ae60'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Height (stationary)', 190, 145);
+    ctx.fillText('✓ Single profile valid', 190, 165);
+
+    // Non-stationary: trending up with volatility
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (var i = 0; i < 50; i++) {
+        var x = 390 + (i/50) * 300;
+        var y = 140 - (i/50)*60 + Math.sin(i*1.2)*15;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Stock price (non-stationary)', 540, 165);
+    ctx.fillText('✗ Must use recent window', 540, 185);
+
+    // Axis labels
+    ctx.fillStyle = '#999'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('time →', 190, h - 8);
+    ctx.fillText('time →', 540, h - 8);
+})();
+
+// 7. Windowed profiling
+(function() {
+    var s = setup('c7'), ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Windowed Profiling: Compare Profiles Across Time Windows', 40, 22);
+
+    var windows = [
+        {label: 'Q1', shape: 'bell', ks: '—', action: 'baseline'},
+        {label: 'Q2', shape: 'bell', ks: 'p=0.42', action: 'stable ✓'},
+        {label: 'Q3', shape: 'right_skew', ks: 'p=0.003', action: 'DRIFT! re-profile'},
+        {label: 'Q4', shape: 'bimodal', ks: 'p<0.001', action: 'SHIFT! new regime'}
+    ];
+
+    var bW = (w - 80) / windows.length;
+    windows.forEach(function(win, i) {
+        var x = 40 + i * bW;
+        var color = win.action.includes('✓') ? '#27ae60' : (win.action.includes('baseline') ? '#2980b9' : '#e74c3c');
+        ctx.fillStyle = color; ctx.globalAlpha = 0.1;
+        ctx.fillRect(x + 5, 45, bW - 10, 180); ctx.globalAlpha = 1;
+        ctx.strokeStyle = color; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.roundRect(x + 5, 45, bW - 10, 180, 6); ctx.stroke();
+
+        ctx.fillStyle = color; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText(win.label, x + bW/2, 68);
+        ctx.fillStyle = '#333'; ctx.font = '17px -apple-system';
+        ctx.fillText('shape: ' + win.shape, x + bW/2, 100);
+        ctx.fillText('KS: ' + win.ks, x + bW/2, 125);
+        ctx.fillStyle = color; ctx.font = 'bold 17px -apple-system';
+        ctx.fillText(win.action, x + bW/2, 160);
+
+        if (i < windows.length - 1) {
+            ctx.strokeStyle = '#999'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(x + bW - 3, 135); ctx.lineTo(x + bW + 7, 135); ctx.stroke();
+            ctx.fillStyle = '#999'; ctx.beginPath();
+            ctx.moveTo(x+bW+3, 132); ctx.lineTo(x+bW+8, 135); ctx.lineTo(x+bW+3, 138); ctx.fill();
+        }
+    });
+
+    ctx.fillStyle = '#555'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('KS test between windows detects when re-profiling is needed', w/2, h - 10);
+})();
+</script>
+</body>
+</html>
