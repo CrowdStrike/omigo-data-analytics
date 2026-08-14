@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aggregation Destroys Signal</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Aggregation Destroys Signal</h1>
+<p class="subtitle">Summarizing into one number loses the pattern that matters.</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>You aggregate time series, transaction sequences, or behavioral data into summary statistics—mean, sum, count—to create features. But the pattern within the data (volatility, trend, seasonality, sequence) is more predictive than the aggregate. By collapsing to a single number, you discard the signal.</p>
+                <ul>
+                    <li>Two customers with $5,000 annual spend: one steady ($400/month), one lumpy ($4,800 in Dec, $200 rest). Loyalty differs.</li>
+                    <li>Average session time = 5 min. But one user is 50 sessions × 6s (bouncing), other is 1 session × 5 min (engaged).</li>
+                    <li>Mean glucose = 110 mg/dL for both. One is stable, other swings 60-180 (diabetic).</li>
+                    <li>Total revenue = $100K. But trend is up (+15% YoY) vs. down (-10% YoY). Future differs.</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Impact:</strong> Aggregation erases the structure of the data. Two entities with identical summary statistics can have completely different underlying patterns—and completely different target outcomes. Your model cannot distinguish them.
+                </div>
+                <p class="example">Example: Churn model. "Average monthly usage" = 50 hours for all users. But churners show declining trend (80→40→30), loyal users show stable pattern (50→50→50). Model sees only the mean. Cannot predict churn.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Aggregation is convenient. Most ML models expect fixed-length feature vectors. Time series and sequences are variable-length. So you collapse them into scalars. But this destroys the temporal structure, variance, and dynamics that drive the outcome.</p>
+                <ul>
+                    <li>Tabular models (logistic, tree-based) expect one row per entity, one column per feature. No natural way to encode sequences.</li>
+                    <li>Computing mean/sum/count is trivial. Computing trend, volatility, autocorrelation requires more thought.</li>
+                    <li>Data pipelines built for reporting (total spend, average score) are reused for ML without considering what the model needs.</li>
+                    <li>Aggregation reduces dimensionality, which seems like a good thing—but it's lossy compression that discards predictive information.</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Mechanism:</strong> The target depends on dynamics (trend, volatility, sequence). You give the model only level (mean, total). Model has no access to the pattern that drives the outcome. Predictive power is capped.
+                </div>
+                <p class="example">Example: Fraud detection. "Total transactions = 12" and "Average amount = $83." But fraud is a rapid burst: 12 transactions in 8 minutes. Legitimate users: 12 over 30 days. Pattern matters. Summary hides it.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Detection & Mitigation</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Before aggregating, extract features that capture the pattern: variance, trend, slope, autocorrelation, recent vs. historical comparison, sequence-based features. Or use models that natively handle sequences.</p>
+                <ul>
+                    <li>Add variance/std alongside mean. Volatility is often more predictive than level.</li>
+                    <li>Add trend: linear regression slope over time, or ratio of recent to historical.</li>
+                    <li>Add recency-weighted features: last 7 days vs. last 30 days.</li>
+                    <li>Binned counts: how many periods above/below threshold, longest streak, time since last event.</li>
+                    <li>For sequences: use RNN/LSTM/Transformer models that consume the full sequence rather than summaries.</li>
+                    <li>Compare model performance with aggregated features vs. pattern-based features. The lift tells you how much signal aggregation destroyed.</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Fix:</strong> Don't stop at mean/sum/count. Add variance, trend, recency, streaks. Better yet: model the sequence directly. Use LSTM for time series, transformers for behavioral sequences.
+                </div>
+                <p class="example">Example: Loan default. "Total income = $78K" (mean over 12 months). Add trend: slope = -$800/month. Add volatility: std = $14K. Add recency: last 3 months = $52K (down from $90K). Model accuracy: +12%.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// Canvas 1: Two users with same mean, different patterns
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Monthly Spend: Mean = $400 for Both Users', w/2, 25);
+
+    var baseY = 220, maxH = 120;
+    var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+
+    // User A: steady
+    var userAData = [410, 395, 405, 390, 400, 405];
+    var startX = 100;
+    var barW = 35;
+    var spacing = 50;
+
+    months.forEach(function(m, i) {
+        var x = startX + i * spacing;
+        var h = (userAData[i] / 500) * maxH;
+
+        ctx.fillStyle = 'rgba(39, 174, 96, 0.6)';
+        ctx.fillRect(x, baseY - h, barW, h);
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(x, baseY - h, barW, h);
+
+        ctx.fillStyle = '#666';
+        ctx.font = '9px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(m, x + barW/2, baseY + 15);
+    });
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('User A: Steady (loyal)', startX, 50);
+    ctx.font = '10px system-ui';
+    ctx.fillText('Mean = $400, Std = $7', startX, 65);
+
+    // User B: volatile
+    var userBData = [50, 80, 200, 850, 150, 1070];
+    startX = 450;
+
+    months.forEach(function(m, i) {
+        var x = startX + i * spacing;
+        var h = (userBData[i] / 1200) * maxH;
+
+        ctx.fillStyle = 'rgba(231, 76, 60, 0.6)';
+        ctx.fillRect(x, baseY - h, barW, h);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(x, baseY - h, barW, h);
+
+        ctx.fillStyle = '#666';
+        ctx.font = '9px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(m, x + barW/2, baseY + 15);
+    });
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('User B: Volatile (risky)', startX, 50);
+    ctx.font = '10px system-ui';
+    ctx.fillText('Mean = $400, Std = $420', startX, 65);
+
+    // Baseline
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(90, baseY);
+    ctx.lineTo(740, baseY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Mean is identical. But volatility and pattern are completely different!', w/2, 265);
+})();
+
+// Canvas 2: Trend hidden by mean
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Usage Over 6 Months: Mean = 50 hours for Both', w/2, 25);
+
+    var baseY = 220, chartH = 140;
+    var months = ['M1', 'M2', 'M3', 'M4', 'M5', 'M6'];
+    var startX = 120, endX = 320, stepX = (endX - startX) / 5;
+
+    // User 1: Declining (churner)
+    var data1 = [80, 70, 55, 40, 30, 25];
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    data1.forEach(function(v, i) {
+        var x = startX + i * stepX;
+        var y = baseY - (v / 100) * chartH;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    data1.forEach(function(v, i) {
+        var x = startX + i * stepX;
+        var y = baseY - (v / 100) * chartH;
+        ctx.fillStyle = '#e74c3c';
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fill();
+    });
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Declining: Churner', (startX + endX) / 2, 60);
+    ctx.font = '10px system-ui';
+    ctx.fillText('Mean = 50h, Trend = -11h/mo', (startX + endX) / 2, 75);
+
+    // User 2: Stable (loyal)
+    startX = 480;
+    endX = 680;
+    stepX = (endX - startX) / 5;
+    var data2 = [48, 52, 50, 51, 49, 50];
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    data2.forEach(function(v, i) {
+        var x = startX + i * stepX;
+        var y = baseY - (v / 100) * chartH;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    data2.forEach(function(v, i) {
+        var x = startX + i * stepX;
+        var y = baseY - (v / 100) * chartH;
+        ctx.fillStyle = '#27ae60';
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fill();
+    });
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Stable: Loyal', (startX + endX) / 2, 60);
+    ctx.font = '10px system-ui';
+    ctx.fillText('Mean = 50h, Trend = +0.3h/mo', (startX + endX) / 2, 75);
+
+    // Axes
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(100, baseY);
+    ctx.lineTo(700, baseY);
+    ctx.stroke();
+
+    ctx.fillStyle = '#666';
+    ctx.font = '9px system-ui';
+    months.forEach(function(m, i) {
+        ctx.fillText(m, 120 + i * 40, baseY + 15);
+        ctx.fillText(m, 480 + i * 40, baseY + 15);
+    });
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Aggregated mean hides the trend. Model cannot predict churn.', w/2, 265);
+})();
+
+// Canvas 3: Feature engineering to capture pattern
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Feature Engineering: From Aggregation to Pattern', w/2, 25);
+
+    // Bad: Aggregation only
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.fillRect(60, 60, 200, 120);
+    ctx.strokeRect(60, 60, 200, 120);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('BAD: Aggregation Only', 160, 80);
+
+    ctx.fillStyle = '#333';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'left';
+    var badFeatures = [
+        'mean_spend',
+        'total_spend',
+        'count_transactions',
+        'avg_transaction_value'
+    ];
+    badFeatures.forEach(function(f, i) {
+        ctx.fillText('• ' + f, 75, 105 + i * 16);
+    });
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Pattern lost!', 160, 170);
+
+    // Arrow
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(260, 120);
+    ctx.lineTo(300, 120);
+    ctx.stroke();
+
+    ctx.fillStyle = '#2980b9';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Add', 280, 105);
+
+    // Good: Pattern features
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.fillRect(300, 60, 240, 180);
+    ctx.strokeRect(300, 60, 240, 180);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('GOOD: Pattern Features', 420, 80);
+
+    ctx.fillStyle = '#333';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'left';
+    var goodFeatures = [
+        'mean_spend (keep this)',
+        'std_spend (volatility)',
+        'trend_slope (up/down)',
+        'recent_vs_historical (last 7d / last 30d)',
+        'time_since_last_transaction',
+        'longest_inactive_streak',
+        'count_above_threshold',
+        'autocorrelation (periodicity)'
+    ];
+    goodFeatures.forEach(function(f, i) {
+        ctx.fillText('• ' + f, 315, 105 + i * 16);
+    });
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Pattern captured!', 420, 230);
+
+    // Performance comparison
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.fillRect(560, 100, 130, 80);
+    ctx.strokeRect(560, 100, 130, 80);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Model AUC', 625, 120);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '10px system-ui';
+    ctx.fillText('Aggregation: 0.73', 625, 145);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('+ Pattern: 0.86', 625, 165);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Lift: +13 pts', 625, 145 + 35);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Mean is not enough. Model needs variance, trend, recency.', w/2, 270);
+})();
+</script>
+
+</body>
+</html>

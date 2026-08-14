@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Class Imbalance Mishandling</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Class Imbalance Mishandling</h1>
+<p class="subtitle">Treating 95/5 class ratio naively → model predicts majority class always</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>"Model is 95% accurate!" — but it just predicts "negative" for everything. Recall on positives = 0%. Oversampling minority in train but evaluating on original distribution → inflated metrics.</p>
+                <ul>
+                    <li>"Model is 95% accurate!" — but it just predicts "negative" for everything. Recall on positives = 0%</li>
+                    <li>Oversampling minority in train but evaluating on original distribution → inflated metrics</li>
+                    <li>Using accuracy as metric when classes are imbalanced → meaningless number</li>
+                </ul>
+                <p class="example">Example: Fraud (2%). Model predicts "no fraud" always → 98% accuracy, 0% fraud detection. Completely useless. Precision-recall or F1 on the minority class tells the real story.</p>
+                <div class="key-point">
+                    <strong>Defense:</strong> Use precision/recall/F1 for rare class. Stratified splits. If oversampling: only on train, never on test. Evaluate at multiple thresholds (PR curve).
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Teams use accuracy as the primary metric without considering class distribution. When 95% of samples are negative, a model that always predicts "negative" achieves 95% accuracy while being completely useless. Naive random splits may further distort the class ratio in individual folds.</p>
+                <ul>
+                    <li>Using accuracy as the primary metric when classes are imbalanced (95/5 or worse)</li>
+                    <li>Naive random splits can create folds with zero minority samples</li>
+                    <li>Default classification threshold of 0.5 assumes balanced classes</li>
+                    <li>Oversampling applied globally (before split) inflates test performance on minority class</li>
+                </ul>
+                <p class="example">Example: Credit card fraud (0.2% positive). Model trained with cross-entropy loss: predicts P(fraud) between 0.01-0.03 for all transactions. At threshold 0.5, it predicts zero fraud. Accuracy: 99.8%. Fraud detected: 0%.</p>
+                <div class="key-point">
+                    <strong>Root Cause:</strong> Accuracy rewards the majority class. A 95/5 split means a trivial "always predict negative" classifier scores 95%. The model's gradient descent finds this trivial solution because the loss from 5% misclassified positives is overwhelmed by the reward from 95% correct negatives.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Use stratified splits to preserve class ratios in each fold. Evaluate with precision, recall, and F1 on the minority class. Use PR curves instead of ROC for imbalanced data. Tune the classification threshold on validation data using business-relevant criteria.</p>
+                <ul>
+                    <li>Stratified splits (StratifiedKFold): preserve class ratio in every fold</li>
+                    <li>Evaluate on minority class: precision, recall, F1 — not overall accuracy</li>
+                    <li>PR curves over ROC curves: PR is more informative when positives are rare</li>
+                    <li>Threshold tuning on validation set: optimize for business metric (e.g., cost of FP vs FN)</li>
+                    <li>If oversampling: apply ONLY on training fold, never on validation/test</li>
+                </ul>
+                <p class="example">Example: Same fraud model. Switch to PR-AUC metric, stratified 5-fold CV, threshold tuned to maximize F1. Result: precision=0.45, recall=0.72 at threshold=0.08. Catches 72% of fraud with 55% false alarm rate on flagged transactions. Actually useful.</p>
+                <div class="key-point">
+                    <strong>Fix:</strong> Replace accuracy with F1 or PR-AUC as the primary metric. Use StratifiedKFold to ensure every fold has minority samples. Tune threshold on validation using the business cost function (e.g., cost of missing fraud vs cost of false alarm).
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // --- LEFT SECTION: Class Distribution ---
+    var leftX = 30;
+    var leftW = 300;
+
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Class Distribution', leftX + leftW / 2, 25);
+
+    // Stacked bar representing 95/5 split
+    var barX = leftX + 40;
+    var barY = 50;
+    var barW = 220;
+    var barH = 120;
+
+    // Negative class (95%)
+    var negW = barW * 0.95;
+    ctx.fillStyle = '#1a5276';
+    ctx.globalAlpha = 0.7;
+    ctx.fillRect(barX, barY, negW, barH);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(barX, barY, negW, barH);
+
+    // Positive class (5%)
+    var posW = barW * 0.05;
+    ctx.fillStyle = '#e74c3c';
+    ctx.globalAlpha = 0.7;
+    ctx.fillRect(barX + negW, barY, posW, barH);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(barX + negW, barY, posW, barH);
+
+    // Labels
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.fillText('95%', barX + negW / 2, barY + barH / 2 + 5);
+
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'left';
+    ctx.fillText('5%', barX + negW + posW + 5, barY + barH / 2 + 5);
+
+    // Legend
+    ctx.font = '12px system-ui';
+    ctx.textAlign = 'left';
+    var legY = barY + barH + 25;
+    ctx.fillStyle = '#1a5276';
+    ctx.fillRect(barX, legY, 12, 12);
+    ctx.fillText('Negative', barX + 18, legY + 10);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(barX + 100, legY, 12, 12);
+    ctx.fillText('Positive', barX + 118, legY + 10);
+
+    // --- RIGHT SECTION: Confusion Matrix ---
+    var rightX = 370;
+    var rightW = 330;
+
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Confusion Matrix (Predicts All Negative)', rightX + rightW / 2, 25);
+
+    // Matrix grid
+    var mX = rightX + 65;
+    var mY = 55;
+    var cellW = 90;
+    var cellH = 55;
+
+    // Header labels
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Predicted', mX + cellW, mY - 15);
+    ctx.font = '11px system-ui';
+    ctx.fillText('Neg', mX + cellW / 2, mY - 3);
+    ctx.fillText('Pos', mX + cellW + cellW / 2, mY - 3);
+
+    // Row labels
+    ctx.save();
+    ctx.translate(mX - 20, mY + cellH);
+    ctx.rotate(-Math.PI / 2);
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Actual', 0, 0);
+    ctx.restore();
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'right';
+    ctx.fillText('Neg', mX - 5, mY + cellH / 2 + 4);
+    ctx.fillText('Pos', mX - 5, mY + cellH + cellH / 2 + 4);
+
+    // TN cell (top-left) - correct
+    ctx.fillStyle = '#27ae60';
+    ctx.globalAlpha = 0.25;
+    ctx.fillRect(mX, mY, cellW, cellH);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(mX, mY, cellW, cellH);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 16px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('950', mX + cellW / 2, mY + cellH / 2 + 6);
+
+    // FP cell (top-right) - zero
+    ctx.fillStyle = '#1a5276';
+    ctx.globalAlpha = 0.1;
+    ctx.fillRect(mX + cellW, mY, cellW, cellH);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(mX + cellW, mY, cellW, cellH);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 16px system-ui';
+    ctx.fillText('0', mX + cellW + cellW / 2, mY + cellH / 2 + 6);
+
+    // FN cell (bottom-left) - missed positives
+    ctx.fillStyle = '#e74c3c';
+    ctx.globalAlpha = 0.25;
+    ctx.fillRect(mX, mY + cellH, cellW, cellH);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(mX, mY + cellH, cellW, cellH);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 16px system-ui';
+    ctx.fillText('50', mX + cellW / 2, mY + cellH + cellH / 2 + 6);
+
+    // TP cell (bottom-right) - zero
+    ctx.fillStyle = '#1a5276';
+    ctx.globalAlpha = 0.1;
+    ctx.fillRect(mX + cellW, mY + cellH, cellW, cellH);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(mX + cellW, mY + cellH, cellW, cellH);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 16px system-ui';
+    ctx.fillText('0', mX + cellW + cellW / 2, mY + cellH + cellH / 2 + 6);
+
+    // Metrics below matrix
+    var metY = mY + cellH * 2 + 25;
+    ctx.font = '12px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('Accuracy: 95%', rightX + 40, metY);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Recall (positive): 0%', rightX + 40, metY + 20);
+    ctx.fillStyle = '#e67e22';
+    ctx.fillText('Precision (positive): N/A', rightX + 40, metY + 40);
+
+    // Bottom warning
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('Useless despite high accuracy — model learns to ignore the minority class', w / 2, h - 10);
+})();
+
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var blue = '#1a5276';
+    var green = '#27ae60';
+    var red = '#e74c3c';
+    var orange = '#e67e22';
+
+    // Title
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = blue;
+    ctx.textAlign = 'center';
+    ctx.fillText('Why Accuracy Fails Under Imbalance', w / 2, 22);
+
+    // --- Two scenario headers ---
+    var leftCX = 185;
+    var rightCX = 535;
+
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = green;
+    ctx.textAlign = 'center';
+    ctx.fillText('Smart Model', leftCX, 48);
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#555';
+    ctx.fillText('(some minority correct)', leftCX, 63);
+
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = red;
+    ctx.textAlign = 'center';
+    ctx.fillText('Lazy Model', rightCX, 48);
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#555';
+    ctx.fillText('(predicts all majority)', rightCX, 63);
+
+    // --- Bar chart comparing metrics ---
+    var metrics = ['Accuracy', 'Precision', 'Recall'];
+    var smartValues = [93, 60, 45];
+    var lazyValues = [95, 0, 0];
+
+    var chartY = 80;
+    var chartH = 160;
+    var barMaxH = 130;
+    var groupW = 100;
+    var barW = 30;
+    var gap = 15;
+
+    // Left chart (Smart Model)
+    var leftStartX = 80;
+    for (var i = 0; i < metrics.length; i++) {
+        var gx = leftStartX + i * (groupW + gap);
+        var barH = (smartValues[i] / 100) * barMaxH;
+        var barY = chartY + barMaxH - barH;
+
+        ctx.fillStyle = green;
+        ctx.globalAlpha = 0.7;
+        ctx.fillRect(gx, barY, barW, barH);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = green;
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(gx, barY, barW, barH);
+
+        // Value label
+        ctx.font = 'bold 11px system-ui';
+        ctx.fillStyle = green;
+        ctx.textAlign = 'center';
+        ctx.fillText(smartValues[i] + '%', gx + barW / 2, barY - 5);
+
+        // Metric label
+        ctx.font = '10px system-ui';
+        ctx.fillStyle = '#555';
+        ctx.fillText(metrics[i], gx + barW / 2, chartY + barMaxH + 15);
+    }
+
+    // Right chart (Lazy Model)
+    var rightStartX = 430;
+    for (var i = 0; i < metrics.length; i++) {
+        var gx = rightStartX + i * (groupW + gap);
+        var barH = (lazyValues[i] / 100) * barMaxH;
+        var barY = chartY + barMaxH - barH;
+
+        ctx.fillStyle = (i === 0) ? orange : red;
+        ctx.globalAlpha = 0.7;
+        ctx.fillRect(gx, barY, barW, Math.max(barH, 2));
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = (i === 0) ? orange : red;
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(gx, barY, barW, Math.max(barH, 2));
+
+        // Value label
+        ctx.font = 'bold 11px system-ui';
+        ctx.fillStyle = (i === 0) ? orange : red;
+        ctx.textAlign = 'center';
+        ctx.fillText(lazyValues[i] + '%', gx + barW / 2, barY - 5);
+
+        // Metric label
+        ctx.font = '10px system-ui';
+        ctx.fillStyle = '#555';
+        ctx.fillText(metrics[i], gx + barW / 2, chartY + barMaxH + 15);
+    }
+
+    // Divider between the two
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(w / 2, 40);
+    ctx.lineTo(w / 2, chartY + barMaxH + 5);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Verdict annotation
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = red;
+    ctx.fillText('Lazy model WINS on accuracy despite being useless!', w / 2, h - 25);
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = blue;
+    ctx.fillText('Precision & Recall reveal the truth: the lazy model detects nothing.', w / 2, h - 8);
+})();
+
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var blue = '#1a5276';
+    var green = '#27ae60';
+    var red = '#e74c3c';
+    var orange = '#e67e22';
+
+    // Title
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = blue;
+    ctx.textAlign = 'center';
+    ctx.fillText('Correct: Stratified Split + Proper Metrics', w / 2, 22);
+
+    // --- Pipeline boxes ---
+    function drawRoundedBox(x, y, bw, bh, fillColor, label, textColor) {
+        ctx.fillStyle = fillColor;
+        ctx.beginPath();
+        var r = 6;
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + bw - r, y);
+        ctx.quadraticCurveTo(x + bw, y, x + bw, y + r);
+        ctx.lineTo(x + bw, y + bh - r);
+        ctx.quadraticCurveTo(x + bw, y + bh, x + bw - r, y + bh);
+        ctx.lineTo(x + r, y + bh);
+        ctx.quadraticCurveTo(x, y + bh, x, y + bh - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = textColor;
+        ctx.font = 'bold 10px system-ui';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, x + bw / 2, y + bh / 2);
+    }
+
+    function drawArrow(x1, y1, x2, y2, color) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+        var angle = Math.atan2(y2 - y1, x2 - x1);
+        var headLen = 7;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - headLen * Math.cos(angle - 0.4), y2 - headLen * Math.sin(angle - 0.4));
+        ctx.lineTo(x2 - headLen * Math.cos(angle + 0.4), y2 - headLen * Math.sin(angle + 0.4));
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    var pipeY = 50;
+    var boxH = 28;
+    var boxes = [
+        { x: 20, w: 70, label: 'Data', color: blue },
+        { x: 115, w: 110, label: 'StratifiedKFold', color: green },
+        { x: 250, w: 110, label: 'Train (+SMOTE)', color: orange },
+        { x: 385, w: 130, label: 'Evaluate (P/R/F1)', color: green }
+    ];
+
+    boxes.forEach(function(b) {
+        drawRoundedBox(b.x, pipeY, b.w, boxH, b.color, b.label, '#fff');
+    });
+
+    // Arrows between pipeline boxes
+    drawArrow(boxes[0].x + boxes[0].w, pipeY + boxH / 2, boxes[1].x, pipeY + boxH / 2, green);
+    drawArrow(boxes[1].x + boxes[1].w, pipeY + boxH / 2, boxes[2].x, pipeY + boxH / 2, green);
+    drawArrow(boxes[2].x + boxes[2].w, pipeY + boxH / 2, boxes[3].x, pipeY + boxH / 2, green);
+
+    // --- PR Curve sketch (bottom-left) ---
+    var prX = 30;
+    var prY = 105;
+    var prW = 180;
+    var prH = 140;
+
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(prX, prY, prW, prH);
+
+    // Axes labels
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#555';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText('Recall', prX + prW / 2, prY + prH + 4);
+    ctx.save();
+    ctx.translate(prX - 12, prY + prH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Precision', 0, 0);
+    ctx.restore();
+
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillStyle = blue;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText('PR Curve', prX + prW / 2, prY - 3);
+
+    // PR curve line
+    ctx.strokeStyle = blue;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(prX + 5, prY + 10);
+    ctx.bezierCurveTo(prX + prW * 0.3, prY + 15, prX + prW * 0.5, prY + prH * 0.4, prX + prW * 0.7, prY + prH * 0.6);
+    ctx.bezierCurveTo(prX + prW * 0.85, prY + prH * 0.75, prX + prW * 0.95, prY + prH * 0.9, prX + prW - 5, prY + prH - 10);
+    ctx.stroke();
+
+    // --- Threshold tuning slider (bottom-right) ---
+    var slX = 260;
+    var slY = 110;
+    var slW = 420;
+
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = blue;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('Threshold Tuning', slX, slY);
+
+    // Slider track
+    var trackY = slY + 25;
+    var trackW = 350;
+    ctx.fillStyle = '#e0e0e0';
+    ctx.fillRect(slX, trackY, trackW, 6);
+
+    // Slider handle
+    var handleX = slX + trackW * 0.35;
+    ctx.fillStyle = orange;
+    ctx.beginPath();
+    ctx.arc(handleX, trackY + 3, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 8px system-ui';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('0.08', handleX, trackY + 3);
+
+    // Scale labels
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#555';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('0.0', slX, trackY + 12);
+    ctx.textAlign = 'right';
+    ctx.fillText('1.0', slX + trackW, trackY + 12);
+
+    // Tradeoff display
+    var tradeY = trackY + 35;
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'left';
+
+    ctx.fillStyle = green;
+    ctx.fillText('Low threshold (0.08):', slX, tradeY);
+    ctx.fillStyle = '#555';
+    ctx.fillText('Recall=0.72, Precision=0.45', slX + 130, tradeY);
+
+    ctx.fillStyle = red;
+    ctx.fillText('High threshold (0.5):', slX, tradeY + 20);
+    ctx.fillStyle = '#555';
+    ctx.fillText('Recall=0.05, Precision=0.90', slX + 130, tradeY + 20);
+
+    ctx.fillStyle = orange;
+    ctx.fillText('Default (0.5):', slX, tradeY + 40);
+    ctx.fillStyle = '#555';
+    ctx.fillText('Assumes balanced — wrong for imbalanced data', slX + 130, tradeY + 40);
+
+    // Bottom note
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = green;
+    ctx.textAlign = 'center';
+    ctx.fillText('Tune threshold on validation set using business cost function', w / 2, h - 10);
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ensemble Leakage (Stacking on Same Data)</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Ensemble Leakage (Stacking on Same Data)</h1>
+<p class="subtitle">Meta-model trained on base predictions from same data.</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>You train base models (e.g., logistic regression, random forest, gradient boosting) on the training set, generate predictions on the same training set, and then train a meta-model (stacker) to combine those predictions. The meta-model sees overfitted base predictions and learns to exploit their training-specific errors.</p>
+                <ul>
+                    <li>Base models train on dataset D and generate predictions P on D</li>
+                    <li>Meta-model trains on P (in-sample base predictions) to predict target Y</li>
+                    <li>Base predictions contain overfit patterns specific to training data</li>
+                    <li>Meta-model learns to combine these overfit patterns, amplifying overfitting</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Impact:</strong> The meta-model achieves high training accuracy because it learns to correct the base models' overfit errors on training data. These errors do not replicate on new data, so the meta-model's corrections are useless or harmful in production. Validation performance is worse than expected.
+                </div>
+                <p class="example">Example: Three base models (RF, GBM, LogReg) train on 10k samples. Generate predictions on the same 10k. Train meta-model on these predictions: train AUC = 0.95. But on test data, base models produce different errors, and meta-model's learned weights hurt performance. Test AUC = 0.80 (worse than best base model at 0.83).</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Base models overfit to some degree. In-sample predictions are systematically better than out-of-sample predictions. The meta-model learns weights based on in-sample performance, which does not transfer.</p>
+                <ul>
+                    <li>Base model A achieves train AUC = 0.88, test AUC = 0.82 — the 0.88 is overfit</li>
+                    <li>Meta-model sees base predictions that reflect 0.88 performance (on training data)</li>
+                    <li>Meta-model learns to weight base model A heavily because its in-sample predictions look good</li>
+                    <li>On test data, base model A delivers 0.82, not 0.88 — meta-model's weights are miscalibrated</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Mechanism:</strong> The meta-model is a second-level learner. If its input features (base predictions) are contaminated by overfitting, the meta-model overfits to the overfit. It learns to exploit the correlation between base prediction errors and the target on training data, but those correlations vanish on new data.
+                </div>
+                <p class="example">Example: Random forest overfits on training sample #47 (predicts 0.95, true = 1). GBM underfits #47 (predicts 0.40, true = 1). Meta-model learns: "when RF high and GBM low, predict high." This pattern is noise. On test data, the pattern is absent, and the meta-model misfires.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Detection & Mitigation</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Use out-of-fold (cross-validated) predictions for meta-model training. Generate base predictions on held-out data so the meta-model sees realistic out-of-sample performance.</p>
+                <ul>
+                    <li>Use K-fold cross-validation: train base models on folds 1-4, predict on fold 5 (repeat for all folds)</li>
+                    <li>Collect out-of-fold predictions for all training samples — these are unbiased estimates of base model performance</li>
+                    <li>Train meta-model on out-of-fold predictions (not in-sample predictions)</li>
+                    <li>For test set: train base models on full training set, generate predictions, feed to meta-model</li>
+                    <li>Alternatively, use a held-out validation set: train base models on train, generate predictions on validation, train meta-model on validation predictions</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Fix:</strong> Generate base model predictions using K-fold cross-validation. Each sample's base prediction comes from models that never saw that sample during training. Train the meta-model on these out-of-fold predictions. This ensures the meta-model learns to combine realistic out-of-sample base predictions.
+                </div>
+                <p class="example">Example: 5-fold CV stacking. Train RF on folds 1-4, predict fold 5 (200 samples). Repeat 5 times to get predictions for all 1000 training samples. Train meta-model on these 1000 out-of-fold predictions. Result: meta-model learns realistic base model weights. Test AUC = 0.84 (improves over best base model at 0.82).</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// Canvas 1: Incorrect stacking (in-sample predictions)
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('INCORRECT Stacking: Meta-Model Trained on In-Sample Base Predictions', w/2, 25);
+
+    // Training data
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2;
+    ctx.fillRect(80, 60, 120, 50);
+    ctx.strokeRect(80, 60, 120, 50);
+    ctx.fillStyle = '#2980b9';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Training Data', 140, 88);
+
+    // Base models
+    var baseModels = [
+        { name: 'RF', y: 140 },
+        { name: 'GBM', y: 175 },
+        { name: 'LogReg', y: 210 }
+    ];
+
+    baseModels.forEach(function(m) {
+        // Arrow down
+        ctx.strokeStyle = '#2980b9';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(140, 110);
+        ctx.lineTo(80, m.y + 15);
+        ctx.stroke();
+
+        // Base model box
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 2;
+        ctx.fillRect(50, m.y, 60, 30);
+        ctx.strokeRect(50, m.y, 60, 30);
+        ctx.fillStyle = '#27ae60';
+        ctx.font = 'bold 10px system-ui';
+        ctx.fillText(m.name, 80, m.y + 18);
+
+        // Arrow to predictions (overfit)
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(110, m.y + 15);
+        ctx.lineTo(220, m.y + 15);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Overfit annotation
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = '8px system-ui';
+        ctx.fillText('(overfit)', 165, m.y + 10);
+
+        // In-sample predictions
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.fillRect(220, m.y, 100, 30);
+        ctx.strokeRect(220, m.y, 100, 30);
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = '10px system-ui';
+        ctx.fillText('In-sample preds', 270, m.y + 18);
+
+        // Arrow to meta-model
+        ctx.strokeStyle = '#e67e22';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(320, m.y + 15);
+        ctx.lineTo(420, 175);
+        ctx.stroke();
+    });
+
+    // Meta-model
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 3;
+    ctx.fillRect(420, 150, 120, 50);
+    ctx.strokeRect(420, 150, 120, 50);
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('META-MODEL', 480, 172);
+    ctx.font = '10px system-ui';
+    ctx.fillText('(Stacker)', 480, 188);
+
+    // Problem annotation
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('PROBLEM: Meta-model learns from overfit base predictions', w/2, 260);
+    ctx.font = '10px system-ui';
+    ctx.fillText('Meta-model overfits to base models\' training-specific errors', w/2, 276);
+})();
+
+// Canvas 2: Performance comparison showing degradation
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Incorrect Stacking Performance', w/2, 25);
+
+    var barWidth = 90;
+    var baseY = 240;
+    var maxBarH = 160;
+
+    var models = [
+        { label: 'RF\n(base)', train: 0.88, test: 0.82, x: 140 },
+        { label: 'GBM\n(base)', train: 0.86, test: 0.83, x: 280 },
+        { label: 'Stacker\n(WRONG)', train: 0.95, test: 0.80, x: 420, highlight: true }
+    ];
+
+    models.forEach(function(m) {
+        // Train bar
+        var trainH = m.train * maxBarH;
+        var trainY = baseY - trainH;
+        ctx.fillStyle = 'rgba(52, 152, 219, 0.5)';
+        ctx.fillRect(m.x - barWidth/2 - 20, trainY, barWidth/2 - 5, trainH);
+        ctx.strokeStyle = '#3498db';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(m.x - barWidth/2 - 20, trainY, barWidth/2 - 5, trainH);
+
+        ctx.fillStyle = '#3498db';
+        ctx.font = 'bold 11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText((m.train * 100).toFixed(0), m.x - barWidth/4 - 20, trainY - 6);
+
+        // Test bar
+        var testH = m.test * maxBarH;
+        var testY = baseY - testH;
+        var testColor = m.highlight ? '#e74c3c' : '#27ae60';
+        ctx.fillStyle = testColor;
+        ctx.globalAlpha = 0.7;
+        ctx.fillRect(m.x + 5, testY, barWidth/2 - 5, testH);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = testColor;
+        ctx.lineWidth = m.highlight ? 3 : 2;
+        ctx.strokeRect(m.x + 5, testY, barWidth/2 - 5, testH);
+
+        ctx.fillStyle = testColor;
+        ctx.font = 'bold 11px system-ui';
+        ctx.fillText((m.test * 100).toFixed(0), m.x + barWidth/4 + 5, testY - 6);
+
+        // Label
+        ctx.fillStyle = '#444';
+        ctx.font = '10px system-ui';
+        var lines = m.label.split('\n');
+        lines.forEach(function(line, idx) {
+            ctx.fillText(line, m.x, baseY + 20 + idx * 12);
+        });
+
+        if (m.highlight) {
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([4, 4]);
+            ctx.strokeRect(m.x - 50, testY - 15, 100, testH + 30);
+            ctx.setLineDash([]);
+        }
+    });
+
+    // Legend
+    ctx.fillStyle = '#3498db';
+    ctx.fillRect(520, 60, 15, 15);
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Train', 540, 71);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(520, 80, 15, 15);
+    ctx.fillText('Test', 540, 91);
+
+    // Problem annotation
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Stacker performs WORSE than best base model!', w/2, 58);
+})();
+
+// Canvas 3: Correct stacking with CV
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('CORRECT Stacking: Meta-Model Trained on Out-of-Fold Predictions', w/2, 25);
+
+    // K-fold diagram
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('1. K-Fold Cross-Validation for Base Models:', 60, 55);
+
+    var foldY = 70;
+    var foldW = 100;
+    var foldH = 30;
+    for (var i = 0; i < 5; i++) {
+        var x = 80 + i * (foldW + 10);
+        var isTest = (i === 2);
+        ctx.fillStyle = isTest ? 'rgba(231, 76, 60, 0.3)' : 'rgba(39, 174, 96, 0.3)';
+        ctx.fillRect(x, foldY, foldW, foldH);
+        ctx.strokeStyle = isTest ? '#e74c3c' : '#27ae60';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, foldY, foldW, foldH);
+
+        ctx.fillStyle = isTest ? '#e74c3c' : '#27ae60';
+        ctx.font = '10px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(isTest ? 'TEST' : 'TRAIN', x + foldW/2, foldY + foldH/2 + 3);
+        ctx.font = '8px system-ui';
+        ctx.fillText('Fold ' + (i+1), x + foldW/2, foldY + foldH/2 + 14);
+    }
+
+    ctx.fillStyle = '#444';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Train base model on green folds → predict red fold (out-of-fold)', 80, foldY + foldH + 18);
+    ctx.fillText('Repeat for all folds → collect unbiased predictions for all samples', 80, foldY + foldH + 32);
+
+    // Step 2
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.fillText('2. Train Meta-Model on Out-of-Fold Predictions:', 60, 160);
+
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.fillRect(80, 175, 180, 40);
+    ctx.strokeRect(80, 175, 180, 40);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Out-of-Fold Base Predictions', 170, 192);
+    ctx.font = '9px system-ui';
+    ctx.fillText('(unbiased, realistic performance)', 170, 206);
+
+    // Arrow
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(260, 195);
+    ctx.lineTo(320, 195);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(320, 195);
+    ctx.lineTo(312, 190);
+    ctx.lineTo(312, 200);
+    ctx.closePath();
+    ctx.fillStyle = '#27ae60';
+    ctx.fill();
+
+    // Meta-model
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 3;
+    ctx.fillRect(320, 170, 140, 50);
+    ctx.strokeRect(320, 170, 140, 50);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('META-MODEL', 390, 192);
+    ctx.font = '10px system-ui';
+    ctx.fillText('(trained correctly)', 390, 208);
+
+    // Performance comparison
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Result (Correct CV Stacking):', w/2, 245);
+
+    ctx.fillStyle = '#444';
+    ctx.font = '10px system-ui';
+    ctx.fillText('Best base model: Test AUC = 0.83', w/2, 262);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Stacker (CV): Test AUC = 0.84 — IMPROVEMENT!', w/2, 278);
+})();
+</script>
+
+</body>
+</html>

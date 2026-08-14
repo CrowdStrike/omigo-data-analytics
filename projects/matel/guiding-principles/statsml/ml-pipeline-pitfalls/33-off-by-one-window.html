@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Off-By-One in Windowing / Aggregation</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Off-By-One in Windowing / Aggregation</h1>
+<p class="subtitle">When inclusive vs exclusive time boundaries cause features to leak future data or miss critical information.</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Computing features using time windows with unclear boundary semantics. "Last 7 days" could mean [t-7, t), [t-7, t], (t-7, t), or (t-7, t]. One bracket difference leaks the target event or excludes the most recent data point.</p>
+                <ul>
+                    <li><strong>Leakage form:</strong> Feature computed as "activity in [label_date - 7d, label_date]" includes the day of the target event itself</li>
+                    <li><strong>Miss form:</strong> Feature computed as "activity in (label_date - 7d, label_date)" excludes both endpoints, losing signal</li>
+                    <li><strong>Language ambiguity:</strong> SQL BETWEEN is inclusive on both ends; pandas iloc is half-open; numpy is half-open by default</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Impact:</strong> 10-20% AUC inflation from leakage (feature sees outcome); or 15% AUC drop from exclusion (feature misses most recent behavior). Fix: Standardize on [t-7, t) for "up to but not including today" and document in code.
+                </div>
+                <p class="example">Example: Predicting churn on day T. Feature "purchases_last_7d" computed as COUNT(*) WHERE date BETWEEN T-7 AND T includes purchases on day T (post-churn), leaking the label. Correct: WHERE date >= T-7 AND date < T.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <ul>
+                    <li><strong>Inclusive vs exclusive conventions differ across languages:</strong> No universal standard — each tool picks its own default</li>
+                    <li><strong>SQL BETWEEN is inclusive on both ends:</strong> <code>BETWEEN T-7 AND T</code> includes T (often unexpected by Python devs)</li>
+                    <li><strong>pandas .loc is inclusive, .iloc is exclusive on end:</strong> Same library, two different boundary conventions</li>
+                    <li><strong>No team-wide convention documented:</strong> Each engineer picks their own interpretation; code reviews miss the boundary semantics</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Root cause:</strong> The difference between [a, b] and [a, b) is invisible in code review. A single bracket character is the difference between leakage and correctness. Without explicit tests, it passes silently.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <ul>
+                    <li><strong>Standardize on exclusive upper bound:</strong> [start, end) everywhere — all features, all languages, all pipelines</li>
+                    <li><strong>Write boundary tests:</strong> <code>assert max(feature_timestamp) < prediction_timestamp</code></li>
+                    <li><strong>Document boundary convention:</strong> In feature engineering code, explicitly comment the bracket notation</li>
+                    <li><strong>Use helper functions that enforce the convention:</strong> <code>get_window(start, end_exclusive)</code> — the API makes it hard to get wrong</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Rule:</strong> Every feature window must have an automated test that proves max(feature_ts) < label_ts. If this test fails, you have leakage. No exceptions.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Off-By-One: Inclusive vs Exclusive Boundaries', w/2, 25);
+
+    var timelineY = 100;
+    var left = 80;
+    var right = 640;
+    var dayWidth = 80;
+
+    // Timeline
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(left, timelineY);
+    ctx.lineTo(right, timelineY);
+    ctx.stroke();
+
+    // Day markers
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    for (var i = 0; i <= 7; i++) {
+        var x = left + i * dayWidth;
+        ctx.beginPath();
+        ctx.moveTo(x, timelineY - 5);
+        ctx.lineTo(x, timelineY + 5);
+        ctx.stroke();
+        ctx.fillText('T-' + (7-i), x, timelineY + 20);
+    }
+
+    // WRONG: Inclusive on both ends (leaks target day)
+    ctx.fillStyle = '#e74c3c';
+    ctx.globalAlpha = 0.25;
+    ctx.fillRect(left, timelineY - 25, right - left, 20);
+    ctx.globalAlpha = 1;
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('WRONG: [T-7, T] (inclusive both)', left, timelineY - 30);
+
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(left, timelineY, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(right, timelineY, 6, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Includes day T!', right, timelineY - 55);
+    ctx.fillText('LEAKAGE', right, timelineY - 42);
+
+    // CORRECT: Half-open [T-7, T)
+    var correctY = 180;
+    ctx.fillStyle = '#27ae60';
+    ctx.globalAlpha = 0.25;
+    ctx.fillRect(left, correctY - 25, right - left - dayWidth, 20);
+    ctx.globalAlpha = 1;
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('CORRECT: [T-7, T) (half-open)', left, correctY - 30);
+
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 3;
+    // Closed at left
+    ctx.beginPath();
+    ctx.arc(left, correctY, 6, 0, Math.PI * 2);
+    ctx.fill();
+    // Open at right
+    var correctRight = right - dayWidth;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(correctRight, correctY, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#27ae60';
+    ctx.stroke();
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Excludes day T', correctRight, correctY - 35);
+    ctx.fillText('(no leakage)', correctRight, correctY - 22);
+
+    // Bottom note
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('SQL: WHERE date >= T-7 AND date < T', left, 250);
+    ctx.fillText('Pandas: .loc[T-7:T, ...]  ← INCLUSIVE (wrong!)', left, 268);
+    ctx.fillText('Pandas: .iloc[start:end]  ← EXCLUSIVE end (correct)', left, 286);
+})();
+
+// Canvas c2: Why It Happens - Comparison of SQL BETWEEN vs pandas iloc
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Same Intent, Different Boundaries!', w/2, 25);
+
+    // Left side: SQL BETWEEN (inclusive both ends - RED)
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(30, 50, 300, 110);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('SQL BETWEEN T-7 AND T', 180, 72);
+
+    // Bracket visualization
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 18px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('[', 60, 108);
+    ctx.textAlign = 'right';
+    ctx.fillText(']', 300, 108);
+
+    // Timeline inside
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(75, 100);
+    ctx.lineTo(290, 100);
+    ctx.stroke();
+
+    // Filled dots (inclusive)
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath();
+    ctx.arc(75, 100, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(290, 100, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('T-7', 75, 120);
+    ctx.fillText('T', 290, 120);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Inclusive BOTH ends', 180, 140);
+    ctx.font = '10px system-ui';
+    ctx.fillText('Includes target day → LEAKS!', 180, 155);
+
+    // Right side: pandas iloc (half-open - GREEN)
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(380, 50, 310, 110);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('pandas iloc[start:end]', 535, 72);
+
+    // Bracket visualization
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 18px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('[', 410, 108);
+    ctx.textAlign = 'right';
+    ctx.fillText(')', 660, 108);
+
+    // Timeline inside
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(425, 100);
+    ctx.lineTo(645, 100);
+    ctx.stroke();
+
+    // Filled dot (inclusive start)
+    ctx.fillStyle = '#27ae60';
+    ctx.beginPath();
+    ctx.arc(425, 100, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Open dot (exclusive end)
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(645, 100, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('start', 425, 120);
+    ctx.fillText('end', 645, 120);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Exclusive upper bound', 535, 140);
+    ctx.font = '10px system-ui';
+    ctx.fillText('Excludes end → safe', 535, 155);
+
+    // Center annotation
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Same intent: "last 7 days of features"', w/2, 200);
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.fillText('But SQL includes day T (leaks label), while iloc excludes it (correct)', w/2, 220);
+
+    // Bottom warning
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Without tests, the 1-day difference is invisible in code review', w/2, 260);
+    ctx.fillStyle = '#555';
+    ctx.font = '10px system-ui';
+    ctx.fillText('Bonus trap: pandas .loc[] IS inclusive on both ends — opposite of .iloc[]!', w/2, 280);
+})();
+
+// Canvas c3: The Correct Approach - Validated pipeline
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Correct Pipeline: Enforce [start, end) + Validate', w/2, 25);
+
+    // Feature Window box
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.fillStyle = 'rgba(26,82,118,0.08)';
+    ctx.fillRect(40, 55, 170, 70);
+    ctx.strokeRect(40, 55, 170, 70);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Feature Window', 125, 78);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillText('[T-7, T)', 125, 100);
+    ctx.fillStyle = '#444';
+    ctx.font = '10px system-ui';
+    ctx.fillText('exclusive upper bound', 125, 117);
+
+    // Arrow to Validation
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(210, 90);
+    ctx.lineTo(270, 90);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(270, 90);
+    ctx.lineTo(264, 85);
+    ctx.lineTo(264, 95);
+    ctx.closePath();
+    ctx.fillStyle = '#27ae60';
+    ctx.fill();
+
+    // Validation box
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.fillStyle = 'rgba(39,174,96,0.08)';
+    ctx.fillRect(275, 55, 180, 70);
+    ctx.strokeRect(275, 55, 180, 70);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Validation', 365, 78);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '11px system-ui';
+    ctx.fillText('max_ts < T ?', 365, 98);
+    ctx.font = 'bold 16px system-ui';
+    ctx.fillText('✓', 365, 118);
+
+    // Arrow to Model Input
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(455, 90);
+    ctx.lineTo(515, 90);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(515, 90);
+    ctx.lineTo(509, 85);
+    ctx.lineTo(509, 95);
+    ctx.closePath();
+    ctx.fillStyle = '#27ae60';
+    ctx.fill();
+
+    // Model Input box
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 3;
+    ctx.fillStyle = 'rgba(39,174,96,0.08)';
+    ctx.fillRect(520, 55, 160, 70);
+    ctx.strokeRect(520, 55, 160, 70);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Model Input', 600, 78);
+    ctx.font = '11px system-ui';
+    ctx.fillText('No leakage', 600, 98);
+    ctx.font = 'bold 16px system-ui';
+    ctx.fillText('✓', 600, 118);
+
+    // Test assertion below
+    ctx.fillStyle = 'rgba(39,174,96,0.08)';
+    ctx.fillRect(100, 160, 520, 45);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(100, 160, 520, 45);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('assert features.timestamp.max() < label_date', w/2, 185);
+    ctx.fillStyle = '#444';
+    ctx.font = '10px system-ui';
+    ctx.fillText('This test runs on every pipeline execution — catches leakage before training', w/2, 200);
+
+    // Bottom summary
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Helper function enforces convention:', w/2, 240);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '12px monospace';
+    ctx.fillText('def get_features(start_inclusive, end_exclusive):', w/2, 260);
+    ctx.fillStyle = '#555';
+    ctx.font = '10px system-ui';
+    ctx.fillText('API naming makes it impossible to forget which end is which', w/2, 280);
+})();
+</script>
+
+</body>
+</html>

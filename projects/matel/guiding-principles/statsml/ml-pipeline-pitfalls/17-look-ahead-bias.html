@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Look-Ahead Bias in Feature Engineering</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Look-Ahead Bias in Feature Engineering</h1>
+<p class="subtitle">Feature uses information from the same row's future or outcome.</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>You engineer features using information that would not be available at prediction time. The feature contains future data, outcome leakage, or information from after the prediction timestamp.</p>
+                <ul>
+                    <li>Predict churn using "days_since_last_login" computed from the entire dataset (includes future logins)</li>
+                    <li>Predict fraud using "total_transactions_this_month" when predicting transactions mid-month</li>
+                    <li>Predict loan default using "credit_score_6months_later"</li>
+                    <li>Predict stock movement using features normalized by future statistics (mean, std from entire time series)</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Impact:</strong> Model performs exceptionally well in training and validation because it has access to the future. In production, when the future information is unavailable, performance collapses. This is one of the most dangerous pitfalls because test metrics look excellent until deployment.
+                </div>
+                <p class="example">Example: Churn model uses "days_until_next_purchase" as a feature. AUC = 0.97 in validation (computed after observing the full timeline). In production, this feature is unknown at prediction time. Deployed AUC = 0.61.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Look-ahead bias occurs when feature engineering happens on the full dataset before temporal splitting, or when features aggregate data across the prediction boundary.</p>
+                <ul>
+                    <li>Computing aggregates (mean, std, min, max) over the entire dataset before train/test split</li>
+                    <li>Using cumulative statistics that include future observations</li>
+                    <li>Joining tables without respecting the "as-of" timestamp (point-in-time correctness)</li>
+                    <li>Using target-derived features (e.g., target encoding) computed from the full dataset including test</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Mechanism:</strong> In offline analysis, you have access to the complete timeline. You compute "customer_lifetime_transactions" by counting all transactions, including those after the prediction date. The model learns that high lifetime value predicts retention, but at prediction time (day 30), you only know transactions up to day 30.
+                </div>
+                <p class="example">Example: Fraud detection uses "account_total_disputed_charges" computed from the entire dataset. Training sees: "account has $5000 in disputes (from future) → high fraud risk." Production sees: "account has $50 in disputes (so far) → predicts low risk." The model is blind to future disputes.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Detection & Mitigation</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Enforce strict temporal discipline. Simulate production by computing features using only information available before the prediction timestamp.</p>
+                <ul>
+                    <li>Use "as-of" joins: for each prediction at time T, use only data from before T</li>
+                    <li>For time-series, use expanding window (not full dataset) for normalization</li>
+                    <li>Feature engineering pipeline: filter data by timestamp before computing aggregates</li>
+                    <li>Walk-forward validation: retrain model with expanding window, never using future data</li>
+                    <li>Production simulation: randomly sample prediction dates and compute features using only past data</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Fix:</strong> For each row with prediction timestamp T, compute all features using only data where timestamp < T. Use point-in-time correctness in all joins and aggregations. Test by simulating production: pick a random date, hide all future data, compute features, make prediction.
+                </div>
+                <p class="example">Example: Correct churn feature: "days_since_last_login_as_of_prediction_date" (only uses logins before prediction timestamp). Correctly implemented: train AUC = 0.84, val AUC = 0.83, prod AUC = 0.82. No collapse.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// Canvas 1: Timeline showing look-ahead bias
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Look-Ahead Bias: Feature Uses Future Information', w/2, 25);
+
+    // Timeline
+    var tlY = 120;
+    var tlStart = 80;
+    var tlEnd = 680;
+
+    ctx.strokeStyle = '#444';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(tlStart, tlY);
+    ctx.lineTo(tlEnd, tlY);
+    ctx.stroke();
+
+    // Prediction point
+    var predX = 280;
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(predX, tlY - 30);
+    ctx.lineTo(predX, tlY + 30);
+    ctx.stroke();
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('PREDICTION', predX, tlY - 40);
+    ctx.fillText('TIME', predX, tlY - 26);
+    ctx.font = '10px system-ui';
+    ctx.fillText('(Day 30)', predX, tlY - 14);
+
+    // Past data (valid)
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.3)';
+    ctx.fillRect(tlStart, tlY - 20, predX - tlStart, 40);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(tlStart, tlY - 20, predX - tlStart, 40);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '11px system-ui';
+    ctx.fillText('VALID DATA', (tlStart + predX) / 2, tlY + 5);
+    ctx.fillText('(available at prediction time)', (tlStart + predX) / 2, tlY + 18);
+
+    // Future data (leakage)
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.3)';
+    ctx.fillRect(predX, tlY - 20, tlEnd - predX, 40);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(predX, tlY - 20, tlEnd - predX, 40);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '11px system-ui';
+    ctx.fillText('FUTURE DATA', (predX + tlEnd) / 2, tlY + 5);
+    ctx.fillText('(NOT available — LEAKAGE!)', (predX + tlEnd) / 2, tlY + 18);
+
+    // Example feature using future
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Feature: "total_transactions_this_month"', 80, 180);
+    ctx.font = '10px system-ui';
+    ctx.fillText('Computed using all of Month 1 (Days 1-30), but prediction is on Day 15', 80, 195);
+    ctx.fillText('Days 16-30 are future — feature contains look-ahead bias', 80, 208);
+
+    // Impact
+    ctx.fillStyle = '#444';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Impact:', 80, 235);
+    ctx.font = '10px system-ui';
+    ctx.fillText('• Training: model sees future, AUC = 0.97', 90, 250);
+    ctx.fillText('• Production: future unavailable, AUC = 0.58', 90, 263);
+})();
+
+// Canvas 2: Performance cliff from train to production
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Performance Cliff: Validation Looks Great, Production Fails', w/2, 25);
+
+    var points = [
+        { x: 120, y: 80, label: 'Train', score: 97 },
+        { x: 300, y: 85, label: 'Validation', score: 95 },
+        { x: 480, y: 200, label: 'Production', score: 58 }
+    ];
+
+    var baseY = 250;
+    var scaleY = 1.7;
+
+    // Line connecting points
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, baseY - points[0].score * scaleY);
+    ctx.lineTo(points[1].x, baseY - points[1].score * scaleY);
+    ctx.stroke();
+
+    // Cliff
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(points[1].x, baseY - points[1].score * scaleY);
+    ctx.lineTo(points[2].x, baseY - points[2].score * scaleY);
+    ctx.stroke();
+
+    // Points
+    points.forEach(function(p, i) {
+        var py = baseY - p.score * scaleY;
+        var color = i < 2 ? '#27ae60' : '#e74c3c';
+
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(p.x, py, 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.fillStyle = color;
+        ctx.font = 'bold 16px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(p.score, p.x, py - 18);
+
+        ctx.font = '12px system-ui';
+        ctx.fillStyle = '#444';
+        ctx.fillText(p.label, p.x, baseY + 20);
+    });
+
+    // Annotations
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '10px system-ui';
+    ctx.fillText('Future data', 210, 130);
+    ctx.fillText('available', 210, 143);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('CLIFF: future data', 390, 150);
+    ctx.fillText('not available!', 390, 164);
+
+    // Divider line
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(380, 60);
+    ctx.lineTo(380, 240);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = '10px system-ui';
+    ctx.fillText('Deployment', 390, 70);
+    ctx.fillText('boundary', 390, 82);
+})();
+
+// Canvas 3: Correct vs incorrect feature engineering
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Correct (Point-in-Time) vs Incorrect (Look-Ahead) Feature Engineering', w/2, 25);
+
+    var boxY = 60;
+    var boxH = 100;
+    var boxW = 280;
+
+    // Incorrect (left)
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.fillRect(60, boxY, boxW, boxH);
+    ctx.strokeRect(60, boxY, boxW, boxH);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('INCORRECT', 200, boxY + 20);
+
+    ctx.fillStyle = '#444';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Feature: avg_monthly_spend', 75, boxY + 42);
+    ctx.fillText('Computed: mean over all months', 75, boxY + 57);
+    ctx.fillText('(includes future months)', 75, boxY + 72);
+    ctx.fillText('Result: Train 97, Prod 58', 75, boxY + 90);
+
+    // Correct (right)
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 3;
+    ctx.fillRect(380, boxY, boxW, boxH);
+    ctx.strokeRect(380, boxY, boxW, boxH);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('CORRECT (Point-in-Time)', 520, boxY + 20);
+
+    ctx.fillStyle = '#444';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Feature: avg_monthly_spend_as_of_T', 395, boxY + 42);
+    ctx.fillText('Computed: mean over months < T', 395, boxY + 57);
+    ctx.fillText('(only past data)', 395, boxY + 72);
+    ctx.fillText('Result: Train 84, Prod 82', 395, boxY + 90);
+
+    // Comparison table
+    var tableY = 190;
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Performance Comparison', w/2, tableY);
+
+    var cols = ['Train', 'Val', 'Prod'];
+    var rows = [
+        { label: 'Incorrect', values: [97, 95, 58], color: '#e74c3c' },
+        { label: 'Correct', values: [84, 83, 82], color: '#27ae60' }
+    ];
+
+    var colW = 80;
+    var rowH = 30;
+    var startX = 200;
+
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#444';
+    cols.forEach(function(col, i) {
+        ctx.fillText(col, startX + i * colW + colW/2, tableY + 25);
+    });
+
+    rows.forEach(function(row, ri) {
+        ctx.fillStyle = row.color;
+        ctx.font = 'bold 10px system-ui';
+        ctx.textAlign = 'right';
+        ctx.fillText(row.label, startX - 10, tableY + 45 + ri * rowH + 12);
+
+        row.values.forEach(function(val, ci) {
+            ctx.fillStyle = row.color;
+            ctx.globalAlpha = 0.2;
+            ctx.fillRect(startX + ci * colW, tableY + 45 + ri * rowH, colW - 5, rowH - 5);
+            ctx.globalAlpha = 1;
+
+            ctx.fillStyle = row.color;
+            ctx.font = 'bold 12px system-ui';
+            ctx.textAlign = 'center';
+            ctx.fillText(val, startX + ci * colW + colW/2, tableY + 45 + ri * rowH + 18);
+        });
+    });
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Point-in-time features: stable performance, production-ready', w/2, 275);
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Target Definition Drift</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.metric strong {
+    color: #1a5276;
+}
+
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Target Definition Drift</h1>
+<p class="subtitle">What "positive" means changes over time, invalidating the label and model objective.</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Business rules or product requirements evolve, silently redefining what constitutes a positive outcome. Historical training data uses the old definition; production evaluates the new one, creating a fundamental mismatch between learned objective and actual objective.</p>
+                <ul>
+                    <li><strong>Business rule changes:</strong> "Purchase" originally meant any completed transaction; now excludes refunded orders within 7 days—training labels don't reflect this</li>
+                    <li><strong>Label definition evolution:</strong> Fraud definition expands to include new attack vectors, but historical negative class doesn't contain these patterns</li>
+                    <li><strong>Consistency across time:</strong> Six months of training data uses three different versions of "churn" definition due to incremental product changes—model learns a blurred concept</li>
+                    <li><strong>Documentation lag:</strong> Code defines the label, but specification doc is outdated; no one knows which definition is authoritative</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Impact:</strong> Model optimizes for the wrong objective. Offline metrics look fine (measured against old definition), but business metrics degrade (measured against new definition). <strong>Fix:</strong> Version target definitions explicitly. Backfill historical labels when definition changes or segment training data by definition version. Document every label change with effective date and relabel policy.
+                </div>
+                <p class="example">Example: "High-value customer" defined as >$500 annual spend in 2024 data. Definition changes to >$800 in Q2 2025. Model trained on mixed data learns confused boundary, predicting "high-value" for $600 customers. Targeting campaign wastes 40% of budget on misclassified users.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Target definition drift is fundamentally an organizational problem. The business evolves continuously, but the ML pipeline is treated as a static artifact that only needs retraining on "more data."</p>
+                <ul>
+                    <li><strong>Business evolves silently:</strong> Label criteria change without model retraining—stakeholders assume the model adapts automatically</li>
+                    <li><strong>Product teams update success criteria:</strong> New KPIs or thresholds are adopted without informing the ML team</li>
+                    <li><strong>Definition changes buried in ETL:</strong> A SQL WHERE clause changes what counts as "converted"—no documentation, no alert</li>
+                    <li><strong>Multiple teams, multiple definitions:</strong> Marketing, product, and finance each define "active user" differently—model trains on one, evaluates on another</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Root cause:</strong> No formal coupling between business definition changes and model lifecycle. The label is not treated as a versioned artifact—it lives implicitly in code, not explicitly in a contract.
+                </div>
+                <p class="example">Example: Marketing redefines "engaged user" from 3 logins/week to 5 actions/week. ETL updates. Model keeps predicting the old concept. Engagement scores diverge from actual business metric by 30% before anyone notices.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Treat the target definition as a first-class versioned artifact. Gate every retraining on definition consistency and never mix definition versions in a single training set.</p>
+                <ul>
+                    <li><strong>Version definitions explicitly:</strong> Use semantic versioning (target_def_v1, v2, v3) with effective dates and changelogs</li>
+                    <li><strong>Retrain from scratch on definition change:</strong> No incremental training on mixed labels—the concept itself changed</li>
+                    <li><strong>Backfill labels before retraining:</strong> Apply new definition to historical data, or exclude pre-change data entirely</li>
+                    <li><strong>Document every change:</strong> Effective date, rationale, impact on label distribution, relabel policy</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Best practice:</strong> Treat label definition as a first-class artifact. Version it, gate retraining on it, and never mix definition versions in a single training set. The pipeline should fail loudly if definition version mismatches are detected.
+                </div>
+                <p class="example">Example: Team uses target_def_v3.yaml with effective_date=2025-06-01. Training pipeline rejects data before that date unless relabeled under v3 rules. Model registry tags every model with its definition version.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// Target definition evolution timeline
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Target Definition Changes Over Training Period', w/2, 25);
+
+    // Timeline
+    var left = 80, right = 660, baseY = 250;
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(left, baseY);
+    ctx.lineTo(right, baseY);
+    ctx.stroke();
+
+    // Time periods
+    var periods = [
+        { label: 'Jan-Apr', start: 0, end: 0.33, def: 'v1', thresh: '>$500', color: '#3498db' },
+        { label: 'May-Aug', start: 0.33, end: 0.66, def: 'v2', thresh: '>$650', color: '#9b59b6' },
+        { label: 'Sep-Dec', start: 0.66, end: 1.0, def: 'v3', thresh: '>$800', color: '#e74c3c' }
+    ];
+
+    periods.forEach(function(p) {
+        var x1 = left + p.start * (right - left);
+        var x2 = left + p.end * (right - left);
+        var mid = (x1 + x2) / 2;
+
+        // Period box
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = 0.2;
+        ctx.fillRect(x1, 60, x2 - x1, 180);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x1, 60, x2 - x1, 180);
+
+        // Labels
+        ctx.fillStyle = p.color;
+        ctx.font = 'bold 12px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(p.label, mid, 85);
+        ctx.font = '11px system-ui';
+        ctx.fillText('Definition ' + p.def, mid, 105);
+        ctx.font = 'bold 11px system-ui';
+        ctx.fillText(p.thresh, mid, 125);
+
+        // Timeline marker
+        ctx.fillStyle = '#666';
+        ctx.font = '10px system-ui';
+        ctx.fillText(p.label, mid, baseY + 15);
+        ctx.beginPath();
+        ctx.moveTo(mid, baseY);
+        ctx.lineTo(mid, baseY + 4);
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+    });
+
+    // Confusion cloud
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([]);
+    var cloudX = w/2, cloudY = 175;
+    ctx.beginPath();
+    ctx.ellipse(cloudX, cloudY, 180, 45, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('MODEL LEARNS BLURRED BOUNDARY', cloudX, cloudY - 10);
+    ctx.font = '11px system-ui';
+    ctx.fillText('Training data mixes 3 definitions', cloudX, cloudY + 8);
+    ctx.fillText('Prediction threshold is incoherent', cloudX, cloudY + 23);
+
+    // Change markers
+    [0.33, 0.66].forEach(function(t) {
+        var x = left + t * (right - left);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(x, 60);
+        ctx.lineTo(x, baseY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = '#e74c3c';
+        ctx.beginPath();
+        ctx.moveTo(x, 53);
+        ctx.lineTo(x - 6, 63);
+        ctx.lineTo(x + 6, 63);
+        ctx.closePath();
+        ctx.fill();
+    });
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Definition changed', left + 0.33 * (right - left), 50);
+    ctx.fillText('Definition changed', left + 0.66 * (right - left), 50);
+})();
+
+// Canvas 2: Business rules evolving while ML model stays static
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Growing Gap: Business Rules vs. ML Model', w/2, 25);
+
+    // Timeline axis
+    var left = 80, right = 640, midY = h/2;
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(left, midY);
+    ctx.lineTo(right, midY);
+    ctx.stroke();
+
+    // Time labels
+    var months = ['Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6'];
+    months.forEach(function(m, i) {
+        var x = left + i * (right - left) / (months.length - 1);
+        ctx.fillStyle = '#666';
+        ctx.font = '10px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(m, x, midY + 15);
+        ctx.beginPath();
+        ctx.moveTo(x, midY - 3);
+        ctx.lineTo(x, midY + 3);
+        ctx.strokeStyle = '#999';
+        ctx.stroke();
+    });
+
+    // Business rules line (evolving upward)
+    ctx.beginPath();
+    ctx.moveTo(left, midY - 30);
+    ctx.bezierCurveTo(left + 100, midY - 40, left + 200, midY - 60, left + 280, midY - 75);
+    ctx.bezierCurveTo(left + 360, midY - 90, left + 450, midY - 110, right, midY - 125);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // ML Model line (stays flat)
+    ctx.beginPath();
+    ctx.moveTo(left, midY + 30);
+    ctx.lineTo(right, midY + 35);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Labels for lines
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Business Rules (evolving)', right - 180, midY - 130);
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('ML Model (static)', right - 140, midY + 55);
+
+    // Gap arrows showing divergence
+    var gapPositions = [0.25, 0.5, 0.75, 1.0];
+    gapPositions.forEach(function(t, i) {
+        var x = left + t * (right - left);
+        var topY = midY - 30 - t * 95;
+        var botY = midY + 30 + t * 5;
+
+        ctx.strokeStyle = '#e67e22';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(x, topY + 10);
+        ctx.lineTo(x, botY - 10);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Arrow heads
+        ctx.fillStyle = '#e67e22';
+        ctx.beginPath();
+        ctx.moveTo(x, topY + 10);
+        ctx.lineTo(x - 4, topY + 18);
+        ctx.lineTo(x + 4, topY + 18);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(x, botY - 10);
+        ctx.lineTo(x - 4, botY - 18);
+        ctx.lineTo(x + 4, botY - 18);
+        ctx.closePath();
+        ctx.fill();
+    });
+
+    // Gap label
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('GAP', left + 0.25 * (right - left), midY + 5);
+    ctx.fillText('GAP', left + 0.5 * (right - left), midY + 5);
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('GROWING GAP', left + 0.75 * (right - left), midY + 5);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillText('CRITICAL DRIFT', right, midY + 5);
+
+    // Annotation
+    ctx.fillStyle = '#666';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('No one triggers retraining — model predicts a concept that no longer exists', w/2, h - 15);
+})();
+
+// Canvas 3: Correct approach — versioned definitions with clean retraining
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Correct Flow: Version → Relabel → Retrain', w/2, 25);
+
+    // Version boxes
+    var versions = [
+        { label: 'v1', x: 60, color: '#3498db' },
+        { label: 'v2', x: 270, color: '#9b59b6' },
+        { label: 'v3', x: 480, color: '#27ae60' }
+    ];
+
+    var boxW = 140, boxH = 50, boxY = 55;
+
+    versions.forEach(function(v) {
+        // Definition box
+        ctx.fillStyle = v.color;
+        ctx.globalAlpha = 0.15;
+        ctx.fillRect(v.x, boxY, boxW, boxH);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = v.color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(v.x, boxY, boxW, boxH);
+
+        ctx.fillStyle = v.color;
+        ctx.font = 'bold 13px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText('Definition ' + v.label, v.x + boxW/2, boxY + 22);
+        ctx.font = '10px system-ui';
+        ctx.fillText('target_def_' + v.label + '.yaml', v.x + boxW/2, boxY + 40);
+    });
+
+    // Relabel step boxes
+    var relabelY = 135;
+    versions.forEach(function(v) {
+        ctx.fillStyle = '#e67e22';
+        ctx.globalAlpha = 0.15;
+        ctx.fillRect(v.x + 15, relabelY, boxW - 30, 35);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = '#e67e22';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(v.x + 15, relabelY, boxW - 30, 35);
+
+        ctx.fillStyle = '#e67e22';
+        ctx.font = 'bold 11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText('Relabel Data', v.x + boxW/2, relabelY + 22);
+    });
+
+    // Model boxes
+    var modelY = 200;
+    versions.forEach(function(v) {
+        ctx.fillStyle = '#1a5276';
+        ctx.globalAlpha = 0.15;
+        ctx.fillRect(v.x + 5, modelY, boxW - 10, 45);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(v.x + 5, modelY, boxW - 10, 45);
+
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 12px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText('Model ' + v.label, v.x + boxW/2, modelY + 20);
+        ctx.font = '10px system-ui';
+        ctx.fillText('(retrained from scratch)', v.x + boxW/2, modelY + 36);
+    });
+
+    // Arrows: definition → relabel
+    versions.forEach(function(v) {
+        var x = v.x + boxW/2;
+        ctx.strokeStyle = '#666';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x, boxY + boxH);
+        ctx.lineTo(x, relabelY);
+        ctx.stroke();
+        // Arrowhead
+        ctx.fillStyle = '#666';
+        ctx.beginPath();
+        ctx.moveTo(x, relabelY);
+        ctx.lineTo(x - 4, relabelY - 7);
+        ctx.lineTo(x + 4, relabelY - 7);
+        ctx.closePath();
+        ctx.fill();
+    });
+
+    // Arrows: relabel → model
+    versions.forEach(function(v) {
+        var x = v.x + boxW/2;
+        ctx.strokeStyle = '#666';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x, relabelY + 35);
+        ctx.lineTo(x, modelY);
+        ctx.stroke();
+        // Arrowhead
+        ctx.fillStyle = '#666';
+        ctx.beginPath();
+        ctx.moveTo(x, modelY);
+        ctx.lineTo(x - 4, modelY - 7);
+        ctx.lineTo(x + 4, modelY - 7);
+        ctx.closePath();
+        ctx.fill();
+    });
+
+    // Change arrows between versions (definition → definition)
+    for (var i = 0; i < versions.length - 1; i++) {
+        var fromX = versions[i].x + boxW;
+        var toX = versions[i + 1].x;
+        var arrowY = boxY + boxH/2;
+
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 3]);
+        ctx.beginPath();
+        ctx.moveTo(fromX + 5, arrowY);
+        ctx.lineTo(toX - 5, arrowY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Arrowhead
+        ctx.fillStyle = '#e74c3c';
+        ctx.beginPath();
+        ctx.moveTo(toX - 5, arrowY);
+        ctx.lineTo(toX - 13, arrowY - 4);
+        ctx.lineTo(toX - 13, arrowY + 4);
+        ctx.closePath();
+        ctx.fill();
+
+        // Label
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = '9px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText('definition change', (fromX + toX) / 2, arrowY - 8);
+    }
+
+    // Key at bottom
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Each version is self-contained: definition + relabeled data + fresh model', w/2, h - 30);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Never mix labels from different definition versions in one training set', w/2, h - 12);
+})();
+</script>
+
+</body>
+</html>

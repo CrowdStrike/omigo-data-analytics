@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stale Feature (Cached / Not Updated)</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Stale Feature (Cached / Not Updated)</h1>
+<p class="subtitle">When a cached feature value becomes outdated because the refresh pipeline failed, but the model keeps serving predictions with stale data.</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Features are precomputed and cached (in a feature store, Redis, or materialized view) for fast serving. The refresh job fails or lags, but the serving system continues using the stale cached values without alerting.</p>
+                <ul>
+                    <li><strong>Silent staleness:</strong> Feature says "user logged in 2 days ago" when they actually logged in 5 minutes ago</li>
+                    <li><strong>Drift:</strong> Model trained on fresh features (computed at training time) but served with 24-hour-old features; performance degrades</li>
+                    <li><strong>Detection gap:</strong> Monitoring tracks model performance (which decays slowly), not feature freshness (which breaks instantly)</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Impact:</strong> 10-30% AUC drop when features lag by 1 day in a real-time prediction task; churn models fail because "last_activity" is 24 hours stale. Solution: TTL on cached features, freshness monitoring (last_updated timestamp), fallback to recompute on cache miss.
+                </div>
+                <p class="example">Example: A fraud detection model uses "transactions_last_hour" computed every 5 minutes. The batch job fails at 2pm but no alert fires. Predictions from 2pm to midnight use 2pm data, missing 10 hours of new transactions. A fraudster exploits this window.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <ul>
+                    <li><strong>Silent pipeline failures:</strong> ETL jobs fail without alerting — no one notices until model performance degrades days later</li>
+                    <li><strong>Cache TTL misconfiguration:</strong> TTLs set arbitrarily (24h) without considering how frequently the underlying data actually changes</li>
+                    <li><strong>No freshness monitoring:</strong> Teams monitor model output metrics (AUC, precision) but not feature freshness — a leading indicator of failure</li>
+                    <li><strong>Upstream schedule changes:</strong> The source system changes its update cadence without notifying downstream feature pipelines</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Core issue:</strong> The serving layer has no concept of "too old." It serves whatever is cached, regardless of age, because freshness was never made a first-class concern.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <ul>
+                    <li><strong>Track last_updated per feature:</strong> Every cached feature carries a timestamp of when it was last computed</li>
+                    <li><strong>Alert on age threshold:</strong> If feature_age exceeds configured SLA (e.g., 30 min for real-time features), fire alert immediately</li>
+                    <li><strong>Feature age as input signal:</strong> Pass feature_age_minutes to the model — let it learn to discount stale signals</li>
+                    <li><strong>TTL with fallback:</strong> If stale, either recompute on-demand or return an uncertainty flag so the serving layer can fall back to a safe default</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Principle:</strong> Freshness is a feature property, not an operational afterthought. Monitor it like you monitor latency — with SLAs, alerts, and fallbacks.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Stale Feature: Cached Value Lags Behind Reality', w/2, 25);
+
+    // Timeline
+    var timelineY = 80;
+    var left = 60;
+    var right = 660;
+    var segmentWidth = (right - left) / 6;
+
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(left, timelineY);
+    ctx.lineTo(right, timelineY);
+    ctx.stroke();
+
+    // Time markers
+    var times = ['8am', '10am', '12pm', '2pm', '4pm', '6pm', '8pm'];
+    ctx.fillStyle = '#444';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    for (var i = 0; i < times.length; i++) {
+        var x = left + i * segmentWidth;
+        ctx.beginPath();
+        ctx.moveTo(x, timelineY - 5);
+        ctx.lineTo(x, timelineY + 5);
+        ctx.stroke();
+        ctx.fillText(times[i], x, timelineY + 18);
+    }
+
+    // Green: Fresh updates (8am - 2pm)
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(left, timelineY - 20);
+    ctx.lineTo(left + 3 * segmentWidth, timelineY - 20);
+    ctx.stroke();
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Fresh features', left + 1.5 * segmentWidth, timelineY - 28);
+
+    // Red: Stale (2pm onward, job failed)
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(left + 3 * segmentWidth, timelineY - 20);
+    ctx.lineTo(right, timelineY - 20);
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('STALE (using 2pm data)', left + 4.5 * segmentWidth, timelineY - 28);
+
+    // Failure marker at 2pm
+    var failX = left + 3 * segmentWidth;
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath();
+    ctx.moveTo(failX, timelineY - 35);
+    ctx.lineTo(failX - 5, timelineY - 45);
+    ctx.lineTo(failX + 5, timelineY - 45);
+    ctx.closePath();
+    ctx.fill();
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillText('Refresh job fails', failX, timelineY - 50);
+
+    // Bottom panel: Actual vs Cached
+    var panelY = 140;
+    ctx.fillStyle = '#444';
+    ctx.font = '12px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Reality (true user activity):', left, panelY);
+
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(left, panelY + 10);
+    for (var i = 0; i <= 60; i++) {
+        var x = left + (i / 60) * (right - left);
+        var activity = 5 + 3 * Math.sin(i / 5) + (i > 30 ? 2 : 0);
+        var y = panelY + 10 + activity * 5;
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    ctx.fillStyle = '#444';
+    ctx.fillText('Cached feature (what model sees):', left, panelY + 90);
+
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(left, panelY + 100);
+    for (var i = 0; i <= 30; i++) {
+        var x = left + (i / 60) * (right - left);
+        var activity = 5 + 3 * Math.sin(i / 5);
+        var y = panelY + 100 + activity * 5;
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Flat line after 2pm (stale)
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    var staleY = panelY + 100 + (5 + 3 * Math.sin(30 / 5)) * 5;
+    ctx.beginPath();
+    ctx.moveTo(left + 0.5 * (right - left), staleY);
+    ctx.lineTo(right, staleY);
+    ctx.stroke();
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillText('Frozen at 2pm value', right - 100, staleY - 8);
+})();
+
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Why It Happens: Silent Pipeline Failure', w/2, 25);
+
+    // Pipeline flow boxes
+    var boxY = 60;
+    var boxH = 55;
+
+    // Source DB
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(30, boxY, 130, boxH);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Source DB', 95, boxY + 20);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '10px system-ui';
+    ctx.fillText('Updated every 5min', 95, boxY + 38);
+    ctx.fillText('✓ Fresh data', 95, boxY + 50);
+
+    // Arrow
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(165, boxY + boxH/2);
+    ctx.lineTo(210, boxY + boxH/2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(210, boxY + boxH/2);
+    ctx.lineTo(203, boxY + boxH/2 - 4);
+    ctx.moveTo(210, boxY + boxH/2);
+    ctx.lineTo(203, boxY + boxH/2 + 4);
+    ctx.stroke();
+
+    // ETL Job - FAILED
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(215, boxY, 130, boxH);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('ETL Job', 280, boxY + 20);
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillText('✖ Failed silently', 280, boxY + 40);
+    ctx.fillStyle = '#666';
+    ctx.font = '10px system-ui';
+    ctx.fillText('No alert triggered', 280, boxY + 52);
+
+    // Arrow
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(350, boxY + boxH/2);
+    ctx.lineTo(395, boxY + boxH/2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(395, boxY + boxH/2);
+    ctx.lineTo(388, boxY + boxH/2 - 4);
+    ctx.moveTo(395, boxY + boxH/2);
+    ctx.lineTo(388, boxY + boxH/2 + 4);
+    ctx.stroke();
+
+    // Feature Cache - STALE
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(400, boxY, 140, boxH);
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Feature Cache', 470, boxY + 20);
+    ctx.fillStyle = '#444';
+    ctx.font = '10px system-ui';
+    ctx.fillText('Serving old values', 470, boxY + 38);
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillText('⏱ 5 hours old', 470, boxY + 52);
+
+    // Arrow
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(545, boxY + boxH/2);
+    ctx.lineTo(590, boxY + boxH/2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(590, boxY + boxH/2);
+    ctx.lineTo(583, boxY + boxH/2 - 4);
+    ctx.moveTo(590, boxY + boxH/2);
+    ctx.lineTo(583, boxY + boxH/2 + 4);
+    ctx.stroke();
+
+    // Model - unaware
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(595, boxY, 100, boxH);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Model', 645, boxY + 20);
+    ctx.fillStyle = '#444';
+    ctx.font = '18px system-ui';
+    ctx.fillText('?', 645, boxY + 45);
+    ctx.font = '10px system-ui';
+    ctx.fillText('No idea it\'s stale', 645, boxY + 55);
+
+    // Bottom explanation
+    ctx.fillStyle = '#444';
+    ctx.font = '12px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Problem timeline:', 40, 155);
+
+    ctx.fillStyle = '#666';
+    ctx.font = '11px system-ui';
+    ctx.fillText('• 2:00pm — ETL job fails (no alert)', 60, 175);
+    ctx.fillText('• 2:00pm to midnight — Model serves predictions using 2pm cached features', 60, 195);
+    ctx.fillText('• Next day — Someone notices model AUC dropped 15%', 60, 215);
+    ctx.fillText('• Root cause: 10 hours of stale features, not model bug', 60, 235);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Gap: Monitoring watches model output (lagging), not feature freshness (leading)', w/2, 270);
+})();
+
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Correct Approach: Feature Freshness Monitoring Dashboard', w/2, 25);
+
+    // Table header
+    var tableX = 40;
+    var tableY = 50;
+    var colWidths = [150, 140, 100, 100, 80];
+    var headers = ['feature_name', 'last_updated', 'age_min', 'SLA_min', 'status'];
+
+    ctx.fillStyle = '#1a5276';
+    ctx.fillRect(tableX, tableY, 570, 22);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'left';
+    var cx = tableX + 5;
+    for (var i = 0; i < headers.length; i++) {
+        ctx.fillText(headers[i], cx, tableY + 15);
+        cx += colWidths[i];
+    }
+
+    // Rows
+    var rows = [
+        { name: 'txn_last_hour', updated: '2024-03-15 14:55', age: '5', sla: '15', status: 'FRESH', color: '#27ae60' },
+        { name: 'user_login_recency', updated: '2024-03-15 14:20', age: '40', sla: '60', status: 'WARNING', color: '#e67e22' },
+        { name: 'fraud_score_24h', updated: '2024-03-15 09:00', age: '360', sla: '30', status: 'STALE', color: '#e74c3c' }
+    ];
+
+    for (var r = 0; r < rows.length; r++) {
+        var rowY = tableY + 24 + r * 28;
+        ctx.fillStyle = r % 2 === 0 ? '#f8f9fa' : '#fff';
+        ctx.fillRect(tableX, rowY, 570, 26);
+
+        ctx.strokeStyle = '#e0e0e0';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(tableX, rowY, 570, 26);
+
+        ctx.font = '10px system-ui';
+        ctx.textAlign = 'left';
+        cx = tableX + 5;
+        ctx.fillStyle = '#444';
+        ctx.fillText(rows[r].name, cx, rowY + 16); cx += colWidths[0];
+        ctx.fillText(rows[r].updated, cx, rowY + 16); cx += colWidths[1];
+        ctx.fillText(rows[r].age, cx, rowY + 16); cx += colWidths[2];
+        ctx.fillText(rows[r].sla, cx, rowY + 16); cx += colWidths[3];
+
+        // Status badge
+        ctx.fillStyle = rows[r].color;
+        ctx.font = 'bold 10px system-ui';
+        ctx.fillText(rows[r].status, cx, rowY + 16);
+
+        // Status dot
+        ctx.beginPath();
+        ctx.arc(cx - 10, rowY + 13, 4, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Action box below table
+    var actionY = tableY + 115;
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.06)';
+    ctx.fillRect(tableX, actionY, 570, 40);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(tableX, actionY, 570, 40);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Action: REJECT prediction if any critical feature exceeds SLA', w/2, actionY + 16);
+    ctx.fillStyle = '#444';
+    ctx.font = '10px system-ui';
+    ctx.fillText('fraud_score_24h age (360 min) > SLA (30 min) → Block serving, trigger recompute, alert on-call', w/2, actionY + 32);
+
+    // Bottom: feature age as signal
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Bonus: Pass feature_age_minutes as input to model', w/2, actionY + 65);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Model learns: "if feature is old, discount its signal" → graceful degradation', w/2, actionY + 82);
+})();
+</script>
+
+</body>
+</html>

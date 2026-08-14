@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Character Encoding / Locale Issues</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Character Encoding / Locale Issues</h1>
+<p class="subtitle">Text data corrupted by encoding mismatches, causing silent data loss and incorrect feature extraction</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Text data encoded in UTF-8 but parsed as Latin-1 (or vice versa) produces mojibake. Non-ASCII characters corrupt silently. Names, addresses, and text features become unusable. Models trained on corrupted text learn garbage patterns.</p>
+                <ul>
+                    <li>UTF-8 vs Latin-1 mismatches turn "José" into "JosÃ©" (mojibake)</li>
+                    <li>Locale-dependent operations (case folding, collation) produce inconsistent results</li>
+                    <li>Byte order marks (BOM) break CSV parsers and JSON decoders</li>
+                    <li>Windows-1252 vs UTF-8 creates "smart quotes" and em-dash corruption</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Impact:</strong> Text features are silently corrupted. String matching fails. Names and addresses become unparseable. Models see corrupted tokens and learn wrong associations. Detection is hard because corrupted text looks "almost right."
+                </div>
+                <p class="example">Example: A customer name table has 10% non-ASCII names. Data exported as UTF-8, imported as Latin-1. "François" becomes "FranÃ§ois". Matching fails. Model sees two different customers.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens / Detection / Common Sources</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Systems default to different encodings. Windows uses Windows-1252, Linux defaults to UTF-8, databases may use Latin-1. Excel exports CSV with BOM. Locale settings change string operations invisibly.</p>
+                <ul>
+                    <li>Excel saves CSV with UTF-8 BOM by default (breaks many parsers)</li>
+                    <li>Database client libraries default to Latin-1 unless explicitly configured</li>
+                    <li>Python 2 treated strings as bytes; Python 3 requires explicit encoding</li>
+                    <li>Locale-dependent case folding: Turkish "i".upper() → "İ" not "I"</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Detection:</strong> Check for replacement characters (U+FFFD �). Scan for mojibake patterns like "Ã©" (é as UTF-8 read as Latin-1). Validate that all text is valid UTF-8. Test with international characters in CI.
+                </div>
+                <p class="example">Example: A pipeline reads CSV exported from Excel. BOM bytes (EF BB BF) are interpreted as text. First column name is "﻿user_id". Joins fail silently because column name doesn't match.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Prevention / Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Enforce UTF-8 everywhere. Explicitly declare encoding at every I/O boundary. Use encoding-aware libraries. Validate text on ingestion. Test with non-ASCII data in your test suite.</p>
+                <ul>
+                    <li>Set database connection encoding to UTF-8 (MySQL: utf8mb4)</li>
+                    <li>Explicitly specify encoding in file I/O: open(file, 'r', encoding='utf-8')</li>
+                    <li>Strip BOM on CSV read: read_csv(file, encoding='utf-8-sig')</li>
+                    <li>Use locale-independent operations: casefold() instead of lower()</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Best practice:</strong> UTF-8 everywhere. Validate text on ingestion with try/except UnicodeDecodeError. Add test cases with names like "José", "北京", "Москва". Log warnings when non-UTF-8 detected.
+                </div>
+                <p class="example">Example: A pipeline explicitly sets UTF-8: database connection, file reads, HTTP headers. Validator checks for mojibake patterns on ingestion. Test suite includes international names. Zero encoding issues in production.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// Canvas 1: Encoding corruption visualization
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Encoding Mismatch — UTF-8 Data Read as Latin-1 (Mojibake)', w/2, 25);
+
+    var examples = [
+        { orig: 'José', utf8: 'José', latin1: 'JosÃ©', desc: 'é → Ã©' },
+        { orig: 'François', utf8: 'François', latin1: 'FranÃ§ois', desc: 'ç → Ã§' },
+        { orig: 'Müller', utf8: 'Müller', latin1: 'MÃ¼ller', desc: 'ü → Ã¼' },
+        { orig: 'Café', utf8: 'Café', latin1: 'CafÃ©', desc: 'é → Ã©' }
+    ];
+
+    var startY = 60;
+    var rowH = 50;
+    var colX = [60, 200, 340, 480];
+
+    // Headers
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ['Original', 'UTF-8 (correct)', 'Read as Latin-1', 'Corruption'].forEach(function(header, i) {
+        ctx.fillText(header, colX[i] + 60, startY - 10);
+    });
+
+    examples.forEach(function(ex, i) {
+        var y = startY + i * rowH + 20;
+
+        // Original
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '14px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(ex.orig, colX[0] + 60, y);
+
+        // UTF-8 (correct)
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(colX[1], y - 18, 120, 30);
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(colX[1], y - 18, 120, 30);
+        ctx.fillStyle = '#27ae60';
+        ctx.font = '14px system-ui';
+        ctx.fillText(ex.utf8, colX[1] + 60, y);
+
+        // Latin-1 (corrupted)
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(colX[2], y - 18, 120, 30);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(colX[2], y - 18, 120, 30);
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = '14px system-ui';
+        ctx.fillText(ex.latin1, colX[2] + 60, y);
+
+        // Description
+        ctx.fillStyle = '#666';
+        ctx.font = '11px system-ui';
+        ctx.fillText(ex.desc, colX[3] + 60, y);
+    });
+
+    ctx.fillStyle = '#666';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Problem: UTF-8 bytes interpreted as Latin-1 produce mojibake. Names become unmatchable.', w/2, 270);
+})();
+
+// Canvas 2: Character replacement diagram
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Common Encoding Issues — Sources and Symptoms', w/2, 25);
+
+    var issues = [
+        {
+            source: 'Excel CSV\nwith BOM',
+            symptom: '\\uFEFF in\nfirst column',
+            fix: 'encoding=\n"utf-8-sig"',
+            x: 100, y: 80
+        },
+        {
+            source: 'Windows-1252\nsmart quotes',
+            symptom: '" " → Ã¢â‚¬Å"',
+            fix: 'Use UTF-8\neverywhere',
+            x: 360, y: 80
+        },
+        {
+            source: 'Locale-dependent\ncase folding',
+            symptom: 'Turkish i.upper()\n→ İ not I',
+            fix: 'Use casefold(),\nnot lower()',
+            x: 100, y: 180
+        },
+        {
+            source: 'MySQL default\nLatin-1',
+            symptom: 'Non-ASCII chars\ncorrupted',
+            fix: 'Use utf8mb4\ncharset',
+            x: 360, y: 180
+        }
+    ];
+
+    issues.forEach(function(issue) {
+        // Box
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.fillRect(issue.x - 70, issue.y - 20, 140, 70);
+        ctx.strokeRect(issue.x - 70, issue.y - 20, 140, 70);
+
+        // Source
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 10px system-ui';
+        ctx.textAlign = 'center';
+        var lines = issue.source.split('\n');
+        lines.forEach(function(line, i) {
+            ctx.fillText(line, issue.x, issue.y - 5 + i * 11);
+        });
+
+        // Symptom
+        ctx.fillStyle = '#666';
+        ctx.font = '9px system-ui';
+        var slines = issue.symptom.split('\n');
+        slines.forEach(function(line, i) {
+            ctx.fillText(line, issue.x, issue.y + 15 + i * 10);
+        });
+
+        // Fix label
+        ctx.fillStyle = '#27ae60';
+        ctx.font = 'bold 8px system-ui';
+        var flines = issue.fix.split('\n');
+        flines.forEach(function(line, i) {
+            ctx.fillText(line, issue.x, issue.y + 35 + i * 9);
+        });
+    });
+
+    // Detection arrow
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(w/2, 50);
+    ctx.lineTo(w/2, 270);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Detection: Scan for U+FFFD (�), mojibake patterns, BOM bytes', w/2, 265);
+})();
+
+// Canvas 3: Detection workflow
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Prevention Pipeline — Enforce UTF-8 at Every Boundary', w/2, 25);
+
+    var steps = [
+        { x: 80, y: 70, label: 'Database\nConnection', detail: 'charset=utf8mb4' },
+        { x: 240, y: 70, label: 'File I/O', detail: 'encoding="utf-8"' },
+        { x: 400, y: 70, label: 'HTTP\nHeaders', detail: 'Content-Type:\nUTF-8' },
+        { x: 560, y: 70, label: 'Validation', detail: 'Check for\nmojibake' }
+    ];
+
+    steps.forEach(function(step, i) {
+        // Box
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 2;
+        ctx.fillRect(step.x - 50, step.y, 100, 50);
+        ctx.strokeRect(step.x - 50, step.y, 100, 50);
+
+        // Label
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = 'bold 11px system-ui';
+        ctx.textAlign = 'center';
+        var lines = step.label.split('\n');
+        lines.forEach(function(line, j) {
+            ctx.fillText(line, step.x, step.y + 16 + j * 12);
+        });
+
+        // Detail
+        ctx.fillStyle = '#1a5276';
+        ctx.font = '9px system-ui';
+        var dlines = step.detail.split('\n');
+        dlines.forEach(function(line, j) {
+            ctx.fillText(line, step.x, step.y + 55 + j * 10);
+        });
+
+        // Arrow
+        if (i < steps.length - 1) {
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(step.x + 50, step.y + 25);
+            ctx.lineTo(steps[i+1].x - 50, steps[i+1].y + 25);
+            ctx.stroke();
+
+            // Arrowhead
+            ctx.beginPath();
+            ctx.moveTo(steps[i+1].x - 50, steps[i+1].y + 25);
+            ctx.lineTo(steps[i+1].x - 58, steps[i+1].y + 20);
+            ctx.lineTo(steps[i+1].x - 58, steps[i+1].y + 30);
+            ctx.closePath();
+            ctx.fillStyle = '#666';
+            ctx.fill();
+        }
+    });
+
+    // Test cases box
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(60, 160, 600, 50);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Test Suite — International Characters', 70, 178);
+
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Add test cases: "José", "François", "Müller", "北京", "Москва", "مصر"', 70, 194);
+
+    // Best practice box
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(60, 225, 600, 50);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Best Practice', 70, 243);
+
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = '11px system-ui';
+    ctx.fillText('UTF-8 everywhere. Explicit encoding at all I/O. Validate on ingestion. Test with non-ASCII.', 70, 259);
+})();
+</script>
+
+</body>
+</html>

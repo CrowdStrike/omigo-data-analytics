@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unit Mismatch (Dollars vs Cents, Seconds vs Milliseconds)</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Unit Mismatch (Dollars vs Cents, Seconds vs Milliseconds)</h1>
+<p class="subtitle">When the same column name is stored in different units across sources or time, causing silent 100x or 1000x errors.</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>A column called "amount" or "duration" exists in multiple tables or data sources, but one stores dollars while another stores cents; one stores seconds while another stores milliseconds. No schema enforcement, no unit metadata, no validation.</p>
+                <ul>
+                    <li><strong>Currency:</strong> Payment API returns cents (2500), internal DB stores dollars (25.00), join mixes both</li>
+                    <li><strong>Time:</strong> Unix timestamps in seconds (1609459200) vs milliseconds (1609459200000); "duration" in seconds vs minutes</li>
+                    <li><strong>Distance:</strong> Meters vs kilometers; inches vs centimeters; longitude in degrees vs radians</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Impact:</strong> Revenue calculations off by 100x, latency metrics off by 1000x, models train on garbage features. Detection: Statistical outlier checks (revenue spike from $50 to $5000), unit tests on representative samples, schema-level unit annotations.
+                </div>
+                <p class="example">Example: Merging transaction data from Stripe (amounts in cents: 4500) with internal analytics table (amounts in dollars: 45.00). A naive join treats 4500 as $4500, inflating revenue by 100x. Model sees nonsensical features: "average purchase $2000" when true value is $20.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <ul>
+                    <li><strong>Undocumented conventions:</strong> Different teams choose different unit conventions independently, with no central registry</li>
+                    <li><strong>System migrations:</strong> A platform migration changes units (e.g., cents to dollars) without updating column names or documentation</li>
+                    <li><strong>API vs DB mismatch:</strong> External APIs return amounts in cents while internal databases store dollars — both land in the same column</li>
+                    <li><strong>No schema-level metadata:</strong> Column definitions lack unit annotations, validation ranges, or semantic types</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Root cause:</strong> The column name "amount" carries no unit semantics. Without explicit unit metadata, every consumer must guess — and guesses diverge across teams and time.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <ul>
+                    <li><strong>Units in column names:</strong> amount_cents, latency_ms, distance_km — self-documenting and prevents mix-ups</li>
+                    <li><strong>Range validation rules:</strong> amount_cents &gt; 0 AND &lt; 10000000 catches 100x errors immediately</li>
+                    <li><strong>Schema-level unit annotations:</strong> Data catalog entries include unit, valid range, and source system</li>
+                    <li><strong>Conversion at ingestion boundary:</strong> Normalize units at the point of entry, not downstream in queries or models</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Principle:</strong> Make the unit impossible to ignore. If the column name forces you to acknowledge the unit, you cannot accidentally mix dollars with cents.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Unit Mismatch: Same Column Name, Different Units', w/2, 25);
+
+    // Source A: Dollars
+    var sourceAX = 120;
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(30, 60, 180, 100);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Source A: Internal DB', sourceAX, 78);
+
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Column: amount', sourceAX, 100);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillText('45.00', sourceAX, 125);
+    ctx.fillStyle = '#666';
+    ctx.font = '10px system-ui';
+    ctx.fillText('(in dollars)', sourceAX, 145);
+
+    // Source B: Cents
+    var sourceBX = 360;
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(270, 60, 180, 100);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('Source B: Stripe API', sourceBX, 78);
+
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Column: amount', sourceBX, 100);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillText('4500', sourceBX, 125);
+    ctx.fillStyle = '#666';
+    ctx.font = '10px system-ui';
+    ctx.fillText('(in cents)', sourceBX, 145);
+
+    // Merge arrow
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(w/2, 170);
+    ctx.lineTo(w/2, 195);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(w/2, 195);
+    ctx.lineTo(w/2 - 5, 185);
+    ctx.moveTo(w/2, 195);
+    ctx.lineTo(w/2 + 5, 185);
+    ctx.stroke();
+
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('UNION / MERGE', w/2, 185);
+
+    // Result: Mixed units
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(180, 205, 360, 80);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillText('Merged Dataset', w/2, 225);
+
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Row 1: amount = 45.00   (dollars)', w/2, 245);
+    ctx.fillText('Row 2: amount = 4500     (cents, but treated as dollars!)', w/2, 260);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Model sees: avg = $2272.50  (garbage!)', w/2, 280);
+
+    // Source C example (time)
+    var timeY = 60;
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(480, timeY, 180, 100);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('Source C: Logs', 570, timeY + 18);
+
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Column: duration', 570, timeY + 40);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillText('1500', 570, timeY + 65);
+    ctx.fillStyle = '#666';
+    ctx.font = '10px system-ui';
+    ctx.fillText('(milliseconds)', 570, timeY + 85);
+    ctx.fillText('vs seconds elsewhere', 570, timeY + 98);
+})();
+
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Why It Happens: Multiple Sources, No Unit Coordination', w/2, 25);
+
+    // Source 1: Payment API
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(20, 50, 180, 60);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Payment API', 110, 68);
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.fillText('amount = 4500', 110, 88);
+    ctx.fillStyle = '#e67e22';
+    ctx.font = '10px system-ui';
+    ctx.fillText('(cents)', 110, 103);
+
+    // Source 2: Internal DB
+    ctx.strokeStyle = '#1a5276';
+    ctx.strokeRect(270, 50, 180, 60);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Internal DB', 360, 68);
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.fillText('amount = 45.00', 360, 88);
+    ctx.fillStyle = '#e67e22';
+    ctx.font = '10px system-ui';
+    ctx.fillText('(dollars)', 360, 103);
+
+    // Source 3: Partner Feed
+    ctx.strokeStyle = '#1a5276';
+    ctx.strokeRect(520, 50, 180, 60);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Partner Feed', 610, 68);
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.fillText('amount = 38.50', 610, 88);
+    ctx.fillStyle = '#e67e22';
+    ctx.font = '10px system-ui';
+    ctx.fillText('(euros)', 610, 103);
+
+    // Arrows down to merge
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 1.5;
+    var mergeY = 155;
+    [110, 360, 610].forEach(function(x) {
+        ctx.beginPath();
+        ctx.moveTo(x, 112);
+        ctx.lineTo(x, mergeY - 10);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x, mergeY - 10);
+        ctx.lineTo(x - 4, mergeY - 18);
+        ctx.moveTo(x, mergeY - 10);
+        ctx.lineTo(x + 4, mergeY - 18);
+        ctx.stroke();
+    });
+
+    // Merge box
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(150, mergeY, 420, 70);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Merged Column: "amount"', w/2, mergeY + 20);
+
+    // Red X
+    ctx.font = 'bold 18px system-ui';
+    ctx.fillText('✖', 150 + 400, mergeY + 20);
+
+    // Values
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.fillText('4500  |  45.00  |  38.50', w/2, mergeY + 42);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('No unit conversion!', w/2, mergeY + 60);
+
+    // Bottom note
+    ctx.fillStyle = '#666';
+    ctx.font = '11px system-ui';
+    ctx.fillText('All treated as same unit → 100x errors in aggregation, model features, and reporting', w/2, h - 20);
+})();
+
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Correct Approach: Units in Column Names + Validation', w/2, 25);
+
+    // Schema boxes
+    var boxes = [
+        { label: 'amount_cents', type: 'INT', range: '> 0 AND < 10,000,000', x: 60 },
+        { label: 'latency_ms', type: 'FLOAT', range: '> 0 AND < 30,000', x: 280 },
+        { label: 'distance_km', type: 'DECIMAL', range: '>= 0 AND < 50,000', x: 500 }
+    ];
+
+    boxes.forEach(function(box) {
+        // Box
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(box.x, 50, 180, 90);
+
+        // Green checkmark
+        ctx.fillStyle = '#27ae60';
+        ctx.font = 'bold 18px system-ui';
+        ctx.textAlign = 'left';
+        ctx.fillText('✓', box.x + 155, 70);
+
+        // Column name
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 12px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(box.label, box.x + 90, 75);
+
+        // Type
+        ctx.fillStyle = '#444';
+        ctx.font = '11px system-ui';
+        ctx.fillText('Type: ' + box.type, box.x + 90, 95);
+
+        // Validation range
+        ctx.fillStyle = '#27ae60';
+        ctx.font = '10px system-ui';
+        ctx.fillText('Valid: ' + box.range, box.x + 90, 115);
+
+        // Green check below
+        ctx.fillStyle = '#666';
+        ctx.font = '10px system-ui';
+        ctx.fillText('Unit in name ✓', box.x + 90, 132);
+    });
+
+    // Annotation box
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.08)';
+    ctx.fillRect(100, 165, 520, 50);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(100, 165, 520, 50);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Units in name = self-documenting + prevents mix-ups', w/2, 185);
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Any merge attempt between amount_cents and amount_dollars triggers immediate type error', w/2, 205);
+
+    // Bottom: conversion at boundary
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Ingestion Boundary Pattern', w/2, 240);
+
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(150, 250, 140, 35);
+    ctx.fillStyle = '#444';
+    ctx.font = '10px system-ui';
+    ctx.fillText('Raw: amount=4500', 220, 265);
+    ctx.fillText('(cents from API)', 220, 278);
+
+    // Arrow
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(295, 267);
+    ctx.lineTo(370, 267);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(370, 267);
+    ctx.lineTo(362, 262);
+    ctx.moveTo(370, 267);
+    ctx.lineTo(362, 272);
+    ctx.stroke();
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '9px system-ui';
+    ctx.fillText('convert', 333, 258);
+
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(375, 250, 170, 35);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillText('Stored: amount_cents = 4500', 460, 265);
+    ctx.fillStyle = '#444';
+    ctx.font = '10px system-ui';
+    ctx.fillText('validated + unit-tagged', 460, 278);
+})();
+</script>
+
+</body>
+</html>

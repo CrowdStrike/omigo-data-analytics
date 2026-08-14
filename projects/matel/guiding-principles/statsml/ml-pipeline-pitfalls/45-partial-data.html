@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Partial Data (Incomplete ETL Window)</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.metric strong {
+    color: #1a5276;
+}
+
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Partial Data (Incomplete ETL Window)</h1>
+<p class="subtitle">Analysis runs before all data arrives, creating systematically biased training sets.</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Training job queries data for day D but runs before all day D data has arrived. The incomplete snapshot is systematically biased—missing late events, missing certain sources, or truncated at arbitrary cutoff. Model learns patterns from partial view, fails on complete data.</p>
+                <ul>
+                    <li><strong>Completeness checks:</strong> No validation that all expected sources delivered data; job proceeds with whoever arrived by deadline, silently omitting stragglers</li>
+                    <li><strong>Late-arriving data:</strong> Events timestamped for day D arrive hours later due to processing lag, timezone conversion, or batch delay—training snapshots miss them every time</li>
+                    <li><strong>ETL timing:</strong> Training job scheduled for 2 AM UTC to process "yesterday," but some sources don't finish loading until 4 AM—training sees only 60% of data</li>
+                    <li><strong>Backfill vs real-time:</strong> Historical data is complete (backfilled); recent data is partial (streaming with lag)—model trained on heterogeneous completeness</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Impact:</strong> Training data systematically underrepresents certain events, regions, or sources. Model learns skewed distributions. Serving data is complete, triggering distributional shift. <strong>Fix:</strong> Add explicit completeness checks—count records per source, compare to historical baseline. Delay training until all sources confirm delivery. Use watermarks or heartbeat signals. Separate complete historical data from incomplete recent data.
+                </div>
+                <p class="example">Example: Daily training job for fraud model runs at 3 AM, processing previous day. International transactions arrive with 4-hour lag due to timezone batch windows. Model trained on data missing 35% of EU transactions. At serving time, full data arrives; model predicts "legitimate" for fraud patterns it never saw, false negative rate 2.8x higher on EU traffic.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <ul>
+                    <li>Queries run before all data for a time window has arrived</li>
+                    <li>Timezone differences cause late-arriving events</li>
+                    <li>Batch pipelines trigger on schedule, not on data completeness</li>
+                    <li>Upstream systems have variable latency (some events arrive hours late)</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Root cause:</strong> Conflating "query returned results" with "all data for this period is present." Schedule-based triggers don't verify completeness.
+                </div>
+                <p class="example">Example: Daily pipeline runs at 2am UTC. Events from US West Coast (UTC-8) for 11pm local time arrive at 7am UTC — 5 hours after pipeline already consumed "yesterday's" data. Those events are permanently lost from training.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <ul>
+                    <li>Implement completeness SLA checks before processing</li>
+                    <li>Don't process until event count matches expected (watermarks)</li>
+                    <li>Use event-time windowing, not processing-time</li>
+                    <li>Add late-arrival buffers (grace periods)</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Best practice:</strong> Gate pipeline execution on data completeness signals, not wall-clock time. Use high-watermarks and expected row counts to verify all sources have flushed.
+                </div>
+                <p class="example">Example: Pipeline checks: expected_events >= 95% of trailing 7-day average for this hour. If not met, pipeline waits (with timeout alert). Late data is reprocessed in next window.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// Partial data arrival timeline
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('ETL Window: Training Job Runs Too Early', w/2, 25);
+
+    // Timeline
+    var left = 100, right = 650, baseY = 230;
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(left, baseY);
+    ctx.lineTo(right, baseY);
+    ctx.stroke();
+
+    // Time labels
+    var times = ['00:00', '01:00', '02:00', '03:00', '04:00', '05:00'];
+    ctx.fillStyle = '#666';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    times.forEach(function(t, i) {
+        var x = left + (i / (times.length - 1)) * (right - left);
+        ctx.fillText(t, x, baseY + 15);
+        ctx.beginPath();
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 1;
+        ctx.moveTo(x, baseY);
+        ctx.lineTo(x, baseY + 4);
+        ctx.stroke();
+    });
+
+    // Data arrival bars
+    var sources = [
+        { name: 'Source A', end: 0.25, color: '#27ae60', y: 70 },
+        { name: 'Source B', end: 0.35, color: '#27ae60', y: 110 },
+        { name: 'Source C', end: 0.55, color: '#e67e22', y: 150 },
+        { name: 'Source D', end: 0.75, color: '#e74c3c', y: 190 }
+    ];
+
+    sources.forEach(function(src) {
+        var endX = left + src.end * (right - left);
+
+        // Bar
+        ctx.fillStyle = src.color;
+        ctx.globalAlpha = 0.6;
+        ctx.fillRect(left, src.y, endX - left, 25);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = src.color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(left, src.y, endX - left, 25);
+
+        // Label
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = 'bold 11px system-ui';
+        ctx.textAlign = 'left';
+        ctx.fillText(src.name, left + 5, src.y + 16);
+
+        // Complete marker
+        ctx.fillStyle = src.color;
+        ctx.font = '9px system-ui';
+        ctx.textAlign = 'center';
+        var timeLabel = times[Math.round(src.end * (times.length - 1))];
+        ctx.fillText('✓ ' + timeLabel, endX, src.y - 5);
+    });
+
+    // Training job runs marker
+    var trainX = left + 0.4 * (right - left);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(trainX, 50);
+    ctx.lineTo(trainX, baseY);
+    ctx.stroke();
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('TRAINING', trainX, 45);
+    ctx.fillText('JOB RUNS', trainX, 60);
+
+    // Arrow pointing down
+    ctx.beginPath();
+    ctx.moveTo(trainX, baseY - 5);
+    ctx.lineTo(trainX - 6, baseY - 13);
+    ctx.lineTo(trainX + 6, baseY - 13);
+    ctx.closePath();
+    ctx.fillStyle = '#e74c3c';
+    ctx.fill();
+
+    // Annotations
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('✓ Data available', 670, 90);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.fillText('⚠ Partial data', 670, 160);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('✗ Missing data', 670, 200);
+
+    // Result box
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.fillRect(left, 250, 550, 40);
+    ctx.strokeRect(left, 250, 550, 40);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('RESULT:', left + 10, 265);
+    ctx.font = '11px system-ui';
+    ctx.fillText('Training sees 2 complete sources, 1 partial (55%), 1 missing (0%). Model learns from biased 63% snapshot.', left + 60, 265);
+    ctx.fillText('At serving time, all 4 sources present → distribution shift → accuracy degrades.', left + 60, 280);
+})();
+
+// Canvas 2: Why It Happens - timeline showing late-arriving events
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Schedule-Based Trigger vs Actual Data Arrival', w/2, 25);
+
+    // Timeline base
+    var left = 80, right = 650, baseY = 160;
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(left, baseY);
+    ctx.lineTo(right, baseY);
+    ctx.stroke();
+
+    // Time labels
+    var times = ['00:00', '02:00', '04:00', '06:00', '08:00', '10:00'];
+    ctx.fillStyle = '#666';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    times.forEach(function(t, i) {
+        var x = left + (i / (times.length - 1)) * (right - left);
+        ctx.fillText(t, x, baseY + 15);
+        ctx.beginPath();
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 1;
+        ctx.moveTo(x, baseY - 3);
+        ctx.lineTo(x, baseY + 3);
+        ctx.stroke();
+    });
+
+    // Query window box
+    var qStart = left;
+    var qEnd = left + 0.35 * (right - left);
+    ctx.fillStyle = 'rgba(26, 82, 118, 0.1)';
+    ctx.fillRect(qStart, 45, qEnd - qStart, baseY - 55);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 3]);
+    ctx.strokeRect(qStart, 45, qEnd - qStart, baseY - 55);
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('QUERY WINDOW', (qStart + qEnd) / 2, 40);
+
+    // Schedule trigger line at 02:00
+    var trigX = left + 0.2 * (right - left);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(trigX, 45);
+    ctx.lineTo(trigX, baseY);
+    ctx.stroke();
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('PIPELINE', trigX, 38);
+    ctx.fillText('TRIGGERS', trigX + 1, 50);
+
+    // Events arriving on time (green dots inside window)
+    var onTimeEvents = [0.05, 0.08, 0.1, 0.12, 0.15, 0.17];
+    onTimeEvents.forEach(function(pos) {
+        var x = left + pos * (right - left);
+        var y = 80 + Math.random() * 50;
+        ctx.beginPath();
+        ctx.arc(x, y, 5, 0, Math.PI * 2);
+        ctx.fillStyle = '#27ae60';
+        ctx.fill();
+    });
+
+    // Late events (red dots arriving after trigger)
+    var lateEvents = [0.45, 0.5, 0.55, 0.62, 0.7, 0.75, 0.8];
+    lateEvents.forEach(function(pos) {
+        var x = left + pos * (right - left);
+        var y = 80 + Math.random() * 50;
+        ctx.beginPath();
+        ctx.arc(x, y, 5, 0, Math.PI * 2);
+        ctx.fillStyle = '#e74c3c';
+        ctx.fill();
+    });
+
+    // Gap annotation
+    var gapStart = trigX + 10;
+    var gapEnd = left + 0.8 * (right - left);
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(gapStart, 135);
+    ctx.lineTo(gapEnd, 135);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Gap arrows
+    ctx.beginPath();
+    ctx.moveTo(gapStart, 135);
+    ctx.lineTo(gapStart + 6, 131);
+    ctx.lineTo(gapStart + 6, 139);
+    ctx.closePath();
+    ctx.fillStyle = '#e67e22';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(gapEnd, 135);
+    ctx.lineTo(gapEnd - 6, 131);
+    ctx.lineTo(gapEnd - 6, 139);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('LATE EVENTS MISSED (5+ hours)', (gapStart + gapEnd) / 2, 128);
+
+    // Legend
+    ctx.textAlign = 'left';
+    ctx.font = '11px system-ui';
+
+    ctx.beginPath();
+    ctx.arc(left + 10, 195, 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#27ae60';
+    ctx.fill();
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('Events captured (arrived before trigger)', left + 22, 199);
+
+    ctx.beginPath();
+    ctx.arc(left + 10, 215, 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fill();
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('Events lost (arrived after pipeline ran)', left + 22, 219);
+
+    // Bottom summary box
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.fillRect(left, 240, 560, 45);
+    ctx.strokeRect(left, 240, 560, 45);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('PROBLEM:', left + 10, 258);
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('Pipeline at 2am UTC captures US East events but misses US West (UTC-8).', left + 75, 258);
+    ctx.fillText('11pm PST events arrive at 7am UTC — 5 hours after cutoff. Permanently lost from training.', left + 75, 275);
+})();
+
+// Canvas 3: The Correct Approach - watermark-based gating
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Watermark-Based Completeness Gate', w/2, 25);
+
+    // Threshold line
+    var left = 100, right = 620, chartTop = 60, chartBottom = 200;
+    var threshold = 0.95;
+    var thresholdY = chartBottom - threshold * (chartBottom - chartTop);
+
+    // Y axis
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(left, chartTop);
+    ctx.lineTo(left, chartBottom);
+    ctx.lineTo(right, chartBottom);
+    ctx.stroke();
+
+    // Y axis labels
+    ctx.fillStyle = '#666';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'right';
+    ctx.fillText('100%', left - 8, chartTop + 4);
+    ctx.fillText('95%', left - 8, thresholdY + 4);
+    ctx.fillText('50%', left - 8, chartBottom - 0.5 * (chartBottom - chartTop) + 4);
+    ctx.fillText('0%', left - 8, chartBottom + 4);
+
+    // Threshold line (green dashed)
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(left, thresholdY);
+    ctx.lineTo(right, thresholdY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('THRESHOLD (95% of 7-day avg)', right + 5, thresholdY + 4);
+
+    // Event accumulation bars (growing toward threshold)
+    var barCount = 10;
+    var barWidth = (right - left - 40) / barCount;
+    var accumulation = [0.3, 0.45, 0.55, 0.65, 0.72, 0.8, 0.85, 0.9, 0.95, 0.98];
+
+    accumulation.forEach(function(val, i) {
+        var x = left + 20 + i * barWidth;
+        var barH = val * (chartBottom - chartTop);
+        var y = chartBottom - barH;
+
+        // Color: orange if below threshold, green if at/above
+        if (val >= threshold) {
+            ctx.fillStyle = 'rgba(39, 174, 96, 0.6)';
+            ctx.strokeStyle = '#27ae60';
+        } else {
+            ctx.fillStyle = 'rgba(230, 126, 34, 0.4)';
+            ctx.strokeStyle = '#e67e22';
+        }
+        ctx.fillRect(x, y, barWidth - 4, barH);
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(x, y, barWidth - 4, barH);
+    });
+
+    // X axis labels
+    ctx.fillStyle = '#666';
+    ctx.font = '9px system-ui';
+    ctx.textAlign = 'center';
+    var xLabels = ['T+0', 'T+1h', 'T+2h', 'T+3h', 'T+4h', 'T+5h', 'T+6h', 'T+7h', 'T+8h', 'T+9h'];
+    xLabels.forEach(function(lbl, i) {
+        var x = left + 20 + i * barWidth + (barWidth - 4) / 2;
+        ctx.fillText(lbl, x, chartBottom + 14);
+    });
+
+    // Gate indicator - closed (red) for early bars, open (green) for threshold bars
+    var gateX = left + 20 + 8 * barWidth + (barWidth - 4) / 2;
+    var gateY = chartTop - 5;
+
+    // Gate closed symbol (before threshold)
+    var closedX = left + 20 + 5 * barWidth + (barWidth - 4) / 2;
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 18px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('⛔', closedX, gateY + 5);
+    ctx.font = '9px system-ui';
+    ctx.fillText('GATE CLOSED', closedX, gateY + 18);
+
+    // Gate open symbol (at threshold)
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 18px system-ui';
+    ctx.fillText('✅', gateX, gateY + 5);
+    ctx.font = '9px system-ui';
+    ctx.fillText('GATE OPENS', gateX, gateY + 18);
+
+    // Arrow from gate open down to bar
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(gateX, gateY + 22);
+    ctx.lineTo(gateX, chartBottom - accumulation[8] * (chartBottom - chartTop) - 5);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(gateX, chartBottom - accumulation[8] * (chartBottom - chartTop) - 5);
+    ctx.lineTo(gateX - 4, chartBottom - accumulation[8] * (chartBottom - chartTop) - 12);
+    ctx.lineTo(gateX + 4, chartBottom - accumulation[8] * (chartBottom - chartTop) - 12);
+    ctx.closePath();
+    ctx.fillStyle = '#27ae60';
+    ctx.fill();
+
+    // Bottom summary box
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.fillRect(left - 20, 230, 560, 55);
+    ctx.strokeRect(left - 20, 230, 560, 55);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('CORRECT:', left - 10, 248);
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('Pipeline waits until event count >= 95% of trailing 7-day average.', left + 60, 248);
+    ctx.fillText('Gate opens only when watermark is met. If timeout reached, alert fires (don\'t proceed silently).', left + 60, 264);
+    ctx.fillText('Late data handled via reprocessing in next window — never permanently lost.', left + 60, 280);
+})();
+</script>
+
+</body>
+</html>

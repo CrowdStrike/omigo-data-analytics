@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Volatile State in Real-Time Systems</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.metric strong {
+    color: #1a5276;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Volatile State in Real-Time Systems</h1>
+<p class="subtitle">Data changes between API calls, model sees inconsistent state causing prediction errors.</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Real-time serving makes multiple feature lookups or API calls sequentially. State changes between calls—concurrent updates, cache evictions, time-based expirations—causing features to reflect inconsistent snapshots. Model trained on coherent data sees incoherent combinations at inference.</p>
+                <ul>
+                    <li><strong>Race conditions:</strong> Fetch feature A (user logged in = true), 50ms later fetch feature B (session_id = null because logout happened mid-request)—model sees impossible state</li>
+                    <li><strong>Snapshot isolation:</strong> No transactional read guarantees; each feature lookup hits current state independently, assembling features from different moments in time</li>
+                    <li><strong>Consistency violations:</strong> Feature X and Y should be correlated (X = item_price, Y = cart_total), but mid-request price update creates X ≠ sum(cart items)—model detects anomaly, misclassifies</li>
+                    <li><strong>Time-sensitive features:</strong> "events in last 5 minutes" computed at request start, "is_active_session" computed 200ms later after events arrived—counts don't match session status</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Impact:</strong> Model encounters feature combinations never seen in training (inconsistent snapshots). Confidence calibration breaks. Edge cases trigger unexpected predictions. Debugging is hard—state is gone by the time error is logged. <strong>Fix:</strong> Fetch all features in single snapshot transaction or batch read. Cache coherent feature snapshot at request start. Add consistency checks—if features violate expected constraints, reject or recompute. Log feature timestamps to detect skew.
+                </div>
+                <p class="example">Example: Fraud detection fetches "account_balance" (read 1), then "transaction_amount" (read 2). Between reads, legitimate withdrawal posts, balance drops. Model sees transaction_amount > account_balance, flags as fraud. False positive rate 12% during high-activity hours when balance changes are frequent.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <ul>
+                    <li><strong>Feature fetches take time:</strong> State changes between calls in distributed systems</li>
+                    <li><strong>Balance drift:</strong> User's account balance changes between feature lookup and prediction serving</li>
+                    <li><strong>Async systems:</strong> Feature store returns stale cached values</li>
+                    <li><strong>Race conditions:</strong> Two requests read the same state, one updates it, other prediction is based on outdated info</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Root cause:</strong> Features are treated as static snapshots when they're actually volatile state. The time between "read feature" and "serve prediction" creates a consistency window where reality can diverge.
+                </div>
+                <p class="example">Example: Credit scoring reads account_balance=$5000 at T=0. By T=200ms (when prediction is served), a $4000 withdrawal processed. Model approved based on stale $5000 balance.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <ul>
+                    <li><strong>Snapshot reads:</strong> Freeze feature state at a single consistent timestamp</li>
+                    <li><strong>Timestamp every feature:</strong> Each value carries its read time</li>
+                    <li><strong>Staleness-aware models:</strong> Degrade gracefully with stale features</li>
+                    <li><strong>Optimistic concurrency:</strong> Check if critical features changed before acting on prediction</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Best practice:</strong> Every feature value should carry a timestamp. Model should know feature age. Critical decisions should verify feature freshness before execution, or use pessimistic bounds.
+                </div>
+                <p class="example">Example: Feature vector includes balance=$5000, balance_read_at=T0. Serving layer checks: if now - balance_read_at > 500ms AND decision=approve, re-fetch balance before finalizing. Adds latency but prevents stale-state errors.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Volatile State: Features from Different Time Snapshots', w/2, 22);
+
+    // Timeline
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(40, 60);
+    ctx.lineTo(680, 60);
+    ctx.stroke();
+
+    // Time markers
+    var times = [
+        {x: 100, label: 'T=0ms', fetch: 'Fetch A', value: 'active_bids=3', color: '#27ae60'},
+        {x: 300, label: 'T=50ms', fetch: 'Fetch B', value: 'price=$45', color: '#2980b9'},
+        {x: 500, label: 'T=100ms', fetch: 'Fetch C', value: 'inventory=12', color: '#e67e22'}
+    ];
+
+    times.forEach(function(t) {
+        // Time point
+        ctx.beginPath();
+        ctx.arc(t.x, 60, 5, 0, 2 * Math.PI);
+        ctx.fillStyle = t.color;
+        ctx.fill();
+        ctx.strokeStyle = t.color;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Label
+        ctx.fillStyle = '#333';
+        ctx.font = 'bold 11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(t.label, t.x, 45);
+
+        // Fetch box
+        ctx.strokeStyle = t.color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(t.x - 50, 75, 100, 35);
+        ctx.fillStyle = t.color;
+        ctx.font = 'bold 11px system-ui';
+        ctx.fillText(t.fetch, t.x, 90);
+        ctx.font = '10px system-ui';
+        ctx.fillText(t.value, t.x, 102);
+    });
+
+    // State change event
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('⚡ NEW BID ARRIVES', 400, 140);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(400, 145);
+    ctx.lineTo(400, 60);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Combined feature vector (impossible state)
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(150, 170, 420, 70);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillText('Combined Feature Vector (impossible state)', 360, 190);
+
+    ctx.font = '11px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('active_bids=3', 170, 210);
+    ctx.fillStyle = '#2980b9';
+    ctx.fillText('price=$45', 290, 210);
+    ctx.fillStyle = '#e67e22';
+    ctx.fillText('inventory=12', 410, 210);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('(but state changed between fetches → never existed together)', 360, 228);
+
+    // Bottom annotation
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('Model trained on coherent snapshots, serves on inconsistent mashups', w/2, h - 10);
+})();
+
+// Canvas 2: Why It Happens - Timeline showing stale feature divergence
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Feature Staleness: Reality Diverges from Cached Value', w/2, 22);
+
+    // Timeline axis
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(60, 140);
+    ctx.lineTo(680, 140);
+    ctx.stroke();
+
+    // Arrow head
+    ctx.beginPath();
+    ctx.moveTo(680, 140);
+    ctx.lineTo(670, 135);
+    ctx.lineTo(670, 145);
+    ctx.closePath();
+    ctx.fillStyle = '#666';
+    ctx.fill();
+
+    // Time label
+    ctx.fillStyle = '#666';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'right';
+    ctx.fillText('time →', 675, 158);
+
+    // Time markers
+    var markers = [
+        {x: 120, label: 'T=0ms', sublabel: 'Feature Read'},
+        {x: 370, label: 'T=100ms', sublabel: 'State Changes'},
+        {x: 600, label: 'T=200ms', sublabel: 'Prediction Served'}
+    ];
+
+    markers.forEach(function(m) {
+        ctx.beginPath();
+        ctx.moveTo(m.x, 133);
+        ctx.lineTo(m.x, 147);
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.fillStyle = '#333';
+        ctx.font = 'bold 11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(m.label, m.x, 170);
+        ctx.font = '10px system-ui';
+        ctx.fillStyle = '#666';
+        ctx.fillText(m.sublabel, m.x, 183);
+    });
+
+    // Cached feature value line (stays flat - stale)
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(120, 80);
+    ctx.lineTo(600, 80);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Label for cached
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Cached: balance = $5000', 125, 73);
+
+    // Real-world state line (drops at T=100ms)
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(120, 80);
+    ctx.lineTo(360, 80);
+    ctx.lineTo(380, 220);
+    ctx.lineTo(600, 220);
+    ctx.stroke();
+
+    // Label for real
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Real: balance = $1000 (after withdrawal)', 390, 238);
+
+    // State change event marker
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('⚡ $4000 withdrawal', 370, 50);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(370, 55);
+    ctx.lineTo(370, 133);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Gap annotation at T=200ms
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(610, 80);
+    ctx.lineTo(610, 220);
+    ctx.stroke();
+    // Arrow heads on gap line
+    ctx.beginPath();
+    ctx.moveTo(610, 85);
+    ctx.lineTo(606, 93);
+    ctx.lineTo(614, 93);
+    ctx.closePath();
+    ctx.fillStyle = '#e74c3c';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(610, 215);
+    ctx.lineTo(606, 207);
+    ctx.lineTo(614, 207);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('STALE', 618, 145);
+    ctx.fillText('GAP', 618, 158);
+    ctx.font = '10px system-ui';
+    ctx.fillText('$4000 error', 618, 172);
+
+    // Bottom annotation
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Model approved loan based on stale $5000 — real balance was $1000', w/2, h - 10);
+})();
+
+// Canvas 3: The Correct Approach - Snapshot read with freshness gate
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Correct: Snapshot Read + Staleness Check Before Serving', w/2, 22);
+
+    // Step 1: Snapshot read box
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.1)';
+    ctx.fillRect(30, 45, 180, 80);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(30, 45, 180, 80);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Snapshot Read', 120, 63);
+    ctx.font = '10px monospace';
+    ctx.fillStyle = '#333';
+    ctx.fillText('balance = $5000', 120, 82);
+    ctx.fillText('read_at = T0', 120, 96);
+    ctx.fillText('All features @ T0', 120, 110);
+
+    // Arrow from snapshot to model
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(210, 85);
+    ctx.lineTo(260, 85);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(260, 85);
+    ctx.lineTo(253, 80);
+    ctx.lineTo(253, 90);
+    ctx.closePath();
+    ctx.fillStyle = '#666';
+    ctx.fill();
+
+    // Step 2: Model prediction box
+    ctx.fillStyle = 'rgba(26, 82, 118, 0.1)';
+    ctx.fillRect(265, 45, 150, 80);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(265, 45, 150, 80);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Model Prediction', 340, 63);
+    ctx.font = '10px monospace';
+    ctx.fillStyle = '#333';
+    ctx.fillText('decision = APPROVE', 340, 82);
+    ctx.fillText('confidence = 0.87', 340, 96);
+    ctx.fillText('feature_age = T0', 340, 110);
+
+    // Arrow from model to freshness gate
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(415, 85);
+    ctx.lineTo(465, 85);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(465, 85);
+    ctx.lineTo(458, 80);
+    ctx.lineTo(458, 90);
+    ctx.closePath();
+    ctx.fillStyle = '#666';
+    ctx.fill();
+
+    // Step 3: Freshness gate (diamond)
+    ctx.fillStyle = 'rgba(230, 126, 34, 0.1)';
+    ctx.beginPath();
+    ctx.moveTo(540, 50);
+    ctx.lineTo(600, 85);
+    ctx.lineTo(540, 120);
+    ctx.lineTo(480, 85);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('VERIFY', 540, 82);
+    ctx.fillText('FRESHNESS', 540, 94);
+
+    // Three outcomes below the gate
+    // Green: Fresh
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(510, 120);
+    ctx.lineTo(440, 165);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(440, 165);
+    ctx.lineTo(447, 158);
+    ctx.lineTo(445, 167);
+    ctx.closePath();
+    ctx.fillStyle = '#27ae60';
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.15)';
+    ctx.fillRect(380, 170, 120, 55);
+    ctx.strokeStyle = '#27ae60';
+    ctx.strokeRect(380, 170, 120, 55);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('FRESH', 440, 188);
+    ctx.font = '9px system-ui';
+    ctx.fillStyle = '#333';
+    ctx.fillText('age < 500ms', 440, 202);
+    ctx.fillText('→ Serve prediction', 440, 216);
+
+    // Orange: Stale but within tolerance
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(540, 120);
+    ctx.lineTo(540, 165);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(540, 165);
+    ctx.lineTo(535, 158);
+    ctx.lineTo(545, 158);
+    ctx.closePath();
+    ctx.fillStyle = '#e67e22';
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(230, 126, 34, 0.15)';
+    ctx.fillRect(480, 170, 120, 55);
+    ctx.strokeStyle = '#e67e22';
+    ctx.strokeRect(480, 170, 120, 55);
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('STALE (ok)', 540, 188);
+    ctx.font = '9px system-ui';
+    ctx.fillStyle = '#333';
+    ctx.fillText('500ms < age < 2s', 540, 202);
+    ctx.fillText('→ Re-fetch, then serve', 540, 216);
+
+    // Red: Stale reject
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(570, 120);
+    ctx.lineTo(640, 165);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(640, 165);
+    ctx.lineTo(633, 158);
+    ctx.lineTo(635, 167);
+    ctx.closePath();
+    ctx.fillStyle = '#e74c3c';
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.15)';
+    ctx.fillRect(580, 170, 120, 55);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.strokeRect(580, 170, 120, 55);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('STALE (reject)', 640, 188);
+    ctx.font = '9px system-ui';
+    ctx.fillStyle = '#333';
+    ctx.fillText('age > 2s', 640, 202);
+    ctx.fillText('→ Reject, re-compute', 640, 216);
+
+    // Legend at bottom left
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(30, 250, 12, 12);
+    ctx.fillStyle = '#333';
+    ctx.fillText('Fresh — serve immediately', 48, 260);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.fillRect(30, 268, 12, 12);
+    ctx.fillStyle = '#333';
+    ctx.fillText('Stale within tolerance — re-fetch then serve', 48, 278);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(30, 286, 12, 12);
+    ctx.fillStyle = '#333';
+    ctx.fillText('Stale beyond tolerance — reject and recompute from scratch', 48, 296);
+})();
+</script>
+
+</body>
+</html>

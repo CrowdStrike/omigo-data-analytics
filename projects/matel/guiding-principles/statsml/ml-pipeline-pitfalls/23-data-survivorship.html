@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Survivorship Bias</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Data Survivorship Bias</h1>
+<p class="subtitle">Training data contains only records that survived retention policies, systematically missing deleted or archived cases</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>When old records are deleted due to retention policies, compliance rules, or user requests, only successful or benign cases remain. The model trains on biased data that excludes failed attempts, closed accounts, or problematic transactions.</p>
+                <ul>
+                    <li>GDPR/privacy compliance deletes user data after account closure</li>
+                    <li>Failed transactions are purged after 90 days</li>
+                    <li>Spam/abuse cases are removed to clean the dataset</li>
+                    <li>Only active accounts remain visible for training</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Impact:</strong> Model learns from survivors only, missing the pattern of what causes failure or churn. Predictions systematically underestimate negative outcomes. Fix: Archive data before deletion, or use time-bounded snapshots that capture all cases at a historical point.
+                </div>
+                <p class="example">Example: A churn model trained on current customer data has no access to deleted accounts. It predicts 5% churn but actual is 18% because high-risk users delete accounts and disappear from the training set.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Common Sources</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Survivorship bias emerges wherever data retention policies, user actions, or system cleanup remove records non-randomly. The deletions correlate with the outcome you're trying to predict.</p>
+                <ul>
+                    <li>User-initiated account deletion (correlated with dissatisfaction)</li>
+                    <li>Compliance-driven purging of old or inactive records</li>
+                    <li>ETL cleanup removing "outliers" or "noisy" records</li>
+                    <li>Logs rotated before failures could be captured</li>
+                    <li>Only successful transactions kept, failed ones discarded</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Root cause:</strong> Data deletion is not random—it correlates with the target variable. Survivorship bias is selection bias applied over time. The data you see is systematically different from the data you need.
+                </div>
+                <p class="example">Example: A fraud detection system uses transaction logs from the past year. Failed auth attempts are purged after 30 days. The model never sees early-stage attack patterns because those records are gone.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Prevention and Mitigation</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>The fix is to capture and archive data before deletion policies apply, or to use point-in-time snapshots that include all records that existed at that moment.</p>
+                <ul>
+                    <li>Archive records to cold storage before deletion</li>
+                    <li>Use point-in-time snapshots for training (not live production data)</li>
+                    <li>Document retention policies and their correlation with outcomes</li>
+                    <li>Track deletion timestamps to detect systematic gaps</li>
+                    <li>Build separate pipelines for compliance vs ML training data</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Best practice:</strong> Separate compliance-driven deletion from ML data pipelines. Archive all training data with outcome labels before any purging occurs. Use immutable snapshots for reproducibility and to prevent survivorship drift over time.
+                </div>
+                <p class="example">Example: A lending platform archives loan applications for 7 years, even after accounts close. Training data includes all outcomes (approved, denied, defaulted, closed) rather than just currently active loans, eliminating survivorship bias.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// Canvas 1: Survivorship visualization
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Data Over Time — Survivors vs Full Population', w/2, 25);
+
+    var left = 80, right = 660, top = 60, bottom = 240;
+
+    // Timeline
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(left, bottom);
+    ctx.lineTo(right, bottom);
+    ctx.stroke();
+
+    ctx.fillStyle = '#666';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('t=0', left, bottom + 20);
+    ctx.fillText('t=6mo', (left+right)/2, bottom + 20);
+    ctx.fillText('t=12mo', right, bottom + 20);
+
+    // Full population (ghosted after deletion)
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(left, top + 80);
+    for (var i = 0; i <= 100; i++) {
+        var t = i / 100;
+        var x = left + t * (right - left);
+        var y = top + 80 - 20 * t + 15 * Math.sin(t * 8);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        if (t > 0.5) {
+            ctx.stroke();
+            ctx.setLineDash([4, 4]);
+            ctx.globalAlpha = 0.3;
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+        }
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('True population', left + 10, top + 70);
+    ctx.globalAlpha = 0.4;
+    ctx.fillText('(deleted)', right - 80, top + 50);
+    ctx.globalAlpha = 1;
+
+    // Survivors only
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (var i = 0; i <= 100; i++) {
+        var t = i / 100;
+        var x = left + t * (right - left);
+        var y = top + 80 - 20 * t + 15 * Math.sin(t * 8);
+        if (t <= 0.5) {
+            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        } else {
+            var yBias = y + 30;
+            i === 50 ? ctx.moveTo(x, yBias) : ctx.lineTo(x, yBias);
+        }
+    }
+    ctx.stroke();
+
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'left';
+    ctx.fillText('Survivors (biased sample)', left + 10, top + 180);
+
+    // Deletion event
+    var delX = (left + right) / 2;
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([6, 3]);
+    ctx.beginPath();
+    ctx.moveTo(delX, top + 40);
+    ctx.lineTo(delX, bottom - 5);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Deletion Event', delX, top + 30);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Model trained here misses negative cases', delX + 120, bottom + 40);
+})();
+
+// Canvas 2: Outcome distribution comparison
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Outcome Distribution — Full vs Surviving Records', w/2, 25);
+
+    var barW = 100, baseY = 240, maxH = 160;
+    var sets = [
+        {x: 200, label: 'Original\nData', pos: 0.70, neg: 0.30, colors: ['#27ae60', '#e74c3c']},
+        {x: 520, label: 'After\nDeletion', pos: 0.88, neg: 0.12, colors: ['#27ae60', '#e74c3c']}
+    ];
+
+    sets.forEach(function(set) {
+        var negH = set.neg * maxH;
+        var posH = set.pos * maxH;
+
+        // Negative (bottom)
+        ctx.fillStyle = set.colors[1];
+        ctx.globalAlpha = 0.35;
+        ctx.fillRect(set.x - barW/2, baseY - negH, barW, negH);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = set.colors[1];
+        ctx.lineWidth = 2;
+        ctx.strokeRect(set.x - barW/2, baseY - negH, barW, negH);
+
+        ctx.fillStyle = set.colors[1];
+        ctx.font = 'bold 14px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(Math.round(set.neg * 100) + '%', set.x, baseY - negH/2 + 5);
+
+        ctx.fillStyle = '#444';
+        ctx.font = '11px system-ui';
+        var lines = set.label.split('\n');
+        lines.forEach(function(line, i) {
+            ctx.fillText(line, set.x, baseY + 18 + i * 14);
+        });
+    });
+
+    // Arrow showing bias
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(290, 140);
+    ctx.lineTo(430, 140);
+    ctx.stroke();
+    // Arrowhead
+    ctx.beginPath();
+    ctx.moveTo(430, 140);
+    ctx.lineTo(420, 135);
+    ctx.lineTo(420, 145);
+    ctx.closePath();
+    ctx.fillStyle = '#e67e22';
+    ctx.fill();
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Negative cases disappear', 360, 130);
+
+    // Labels
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Failures / Churned', 200, baseY - 10);
+    ctx.fillText('Failures / Churned', 520, baseY - 10);
+
+    // Baseline
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(80, baseY);
+    ctx.lineTo(660, baseY);
+    ctx.stroke();
+})();
+
+// Canvas 3: Archival workflow
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Correct Workflow — Archive Before Deletion', w/2, 25);
+
+    var boxes = [
+        {x: 80, y: 70, w: 120, h: 50, label: 'Production\nData', color: '#1a5276'},
+        {x: 260, y: 70, w: 140, h: 50, label: 'Snapshot\n+ Archive', color: '#27ae60'},
+        {x: 460, y: 70, w: 120, h: 50, label: 'ML Training\nData', color: '#27ae60'},
+        {x: 260, y: 170, w: 140, h: 50, label: 'Compliance\nDeletion', color: '#e67e22'}
+    ];
+
+    boxes.forEach(function(box) {
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = box.color;
+        ctx.lineWidth = 3;
+        ctx.fillRect(box.x, box.y, box.w, box.h);
+        ctx.strokeRect(box.x, box.y, box.w, box.h);
+
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '12px system-ui';
+        ctx.textAlign = 'center';
+        var lines = box.label.split('\n');
+        lines.forEach(function(line, j) {
+            ctx.fillText(line, box.x + box.w/2, box.y + box.h/2 + (j - lines.length/2 + 0.8) * 15);
+        });
+    });
+
+    // Arrows
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(200, 95);
+    ctx.lineTo(260, 95);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(400, 95);
+    ctx.lineTo(460, 95);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(330, 120);
+    ctx.lineTo(330, 170);
+    ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Immutable snapshot', 330, 58);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.fillText('Separate path', 330, 150);
+
+    ctx.fillStyle = '#666';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('ML pipeline uses archived data (all outcomes)', 100, 255);
+    ctx.fillText('Compliance deletion does not affect training set', 100, 275);
+})();
+</script>
+
+</body>
+</html>

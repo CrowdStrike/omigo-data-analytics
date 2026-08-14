@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rare Category Explosion</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Rare Category Explosion</h1>
+<p class="subtitle">One-hot encoding high-cardinality features creates sparse columns.</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>You one-hot encode a high-cardinality categorical feature (user_id, product_sku, zip_code with 2000+ unique values). The feature explodes into thousands of sparse binary columns, each appearing in only a handful of training samples.</p>
+                <ul>
+                    <li>A single categorical column becomes 2000+ binary features</li>
+                    <li>Most categories appear in fewer than 10 samples (0.5% density)</li>
+                    <li>Model learns spurious associations with rare categories</li>
+                    <li>Regularization cannot overcome the curse of dimensionality</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Impact:</strong> Training accuracy is artificially high because the model memorizes rare category patterns. Validation and test performance collapse because new data contains different rare categories or the same categories behave differently with limited training examples.
+                </div>
+                <p class="example">Example: E-commerce model one-hot encodes product_sku (2400 unique products). Train AUC = 0.92, but test AUC = 0.68 because most SKUs in test set appeared fewer than 5 times in training.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>High-cardinality features contain many categories with very few observations each. One-hot encoding treats each category as an independent feature, creating a massive sparse feature space where most values are zero.</p>
+                <ul>
+                    <li>With 2000 categories and 5000 samples, average support per category is 2.5 observations</li>
+                    <li>Rare categories lack statistical power — any observed pattern is likely noise</li>
+                    <li>Tree models can easily split on rare categories, creating pure leaf nodes (overfitting)</li>
+                    <li>Linear models assign coefficients to categories with insufficient evidence</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Mechanism:</strong> Rare categories act like fingerprints. The model learns "if product_sku_A2439=1 then target=1" based on 3 positive samples, ignoring that this is pure chance. New data contains different rare categories with no learned weights, causing predictions to regress to the mean.
+                </div>
+                <p class="example">Example: Zip code 94301 appears 4 times in training, all with positive outcomes. Model learns strong positive weight. In test, 94301 appears 8 times with 50% positive rate. Model overpredicts because it memorized the training coincidence.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Detection & Mitigation</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Monitor feature dimensionality and category frequency. For high-cardinality features, use target encoding, frequency encoding, embeddings, or grouping strategies instead of one-hot encoding.</p>
+                <ul>
+                    <li>Count unique categories — if > 50, reconsider one-hot encoding</li>
+                    <li>Check category frequency distribution — flag categories with < 30 samples</li>
+                    <li>Use target encoding: replace category with mean target value (with cross-validation)</li>
+                    <li>Use frequency encoding: replace with category count or proportion</li>
+                    <li>Group rare categories into "OTHER" bucket (appears in > 1% of samples)</li>
+                    <li>Use embeddings for very high cardinality (entity embeddings)</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Fix:</strong> Replace one-hot encoding with target encoding or frequency encoding for high-cardinality features. Group categories with fewer than 30 samples into an "OTHER" category. For categorical features with 1000+ levels, consider embeddings.
+                </div>
+                <p class="example">Example: Replace one-hot product_sku with (1) target-encoded mean conversion rate per SKU and (2) frequency-encoded SKU popularity rank. Train AUC = 0.88, test AUC = 0.84. Dimensionality drops from 2400 to 2.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// Canvas 1: Feature explosion visualization
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Feature Explosion: 1 Categorical Column → 2000 Binary Columns', w/2, 25);
+
+    // Left: Original feature
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 3;
+    ctx.fillRect(80, 120, 140, 60);
+    ctx.strokeRect(80, 120, 140, 60);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('product_sku', 150, 145);
+    ctx.font = '11px system-ui';
+    ctx.fillText('(1 column)', 150, 162);
+    ctx.fillText('2000 categories', 150, 177);
+
+    // Arrow
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(220, 150);
+    ctx.lineTo(280, 150);
+    ctx.stroke();
+
+    // Arrow head
+    ctx.beginPath();
+    ctx.moveTo(280, 150);
+    ctx.lineTo(270, 145);
+    ctx.lineTo(270, 155);
+    ctx.closePath();
+    ctx.fillStyle = '#e67e22';
+    ctx.fill();
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('ONE-HOT', 250, 135);
+    ctx.fillText('ENCODE', 250, 148);
+
+    // Right: Exploded features (showing many columns)
+    var numCols = 30;
+    var colW = 12;
+    var startX = 320;
+    var baseY = 120;
+
+    for (var i = 0; i < numCols; i++) {
+        var x = startX + i * (colW + 2);
+        var h_val = 60;
+        ctx.fillStyle = i < 5 ? 'rgba(231, 76, 60, 0.4)' : 'rgba(231, 76, 60, 0.15)';
+        ctx.fillRect(x, baseY, colW, h_val);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x, baseY, colW, h_val);
+    }
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('2000 BINARY COLUMNS', startX + 200, baseY - 15);
+    ctx.font = '10px system-ui';
+    ctx.fillText('(mostly zeros — sparse!)', startX + 200, baseY - 2);
+
+    // Bottom: Density info
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Density: 0.05% (1 one per column, 1999 zeros)', 80, 220);
+    ctx.fillText('Avg samples per category: 2.5', 80, 238);
+    ctx.fillText('Categories with < 10 samples: 87%', 80, 256);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Result: Model memorizes noise, fails to generalize', 80, 278);
+})();
+
+// Canvas 2: Sparsity pattern and performance degradation
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Performance Degradation with High-Cardinality One-Hot Encoding', w/2, 25);
+
+    var barWidth = 80;
+    var baseY = 240;
+    var maxBarH = 160;
+    var datasets = [
+        { label: 'Train', score: 0.92, x: 200, color: '#27ae60' },
+        { label: 'Validation', score: 0.75, x: 360, color: '#e67e22' },
+        { label: 'Test', score: 0.68, x: 520, color: '#e74c3c' }
+    ];
+
+    datasets.forEach(function(d) {
+        var barH = d.score * maxBarH;
+        var x = d.x - barWidth/2;
+        var y = baseY - barH;
+
+        ctx.fillStyle = d.color;
+        ctx.globalAlpha = 0.7;
+        ctx.fillRect(x, y, barWidth, barH);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = d.color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, barWidth, barH);
+
+        ctx.font = 'bold 16px system-ui';
+        ctx.fillStyle = d.color;
+        ctx.textAlign = 'center';
+        ctx.fillText(Math.round(d.score * 100), d.x, y - 8);
+
+        ctx.font = '12px system-ui';
+        ctx.fillStyle = '#444';
+        ctx.fillText(d.label, d.x, baseY + 20);
+    });
+
+    // Annotations
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Memorizes', 200, baseY + 38);
+    ctx.fillText('rare patterns', 200, baseY + 50);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('New rare', 520, baseY + 38);
+    ctx.fillText('categories', 520, baseY + 50);
+
+    // Title for gap
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('24-point gap: overfitting signal', w/2, 55);
+})();
+
+// Canvas 3: Solution comparison
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Encoding Strategy Comparison (Test AUC)', w/2, 25);
+
+    var strategies = [
+        { name: 'One-Hot\n(2000 cols)', train: 0.92, test: 0.68, x: 150 },
+        { name: 'Target\nEncoding', train: 0.88, test: 0.84, x: 320 },
+        { name: 'Frequency +\nGrouping', train: 0.86, test: 0.83, x: 490 },
+        { name: 'Embeddings\n(dim=10)', train: 0.89, test: 0.85, x: 660 }
+    ];
+
+    var baseY = 230;
+    var maxH = 140;
+
+    strategies.forEach(function(strat) {
+        var trainH = strat.train * maxH;
+        var testH = strat.test * maxH;
+        var barW = 35;
+
+        // Train bar
+        ctx.fillStyle = 'rgba(52, 152, 219, 0.5)';
+        ctx.fillRect(strat.x - 45, baseY - trainH, barW, trainH);
+        ctx.strokeStyle = '#3498db';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(strat.x - 45, baseY - trainH, barW, trainH);
+
+        // Test bar
+        var testColor = strat.test > 0.80 ? '#27ae60' : '#e74c3c';
+        ctx.fillStyle = testColor;
+        ctx.globalAlpha = 0.7;
+        ctx.fillRect(strat.x + 10, baseY - testH, barW, testH);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = testColor;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(strat.x + 10, baseY - testH, barW, testH);
+
+        // Labels
+        ctx.font = '10px system-ui';
+        ctx.fillStyle = '#444';
+        ctx.textAlign = 'center';
+        var lines = strat.name.split('\n');
+        lines.forEach(function(line, idx) {
+            ctx.fillText(line, strat.x, baseY + 20 + idx * 12);
+        });
+
+        // Scores
+        ctx.font = 'bold 10px system-ui';
+        ctx.fillStyle = '#3498db';
+        ctx.fillText(Math.round(strat.train * 100), strat.x - 27, baseY - trainH - 5);
+
+        ctx.fillStyle = testColor;
+        ctx.fillText(Math.round(strat.test * 100), strat.x + 28, baseY - testH - 5);
+    });
+
+    // Legend
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#3498db';
+    ctx.fillRect(80, 60, 15, 15);
+    ctx.fillText('Train', 100, 71);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(160, 60, 15, 15);
+    ctx.fillText('Test', 180, 71);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Target/Frequency encoding: better generalization, lower dimensionality', w/2, 265);
+})();
+</script>
+
+</body>
+</html>

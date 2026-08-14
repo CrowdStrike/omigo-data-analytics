@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Train/Test Contamination</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Train/Test Contamination</h1>
+<p class="subtitle">Information from test set leaks into training process</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Same patient appears in both train and test (different visits) — model memorizes patient, not pattern. Feature engineering uses statistics from full dataset (including test) — mean/std include test rows.</p>
+                <ul>
+                    <li>Same patient appears in both train and test (different visits) → model memorizes patient, not pattern</li>
+                    <li>Feature engineering uses statistics from full dataset (including test) → mean/std include test rows</li>
+                    <li>Oversampling/SMOTE applied before train/test split → synthetic points in test set resemble training points</li>
+                </ul>
+                <p class="example">Example: Patient has 5 hospital visits. 3 in train, 2 in test. Model learns "patient_id_12345 → positive" — it's memorizing, not generalizing. On new patients: accuracy drops 20%.</p>
+                <div class="key-point">
+                    <strong>Defense:</strong> Split by ENTITY (patient, user, household), not by row. All rows from one entity must be in the same split.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Random row-level splits ignore entity grouping. When the same patient/user/household appears in both train and test, the model memorizes entities rather than learning generalizable patterns. Applying SMOTE or oversampling before splitting creates synthetic test points that are near-copies of training data.</p>
+                <ul>
+                    <li>Random row-level splits ignore entity grouping (patient, user, household, device)</li>
+                    <li>Same entity in both splits &rarr; model memorizes entity-specific patterns, not generalizable signal</li>
+                    <li>SMOTE/oversampling applied before split &rarr; synthetic minority samples leak into test set</li>
+                    <li>Feature engineering on full data &rarr; statistics (mean, count) include test entity information</li>
+                </ul>
+                <p class="example">Example: 1000 patients, 5 visits each = 5000 rows. Random 80/20 split: each patient has ~4 train rows and ~1 test row. Model achieves 92% accuracy. Entity-level split (800 patients train, 200 test): accuracy drops to 74%. The 18% gap was memorization.</p>
+                <div class="key-point">
+                    <strong>Root Cause:</strong> sklearn's train_test_split operates on rows, not entities. If a patient has 10 visits and 7 go to train, the model learns "patient X &rarr; outcome Y" which trivially generalizes to the 3 test visits of the same patient. This is memorization, not learning.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Use entity-level splitting with GroupKFold or GroupShuffleSplit. All records from one entity must be in the same split. Apply oversampling only after splitting, on the training set only.</p>
+                <ul>
+                    <li>Use GroupKFold or GroupShuffleSplit: split by entity (patient_id, user_id, household_id)</li>
+                    <li>All records from one entity go to the SAME split &mdash; no entity spans train and test</li>
+                    <li>Apply SMOTE/oversampling AFTER splitting, on training set only</li>
+                    <li>Feature engineering: compute statistics only from training entities</li>
+                    <li>Validate: check that no entity ID appears in both train and test sets</li>
+                </ul>
+                <p class="example">Example: GroupKFold with groups=patient_id. 1000 patients &rarr; 800 in train (all their visits), 200 in test (all their visits). No patient appears in both. Model accuracy: 74% &mdash; honest and reproducible in production.</p>
+                <div class="key-point">
+                    <strong>Fix:</strong> Replace train_test_split(X, y) with GroupShuffleSplit(groups=patient_id). This guarantees zero overlap. For SMOTE: split first, then oversample only the training partition. Test set must reflect real-world entity distribution.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Entity-Level Split: Wrong vs Right', w/2, 25);
+
+    var colW = 320, colH = 220;
+    var leftX = 30, rightX = 390;
+    var topY = 50;
+
+    // Left side: WRONG (random split)
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.fillRect(leftX, topY, colW, colH);
+    ctx.strokeRect(leftX, topY, colW, colH);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('WRONG: Random Split', leftX + colW/2, topY + 20);
+
+    // Patient with records split across train/test
+    var patientY = topY + 45;
+    ctx.fillStyle = '#333';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Patient #12345:', leftX + 15, patientY);
+
+    // Train records (green)
+    ctx.fillStyle = '#27ae60';
+    ctx.globalAlpha = 0.6;
+    ctx.fillRect(leftX + 30, patientY + 10, 100, 25);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(leftX + 30, patientY + 10, 100, 25);
+
+    ctx.fillStyle = '#fff';
+    ctx.font = '9px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Visit 1 (train)', leftX + 80, patientY + 20);
+    ctx.fillText('Visit 3 (train)', leftX + 80, patientY + 30);
+
+    // Test records (red)
+    ctx.fillStyle = '#e74c3c';
+    ctx.globalAlpha = 0.6;
+    ctx.fillRect(leftX + 150, patientY + 10, 100, 25);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(leftX + 150, patientY + 10, 100, 25);
+
+    ctx.fillStyle = '#fff';
+    ctx.font = '9px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Visit 2 (test)', leftX + 200, patientY + 20);
+    ctx.fillText('Visit 5 (test)', leftX + 200, patientY + 30);
+
+    // Contamination warning
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Same patient in both!', leftX + colW/2, patientY + 50);
+
+    // Additional patients
+    var p2Y = patientY + 70;
+    ctx.fillStyle = '#333';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Patient #67890:', leftX + 15, p2Y);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.globalAlpha = 0.6;
+    ctx.fillRect(leftX + 30, p2Y + 10, 100, 25);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(leftX + 30, p2Y + 10, 100, 25);
+
+    ctx.fillStyle = '#fff';
+    ctx.font = '9px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Visit 1 (train)', leftX + 80, p2Y + 23);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.globalAlpha = 0.6;
+    ctx.fillRect(leftX + 150, p2Y + 10, 100, 25);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(leftX + 150, p2Y + 10, 100, 25);
+
+    ctx.fillStyle = '#fff';
+    ctx.font = '9px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Visit 4 (test)', leftX + 200, p2Y + 23);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Model memorizes patients,', leftX + colW/2, topY + 190);
+    ctx.fillText('not patterns', leftX + colW/2, topY + 205);
+
+    // Right side: RIGHT (entity-level split)
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 3;
+    ctx.fillRect(rightX, topY, colW, colH);
+    ctx.strokeRect(rightX, topY, colW, colH);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('RIGHT: Entity-Level Split', rightX + colW/2, topY + 20);
+
+    // Patient fully in train
+    var rPatientY = topY + 45;
+    ctx.fillStyle = '#333';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Patient #12345:', rightX + 15, rPatientY);
+    ctx.fillText('(ALL in train)', rightX + 15, rPatientY + 12);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.globalAlpha = 0.6;
+    ctx.fillRect(rightX + 30, rPatientY + 20, 250, 35);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(rightX + 30, rPatientY + 20, 250, 35);
+
+    ctx.fillStyle = '#fff';
+    ctx.font = '9px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Visit 1, Visit 2, Visit 3,', rightX + 155, rPatientY + 33);
+    ctx.fillText('Visit 4, Visit 5 (all train)', rightX + 155, rPatientY + 45);
+
+    // Patient fully in test
+    var rP2Y = rPatientY + 75;
+    ctx.fillStyle = '#333';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Patient #67890:', rightX + 15, rP2Y);
+    ctx.fillText('(ALL in test)', rightX + 15, rP2Y + 12);
+
+    ctx.fillStyle = '#2980b9';
+    ctx.globalAlpha = 0.6;
+    ctx.fillRect(rightX + 30, rP2Y + 20, 250, 35);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(rightX + 30, rP2Y + 20, 250, 35);
+
+    ctx.fillStyle = '#fff';
+    ctx.font = '9px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Visit 1, Visit 2, Visit 3,', rightX + 155, rP2Y + 33);
+    ctx.fillText('Visit 4 (all test)', rightX + 155, rP2Y + 45);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('No leakage: each patient', rightX + colW/2, topY + 190);
+    ctx.fillText('appears in only ONE split', rightX + colW/2, topY + 205);
+
+    // Bottom message
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Split by entity (patient/user/household), not by row. All records from one entity in same set.', w/2, 285);
+})();
+
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Title
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('How Entity Contamination Occurs', w/2, 25);
+
+    // Dataset table on the left
+    var tableX = 30, tableY = 45;
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(tableX, tableY, 160, 130);
+
+    // Table header
+    ctx.fillStyle = '#1a5276';
+    ctx.globalAlpha = 0.15;
+    ctx.fillRect(tableX, tableY, 160, 22);
+    ctx.globalAlpha = 1;
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('patient_id', tableX + 50, tableY + 15);
+    ctx.fillText('visit', tableX + 120, tableY + 15);
+
+    // Table rows
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1;
+    var rows = [
+        { pid: 'A', visit: '1', color: '#e67e22' },
+        { pid: 'A', visit: '2', color: '#e67e22' },
+        { pid: 'A', visit: '3', color: '#e67e22' },
+        { pid: 'B', visit: '1', color: '#1a5276' },
+        { pid: 'B', visit: '2', color: '#1a5276' }
+    ];
+
+    rows.forEach(function(row, i) {
+        var rowY = tableY + 22 + i * 22;
+        ctx.beginPath();
+        ctx.moveTo(tableX, rowY);
+        ctx.lineTo(tableX + 160, rowY);
+        ctx.stroke();
+
+        ctx.fillStyle = row.color;
+        ctx.font = '10px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText('Patient ' + row.pid, tableX + 50, rowY + 15);
+        ctx.fillText(row.visit, tableX + 120, rowY + 15);
+    });
+
+    // Arrow from table to split boxes
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(200, 110);
+    ctx.lineTo(250, 110);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(245, 105);
+    ctx.lineTo(255, 110);
+    ctx.lineTo(245, 115);
+    ctx.fill();
+
+    // "Random Split" label
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('train_test_split()', 227, 95);
+
+    // Train box
+    var trainX = 270, trainY = 50, boxW = 190, boxH = 100;
+    ctx.fillStyle = '#27ae60';
+    ctx.globalAlpha = 0.1;
+    ctx.fillRect(trainX, trainY, boxW, boxH);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(trainX, trainY, boxW, boxH);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('TRAIN SET', trainX + boxW/2, trainY + 16);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = '10px system-ui';
+    ctx.fillText('Patient A - Visit 1', trainX + boxW/2, trainY + 38);
+    ctx.fillText('Patient A - Visit 3', trainX + boxW/2, trainY + 54);
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('Patient B - Visit 1', trainX + boxW/2, trainY + 70);
+    ctx.fillText('Patient B - Visit 2', trainX + boxW/2, trainY + 86);
+
+    // Test box
+    var testX = 490, testY = 50;
+    ctx.fillStyle = '#e74c3c';
+    ctx.globalAlpha = 0.1;
+    ctx.fillRect(testX, testY, boxW, boxH);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(testX, testY, boxW, boxH);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('TEST SET', testX + boxW/2, testY + 16);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = '10px system-ui';
+    ctx.fillText('Patient A - Visit 2', testX + boxW/2, testY + 45);
+    ctx.fillStyle = '#1a5276';
+
+    // Red dashed lines showing contamination
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 3]);
+
+    // Connection line: Patient A in train to Patient A in test
+    ctx.beginPath();
+    ctx.moveTo(trainX + boxW, trainY + 38);
+    ctx.lineTo(testX, testY + 45);
+    ctx.stroke();
+
+    ctx.setLineDash([]);
+
+    // Warning label on the connection
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('SAME ENTITY!', (trainX + boxW + testX) / 2, trainY + 25);
+
+    // Bottom explanation
+    ctx.fillStyle = '#333';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Patient A appears in BOTH splits. Model memorizes "Patient A → outcome"', w/2, 195);
+    ctx.fillText('instead of learning generalizable patterns.', w/2, 212);
+
+    // SMOTE diagram below
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('SMOTE before split:', 30, 240);
+
+    ctx.fillStyle = '#333';
+    ctx.font = '10px system-ui';
+    ctx.fillText('Full Data → SMOTE (creates synthetic) → Split → Synthetic copies in test set!', 180, 240);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('✖ Test points are near-copies of training data — not independent evaluation', w/2, 265);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Result: Inflated accuracy (92%) that collapses on truly unseen entities (74%)', w/2, 288);
+})();
+
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Title
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Correct: Entity-Level Split (GroupKFold)', w/2, 25);
+
+    // Entity blocks - train side
+    var trainX = 30, blockY = 55, blockH = 35, gap = 8;
+    var entities = [
+        { id: 'Patient A', color: '#e67e22', split: 'train' },
+        { id: 'Patient B', color: '#1a5276', split: 'train' },
+        { id: 'Patient C', color: '#27ae60', split: 'train' },
+        { id: 'Patient D', color: '#8e44ad', split: 'train' },
+        { id: 'Patient E', color: '#e74c3c', split: 'test' },
+        { id: 'Patient F', color: '#2980b9', split: 'test' }
+    ];
+
+    // Train region
+    var trainRegionX = 20, trainRegionW = 350, trainRegionY = 42, trainRegionH = 195;
+    ctx.fillStyle = '#27ae60';
+    ctx.globalAlpha = 0.08;
+    ctx.fillRect(trainRegionX, trainRegionY, trainRegionW, trainRegionH);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(trainRegionX, trainRegionY, trainRegionW, trainRegionH);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('TRAIN (800 patients)', trainRegionX + trainRegionW/2, trainRegionY + 16);
+
+    // Test region
+    var testRegionX = 390, testRegionW = 310, testRegionY = 42, testRegionH = 195;
+    ctx.fillStyle = '#2980b9';
+    ctx.globalAlpha = 0.08;
+    ctx.fillRect(testRegionX, testRegionY, testRegionW, testRegionH);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(testRegionX, testRegionY, testRegionW, testRegionH);
+
+    ctx.fillStyle = '#2980b9';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('TEST (200 patients)', testRegionX + testRegionW/2, testRegionY + 16);
+
+    // Draw entity blocks in train
+    var trainEntities = entities.filter(function(e) { return e.split === 'train'; });
+    trainEntities.forEach(function(ent, i) {
+        var bx = trainRegionX + 20;
+        var by = trainRegionY + 30 + i * (blockH + gap);
+        var bw = trainRegionW - 40;
+
+        ctx.fillStyle = ent.color;
+        ctx.globalAlpha = 0.3;
+        ctx.fillRect(bx, by, bw, blockH);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = ent.color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(bx, by, bw, blockH);
+
+        ctx.fillStyle = '#333';
+        ctx.font = '10px system-ui';
+        ctx.textAlign = 'left';
+        ctx.fillText(ent.id + '  (all visits: v1, v2, v3, v4, v5)', bx + 10, by + 21);
+    });
+
+    // Draw entity blocks in test
+    var testEntities = entities.filter(function(e) { return e.split === 'test'; });
+    testEntities.forEach(function(ent, i) {
+        var bx = testRegionX + 20;
+        var by = testRegionY + 30 + i * (blockH + gap);
+        var bw = testRegionW - 40;
+
+        ctx.fillStyle = ent.color;
+        ctx.globalAlpha = 0.3;
+        ctx.fillRect(bx, by, bw, blockH);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = ent.color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(bx, by, bw, blockH);
+
+        ctx.fillStyle = '#333';
+        ctx.font = '10px system-ui';
+        ctx.textAlign = 'left';
+        ctx.fillText(ent.id + '  (all visits: v1, v2, v3, v4)', bx + 10, by + 21);
+    });
+
+    // Divider with "no crossing" indicator
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([8, 4]);
+    ctx.beginPath();
+    ctx.moveTo(377, trainRegionY);
+    ctx.lineTo(377, trainRegionY + trainRegionH);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Checkmark
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 18px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('✓', 377, trainRegionY + trainRegionH + 18);
+
+    // Bottom annotation
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('No entity crosses the boundary. GroupShuffleSplit(groups=patient_id) guarantees zero overlap.', w/2, 275);
+
+    ctx.fillStyle = '#333';
+    ctx.font = '10px system-ui';
+    ctx.fillText('Honest accuracy: 74% — reproducible in production on unseen entities', w/2, 292);
+})();
+</script>
+
+</body>
+</html>

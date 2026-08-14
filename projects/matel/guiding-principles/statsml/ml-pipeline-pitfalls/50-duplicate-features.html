@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duplicate / Highly Correlated Features (Semantic Incoherence)</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.metric strong {
+    color: #1a5276;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Duplicate / Highly Correlated Features (Semantic Incoherence)</h1>
+<p class="subtitle">Near-identical features destroy interpretability and split importance across redundant variables.</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Features are semantically identical or nearly so (correlation > 0.95), often due to multiple derivations of same concept or renamed columns from different sources. Tree models split importance arbitrarily, linear models have unstable coefficients, interpretation becomes meaningless.</p>
+                <ul>
+                    <li><strong>Feature correlation:</strong> "revenue_usd" and "revenue_dollars" are same data, different names; model treats as two features, splits importance 50/50 randomly</li>
+                    <li><strong>Importance splitting:</strong> True signal strength is 0.4, but split across 3 correlated features (0.15, 0.12, 0.13); all rank below threshold, erroneously dropped in feature selection</li>
+                    <li><strong>Semantic duplication:</strong> "age" and "birth_year" (perfectly correlated given constant reference year); "price" and "log_price" (monotonic transform, nearly redundant for tree models)</li>
+                    <li><strong>Multicollinearity:</strong> Linear models: coefficients unstable, change dramatically with small data perturbations; regularization arbitrarily zeros one of the pair</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Impact:</strong> Feature importance uninterpretable—can't determine which features matter because importance is fractured. Model explanation contradictory. Feature selection drops important predictors because importance diluted below threshold. Coefficients unstable across retraining. <strong>Fix:</strong> Compute pairwise correlation matrix, drop features with r > 0.95. Use variance inflation factor (VIF) to detect multicollinearity. Deduplicate at feature engineering stage—one canonical feature per concept.
+                </div>
+                <p class="example">Example: User engagement model has "total_clicks," "click_count," and "num_clicks" from three different logging sources—all identical. True importance: 0.42. Measured importance split: 0.16, 0.14, 0.12. Feature selection drops all three because each individually below 0.20 threshold. Retrained model without click features loses 18% AUC. Post-mortem discovers they were duplicates of critical signal.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <ul>
+                    <li>Collecting all available features without deduplication</li>
+                    <li>Same signal appears under different names from different source systems</li>
+                    <li>Feature engineering creates correlated variants (amount, log_amount, amount_zscore)</li>
+                    <li>Teams independently create similar features without cross-team visibility</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Root cause:</strong> The "more features = better" assumption combined with siloed feature development. Without a central registry, the same information enters the model through multiple correlated paths.
+                </div>
+                <p class="example">Example: Three teams contribute features: "revenue_30d", "monthly_revenue", "rev_last_month" — all computed slightly differently but 0.98 correlated. Tree model splits on all three, appearing to use diverse signals when it's one signal three times.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <ul>
+                    <li>Correlation clustering: group features with correlation > 0.95</li>
+                    <li>Keep one representative per cluster (most interpretable or most stable)</li>
+                    <li>Post-hoc path audit in tree models: check if multiple splits use the same underlying signal</li>
+                    <li>Central feature registry with lineage tracking</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Best practice:</strong> Before training, compute pairwise correlation matrix. Cluster features above threshold. Select one per cluster. After training, audit feature importance — if removed "duplicates" would change predictions, the dedup threshold was too aggressive.
+                </div>
+                <p class="example">Example: 200 features clustered into 85 groups. Keep 85 representatives. Model performance unchanged (0.1% AUC difference) but interpretability and stability improve dramatically.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Duplicate Features: Importance Fragmentation', w/2, 18);
+
+    // Left side: Tree path with duplicates
+    ctx.fillStyle = '#444';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('BEFORE DEDUP', 170, 38);
+
+    // Tree nodes
+    var nodes = [
+        {x: 170, y: 58, label: 'income > 50k', color: '#e74c3c'},
+        {x: 100, y: 108, label: 'annual_salary > 48k', color: '#e74c3c'},
+        {x: 240, y: 108, label: 'yearly_earnings > 52k', color: '#e74c3c'}
+    ];
+
+    nodes.forEach(function(n) {
+        ctx.strokeStyle = n.color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(n.x - 70, n.y - 12, 140, 24);
+        ctx.fillStyle = n.color;
+        ctx.font = '10px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(n.label, n.x, n.y + 4);
+    });
+
+    // Tree edges
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(170, 70);
+    ctx.lineTo(100, 96);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(170, 70);
+    ctx.lineTo(240, 96);
+    ctx.stroke();
+
+    // Annotation: same signal
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('All 3 = same signal!', 170, 145);
+
+    // Fragmented importance bars (left)
+    ctx.fillStyle = '#444';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Feature Importance:', 30, 165);
+
+    var fragBars = [
+        {label: 'income', val: 4},
+        {label: 'annual_salary', val: 4},
+        {label: 'yearly_earnings', val: 4}
+    ];
+    var barY = 175;
+    fragBars.forEach(function(b) {
+        ctx.fillStyle = '#e74c3c';
+        ctx.globalAlpha = 0.4;
+        ctx.fillRect(140, barY, b.val * 8, 14);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(140, barY, b.val * 8, 14);
+        ctx.fillStyle = '#333';
+        ctx.font = '9px monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText(b.label, 135, barY + 11);
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 9px system-ui';
+        ctx.textAlign = 'left';
+        ctx.fillText(b.val + '%', 140 + b.val * 8 + 4, barY + 11);
+        barY += 18;
+    });
+
+    // Threshold line
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(180, 173);
+    ctx.lineTo(180, 228);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e67e22';
+    ctx.font = '9px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('drop threshold (5%)', 184, 228);
+
+    // Divider
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(345, 32);
+    ctx.lineTo(345, 280);
+    ctx.stroke();
+
+    // Right side: After dedup
+    ctx.fillStyle = '#444';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('AFTER DEDUP', 530, 38);
+
+    // Clean tree node
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(460, 55, 140, 28);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('income > 50k', 530, 73);
+
+    // Clean tree children (different features)
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(380, 110, 110, 24);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = '10px monospace';
+    ctx.fillText('age > 35', 435, 126);
+
+    ctx.strokeRect(560, 110, 110, 24);
+    ctx.fillText('tenure > 5yr', 615, 126);
+
+    // Tree edges
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(530, 83);
+    ctx.lineTo(435, 110);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(530, 83);
+    ctx.lineTo(615, 110);
+    ctx.stroke();
+
+    // Annotation
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Readable path, distinct splits', 530, 148);
+
+    // Consolidated importance bar (right)
+    ctx.fillStyle = '#444';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Feature Importance:', 380, 170);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.globalAlpha = 0.4;
+    ctx.fillRect(490, 178, 18 * 8, 16);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(490, 178, 18 * 8, 16);
+    ctx.fillStyle = '#333';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText('income', 485, 191);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('18%', 490 + 18 * 8 + 5, 191);
+
+    // Arrow from left to right
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(310, 195);
+    ctx.lineTo(340, 195);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(340, 195);
+    ctx.lineTo(335, 190);
+    ctx.lineTo(335, 200);
+    ctx.closePath();
+    ctx.fillStyle = '#27ae60';
+    ctx.fill();
+
+    // Bottom annotation
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('3 duplicates x 4% each = below threshold. After dedup: 18% = top feature.', w/2, h - 8);
+})();
+
+// Canvas 2: Why It Happens - multiple names converging to same signal, correlation heatmap, redundant tree paths
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Why Duplicates Accumulate', w/2, 18);
+
+    // Left: Multiple feature names converging to one signal
+    ctx.fillStyle = '#444';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('MULTIPLE NAMES, ONE SIGNAL', 130, 38);
+
+    var featureNames = ['revenue_30d', 'monthly_revenue', 'rev_last_month'];
+    var teamLabels = ['Team A', 'Team B', 'Team C'];
+    var startY = 55;
+    featureNames.forEach(function(name, i) {
+        var y = startY + i * 32;
+        // Team label
+        ctx.fillStyle = '#e67e22';
+        ctx.font = 'bold 9px system-ui';
+        ctx.textAlign = 'right';
+        ctx.fillText(teamLabels[i], 38, y + 4);
+        // Feature box
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1.5;
+        ctx.fillStyle = 'rgba(231,76,60,0.08)';
+        ctx.fillRect(45, y - 10, 120, 20);
+        ctx.strokeRect(45, y - 10, 120, 20);
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = '10px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(name, 105, y + 4);
+        // Arrow to signal
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(167, y);
+        ctx.lineTo(195, 87);
+        ctx.stroke();
+    });
+
+    // Signal node
+    ctx.fillStyle = '#1a5276';
+    ctx.beginPath();
+    ctx.arc(210, 87, 14, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 9px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('$$', 210, 91);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = '9px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('(same underlying signal)', 210, 115);
+
+    // Correlation annotation
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillText('r = 0.98', 210, 130);
+
+    // Center: Correlation matrix heatmap
+    ctx.fillStyle = '#444';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('CORRELATION MATRIX', 380, 38);
+
+    var matLabels = ['rev_30d', 'mon_rev', 'rev_lm', 'age', 'tenure', 'clicks'];
+    var matSize = 6;
+    var cellSize = 22;
+    var matX = 305;
+    var matY = 48;
+
+    // Correlation values (1 = perfect self, high for first 3, low elsewhere)
+    var corrMatrix = [
+        [1.0, 0.98, 0.97, 0.12, 0.05, 0.30],
+        [0.98, 1.0, 0.96, 0.10, 0.08, 0.28],
+        [0.97, 0.96, 1.0, 0.14, 0.06, 0.32],
+        [0.12, 0.10, 0.14, 1.0, 0.45, 0.20],
+        [0.05, 0.08, 0.06, 0.45, 1.0, 0.15],
+        [0.30, 0.28, 0.32, 0.20, 0.15, 1.0]
+    ];
+
+    // Draw cells
+    for (var i = 0; i < matSize; i++) {
+        for (var j = 0; j < matSize; j++) {
+            var val = corrMatrix[i][j];
+            var intensity = val;
+            if (i < 3 && j < 3 && i !== j) {
+                ctx.fillStyle = 'rgba(231,76,60,' + (intensity * 0.8) + ')';
+            } else if (i === j) {
+                ctx.fillStyle = 'rgba(26,82,118,0.7)';
+            } else {
+                ctx.fillStyle = 'rgba(26,82,118,' + (intensity * 0.4) + ')';
+            }
+            ctx.fillRect(matX + j * cellSize, matY + i * cellSize, cellSize - 1, cellSize - 1);
+        }
+    }
+
+    // Row labels
+    ctx.fillStyle = '#333';
+    ctx.font = '8px monospace';
+    ctx.textAlign = 'right';
+    for (var i = 0; i < matSize; i++) {
+        ctx.fillText(matLabels[i], matX - 3, matY + i * cellSize + 14);
+    }
+
+    // Highlight cluster box
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([3, 2]);
+    ctx.strokeRect(matX - 1, matY - 1, cellSize * 3 + 1, cellSize * 3 + 1);
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 9px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('duplicate cluster', matX + cellSize * 1.5, matY + cellSize * 3 + 12);
+
+    // Right: Redundant tree splits
+    ctx.fillStyle = '#444';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('REDUNDANT TREE SPLITS', 600, 38);
+
+    // Tree with same signal at every level
+    var treeNodes = [
+        {x: 600, y: 60, label: 'revenue_30d > 5k'},
+        {x: 555, y: 100, label: 'monthly_revenue > 4.8k'},
+        {x: 645, y: 100, label: 'rev_last_month > 5.2k'}
+    ];
+
+    treeNodes.forEach(function(n) {
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(n.x - 68, n.y - 10, 136, 20);
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = '9px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(n.label, n.x, n.y + 3);
+    });
+
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(600, 70); ctx.lineTo(555, 90); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(600, 70); ctx.lineTo(645, 90); ctx.stroke();
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 9px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Same signal at every split!', 600, 130);
+
+    // Bottom: Summary
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Siloed teams + no feature registry = same information enters model N times under different names', w/2, h - 30);
+
+    // Bottom flow diagram
+    var sources = ['Source A', 'Source B', 'Source C'];
+    var sx = 180;
+    sources.forEach(function(src, i) {
+        var x = sx + i * 180;
+        ctx.fillStyle = '#e67e22';
+        ctx.font = '9px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(src, x, h - 12);
+    });
+})();
+
+// Canvas 3: The Correct Approach - correlation clusters, selection, clean flow
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Correct Approach: Cluster, Select, Verify', w/2, 18);
+
+    // Left: Correlation clusters with representatives
+    ctx.fillStyle = '#444';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('CORRELATION CLUSTERS', 150, 38);
+
+    // Cluster 1: revenue group
+    var cluster1 = [
+        {name: 'revenue_30d', selected: true},
+        {name: 'monthly_revenue', selected: false},
+        {name: 'rev_last_month', selected: false}
+    ];
+    var cY = 52;
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 2]);
+    ctx.strokeRect(20, cY - 5, 260, 55);
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#666';
+    ctx.font = '8px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Cluster 1 (r>0.95)', 25, cY + 3);
+
+    cluster1.forEach(function(f, i) {
+        var x = 40 + i * 85;
+        var y = cY + 22;
+        if (f.selected) {
+            ctx.fillStyle = 'rgba(39,174,96,0.15)';
+            ctx.fillRect(x - 5, y - 10, 78, 20);
+            ctx.strokeStyle = '#27ae60';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x - 5, y - 10, 78, 20);
+            ctx.fillStyle = '#27ae60';
+            ctx.font = 'bold 9px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(f.name, x + 34, y + 3);
+            // Checkmark
+            ctx.fillStyle = '#27ae60';
+            ctx.font = 'bold 12px system-ui';
+            ctx.fillText('✓', x + 70, y + 4);
+        } else {
+            ctx.fillStyle = 'rgba(0,0,0,0.05)';
+            ctx.fillRect(x - 5, y - 10, 78, 20);
+            ctx.strokeStyle = '#ccc';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x - 5, y - 10, 78, 20);
+            ctx.fillStyle = '#aaa';
+            ctx.font = '9px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(f.name, x + 34, y + 3);
+            // X mark
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(x + 65, y - 6); ctx.lineTo(x + 73, y + 2); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(x + 73, y - 6); ctx.lineTo(x + 65, y + 2); ctx.stroke();
+        }
+    });
+
+    // Cluster 2: engagement group
+    var cluster2 = [
+        {name: 'click_count', selected: true},
+        {name: 'total_clicks', selected: false},
+        {name: 'num_clicks', selected: false}
+    ];
+    cY = 115;
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 2]);
+    ctx.strokeRect(20, cY - 5, 260, 55);
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#666';
+    ctx.font = '8px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Cluster 2 (r>0.95)', 25, cY + 3);
+
+    cluster2.forEach(function(f, i) {
+        var x = 40 + i * 85;
+        var y = cY + 22;
+        if (f.selected) {
+            ctx.fillStyle = 'rgba(39,174,96,0.15)';
+            ctx.fillRect(x - 5, y - 10, 78, 20);
+            ctx.strokeStyle = '#27ae60';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x - 5, y - 10, 78, 20);
+            ctx.fillStyle = '#27ae60';
+            ctx.font = 'bold 9px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(f.name, x + 34, y + 3);
+            ctx.fillStyle = '#27ae60';
+            ctx.font = 'bold 12px system-ui';
+            ctx.fillText('✓', x + 70, y + 4);
+        } else {
+            ctx.fillStyle = 'rgba(0,0,0,0.05)';
+            ctx.fillRect(x - 5, y - 10, 78, 20);
+            ctx.strokeStyle = '#ccc';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x - 5, y - 10, 78, 20);
+            ctx.fillStyle = '#aaa';
+            ctx.font = '9px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(f.name, x + 34, y + 3);
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(x + 65, y - 6); ctx.lineTo(x + 73, y + 2); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(x + 73, y - 6); ctx.lineTo(x + 65, y + 2); ctx.stroke();
+        }
+    });
+
+    // Cluster 3: single features (no duplicates)
+    cY = 178;
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 2]);
+    ctx.strokeRect(20, cY - 5, 260, 40);
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#666';
+    ctx.font = '8px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Unique features (no cluster)', 25, cY + 3);
+
+    var uniques = ['age', 'tenure', 'region'];
+    uniques.forEach(function(f, i) {
+        var x = 40 + i * 85;
+        var y = cY + 20;
+        ctx.fillStyle = 'rgba(39,174,96,0.15)';
+        ctx.fillRect(x - 5, y - 10, 78, 20);
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x - 5, y - 10, 78, 20);
+        ctx.fillStyle = '#27ae60';
+        ctx.font = 'bold 9px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(f, x + 34, y + 3);
+    });
+
+    // Arrow from clusters to model
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(290, 140);
+    ctx.lineTo(330, 140);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(330, 140);
+    ctx.lineTo(325, 135);
+    ctx.lineTo(325, 145);
+    ctx.closePath();
+    ctx.fillStyle = '#27ae60';
+    ctx.fill();
+
+    // Right: Clean reduced feature set flowing into model
+    ctx.fillStyle = '#444';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('CLEAN FEATURE SET → MODEL', 530, 38);
+
+    // Reduced features box
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.fillStyle = 'rgba(39,174,96,0.06)';
+    ctx.fillRect(350, 50, 155, 130);
+    ctx.strokeRect(350, 50, 155, 130);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 9px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('5 Representatives', 427, 65);
+
+    var reps = ['revenue_30d', 'click_count', 'age', 'tenure', 'region'];
+    reps.forEach(function(f, i) {
+        var y = 80 + i * 20;
+        ctx.fillStyle = '#27ae60';
+        ctx.font = '10px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(f, 427, y);
+    });
+
+    // Arrow to model
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(510, 115);
+    ctx.lineTo(550, 115);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(550, 115);
+    ctx.lineTo(545, 110);
+    ctx.lineTo(545, 120);
+    ctx.closePath();
+    ctx.fillStyle = '#1a5276';
+    ctx.fill();
+
+    // Model box
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.fillStyle = 'rgba(26,82,118,0.08)';
+    ctx.fillRect(555, 85, 130, 60);
+    ctx.strokeRect(555, 85, 130, 60);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Model', 620, 108);
+    ctx.font = '10px system-ui';
+    ctx.fillText('Stable & Interpretable', 620, 125);
+
+    // Bottom: Results comparison
+    ctx.fillStyle = '#444';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('RESULT', 530, 200);
+
+    // Before
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Before: 200 features, unstable importance', 380, 220);
+
+    // After
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillText('After: 85 features, same AUC (≤0.1% diff)', 380, 240);
+    ctx.fillText('Interpretability: dramatically improved', 380, 258);
+
+    // Bottom summary
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Cluster (r>0.95) → Select 1 per cluster → Verify AUC unchanged → Audit importance', w/2, h - 8);
+})();
+</script>
+
+</body>
+</html>

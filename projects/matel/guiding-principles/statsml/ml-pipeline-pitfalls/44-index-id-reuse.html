@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Index / ID Reuse</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.metric strong {
+    color: #1a5276;
+}
+
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Index / ID Reuse</h1>
+<p class="subtitle">IDs get recycled or reset, causing joins to match wrong records and corrupt training labels.</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>System reuses IDs after deletion, reset, or partition boundary, breaking the assumption that ID uniquely identifies an entity. Joins across tables or time periods match unrelated records, silently corrupting training data with mislabeled examples.</p>
+                <ul>
+                    <li><strong>ID collision:</strong> Auto-increment counter resets after migration or per-partition, creating duplicate IDs across time—session_id=42 in Jan is different entity from session_id=42 in Feb</li>
+                    <li><strong>Temporal boundaries:</strong> Join uses ID alone without timestamp constraint, merging data from deleted user_id=1234 (2024) with new user_id=1234 (2025)</li>
+                    <li><strong>Foreign key integrity:</strong> Parent record deleted and ID recycled before child records cleaned up—orphaned child data now points to wrong parent</li>
+                    <li><strong>Partition-scoped IDs:</strong> ID unique within partition but not globally; cross-partition joins create many-to-many matches instead of one-to-one</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Impact:</strong> Training examples contaminated with features from unrelated entities. Model learns spurious correlations from mismatched data. Silent correctness violation—looks like valid data. <strong>Fix:</strong> Use UUIDs or composite keys (ID + timestamp + partition). Add temporal constraints to all joins. Validate key uniqueness in actual data, not just schema. Log when IDs are recycled.
+                </div>
+                <p class="example">Example: Session IDs are 32-bit auto-increment, reset monthly. Training job joins January sessions (id=1-50K) to February events using bare session_id, matching January's session 1234 (mobile user) to February's session 1234 (desktop user). Model learns desktop features predict mobile behavior, accuracy drops 22% on real mobile traffic.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>ID reuse is rarely intentional—it emerges from system design choices that assume local uniqueness implies global uniqueness.</p>
+                <ul>
+                    <li><strong>Auto-increment resets:</strong> IDs reset when tables are recreated or databases migrated</li>
+                    <li><strong>Session recycling:</strong> Session IDs recycle after TTL expires</li>
+                    <li><strong>Shared namespaces:</strong> Test and production environments share ID namespace</li>
+                    <li><strong>Uncoordinated generation:</strong> Microservices generate IDs independently without coordination</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Root cause:</strong> Assuming IDs are globally unique across time and systems when they're only locally unique within one context.
+                </div>
+                <p class="example">Example: user_id=12345 in prod DB refers to Alice. After a migration, user_id=12345 now refers to Bob. Joins across pre/post migration data silently merge two different people.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Design join keys to be collision-proof across time, environment, and source system.</p>
+                <ul>
+                    <li><strong>UUIDs:</strong> Use UUIDs or globally unique identifiers</li>
+                    <li><strong>Composite keys:</strong> Include source system + timestamp in composite keys</li>
+                    <li><strong>No bare auto-increment joins:</strong> Never join across systems on auto-increment IDs alone</li>
+                    <li><strong>Row provenance:</strong> Add source_id and ingestion_date to every row</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Best practice:</strong> Design join keys to be collision-proof across time, environment, and source system. If you can't guarantee uniqueness, add qualifying dimensions.
+                </div>
+                <p class="example">Example: Instead of JOIN ON user_id, use JOIN ON user_id AND source='prod_v2' AND created_date >= '2025-01-01'. Eliminates cross-migration collisions.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// ID reuse collision diagram
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('ID Reuse: Join Matches Wrong Records', w/2, 25);
+
+    // January partition
+    ctx.fillStyle = '#3498db';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('JANUARY PARTITION', 180, 60);
+
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#3498db';
+    ctx.lineWidth = 2;
+    ctx.fillRect(60, 75, 240, 60);
+    ctx.strokeRect(60, 75, 240, 60);
+
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('session_id: 1234', 75, 95);
+    ctx.fillText('user_type: "mobile"', 75, 110);
+    ctx.fillText('region: "US-West"', 75, 125);
+
+    // February partition
+    ctx.fillStyle = '#9b59b6';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('FEBRUARY PARTITION', 180, 165);
+
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#9b59b6';
+    ctx.lineWidth = 2;
+    ctx.fillRect(60, 180, 240, 60);
+    ctx.strokeRect(60, 180, 240, 60);
+
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('session_id: 1234', 75, 200);
+    ctx.fillText('user_type: "desktop"', 75, 215);
+    ctx.fillText('region: "EU-Central"', 75, 230);
+
+    // Wrong join arrow
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([8, 4]);
+    ctx.beginPath();
+    ctx.moveTo(300, 105);
+    ctx.bezierCurveTo(370, 105, 370, 210, 300, 210);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Arrow head
+    ctx.beginPath();
+    ctx.moveTo(300, 210);
+    ctx.lineTo(308, 205);
+    ctx.lineTo(308, 215);
+    ctx.closePath();
+    ctx.fillStyle = '#e74c3c';
+    ctx.fill();
+
+    // Join label
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('JOIN ON', 370, 150);
+    ctx.fillText('session_id', 370, 165);
+
+    // Result box (corrupted)
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.fillRect(420, 75, 260, 165);
+    ctx.strokeRect(420, 75, 260, 165);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('CORRUPTED TRAINING ROW', 550, 100);
+
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('session_id: 1234', 435, 125);
+    ctx.fillText('user_type: "mobile" (Jan)', 435, 145);
+    ctx.fillText('region: "US-West" (Jan)', 435, 160);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('+ events: "desktop" (Feb)', 435, 180);
+    ctx.fillText('+ events: "EU-Central" (Feb)', 435, 195);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Features from two different entities', 550, 220);
+    ctx.fillText('Model learns spurious patterns', 550, 233);
+
+    // Reset marker
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('ID counter reset', 180, 155);
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(100, 150);
+    ctx.lineTo(260, 150);
+    ctx.stroke();
+    ctx.setLineDash([]);
+})();
+
+// Canvas 2: Why It Happens - Two DBs with same ID pointing to different entities
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Same ID, Different Entities After Migration', w/2, 25);
+
+    // Draw DB v1 cylinder
+    var db1x = 130, db1y = 70;
+    ctx.fillStyle = '#eaf2f8';
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(db1x, db1y, 60, 15, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#eaf2f8';
+    ctx.fillRect(70, db1y, 120, 70);
+    ctx.strokeStyle = '#1a5276';
+    ctx.beginPath();
+    ctx.moveTo(70, db1y);
+    ctx.lineTo(70, db1y + 70);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(190, db1y);
+    ctx.lineTo(190, db1y + 70);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(db1x, db1y + 70, 60, 15, 0, 0, Math.PI, false);
+    ctx.stroke();
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('DB v1 (Pre-Migration)', db1x, db1y + 50);
+
+    // DB v1 record
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 1.5;
+    ctx.fillRect(80, 165, 100, 50);
+    ctx.strokeRect(80, 165, 100, 50);
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('ID: 1001', 130, 182);
+    ctx.fillText('Name: Alice', 130, 197);
+    ctx.fillText('Role: Admin', 130, 210);
+
+    // Draw DB v2 cylinder
+    var db2x = 530, db2y = 70;
+    ctx.fillStyle = '#f5eef8';
+    ctx.strokeStyle = '#9b59b6';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(db2x, db2y, 60, 15, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#f5eef8';
+    ctx.fillRect(470, db2y, 120, 70);
+    ctx.strokeStyle = '#9b59b6';
+    ctx.beginPath();
+    ctx.moveTo(470, db2y);
+    ctx.lineTo(470, db2y + 70);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(590, db2y);
+    ctx.lineTo(590, db2y + 70);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(db2x, db2y + 70, 60, 15, 0, 0, Math.PI, false);
+    ctx.stroke();
+    ctx.fillStyle = '#9b59b6';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('DB v2 (Post-Migration)', db2x, db2y + 50);
+
+    // DB v2 record
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#9b59b6';
+    ctx.lineWidth = 1.5;
+    ctx.fillRect(480, 165, 100, 50);
+    ctx.strokeRect(480, 165, 100, 50);
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('ID: 1001', 530, 182);
+    ctx.fillText('Name: Bob', 530, 197);
+    ctx.fillText('Role: Viewer', 530, 210);
+
+    // Collision zone in the middle
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.1)';
+    ctx.fillRect(250, 155, 160, 70);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 3]);
+    ctx.strokeRect(250, 155, 160, 70);
+    ctx.setLineDash([]);
+
+    // Arrows pointing to collision
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(180, 190);
+    ctx.lineTo(250, 190);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(250, 190);
+    ctx.lineTo(242, 185);
+    ctx.lineTo(242, 195);
+    ctx.closePath();
+    ctx.fillStyle = '#e74c3c';
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(480, 190);
+    ctx.lineTo(410, 190);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(410, 190);
+    ctx.lineTo(418, 185);
+    ctx.lineTo(418, 195);
+    ctx.closePath();
+    ctx.fillStyle = '#e74c3c';
+    ctx.fill();
+
+    // Red X in collision zone
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(315, 170);
+    ctx.lineTo(345, 200);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(345, 170);
+    ctx.lineTo(315, 200);
+    ctx.stroke();
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('COLLISION', 330, 215);
+
+    // Bottom explanation
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('JOIN ON user_id = 1001', 330, 250);
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Merges Alice\'s history with Bob\'s profile', 330, 270);
+    ctx.fillText('Two people become one corrupted record', 330, 285);
+})();
+
+// Canvas 3: The Correct Approach - UUID keys with source tags and safe joins
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Safe Joins with Qualifying Dimensions', w/2, 25);
+
+    // Left side: UUID-based record
+    ctx.fillStyle = '#eafaf1';
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.fillRect(40, 50, 200, 100);
+    ctx.strokeRect(40, 50, 200, 100);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('UUID-BASED RECORD', 140, 68);
+
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('id: a3f7...c9e2', 55, 88);
+    ctx.fillText('source: "prod_v2"', 55, 103);
+    ctx.fillText('created: 2025-03-15', 55, 118);
+    ctx.fillText('user: Alice', 55, 133);
+
+    // Right side: Another record with different UUID
+    ctx.fillStyle = '#eafaf1';
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.fillRect(480, 50, 200, 100);
+    ctx.strokeRect(480, 50, 200, 100);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('UUID-BASED RECORD', 580, 68);
+
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('id: b8d1...4f7a', 495, 88);
+    ctx.fillText('source: "prod_v2"', 495, 103);
+    ctx.fillText('created: 2025-03-15', 495, 118);
+    ctx.fillText('user: Alice', 495, 133);
+
+    // Green checkmark and join arrow between them
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(240, 100);
+    ctx.lineTo(480, 100);
+    ctx.stroke();
+    // Arrowhead
+    ctx.beginPath();
+    ctx.moveTo(480, 100);
+    ctx.lineTo(472, 95);
+    ctx.lineTo(472, 105);
+    ctx.closePath();
+    ctx.fillStyle = '#27ae60';
+    ctx.fill();
+
+    // Green checkmark above arrow
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(348, 78);
+    ctx.lineTo(355, 86);
+    ctx.lineTo(368, 70);
+    ctx.stroke();
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('SAFE JOIN', 360, 95);
+
+    // Bottom section: the correct join query
+    ctx.fillStyle = '#f8f9fa';
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.fillRect(40, 175, 640, 55);
+    ctx.strokeRect(40, 175, 640, 55);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Correct Join Pattern:', 55, 195);
+
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = '10px monospace';
+    ctx.fillText("JOIN ON user_id AND source = 'prod_v2' AND created_date >= '2025-01-01'", 55, 215);
+
+    // Bottom: comparison - bad vs good
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+
+    // Bad approach
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.fillRect(40, 250, 280, 35);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.strokeRect(40, 250, 280, 35);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(41, 251, 278, 33);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('JOIN ON user_id', 180, 265);
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillText('Collisions possible', 180, 280);
+
+    // Red X
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(330, 255);
+    ctx.lineTo(342, 279);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(342, 255);
+    ctx.lineTo(330, 279);
+    ctx.stroke();
+
+    // Good approach
+    ctx.fillStyle = '#eafaf1';
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.fillRect(370, 250, 310, 35);
+    ctx.strokeRect(370, 250, 310, 35);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('JOIN ON user_id + source + date', 525, 265);
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillText('Collision-proof', 525, 280);
+
+    // Green checkmark
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(350, 267);
+    ctx.lineTo(355, 273);
+    ctx.lineTo(365, 258);
+    ctx.stroke();
+})();
+</script>
+
+</body>
+</html>

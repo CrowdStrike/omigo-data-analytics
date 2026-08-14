@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Batch vs Online Feature Mismatch (Training-Serving Skew)</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.metric strong {
+    color: #1a5276;
+}
+
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Batch vs Online Feature Mismatch (Training-Serving Skew)</h1>
+<p class="subtitle">Features computed differently in batch training vs real-time serving create systematic prediction errors.</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Training uses batch-computed features with one aggregation window, but serving recomputes them in real-time with different logic or time boundaries. The model learns patterns from the batch version that don't hold in production.</p>
+                <ul>
+                    <li><strong>Time aggregation windows:</strong> Training uses "last 30 days" computed at midnight; serving uses "last 30 days" from request timestamp, creating boundary mismatches</li>
+                    <li><strong>Feature computation logic:</strong> Training runs SQL with full table scans; serving uses cached lookups or approximate streaming aggregates that drift from exact values</li>
+                    <li><strong>Data freshness:</strong> Training features reflect complete, backfilled data; serving features use whatever arrived by request time, missing late events</li>
+                    <li><strong>Timezone and rounding:</strong> Batch jobs run in UTC with date truncation; serving uses local timezone or millisecond precision, shifting boundaries</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Impact:</strong> Model degrades in production despite good offline metrics. Features that were predictive in training are systematically different at serving time. <strong>Fix:</strong> Use identical feature computation logic in training and serving—same code, same libraries, same time boundaries. Log actual serving features and compare distributions against training features.
+                </div>
+                <p class="example">Example: A model trained on "user activity in last 7 days" (computed at midnight) sees values like 15, 23, 8 during training. At serving time, the same feature is computed from request timestamp (e.g., 3:42 PM), producing values like 12, 19, 6—systematically lower because fewer complete days. Accuracy drops 8% in production.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <ul>
+                    <li><strong>Different code paths:</strong> Batch training uses SQL/Spark; streaming serving uses Flink/Redis — different implementations of "the same" logic</li>
+                    <li><strong>Time boundary mismatch:</strong> Training computes features at midnight with complete data; serving computes mid-day with partial data</li>
+                    <li><strong>Library version drift:</strong> Training environment pins library v2.1; serving container upgraded to v2.3 with subtle behavioral changes</li>
+                    <li><strong>Timezone handling:</strong> Batch jobs truncate to UTC date; real-time systems use local timezone or raw timestamps</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Root cause:</strong> Training and serving are built by different teams, at different times, with different priorities (throughput vs latency). The "same feature" is actually two implementations that happen to share a name.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <ul>
+                    <li><strong>Unified feature pipeline:</strong> Same code computes features for both training AND serving — one implementation, two execution modes</li>
+                    <li><strong>Log and compare:</strong> Log actual online features at serving time; compare with batch-computed versions to detect drift</li>
+                    <li><strong>Distribution monitoring:</strong> Compare training vs serving feature distributions daily; alert on KL-divergence spikes</li>
+                    <li><strong>Feature store consistency:</strong> Use a feature store that guarantees identical values across batch and online retrieval</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Principle:</strong> One definition, one computation, verified daily. If training and serving can't share code, they must share validation.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// Training vs Serving Feature Computation Flow
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Training vs Serving Feature Computation', w/2, 25);
+
+    // Training path (top)
+    var topY = 80;
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('TRAINING (Batch)', w/4, 55);
+
+    // Training box 1
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.fillRect(40, topY - 20, 140, 40);
+    ctx.strokeRect(40, topY - 20, 140, 40);
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = '11px system-ui';
+    ctx.fillText('SQL: Full scan', 110, topY - 5);
+    ctx.fillText('00:00 UTC window', 110, topY + 10);
+
+    // Arrow
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(180, topY);
+    ctx.lineTo(220, topY);
+    ctx.stroke();
+    // Arrow head
+    ctx.beginPath();
+    ctx.moveTo(220, topY);
+    ctx.lineTo(213, topY - 5);
+    ctx.lineTo(213, topY + 5);
+    ctx.closePath();
+    ctx.fillStyle = '#27ae60';
+    ctx.fill();
+
+    // Training result
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.fillRect(220, topY - 25, 120, 50);
+    ctx.strokeRect(220, topY - 25, 120, 50);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillText('Feature = 23', 280, topY + 5);
+
+    // Serving path (bottom)
+    var botY = 200;
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('SERVING (Real-time)', w/4, 150);
+
+    // Serving box 1
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.fillRect(40, botY - 20, 140, 40);
+    ctx.strokeRect(40, botY - 20, 140, 40);
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Cache lookup', 110, botY - 5);
+    ctx.fillText('15:42 timestamp', 110, botY + 10);
+
+    // Arrow
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(180, botY);
+    ctx.lineTo(220, botY);
+    ctx.stroke();
+    // Arrow head
+    ctx.beginPath();
+    ctx.moveTo(220, botY);
+    ctx.lineTo(213, botY - 5);
+    ctx.lineTo(213, botY + 5);
+    ctx.closePath();
+    ctx.fillStyle = '#e74c3c';
+    ctx.fill();
+
+    // Serving result (different)
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.fillRect(220, botY - 25, 120, 50);
+    ctx.strokeRect(220, botY - 25, 120, 50);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillText('Feature = 19', 280, botY + 5);
+
+    // Consequence box (right side)
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 3;
+    ctx.fillRect(400, 110, 280, 80);
+    ctx.strokeRect(400, 110, 280, 80);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('SKEW DETECTED', 540, 135);
+
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Different computation logic', 540, 155);
+    ctx.fillText('Different time boundaries', 540, 170);
+    ctx.fillText('→ Model sees shifted distribution', 540, 185);
+
+    // Arrows pointing to consequence
+    ctx.strokeStyle = '#ccc';
+    ctx.setLineDash([4, 4]);
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(340, topY);
+    ctx.lineTo(400, 135);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(340, botY);
+    ctx.lineTo(400, 165);
+    ctx.stroke();
+    ctx.setLineDash([]);
+})();
+
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Two Paths, One Feature Name', w/2, 25);
+
+    // TRAINING path (top)
+    var topY = 80;
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('TRAINING', 20, topY - 15);
+
+    // Training boxes
+    var tBoxes = ['Spark SQL', 'Full table scan', 'UTC midnight', 'Feature = 23'];
+    var tColors = ['#1a5276', '#1a5276', '#1a5276', '#27ae60'];
+    for (var i = 0; i < tBoxes.length; i++) {
+        var bx = 20 + i * 170;
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = tColors[i];
+        ctx.lineWidth = 2;
+        ctx.fillRect(bx, topY, 140, 40);
+        ctx.strokeRect(bx, topY, 140, 40);
+        ctx.fillStyle = i === 3 ? '#27ae60' : '#2c3e50';
+        ctx.font = i === 3 ? 'bold 12px system-ui' : '11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(tBoxes[i], bx + 70, topY + 24);
+        // Arrow between boxes
+        if (i < 3) {
+            ctx.strokeStyle = '#999';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(bx + 140, topY + 20);
+            ctx.lineTo(bx + 170, topY + 20);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(bx + 170, topY + 20);
+            ctx.lineTo(bx + 164, topY + 16);
+            ctx.lineTo(bx + 164, topY + 24);
+            ctx.closePath();
+            ctx.fillStyle = '#999';
+            ctx.fill();
+        }
+    }
+
+    // SERVING path (bottom)
+    var botY = 190;
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('SERVING', 20, botY - 15);
+
+    var sBoxes = ['Redis lookup', 'Partial data', '3:42 PM local', 'Feature = 19'];
+    var sColors = ['#1a5276', '#1a5276', '#1a5276', '#e74c3c'];
+    for (var i = 0; i < sBoxes.length; i++) {
+        var bx = 20 + i * 170;
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = sColors[i];
+        ctx.lineWidth = 2;
+        ctx.fillRect(bx, botY, 140, 40);
+        ctx.strokeRect(bx, botY, 140, 40);
+        ctx.fillStyle = i === 3 ? '#e74c3c' : '#2c3e50';
+        ctx.font = i === 3 ? 'bold 12px system-ui' : '11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(sBoxes[i], bx + 70, botY + 24);
+        if (i < 3) {
+            ctx.strokeStyle = '#999';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(bx + 140, botY + 20);
+            ctx.lineTo(bx + 170, botY + 20);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(bx + 170, botY + 20);
+            ctx.lineTo(bx + 164, botY + 16);
+            ctx.lineTo(bx + 164, botY + 24);
+            ctx.closePath();
+            ctx.fillStyle = '#999';
+            ctx.fill();
+        }
+    }
+
+    // Red double-arrow between the two result boxes
+    var arrowX = 20 + 3 * 170 + 70;
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(arrowX, topY + 40);
+    ctx.lineTo(arrowX, botY);
+    ctx.stroke();
+    // Arrow heads (double)
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath();
+    ctx.moveTo(arrowX, topY + 40);
+    ctx.lineTo(arrowX - 6, topY + 50);
+    ctx.lineTo(arrowX + 6, topY + 50);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(arrowX, botY);
+    ctx.lineTo(arrowX - 6, botY - 10);
+    ctx.lineTo(arrowX + 6, botY - 10);
+    ctx.closePath();
+    ctx.fill();
+
+    // Skew label
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('SKEW: same feature,', arrowX, topY + 70);
+    ctx.fillText('different values!', arrowX, topY + 85);
+})();
+
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Unified Feature Architecture', w/2, 25);
+
+    // Single "Feature Logic" box at top
+    var flx = w/2 - 100, fly = 45;
+    ctx.fillStyle = 'rgba(26, 82, 118, 0.1)';
+    ctx.fillRect(flx, fly, 200, 40);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(flx, fly, 200, 40);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillText('Feature Logic (single codebase)', w/2, fly + 25);
+
+    // Arrows down to Training and Serving
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    // Left arrow to Training
+    ctx.beginPath();
+    ctx.moveTo(w/2 - 40, fly + 40);
+    ctx.lineTo(w/2 - 100, fly + 80);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(w/2 - 100, fly + 80);
+    ctx.lineTo(w/2 - 93, fly + 72);
+    ctx.lineTo(w/2 - 90, fly + 80);
+    ctx.closePath();
+    ctx.fillStyle = '#1a5276';
+    ctx.fill();
+
+    // Right arrow to Serving
+    ctx.beginPath();
+    ctx.moveTo(w/2 + 40, fly + 40);
+    ctx.lineTo(w/2 + 100, fly + 80);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(w/2 + 100, fly + 80);
+    ctx.lineTo(w/2 + 93, fly + 72);
+    ctx.lineTo(w/2 + 90, fly + 80);
+    ctx.closePath();
+    ctx.fillStyle = '#1a5276';
+    ctx.fill();
+
+    // Training box
+    var txBox = w/2 - 160, tyBox = fly + 85;
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.1)';
+    ctx.fillRect(txBox, tyBox, 120, 35);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(txBox, tyBox, 120, 35);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Training', txBox + 60, tyBox + 22);
+
+    // Serving box
+    var sxBox = w/2 + 40, syBox = fly + 85;
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.1)';
+    ctx.fillRect(sxBox, syBox, 120, 35);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(sxBox, syBox, 120, 35);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Serving', sxBox + 60, syBox + 22);
+
+    // Log & Compare box below
+    var lcx = w/2 - 140, lcy = fly + 145;
+    ctx.fillStyle = 'rgba(26, 82, 118, 0.05)';
+    ctx.fillRect(lcx, lcy, 280, 80);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(lcx, lcy, 280, 80);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('Log & Compare Distributions', w/2, lcy + 18);
+
+    // Two overlapping histograms
+    var hx = lcx + 40, hy = lcy + 30, hw = 200, hh = 40;
+    // Training distribution (green bars)
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.4)';
+    var bars = [10, 18, 30, 35, 28, 15, 8];
+    for (var i = 0; i < bars.length; i++) {
+        var barH = bars[i];
+        ctx.fillRect(hx + i * 28, hy + hh - barH, 12, barH);
+    }
+    // Serving distribution (blue bars, offset)
+    ctx.fillStyle = 'rgba(26, 82, 118, 0.4)';
+    var bars2 = [9, 17, 29, 34, 27, 14, 7];
+    for (var i = 0; i < bars2.length; i++) {
+        var barH = bars2[i];
+        ctx.fillRect(hx + i * 28 + 13, hy + hh - barH, 12, barH);
+    }
+
+    // Legend
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.6)';
+    ctx.fillRect(lcx + 220, lcy + 55, 12, 12);
+    ctx.fillStyle = '#444';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Train', lcx + 235, lcy + 65);
+    ctx.fillStyle = 'rgba(26, 82, 118, 0.6)';
+    ctx.fillRect(lcx + 220, lcy + 40, 12, 12);
+    ctx.fillStyle = '#444';
+    ctx.fillText('Serve', lcx + 235, lcy + 50);
+
+    // Green annotation at bottom
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Same code, same result, verified daily', w/2, h - 15);
+})();
+</script>
+
+</body>
+</html>

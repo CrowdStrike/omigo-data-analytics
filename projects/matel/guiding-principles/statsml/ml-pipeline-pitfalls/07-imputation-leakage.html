@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Imputation Leakage</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Imputation Leakage</h1>
+<p class="subtitle">Filling missing values using information from the full dataset</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Impute with column mean → mean computed over train+test → test info leaks. KNN imputation: nearest neighbors may come from the test set → using test values to fill train gaps.</p>
+                <ul>
+                    <li>Impute with column mean → mean computed over train+test → test info leaks</li>
+                    <li>KNN imputation: nearest neighbors may come from the test set → using test values to fill train gaps</li>
+                    <li>Imputation strategy itself can leak: "if missing → likely negative" was learned from the full dataset</li>
+                </ul>
+                <p class="example">Example: Income missing for 20% of records. Impute with median=$52k (computed globally). Test set median is actually $48k (different demographic). Leaked the higher train median into test imputation.</p>
+                <div class="key-point">
+                    <strong>Defense:</strong> Impute using train-only statistics. Better: encode "missing" as its own signal (a feature "is_missing_income" may be predictive without needing imputation).
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>SimpleImputer (or any imputer) is fit on the full dataset before splitting. The imputation values (mean, median, mode, KNN neighbors) incorporate test data. This is the same class of error as scaling leakage but specifically for missing value handling.</p>
+                <ul>
+                    <li>SimpleImputer.fit(X_full) computes fill values using train+test rows combined</li>
+                    <li>KNN imputation: nearest neighbors may come from test set to fill train gaps</li>
+                    <li>Iterative imputation (MICE): builds models using all data including test rows</li>
+                    <li>The imputation strategy itself (which values are missing) may encode test patterns</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Root Cause:</strong> Imputation is a form of model fitting — it estimates a value from observed data. If the "observed data" includes test rows, the imputed values carry test information into training features. Same principle as scaling leakage, often more impactful because missing values can be 20-40% of a column.
+                </div>
+                <p class="example">Example: 40% of "income" column is missing. Global median = $52k (includes test). Train-only median = $48k. Every imputed training row gets $52k instead of $48k — a $4k bias toward test. For a model predicting default, this shifts the decision boundary.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Fit imputer on training data only. Transform both train and test using train-derived fill values. Alternatively, encode missingness as a feature — a binary "is_missing" column preserves the information signal without needing imputation.</p>
+                <ul>
+                    <li>Fit imputer on TRAIN ONLY: imputer.fit(X_train), then transform both splits</li>
+                    <li>Use Pipeline to enforce: imputation step fits only on training data within CV</li>
+                    <li>Alternative: encode missingness as a feature (is_missing_income = 1/0) — often predictive</li>
+                    <li>For KNN imputation: neighbors must come from training set only</li>
+                    <li>Validate: compare imputed values between "global fit" and "train-only fit" — difference reveals leak magnitude</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Fix:</strong> imputer = SimpleImputer(strategy='median'). imputer.fit(X_train). X_train_filled = imputer.transform(X_train). X_test_filled = imputer.transform(X_test). Or better: add a "missingness indicator" column that captures the signal of why data is missing.
+                </div>
+                <p class="example">Example: After fixing: train median = $48k used for all imputation. Test rows get $48k fill (not $52k). Additionally, "is_missing_income" flag added. Model uses the flag and achieves 2% better recall — missingness was informative about default risk.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Title
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Imputation Leakage: Where Does the Mean Come From?', w/2, 20);
+
+    // --- Data column (center-left) ---
+    var colX = 100, colY = 42, cellH = 28, cellW = 70;
+    var values = ['$45k', '$50k', '?', '$55k', '?', '$47k'];
+    var labels = ['train', 'train', 'train', 'test', 'test', 'test'];
+
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('Salary Column', colX + cellW/2, colY - 6);
+
+    for (var i = 0; i < values.length; i++) {
+        var y = colY + i * cellH;
+        var isMissing = values[i] === '?';
+
+        // Cell background
+        if (i < 3) {
+            ctx.fillStyle = isMissing ? '#fdebd0' : '#eafaf1';
+        } else {
+            ctx.fillStyle = isMissing ? '#fdebd0' : '#ebf5fb';
+        }
+        ctx.fillRect(colX, y, cellW, cellH - 2);
+        ctx.strokeStyle = '#bbb';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(colX, y, cellW, cellH - 2);
+
+        // Cell value
+        ctx.font = isMissing ? 'bold 13px system-ui' : '12px system-ui';
+        ctx.fillStyle = isMissing ? '#e74c3c' : '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText(values[i], colX + cellW/2, y + cellH/2 + 3);
+
+        // Row label
+        ctx.font = '10px system-ui';
+        ctx.fillStyle = i < 3 ? '#27ae60' : '#e67e22';
+        ctx.textAlign = 'left';
+        ctx.fillText(labels[i], colX + cellW + 6, y + cellH/2 + 3);
+    }
+
+    // Bracket for train
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(colX - 10, colY);
+    ctx.lineTo(colX - 16, colY);
+    ctx.lineTo(colX - 16, colY + 3 * cellH - 2);
+    ctx.lineTo(colX - 10, colY + 3 * cellH - 2);
+    ctx.stroke();
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'right';
+    ctx.save();
+    ctx.translate(colX - 20, colY + 1.5 * cellH);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillText('TRAIN', 0, 0);
+    ctx.restore();
+
+    // Bracket for test
+    ctx.strokeStyle = '#e67e22';
+    ctx.beginPath();
+    ctx.moveTo(colX - 10, colY + 3 * cellH);
+    ctx.lineTo(colX - 16, colY + 3 * cellH);
+    ctx.lineTo(colX - 16, colY + 6 * cellH - 2);
+    ctx.lineTo(colX - 10, colY + 6 * cellH - 2);
+    ctx.stroke();
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#e67e22';
+    ctx.save();
+    ctx.translate(colX - 20, colY + 4.5 * cellH);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillText('TEST', 0, 0);
+    ctx.restore();
+
+    // --- Two paths diverging from the column ---
+    var forkX = colX + cellW + 50;
+    var forkY = colY + 3 * cellH;
+
+    // Wrong path (top-right) - red
+    var wrongX = 360, wrongY = 40;
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 3]);
+    ctx.beginPath();
+    ctx.moveTo(forkX, forkY - 30);
+    ctx.quadraticCurveTo(forkX + 60, wrongY, wrongX, wrongY + 20);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Wrong path box
+    ctx.fillStyle = '#fdedec';
+    ctx.fillRect(wrongX, wrongY, 200, 70);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(wrongX, wrongY, 200, 70);
+
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('WRONG: Mean from ALL data', wrongX + 100, wrongY + 18);
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('($45k+$50k+$55k+$47k) / 4', wrongX + 100, wrongY + 38);
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Fill ? with $49.25k', wrongX + 100, wrongY + 58);
+
+    // Cross mark
+    ctx.font = 'bold 18px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'left';
+    ctx.fillText('✘', wrongX + 204, wrongY + 18);
+
+    // Right path (bottom-right) - green
+    var rightX = 360, rightY = 170;
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(forkX, forkY + 10);
+    ctx.quadraticCurveTo(forkX + 60, rightY + 30, rightX, rightY + 30);
+    ctx.stroke();
+
+    // Right path box
+    ctx.fillStyle = '#eafaf1';
+    ctx.fillRect(rightX, rightY, 200, 70);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(rightX, rightY, 200, 70);
+
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText('RIGHT: Mean from TRAIN only', rightX + 100, rightY + 18);
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('($45k + $50k) / 2', rightX + 100, rightY + 38);
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('Fill ? with $47.5k', rightX + 100, rightY + 58);
+
+    // Check mark
+    ctx.font = 'bold 18px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'left';
+    ctx.fillText('✔', rightX + 204, rightY + 18);
+
+    // --- Leaked value difference callout ---
+    ctx.fillStyle = '#fef9e7';
+    ctx.fillRect(580, 120, 130, 50);
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(580, 120, 130, 50);
+
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#e67e22';
+    ctx.textAlign = 'center';
+    ctx.fillText('Leaked difference:', 645, 138);
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillText('$49.25k vs $47.5k', 645, 158);
+
+    // Bottom annotation
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Test data ($55k) inflates the mean → model sees artificially high imputed values during training', w/2, 280);
+})();
+
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Title
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('How Imputation Parameters Leak Test Info', w/2, 20);
+
+    // Dataset box
+    var dsX = 40, dsY = 50, dsW = 160, dsH = 200;
+    ctx.fillStyle = '#f8f9fa';
+    ctx.fillRect(dsX, dsY, dsW, dsH);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(dsX, dsY, dsW, dsH);
+
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Full Dataset', dsX + dsW/2, dsY + 16);
+
+    // Train section (top half)
+    var trainH = dsH * 0.55;
+    ctx.fillStyle = 'rgba(39,174,96,0.15)';
+    ctx.fillRect(dsX + 4, dsY + 24, dsW - 8, trainH - 10);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(dsX + 4, dsY + 24, dsW - 8, trainH - 10);
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('TRAIN', dsX + dsW/2, dsY + 38);
+
+    // Missing values in train (red question marks)
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('? ? ?', dsX + dsW/2 - 20, dsY + 60);
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('$45k $50k $47k', dsX + dsW/2, dsY + 80);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('? ? ?', dsX + dsW/2 - 20, dsY + 96);
+
+    // Test section (bottom half)
+    var testTop = dsY + trainH + 18;
+    var testH = dsH - trainH - 22;
+    ctx.fillStyle = 'rgba(230,126,34,0.15)';
+    ctx.fillRect(dsX + 4, testTop, dsW - 8, testH);
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(dsX + 4, testTop, dsW - 8, testH);
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillStyle = '#e67e22';
+    ctx.textAlign = 'center';
+    ctx.fillText('TEST', dsX + dsW/2, testTop + 14);
+
+    // Missing values in test
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('? ?', dsX + dsW/2 - 10, testTop + 34);
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#e67e22';
+    ctx.fillText('$55k $60k $58k', dsX + dsW/2, testTop + 52);
+
+    // Arrows from both sections to "Compute Median" box
+    var medX = 320, medY = 110, medW = 160, medH = 50;
+
+    // Arrow from train
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(dsX + dsW, dsY + trainH/2 + 20);
+    ctx.lineTo(medX, medY + 15);
+    ctx.stroke();
+    // Arrowhead
+    ctx.fillStyle = '#27ae60';
+    ctx.beginPath();
+    ctx.moveTo(medX, medY + 15);
+    ctx.lineTo(medX - 8, medY + 10);
+    ctx.lineTo(medX - 8, medY + 20);
+    ctx.closePath();
+    ctx.fill();
+
+    // Arrow from test
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(dsX + dsW, testTop + testH/2);
+    ctx.lineTo(medX, medY + 35);
+    ctx.stroke();
+    // Arrowhead
+    ctx.fillStyle = '#e67e22';
+    ctx.beginPath();
+    ctx.moveTo(medX, medY + 35);
+    ctx.lineTo(medX - 8, medY + 30);
+    ctx.lineTo(medX - 8, medY + 40);
+    ctx.closePath();
+    ctx.fill();
+
+    // "Compute Median" box
+    ctx.fillStyle = '#fdedec';
+    ctx.fillRect(medX, medY, medW, medH);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(medX, medY, medW, medH);
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Compute Median', medX + medW/2, medY + 20);
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Uses ALL rows!', medX + medW/2, medY + 38);
+
+    // Contaminated result box
+    var resX = 530, resY = 90, resW = 170, resH = 60;
+    ctx.fillStyle = '#fef9e7';
+    ctx.fillRect(resX, resY, resW, resH);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(resX, resY, resW, resH);
+
+    // Arrow from median to result
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(medX + medW, medY + medH/2);
+    ctx.lineTo(resX, resY + resH/2);
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath();
+    ctx.moveTo(resX, resY + resH/2);
+    ctx.lineTo(resX - 8, resY + resH/2 - 5);
+    ctx.lineTo(resX - 8, resY + resH/2 + 5);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('CONTAMINATED', resX + resW/2, resY + 16);
+    ctx.font = '12px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('Median = f(train + test)', resX + resW/2, resY + 34);
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('$52k (not $48k!)', resX + resW/2, resY + 52);
+
+    // Red warning symbol
+    ctx.font = 'bold 20px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'left';
+    ctx.fillText('⚠', resX + resW + 4, resY + 24);
+
+    // Bottom annotation
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Test rows ($55k, $60k, $58k) inflate the median — every imputed train value is biased upward', w/2, h - 15);
+})();
+
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Title
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Correct: Train-Only Imputation + Missingness Features', w/2, 20);
+
+    // Pipeline wrapper
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 3]);
+    ctx.strokeRect(30, 35, w - 60, h - 60);
+    ctx.setLineDash([]);
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'left';
+    ctx.fillText('sklearn.pipeline.Pipeline', 40, 50);
+
+    // Track 1: Split -> Fit imputer on train -> Transform both
+    var t1Y = 70;
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'left';
+    ctx.fillText('Track 1: Imputation', 50, t1Y);
+
+    // Step boxes for Track 1
+    var steps1 = ['Split Data', 'Fit on Train', 'Transform Both'];
+    var stepW = 140, stepH = 40, gap = 30;
+    var startX = 70;
+
+    for (var i = 0; i < steps1.length; i++) {
+        var sx = startX + i * (stepW + gap);
+        var sy = t1Y + 10;
+
+        ctx.fillStyle = '#eafaf1';
+        ctx.fillRect(sx, sy, stepW, stepH);
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(sx, sy, stepW, stepH);
+
+        ctx.font = '11px system-ui';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText(steps1[i], sx + stepW/2, sy + 16);
+
+        if (i === 0) {
+            ctx.font = '9px system-ui';
+            ctx.fillStyle = '#555';
+            ctx.fillText('train / test', sx + stepW/2, sy + 32);
+        } else if (i === 1) {
+            ctx.font = '9px system-ui';
+            ctx.fillStyle = '#27ae60';
+            ctx.fillText('imputer.fit(X_train)', sx + stepW/2, sy + 32);
+        } else {
+            ctx.font = '9px system-ui';
+            ctx.fillStyle = '#27ae60';
+            ctx.fillText('train stats → both sets', sx + stepW/2, sy + 32);
+        }
+
+        // Arrow between steps
+        if (i < steps1.length - 1) {
+            var arrowStartX = sx + stepW;
+            var arrowEndX = sx + stepW + gap;
+            ctx.strokeStyle = '#27ae60';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(arrowStartX, sy + stepH/2);
+            ctx.lineTo(arrowEndX, sy + stepH/2);
+            ctx.stroke();
+            ctx.fillStyle = '#27ae60';
+            ctx.beginPath();
+            ctx.moveTo(arrowEndX, sy + stepH/2);
+            ctx.lineTo(arrowEndX - 6, sy + stepH/2 - 4);
+            ctx.lineTo(arrowEndX - 6, sy + stepH/2 + 4);
+            ctx.closePath();
+            ctx.fill();
+        }
+    }
+
+    // Green checkmark for Track 1
+    ctx.font = 'bold 18px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'left';
+    ctx.fillText('✔', startX + 2 * (stepW + gap) + stepW + 10, t1Y + 35);
+
+    // Track 2: Add is_missing features
+    var t2Y = 150;
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'left';
+    ctx.fillText('Track 2: Missingness Encoding', 50, t2Y);
+
+    var steps2 = ['Identify NaN', 'Add is_missing=1/0', 'Predictive Signal'];
+    for (var j = 0; j < steps2.length; j++) {
+        var sx2 = startX + j * (stepW + gap);
+        var sy2 = t2Y + 10;
+
+        ctx.fillStyle = '#ebf5fb';
+        ctx.fillRect(sx2, sy2, stepW, stepH);
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(sx2, sy2, stepW, stepH);
+
+        ctx.font = '11px system-ui';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText(steps2[j], sx2 + stepW/2, sy2 + 16);
+
+        if (j === 0) {
+            ctx.font = '9px system-ui';
+            ctx.fillStyle = '#555';
+            ctx.fillText('detect missing cells', sx2 + stepW/2, sy2 + 32);
+        } else if (j === 1) {
+            ctx.font = '9px system-ui';
+            ctx.fillStyle = '#1a5276';
+            ctx.fillText('binary indicator column', sx2 + stepW/2, sy2 + 32);
+        } else {
+            ctx.font = '9px system-ui';
+            ctx.fillStyle = '#1a5276';
+            ctx.fillText('missingness = information', sx2 + stepW/2, sy2 + 32);
+        }
+
+        // Arrow between steps
+        if (j < steps2.length - 1) {
+            var a2Start = sx2 + stepW;
+            var a2End = sx2 + stepW + gap;
+            ctx.strokeStyle = '#1a5276';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(a2Start, sy2 + stepH/2);
+            ctx.lineTo(a2End, sy2 + stepH/2);
+            ctx.stroke();
+            ctx.fillStyle = '#1a5276';
+            ctx.beginPath();
+            ctx.moveTo(a2End, sy2 + stepH/2);
+            ctx.lineTo(a2End - 6, sy2 + stepH/2 - 4);
+            ctx.lineTo(a2End - 6, sy2 + stepH/2 + 4);
+            ctx.closePath();
+            ctx.fill();
+        }
+    }
+
+    // Green checkmark for Track 2
+    ctx.font = 'bold 18px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'left';
+    ctx.fillText('✔', startX + 2 * (stepW + gap) + stepW + 10, t2Y + 35);
+
+    // Result box at bottom
+    var rbX = 200, rbY = 230, rbW = 320, rbH = 40;
+    ctx.fillStyle = '#eafaf1';
+    ctx.fillRect(rbX, rbY, rbW, rbH);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(rbX, rbY, rbW, rbH);
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText('No leakage + missingness signal preserved', rbX + rbW/2, rbY + 16);
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('+2% recall from is_missing_income feature', rbX + rbW/2, rbY + 32);
+
+    // Arrows from both tracks to result
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(startX + stepW + gap + stepW/2, t1Y + 10 + stepH);
+    ctx.lineTo(rbX + rbW/2 - 40, rbY);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(startX + stepW + gap + stepW/2, t2Y + 10 + stepH);
+    ctx.lineTo(rbX + rbW/2 + 40, rbY);
+    ctx.stroke();
+})();
+</script>
+
+</body>
+</html>

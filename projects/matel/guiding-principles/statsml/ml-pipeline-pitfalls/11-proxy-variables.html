@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Proxy Variables (Hidden Sensitive Attributes)</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Proxy Variables (Hidden Sensitive Attributes)</h1>
+<p class="subtitle">Model learns protected attributes through correlated features despite explicit removal.</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>You remove sensitive attributes like race, gender, or age from your model to ensure fairness. But correlated features act as proxies, allowing the model to reconstruct the protected attribute and discriminate anyway.</p>
+                <ul>
+                    <li>Zip code correlates 0.85 with race in many US cities</li>
+                    <li>First name can predict gender with 95% accuracy</li>
+                    <li>Job title and years of experience proxy for age</li>
+                    <li>Credit score and income correlate with protected classes</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Impact:</strong> Removing the protected attribute from the feature set does not prevent discrimination. The model finds indirect pathways through correlated features, producing the same disparate outcomes while appearing compliant.
+                </div>
+                <p class="example">Example: Credit model removes gender, but uses "cosmetics purchase frequency" (F=94%, M=6%) and "automotive parts" (M=89%, F=11%) which perfectly reconstruct it.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Protected attributes are not isolated random variables. They are deeply embedded in the social and economic structure of your data. Correlations with non-protected features are strong, systematic, and numerous.</p>
+                <ul>
+                    <li>Geographic features (zip, neighborhood) encode race via residential segregation</li>
+                    <li>Purchasing patterns, browsing history, and product preferences differ by gender</li>
+                    <li>Job sequences, tenure, and seniority correlate with age</li>
+                    <li>Many seemingly neutral features are downstream consequences of protected attributes</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Mechanism:</strong> If feature X correlates 0.7+ with protected attribute Y, and X is predictive of the outcome, the model implicitly learns Y through X. Removing Y from the feature list does nothing if X remains.
+                </div>
+                <p class="example">Example: Remove "age" but keep "years since account creation" (r=0.92 with age), "preferred payment method" (older→check, younger→digital), and "device type" (older→desktop, younger→mobile).</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Detection & Mitigation</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Fairness cannot be achieved by feature exclusion alone. You must measure disparate impact, audit proxy correlations, and use fairness-aware training methods.</p>
+                <ul>
+                    <li>Compute correlation between each feature and protected attributes (even if removed)</li>
+                    <li>Train a model to predict the protected attribute from remaining features — if AUC > 0.7, proxies exist</li>
+                    <li>Measure disparate impact: does the model produce different approval/rejection rates across groups?</li>
+                    <li>Use fairness constraints (demographic parity, equalized odds) during training</li>
+                    <li>Apply adversarial debiasing or reweighting techniques</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Fix:</strong> Audit your model for disparate impact on protected groups. If found, use fairness-constrained optimization, reweighting, or adversarial training. Simply removing features is insufficient.
+                </div>
+                <p class="example">Example: Loan model achieves 82% approval for group A, 53% for group B despite removing race. Audit reveals zip code is the proxy (correlation 0.87). Apply demographic parity constraint to equalize approval rates.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// Canvas 1: Correlation network showing proxy relationships
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Protected Attribute → Proxy Features → Model Decision', w/2, 25);
+
+    // Protected attribute (removed, shown in red)
+    var centerX = 150, centerY = 150;
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, 50, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '12px system-ui';
+    ctx.fillText('Gender', centerX, centerY - 5);
+    ctx.fillText('(REMOVED)', centerX, centerY + 10);
+
+    // Proxy features
+    var proxies = [
+        { x: 350, y: 80, label: 'Zip Code', corr: '0.85' },
+        { x: 350, y: 150, label: 'First Name', corr: '0.92' },
+        { x: 350, y: 220, label: 'Purchase Pattern', corr: '0.78' }
+    ];
+
+    proxies.forEach(function(p) {
+        // Arrow from protected to proxy
+        ctx.strokeStyle = '#e67e22';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(centerX + 50, centerY);
+        ctx.lineTo(p.x - 60, p.y);
+        ctx.stroke();
+
+        // Correlation label
+        ctx.fillStyle = '#e67e22';
+        ctx.font = '10px system-ui';
+        ctx.fillText('r=' + p.corr, (centerX + p.x) / 2, (centerY + p.y) / 2 - 5);
+
+        // Proxy box
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = '#2980b9';
+        ctx.lineWidth = 2;
+        ctx.fillRect(p.x - 60, p.y - 20, 120, 40);
+        ctx.strokeRect(p.x - 60, p.y - 20, 120, 40);
+
+        ctx.fillStyle = '#1a5276';
+        ctx.font = '11px system-ui';
+        ctx.fillText(p.label, p.x, p.y + 5);
+    });
+
+    // Model decision
+    var modelX = 570;
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 3;
+    ctx.fillRect(modelX - 70, 125, 140, 50);
+    ctx.strokeRect(modelX - 70, 125, 140, 50);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('MODEL', modelX, 145);
+    ctx.fillText('DECISION', modelX, 162);
+
+    // Arrows from proxies to model
+    proxies.forEach(function(p) {
+        ctx.strokeStyle = '#2980b9';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(p.x + 60, p.y);
+        ctx.lineTo(modelX - 70, 150);
+        ctx.stroke();
+    });
+})();
+
+// Canvas 2: Group comparison showing disparate impact
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Approval Rate by Protected Group (Gender Removed From Features)', w/2, 25);
+
+    var barWidth = 100, baseY = 260, maxBarH = 180;
+    var groups = [
+        { label: 'Group A', approval: 0.82, x: 200 },
+        { label: 'Group B', approval: 0.54, x: 400 },
+        { label: 'Group C', approval: 0.68, x: 600 }
+    ];
+
+    groups.forEach(function(g) {
+        var barH = g.approval * maxBarH;
+        var x = g.x - barWidth/2;
+        var y = baseY - barH;
+
+        var color = g.approval > 0.75 ? '#27ae60' : (g.approval > 0.60 ? '#e67e22' : '#e74c3c');
+
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.7;
+        ctx.fillRect(x, y, barWidth, barH);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, barWidth, barH);
+
+        ctx.font = 'bold 14px system-ui';
+        ctx.fillStyle = color;
+        ctx.textAlign = 'center';
+        ctx.fillText(Math.round(g.approval * 100) + '%', g.x, y - 10);
+
+        ctx.font = '12px system-ui';
+        ctx.fillStyle = '#444';
+        ctx.fillText(g.label, g.x, baseY + 20);
+    });
+
+    // Fairness threshold line
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    var targetY = baseY - (0.70 * maxBarH);
+    ctx.moveTo(100, targetY);
+    ctx.lineTo(700, targetY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#2980b9';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Fairness target: 70%', 110, targetY - 8);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('28% gap between groups despite removing protected attribute!', w/2, 55);
+})();
+
+// Canvas 3: Proxy detection via reconstruction model
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Proxy Detection: Can We Predict Protected Attribute From Remaining Features?', w/2, 25);
+
+    // Left: Input features
+    ctx.fillStyle = '#1a5276';
+    ctx.font = '12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Remaining Features', 150, 60);
+    ctx.fillText('(after removal)', 150, 75);
+
+    var features = ['Zip Code', 'First Name', 'Purchase', 'Device', 'Payment'];
+    features.forEach(function(f, i) {
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = '#2980b9';
+        ctx.lineWidth = 1.5;
+        var y = 100 + i * 32;
+        ctx.fillRect(80, y, 140, 25);
+        ctx.strokeRect(80, y, 140, 25);
+        ctx.fillStyle = '#1a5276';
+        ctx.font = '10px system-ui';
+        ctx.fillText(f, 150, y + 16);
+    });
+
+    // Middle: Reconstruction model
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 3;
+    ctx.fillRect(320, 140, 120, 60);
+    ctx.strokeRect(320, 140, 120, 60);
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('Reconstruction', 380, 162);
+    ctx.fillText('Model', 380, 180);
+
+    // Arrows
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(220, 150);
+    ctx.lineTo(320, 170);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(440, 170);
+    ctx.lineTo(500, 170);
+    ctx.stroke();
+
+    // Right: Predicted protected attribute
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.fillRect(500, 140, 160, 60);
+    ctx.strokeRect(500, 140, 160, 60);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('Predicted Gender', 580, 162);
+    ctx.font = '11px system-ui';
+    ctx.fillText('AUC = 0.89', 580, 182);
+
+    // Verdict
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillText('PROXIES DETECTED: Model can reconstruct protected attribute', w/2, 240);
+    ctx.font = '11px system-ui';
+    ctx.fillText('Remaining features contain enough information to predict gender with 89% accuracy', w/2, 260);
+})();
+</script>
+
+</body>
+</html>

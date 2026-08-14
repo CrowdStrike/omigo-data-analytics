@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scaling Before Splitting</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Scaling Before Splitting</h1>
+<p class="subtitle">Normalizing with global mean/std → test statistics leak into train</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>StandardScaler on full dataset → mean includes test values → model has seen test distribution. The effect is usually small (1-2%) but in competitions or borderline cases, it matters.</p>
+                <ul>
+                    <li>StandardScaler on full dataset → mean includes test values → model has seen test distribution</li>
+                    <li>The effect is usually small (1-2%) but in competitions or borderline cases, it matters</li>
+                    <li>Same issue with any global transform: PCA, feature selection, binning boundaries</li>
+                </ul>
+                <p class="example">Example: Feature ranges from 0-100 in train, 0-150 in test. Global scaling sees 150. Model trained on properly-scaled data would never encounter values > 100. With leaked scaling, it handles the extrapolation — unfairly.</p>
+                <div class="key-point">
+                    <strong>Defense:</strong> Fit scaler on TRAIN ONLY. Transform test using train's statistics. Pipeline: split → fit_transform(train) → transform(test).
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>It is convenient to scale the entire dataset once before splitting. Many tutorials and textbook examples show this incorrect pattern because it simplifies the code. The data leakage is subtle — typically only 1-2% performance inflation — so it often goes unnoticed.</p>
+                <ul>
+                    <li>Convenience: one StandardScaler call on the full dataframe before train_test_split</li>
+                    <li>Tutorials and examples often show this wrong pattern without correction</li>
+                    <li>The effect is subtle (1-2% accuracy inflation) so it goes unnoticed in most projects</li>
+                    <li>Same issue affects any fitted transform: PCA, polynomial features, discretization</li>
+                </ul>
+                <p class="example">Example: Feature "income" has mean=$50k in train, mean=$65k in test (different demographics). Global scaler uses mean=$55k. Training data is shifted toward test. Model performs 1.5% better because scaling already adapted to the test shift.</p>
+                <div class="key-point">
+                    <strong>Root Cause:</strong> StandardScaler.fit(X_full) computes mean and std using ALL rows, including test rows. When you transform training data, the scaling parameters already encode information about the test distribution. The model implicitly "knows" the test distribution.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Use sklearn Pipeline to ensure the scaler is fit ONLY on training data. The Pipeline object encapsulates fit_transform on train and transform-only on test, making leakage impossible by construction.</p>
+                <ul>
+                    <li>Use sklearn Pipeline: fit_transform on train, transform on test — enforced by API</li>
+                    <li>Split FIRST, then fit scaler on training data only</li>
+                    <li>Transform test data using the train-fitted scaler (train mean, train std)</li>
+                    <li>In cross-validation: Pipeline inside CV ensures re-fitting on each train fold</li>
+                    <li>Production: save the fitted scaler alongside the model for consistent transforms</li>
+                </ul>
+                <p class="example">Example: Correct workflow: X_train, X_test = split(X). scaler.fit(X_train). X_train_scaled = scaler.transform(X_train). X_test_scaled = scaler.transform(X_test). Test is scaled using train's mean/std — no information leak.</p>
+                <div class="key-point">
+                    <strong>Fix:</strong> pipeline = Pipeline([('scaler', StandardScaler()), ('model', LogisticRegression())]). The pipeline fits the scaler on train only, transforms test with train parameters. Cross-validation with pipeline = no leakage by construction.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var blue = '#1a5276';
+    var green = '#27ae60';
+    var red = '#e74c3c';
+    var orange = '#e67e22';
+
+    // Title
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = blue;
+    ctx.textAlign = 'center';
+    ctx.fillText('Scaling Before vs After Split', w / 2, 20);
+
+    // Helper: draw a rounded rect box with text
+    function drawBox(x, y, bw, bh, label, fillColor, textColor) {
+        ctx.fillStyle = fillColor;
+        ctx.beginPath();
+        var r = 6;
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + bw - r, y);
+        ctx.quadraticCurveTo(x + bw, y, x + bw, y + r);
+        ctx.lineTo(x + bw, y + bh - r);
+        ctx.quadraticCurveTo(x + bw, y + bh, x + bw - r, y + bh);
+        ctx.lineTo(x + r, y + bh);
+        ctx.quadraticCurveTo(x, y + bh, x, y + bh - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = textColor;
+        ctx.font = 'bold 11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, x + bw / 2, y + bh / 2);
+    }
+
+    // Helper: draw arrow between two points
+    function drawArrow(x1, y1, x2, y2, color) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+        // Arrowhead
+        var angle = Math.atan2(y2 - y1, x2 - x1);
+        var headLen = 8;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - headLen * Math.cos(angle - 0.4), y2 - headLen * Math.sin(angle - 0.4));
+        ctx.lineTo(x2 - headLen * Math.cos(angle + 0.4), y2 - headLen * Math.sin(angle + 0.4));
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    var boxW = 100;
+    var boxH = 30;
+
+    // === WRONG PATH (top, red) ===
+    var wrongY = 65;
+    var wrongLabel = 'WRONG';
+
+    // Label
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = red;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(wrongLabel, 10, wrongY + boxH / 2);
+
+    // Boxes for wrong path
+    var wx = [80, 210, 340, 470];
+    var wrongLabels = ['Full Data', 'Scale', 'Split', 'Train'];
+    var wrongColors = [blue, red, red, red];
+
+    wrongLabels.forEach(function(label, i) {
+        var bgColor = (i === 0) ? blue : red;
+        drawBox(wx[i], wrongY, boxW, boxH, label, bgColor, '#fff');
+    });
+
+    // Arrows for wrong path
+    for (var i = 0; i < wx.length - 1; i++) {
+        drawArrow(wx[i] + boxW, wrongY + boxH / 2, wx[i + 1], wrongY + boxH / 2, red);
+    }
+
+    // Leakage annotation on wrong path
+    ctx.setLineDash([4, 3]);
+    ctx.strokeStyle = orange;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(wx[1] + boxW / 2, wrongY + boxH + 2);
+    ctx.lineTo(wx[1] + boxW / 2, wrongY + boxH + 18);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.font = 'italic 10px system-ui';
+    ctx.fillStyle = orange;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText('test mean/std leak into scaler', wx[1] + boxW / 2 + 60, wrongY + boxH + 10);
+
+    // X mark
+    ctx.font = 'bold 18px system-ui';
+    ctx.fillStyle = red;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('✖', wx[3] + boxW + 30, wrongY + boxH / 2);
+
+    // === RIGHT PATH (bottom, green) ===
+    var rightY = 165;
+    var rightLabel = 'RIGHT';
+
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = green;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(rightLabel, 10, rightY + boxH / 2);
+
+    // Boxes for right path
+    var rx = [80, 210, 360, 530];
+    var rightLabels = ['Full Data', 'Split', 'Scale(train)', 'Apply(test)'];
+    var rightBoxW = [100, 100, 110, 110];
+
+    rightLabels.forEach(function(label, i) {
+        var bgColor = (i === 0) ? blue : green;
+        drawBox(rx[i], rightY, rightBoxW[i], boxH, label, bgColor, '#fff');
+    });
+
+    // Arrows for right path
+    drawArrow(rx[0] + rightBoxW[0], rightY + boxH / 2, rx[1], rightY + boxH / 2, green);
+    drawArrow(rx[1] + rightBoxW[1], rightY + boxH / 2, rx[2], rightY + boxH / 2, green);
+    drawArrow(rx[2] + rightBoxW[2], rightY + boxH / 2, rx[3], rightY + boxH / 2, green);
+
+    // Checkmark
+    ctx.font = 'bold 18px system-ui';
+    ctx.fillStyle = green;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('✔', rx[3] + rightBoxW[3] + 25, rightY + boxH / 2);
+
+    // === Leakage illustration ===
+    // Dashed line showing leakage from Scale box in wrong path down to a note
+    ctx.setLineDash([5, 3]);
+    ctx.strokeStyle = orange;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(wx[2] + boxW / 2, wrongY + boxH);
+    ctx.lineTo(wx[2] + boxW / 2, wrongY + boxH + 40);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Note box for leakage explanation
+    ctx.fillStyle = 'rgba(230, 126, 34, 0.1)';
+    ctx.strokeStyle = orange;
+    ctx.lineWidth = 1;
+    var noteX = 200;
+    var noteY = wrongY + boxH + 42;
+    var noteW = 320;
+    var noteH = 28;
+    ctx.fillRect(noteX, noteY, noteW, noteH);
+    ctx.strokeRect(noteX, noteY, noteW, noteH);
+
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = orange;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Test statistics (mean, std) leak into scaler fitted on full data', noteX + noteW / 2, noteY + noteH / 2);
+
+    // === Bottom note ===
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = blue;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText('Fit scaler on train only. Transform test using train-fitted parameters.', w / 2, h - 20);
+
+    // Separator line between paths
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(30, (wrongY + boxH + 70 + rightY) / 2);
+    ctx.lineTo(w - 30, (wrongY + boxH + 70 + rightY) / 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+})();
+
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var blue = '#1a5276';
+    var green = '#27ae60';
+    var red = '#e74c3c';
+    var orange = '#e67e22';
+
+    // Title
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = blue;
+    ctx.textAlign = 'center';
+    ctx.fillText('How Test Info Leaks Into Scaler Parameters', w / 2, 22);
+
+    // Helper: rounded box
+    function drawBox(x, y, bw, bh, fillColor, label, textColor) {
+        ctx.fillStyle = fillColor;
+        ctx.beginPath();
+        var r = 6;
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + bw - r, y);
+        ctx.quadraticCurveTo(x + bw, y, x + bw, y + r);
+        ctx.lineTo(x + bw, y + bh - r);
+        ctx.quadraticCurveTo(x + bw, y + bh, x + bw - r, y + bh);
+        ctx.lineTo(x + r, y + bh);
+        ctx.quadraticCurveTo(x, y + bh, x, y + bh - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = textColor;
+        ctx.font = 'bold 11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, x + bw / 2, y + bh / 2);
+    }
+
+    function drawArrow(x1, y1, x2, y2, color) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+        var angle = Math.atan2(y2 - y1, x2 - x1);
+        var headLen = 7;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - headLen * Math.cos(angle - 0.4), y2 - headLen * Math.sin(angle - 0.4));
+        ctx.lineTo(x2 - headLen * Math.cos(angle + 0.4), y2 - headLen * Math.sin(angle + 0.4));
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    // Flow: Full Data -> fit(mean, std) -> includes test rows!
+    var flowY = 55;
+    var boxH = 32;
+
+    drawBox(30, flowY, 120, boxH, blue, 'Full Data (N=1000)', '#fff');
+    drawArrow(150, flowY + boxH / 2, 185, flowY + boxH / 2, red);
+    drawBox(185, flowY, 150, boxH, red, 'fit(mean, std)', '#fff');
+    drawArrow(335, flowY + boxH / 2, 370, flowY + boxH / 2, red);
+    drawBox(370, flowY, 180, boxH, red, 'Includes test rows!', '#fff');
+
+    // Red warning highlight
+    ctx.strokeStyle = red;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(368, flowY - 2, 184, boxH + 4);
+    ctx.setLineDash([]);
+
+    // Contamination illustration
+    var contY = 120;
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = blue;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('Scaler Parameters (Contaminated):', 30, contY);
+
+    // Three columns: Train Mean, Test Mean, Global Mean
+    var colY = contY + 25;
+    var colW = 180;
+
+    // Train mean box
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.1)';
+    ctx.fillRect(30, colY, colW, 50);
+    ctx.strokeStyle = green;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(30, colY, colW, 50);
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = green;
+    ctx.textAlign = 'center';
+    ctx.fillText('Train Mean', 30 + colW / 2, colY + 12);
+    ctx.font = 'bold 20px system-ui';
+    ctx.fillText('$50k', 30 + colW / 2, colY + 34);
+
+    // Test mean box
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.1)';
+    ctx.fillRect(230, colY, colW, 50);
+    ctx.strokeStyle = red;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(230, colY, colW, 50);
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = red;
+    ctx.textAlign = 'center';
+    ctx.fillText('Test Mean', 230 + colW / 2, colY + 12);
+    ctx.font = 'bold 20px system-ui';
+    ctx.fillText('$65k', 230 + colW / 2, colY + 34);
+
+    // Global mean box (leaked)
+    ctx.fillStyle = 'rgba(230, 126, 34, 0.15)';
+    ctx.fillRect(430, colY, colW + 40, 50);
+    ctx.strokeStyle = orange;
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(430, colY, colW + 40, 50);
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = orange;
+    ctx.textAlign = 'center';
+    ctx.fillText('Global Mean (LEAKED)', 430 + (colW + 40) / 2, colY + 12);
+    ctx.font = 'bold 20px system-ui';
+    ctx.fillText('$55k', 430 + (colW + 40) / 2, colY + 34);
+
+    // Arrows showing contamination
+    drawArrow(30 + colW, colY + 25, 230, colY + 25, '#ccc');
+    drawArrow(230 + colW, colY + 25, 430, colY + 25, red);
+
+    // Red contamination label
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = red;
+    ctx.textAlign = 'center';
+    ctx.fillText('Test info contaminates global mean', w / 2, colY + 65);
+
+    // Bottom explanation
+    var botY = colY + 85;
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#555';
+    ctx.textAlign = 'center';
+    ctx.fillText('Training data scaled with mean=$55k instead of correct mean=$50k', w / 2, botY);
+    ctx.fillText('Model implicitly "knows" test distribution shifted upward', w / 2, botY + 16);
+
+    // Red bottom warning
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = red;
+    ctx.textAlign = 'center';
+    ctx.fillText('Result: 1-2% artificial accuracy inflation — subtle but real leakage', w / 2, h - 10);
+})();
+
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var blue = '#1a5276';
+    var green = '#27ae60';
+    var red = '#e74c3c';
+    var orange = '#e67e22';
+
+    // Title
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = blue;
+    ctx.textAlign = 'center';
+    ctx.fillText('Correct: sklearn Pipeline (Fit on Train Only)', w / 2, 22);
+
+    // Helper: rounded box
+    function drawBox(x, y, bw, bh, fillColor, label, textColor) {
+        ctx.fillStyle = fillColor;
+        ctx.beginPath();
+        var r = 6;
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + bw - r, y);
+        ctx.quadraticCurveTo(x + bw, y, x + bw, y + r);
+        ctx.lineTo(x + bw, y + bh - r);
+        ctx.quadraticCurveTo(x + bw, y + bh, x + bw - r, y + bh);
+        ctx.lineTo(x + r, y + bh);
+        ctx.quadraticCurveTo(x, y + bh, x, y + bh - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = textColor;
+        ctx.font = 'bold 10px system-ui';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, x + bw / 2, y + bh / 2);
+    }
+
+    function drawArrow(x1, y1, x2, y2, color) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+        var angle = Math.atan2(y2 - y1, x2 - x1);
+        var headLen = 7;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - headLen * Math.cos(angle - 0.4), y2 - headLen * Math.sin(angle - 0.4));
+        ctx.lineTo(x2 - headLen * Math.cos(angle + 0.4), y2 - headLen * Math.sin(angle + 0.4));
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    // Pipeline sequence: Split -> fit_transform(train) -> transform(test) -> Model
+    var pipeY = 50;
+    var boxH = 30;
+
+    drawBox(20, pipeY, 80, boxH, blue, 'Full Data', '#fff');
+    drawArrow(100, pipeY + boxH / 2, 125, pipeY + boxH / 2, green);
+    drawBox(125, pipeY, 70, boxH, green, 'Split', '#fff');
+
+    // Two branches from Split
+    // Train branch (top)
+    var trainY = pipeY - 25;
+    drawArrow(195, pipeY + boxH / 2 - 5, 230, trainY + boxH / 2, green);
+    drawBox(230, trainY, 140, boxH, green, 'fit_transform(train)', '#fff');
+    drawArrow(370, trainY + boxH / 2, 405, trainY + boxH / 2, green);
+    drawBox(405, trainY, 80, boxH, green, 'Model', '#fff');
+
+    // Test branch (bottom)
+    var testY = pipeY + 25;
+    drawArrow(195, pipeY + boxH / 2 + 5, 230, testY + boxH / 2, green);
+    drawBox(230, testY, 130, boxH, green, 'transform(test)', '#fff');
+    drawArrow(360, testY + boxH / 2, 405, testY + boxH / 2, green);
+    drawBox(405, testY, 80, boxH, green, 'Evaluate', '#fff');
+
+    // Show scaler params come from train only
+    ctx.setLineDash([4, 3]);
+    ctx.strokeStyle = green;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(300, trainY + boxH);
+    ctx.lineTo(300, testY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.font = '9px system-ui';
+    ctx.fillStyle = green;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('train params', 305, (trainY + boxH + testY) / 2);
+
+    // Red X blocking test -> scaler contamination
+    var blockY = 130;
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = red;
+    ctx.textAlign = 'center';
+
+    // Draw blocked path
+    ctx.setLineDash([4, 3]);
+    ctx.strokeStyle = red;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(280, testY + boxH);
+    ctx.lineTo(280, blockY + 10);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // X mark
+    ctx.font = 'bold 22px system-ui';
+    ctx.fillStyle = red;
+    ctx.fillText('✖', 280, blockY + 25);
+    ctx.font = '10px system-ui';
+    ctx.fillText('Test cannot influence scaler', 280, blockY + 42);
+
+    // Pipeline box showing the sklearn construct
+    var codeY = 175;
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.08)';
+    ctx.fillRect(30, codeY, w - 60, 55);
+    ctx.strokeStyle = green;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(30, codeY, w - 60, 55);
+
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = green;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('sklearn Pipeline (enforces correct order):', 45, codeY + 8);
+
+    ctx.font = '11px monospace';
+    ctx.fillStyle = blue;
+    ctx.fillText("pipeline = Pipeline([('scaler', StandardScaler()), ('model', LogisticRegression())])", 45, codeY + 26);
+    ctx.fillText("cross_val_score(pipeline, X, y, cv=StratifiedKFold(5))  # re-fits each fold", 45, codeY + 40);
+
+    // Green arrows showing correct data flow
+    var flowY2 = 245;
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = green;
+    ctx.textAlign = 'center';
+    ctx.fillText('Correct Flow:', 60, flowY2);
+
+    drawBox(120, flowY2 - 12, 100, 24, green, 'Train Data', '#fff');
+    drawArrow(220, flowY2, 245, flowY2, green);
+    drawBox(245, flowY2 - 12, 120, 24, green, 'fit + transform', '#fff');
+    drawArrow(365, flowY2, 390, flowY2, green);
+    drawBox(390, flowY2 - 12, 90, 24, green, 'Train Model', '#fff');
+
+    var flowY3 = 275;
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = blue;
+    ctx.textAlign = 'center';
+    ctx.fillText('Test Flow:', 60, flowY3);
+
+    drawBox(120, flowY3 - 12, 100, 24, blue, 'Test Data', '#fff');
+    drawArrow(220, flowY3, 245, flowY3, blue);
+    drawBox(245, flowY3 - 12, 120, 24, blue, 'transform only', '#fff');
+    drawArrow(365, flowY3, 390, flowY3, blue);
+    drawBox(390, flowY3 - 12, 90, 24, blue, 'Predict', '#fff');
+})();
+</script>
+
+</body>
+</html>

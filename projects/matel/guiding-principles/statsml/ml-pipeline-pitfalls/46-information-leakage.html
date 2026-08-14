@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Information Leakage (Comprehensive)</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.metric strong {
+    color: #1a5276;
+}
+
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Information Leakage (Comprehensive)</h1>
+<p class="subtitle">Umbrella category for any information crossing a boundary it shouldn't—temporal, train-test, or entity.</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Information that wouldn't be available at prediction time leaks into training, inflating offline metrics while guaranteeing production failure. Includes future data, test set signals, or cross-entity contamination. The model learns shortcuts that don't exist in reality.</p>
+                <ul>
+                    <li><strong>Temporal boundaries:</strong> Feature uses data from after the prediction timestamp—e.g., "user churned 30 days later" as feature when predicting churn; model sees the answer</li>
+                    <li><strong>Train-test boundaries:</strong> Normalization or imputation computed on full dataset including test set, leaking test distribution into training preprocessing</li>
+                    <li><strong>Entity boundaries:</strong> User-level features include aggregates from other users in same test batch, leaking cross-user signals that won't be available for isolated predictions</li>
+                    <li><strong>Target encoding leakage:</strong> Categorical feature encoded with target mean computed on full dataset, directly embedding label information into feature</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Impact:</strong> Artificially perfect offline metrics (AUC > 0.99) collapse to random performance (AUC ~ 0.5) in production. Model has memorized patterns that don't generalize because they violate causality. <strong>Fix:</strong> Enforce strict temporal ordering—features use only data from before prediction time. Compute preprocessing statistics only on training set. Isolate entity-level computations. Simulate production data availability during training.
+                </div>
+                <p class="example">Example: Predicting loan default. Feature "account_closed_within_90_days" computed from future data (loans approved today, account status checked 90 days later). Training AUC = 0.97; production AUC = 0.52. Model learned that closed accounts default (true) but can't predict closures in advance (leakage).</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Information leakage is an umbrella term covering many distinct failure modes. Each has different mechanics but the same symptom: unrealistically good offline metrics.</p>
+                <ul>
+                    <li><strong>Temporal leakage:</strong> Using future data to predict past events—features computed from data that didn't exist at prediction time</li>
+                    <li><strong>Split leakage:</strong> Same entity appears in train and test (grouped data not split by group)—e.g., multiple visits from one patient in both sets</li>
+                    <li><strong>Deployment leakage:</strong> Features available offline but not at prediction time—batch-computed fields unavailable in real-time serving</li>
+                    <li><strong>Label leakage:</strong> Target variable encoded into features (e.g., "cancelled_reason" predicting churn)—direct or indirect label exposure</li>
+                    <li><strong>Population leakage:</strong> Training population differs from deployment population—selection bias in who enters the dataset</li>
+                    <li><strong>Knowledge leakage:</strong> Domain knowledge about label inadvertently encoded during feature engineering</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Root cause:</strong> Leakage is an umbrella term covering many distinct failure modes. Each has different mechanics but the same symptom: unrealistically good offline metrics. Recognizing which type you have determines the fix.
+                </div>
+                <p class="example">Example: A hospital readmission model uses "discharge_summary_text" which contains phrases like "patient likely to return." The model achieves 98% AUC offline but the field isn't populated until after the readmission decision is made.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>The universal test for leakage: "Is this feature available at prediction time?" Every feature must pass this test before inclusion in the training pipeline.</p>
+                <ul>
+                    <li><strong>Feature availability audit:</strong> Apply the universal test—"Is this feature available at prediction time?"</li>
+                    <li><strong>Feature parity:</strong> Ensure feature parity between training and serving environments—no offline-only features</li>
+                    <li><strong>Entity-aware splits:</strong> Split by entity (patient, user, session) not by row—all rows from one entity stay together</li>
+                    <li><strong>Time-based splits:</strong> For temporal data, train on past, validate on future—never shuffle time series</li>
+                    <li><strong>Feature registry:</strong> Document when each feature becomes available relative to prediction time</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Best practice:</strong> For every feature, document when it becomes available relative to prediction time. Build a feature availability timeline. Any feature filled after the prediction moment is leakage.
+                </div>
+                <p class="example">Example: Feature registry has columns: feature_name, available_at (e.g., "T-0", "T+1h", "T+1d"). Training pipeline automatically excludes any feature where available_at > prediction_time.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// Information leakage boundaries diagram
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Three Boundaries Where Leakage Occurs', w/2, 25);
+
+    var colWidth = w / 3;
+
+    // Temporal leakage
+    var x1 = colWidth / 2;
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('TEMPORAL', x1, 55);
+
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 2;
+    ctx.fillRect(x1 - 90, 70, 80, 50);
+    ctx.strokeRect(x1 - 90, 70, 80, 50);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Past data', x1 - 50, 90);
+    ctx.fillText('(available)', x1 - 50, 103);
+
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 2;
+    ctx.fillRect(x1 + 10, 70, 80, 50);
+    ctx.strokeRect(x1 + 10, 70, 80, 50);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '10px system-ui';
+    ctx.fillText('Future data', x1 + 50, 90);
+    ctx.fillText('(leaked)', x1 + 50, 103);
+
+    // Temporal barrier
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(x1, 65);
+    ctx.lineTo(x1, 125);
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 9px system-ui';
+    ctx.save();
+    ctx.translate(x1 - 5, 95);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Prediction time', 0, 0);
+    ctx.restore();
+
+    ctx.font = '9px system-ui';
+    ctx.fillText('Feature uses', x1, 145);
+    ctx.fillText('future values', x1, 157);
+
+    // Train-test leakage
+    var x2 = colWidth + colWidth / 2;
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('TRAIN-TEST', x2, 55);
+
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.3)';
+    ctx.fillRect(x2 - 90, 70, 80, 50);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x2 - 90, 70, 80, 50);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Train set', x2 - 50, 98);
+
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.3)';
+    ctx.fillRect(x2 + 10, 70, 80, 50);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x2 + 10, 70, 80, 50);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '10px system-ui';
+    ctx.fillText('Test set', x2 + 50, 98);
+
+    // Leakage arrow
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(x2 + 10, 95);
+    ctx.lineTo(x2 - 10, 95);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x2 - 10, 95);
+    ctx.lineTo(x2 - 5, 90);
+    ctx.lineTo(x2 - 5, 100);
+    ctx.closePath();
+    ctx.fillStyle = '#e74c3c';
+    ctx.fill();
+
+    ctx.font = '9px system-ui';
+    ctx.fillText('Preprocessing', x2, 145);
+    ctx.fillText('on full data', x2, 157);
+
+    // Entity leakage
+    var x3 = 2 * colWidth + colWidth / 2;
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('ENTITY', x3, 55);
+
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x3 - 50, 95, 25, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '10px system-ui';
+    ctx.fillText('User A', x3 - 50, 98);
+
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x3 + 50, 95, 25, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '10px system-ui';
+    ctx.fillText('User B', x3 + 50, 98);
+
+    // Cross-entity arrow
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(x3 - 25, 95);
+    ctx.lineTo(x3 + 25, 95);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x3 + 25, 95);
+    ctx.lineTo(x3 + 18, 90);
+    ctx.lineTo(x3 + 18, 100);
+    ctx.closePath();
+    ctx.fillStyle = '#e74c3c';
+    ctx.fill();
+
+    ctx.font = '9px system-ui';
+    ctx.fillText('Feature uses', x3, 145);
+    ctx.fillText('other users', x3, 157);
+
+    // Bottom summary
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.fillRect(80, 185, w - 160, 80);
+    ctx.strokeRect(80, 185, w - 160, 80);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('IMPACT: Inflated Offline Metrics, Production Collapse', w/2, 205);
+
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = '10px system-ui';
+    ctx.fillText('Training AUC = 0.97 (model sees leaked information)', w/2, 225);
+    ctx.fillText('Production AUC = 0.53 (information not available at inference time)', w/2, 240);
+    ctx.fillText('Model learned shortcuts that violate causality or isolation assumptions', w/2, 255);
+})();
+
+// Canvas 2: Taxonomy of leakage types
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Taxonomy of Information Leakage Types', w/2, 25);
+
+    // Central node
+    var cx = w / 2, cy = 90;
+    ctx.fillStyle = '#1a5276';
+    ctx.beginPath();
+    ctx.roundRect(cx - 80, cy - 20, 160, 40, 8);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('Information Leakage', cx, cy + 5);
+
+    // Branch types with colors
+    var types = [
+        { label: 'Temporal', color: '#e74c3c', x: 80 },
+        { label: 'Split', color: '#e67e22', x: 220 },
+        { label: 'Deployment', color: '#8e44ad', x: 360 },
+        { label: 'Label', color: '#27ae60', x: 500 },
+        { label: 'Population', color: '#2980b9', x: 640 }
+    ];
+
+    var branchY = 180;
+
+    for (var i = 0; i < types.length; i++) {
+        var t = types[i];
+
+        // Connecting line from center to branch
+        ctx.strokeStyle = t.color;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(cx, cy + 20);
+        ctx.lineTo(t.x, branchY - 25);
+        ctx.stroke();
+
+        // Branch node
+        ctx.fillStyle = t.color;
+        ctx.beginPath();
+        ctx.roundRect(t.x - 50, branchY - 25, 100, 35, 6);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 11px system-ui';
+        ctx.fillText(t.label, t.x, branchY - 4);
+    }
+
+    // Descriptions below each node
+    ctx.font = '9px system-ui';
+    ctx.fillStyle = '#2c3e50';
+    var descs = [
+        ['Future data used', 'to predict past'],
+        ['Same entity in', 'train and test'],
+        ['Features absent', 'at serve time'],
+        ['Target encoded', 'in features'],
+        ['Training != deploy', 'population']
+    ];
+    for (var i = 0; i < types.length; i++) {
+        ctx.fillText(descs[i][0], types[i].x, branchY + 25);
+        ctx.fillText(descs[i][1], types[i].x, branchY + 37);
+    }
+
+    // Common symptom box at bottom
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(150, 245, w - 300, 40, 6);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Common Symptom: Unrealistically good offline metrics', w/2, 268);
+})();
+
+// Canvas 3: Feature availability timeline
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Feature Availability Timeline', w/2, 25);
+
+    // Timeline
+    var tlY = 80;
+    var tlLeft = 60;
+    var tlRight = w - 60;
+    var predX = w / 2;
+
+    // Timeline line
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(tlLeft, tlY);
+    ctx.lineTo(tlRight, tlY);
+    ctx.stroke();
+
+    // Arrow head
+    ctx.beginPath();
+    ctx.moveTo(tlRight, tlY);
+    ctx.lineTo(tlRight - 8, tlY - 5);
+    ctx.lineTo(tlRight - 8, tlY + 5);
+    ctx.closePath();
+    ctx.fillStyle = '#2c3e50';
+    ctx.fill();
+
+    // Prediction moment divider
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([6, 3]);
+    ctx.beginPath();
+    ctx.moveTo(predX, tlY - 30);
+    ctx.lineTo(predX, tlY + 30);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Prediction label
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('PREDICTION MOMENT', predX, tlY - 35);
+
+    // Time labels
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.fillText('T-7d', tlLeft + 20, tlY + 20);
+    ctx.fillText('T-1d', tlLeft + 100, tlY + 20);
+    ctx.fillText('T-0', predX, tlY + 20);
+    ctx.fillText('T+1h', predX + 80, tlY + 20);
+    ctx.fillText('T+1d', tlRight - 60, tlY + 20);
+
+    // Available features (left side, green)
+    var features_left = [
+        { name: 'age', x: tlLeft + 30 },
+        { name: 'login_count_7d', x: tlLeft + 110 },
+        { name: 'account_tenure', x: predX - 80 }
+    ];
+
+    ctx.font = '10px system-ui';
+    var featY = 140;
+    for (var i = 0; i < features_left.length; i++) {
+        var f = features_left[i];
+        var fx = f.x;
+        var fy = featY + i * 35;
+
+        // Green box
+        ctx.fillStyle = 'rgba(39, 174, 96, 0.15)';
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(fx - 55, fy - 12, 110, 24, 4);
+        ctx.fill();
+        ctx.stroke();
+
+        // Checkmark
+        ctx.fillStyle = '#27ae60';
+        ctx.font = 'bold 12px system-ui';
+        ctx.textAlign = 'left';
+        ctx.fillText('✓', fx - 50, fy + 5);
+
+        // Feature name
+        ctx.font = '10px system-ui';
+        ctx.fillText(f.name, fx - 35, fy + 4);
+        ctx.textAlign = 'center';
+    }
+
+    // Unavailable features (right side, red with X)
+    var features_right = [
+        { name: 'discharge_summary', x: predX + 90 },
+        { name: 'outcome_30d', x: predX + 90 },
+        { name: 'final_diagnosis', x: predX + 90 }
+    ];
+
+    for (var i = 0; i < features_right.length; i++) {
+        var f = features_right[i];
+        var fx = f.x;
+        var fy = featY + i * 35;
+
+        // Red box
+        ctx.fillStyle = 'rgba(231, 76, 60, 0.15)';
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(fx - 55, fy - 12, 125, 24, 4);
+        ctx.fill();
+        ctx.stroke();
+
+        // X mark
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 12px system-ui';
+        ctx.textAlign = 'left';
+        ctx.fillText('✗', fx - 50, fy + 5);
+
+        // Feature name
+        ctx.font = '10px system-ui';
+        ctx.fillText(f.name, fx - 35, fy + 4);
+        ctx.textAlign = 'center';
+    }
+
+    // Legend
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(80, 265, 12, 12);
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('Available at prediction time (safe)', 98, 275);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(320, 265, 12, 12);
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('Not yet available (LEAKAGE)', 338, 275);
+})();
+</script>
+
+</body>
+</html>

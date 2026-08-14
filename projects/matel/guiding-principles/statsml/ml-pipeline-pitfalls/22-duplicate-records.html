@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duplicate / Near-Duplicate Records</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Duplicate / Near-Duplicate Records</h1>
+<p class="subtitle">Same or nearly identical record appearing in both train and test sets causes memorization leakage and inflated performance</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>When the same record (or near-duplicates differing only in irrelevant fields) appears in both train and test sets, the model simply memorizes it. Test accuracy becomes artificially high because the model has seen these exact examples before.</p>
+                <ul>
+                    <li>ETL bugs create duplicate rows from joins or retries</li>
+                    <li>Data collection systems capture same event multiple times</li>
+                    <li>Splitting before deduplication spreads copies across train/test</li>
+                    <li>Near-duplicates (same content, different timestamp) are harder to detect</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Impact:</strong> Test performance vastly overstates production performance. Models fail in the wild because they memorized duplicates rather than learning patterns. Fix: Deduplicate before splitting. Use entity-level splits where possible.
+                </div>
+                <p class="example">Example: A text classifier has 15% duplicate documents. Test accuracy is 94%, but production accuracy is 78%. The model memorized duplicates instead of learning features.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Detection Strategies</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Detecting duplicates requires checking across the train/test boundary. Exact duplicates are easy; near-duplicates require content hashing or similarity measures.</p>
+                <ul>
+                    <li>Hash all rows and check for collisions across train/test</li>
+                    <li>For text: use MinHash or SimHash to find near-duplicates</li>
+                    <li>For images: perceptual hashing (pHash, dHash)</li>
+                    <li>For time-series: compare windowed subsequences</li>
+                    <li>Check for suspiciously high test accuracy on specific subsets</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Detection signal:</strong> Large gap between in-sample and out-of-sample error, or test accuracy that seems "too good" for the problem difficulty. Inspect high-confidence predictions for memorization.
+                </div>
+                <p class="example">Example: A fraud model has 99.5% test accuracy but 87% production accuracy. Investigating shows 20% of test set has exact matches in training data due to retry logic creating duplicate transactions.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Prevention and Mitigation</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>The safest approach is to deduplicate the entire dataset before any splitting. Use entity-level or temporal splits to prevent information leakage through near-duplicates.</p>
+                <ul>
+                    <li>Deduplicate globally before train/test split</li>
+                    <li>Use entity-based splitting (one user or account entirely in train or test)</li>
+                    <li>For time-series, use temporal splits with guardbands</li>
+                    <li>Monitor for duplicate creation in ETL pipelines</li>
+                    <li>Track unique IDs and flag when same ID appears in multiple sets</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Best practice:</strong> Always deduplicate before splitting. Use content-based deduplication (not just ID-based) to catch near-duplicates. For high-stakes applications, implement automated checks that fail the pipeline if cross-set duplicates are detected.
+                </div>
+                <p class="example">Example: An e-commerce recommendation system switched from random split to user-level split. Test accuracy dropped from 91% to 78%, revealing that the model had been memorizing duplicate product views from the same users.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// Canvas 1: Duplicates across train/test boundary
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Duplicate Records Across Train/Test Split', w/2, 25);
+
+    var trainX = 100, testX = 450, boxW = 200, startY = 60;
+
+    // Train set
+    ctx.fillStyle = '#1a5276';
+    ctx.font = '12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('TRAIN SET', trainX + boxW/2, 50);
+
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(trainX, startY, boxW, 220);
+
+    var records = [
+        {y: 80, label: 'Record A', color: '#27ae60'},
+        {y: 110, label: 'Record B', color: '#e74c3c'},
+        {y: 140, label: 'Record C', color: '#27ae60'},
+        {y: 170, label: 'Record D', color: '#e74c3c'},
+        {y: 200, label: 'Record E', color: '#27ae60'},
+        {y: 230, label: 'Record F', color: '#e74c3c'}
+    ];
+
+    records.forEach(function(rec) {
+        ctx.fillStyle = rec.color;
+        ctx.globalAlpha = 0.3;
+        ctx.fillRect(trainX + 20, rec.y, boxW - 40, 20);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = rec.color;
+        ctx.strokeRect(trainX + 20, rec.y, boxW - 40, 20);
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(rec.label, trainX + boxW/2, rec.y + 14);
+    });
+
+    // Test set
+    ctx.fillStyle = '#1a5276';
+    ctx.font = '12px system-ui';
+    ctx.fillText('TEST SET', testX + boxW/2, 50);
+
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(testX, startY, boxW, 220);
+
+    var testRecs = [
+        {y: 80, label: 'Record G', color: '#27ae60'},
+        {y: 110, label: 'Record B', color: '#e74c3c', dup: true},
+        {y: 140, label: 'Record H', color: '#27ae60'},
+        {y: 170, label: 'Record D', color: '#e74c3c', dup: true},
+        {y: 200, label: 'Record I', color: '#27ae60'},
+        {y: 230, label: 'Record F', color: '#e74c3c', dup: true}
+    ];
+
+    testRecs.forEach(function(rec) {
+        ctx.fillStyle = rec.color;
+        ctx.globalAlpha = 0.3;
+        ctx.fillRect(testX + 20, rec.y, boxW - 40, 20);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = rec.color;
+        ctx.lineWidth = rec.dup ? 3 : 1;
+        ctx.strokeRect(testX + 20, rec.y, boxW - 40, 20);
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = rec.dup ? 'bold 11px system-ui' : '11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(rec.label, testX + boxW/2, rec.y + 14);
+    });
+
+    // Draw arrows connecting duplicates
+    [[110, 110], [170, 170], [230, 230]].forEach(function(pair) {
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(trainX + boxW, pair[0] + 10);
+        ctx.lineTo(testX, pair[1] + 10);
+        ctx.stroke();
+        ctx.setLineDash([]);
+    });
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('DUPLICATES = MEMORIZATION', w/2, 275);
+})();
+
+// Canvas 2: Test accuracy breakdown
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Test Accuracy Breakdown — Duplicates vs Novel Records', w/2, 25);
+
+    var barW = 120, baseY = 240, maxH = 160;
+    var bars = [
+        {x: 160, label: 'Duplicates\n(15% of test)', acc: 0.99, color: '#e74c3c'},
+        {x: 360, label: 'Novel Records\n(85% of test)', acc: 0.76, color: '#27ae60'},
+        {x: 560, label: 'Weighted\nAverage', acc: 0.80, color: '#2980b9'}
+    ];
+
+    bars.forEach(function(bar) {
+        var h = bar.acc * maxH;
+        var y = baseY - h;
+
+        ctx.fillStyle = bar.color;
+        ctx.globalAlpha = 0.35;
+        ctx.fillRect(bar.x - barW/2, y, barW, h);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = bar.color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(bar.x - barW/2, y, barW, h);
+
+        ctx.fillStyle = bar.color;
+        ctx.font = 'bold 16px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(Math.round(bar.acc * 100) + '%', bar.x, y - 10);
+
+        ctx.fillStyle = '#444';
+        ctx.font = '11px system-ui';
+        var lines = bar.label.split('\n');
+        lines.forEach(function(line, i) {
+            ctx.fillText(line, bar.x, baseY + 18 + i * 14);
+        });
+    });
+
+    // Baseline
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(60, baseY);
+    ctx.lineTo(680, baseY);
+    ctx.stroke();
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Model memorized duplicates but struggles with novel data', w/2, 275);
+})();
+
+// Canvas 3: Deduplication workflow
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Correct Workflow — Deduplicate Before Splitting', w/2, 25);
+
+    var boxes = [
+        {x: 100, y: 80, w: 120, h: 50, label: 'Raw Data\n(with dupes)', color: '#e74c3c'},
+        {x: 280, y: 80, w: 140, h: 50, label: 'Deduplicate\nGlobally', color: '#e67e22'},
+        {x: 480, y: 80, w: 120, h: 50, label: 'Clean Data\n(unique)', color: '#27ae60'},
+        {x: 360, y: 180, w: 140, h: 50, label: 'Train/Test\nSplit', color: '#2980b9'}
+    ];
+
+    boxes.forEach(function(box, i) {
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = box.color;
+        ctx.lineWidth = 3;
+        ctx.fillRect(box.x, box.y, box.w, box.h);
+        ctx.strokeRect(box.x, box.y, box.w, box.h);
+
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '12px system-ui';
+        ctx.textAlign = 'center';
+        var lines = box.label.split('\n');
+        lines.forEach(function(line, j) {
+            ctx.fillText(line, box.x + box.w/2, box.y + box.h/2 + (j - lines.length/2 + 0.8) * 15);
+        });
+    });
+
+    // Arrows
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(220, 105);
+    ctx.lineTo(280, 105);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(420, 105);
+    ctx.lineTo(480, 105);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(540, 130);
+    ctx.lineTo(540, 160);
+    ctx.lineTo(430, 160);
+    ctx.lineTo(430, 180);
+    ctx.stroke();
+
+    // Final splits
+    var splitY = 250;
+    ctx.fillStyle = 'rgba(26,82,118,0.3)';
+    ctx.fillRect(260, splitY, 100, 40);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(260, splitY, 100, 40);
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('TRAIN', 310, splitY + 25);
+
+    ctx.fillStyle = 'rgba(39,174,96,0.3)';
+    ctx.fillRect(380, splitY, 100, 40);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(380, splitY, 100, 40);
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('TEST', 430, splitY + 25);
+
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(430, 230);
+    ctx.lineTo(310, 250);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(430, 230);
+    ctx.lineTo(430, 250);
+    ctx.stroke();
+})();
+</script>
+
+</body>
+</html>

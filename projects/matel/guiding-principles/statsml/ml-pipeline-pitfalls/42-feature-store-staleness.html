@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Feature Store Staleness</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.metric strong {
+    color: #1a5276;
+}
+
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Feature Store Staleness</h1>
+<p class="subtitle">Feature store serves outdated values with no monitoring, silently degrading model performance.</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Feature store caches values for performance but fails to monitor freshness. Updates pause or lag without alerting, causing models to make decisions on hours-old or day-old features while believing they are current.</p>
+                <ul>
+                    <li><strong>Cache expiry:</strong> TTL set to "reasonable" values (e.g., 1 hour) without checking actual update frequency—upstream job now runs every 6 hours, cache serves 5-hour-old data</li>
+                    <li><strong>Update frequency drift:</strong> Feature pipeline originally refreshed every 15 minutes, now runs hourly due to load or failures, but no alerts fire</li>
+                    <li><strong>Staleness detection:</strong> No timestamp comparison at read time—application assumes if value exists, it's fresh enough</li>
+                    <li><strong>Silent degradation:</strong> Model accuracy erodes gradually as features age; no single event triggers investigation</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Impact:</strong> Models make decisions on outdated context, systematically missing recent events. Gradual accuracy drop is invisible until major incident. <strong>Fix:</strong> Store and expose feature timestamp at write time. Alert when age exceeds threshold. Monitor staleness percentiles across all features. Reject reads when staleness exceeds policy.
+                </div>
+                <p class="example">Example: Feature store caches "user session count in last 10 minutes" with 5-minute TTL. Upstream streaming job fails silently at 2 PM, cache continues serving 2 PM values until 8 PM when manual investigation starts. Model predicts "inactive" for users with recent activity, blocking 14% of legitimate traffic.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <ul>
+                    <li><strong>Unmonitored pipelines:</strong> Refresh pipelines have no SLA enforcement — failures are silent and undetected for hours</li>
+                    <li><strong>No per-feature freshness SLA:</strong> No defined or tracked maximum age per feature; all features treated identically</li>
+                    <li><strong>Generic cache TTLs:</strong> Cache expiry set to "1 hour" generically without matching actual upstream update cadence</li>
+                    <li><strong>No alert propagation:</strong> Upstream pipeline failures don't propagate alerts downstream to consumers</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Root cause:</strong> Feature stores are built for performance (low-latency reads) but freshness monitoring is an afterthought. The system optimizes for speed of retrieval without tracking age of data.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <ul>
+                    <li><strong>Per-feature timestamps:</strong> Store last_updated timestamp per feature per entity in the feature store</li>
+                    <li><strong>Defined SLAs:</strong> Define max_age SLA per feature (e.g., user_activity: 15 min, demographics: 24 hours)</li>
+                    <li><strong>Alert on breach:</strong> Alert when any feature exceeds its freshness SLA</li>
+                    <li><strong>Reject stale predictions:</strong> Return uncertainty flag instead of prediction when critical features are stale</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Principle:</strong> Every feature read should carry its age. The model serving layer must know whether it is making a decision on fresh data or stale data — and act accordingly.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// Feature staleness timeline
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Feature Store Staleness Over Time', w/2, 25);
+
+    // Timeline axis
+    var left = 60, right = 680, baseY = 220;
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(left, baseY);
+    ctx.lineTo(right, baseY);
+    ctx.stroke();
+
+    // Time labels
+    ctx.fillStyle = '#666';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    var times = ['10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'];
+    times.forEach(function(t, i) {
+        var x = left + (i / (times.length - 1)) * (right - left);
+        ctx.fillText(t, x, baseY + 15);
+        ctx.beginPath();
+        ctx.moveTo(x, baseY);
+        ctx.lineTo(x, baseY + 4);
+        ctx.stroke();
+    });
+
+    // Fresh period (green)
+    var freshEnd = left + 4 * (right - left) / 6;
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.3)';
+    ctx.fillRect(left, 60, freshEnd - left, 150);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([]);
+    ctx.strokeRect(left, 60, freshEnd - left, 150);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('FRESH', (left + freshEnd) / 2, 85);
+    ctx.font = '11px system-ui';
+    ctx.fillText('Updates every 15 min', (left + freshEnd) / 2, 100);
+
+    // Stale period (red)
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.3)';
+    ctx.fillRect(freshEnd, 60, right - freshEnd, 150);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(freshEnd, 60, right - freshEnd, 150);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('STALE', (freshEnd + right) / 2, 85);
+    ctx.font = '11px system-ui';
+    ctx.fillText('Pipeline failure — no updates', (freshEnd + right) / 2, 100);
+    ctx.fillText('Cache serves old values', (freshEnd + right) / 2, 115);
+
+    // Staleness line chart
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    var pts = 50;
+    for (var i = 0; i <= pts; i++) {
+        var t = i / pts;
+        var x = left + t * (right - left);
+        var stale;
+        if (t < 4/6) {
+            // Fresh period: small oscillation
+            stale = 5 + 3 * Math.sin(t * 40);
+        } else {
+            // Stale period: linear growth
+            stale = 5 + (t - 4/6) * 600;
+        }
+        var y = 200 - Math.min(stale, 120);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Label line
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Staleness (minutes)', right - 150, 90);
+
+    // Alert threshold line
+    var thresholdY = 130;
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(left, thresholdY);
+    ctx.lineTo(right, thresholdY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'right';
+    ctx.fillText('Alert threshold (30 min)', left - 5, thresholdY - 5);
+
+    // Failure marker
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath();
+    ctx.arc(freshEnd, 198, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Pipeline fails', freshEnd, 175);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.setLineDash([2, 2]);
+    ctx.beginPath();
+    ctx.moveTo(freshEnd, 185);
+    ctx.lineTo(freshEnd, baseY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+})();
+
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Feature Store Without Freshness Monitoring', w/2, 25);
+
+    // Feature Store box
+    var fsx = 50, fsy = 50, fsw = 400, fsh = 180;
+    ctx.fillStyle = '#f8f9fa';
+    ctx.fillRect(fsx, fsy, fsw, fsh);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(fsx, fsy, fsw, fsh);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('FEATURE STORE', fsx + 10, fsy + 20);
+
+    // Feature A: fresh (green)
+    var fy1 = fsy + 40;
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.15)';
+    ctx.fillRect(fsx + 15, fy1, 370, 35);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(fsx + 15, fy1, 370, 35);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Feature A: user_clicks', fsx + 25, fy1 + 15);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '10px system-ui';
+    ctx.fillText('Last updated: 5 min ago', fsx + 25, fy1 + 28);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'right';
+    ctx.fillText('FRESH', fsx + 375, fy1 + 22);
+    ctx.textAlign = 'left';
+
+    // Feature B: stale (red)
+    var fy2 = fy1 + 45;
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.15)';
+    ctx.fillRect(fsx + 15, fy2, 370, 35);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(fsx + 15, fy2, 370, 35);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Feature B: session_count', fsx + 25, fy2 + 15);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '10px system-ui';
+    ctx.fillText('Last updated: 3 hours ago', fsx + 25, fy2 + 28);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'right';
+    ctx.fillText('STALE', fsx + 375, fy2 + 22);
+    ctx.textAlign = 'left';
+
+    // Feature C: very stale (red)
+    var fy3 = fy2 + 45;
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.15)';
+    ctx.fillRect(fsx + 15, fy3, 370, 35);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(fsx + 15, fy3, 370, 35);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Feature C: purchase_history', fsx + 25, fy3 + 15);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '10px system-ui';
+    ctx.fillText('Last updated: 6 hours ago', fsx + 25, fy3 + 28);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'right';
+    ctx.fillText('STALE', fsx + 375, fy3 + 22);
+    ctx.textAlign = 'left';
+
+    // Missing monitoring: "?" box
+    var mx = 500, my = 80, mw = 160, mh = 60;
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.strokeRect(mx, my, mw, mh);
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 28px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('?', mx + mw/2, my + 35);
+    ctx.font = '10px system-ui';
+    ctx.fillText('No monitoring', mx + mw/2, my + 52);
+
+    // Arrow from store to model
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(fsx + fsw, fsy + fsh/2);
+    ctx.lineTo(520, fsy + fsh/2);
+    ctx.stroke();
+
+    // Model box
+    var modX = 520, modY = fsy + fsh/2 - 25;
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.fillRect(modX, modY, 140, 50);
+    ctx.strokeRect(modX, modY, 140, 50);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('MODEL', modX + 70, modY + 20);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '10px system-ui';
+    ctx.fillText('Receives all features', modX + 70, modY + 35);
+    ctx.fillText('without knowing age', modX + 70, modY + 47);
+
+    // Bottom warning
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Model has no idea which features are stale — silent degradation', w/2, h - 15);
+})();
+
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Green border for properly monitored system
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(5, 5, w - 10, h - 10);
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Freshness Monitoring Dashboard', w/2, 30);
+
+    // Table header
+    var tx = 40, ty = 55;
+    var cols = [0, 140, 280, 360, 440, 560];
+    var headers = ['Feature', 'Last Updated', 'Age', 'SLA', 'Status'];
+
+    ctx.fillStyle = '#1a5276';
+    ctx.fillRect(tx, ty, 620, 25);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    for (var i = 0; i < headers.length; i++) {
+        ctx.fillText(headers[i], tx + cols[i] + 8, ty + 17);
+    }
+
+    // Row 1: user_activity - green
+    var ry1 = ty + 30;
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.08)';
+    ctx.fillRect(tx, ry1, 620, 28);
+    ctx.strokeStyle = '#ddd';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(tx, ry1, 620, 28);
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = '11px system-ui';
+    ctx.fillText('user_activity', tx + cols[0] + 8, ry1 + 18);
+    ctx.fillText('2 min ago', tx + cols[1] + 8, ry1 + 18);
+    ctx.fillText('2 min', tx + cols[2] + 8, ry1 + 18);
+    ctx.fillText('15 min', tx + cols[3] + 8, ry1 + 18);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('OK', tx + cols[4] + 8, ry1 + 18);
+
+    // Row 2: session_count - yellow/warning
+    var ry2 = ry1 + 30;
+    ctx.fillStyle = 'rgba(230, 126, 34, 0.08)';
+    ctx.fillRect(tx, ry2, 620, 28);
+    ctx.strokeStyle = '#ddd';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(tx, ry2, 620, 28);
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = '11px system-ui';
+    ctx.fillText('session_count', tx + cols[0] + 8, ry2 + 18);
+    ctx.fillText('12 min ago', tx + cols[1] + 8, ry2 + 18);
+    ctx.fillText('12 min', tx + cols[2] + 8, ry2 + 18);
+    ctx.fillText('15 min', tx + cols[3] + 8, ry2 + 18);
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('WARNING', tx + cols[4] + 8, ry2 + 18);
+
+    // Row 3: purchase_history - red/breach
+    var ry3 = ry2 + 30;
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.08)';
+    ctx.fillRect(tx, ry3, 620, 28);
+    ctx.strokeStyle = '#ddd';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(tx, ry3, 620, 28);
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = '11px system-ui';
+    ctx.fillText('purchase_history', tx + cols[0] + 8, ry3 + 18);
+    ctx.fillText('3 hours ago', tx + cols[1] + 8, ry3 + 18);
+    ctx.fillText('180 min', tx + cols[2] + 8, ry3 + 18);
+    ctx.fillText('60 min', tx + cols[3] + 8, ry3 + 18);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('BREACH', tx + cols[4] + 8, ry3 + 18);
+
+    // Decision logic box below
+    var dlx = 80, dly = ry3 + 45, dlw = 520, dlh = 50;
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.05)';
+    ctx.fillRect(dlx, dly, dlw, dlh);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(dlx, dly, dlw, dlh);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('DECISION LOGIC', w/2, dly + 18);
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = '11px system-ui';
+    ctx.fillText('If any critical feature > SLA: return uncertainty flag instead of prediction', w/2, dly + 38);
+
+    // Bottom annotation
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Every feature carries its age. Every prediction knows its confidence.', w/2, h - 15);
+})();
+</script>
+
+</body>
+</html>

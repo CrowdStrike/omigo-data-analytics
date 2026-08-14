@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Floating Point / Precision Loss</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Floating Point / Precision Loss</h1>
+<p class="subtitle">When numerical precision issues create silent errors in aggregations, comparisons, and financial calculations.</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Floating point arithmetic is inexact. Repeated operations accumulate rounding errors. Equality checks fail. Currency stored as float loses cents. Large integers stored as float lose precision beyond 2^53.</p>
+                <ul>
+                    <li><strong>Accumulation:</strong> Summing 1M small floats (0.01) yields 9999.999743 instead of 10000.00</li>
+                    <li><strong>Comparison:</strong> 0.1 + 0.2 != 0.3 in float; WHERE revenue = 0.3 matches nothing</li>
+                    <li><strong>Currency:</strong> $19.99 stored as float becomes 19.989999771; multiply by 1M transactions = $100k error</li>
+                    <li><strong>Large IDs:</strong> User ID 9007199254740993 (> 2^53) stored as float64 becomes 9007199254740992 (collision)</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Impact:</strong> Financial reports off by thousands due to rounding; user IDs collide; model features drift because 0.33333 rounded differently in batch vs online. Solution: Use DECIMAL/NUMERIC for currency, INTEGER for IDs, round-to-even for aggregations, epsilon tolerance for comparisons.
+                </div>
+                <p class="example">Example: E-commerce pipeline aggregates revenue as SUM(price * quantity) using float. For 1M transactions averaging $25, accumulated rounding error is $3,200. Daily P&L report is wrong. Auditors notice $1.2M annual discrepancy; takes 6 months to find root cause.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <ul>
+                    <li><strong>float32 aggregations:</strong> Using float32 for SUM/AVG where float64 is needed — error accumulates with every row</li>
+                    <li><strong>Equality comparisons:</strong> WHERE price = 19.99 matches nothing because stored value is 19.989999...</li>
+                    <li><strong>Division by near-zero:</strong> 1.0 / 0.0000001 produces Inf/NaN that propagates silently through entire pipeline</li>
+                    <li><strong>Serialization round-trips:</strong> JSON/CSV export truncates precision; re-import produces different values than original</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Root cause:</strong> IEEE 754 floating point represents numbers in binary fractions. Most decimal fractions (0.1, 0.01, 19.99) have no exact binary representation. Each operation adds a small error; millions of operations compound into visible discrepancies.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <ul>
+                    <li><strong>Aggregations:</strong> Use float64 for all SUM/AVG operations; DECIMAL/NUMERIC for currency</li>
+                    <li><strong>Comparisons:</strong> Never join or filter on float columns; use epsilon tolerance (abs(a-b) &lt; 1e-9)</li>
+                    <li><strong>Post-operation checks:</strong> Explicit NaN/Inf validation after every division or log operation</li>
+                    <li><strong>Currency:</strong> Store as integers (cents) not floats — $19.99 becomes 1999</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Principle:</strong> Defensive numerical programming — assume every float operation can lose precision, and design systems that detect and prevent accumulation of error.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Floating Point Precision Loss', w/2, 25);
+
+    // Example 1: 0.1 + 0.2
+    var ex1Y = 60;
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(50, ex1Y, 280, 70);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Example 1: Simple Addition', 60, ex1Y + 20);
+
+    ctx.fillStyle = '#444';
+    ctx.font = '11px monospace';
+    ctx.fillText('0.1 + 0.2 = 0.30000000000000004', 60, ex1Y + 42);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Not 0.3! Equality check fails.', 60, ex1Y + 60);
+
+    // Example 2: Currency accumulation
+    var ex2Y = 60;
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(390, ex2Y, 280, 70);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('Example 2: Currency Sum', 400, ex2Y + 20);
+
+    ctx.fillStyle = '#444';
+    ctx.font = '11px monospace';
+    ctx.fillText('$0.01 × 1M times:', 400, ex2Y + 42);
+    ctx.fillText('= $9999.999743 (not $10000)', 400, ex2Y + 57);
+
+    // Example 3: Large integer
+    var ex3Y = 150;
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(50, ex3Y, 280, 70);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('Example 3: Large Integer ID', 60, ex3Y + 20);
+
+    ctx.fillStyle = '#444';
+    ctx.font = '11px monospace';
+    ctx.fillText('ID: 9007199254740993', 60, ex3Y + 42);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillText('Stored as: 9007199254740992', 60, ex3Y + 57);
+    ctx.fillText('(precision loss beyond 2^53)', 60, ex3Y + 70);
+
+    // Example 4: Comparison failure
+    var ex4Y = 150;
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(390, ex4Y, 280, 70);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('Example 4: Filter Fails', 400, ex4Y + 20);
+
+    ctx.fillStyle = '#444';
+    ctx.font = '11px monospace';
+    ctx.fillText('WHERE price = 19.99', 400, ex4Y + 42);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillText('Matches nothing!', 400, ex4Y + 57);
+    ctx.fillText('(stored as 19.989999771)', 400, ex4Y + 70);
+
+    // Bottom: Solutions
+    var solY = 240;
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Solutions:', w/2, solY);
+
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('• Use DECIMAL/NUMERIC for currency (stores exact values)', 80, solY + 20);
+    ctx.fillText('• Use INTEGER/BIGINT for IDs (no precision loss)', 80, solY + 35);
+    ctx.fillText('• Use epsilon tolerance for comparisons: abs(a - b) < 1e-9', 80, solY + 50);
+})();
+
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Three Failure Modes', w/2, 25);
+
+    // Box 1: float32 sum
+    var bx1 = 30, by1 = 50, bw = 200, bh = 110;
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.08)';
+    ctx.fillRect(bx1, by1, bw, bh);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(bx1, by1, bw, bh);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('float32 SUM', bx1 + bw/2, by1 + 18);
+
+    // Mini graph: error growing with N
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (var i = 0; i <= 40; i++) {
+        var x = bx1 + 20 + i * 4;
+        var y = by1 + 90 - (i * i * 0.04);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    ctx.fillStyle = '#666';
+    ctx.font = '10px system-ui';
+    ctx.fillText('Error grows with N', bx1 + bw/2, by1 + 105);
+
+    // Box 2: Equality check
+    var bx2 = 260, by2 = 50;
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.08)';
+    ctx.fillRect(bx2, by2, bw, bh);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(bx2, by2, bw, bh);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Equality Check', bx2 + bw/2, by2 + 18);
+
+    ctx.fillStyle = '#444';
+    ctx.font = '12px monospace';
+    ctx.fillText('0.1 + 0.2', bx2 + bw/2, by2 + 45);
+    ctx.fillText('!=', bx2 + bw/2, by2 + 62);
+    ctx.fillText('0.3', bx2 + bw/2, by2 + 79);
+
+    // Red X
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(bx2 + bw - 30, by2 + 55);
+    ctx.lineTo(bx2 + bw - 15, by2 + 70);
+    ctx.moveTo(bx2 + bw - 15, by2 + 55);
+    ctx.lineTo(bx2 + bw - 30, by2 + 70);
+    ctx.stroke();
+
+    // Box 3: Division by ~0
+    var bx3 = 490, by3 = 50;
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.08)';
+    ctx.fillRect(bx3, by3, bw, bh);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(bx3, by3, bw, bh);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Division by ~0', bx3 + bw/2, by3 + 18);
+
+    ctx.fillStyle = '#444';
+    ctx.font = '11px monospace';
+    ctx.fillText('1.0 / 0.0000001', bx3 + bw/2, by3 + 45);
+    ctx.fillText('= Inf', bx3 + bw/2, by3 + 62);
+
+    // Propagation arrow
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(bx3 + 50, by3 + 78);
+    ctx.lineTo(bx3 + 150, by3 + 78);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(bx3 + 150, by3 + 78);
+    ctx.lineTo(bx3 + 143, by3 + 73);
+    ctx.lineTo(bx3 + 143, by3 + 83);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '10px system-ui';
+    ctx.fillText('Inf propagates through pipeline', bx3 + bw/2, by3 + 100);
+
+    // Bottom annotation
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('All three are silent — no exception, no warning, just wrong results', w/2, h - 20);
+})();
+
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Defensive Numerical Programming', w/2, 25);
+
+    // 2x2 grid of solution boxes
+    var gx = 40, gy = 50, gw = 300, gh = 100, gap = 20;
+
+    // Box 1: Aggregations float64
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.08)';
+    ctx.fillRect(gx, gy, gw, gh);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(gx, gy, gw, gh);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 20px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('✓', gx + 10, gy + 35);
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('Aggregations: float64', gx + 40, gy + 30);
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.fillText('SUM, AVG, COUNT always in', gx + 40, gy + 50);
+    ctx.fillText('double precision (64-bit)', gx + 40, gy + 65);
+
+    // Box 2: Currency INTEGER
+    var bx2x = gx + gw + gap;
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.08)';
+    ctx.fillRect(bx2x, gy, gw, gh);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(bx2x, gy, gw, gh);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 20px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('✓', bx2x + 10, gy + 35);
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('Currency: INTEGER (cents)', bx2x + 40, gy + 30);
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.fillText('$19.99 stored as 1999', bx2x + 40, gy + 50);
+    ctx.fillText('No precision loss ever', bx2x + 40, gy + 65);
+
+    // Box 3: Comparisons epsilon
+    var gy2 = gy + gh + gap;
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.08)';
+    ctx.fillRect(gx, gy2, gw, gh);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(gx, gy2, gw, gh);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 20px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('✓', gx + 10, gy2 + 35);
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('Comparisons: |a-b| < epsilon', gx + 40, gy2 + 30);
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Never use == on floats', gx + 40, gy2 + 50);
+    ctx.fillText('Tolerance: 1e-9 or relative', gx + 40, gy2 + 65);
+
+    // Box 4: Post-op check
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.08)';
+    ctx.fillRect(bx2x, gy2, gw, gh);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(bx2x, gy2, gw, gh);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 20px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('✓', bx2x + 10, gy2 + 35);
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('Post-op: check NaN/Inf', bx2x + 40, gy2 + 30);
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.fillText('After every division/log:', bx2x + 40, gy2 + 50);
+    ctx.fillText('assert isfinite(result)', bx2x + 40, gy2 + 65);
+
+    // Center annotation
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Defensive numerical programming', w/2, h - 15);
+})();
+</script>
+
+</body>
+</html>

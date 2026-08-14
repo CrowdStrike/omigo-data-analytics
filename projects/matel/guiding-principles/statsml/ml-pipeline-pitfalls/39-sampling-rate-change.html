@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sampling Rate Changes</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Sampling Rate Changes</h1>
+<p class="subtitle">When data collection frequency changes over time, creating fake trends that look like real behavior shifts.</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>The rate at which events are logged or sampled changes between time periods. Analytics interpret the volume change as user behavior when it's actually a measurement artifact.</p>
+                <ul>
+                    <li><strong>Log sampling:</strong> Errors logged at 100% until March, then downsampled to 10%; error "drop" is illusory</li>
+                    <li><strong>Instrumentation changes:</strong> New SDK version logs every click; old version logged every 5th click; "engagement spike" is fake</li>
+                    <li><strong>Retention policy:</strong> Changed from "keep 7 days" to "keep 30 days"; older data now available, looks like volume increased</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Impact:</strong> False trend detection, models train on inconsistent densities, time-series forecasts break at sampling discontinuities. Detection: Plot event counts over time with annotations for instrumentation changes; normalize by sampling rate metadata if available.
+                </div>
+                <p class="example">Example: Mobile app logs clicks at 100% rate through 2023, then switches to 1% sampling in Jan 2024 to reduce costs. A model trained on 2023-2024 data sees a "cliff" in click volume and learns "post-Jan users are less engaged" when true engagement is unchanged. Feature drift alarms fire falsely.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <ul>
+                    <li>SDK upgrades that change default logging rates</li>
+                    <li>Cost-reduction decisions that downsample without notifying ML teams</li>
+                    <li>A/B test instrumentation that logs differently per variant</li>
+                    <li>Infrastructure changes (new data center, different sampling config)</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Root cause:</strong> Sampling rate is an infrastructure decision made independently of ML teams. Volume changes look identical to behavior changes in raw event counts.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <ul>
+                    <li>Track sampling rate as metadata alongside event counts</li>
+                    <li>Normalize all counts by sampling rate before use as features</li>
+                    <li>Segment model training into pre/post sampling change periods</li>
+                    <li>Store sampling_rate column in event tables; divide raw counts by it</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Principle:</strong> Raw counts are meaningless without knowing the sampling denominator. Always normalize: adjusted_count = raw_count / sampling_rate.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Sampling Rate Change: Fake Trend from Measurement Shift', w/2, 25);
+
+    // Axes
+    var left = 80;
+    var right = 660;
+    var bottom = 260;
+    var top = 60;
+
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(left, top);
+    ctx.lineTo(left, bottom);
+    ctx.lineTo(right, bottom);
+    ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Time', (left + right) / 2, bottom + 20);
+
+    ctx.save();
+    ctx.translate(left - 50, (top + bottom) / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Event Count', 0, 0);
+    ctx.restore();
+
+    // Time periods
+    var changeX = left + (right - left) * 0.6;
+
+    // Period 1: 100% sampling
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    var pts = 30;
+    for (var i = 0; i <= pts; i++) {
+        var t = i / pts;
+        var x = left + t * (changeX - left);
+        var noise = (Math.random() - 0.5) * 10;
+        var y = bottom - 150 + noise;
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Label for period 1
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('100% sampling', (left + changeX) / 2, top + 15);
+
+    // Period 2: 10% sampling (drop)
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    var start = pts;
+    for (var i = 0; i <= pts; i++) {
+        var t = i / pts;
+        var x = changeX + t * (right - changeX);
+        var noise = (Math.random() - 0.5) * 2;
+        var y = bottom - 15 + noise; // 10x lower
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Label for period 2
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('10% sampling', (changeX + right) / 2, top + 15);
+
+    // Vertical line at change point
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.moveTo(changeX, top + 25);
+    ctx.lineTo(changeX, bottom);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillText('Sampling rate', changeX, top + 40);
+    ctx.fillText('changed here', changeX, top + 52);
+
+    // Annotation: Fake drop
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Looks like 90% drop in activity', changeX + 20, bottom - 80);
+    ctx.font = '11px system-ui';
+    ctx.fillText('But: True activity unchanged!', changeX + 20, bottom - 65);
+    ctx.fillText('Only measurement changed.', changeX + 20, bottom - 50);
+
+    // True activity line (dashed)
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(left, bottom - 150);
+    ctx.lineTo(right, bottom - 150);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('True activity (constant)', right - 120, bottom - 155);
+})();
+
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Title
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('SDK Upgrade Changes Logging Rate — Not User Behavior', w/2, 22);
+
+    // Timeline
+    var tlY = 80;
+    var tlLeft = 60, tlRight = 660;
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(tlLeft, tlY);
+    ctx.lineTo(tlRight, tlY);
+    ctx.stroke();
+
+    // Divider
+    var divX = (tlLeft + tlRight) / 2;
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(divX, 40);
+    ctx.lineTo(divX, 180);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('SDK Upgrade', divX, 38);
+
+    // Period 1: Dense dots (100% sampling)
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('SDK v1: 100% logging', (tlLeft + divX) / 2, tlY - 20);
+
+    // Draw dense event dots
+    var dotY = tlY + 30;
+    ctx.fillStyle = '#1a5276';
+    for (var i = 0; i < 60; i++) {
+        var dx = tlLeft + 20 + Math.random() * (divX - tlLeft - 40);
+        var dy = dotY + Math.random() * 40;
+        ctx.beginPath();
+        ctx.arc(dx, dy, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Period 2: Sparse dots (10% sampling)
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('SDK v2: 10% logging', (divX + tlRight) / 2, tlY - 20);
+
+    ctx.fillStyle = '#e74c3c';
+    for (var i = 0; i < 6; i++) {
+        var dx = divX + 20 + Math.random() * (tlRight - divX - 40);
+        var dy = dotY + Math.random() * 40;
+        ctx.beginPath();
+        ctx.arc(dx, dy, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // True behavior annotation
+    ctx.fillStyle = 'rgba(39,174,96,0.08)';
+    ctx.fillRect(100, 185, 520, 35);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(100, 185, 520, 35);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('True user behavior: IDENTICAL in both periods', w/2, 207);
+
+    // Bottom annotation
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Volume drop = measurement artifact, not behavior change', w/2, 248);
+
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Without metadata, this looks like a 90% drop in user engagement', w/2, 270);
+    ctx.fillText('Model interprets measurement change as a feature distribution shift', w/2, 286);
+})();
+
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Title
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Normalize by Sampling Rate Before Feature Engineering', w/2, 22);
+
+    // Pipeline flow
+    var pipeY = 65;
+    var boxes = [
+        { label: 'Raw Events', x: 50, w: 120, color: '#1a5276' },
+        { label: 'Normalize by\nsampling_rate', x: 240, w: 140, color: '#27ae60' },
+        { label: 'Adjusted\nCounts', x: 450, w: 120, color: '#1a5276' }
+    ];
+
+    for (var i = 0; i < boxes.length; i++) {
+        var b = boxes[i];
+        ctx.fillStyle = (i === 1) ? 'rgba(39,174,96,0.12)' : 'rgba(26,82,118,0.08)';
+        ctx.fillRect(b.x, pipeY, b.w, 40);
+        ctx.strokeStyle = b.color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(b.x, pipeY, b.w, 40);
+        ctx.fillStyle = b.color;
+        ctx.font = 'bold 11px system-ui';
+        ctx.textAlign = 'center';
+        var lines = b.label.split('\n');
+        for (var l = 0; l < lines.length; l++) {
+            ctx.fillText(lines[l], b.x + b.w/2, pipeY + 18 + l * 14);
+        }
+    }
+
+    // Arrows between boxes
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(boxes[0].x + boxes[0].w, pipeY + 20);
+    ctx.lineTo(boxes[1].x, pipeY + 20);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(boxes[1].x + boxes[1].w, pipeY + 20);
+    ctx.lineTo(boxes[2].x, pipeY + 20);
+    ctx.stroke();
+    // Arrowheads
+    ctx.fillStyle = '#999';
+    ctx.beginPath();
+    ctx.moveTo(boxes[1].x, pipeY + 20);
+    ctx.lineTo(boxes[1].x - 8, pipeY + 16);
+    ctx.lineTo(boxes[1].x - 8, pipeY + 24);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(boxes[2].x, pipeY + 20);
+    ctx.lineTo(boxes[2].x - 8, pipeY + 16);
+    ctx.lineTo(boxes[2].x - 8, pipeY + 24);
+    ctx.closePath();
+    ctx.fill();
+
+    // Arrow to model
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(boxes[2].x + boxes[2].w, pipeY + 20);
+    ctx.lineTo(boxes[2].x + boxes[2].w + 40, pipeY + 20);
+    ctx.stroke();
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('→ Model', boxes[2].x + boxes[2].w + 15, pipeY + 38);
+
+    // Example calculations
+    var exY = 130;
+    ctx.fillStyle = '#444';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Example:', 60, exY);
+
+    // Row 1: 10% sampling
+    ctx.font = '11px system-ui';
+    ctx.fillText('Raw count = 100  at  sampling_rate = 10%', 80, exY + 22);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('→  Adjusted = 100 / 0.10 = 1,000', 380, exY + 22);
+
+    // Row 2: 100% sampling
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Raw count = 950  at  sampling_rate = 100%', 80, exY + 44);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('→  Adjusted = 950 / 1.00 = 950', 380, exY + 44);
+
+    // Comparison
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Both adjusted counts ≈ 1000 — consistent signal for model', w/2, exY + 72);
+
+    // Green success box
+    ctx.fillStyle = 'rgba(39,174,96,0.08)';
+    ctx.fillRect(80, 225, 560, 55);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(80, 225, 560, 55);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('✓  Model sees true activity regardless of measurement changes', w/2, 247);
+
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Store sampling_rate as metadata; normalize before feature engineering', w/2, 266);
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Target Leakage (Label Encoded in Features)</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Target Leakage (Label Encoded in Features)</h1>
+<p class="subtitle">A feature is a direct proxy or consequence of the label</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>"treatment_given=chemo" perfectly predicts "has_cancer" — but treatment was assigned BECAUSE of cancer diagnosis. The feature doesn't predict the target; it IS the target wearing a disguise.</p>
+                <ul>
+                    <li>"treatment_given=chemo" perfectly predicts "has_cancer" — but treatment was assigned BECAUSE of cancer diagnosis</li>
+                    <li>The feature doesn't predict the target; it IS the target wearing a disguise</li>
+                    <li>Symptoms: perfect accuracy on train, feature importance dominated by one variable, model useless on new data where proxy is absent</li>
+                </ul>
+                <p class="example">Example: Predicting loan default. Feature "collection_calls_made" = 0 for good loans, >0 for defaults. But calls happen AFTER default — it's a consequence, not a predictor.</p>
+                <div class="key-point">
+                    <strong>Defense:</strong> Check causal direction. Does the feature CAUSE the outcome, or does the outcome CAUSE the feature? If the latter → leakage.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Teams confuse correlation with causation. A feature that is perfectly correlated with the target seems like a great predictor — but it is actually a consequence of the target, not a cause. These proxy features are set AFTER the outcome is known.</p>
+                <ul>
+                    <li>Confusing correlation with causation: high correlation does not imply predictive utility</li>
+                    <li>Features that are consequences of the target (set AFTER the outcome is determined)</li>
+                    <li>Data pipelines that join tables without checking temporal ordering of events</li>
+                    <li>"Worked in the lab" syndrome: feature exists in historical data but not at prediction time</li>
+                </ul>
+                <p class="example">Example: Predicting customer churn. Feature "account_closed_date" is non-null only for churned customers. AUC = 0.99. But account closure IS churn — you cannot know this feature at prediction time.</p>
+                <div class="key-point">
+                    <strong>Root Cause:</strong> The team does not ask "which direction does causation flow?" A feature perfectly correlated with the target is suspicious, not impressive. If removing the feature drops accuracy from 99% to 75%, it was doing the target's job.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Apply a causal direction check to every feature. Ask: "Does this feature exist BEFORE the outcome is determined?" Remove any feature that is set after the outcome. When in doubt, trace the data generation process step by step.</p>
+                <ul>
+                    <li>Causal direction check: for each feature, ask "is this set before or after the outcome?"</li>
+                    <li>Remove any feature whose value is determined by the target (consequence, not cause)</li>
+                    <li>Trace the data generation process: draw a timeline of when each column gets its value</li>
+                    <li>Suspicion trigger: any feature with AUC > 0.95 by itself deserves manual causal review</li>
+                    <li>Use domain experts to validate that features are genuinely available pre-outcome</li>
+                </ul>
+                <p class="example">Example: After removing "collection_calls_made" (a consequence of default), loan default model drops from 98% to 76% AUC. The 76% is the real performance. The model now uses legitimate predictors: income, credit score, debt-to-income ratio.</p>
+                <div class="key-point">
+                    <strong>Fix:</strong> For every feature with high univariate predictive power, trace the causal chain. If target → feature (not feature → target), it is leakage regardless of correlation strength. Remove it and accept the accuracy drop.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Causal Direction: What the Model Assumes vs Reality', w/2, 25);
+
+    var boxW = 160, boxH = 80;
+    var leftX = 120, rightX = 440;
+    var topY = 70, bottomY = 180;
+
+    // Top section: What model assumes
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('What Model Assumes', w/2, 60);
+
+    // Feature box (left)
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.fillRect(leftX, topY, boxW, boxH);
+    ctx.strokeRect(leftX, topY, boxW, boxH);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Feature', leftX + boxW/2, topY + 25);
+    ctx.font = '10px system-ui';
+    ctx.fillText('treatment_given', leftX + boxW/2, topY + 45);
+    ctx.fillText('= chemo', leftX + boxW/2, topY + 60);
+
+    // Arrow (left to right)
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(leftX + boxW + 10, topY + boxH/2);
+    ctx.lineTo(rightX - 10, topY + boxH/2);
+    ctx.stroke();
+
+    // Arrow head
+    ctx.fillStyle = '#27ae60';
+    ctx.beginPath();
+    ctx.moveTo(rightX - 10, topY + boxH/2);
+    ctx.lineTo(rightX - 20, topY + boxH/2 - 6);
+    ctx.lineTo(rightX - 20, topY + boxH/2 + 6);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '10px system-ui';
+    ctx.fillText('predicts', (leftX + boxW + rightX) / 2, topY + boxH/2 - 8);
+
+    // Target box (right)
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.fillRect(rightX, topY, boxW, boxH);
+    ctx.strokeRect(rightX, topY, boxW, boxH);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Target', rightX + boxW/2, topY + 25);
+    ctx.font = '10px system-ui';
+    ctx.fillText('has_cancer', rightX + boxW/2, topY + 45);
+    ctx.fillText('= yes', rightX + boxW/2, topY + 60);
+
+    // Bottom section: Reality
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Reality (Reversed Causation)', w/2, 170);
+
+    // Target box (left - reality)
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.fillRect(leftX, bottomY, boxW, boxH);
+    ctx.strokeRect(leftX, bottomY, boxW, boxH);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Target', leftX + boxW/2, bottomY + 25);
+    ctx.font = '10px system-ui';
+    ctx.fillText('has_cancer', leftX + boxW/2, bottomY + 45);
+    ctx.fillText('= yes', leftX + boxW/2, bottomY + 60);
+
+    // Arrow (right to left in reality)
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(leftX + boxW + 10, bottomY + boxH/2);
+    ctx.lineTo(rightX - 10, bottomY + boxH/2);
+    ctx.stroke();
+
+    // Arrow head
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath();
+    ctx.moveTo(rightX - 10, bottomY + boxH/2);
+    ctx.lineTo(rightX - 20, bottomY + boxH/2 - 6);
+    ctx.lineTo(rightX - 20, bottomY + boxH/2 + 6);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '10px system-ui';
+    ctx.fillText('causes', (leftX + boxW + rightX) / 2, bottomY + boxH/2 - 8);
+
+    // Feature box (right - reality)
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.fillRect(rightX, bottomY, boxW, boxH);
+    ctx.strokeRect(rightX, bottomY, boxW, boxH);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Feature', rightX + boxW/2, bottomY + 25);
+    ctx.font = '10px system-ui';
+    ctx.fillText('treatment_given', rightX + boxW/2, bottomY + 45);
+    ctx.fillText('= chemo', rightX + boxW/2, bottomY + 60);
+
+    // Bottom message
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('The feature is a consequence of the target, not a predictor. Perfect training accuracy, useless in production.', w/2, 285);
+})();
+
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('The Causation Trap: Feature is a Consequence', w/2, 25);
+
+    var leftX = 100, midX = 320, rightX = 480;
+    var rowH = 80;
+
+    // Scenario 1: Legitimate predictor (green)
+    var y1 = 55;
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('1. Legitimate predictor', leftX, y1 + 15);
+
+    // Feature box
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.fillRect(midX, y1, 100, 30);
+    ctx.strokeRect(midX, y1, 100, 30);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Feature', midX + 50, y1 + 19);
+
+    // Arrow from feature to target
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(midX + 100, y1 + 15);
+    ctx.lineTo(rightX, y1 + 15);
+    ctx.stroke();
+    ctx.fillStyle = '#27ae60';
+    ctx.beginPath();
+    ctx.moveTo(rightX, y1 + 15);
+    ctx.lineTo(rightX - 8, y1 + 10);
+    ctx.lineTo(rightX - 8, y1 + 20);
+    ctx.closePath();
+    ctx.fill();
+
+    // Target box
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.fillRect(rightX, y1, 100, 30);
+    ctx.strokeRect(rightX, y1, 100, 30);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Target', rightX + 50, y1 + 19);
+
+    // Scenario 2: Target leakage (red)
+    var y2 = 135;
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('2. Target leakage', leftX, y2 + 15);
+
+    // Target box (left side in this scenario)
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.fillRect(midX, y2, 100, 30);
+    ctx.strokeRect(midX, y2, 100, 30);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Target', midX + 50, y2 + 19);
+
+    // Arrow from target to feature (reversed!)
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(midX + 100, y2 + 15);
+    ctx.lineTo(rightX, y2 + 15);
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath();
+    ctx.moveTo(rightX, y2 + 15);
+    ctx.lineTo(rightX - 8, y2 + 10);
+    ctx.lineTo(rightX - 8, y2 + 20);
+    ctx.closePath();
+    ctx.fill();
+
+    // Feature box (right side)
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.fillRect(rightX, y2, 100, 30);
+    ctx.strokeRect(rightX, y2, 100, 30);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Feature', rightX + 50, y2 + 19);
+
+    // Scenario 3: Confounded (orange)
+    var y3 = 215;
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('3. Confounded', leftX, y3 + 15);
+
+    // Hidden variable box (center top)
+    var hiddenX = midX + 75;
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.fillRect(hiddenX - 50, y3 - 15, 100, 25);
+    ctx.strokeRect(hiddenX - 50, y3 - 15, 100, 25);
+    ctx.fillStyle = '#e67e22';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Hidden Variable', hiddenX, y3 + 1);
+
+    // Feature box (left)
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.fillRect(midX, y3 + 25, 100, 30);
+    ctx.strokeRect(midX, y3 + 25, 100, 30);
+    ctx.fillStyle = '#e67e22';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Feature', midX + 50, y3 + 44);
+
+    // Target box (right)
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.fillRect(rightX, y3 + 25, 100, 30);
+    ctx.strokeRect(rightX, y3 + 25, 100, 30);
+    ctx.fillStyle = '#e67e22';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Target', rightX + 50, y3 + 44);
+
+    // Arrow from hidden to feature
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(hiddenX - 25, y3 + 10);
+    ctx.lineTo(midX + 50, y3 + 25);
+    ctx.stroke();
+    ctx.fillStyle = '#e67e22';
+    ctx.beginPath();
+    ctx.moveTo(midX + 50, y3 + 25);
+    ctx.lineTo(midX + 45, y3 + 16);
+    ctx.lineTo(midX + 55, y3 + 18);
+    ctx.closePath();
+    ctx.fill();
+
+    // Arrow from hidden to target
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(hiddenX + 25, y3 + 10);
+    ctx.lineTo(rightX + 50, y3 + 25);
+    ctx.stroke();
+    ctx.fillStyle = '#e67e22';
+    ctx.beginPath();
+    ctx.moveTo(rightX + 50, y3 + 25);
+    ctx.lineTo(rightX + 45, y3 + 16);
+    ctx.lineTo(rightX + 55, y3 + 18);
+    ctx.closePath();
+    ctx.fill();
+
+    // Bottom message
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Only scenario 1 is valid. Scenarios 2 and 3 produce misleading accuracy.', w/2, 285);
+})();
+
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Correct: Causal Direction Audit', w/2, 25);
+
+    // Timeline
+    var timelineY = 100;
+    var startX = 80, endX = 640;
+
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(startX, timelineY);
+    ctx.lineTo(endX, timelineY);
+    ctx.stroke();
+
+    // Timeline markers
+    var markerPositions = [
+        { x: 180, label: 'Feature Value Set', color: '#1a5276' },
+        { x: 360, label: 'Prediction Point', color: '#e67e22' },
+        { x: 540, label: 'Outcome Determined', color: '#e74c3c' }
+    ];
+
+    markerPositions.forEach(function(m) {
+        ctx.strokeStyle = m.color;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(m.x, timelineY - 20);
+        ctx.lineTo(m.x, timelineY + 20);
+        ctx.stroke();
+
+        ctx.fillStyle = m.color;
+        ctx.font = 'bold 10px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(m.label, m.x, timelineY - 28);
+    });
+
+    // Checklist area
+    var checkY = 150;
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Feature Audit Checklist:', 80, checkY);
+
+    // Valid features (set before prediction)
+    var validFeatures = ['income_level', 'credit_score', 'debt_to_income'];
+    validFeatures.forEach(function(f, i) {
+        var fy = checkY + 22 + i * 22;
+        ctx.fillStyle = '#27ae60';
+        ctx.font = 'bold 14px system-ui';
+        ctx.textAlign = 'left';
+        ctx.fillText('✓', 90, fy);
+        ctx.fillStyle = '#333';
+        ctx.font = '11px system-ui';
+        ctx.fillText(f, 110, fy);
+        ctx.fillStyle = '#27ae60';
+        ctx.font = '10px system-ui';
+        ctx.fillText('(set before prediction)', 250, fy);
+    });
+
+    // Invalid features (set after outcome)
+    var invalidFeatures = ['collection_calls', 'account_closed_date'];
+    invalidFeatures.forEach(function(f, i) {
+        var fy = checkY + 22 + (validFeatures.length + i) * 22;
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 14px system-ui';
+        ctx.textAlign = 'left';
+        ctx.fillText('✗', 90, fy);
+        ctx.fillStyle = '#333';
+        ctx.font = '11px system-ui';
+        ctx.fillText(f, 110, fy);
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = '10px system-ui';
+        ctx.fillText('(set after outcome — REMOVE)', 250, fy);
+    });
+
+    // Bottom message
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Rule: If feature value is determined after the outcome, it is leakage. Remove it.', w/2, 285);
+})();
+</script>
+
+</body>
+</html>

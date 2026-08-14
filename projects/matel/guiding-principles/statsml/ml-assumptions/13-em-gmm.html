@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EM / Gaussian Mixture Models - ML Assumptions</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+.back-link {
+    color: #2980b9;
+    text-decoration: none;
+    font-size: 0.9rem;
+    margin-bottom: 20px;
+    display: inline-block;
+}
+.back-link:hover { text-decoration: underline; }
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.obj-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+}
+.obj-table td {
+    border: 1px solid #e0e0e0;
+    padding: 20px 24px;
+    vertical-align: middle;
+}
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-table tr:nth-child(even) td { background: #fafcfe; }
+.obj-title {
+    font-size: 1.05em;
+    font-weight: 600;
+    color: #1a5276;
+    margin-bottom: 8px;
+}
+canvas { display: block; margin: 0 auto; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.good { color: #27ae60; font-weight: 600; }
+.bad { color: #e74c3c; font-weight: 600; }
+.warn { color: #e67e22; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<a href="../16-ml-assumptions.html" class="back-link">← ML Assumptions Reference</a>
+
+<h1>13. EM / Gaussian Mixture Models</h1>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Iteratively estimates latent cluster assignments and Gaussian parameters — soft clustering with probabilistic assignments</div>
+<ul>
+<li><strong>Assumes Gaussian components:</strong> Each cluster is modeled as a multivariate Gaussian. Non-Gaussian subpopulations (uniform blobs, skewed groups, ring-shaped clusters) are poorly fit — EM uses multiple Gaussians to approximate, wasting components.</li>
+<li><strong>Assumes correct number of components (K):</strong> Like K-means, must specify K. Too few → merges distinct groups. Too many → splits coherent groups. BIC/AIC help but aren't definitive.</li>
+<li><strong>Sensitive to initialization:</strong> EM finds local optima, not global. Different starting points → different solutions. Can converge to degenerate solutions where one component collapses to a single point (variance → 0).</li>
+<li><strong>Assumes sufficient data per component:</strong> Each Gaussian needs enough points to estimate its mean AND full covariance matrix. With d features, need at least d(d+1)/2 + d parameters per component. 10 features = 65 params per cluster.</li>
+<li><strong>Covariance estimation can fail:</strong> Singular covariance matrices when component has fewer points than dimensions. Regularization (diagonal, tied, or spherical covariance) helps but changes the model's expressiveness.</li>
+<li><strong>Soft assignments are a strength AND weakness:</strong> Points get probability of belonging to each cluster (not hard assignment). Great for overlapping populations. But makes "which cluster does this point belong to?" ambiguous when probabilities are near 50/50.</li>
+<li style="color: #e74c3c;"><strong>Violation:</strong> Fitting GMM to income data that's actually right_skew + a spike at zero (unemployed). EM uses 3-4 Gaussians to approximate the right_skew tail, "discovering" fake subpopulations that are artifacts of the wrong distributional assumption.</li>
+<li style="color: #e67e22;"><strong>Real example:</strong> Cholesterol with two modes (normal ~200, high ~280). GMM with K=2 correctly finds both. But with K=3 it "discovers" a third group at ~240 that's just the overlap region — not a real subpopulation. BIC says K=2 but only barely.</li>
+<li style="color: #27ae60;"><strong>Alternatives:</strong> Non-Gaussian clusters → kernel density estimation, DBSCAN. Unknown K → DPGMM (Dirichlet Process — auto-selects K). High-dimensional → factor analyzers or mixture of factor analyzers. Singular covariance → regularized GMM or diagonal constraint.</li>
+</ul>
+</td>
+<td>
+<canvas id="c13" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+
+function setupCanvas(id) {
+    var c = document.getElementById(id);
+    var w = c.width, h = c.height;
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return {ctx: ctx, w: w, h: h};
+}
+
+// 13. EM/GMM — fitting Gaussians to non-Gaussian data creates fake subpopulations
+(function() {
+    var s = setupCanvas('c13'), ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.fillStyle = '#555'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('EM/GMM: wrong K or wrong shape → fake subpopulations', w/2, 18);
+
+    var lw = w/2 - 30, pad = 40;
+
+    // Left: true bimodal data with K=2 (correct)
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 12px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('K=2 (correct)', pad + lw/2, 38);
+
+    // Draw histogram of bimodal data
+    var bimodal = [2,5,12,20,28,18,8,4,3,4,8,18,28,20,12,5,2];
+    var max = 30, bw = (lw - 20) / bimodal.length;
+    ctx.fillStyle = 'rgba(26,82,118,0.3)';
+    bimodal.forEach(function(v, i) {
+        ctx.fillRect(pad + 10 + i*bw, h-50-(v/max)*(h-110), bw-1, (v/max)*(h-110));
+    });
+
+    // Two Gaussian curves (correct fit)
+    ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    for (var i = 0; i < bimodal.length * 4; i++) {
+        var x = i / 4.0;
+        var g1 = 28 * Math.exp(-0.5 * Math.pow((x-4)/1.8, 2));
+        var g2 = 28 * Math.exp(-0.5 * Math.pow((x-12)/1.8, 2));
+        var y = Math.max(g1, g2);
+        var px = pad + 10 + (x/bimodal.length) * (lw-20);
+        var py = h-50-(y/max)*(h-110);
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#27ae60'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('✓ Two real groups found', pad + lw/2, h-25);
+
+    // Right: same data with K=4 (overfitting — fake groups)
+    var rx = w/2 + 20;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 12px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('K=4 (too many)', rx + lw/2 - 10, 38);
+
+    ctx.fillStyle = 'rgba(26,82,118,0.3)';
+    bimodal.forEach(function(v, i) {
+        ctx.fillRect(rx + 10 + i*bw, h-50-(v/max)*(h-110), bw-1, (v/max)*(h-110));
+    });
+
+    // Four narrow Gaussians (overfitting)
+    var colors = ['#e74c3c', '#e67e22', '#8e44ad', '#2980b9'];
+    var centers = [3, 5.5, 10.5, 13];
+    var widths = [1.2, 1.0, 1.0, 1.2];
+    centers.forEach(function(c, ci) {
+        ctx.strokeStyle = colors[ci]; ctx.lineWidth = 3;
+        ctx.beginPath();
+        for (var i = 0; i < bimodal.length * 4; i++) {
+            var x = i / 4.0;
+            var g = 22 * Math.exp(-0.5 * Math.pow((x-c)/widths[ci], 2));
+            var px = rx + 10 + (x/bimodal.length) * (lw-20);
+            var py = h-50-(g/max)*(h-110);
+            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+    });
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 11px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('✗ 4 "groups" — 2 are fake!', rx + lw/2 - 10, h-25);
+
+    // Divider
+    ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(w/2-5, 35); ctx.lineTo(w/2-5, h-15); ctx.stroke();
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Label Noise (Incorrect Ground Truth)</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Label Noise (Incorrect Ground Truth)</h1>
+<p class="subtitle">When the target variable itself is wrong for 5-20% of records, capping model performance and misleading evaluation.</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>The labels used for training and evaluation are systematically or randomly incorrect. Human annotators disagree, upstream data bugs propagate, proxy labels approximate the true outcome but are noisy.</p>
+                <ul>
+                    <li><strong>Human annotation:</strong> Medical diagnosis labels with 10-15% inter-rater disagreement; content moderation with subjective boundaries</li>
+                    <li><strong>Proxy labels:</strong> "Clicked ad" as proxy for "purchase intent"; "watched 30 seconds" as proxy for "liked video"</li>
+                    <li><strong>Pipeline bugs:</strong> Join errors, off-by-one bugs, timezone issues corrupt 5% of labels; no validation</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Impact:</strong> Performance ceiling at 85% AUC when 15% of labels are wrong; model learns the noise not the signal. Detection: Compare model predictions to human expert review on a sample; measure inter-annotator agreement (Cohen's kappa); audit label distribution for impossible values.
+                </div>
+                <p class="example">Example: A fraud detection model uses "transaction_refunded" as the label for fraud. But 20% of refunds are legitimate returns, not fraud. The model learns that "expensive electronics purchase" is fraud, harming legitimate customers. True performance is unknowable without clean labels.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <ul>
+                    <li><strong>Annotator disagreement (15-30%):</strong> Subjective tasks like sentiment, toxicity, or medical diagnosis have inherent ambiguity — different annotators label the same example differently</li>
+                    <li><strong>Proxy labels:</strong> Using "clicked" as proxy for "purchase intent" or "refunded" as proxy for "fraud" — approximations that systematically mislabel 10-20% of cases</li>
+                    <li><strong>Time-dependent definitions:</strong> Fraud criteria change yearly, content policies evolve quarterly — labels from 2022 may be wrong by 2024 standards</li>
+                    <li><strong>Pipeline bugs:</strong> Join errors, timezone mismatches, or off-by-one bugs silently corrupt 5-10% of labels with no validation check</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Core issue:</strong> Teams assume labels are ground truth. But "ground truth" is often a noisy approximation — and nobody measures how noisy.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <ul>
+                    <li><strong>Estimate noise rate:</strong> Compute inter-annotator agreement (Cohen's kappa, Krippendorff's alpha) — if kappa &lt; 0.6, your labels are too noisy for standard training</li>
+                    <li><strong>Noise-robust loss functions:</strong> Use symmetric cross-entropy, forward correction, or confident learning to down-weight likely-mislabeled examples</li>
+                    <li><strong>Multiple annotations:</strong> Get 3-5 labels per example, use majority vote or soft labels (probability distributions) instead of hard 0/1</li>
+                    <li><strong>Audit before training:</strong> Sample 500 examples, have an expert relabel, compute agreement with existing labels — reject dataset if noise &gt; 15%</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Principle:</strong> Treat label quality as a measurable property with acceptance criteria. No model can overcome garbage labels — measure and fix the labels first.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Label Noise: Ground Truth Contains Errors', w/2, 25);
+
+    // Left: True labels (unknown)
+    ctx.fillStyle = '#444';
+    ctx.font = '12px system-ui';
+    ctx.fillText('TRUE LABELS (unknown)', 140, 55);
+
+    var leftX = 140;
+    var topY = 75;
+    var rowH = 22;
+
+    // Positives
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(60, topY, 160, rowH * 4);
+    ctx.fillStyle = '#fff';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('True Positive Examples', leftX, topY + rowH * 2);
+
+    // Negatives
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(60, topY + rowH * 4.5, 160, rowH * 4);
+    ctx.fillStyle = '#fff';
+    ctx.fillText('True Negative Examples', leftX, topY + rowH * 6.5);
+
+    // Arrow to noisy labels
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(240, 150);
+    ctx.lineTo(320, 150);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(320, 150);
+    ctx.lineTo(310, 145);
+    ctx.lineTo(310, 155);
+    ctx.closePath();
+    ctx.fillStyle = '#666';
+    ctx.fill();
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Annotation / pipeline', 280, 140);
+    ctx.fillText('introduces errors', 280, 152);
+
+    // Right: Noisy labels (what model sees)
+    ctx.fillStyle = '#444';
+    ctx.font = '12px system-ui';
+    ctx.fillText('NOISY LABELS (what model sees)', 520, 55);
+
+    var rightX = 520;
+
+    // Mixed positives (some wrong)
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(440, topY, 140, rowH * 3);
+    ctx.fillStyle = '#fff';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Labeled Positive', rightX, topY + rowH * 1.5);
+
+    // Mislabeled (should be negative)
+    ctx.fillStyle = '#e67e22';
+    ctx.fillRect(440, topY + rowH * 3, 140, rowH * 1);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillText('MISLABELED (should be neg)', rightX, topY + rowH * 3.5);
+
+    // Mislabeled (should be positive)
+    ctx.fillStyle = '#e67e22';
+    ctx.fillRect(440, topY + rowH * 4.5, 140, rowH * 1);
+    ctx.fillStyle = '#fff';
+    ctx.fillText('MISLABELED (should be pos)', rightX, topY + rowH * 5);
+
+    // Mixed negatives
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(440, topY + rowH * 5.5, 140, rowH * 3);
+    ctx.fillStyle = '#fff';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Labeled Negative', rightX, topY + rowH * 7);
+
+    // Bottom impact
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('15% label noise → performance ceiling at ~85% AUC', w/2, 250);
+    ctx.font = '10px system-ui';
+    ctx.fillText('Model cannot distinguish signal from noise in the labels themselves', w/2, 268);
+})();
+
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Why It Happens: Annotator Disagreement', w/2, 25);
+
+    // Headers
+    ctx.fillStyle = '#444';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Example', 60, 55);
+    ctx.fillText('#1', 130, 55);
+    ctx.fillText('#2', 190, 55);
+    ctx.fillText('#3', 250, 55);
+    ctx.fillText('#4', 310, 55);
+    ctx.fillText('#5', 370, 55);
+
+    // Annotator rows
+    var annotators = [
+        { name: 'Annotator A', labels: ['+', '+', '-', '+', '-'] },
+        { name: 'Annotator B', labels: ['+', '-', '-', '+', '-'] },
+        { name: 'Annotator C', labels: ['+', '+', '+', '-', '-'] }
+    ];
+
+    // Which columns have disagreement: #2, #3, #4 have disagreement
+    var disagreements = [false, true, true, true, false];
+
+    for (var a = 0; a < annotators.length; a++) {
+        var rowY = 75 + a * 35;
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 11px system-ui';
+        ctx.textAlign = 'left';
+        ctx.fillText(annotators[a].name, 60, rowY + 12);
+
+        for (var l = 0; l < 5; l++) {
+            var lx = 130 + l * 60;
+            // Background highlight for disagreement columns
+            if (disagreements[l]) {
+                ctx.fillStyle = 'rgba(230, 126, 34, 0.15)';
+                ctx.fillRect(lx - 12, rowY - 3, 35, 22);
+            }
+
+            var label = annotators[a].labels[l];
+            ctx.fillStyle = label === '+' ? '#27ae60' : '#e74c3c';
+            ctx.font = 'bold 14px system-ui';
+            ctx.textAlign = 'center';
+            ctx.fillText(label, lx + 5, rowY + 12);
+        }
+    }
+
+    // Disagreement markers
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    for (var d = 0; d < 5; d++) {
+        if (disagreements[d]) {
+            ctx.fillText('⚠', 135 + d * 60, 185);
+        }
+    }
+
+    // Cohen's kappa
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText("Cohen's kappa = 0.45", 450, 80);
+    ctx.fillStyle = '#e67e22';
+    ctx.font = '11px system-ui';
+    ctx.fillText('(moderate agreement)', 450, 98);
+
+    // Agreement scale
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(450, 115);
+    ctx.lineTo(650, 115);
+    ctx.stroke();
+
+    // Scale markers
+    var scaleLabels = ['0.0', '0.2', '0.4', '0.6', '0.8', '1.0'];
+    ctx.fillStyle = '#666';
+    ctx.font = '9px system-ui';
+    ctx.textAlign = 'center';
+    for (var i = 0; i < scaleLabels.length; i++) {
+        var sx = 450 + i * 40;
+        ctx.fillText(scaleLabels[i], sx, 128);
+        ctx.beginPath();
+        ctx.moveTo(sx, 112);
+        ctx.lineTo(sx, 118);
+        ctx.stroke();
+    }
+
+    // Kappa marker
+    ctx.fillStyle = '#e67e22';
+    ctx.beginPath();
+    ctx.arc(450 + 0.45 * 200, 115, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Scale labels
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '8px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Poor', 460, 140);
+    ctx.fillStyle = '#e67e22';
+    ctx.fillText('Moderate', 520, 140);
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('Good', 580, 140);
+    ctx.fillText('Excellent', 640, 140);
+
+    // Bottom question
+    ctx.fillStyle = '#444';
+    ctx.font = '12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('3 out of 5 examples have annotator disagreement (60%)', w/2, 210);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillText('Which label is "ground truth"?', w/2, 240);
+
+    ctx.fillStyle = '#666';
+    ctx.font = '11px system-ui';
+    ctx.fillText('With kappa = 0.45, ~15-20% of labels are effectively random', w/2, 265);
+    ctx.fillText('No model architecture can recover from fundamentally ambiguous supervision', w/2, 282);
+})();
+
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Correct Approach: Label Quality Pipeline', w/2, 25);
+
+    // Pipeline stages
+    var stages = [
+        { label: 'Raw Labels', x: 30, w: 110, color: '#1a5276', desc: 'N = 10,000' },
+        { label: 'Quality Audit', x: 170, w: 120, color: '#1a5276', desc: 'Sample 500' },
+        { label: 'Noise Estimation', x: 320, w: 140, color: '#e67e22', desc: 'Flip rate: 12%' },
+        { label: 'Noise-Robust', x: 490, w: 130, color: '#27ae60', desc: 'Adjusted loss' }
+    ];
+
+    var stageY = 55;
+    var stageH = 65;
+
+    for (var i = 0; i < stages.length; i++) {
+        var st = stages[i];
+
+        // Box
+        ctx.strokeStyle = st.color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(st.x, stageY, st.w, stageH);
+
+        // Green checkmark
+        ctx.fillStyle = '#27ae60';
+        ctx.font = '14px system-ui';
+        ctx.textAlign = 'right';
+        ctx.fillText('✓', st.x + st.w - 5, stageY + 15);
+
+        // Label
+        ctx.fillStyle = st.color;
+        ctx.font = 'bold 11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(st.label, st.x + st.w/2, stageY + 25);
+
+        // Description
+        ctx.fillStyle = '#444';
+        ctx.font = '10px system-ui';
+        ctx.fillText(st.desc, st.x + st.w/2, stageY + 45);
+
+        // Arrow to next
+        if (i < stages.length - 1) {
+            var arrowStartX = st.x + st.w + 2;
+            var arrowEndX = stages[i+1].x - 2;
+            var arrowY = stageY + stageH/2;
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(arrowStartX, arrowY);
+            ctx.lineTo(arrowEndX, arrowY);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(arrowEndX, arrowY);
+            ctx.lineTo(arrowEndX - 6, arrowY - 3);
+            ctx.moveTo(arrowEndX, arrowY);
+            ctx.lineTo(arrowEndX - 6, arrowY + 3);
+            ctx.stroke();
+        }
+    }
+
+    // Stage details below
+    var detailY = 140;
+
+    // Quality Audit detail
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Quality Audit:', 40, detailY);
+    ctx.fillStyle = '#444';
+    ctx.font = '10px system-ui';
+    ctx.fillText('• Sample 500 random examples', 50, detailY + 16);
+    ctx.fillText('• 3 expert annotators relabel independently', 50, detailY + 30);
+    ctx.fillText("• Compute Cohen's kappa: 0.72 (acceptable)", 50, detailY + 44);
+
+    // Noise Estimation detail
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Noise Estimation:', 380, detailY);
+    ctx.fillStyle = '#444';
+    ctx.font = '10px system-ui';
+    ctx.fillText('• Estimated flip rate: 12%', 390, detailY + 16);
+    ctx.fillText('• Confident learning identifies suspect labels', 390, detailY + 30);
+    ctx.fillText('• 1,200 labels flagged for review', 390, detailY + 44);
+
+    // Final output box
+    var outY = 225;
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.08)';
+    ctx.fillRect(80, outY, 560, 55);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(80, outY, 560, 55);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Model aware of label uncertainty', w/2, outY + 18);
+    ctx.fillStyle = '#444';
+    ctx.font = '10px system-ui';
+    ctx.fillText('Symmetric cross-entropy loss: down-weights high-loss examples (likely mislabeled)', w/2, outY + 35);
+    ctx.fillText('Result: Model trained on effective 88% clean labels → robust predictions despite 12% noise', w/2, outY + 50);
+})();
+</script>
+
+</body>
+</html>

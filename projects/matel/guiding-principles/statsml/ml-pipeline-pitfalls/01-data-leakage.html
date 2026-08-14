@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Leakage (Future Info in Training)</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Data Leakage (Future Info in Training)</h1>
+<p class="subtitle">Model uses information not available at prediction time</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Your model achieves near-perfect accuracy in training and testing but collapses in production. The gap reveals that training data included information that would not be available at prediction time.</p>
+                <ul>
+                    <li>Feature computed from future events leaks into training (e.g., "total_purchases_lifetime" when predicting churn at day 30)</li>
+                    <li>Model gets 99% accuracy in training, 55% in production — the gap IS the leakage</li>
+                    <li>Subtle forms: aggregates computed over full time range, features derived from other rows (global mean), join keys that shouldn't exist yet</li>
+                </ul>
+                <p class="example">Example: Predicting hospital readmission using "discharge diagnosis code" — but that code was assigned AFTER the outcome was known. At prediction time (admission), you don't have it.</p>
+                <div class="key-point">
+                    <strong>Defense:</strong> For every feature, ask: "would I have this value at the moment I need to make the prediction?" If no → remove it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Features are computed without timestamp discipline. Aggregates are calculated over the full time range instead of being restricted to data available before the prediction point. Join operations pull in records from the future because no temporal filter is applied.</p>
+                <ul>
+                    <li>Features computed without timestamp discipline — aggregates span full time range</li>
+                    <li>No "available at prediction time?" audit during feature engineering</li>
+                    <li>Join keys pull future records because no temporal filter is applied</li>
+                    <li>Convenient but deadly: computing rolling stats using pandas without explicit cutoff dates</li>
+                </ul>
+                <p class="example">Example: "avg_spending_30d" computed as average over the entire dataset including future months. At prediction time (Jan 1), the feature includes spending from Feb-Dec. Nobody noticed because the code runs correctly — it just answers the wrong question.</p>
+                <div class="key-point">
+                    <strong>Root Cause:</strong> The feature engineering pipeline treats all data as a single static snapshot. There is no concept of "when this row was created" baked into the computation graph.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>For every feature, apply the "available at prediction time?" test. Implement temporal feature auditing: each feature computation must take a cutoff timestamp parameter. No feature should access any row with timestamp > cutoff.</p>
+                <ul>
+                    <li>Temporal feature audit: every feature computation takes a cutoff timestamp parameter</li>
+                    <li>"Available at prediction time?" test applied to every single feature before model training</li>
+                    <li>Use point-in-time joins: filter all joined tables to records existing before the prediction timestamp</li>
+                    <li>Automate: build a feature registry that enforces temporal constraints at computation time</li>
+                    <li>Validate: compare feature distributions at different time cutoffs — sudden jumps indicate leakage</li>
+                </ul>
+                <p class="example">Example: Correct "avg_spending_30d" for a Jan 1 prediction uses only Dec data (30 days back from prediction point). The feature store query: SELECT AVG(amount) FROM transactions WHERE user_id=X AND txn_date BETWEEN '2023-12-01' AND '2023-12-31'.</p>
+                <div class="key-point">
+                    <strong>Fix:</strong> Build a point-in-time feature store. Each feature is computed with an explicit timestamp boundary. The system physically cannot access future data because the query enforces WHERE event_time < prediction_time.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Timeline: Future Information Leaking Into Training', w/2, 25);
+
+    // Timeline
+    var timelineY = 150;
+    var startX = 60;
+    var endX = 660;
+
+    // Draw timeline axis
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(startX, timelineY);
+    ctx.lineTo(endX, timelineY);
+    ctx.stroke();
+
+    // Prediction point marker
+    var predX = 300;
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(predX, timelineY - 60);
+    ctx.lineTo(predX, timelineY + 60);
+    ctx.stroke();
+
+    ctx.fillStyle = '#2980b9';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('PREDICTION', predX, 80);
+    ctx.fillText('POINT', predX, 95);
+    ctx.fillText('(t=0)', predX, 110);
+
+    // Valid features (BEFORE prediction)
+    var validFeatures = [
+        { x: 120, label: 'age' },
+        { x: 180, label: 'income' },
+        { x: 240, label: 'history' }
+    ];
+
+    validFeatures.forEach(function(f) {
+        ctx.fillStyle = '#27ae60';
+        ctx.globalAlpha = 0.6;
+        ctx.fillRect(f.x - 20, timelineY - 25, 40, 20);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(f.x - 20, timelineY - 25, 40, 20);
+
+        ctx.fillStyle = '#27ae60';
+        ctx.font = '10px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(f.label, f.x, timelineY - 11);
+    });
+
+    // Valid label
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Valid features', 170, timelineY - 40);
+    ctx.fillText('(available at t=0)', 170, timelineY - 28);
+
+    // Leakage features (AFTER prediction)
+    var leakageFeatures = [
+        { x: 380, label: 'purchases' },
+        { x: 480, label: 'churn' },
+        { x: 580, label: 'lifetime_val' }
+    ];
+
+    leakageFeatures.forEach(function(f) {
+        ctx.fillStyle = '#e74c3c';
+        ctx.globalAlpha = 0.6;
+        ctx.fillRect(f.x - 30, timelineY - 25, 60, 20);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(f.x - 30, timelineY - 25, 60, 20);
+
+        ctx.fillStyle = '#fff';
+        ctx.font = '9px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(f.label, f.x, timelineY - 11);
+    });
+
+    // Leakage arrow
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(480, timelineY - 50);
+    ctx.lineTo(predX + 20, timelineY - 50);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Arrow head
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath();
+    ctx.moveTo(predX + 20, timelineY - 50);
+    ctx.lineTo(predX + 30, timelineY - 45);
+    ctx.lineTo(predX + 30, timelineY - 55);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('LEAKAGE: future info', 400, timelineY - 60);
+    ctx.fillText('flows back to training', 400, timelineY - 48);
+
+    // Time labels
+    ctx.fillStyle = '#666';
+    ctx.font = '10px system-ui';
+    ctx.fillText('Past', startX + 20, timelineY + 20);
+    ctx.fillText('Future', endX - 20, timelineY + 20);
+
+    // Bottom message
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('At prediction time, you won\'t have these future values. Model learns an impossible task.', w/2, 270);
+})();
+
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Where Leakage Enters the Pipeline', w/2, 25);
+
+    // Pipeline boxes
+    var boxW = 150, boxH = 50;
+    var y = 80;
+    var boxes = [
+        { x: 80, label: 'Raw Data', color: '#1a5276' },
+        { x: 285, label: 'Feature Engineering', color: '#e67e22' },
+        { x: 520, label: 'Model Training', color: '#1a5276' }
+    ];
+
+    boxes.forEach(function(b) {
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = b.color;
+        ctx.lineWidth = 2;
+        ctx.fillRect(b.x, y, boxW, boxH);
+        ctx.strokeRect(b.x, y, boxW, boxH);
+
+        ctx.fillStyle = b.color;
+        ctx.font = 'bold 12px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(b.label, b.x + boxW/2, y + boxH/2 + 5);
+    });
+
+    // Arrows between pipeline boxes
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([]);
+    // Arrow 1: Raw Data -> Feature Engineering
+    ctx.beginPath();
+    ctx.moveTo(80 + boxW, y + boxH/2);
+    ctx.lineTo(285, y + boxH/2);
+    ctx.stroke();
+    ctx.fillStyle = '#1a5276';
+    ctx.beginPath();
+    ctx.moveTo(285, y + boxH/2);
+    ctx.lineTo(275, y + boxH/2 - 5);
+    ctx.lineTo(275, y + boxH/2 + 5);
+    ctx.closePath();
+    ctx.fill();
+
+    // Arrow 2: Feature Engineering -> Model Training
+    ctx.beginPath();
+    ctx.moveTo(285 + boxW, y + boxH/2);
+    ctx.lineTo(520, y + boxH/2);
+    ctx.stroke();
+    ctx.fillStyle = '#1a5276';
+    ctx.beginPath();
+    ctx.moveTo(520, y + boxH/2);
+    ctx.lineTo(510, y + boxH/2 - 5);
+    ctx.lineTo(510, y + boxH/2 + 5);
+    ctx.closePath();
+    ctx.fill();
+
+    // Future Events box below
+    var futureX = 285, futureY = 200;
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.fillRect(futureX, futureY, boxW, boxH);
+    ctx.strokeRect(futureX, futureY, boxW, boxH);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Future Events', futureX + boxW/2, futureY + boxH/2 + 5);
+
+    // Red dashed arrow from Future Events up to Feature Engineering
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(futureX + boxW/2, futureY);
+    ctx.lineTo(285 + boxW/2, y + boxH);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Arrow head pointing up
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath();
+    ctx.moveTo(285 + boxW/2, y + boxH);
+    ctx.lineTo(285 + boxW/2 - 6, y + boxH + 10);
+    ctx.lineTo(285 + boxW/2 + 6, y + boxH + 10);
+    ctx.closePath();
+    ctx.fill();
+
+    // Label on the dashed arrow
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('No temporal filter', futureX + boxW + 10, futureY + 10);
+
+    // Bottom message
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Future events leak into feature engineering because no timestamp boundary is enforced.', w/2, 280);
+})();
+
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Correct Pipeline: Point-in-Time Feature Store', w/2, 25);
+
+    // Timeline
+    var timelineY = 150;
+    var startX = 60, endX = 660;
+
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(startX, timelineY);
+    ctx.lineTo(endX, timelineY);
+    ctx.stroke();
+
+    // Prediction point marker
+    var predX = 360;
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(predX, timelineY - 50);
+    ctx.lineTo(predX, timelineY + 50);
+    ctx.stroke();
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Prediction Point', predX, timelineY - 58);
+
+    // Feature Query box
+    var queryX = 100, queryY = 50;
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.fillRect(queryX, queryY, 220, 40);
+    ctx.strokeRect(queryX, queryY, 220, 40);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('WHERE event_time < prediction_time', queryX + 110, queryY + 24);
+
+    // Valid features (before prediction point) with green checkmarks
+    var validXPositions = [140, 220, 300];
+    validXPositions.forEach(function(x) {
+        ctx.fillStyle = '#27ae60';
+        ctx.font = 'bold 16px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText('✓', x, timelineY - 15);
+
+        ctx.fillStyle = 'rgba(39,174,96,0.3)';
+        ctx.fillRect(x - 20, timelineY - 8, 40, 16);
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x - 20, timelineY - 8, 40, 16);
+    });
+
+    // Labels for valid features
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('feature_1', 140, timelineY + 25);
+    ctx.fillText('feature_2', 220, timelineY + 25);
+    ctx.fillText('feature_3', 300, timelineY + 25);
+
+    // Blocked future data (after prediction point) with red X
+    var blockedXPositions = [440, 520, 600];
+    blockedXPositions.forEach(function(x) {
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 16px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText('✗', x, timelineY - 15);
+
+        ctx.fillStyle = 'rgba(231,76,60,0.2)';
+        ctx.fillRect(x - 20, timelineY - 8, 40, 16);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x - 20, timelineY - 8, 40, 16);
+    });
+
+    // Labels for blocked features
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('future_1', 440, timelineY + 25);
+    ctx.fillText('future_2', 520, timelineY + 25);
+    ctx.fillText('future_3', 600, timelineY + 25);
+
+    // Legend labels
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('ALLOWED (before cutoff)', 220, timelineY + 50);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('BLOCKED (after cutoff)', 520, timelineY + 50);
+
+    // Time labels
+    ctx.fillStyle = '#666';
+    ctx.font = '10px system-ui';
+    ctx.fillText('Past', startX + 20, timelineY + 70);
+    ctx.fillText('Future', endX - 20, timelineY + 70);
+
+    // Bottom message
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('The query enforces WHERE event_time < prediction_time. Future data is physically inaccessible.', w/2, 280);
+})();
+</script>
+
+</body>
+</html>

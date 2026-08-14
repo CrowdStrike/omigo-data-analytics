@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Outlier Handling Before Understanding</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Outlier Handling Before Understanding</h1>
+<p class="subtitle">Removing outliers because they're 'weird' before asking why.</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>You detect outliers using statistical thresholds (z-score > 3, IQR rule) and remove them to "clean" the data. But outliers are not necessarily errors. They may be the most informative cases—rare events, high-value customers, fraud, equipment failure—and removing them destroys the model's ability to predict these critical outcomes.</p>
+                <ul>
+                    <li>High spenders are outliers. Remove them. Model now cannot predict high-value customers.</li>
+                    <li>Fraudulent transactions are outliers by definition. Remove them. Fraud detection model learns nothing.</li>
+                    <li>Medical crises produce outlier vital signs. Remove them. Severity model misses critical cases.</li>
+                    <li>Equipment failures show outlier sensor readings. Remove them. Predictive maintenance fails.</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Impact:</strong> Outliers are often the positive class. Removing them creates a cleaned dataset where the target is underrepresented or absent. The model trains on sanitized, boring data and fails in production when it encounters real-world extremes.
+                </div>
+                <p class="example">Example: Churn prediction. Users with usage > 3 std above mean are removed as outliers. These are power users who then churned when a feature broke. Model never learns this pattern. Misses 80% of high-value churn.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Outlier removal is taught as a preprocessing step in ML courses. Tools make it easy to apply z-score or IQR filters with one line of code. But this treats outliers as noise, when they are often signal—especially in imbalanced datasets where the minority class is rare and extreme.</p>
+                <ul>
+                    <li>Statistical outlier tests assume the data should follow a specific distribution (Gaussian for z-score). Real data rarely does.</li>
+                    <li>Outliers can be errors (sensor malfunction, data entry typo) or valid extreme events (VIP customer, crisis). Automated rules cannot distinguish.</li>
+                    <li>In imbalanced datasets, the minority class is often outlier-like: rare, extreme, different from the majority. Removing outliers removes the positives.</li>
+                    <li>Outliers increase model variance and can skew coefficients in linear models. Easy fix: remove them. But tree-based models handle outliers naturally via splits.</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Mechanism:</strong> You remove points > 3 std from mean. These are 1% of the data. But they contain 40% of the positive class. Model now trained on 99% negatives, 60% positives. Decision boundary shifts. Test set has the outliers. Model fails.
+                </div>
+                <p class="example">Example: Credit default. Income > $500K flagged as outlier (z > 4). Removed. But high earners with unusual debt patterns default at 8% (vs. 2% baseline). Model misses this subgroup entirely.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Detection & Mitigation</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Before removing outliers, investigate why they exist and whether they correlate with the target. Distinguish errors from valid extremes. Use robust methods or models that tolerate outliers.</p>
+                <ul>
+                    <li>Plot outliers and inspect them manually. Are they errors (typos, sensor failures) or real extremes?</li>
+                    <li>Check target rate in outliers vs. non-outliers. If outliers have higher positive rate, they are informative.</li>
+                    <li>Separate outlier removal by cause: remove obvious errors, keep valid extremes as a distinct segment.</li>
+                    <li>Use robust preprocessing: winsorization (cap at percentile) instead of removal, log/sqrt transform to compress range.</li>
+                    <li>Use models that handle outliers: tree-based methods (XGBoost, Random Forest) split around extremes rather than being distorted by them.</li>
+                    <li>If you must remove outliers, do it per feature, not per row. Don't delete entire observations.</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Fix:</strong> Don't remove outliers by default. Investigate first. If they predict the target, keep them or handle with winsorization/transforms. Use tree models that naturally tolerate extremes.
+                </div>
+                <p class="example">Example: Revenue prediction. Transaction > $50K flagged as outlier. Check: 8% of data, 35% of total revenue, 12% positive rate vs. 6% baseline. Don't remove. Winsorize at 99th percentile or use XGBoost. Model now works for all segments.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// Canvas 1: Outliers contain the positive class
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Outlier Removal Destroys Signal', w/2, 25);
+
+    var baseY = 200, baseX = 100, chartW = 550, chartH = 120;
+
+    // Before removal: full distribution
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Before Outlier Removal:', baseX, 60);
+
+    // Main distribution (negatives)
+    for (var i = 0; i < 200; i++) {
+        var x = baseX + (i / 200) * (chartW * 0.75);
+        var y = baseY - Math.random() * (chartH * 0.6);
+        ctx.fillStyle = 'rgba(52, 152, 219, 0.4)';
+        ctx.beginPath();
+        ctx.arc(x, y, 2, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Outlier region (positives)
+    for (var i = 0; i < 50; i++) {
+        var x = baseX + chartW * 0.75 + (i / 50) * (chartW * 0.25);
+        var y = baseY - Math.random() * chartH;
+        ctx.fillStyle = i < 45 ? 'rgba(231, 76, 60, 0.7)' : 'rgba(52, 152, 219, 0.4)';
+        ctx.beginPath();
+        ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Outlier threshold line
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    var threshX = baseX + chartW * 0.75;
+    ctx.moveTo(threshX, baseY - chartH - 10);
+    ctx.lineTo(threshX, baseY + 10);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Outlier', threshX, baseY - chartH - 15);
+    ctx.fillText('threshold', threshX, baseY - chartH - 3);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '10px system-ui';
+    ctx.fillText('45 positives', threshX + 60, baseY + 30);
+
+    ctx.fillStyle = '#3498db';
+    ctx.fillText('5 negatives', threshX + 60, baseY + 45);
+
+    // After removal
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('After Outlier Removal:', baseX, 240);
+
+    baseY = 280;
+    baseX = 100;
+
+    // Main distribution only (outliers removed)
+    for (var i = 0; i < 200; i++) {
+        var x = baseX + (i / 200) * (chartW * 0.9);
+        var y = baseY - Math.random() * (chartH * 0.4);
+        ctx.fillStyle = 'rgba(52, 152, 219, 0.4)';
+        ctx.beginPath();
+        ctx.arc(x, y, 2, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Removed 50 outliers. Lost 90% of positive class!', w/2, 260);
+})();
+
+// Canvas 2: Target rate comparison
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Positive Rate: Outliers vs. Non-Outliers', w/2, 25);
+
+    var baseY = 240, maxH = 150;
+    var barWidth = 140;
+
+    // Non-outliers
+    var nonOutlierX = 200;
+    var nonOutlierRate = 0.04;
+    var nonOutlierH = nonOutlierRate * maxH * 10;
+
+    ctx.fillStyle = 'rgba(52, 152, 219, 0.6)';
+    ctx.fillRect(nonOutlierX - barWidth/2, baseY - nonOutlierH, barWidth, nonOutlierH);
+    ctx.strokeStyle = '#3498db';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(nonOutlierX - barWidth/2, baseY - nonOutlierH, barWidth, nonOutlierH);
+
+    ctx.fillStyle = '#3498db';
+    ctx.font = 'bold 16px system-ui';
+    ctx.fillText('4%', nonOutlierX, baseY - nonOutlierH - 12);
+
+    ctx.fillStyle = '#333';
+    ctx.font = '12px system-ui';
+    ctx.fillText('Non-Outliers', nonOutlierX, baseY + 20);
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.fillText('n = 5,850 (98%)', nonOutlierX, baseY + 36);
+    ctx.fillText('positives = 234', nonOutlierX, baseY + 50);
+
+    // Outliers
+    var outlierX = 520;
+    var outlierRate = 0.34;
+    var outlierH = outlierRate * maxH * 10;
+
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.6)';
+    ctx.fillRect(outlierX - barWidth/2, baseY - outlierH, barWidth, outlierH);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(outlierX - barWidth/2, baseY - outlierH, barWidth, outlierH);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 16px system-ui';
+    ctx.fillText('34%', outlierX, baseY - outlierH - 12);
+
+    ctx.fillStyle = '#333';
+    ctx.font = '12px system-ui';
+    ctx.fillText('Outliers', outlierX, baseY + 20);
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.fillText('n = 150 (2%)', outlierX, baseY + 36);
+    ctx.fillText('positives = 51', outlierX, baseY + 50);
+
+    // Baseline
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(100, baseY);
+    ctx.lineTo(650, baseY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Outliers are 8.5x more likely to be positive. They ARE the signal!', w/2, 280);
+})();
+
+// Canvas 3: Outlier handling decision tree
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Outlier Handling Decision Tree', w/2, 25);
+
+    // Start
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2;
+    ctx.fillRect(w/2 - 70, 50, 140, 40);
+    ctx.strokeRect(w/2 - 70, 50, 140, 40);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Outliers detected', w/2, 70);
+
+    // Arrow down
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(w/2, 90);
+    ctx.lineTo(w/2, 110);
+    ctx.stroke();
+
+    // Decision 1: Are they errors?
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    var d1Y = 110;
+    ctx.fillRect(w/2 - 100, d1Y, 200, 40);
+    ctx.strokeRect(w/2 - 100, d1Y, 200, 40);
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Are they data errors?', w/2, d1Y + 15);
+    ctx.font = '10px system-ui';
+    ctx.fillText('(typos, sensor failures)', w/2, d1Y + 30);
+
+    // Left: Yes (errors)
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(w/2 - 100, 130);
+    ctx.lineTo(150, 130);
+    ctx.lineTo(150, 170);
+    ctx.stroke();
+
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.fillRect(80, 170, 140, 50);
+    ctx.strokeRect(80, 170, 140, 50);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillText('Yes: Errors', 150, 185);
+    ctx.font = '10px system-ui';
+    ctx.fillText('Remove or', 150, 200);
+    ctx.fillText('correct them', 150, 213);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '9px system-ui';
+    ctx.fillText('Yes', 180, 125);
+
+    // Right: No (valid extremes)
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(w/2 + 100, 130);
+    ctx.lineTo(570, 130);
+    ctx.lineTo(570, 160);
+    ctx.stroke();
+
+    // Decision 2: Do they predict target?
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.fillRect(480, 160, 180, 40);
+    ctx.strokeRect(480, 160, 180, 40);
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillText('Higher target rate', 570, 175);
+    ctx.fillText('than non-outliers?', 570, 188);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '9px system-ui';
+    ctx.fillText('No', 520, 125);
+
+    // Decision 2 - Yes
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(570, 200);
+    ctx.lineTo(570, 230);
+    ctx.stroke();
+
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.fillRect(490, 230, 160, 50);
+    ctx.strokeRect(490, 230, 160, 50);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillText('Yes: KEEP THEM!', 570, 245);
+    ctx.font = '9px system-ui';
+    ctx.fillText('Use tree models or', 570, 260);
+    ctx.fillText('winsorize, don\'t remove', 570, 272);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '9px system-ui';
+    ctx.fillText('Yes', 540, 215);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Don\'t remove outliers by default. Understand them first.', w/2, 295);
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Temporal Leakage (Shuffling Time Series)</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Temporal Leakage (Shuffling Time Series)</h1>
+<p class="subtitle">Random train/test split on time-ordered data → model sees the future</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Stock data: random split puts 2024 data in train, 2023 in test. Model "predicts" the past using future knowledge. Customer behavior: Tuesday's data trains, Monday's data tests.</p>
+                <ul>
+                    <li>Stock data: random split puts 2024 data in train, 2023 in test. Model "predicts" the past using future knowledge</li>
+                    <li>Customer behavior: Tuesday's data trains, Monday's data tests. Features from Tuesday leak Tuesday-knowledge into "predicting" Monday</li>
+                    <li>Symptom: 90% accuracy on random split, 60% on proper temporal split</li>
+                </ul>
+                <p class="example">Example: Fraud detection model achieves 95% on random split. Deploy with temporal split (train on past, predict future): 72%. The 23% gap was temporal leakage.</p>
+                <div class="key-point">
+                    <strong>Defense:</strong> Always use temporal splits for time-ordered data. Train on [t₀, t₁], test on [t₁, t₂]. Never shuffle across time.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>sklearn's default cross-validation uses random shuffling, treating time series data as i.i.d. This violates the fundamental assumption that future data should not inform predictions about the past. Many tutorials and examples use random splits without warning about temporal structure.</p>
+                <ul>
+                    <li>sklearn's default KFold uses random shuffle &mdash; treats time series as i.i.d. samples</li>
+                    <li>Tutorials show train_test_split without temporal awareness, creating bad habits</li>
+                    <li>Teams copy-paste cross-validation code that works for i.i.d. data but fails for time series</li>
+                    <li>Auto-correlation in time series means nearby points are similar &mdash; random split exploits this</li>
+                </ul>
+                <p class="example">Example: Daily stock returns. Random 5-fold CV: each fold mixes days from all years. Fold 3 trains on 2024 data to "predict" 2022 prices. Model learns patterns from the future. CV accuracy: 68%. Temporal split (train 2020-2023, test 2024): 52%. The model has no real edge.</p>
+                <div class="key-point">
+                    <strong>Root Cause:</strong> Time series data violates the i.i.d. assumption. Adjacent time points are correlated. Random shuffling places correlated future points in training, giving the model access to patterns it cannot have in production (where it must predict the unknown future).
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Use temporal splits: train on [t0, t1], test on [t1, t2]. For cross-validation, use TimeSeriesSplit (walk-forward validation). Never shuffle time-ordered data. Each fold trains on past and tests on the immediate future.</p>
+                <ul>
+                    <li>Temporal split: train on past [t0, t1], test on future [t1, t2]</li>
+                    <li>Walk-forward validation (TimeSeriesSplit): expanding or sliding window training</li>
+                    <li>Never shuffle time-ordered data &mdash; preserve chronological order</li>
+                    <li>Gap between train and test periods to avoid label leakage from adjacent days</li>
+                    <li>Validate: if random split >> temporal split performance, you have temporal leakage</li>
+                </ul>
+                <p class="example">Example: Walk-forward with 6-month train window, 1-month test. Fold 1: train Jan-Jun, test Jul. Fold 2: train Feb-Jul, test Aug. Average accuracy across folds: 54%. This is real &mdash; the model must predict unseen future patterns.</p>
+                <div class="key-point">
+                    <strong>Fix:</strong> Replace KFold with TimeSeriesSplit. Train on months 1-6, test on month 7. Train on months 1-7, test on month 8. Each fold only ever predicts the future from the past. The performance estimate is honest.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Random Shuffled Split vs Temporal Split', w/2, 25);
+
+    // Timeline
+    var timelineY = 80;
+    var startX = 60, endX = 660;
+    var pointSpacing = 40;
+
+    // Top: WRONG (random split)
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('WRONG: Random Shuffle Split', startX, 55);
+
+    // Draw points (mixed years)
+    var wrongPoints = [
+        { x: 100, year: '2023', set: 'test', color: '#e74c3c' },
+        { x: 150, year: '2024', set: 'train', color: '#27ae60' },
+        { x: 200, year: '2023', set: 'train', color: '#27ae60' },
+        { x: 250, year: '2024', set: 'test', color: '#e74c3c' },
+        { x: 300, year: '2023', set: 'train', color: '#27ae60' },
+        { x: 350, year: '2024', set: 'train', color: '#27ae60' },
+        { x: 400, year: '2023', set: 'test', color: '#e74c3c' },
+        { x: 450, year: '2024', set: 'train', color: '#27ae60' },
+        { x: 500, year: '2024', set: 'test', color: '#e74c3c' },
+        { x: 550, year: '2023', set: 'train', color: '#27ae60' }
+    ];
+
+    wrongPoints.forEach(function(p) {
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = 0.7;
+        ctx.beginPath();
+        ctx.arc(p.x, timelineY, 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        ctx.fillStyle = '#333';
+        ctx.font = '8px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(p.year, p.x, timelineY + 20);
+    });
+
+    // Annotation for wrong split
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('2024 data in TRAIN, 2023 data in TEST', w/2, timelineY + 35);
+    ctx.fillText('Model learns from the future! Accuracy: 90% (inflated)', w/2, timelineY + 47);
+
+    // Bottom: RIGHT (temporal split)
+    var bottomY = 180;
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('RIGHT: Temporal Split', startX, 155);
+
+    // Timeline line
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(startX, bottomY);
+    ctx.lineTo(endX, bottomY);
+    ctx.stroke();
+
+    // Train section (past - left side)
+    ctx.fillStyle = '#27ae60';
+    ctx.globalAlpha = 0.2;
+    ctx.fillRect(startX, bottomY - 30, 280, 60);
+    ctx.globalAlpha = 1;
+
+    var trainPoints = [100, 150, 200, 250, 300, 350];
+    trainPoints.forEach(function(x) {
+        ctx.fillStyle = '#27ae60';
+        ctx.globalAlpha = 0.7;
+        ctx.beginPath();
+        ctx.arc(x, bottomY, 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        ctx.fillStyle = '#333';
+        ctx.font = '8px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText('2023', x, bottomY + 20);
+    });
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('TRAIN', 220, bottomY - 12);
+    ctx.fillText('(past)', 220, bottomY);
+
+    // Divider
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([5, 3]);
+    ctx.beginPath();
+    ctx.moveTo(380, bottomY - 35);
+    ctx.lineTo(380, bottomY + 35);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('t₁', 380, bottomY - 42);
+
+    // Test section (future - right side)
+    ctx.fillStyle = '#2980b9';
+    ctx.globalAlpha = 0.2;
+    ctx.fillRect(380, bottomY - 30, 280, 60);
+    ctx.globalAlpha = 1;
+
+    var testPoints = [420, 470, 520, 570, 620];
+    testPoints.forEach(function(x) {
+        ctx.fillStyle = '#2980b9';
+        ctx.globalAlpha = 0.7;
+        ctx.beginPath();
+        ctx.arc(x, bottomY, 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        ctx.fillStyle = '#333';
+        ctx.font = '8px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText('2024', x, bottomY + 20);
+    });
+
+    ctx.fillStyle = '#2980b9';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('TEST', 520, bottomY - 12);
+    ctx.fillText('(future)', 520, bottomY);
+
+    // Annotation for right split
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Train on past, test on future. No leakage.', w/2, bottomY + 40);
+    ctx.fillText('Honest accuracy: 72% (realistic)', w/2, bottomY + 52);
+
+    // Bottom message
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('18% accuracy gap reveals temporal leakage. Always split time-ordered data chronologically.', w/2, 275);
+})();
+
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Title
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Random Shuffle Breaks Temporal Order', w/2, 25);
+
+    // Original timeline (top)
+    ctx.fillStyle = '#333';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Original order:', 30, 55);
+
+    var timelineY = 75;
+    var startX = 80, spacing = 55;
+
+    // Draw timeline line
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(startX - 10, timelineY);
+    ctx.lineTo(startX + 10 * spacing, timelineY);
+    ctx.stroke();
+
+    // Arrow at end
+    ctx.beginPath();
+    ctx.moveTo(startX + 10 * spacing - 5, timelineY - 5);
+    ctx.lineTo(startX + 10 * spacing + 5, timelineY);
+    ctx.lineTo(startX + 10 * spacing - 5, timelineY + 5);
+    ctx.fillStyle = '#666';
+    ctx.fill();
+
+    ctx.fillStyle = '#666';
+    ctx.font = '9px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('time →', startX + 10 * spacing + 20, timelineY + 4);
+
+    // Data points in order
+    for (var i = 1; i <= 10; i++) {
+        var x = startX + (i - 1) * spacing;
+        ctx.fillStyle = '#1a5276';
+        ctx.globalAlpha = 0.7;
+        ctx.beginPath();
+        ctx.arc(x, timelineY, 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 10px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText('' + i, x, timelineY + 4);
+    }
+
+    // Shuffle arrows
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('↓  Random Shuffle  ↓', w/2, 110);
+
+    // Shuffled result with train/test assignment
+    var shuffledY = 145;
+    ctx.fillStyle = '#333';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('After shuffle:', 30, shuffledY - 5);
+
+    // Define shuffled order and assignments
+    var shuffled = [
+        { num: 7, set: 'train' }, { num: 2, set: 'train' }, { num: 10, set: 'train' },
+        { num: 4, set: 'train' }, { num: 8, set: 'train' }, { num: 1, set: 'train' },
+        { num: 9, set: 'train' }, { num: 3, set: 'test' }, { num: 5, set: 'test' },
+        { num: 6, set: 'test' }
+    ];
+
+    // Train region background
+    ctx.fillStyle = '#27ae60';
+    ctx.globalAlpha = 0.1;
+    ctx.fillRect(startX - 20, shuffledY - 18, 7 * spacing + 10, 36);
+    ctx.globalAlpha = 1;
+
+    // Test region background
+    ctx.fillStyle = '#e74c3c';
+    ctx.globalAlpha = 0.1;
+    ctx.fillRect(startX + 7 * spacing - 10, shuffledY - 18, 3 * spacing + 10, 36);
+    ctx.globalAlpha = 1;
+
+    shuffled.forEach(function(pt, i) {
+        var x = startX + i * spacing;
+        var color = pt.set === 'train' ? '#27ae60' : '#e74c3c';
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.7;
+        ctx.beginPath();
+        ctx.arc(x, shuffledY, 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 10px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText('' + pt.num, x, shuffledY + 4);
+    });
+
+    // Labels
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText('TRAIN (70%)', startX + 3 * spacing, shuffledY + 28);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('TEST (30%)', startX + 8 * spacing, shuffledY + 28);
+
+    // Highlight the problem: future point 8 in train, past point 3 in test
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([4, 3]);
+
+    // Circle around point 8 in train (index 4 in shuffled array)
+    ctx.beginPath();
+    ctx.arc(startX + 4 * spacing, shuffledY, 17, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Circle around point 3 in test (index 7 in shuffled array)
+    ctx.beginPath();
+    ctx.arc(startX + 7 * spacing, shuffledY, 17, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Red arrow and annotation
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Point 8 (future)', startX + 4 * spacing, shuffledY - 25);
+    ctx.fillText('in TRAIN!', startX + 4 * spacing, shuffledY - 15);
+
+    ctx.fillText('Point 3 (past)', startX + 7 * spacing, shuffledY - 25);
+    ctx.fillText('in TEST!', startX + 7 * spacing, shuffledY - 15);
+
+    // Bottom explanation
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Future data (points 7,8,9,10) trains the model to "predict" past points (3,5,6)', w/2, 225);
+
+    ctx.fillStyle = '#333';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Adjacent time points are auto-correlated. Model exploits future→past correlation.', w/2, 248);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Random CV accuracy: 68%  |  Temporal split accuracy: 52%  |  Gap = leakage', w/2, 278);
+})();
+
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Title
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Correct: Walk-Forward (TimeSeriesSplit)', w/2, 25);
+
+    // Time arrow at top
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(60, 45);
+    ctx.lineTo(660, 45);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(655, 40);
+    ctx.lineTo(665, 45);
+    ctx.lineTo(655, 50);
+    ctx.fillStyle = '#666';
+    ctx.fill();
+
+    ctx.fillStyle = '#666';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('time →', 665, 48);
+
+    // Month labels
+    var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    var mStartX = 60, mSpacing = 50;
+    ctx.font = '9px system-ui';
+    ctx.fillStyle = '#333';
+    ctx.textAlign = 'center';
+    months.forEach(function(m, i) {
+        ctx.fillText(m, mStartX + i * mSpacing, 58);
+    });
+
+    // Folds
+    var folds = [
+        { train: [0, 5], test: [6, 6], label: 'Fold 1' },
+        { train: [0, 6], test: [7, 7], label: 'Fold 2' },
+        { train: [0, 7], test: [8, 8], label: 'Fold 3' },
+        { train: [0, 8], test: [9, 9], label: 'Fold 4' },
+        { train: [0, 9], test: [10, 10], label: 'Fold 5' }
+    ];
+
+    var foldStartY = 72, foldH = 30, foldGap = 10;
+
+    folds.forEach(function(fold, fi) {
+        var y = foldStartY + fi * (foldH + foldGap);
+
+        // Label
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 10px system-ui';
+        ctx.textAlign = 'right';
+        ctx.fillText(fold.label, mStartX - 10, y + foldH/2 + 4);
+
+        // Train bar (green)
+        var trainStart = mStartX + fold.train[0] * mSpacing - 20;
+        var trainEnd = mStartX + fold.train[1] * mSpacing + 20;
+        var trainW = trainEnd - trainStart;
+
+        ctx.fillStyle = '#27ae60';
+        ctx.globalAlpha = 0.4;
+        ctx.fillRect(trainStart, y, trainW, foldH);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(trainStart, y, trainW, foldH);
+
+        // Test bar (blue)
+        var testStart = mStartX + fold.test[0] * mSpacing - 20;
+        var testEnd = mStartX + fold.test[1] * mSpacing + 20;
+        var testW = testEnd - testStart;
+
+        ctx.fillStyle = '#1a5276';
+        ctx.globalAlpha = 0.4;
+        ctx.fillRect(testStart, y, testW, foldH);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(testStart, y, testW, foldH);
+
+        // Labels inside bars
+        if (fi === 0) {
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 9px system-ui';
+            ctx.textAlign = 'center';
+            ctx.fillText('TRAIN (past)', trainStart + trainW/2, y + foldH/2 + 3);
+            ctx.fillText('TEST', testStart + testW/2, y + foldH/2 + 3);
+        }
+    });
+
+    // Legend
+    var legendY = 280;
+    ctx.fillStyle = '#27ae60';
+    ctx.globalAlpha = 0.5;
+    ctx.fillRect(200, legendY - 8, 14, 14);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#333';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Train (past)', 218, legendY + 3);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.globalAlpha = 0.5;
+    ctx.fillRect(310, legendY - 8, 14, 14);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#333';
+    ctx.fillText('Test (future)', 328, legendY + 3);
+
+    // Expanding window annotation
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(mStartX + 5 * mSpacing + 25, foldStartY);
+    ctx.lineTo(mStartX + 9 * mSpacing + 25, foldStartY + 4 * (foldH + foldGap) + foldH);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 9px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('expanding', mStartX + 9 * mSpacing + 28, foldStartY + 2 * (foldH + foldGap) + foldH/2);
+    ctx.fillText('window', mStartX + 9 * mSpacing + 28, foldStartY + 2 * (foldH + foldGap) + foldH/2 + 12);
+
+    // Bottom annotation
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Each fold only predicts the future from the past. Honest performance estimate: 54%', w/2, 260);
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unquantified Spikes (Memory / Skew Failures)</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Unquantified Spikes (Memory / Skew Failures)</h1>
+<p class="subtitle">Data volume spikes or skew cause memory exhaustion and pipeline failures without profiling or warnings</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Pipeline lacks cardinality profiling and can't predict memory needs. One power user with 10M events crashes the reducer. Seasonal traffic spikes exceed capacity. No alerts until OOM kills the job.</p>
+                <ul>
+                    <li>No profiling of key cardinality (users, sessions, events per partition)</li>
+                    <li>Groupby operations on skewed keys (one user with 100x data)</li>
+                    <li>Seasonal spikes (Black Friday, tax season) exceed baseline capacity</li>
+                    <li>Window functions over unbounded partitions exhaust memory</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Impact:</strong> Pipelines fail unpredictably in production. No way to predict resource needs. Retries make it worse by replaying same skewed partition. Data loss or SLA breaches. Fix: Profile cardinality continuously, set memory budgets, repartition on skew detection.
+                </div>
+                <p class="example">Example: A recommendation pipeline groups by user_id. 99% of users have < 1000 events, but one bot account has 50M. The partition with that user exhausts 64GB RAM and crashes, failing the entire job.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens / Detection / Common Sources</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Pipelines are designed for average case, not tail behavior. Teams assume uniform distribution. No pre-execution profiling means surprises only surface in production.</p>
+                <ul>
+                    <li>Assumes all partitions are similar size (rarely true)</li>
+                    <li>No cardinality checks before shuffle/groupby operations</li>
+                    <li>Memory limits set based on average, not p99 or max</li>
+                    <li>Production data has long tail (bots, scrapers, power users)</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Detection:</strong> Profile key cardinality before expensive operations. Track partition size distribution (min, p50, p99, max). Alert when skew ratio (max/median) > 100. Monitor memory high-water mark per task. Log cardinality stats for every groupby.
+                </div>
+                <p class="example">Example: E-commerce pipeline groups orders by customer_id. During Black Friday, order volume 10x normal. Top customer has 5,000 orders (vs typical 3). Pipeline sized for 64 orders/customer crashes on 5,000-order partition.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Prevention / Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Profile cardinality before every shuffle, groupby, or window operation. Set memory budgets based on p99, not average. Detect and repartition skewed keys automatically.</p>
+                <ul>
+                    <li>Profile cardinality: SELECT key, COUNT(*) GROUP BY key ORDER BY count DESC LIMIT 100</li>
+                    <li>Set memory = p99_partition_size × row_size × safety_factor</li>
+                    <li>Alert if skew ratio (max/median) > threshold (e.g., 100)</li>
+                    <li>Repartition hot keys: split large partitions into subpartitions</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Best practice:</strong> Add cardinality profiling as a pipeline stage before expensive ops. Emit metrics: partition count, min/median/p99/max size, skew ratio. Use salting or sub-key partitioning for hot keys. Budget memory for p99, not average.
+                </div>
+                <p class="example">Example: Before groupby user_id, profile cardinality. Detect user_12345 has 10M events (vs p99 of 5K). Repartition that user by (user_id, event_hour) to split load across 24 partitions. Rest of users process normally.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// Canvas 1: Memory spike visualization
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Memory Spike from Skewed Partition', w/2, 25);
+
+    var left = 60, right = 660, top = 70, bottom = 240;
+
+    // Axes
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(left, top);
+    ctx.lineTo(left, bottom);
+    ctx.lineTo(right, bottom);
+    ctx.stroke();
+
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    ctx.fillText('Time / Partition →', (left + right)/2, bottom + 25);
+    ctx.save();
+    ctx.translate(25, (top + bottom)/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillText('Memory Usage (GB)', 0, 0);
+    ctx.restore();
+
+    // Y-axis labels
+    ctx.textAlign = 'right';
+    for (var i = 0; i <= 5; i++) {
+        var val = i * 20;
+        var y = bottom - i * (bottom - top) / 5;
+        ctx.fillText(val, left - 10, y + 4);
+        ctx.strokeStyle = '#e0e0e0';
+        ctx.beginPath();
+        ctx.moveTo(left, y);
+        ctx.lineTo(right, y);
+        ctx.stroke();
+    }
+
+    // Memory limit line
+    var limitY = bottom - 0.4 * (bottom - top);
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(left, limitY);
+    ctx.lineTo(right, limitY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Memory Limit: 8GB', left + 5, limitY - 5);
+
+    // Normal partitions (low memory)
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (var i = 0; i <= 60; i++) {
+        var t = i / 100;
+        var x = left + t * (right - left);
+        var mem = 0.15 + 0.05 * Math.sin(i * 0.8);
+        var y = bottom - mem * (bottom - top);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Spike (OOM)
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 60; i <= 100; i++) {
+        var t = i / 100;
+        var x = left + t * (right - left);
+        var spike = (i - 60) / 15;
+        var mem = 0.15 + Math.min(spike * 0.8, 1.0);
+        var y = bottom - mem * (bottom - top);
+        i === 60 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // OOM marker
+    var oomX = left + 0.75 * (right - left);
+    var oomY = top + 10;
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath();
+    ctx.arc(oomX, oomY, 8, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('OOM', oomX, oomY + 4);
+    ctx.fillText('JOB KILLED', oomX, oomY + 20);
+
+    // Annotations
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Normal partitions: 1-2 GB', left + 10, bottom - 30);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Skewed partition (hot key): 100GB needed', left + 320, top + 50);
+
+    // Arrow to spike
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(left + 320, top + 60);
+    ctx.lineTo(oomX, oomY + 12);
+    ctx.stroke();
+})();
+
+// Canvas 2: Skewed partition diagram
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Skewed Key Distribution (Long Tail)', w/2, 25);
+
+    var left = 60, right = 660, top = 70, bottom = 240;
+
+    // Axes
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(left, top);
+    ctx.lineTo(left, bottom);
+    ctx.lineTo(right, bottom);
+    ctx.stroke();
+
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    ctx.fillText('Keys (sorted by count) →', (left + right)/2, bottom + 25);
+    ctx.save();
+    ctx.translate(25, (top + bottom)/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillText('Row Count', 0, 0);
+    ctx.restore();
+
+    // Y-axis labels (log scale)
+    ctx.textAlign = 'right';
+    var yLabels = [1, 10, 100, 1000, '10K', '100K'];
+    for (var i = 0; i < yLabels.length; i++) {
+        var y = bottom - i * (bottom - top) / (yLabels.length - 1);
+        ctx.fillText(yLabels[i], left - 10, y + 4);
+    }
+
+    // Normal keys (most keys have few rows)
+    ctx.fillStyle = 'rgba(39,174,96,0.6)';
+    var barW = 4;
+    for (var i = 0; i < 100; i++) {
+        var x = left + 10 + i * 5;
+        var normalH = 20 + 40 * Math.random();
+        ctx.fillRect(x, bottom - normalH, barW, normalH);
+    }
+
+    // Medium keys
+    ctx.fillStyle = 'rgba(230,126,34,0.6)';
+    for (var i = 0; i < 20; i++) {
+        var x = left + 520 + i * 5;
+        var medH = 60 + 60 * Math.random();
+        ctx.fillRect(x, bottom - medH, barW, medH);
+    }
+
+    // Hot key (outlier)
+    ctx.fillStyle = 'rgba(231,76,60,0.8)';
+    var hotX = right - 15;
+    var hotH = 150;
+    ctx.fillRect(hotX - 6, bottom - hotH, 12, hotH);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(hotX - 6, bottom - hotH, 12, hotH);
+
+    // Hot key annotation
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Hot key', hotX, bottom - hotH - 10);
+    ctx.font = '10px system-ui';
+    ctx.fillText('10M rows', hotX, bottom - hotH + 5);
+    ctx.fillText('(100x p99)', hotX, bottom - hotH + 18);
+
+    // Skew ratio annotation
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(500, top + 10, 140, 40);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(500, top + 10, 140, 40);
+
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Skew Ratio: 10,000', 570, top + 25);
+    ctx.font = '10px system-ui';
+    ctx.fillText('(max / median)', 570, top + 40);
+
+    // Labels
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('99% of keys', left + 10, top + 15);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.fillText('0.9%', left + 520, top + 15);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'right';
+    ctx.fillText('0.1% (but crashes pipeline)', right - 25, top + 15);
+})();
+
+// Canvas 3: Profiling workflow
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Profiling Workflow: Detect & Mitigate Skew', w/2, 25);
+
+    var boxY = 80;
+    var boxH = 50;
+    var boxW = 140;
+
+    var steps = [
+        {x: 80, label: 'Profile\nCardinality', color: '#1a5276'},
+        {x: 250, label: 'Detect\nSkew', color: '#e67e22'},
+        {x: 420, label: 'Repartition\nHot Keys', color: '#27ae60'},
+        {x: 590, label: 'Execute\nSafely', color: '#27ae60'}
+    ];
+
+    steps.forEach(function(step, i) {
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = step.color;
+        ctx.lineWidth = 3;
+        ctx.fillRect(step.x - boxW/2, boxY, boxW, boxH);
+        ctx.strokeRect(step.x - boxW/2, boxY, boxW, boxH);
+
+        ctx.fillStyle = step.color;
+        ctx.font = 'bold 11px system-ui';
+        ctx.textAlign = 'center';
+        var lines = step.label.split('\n');
+        lines.forEach(function(line, j) {
+            ctx.fillText(line, step.x, boxY + boxH/2 - 5 + j * 14);
+        });
+
+        // Arrow
+        if (i < steps.length - 1) {
+            ctx.strokeStyle = '#999';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(step.x + boxW/2, boxY + boxH/2);
+            ctx.lineTo(steps[i + 1].x - boxW/2, boxY + boxH/2);
+            ctx.stroke();
+
+            // Arrowhead
+            ctx.fillStyle = '#999';
+            ctx.beginPath();
+            ctx.moveTo(steps[i + 1].x - boxW/2, boxY + boxH/2);
+            ctx.lineTo(steps[i + 1].x - boxW/2 - 8, boxY + boxH/2 - 5);
+            ctx.lineTo(steps[i + 1].x - boxW/2 - 8, boxY + boxH/2 + 5);
+            ctx.closePath();
+            ctx.fill();
+        }
+    });
+
+    // Details for each step
+    var detailY = boxY + boxH + 30;
+
+    // Step 1 details
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('SELECT key,', 20, detailY);
+    ctx.fillText('  COUNT(*) as cnt', 20, detailY + 12);
+    ctx.fillText('GROUP BY key', 20, detailY + 24);
+    ctx.fillText('ORDER BY cnt DESC', 20, detailY + 36);
+
+    // Step 2 details
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Skew ratio:', 195, detailY);
+    ctx.fillText('max / median', 195, detailY + 12);
+    ctx.font = '10px system-ui';
+    ctx.fillText('Alert if > 100', 195, detailY + 24);
+
+    // Step 3 details
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillText('If hot key:', 365, detailY);
+    ctx.font = '10px system-ui';
+    ctx.fillText('Split by sub-key', 365, detailY + 12);
+    ctx.fillText('(e.g., hour, hash)', 365, detailY + 24);
+
+    // Step 4 details
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillText('Memory budget:', 535, detailY);
+    ctx.font = '10px system-ui';
+    ctx.fillText('p99 × row_size', 535, detailY + 12);
+    ctx.fillText('× safety_factor', 535, detailY + 24);
+
+    // Metrics dashboard
+    var dashY = detailY + 60;
+    ctx.fillStyle = '#f8f9fa';
+    ctx.fillRect(20, dashY, 680, 50);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(20, dashY, 680, 50);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Emit Metrics: partition_count, min_size, median_size, p99_size, max_size, skew_ratio, memory_peak', 35, dashY + 20);
+
+    ctx.font = '10px system-ui';
+    ctx.fillText('Alert if: skew_ratio > 100 OR memory_peak > 0.9 × limit OR partition failure rate > 1%', 35, dashY + 38);
+})();
+</script>
+
+</body>
+</html>

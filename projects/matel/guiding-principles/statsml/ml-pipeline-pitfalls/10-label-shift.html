@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Label Shift (Train ≠ Deploy Distribution)</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Label Shift (Train ≠ Deploy Distribution)</h1>
+<p class="subtitle">Class proportions in production differ from training</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Trained on 50/50 balanced data. Production is 99/1. Calibration is wrong — model over-predicts the rare class. Threshold set at 0.5 in training is wrong when base rate is 1% — should be much lower.</p>
+                <ul>
+                    <li>Trained on 50/50 balanced data. Production is 99/1. Calibration is wrong — model over-predicts the rare class</li>
+                    <li>Threshold set at 0.5 in training is wrong when base rate is 1% — should be much lower</li>
+                    <li>Even well-calibrated models break when deployed to different prevalence populations</li>
+                </ul>
+                <p class="example">Example: Disease prediction model trained on case-control (50% disease). Deployed in general population (1% disease). At threshold 0.5: flags 30% of population as positive. Useless. Need threshold recalibration.</p>
+                <div class="key-point">
+                    <strong>Defense:</strong> Know your deployment base rate. Recalibrate predictions using Platt scaling or isotonic regression on deployment-representative data.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Training data is artificially balanced (50/50 sampling) when the production environment is heavily imbalanced (99/1). The model learns calibrated probabilities for the balanced distribution, but these probabilities are wrong when the base rate changes. The threshold selected on balanced data is inappropriate for production.</p>
+                <ul>
+                    <li>Balanced sampling for training (50/50) when production is imbalanced (99/1 or worse)</li>
+                    <li>Case-control study design: equal cases and controls, but deployment has natural prevalence</li>
+                    <li>Model probabilities calibrated to training base rate, not deployment base rate</li>
+                    <li>Threshold = 0.5 works for 50/50 but is catastrophically wrong for 99/1</li>
+                </ul>
+                <p class="example">Example: Disease prediction. Training: 50% disease (case-control design). Model outputs P(disease)=0.6 for a patient. In production (1% prevalence), the true P(disease|features) for the same patient is ~0.012. The model's 0.6 output is 50x too high because it was calibrated to 50% base rate.</p>
+                <div class="key-point">
+                    <strong>Root Cause:</strong> P(Y=1|X) learned by the model is calibrated to training P(Y=1) = 0.5. In production P(Y=1) = 0.01. By Bayes' theorem, the posterior shifts. A score of 0.5 in training corresponds to a much lower true probability in production. The model is not wrong — it is miscalibrated for a different prevalence.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Know the deployment base rate. Recalibrate model predictions using Platt scaling or isotonic regression on deployment-representative data. Adjust the classification threshold to match production prevalence and business costs.</p>
+                <ul>
+                    <li>Know your deployment base rate: measure P(Y=1) in production data</li>
+                    <li>Platt scaling: fit a logistic function to map model scores to calibrated probabilities for production prevalence</li>
+                    <li>Isotonic regression: non-parametric calibration on a deployment-representative validation set</li>
+                    <li>Threshold adjustment: solve for optimal threshold given production base rate and cost matrix</li>
+                    <li>Monitor: track prediction rate vs observed rate — divergence signals distribution shift</li>
+                </ul>
+                <p class="example">Example: Model trained on 50/50 data. Production base rate = 1%. Apply Platt scaling on production-representative validation set. New threshold = 0.03 (not 0.5). Result: flags 5% of population (not 30%), catches 70% of true positives. Practical and deployable.</p>
+                <div class="key-point">
+                    <strong>Fix:</strong> (1) Train model on balanced data (fine for discrimination). (2) Calibrate on data with production prevalence using Platt scaling. (3) Set threshold using production base rate: threshold = prior_ratio * cost_ratio. (4) Monitor deployed prediction rates vs observed outcome rates.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var leftX = 40;
+    var rightX = 380;
+    var panelW = 300;
+    var barY = 80;
+    var barH = 120;
+
+    // Title
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Label Shift: Training vs Production Class Distribution', w/2, 20);
+
+    // --- Left panel: Training Distribution (50/50) ---
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Training Distribution', leftX + panelW/2, 45);
+
+    // Negative class bar (left half)
+    ctx.fillStyle = '#1a5276';
+    ctx.globalAlpha = 0.6;
+    ctx.fillRect(leftX, barY, panelW/2, barH);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(leftX, barY, panelW/2, barH);
+
+    // Positive class bar (right half)
+    ctx.fillStyle = '#27ae60';
+    ctx.globalAlpha = 0.6;
+    ctx.fillRect(leftX + panelW/2, barY, panelW/2, barH);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#27ae60';
+    ctx.strokeRect(leftX + panelW/2, barY, panelW/2, barH);
+
+    // Labels inside bars
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Negative', leftX + panelW/4, barY + barH/2 - 5);
+    ctx.fillText('50%', leftX + panelW/4, barY + barH/2 + 12);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('Positive', leftX + 3*panelW/4, barY + barH/2 - 5);
+    ctx.fillText('50%', leftX + 3*panelW/4, barY + barH/2 + 12);
+
+    // Threshold line at 0.5 on left panel
+    var threshXLeft = leftX + panelW/2;
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([6, 3]);
+    ctx.beginPath();
+    ctx.moveTo(threshXLeft, barY - 10);
+    ctx.lineTo(threshXLeft, barY + barH + 10);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('threshold = 0.5', threshXLeft, barY - 15);
+
+    // Checkmark annotation
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('✓ Correct threshold', leftX + panelW/2, barY + barH + 30);
+
+    // --- Right panel: Production Distribution (99/1) ---
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Production Distribution', rightX + panelW/2, 45);
+
+    // Negative class bar (99%)
+    var negW = panelW * 0.99;
+    var posW = panelW * 0.01;
+
+    ctx.fillStyle = '#1a5276';
+    ctx.globalAlpha = 0.6;
+    ctx.fillRect(rightX, barY, negW, barH);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(rightX, barY, negW, barH);
+
+    // Positive class bar (1%) - thin sliver
+    ctx.fillStyle = '#27ae60';
+    ctx.globalAlpha = 0.8;
+    ctx.fillRect(rightX + negW, barY, posW, barH);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#27ae60';
+    ctx.strokeRect(rightX + negW, barY, posW, barH);
+
+    // Labels
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Negative 99%', rightX + negW/2, barY + barH/2 + 5);
+
+    // Positive label with arrow (too small to fit inside)
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('← 1%', rightX + negW + posW + 3, barY + barH/2 + 4);
+
+    // Threshold line at 0.5 on right panel (same relative position)
+    var threshXRight = rightX + panelW/2;
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([6, 3]);
+    ctx.beginPath();
+    ctx.moveTo(threshXRight, barY - 10);
+    ctx.lineTo(threshXRight, barY + barH + 10);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('threshold = 0.5', threshXRight, barY - 15);
+
+    // Shaded region showing false positive zone (from threshold to end)
+    ctx.fillStyle = '#e74c3c';
+    ctx.globalAlpha = 0.2;
+    ctx.fillRect(threshXRight, barY, panelW/2, barH);
+    ctx.globalAlpha = 1;
+
+    // Red bracket/annotation for the false positive region
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(threshXRight, barY + barH + 5);
+    ctx.lineTo(threshXRight, barY + barH + 12);
+    ctx.lineTo(rightX + panelW, barY + barH + 12);
+    ctx.lineTo(rightX + panelW, barY + barH + 5);
+    ctx.stroke();
+
+    // Error annotation
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('✗ Flags 30% as positive', rightX + panelW * 0.75, barY + barH + 28);
+    ctx.fillText('True positive rate: 1%', rightX + panelW * 0.75, barY + barH + 43);
+
+    // Bottom summary
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('Threshold calibrated on balanced data fails under label shift', w/2, 285);
+})();
+
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Title
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('How Training Base Rate Distorts Production Predictions', w/2, 20);
+
+    // Two distribution panels
+    var panelW = 300, panelH = 180;
+    var leftX = 40, rightX = 390;
+    var panelY = 45;
+
+    // --- Left: Balanced (50/50) calibration ---
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Training: P(Y=1) = 0.50', leftX + panelW/2, panelY - 5);
+
+    // Draw two overlapping Gaussian-like curves for class 0 and class 1
+    var curveY = panelY + 20;
+    var curveH = 100;
+    var curveW = panelW - 20;
+    var cx = leftX + 10;
+
+    // Axes
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx, curveY + curveH);
+    ctx.lineTo(cx + curveW, curveY + curveH);
+    ctx.stroke();
+
+    // Class 0 distribution (left-ish)
+    ctx.beginPath();
+    ctx.moveTo(cx, curveY + curveH);
+    for (var i = 0; i <= curveW * 0.7; i++) {
+        var x = i / (curveW * 0.7);
+        var y = Math.exp(-Math.pow((x - 0.4) * 4, 2) / 2) * curveH * 0.8;
+        ctx.lineTo(cx + i, curveY + curveH - y);
+    }
+    ctx.lineTo(cx + curveW * 0.7, curveY + curveH);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(26,82,118,0.3)';
+    ctx.fill();
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Class 1 distribution (right-ish)
+    ctx.beginPath();
+    ctx.moveTo(cx + curveW * 0.3, curveY + curveH);
+    for (var i = 0; i <= curveW * 0.7; i++) {
+        var x = i / (curveW * 0.7);
+        var y = Math.exp(-Math.pow((x - 0.6) * 4, 2) / 2) * curveH * 0.8;
+        ctx.lineTo(cx + curveW * 0.3 + i, curveY + curveH - y);
+    }
+    ctx.lineTo(cx + curveW, curveY + curveH);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(39,174,96,0.3)';
+    ctx.fill();
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Threshold at 0.5 (middle)
+    var threshX = cx + curveW * 0.5;
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([5, 3]);
+    ctx.beginPath();
+    ctx.moveTo(threshX, curveY);
+    ctx.lineTo(threshX, curveY + curveH + 5);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillStyle = '#e67e22';
+    ctx.textAlign = 'center';
+    ctx.fillText('t = 0.5', threshX, curveY - 5);
+
+    // Labels
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Class 0', cx + curveW * 0.25, curveY + curveH + 15);
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('Class 1', cx + curveW * 0.7, curveY + curveH + 15);
+
+    // Checkmark
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('✓ Balanced: threshold cuts evenly', leftX + panelW/2, curveY + curveH + 35);
+
+    // --- Right: Imbalanced (99/1) calibration ---
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Production: P(Y=1) = 0.01', rightX + panelW/2, panelY - 5);
+
+    var cx2 = rightX + 10;
+
+    // Axes
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx2, curveY + curveH);
+    ctx.lineTo(cx2 + curveW, curveY + curveH);
+    ctx.stroke();
+
+    // Class 0 distribution (dominant, tall)
+    ctx.beginPath();
+    ctx.moveTo(cx2, curveY + curveH);
+    for (var i = 0; i <= curveW * 0.7; i++) {
+        var x = i / (curveW * 0.7);
+        var y = Math.exp(-Math.pow((x - 0.4) * 4, 2) / 2) * curveH * 0.95;
+        ctx.lineTo(cx2 + i, curveY + curveH - y);
+    }
+    ctx.lineTo(cx2 + curveW * 0.7, curveY + curveH);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(26,82,118,0.3)';
+    ctx.fill();
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Class 1 distribution (tiny, barely visible)
+    ctx.beginPath();
+    ctx.moveTo(cx2 + curveW * 0.3, curveY + curveH);
+    for (var i = 0; i <= curveW * 0.7; i++) {
+        var x = i / (curveW * 0.7);
+        var y = Math.exp(-Math.pow((x - 0.6) * 4, 2) / 2) * curveH * 0.08;
+        ctx.lineTo(cx2 + curveW * 0.3 + i, curveY + curveH - y);
+    }
+    ctx.lineTo(cx2 + curveW, curveY + curveH);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(39,174,96,0.3)';
+    ctx.fill();
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Threshold at 0.5 (same position — but wrong for this distribution)
+    var threshX2 = cx2 + curveW * 0.5;
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([5, 3]);
+    ctx.beginPath();
+    ctx.moveTo(threshX2, curveY);
+    ctx.lineTo(threshX2, curveY + curveH + 5);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillStyle = '#e67e22';
+    ctx.textAlign = 'center';
+    ctx.fillText('t = 0.5', threshX2, curveY - 5);
+
+    // Shade false positive region
+    ctx.fillStyle = 'rgba(231,76,60,0.2)';
+    ctx.fillRect(threshX2, curveY, curveW * 0.5 - 10, curveH);
+
+    // Labels
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Class 0 (99%)', cx2 + curveW * 0.25, curveY + curveH + 15);
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('Class 1 (1%)', cx2 + curveW * 0.75, curveY + curveH + 15);
+
+    // Error annotation
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('✗ Same threshold → massive false positives', rightX + panelW/2, curveY + curveH + 35);
+
+    // Bottom: posterior shift explanation
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('Score 0.5 in training → true P(Y=1) ≈ 0.01 in production (Bayes shift)', w/2, h - 12);
+})();
+
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Title
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Correct: Recalibrate for Deployment Prevalence', w/2, 20);
+
+    // Pipeline stages
+    var stageY = 50, stageH = 55;
+    var stages = [
+        { label: 'Train', sub: '(balanced 50/50)', x: 30, w: 100, color: '#1a5276' },
+        { label: 'Raw Scores', sub: '(0.0 - 1.0)', x: 160, w: 100, color: '#e67e22' },
+        { label: 'Platt Scaling', sub: '(prod. prevalence)', x: 290, w: 120, color: '#27ae60' },
+        { label: 'Calibrated P', sub: '(true probs)', x: 440, w: 100, color: '#27ae60' },
+        { label: 'Threshold', sub: '(adjusted)', x: 570, w: 110, color: '#1a5276' }
+    ];
+
+    for (var i = 0; i < stages.length; i++) {
+        var st = stages[i];
+        ctx.fillStyle = st.color === '#1a5276' ? 'rgba(26,82,118,0.12)' :
+                        st.color === '#27ae60' ? 'rgba(39,174,96,0.12)' : 'rgba(230,126,34,0.12)';
+        ctx.fillRect(st.x, stageY, st.w, stageH);
+        ctx.strokeStyle = st.color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(st.x, stageY, st.w, stageH);
+        ctx.font = 'bold 11px system-ui';
+        ctx.fillStyle = st.color;
+        ctx.textAlign = 'center';
+        ctx.fillText(st.label, st.x + st.w/2, stageY + 22);
+        ctx.font = '9px system-ui';
+        ctx.fillText(st.sub, st.x + st.w/2, stageY + 38);
+
+        // Arrow between stages
+        if (i < stages.length - 1) {
+            var arrowStart = st.x + st.w + 3;
+            var arrowEnd = stages[i+1].x - 3;
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(arrowStart, stageY + stageH/2);
+            ctx.lineTo(arrowEnd, stageY + stageH/2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(arrowEnd - 5, stageY + stageH/2 - 4);
+            ctx.lineTo(arrowEnd, stageY + stageH/2);
+            ctx.lineTo(arrowEnd - 5, stageY + stageH/2 + 4);
+            ctx.fillStyle = '#666';
+            ctx.fill();
+        }
+    }
+
+    // Threshold shift visualization
+    var shiftY = 130;
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Threshold Adjustment', w/2, shiftY);
+
+    // Before: threshold at 0.5
+    var barX = 80, barW = 250, barH = 25;
+    var beforeY = shiftY + 15;
+    ctx.fillStyle = 'rgba(231,76,60,0.1)';
+    ctx.fillRect(barX, beforeY, barW, barH);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(barX, beforeY, barW, barH);
+
+    // Threshold marker at 0.5
+    var t05x = barX + barW * 0.5;
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(t05x, beforeY - 3);
+    ctx.lineTo(t05x, beforeY + barH + 3);
+    ctx.stroke();
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('t = 0.5', t05x, beforeY + barH + 14);
+    ctx.textAlign = 'left';
+    ctx.fillText('Before: 30% flagged', barX + barW + 15, beforeY + 16);
+
+    // 0 and 1 labels
+    ctx.font = '9px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    ctx.fillText('0', barX, beforeY + barH + 14);
+    ctx.fillText('1', barX + barW, beforeY + barH + 14);
+
+    // After: threshold at 0.03
+    var afterY = shiftY + 70;
+    ctx.fillStyle = 'rgba(39,174,96,0.1)';
+    ctx.fillRect(barX, afterY, barW, barH);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(barX, afterY, barW, barH);
+
+    // Threshold marker at 0.03
+    var t003x = barX + barW * 0.03;
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(t003x, afterY - 3);
+    ctx.lineTo(t003x, afterY + barH + 3);
+    ctx.stroke();
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText('t = 0.03', t003x + 20, afterY + barH + 14);
+    ctx.textAlign = 'left';
+    ctx.fillText('After: 5% flagged, 70% recall', barX + barW + 15, afterY + 16);
+
+    // 0 and 1 labels
+    ctx.font = '9px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    ctx.fillText('0', barX, afterY + barH + 14);
+    ctx.fillText('1', barX + barW, afterY + barH + 14);
+
+    // Arrow showing the shift
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(t05x, beforeY + barH + 20);
+    ctx.lineTo(t003x + 20, afterY - 5);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillStyle = '#e67e22';
+    ctx.textAlign = 'center';
+    ctx.fillText('prevalence shift', (t05x + t003x + 20)/2 + 15, (beforeY + barH + 20 + afterY - 5)/2);
+
+    // Bottom comparison
+    var compY = h - 40;
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('Before: t=0.5, flags 30%, useless precision', w * 0.3, compY);
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('After: t=0.03, flags 5%, 70% true positive recall', w * 0.7, compY);
+
+    // Green checkmark at bottom
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText('✓ Practical and deployable', w/2, h - 10);
+})();
+</script>
+
+</body>
+</html>

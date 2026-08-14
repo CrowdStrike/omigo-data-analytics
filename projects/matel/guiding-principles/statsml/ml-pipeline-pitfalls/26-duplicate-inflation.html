@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duplicate Inflation in ETL</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Duplicate Inflation in ETL</h1>
+<p class="subtitle">ETL joins or retry logic create duplicate rows that inflate counts and skew statistical analysis</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Many-to-many joins create fanout, retry logic generates multiple records for the same event, or window functions duplicate rows. Aggregations count duplicates multiple times, making metrics like conversion rate or average value incorrect.</p>
+                <ul>
+                    <li>User joins session joins event creates M × N × P fanout</li>
+                    <li>Kafka retry logic writes duplicate messages with same event_id</li>
+                    <li>Window function over partitions duplicates base rows</li>
+                    <li>Incremental append without deduplication accumulates duplicates</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Impact:</strong> Counts are inflated by 2x-10x. Averages are biased if duplicates aren't random. Downstream models trained on inflated counts learn wrong distributions. Fix: Add explicit deduplication step after joins and before aggregation.
+                </div>
+                <p class="example">Example: A conversion funnel joins users × sessions × events. For 100 users with 3 sessions and 10 events each, naive join produces 3,000 rows instead of 100 users. Conversion rate appears 30x higher than reality.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens / Detection / Common Sources</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>SQL joins default to Cartesian product behavior. Retry logic prioritizes delivery over idempotency. Teams forget that join fanout requires explicit deduplication before counting.</p>
+                <ul>
+                    <li>Many-to-many joins without awareness of fanout consequences</li>
+                    <li>At-least-once delivery semantics in event streams (Kafka, SQS)</li>
+                    <li>Multiple systems writing to same table without unique constraints</li>
+                    <li>Window functions used before understanding their duplication behavior</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Detection:</strong> Compare count(*) vs count(distinct primary_key). If ratio > 1.0, you have duplicates. Profile join cardinality: for A JOIN B, check if |A × B| > |A| + |B| by orders of magnitude. Track row count deltas across pipeline stages.
+                </div>
+                <p class="example">Example: An ad pipeline joins impressions × clicks × conversions. Impressions table has 1M rows, clicks 10K, conversions 500. Naive join yields 5B rows (fanout of 5000x). Correct result should be 500 attributed conversions.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Prevention / Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Add explicit deduplication after every join and before every aggregation. Use distinct or group by on primary key. Profile join cardinality to catch unexpected fanout.</p>
+                <ul>
+                    <li>After every join: SELECT DISTINCT ON (primary_key) to collapse fanout</li>
+                    <li>Before aggregation: GROUP BY primary_key, then aggregate</li>
+                    <li>Use LEFT JOIN instead of INNER JOIN when possible to avoid fanout</li>
+                    <li>Add unique constraints or row_number() = 1 filters in window functions</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Best practice:</strong> Profile every join: log input cardinality |A|, |B| and output |A JOIN B|. Alert if output > max(|A|, |B|) × expected_multiplier. Always include count(*) vs count(distinct id) in pipeline metrics dashboard.
+                </div>
+                <p class="example">Example: Instead of SELECT COUNT(*) FROM users JOIN sessions JOIN events, use SELECT COUNT(DISTINCT user_id) FROM (deduplicated result). Or pre-aggregate: count events per session, then sessions per user.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// Canvas 1: Join fanout visualization
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Join Fanout: 2 Users × 3 Sessions × 5 Events = 30 Rows', w/2, 25);
+
+    var leftX = 80;
+    var midX = 280;
+    var rightX = 480;
+    var centerY = 150;
+
+    // Users (2)
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('USERS (2)', leftX, 60);
+
+    for (var i = 0; i < 2; i++) {
+        var y = centerY - 30 + i * 60;
+        ctx.fillStyle = 'rgba(26,82,118,0.7)';
+        ctx.fillRect(leftX - 30, y - 15, 60, 30);
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(leftX - 30, y - 15, 60, 30);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 10px system-ui';
+        ctx.fillText('U' + (i + 1), leftX, y + 4);
+    }
+
+    // Sessions (3)
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('SESSIONS (3)', midX, 60);
+
+    for (var i = 0; i < 3; i++) {
+        var y = centerY - 50 + i * 50;
+        ctx.fillStyle = 'rgba(230,126,34,0.7)';
+        ctx.fillRect(midX - 30, y - 15, 60, 30);
+        ctx.strokeStyle = '#e67e22';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(midX - 30, y - 15, 60, 30);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 10px system-ui';
+        ctx.fillText('S' + (i + 1), midX, y + 4);
+    }
+
+    // Events (5)
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('EVENTS (5)', rightX, 60);
+
+    for (var i = 0; i < 5; i++) {
+        var y = 90 + i * 35;
+        ctx.fillStyle = 'rgba(39,174,96,0.7)';
+        ctx.fillRect(rightX - 30, y - 15, 60, 30);
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(rightX - 30, y - 15, 60, 30);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 10px system-ui';
+        ctx.fillText('E' + (i + 1), rightX, y + 4);
+    }
+
+    // Arrows showing explosion
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(leftX + 30, centerY);
+    ctx.lineTo(midX - 30, centerY);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(midX + 30, centerY);
+    ctx.lineTo(rightX - 30, centerY);
+    ctx.stroke();
+
+    // Result fanout
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('RESULT: 30 rows', 630, centerY - 30);
+    ctx.font = '10px system-ui';
+    ctx.fillText('(2 × 3 × 5)', 630, centerY - 15);
+    ctx.fillText('Each user', 630, centerY + 5);
+    ctx.fillText('appears 15x', 630, centerY + 18);
+
+    // Warning
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('COUNT(*) = 30, but only 2 actual users!', w/2, 270);
+})();
+
+// Canvas 2: Count inflation from retries
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Duplicate Detection: Count(*) vs Count(Distinct)', w/2, 25);
+
+    var left = 80, right = 640, top = 70, bottom = 240;
+
+    // Axes
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(left, top);
+    ctx.lineTo(left, bottom);
+    ctx.lineTo(right, bottom);
+    ctx.stroke();
+
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    ctx.fillText('Pipeline Stage', (left + right)/2, bottom + 25);
+    ctx.save();
+    ctx.translate(25, (top + bottom)/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillText('Row Count', 0, 0);
+    ctx.restore();
+
+    // Y-axis labels
+    ctx.textAlign = 'right';
+    for (var i = 0; i <= 5; i++) {
+        var val = i * 500;
+        var y = bottom - i * (bottom - top) / 5;
+        ctx.fillText(val, left - 10, y + 4);
+        ctx.strokeStyle = '#e0e0e0';
+        ctx.beginPath();
+        ctx.moveTo(left, y);
+        ctx.lineTo(right, y);
+        ctx.stroke();
+    }
+
+    // Data
+    var stages = [
+        {label: 'Source', total: 1000, distinct: 1000},
+        {label: 'After\nKafka', total: 1200, distinct: 1000},
+        {label: 'After\nJoin', total: 2400, distinct: 1000},
+        {label: 'After\nWindow', total: 2400, distinct: 1000}
+    ];
+
+    var barW = 50;
+    var spacing = (right - left - barW * stages.length * 2) / (stages.length + 1);
+
+    stages.forEach(function(stage, i) {
+        var x = left + spacing + i * (spacing + barW * 2 + 20);
+
+        // Total count bar (inflated)
+        var totalH = (stage.total / 2500) * (bottom - top);
+        ctx.fillStyle = 'rgba(231,76,60,0.7)';
+        ctx.fillRect(x, bottom - totalH, barW, totalH);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, bottom - totalH, barW, totalH);
+
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 10px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(stage.total, x + barW/2, bottom - totalH - 5);
+
+        // Distinct count bar (true)
+        var distinctH = (stage.distinct / 2500) * (bottom - top);
+        ctx.fillStyle = 'rgba(39,174,96,0.7)';
+        ctx.fillRect(x + barW + 10, bottom - distinctH, barW, distinctH);
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x + barW + 10, bottom - distinctH, barW, distinctH);
+
+        ctx.fillStyle = '#27ae60';
+        ctx.font = 'bold 10px system-ui';
+        ctx.fillText(stage.distinct, x + barW + 10 + barW/2, bottom - distinctH - 5);
+
+        // Stage label
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '10px system-ui';
+        var lines = stage.label.split('\n');
+        lines.forEach(function(line, j) {
+            ctx.fillText(line, x + barW + 5, bottom + 40 + j * 12);
+        });
+    });
+
+    // Legend
+    ctx.fillStyle = 'rgba(231,76,60,0.7)';
+    ctx.fillRect(left + 20, top + 10, 15, 15);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(left + 20, top + 10, 15, 15);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('COUNT(*)', left + 40, top + 21);
+
+    ctx.fillStyle = 'rgba(39,174,96,0.7)';
+    ctx.fillRect(left + 120, top + 10, 15, 15);
+    ctx.strokeStyle = '#27ae60';
+    ctx.strokeRect(left + 120, top + 10, 15, 15);
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('COUNT(DISTINCT id)', left + 140, top + 21);
+
+    // Alert annotation
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Ratio > 1.0 indicates duplicates', w/2, 270);
+})();
+
+// Canvas 3: Correct vs inflated metrics comparison
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Impact on Metrics: Duplicates vs Deduplicated', w/2, 25);
+
+    var colW = 280;
+    var leftCol = 60;
+    var rightCol = 400;
+    var startY = 70;
+    var rowH = 35;
+
+    // Left column: Wrong (inflated)
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('WRONG (with duplicates)', leftCol + colW/2, startY - 10);
+
+    var wrongMetrics = [
+        {label: 'Total Users', value: '3,000', color: '#e74c3c'},
+        {label: 'Avg Sessions/User', value: '9.2', color: '#e74c3c'},
+        {label: 'Conversion Rate', value: '28%', color: '#e74c3c'}
+    ];
+
+    wrongMetrics.forEach(function(metric, i) {
+        var y = startY + i * rowH;
+
+        ctx.fillStyle = '#ffe5e5';
+        ctx.fillRect(leftCol, y, colW, rowH);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(leftCol, y, colW, rowH);
+
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '11px system-ui';
+        ctx.textAlign = 'left';
+        ctx.fillText(metric.label, leftCol + 10, y + rowH/2 + 4);
+
+        ctx.fillStyle = metric.color;
+        ctx.font = 'bold 14px system-ui';
+        ctx.textAlign = 'right';
+        ctx.fillText(metric.value, leftCol + colW - 10, y + rowH/2 + 5);
+    });
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Inflated by join fanout', leftCol + colW/2, startY + 3*rowH + 15);
+
+    // Right column: Correct (deduplicated)
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillText('CORRECT (deduplicated)', rightCol + colW/2, startY - 10);
+
+    var correctMetrics = [
+        {label: 'Total Users', value: '100', color: '#27ae60'},
+        {label: 'Avg Sessions/User', value: '3.0', color: '#27ae60'},
+        {label: 'Conversion Rate', value: '2.8%', color: '#27ae60'}
+    ];
+
+    correctMetrics.forEach(function(metric, i) {
+        var y = startY + i * rowH;
+
+        ctx.fillStyle = '#f0f8f4';
+        ctx.fillRect(rightCol, y, colW, rowH);
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(rightCol, y, colW, rowH);
+
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '11px system-ui';
+        ctx.textAlign = 'left';
+        ctx.fillText(metric.label, rightCol + 10, y + rowH/2 + 4);
+
+        ctx.fillStyle = metric.color;
+        ctx.font = 'bold 14px system-ui';
+        ctx.textAlign = 'right';
+        ctx.fillText(metric.value, rightCol + colW - 10, y + rowH/2 + 5);
+    });
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('After SELECT DISTINCT user_id', rightCol + colW/2, startY + 3*rowH + 15);
+
+    // SQL examples
+    var sqlY = startY + 3*rowH + 45;
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('SELECT COUNT(*) FROM users JOIN sessions', leftCol, sqlY);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('SELECT COUNT(DISTINCT user_id) FROM ...', rightCol, sqlY);
+
+    // Delta annotation
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 3]);
+    ctx.beginPath();
+    ctx.moveTo(leftCol + colW/2, startY + 3*rowH + 30);
+    ctx.lineTo(rightCol + colW/2, startY + 3*rowH + 30);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('30x inflation!', (leftCol + rightCol + colW)/2, startY + 3*rowH + 27);
+
+    // Best practice callout
+    ctx.fillStyle = '#f8f9fa';
+    ctx.fillRect(60, sqlY + 20, 620, 50);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(60, sqlY + 20, 620, 50);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Best Practice: Profile every join', 75, sqlY + 38);
+
+    ctx.font = '10px system-ui';
+    ctx.fillText('Alert if |output| > max(|A|, |B|) × expected_multiplier. Add COUNT(*) vs COUNT(DISTINCT id) to dashboards.', 75, sqlY + 54);
+})();
+</script>
+
+</body>
+</html>

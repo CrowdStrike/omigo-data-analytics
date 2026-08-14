@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NULL Semantics Mismatch</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: NULL Semantics Mismatch</h1>
+<p class="subtitle">When NULL means different things in different columns or contexts, creating silent misinterpretation of missing data.</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>A NULL value has no inherent meaning. In one column it might mean "not applicable", in another "not yet collected", in another "unknown", and in another "explicitly declined to answer". Without documentation, models treat them all identically.</p>
+                <ul>
+                    <li><strong>Ambiguity:</strong> NULL in phone_number (no phone) vs NULL in last_purchase_date (never purchased) vs NULL in survey_response (skipped question)</li>
+                    <li><strong>Treatment:</strong> Imputation strategies that work for one type (mean imputation for MCAR) catastrophically fail for another (MNAR)</li>
+                    <li><strong>Joins:</strong> NULL != NULL in SQL; filters on NULL columns silently drop rows</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Impact:</strong> Models misinterpret signal as noise, imputation destroys information, joins drop 20% of data silently. Solution: Encode NULL reasons as separate columns or sentinel values (e.g., -1 for "never", -2 for "declined").
+                </div>
+                <p class="example">Example: In a customer dataset, NULL in "last_login_date" means "never logged in" (strong negative signal), but NULL in "preferred_language" means "not asked yet" (neutral). Treating both as missing at random destroys the churn prediction signal.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <ul>
+                    <li><strong>No column-level NULL documentation:</strong> Data dictionaries rarely specify what NULL means per column — just "nullable: yes/no"</li>
+                    <li><strong>Treating all NULLs as "unknown":</strong> Default mental model conflates absence of data with absence of signal</li>
+                    <li><strong>Different upstream systems encode missingness differently:</strong> One system sends NULL, another sends empty string, another sends -1</li>
+                    <li><strong>Schema evolution adds nullable columns:</strong> New columns appear with NULLs for historical rows without documenting why those rows have no value</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Root cause:</strong> NULL is overloaded — it's a single database concept forced to represent 4+ distinct real-world meanings. Without metadata, the context is lost.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <ul>
+                    <li><strong>Document NULL meaning per column:</strong> Data dictionary must state: "NULL in X means Y"</li>
+                    <li><strong>Create explicit is_missing indicator features:</strong> Boolean columns that encode the fact of missingness as signal</li>
+                    <li><strong>Use different imputation per NULL type:</strong> MCAR → mean/median; MNAR → model-based or indicator; MAR → conditional imputation</li>
+                    <li><strong>Encode reason codes:</strong> -1 = not applicable, -2 = not collected, -3 = declined — preserve semantics numerically</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Rule:</strong> Every NULL column should expand into at least two columns: the value (when present) and the reason for absence. The reason IS the feature.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('NULL Semantics: Same Symbol, Different Meanings', w/2, 25);
+
+    var colWidth = 170;
+    var startX = 50;
+    var startY = 60;
+    var colSpacing = 180;
+
+    // Column 1: Not Applicable
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(startX, startY, colWidth, 200);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Column A: phone_number', startX + colWidth/2, startY + 20);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 16px system-ui';
+    ctx.fillText('NULL', startX + colWidth/2, startY + 55);
+
+    ctx.fillStyle = '#444';
+    ctx.font = '10px system-ui';
+    ctx.fillText('Meaning:', startX + colWidth/2, startY + 85);
+    ctx.fillText('"Not Applicable"', startX + colWidth/2, startY + 100);
+    ctx.fillText('User has no phone', startX + colWidth/2, startY + 115);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillText('Impute: "no_phone"', startX + colWidth/2, startY + 145);
+    ctx.fillText('Feature: has_phone=0', startX + colWidth/2, startY + 160);
+
+    // Column 2: Never Occurred
+    ctx.strokeStyle = '#1a5276';
+    ctx.strokeRect(startX + colSpacing, startY, colWidth, 200);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Column B: last_login', startX + colSpacing + colWidth/2, startY + 20);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 16px system-ui';
+    ctx.fillText('NULL', startX + colSpacing + colWidth/2, startY + 55);
+
+    ctx.fillStyle = '#444';
+    ctx.font = '10px system-ui';
+    ctx.fillText('Meaning:', startX + colSpacing + colWidth/2, startY + 85);
+    ctx.fillText('"Never Occurred"', startX + colSpacing + colWidth/2, startY + 100);
+    ctx.fillText('Strong churn signal', startX + colSpacing + colWidth/2, startY + 115);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillText('Impute: days=-999', startX + colSpacing + colWidth/2, startY + 145);
+    ctx.fillText('Feature: never_login=1', startX + colSpacing + colWidth/2, startY + 160);
+
+    // Column 3: Not Asked
+    ctx.strokeStyle = '#1a5276';
+    ctx.strokeRect(startX + 2*colSpacing, startY, colWidth, 200);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Column C: survey_q5', startX + 2*colSpacing + colWidth/2, startY + 20);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 16px system-ui';
+    ctx.fillText('NULL', startX + 2*colSpacing + colWidth/2, startY + 55);
+
+    ctx.fillStyle = '#444';
+    ctx.font = '10px system-ui';
+    ctx.fillText('Meaning:', startX + 2*colSpacing + colWidth/2, startY + 85);
+    ctx.fillText('"Not Yet Asked"', startX + 2*colSpacing + colWidth/2, startY + 100);
+    ctx.fillText('MCAR, neutral', startX + 2*colSpacing + colWidth/2, startY + 115);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillText('Impute: median/mode', startX + 2*colSpacing + colWidth/2, startY + 145);
+    ctx.fillText('Or: drop column', startX + 2*colSpacing + colWidth/2, startY + 160);
+
+    // Bottom warning
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Treating all three identically destroys information!', w/2, 280);
+})();
+
+// Canvas c2: Why It Happens - Multiple source systems with different NULL meanings
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Multiple Sources, One NULL — Context Lost', w/2, 25);
+
+    // Source system boxes
+    var systems = [
+        { label: 'System A', meaning: 'NULL = "not applicable"', color: '#1a5276' },
+        { label: 'System B', meaning: 'NULL = "not collected yet"', color: '#e67e22' },
+        { label: 'System C', meaning: 'NULL = "declined to answer"', color: '#e74c3c' }
+    ];
+
+    var sy = 55;
+    for (var i = 0; i < systems.length; i++) {
+        var y = sy + i * 65;
+        ctx.strokeStyle = systems[i].color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(30, y, 210, 50);
+        ctx.fillStyle = systems[i].color;
+        ctx.font = 'bold 11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(systems[i].label, 135, y + 20);
+        ctx.font = '10px system-ui';
+        ctx.fillStyle = '#444';
+        ctx.fillText(systems[i].meaning, 135, y + 38);
+
+        // Arrow to merged table
+        ctx.strokeStyle = '#666';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(240, y + 25);
+        ctx.lineTo(370, 150);
+        ctx.stroke();
+    }
+
+    // Merged column box
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(370, 100, 200, 100);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Merged Table', 470, 120);
+    ctx.fillText('Column: "last_login"', 470, 140);
+
+    // NULL values stacked
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillText('NULL', 470, 165);
+    ctx.fillText('NULL', 470, 183);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '10px system-ui';
+    ctx.fillText('(no context preserved!)', 470, 198);
+
+    // Bottom annotation
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('All 3 meanings collapsed into identical NULL — information destroyed', w/2, 250);
+
+    ctx.fillStyle = '#555';
+    ctx.font = '10px system-ui';
+    ctx.fillText('Model sees one "missing" pattern where there are actually three distinct signals', w/2, 272);
+})();
+
+// Canvas c3: The Correct Approach - Expanded schema with reason codes
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Correct: Expand NULL Into Explicit Columns', w/2, 25);
+
+    // Original column
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(30, 55, 140, 50);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('last_login', 100, 75);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '12px system-ui';
+    ctx.fillText('NULL', 100, 95);
+
+    // Arrow expanding
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(170, 80);
+    ctx.lineTo(220, 60);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(170, 80);
+    ctx.lineTo(220, 120);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(170, 80);
+    ctx.lineTo(220, 180);
+    ctx.stroke();
+
+    // Expanded column 1: value
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(225, 40, 230, 45);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('last_login_value', 235, 58);
+    ctx.fillStyle = '#444';
+    ctx.font = '10px system-ui';
+    ctx.fillText('The date (or NULL if truly absent)', 235, 75);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '14px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('✓', 445, 63);
+
+    // Expanded column 2: reason
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(225, 100, 230, 60);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('last_login_missing_reason', 235, 118);
+    ctx.fillStyle = '#444';
+    ctx.font = '10px system-ui';
+    ctx.fillText('enum: never_logged_in', 235, 135);
+    ctx.fillText('       not_tracked | system_error', 235, 148);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '14px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('✓', 445, 130);
+
+    // Expanded column 3: boolean feature
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(225, 175, 230, 45);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('has_logged_in', 235, 193);
+    ctx.fillStyle = '#444';
+    ctx.font = '10px system-ui';
+    ctx.fillText('boolean feature (direct model input)', 235, 210);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '14px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('✓', 445, 198);
+
+    // Right side summary
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Context preserved!', 590, 100);
+    ctx.fillStyle = '#555';
+    ctx.font = '10px system-ui';
+    ctx.fillText('Each NULL type becomes', 590, 125);
+    ctx.fillText('a distinct, usable signal', 590, 140);
+
+    // Bottom note
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('1 ambiguous NULL → 3 explicit, informative columns', w/2, 260);
+})();
+</script>
+
+</body>
+</html>

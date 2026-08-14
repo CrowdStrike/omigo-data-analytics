@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Linear Regression - ML Assumptions</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+.back-link {
+    color: #2980b9;
+    text-decoration: none;
+    font-size: 0.9rem;
+    margin-bottom: 20px;
+    display: inline-block;
+}
+.back-link:hover { text-decoration: underline; }
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.obj-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+}
+.obj-table td {
+    border: 1px solid #e0e0e0;
+    padding: 20px 24px;
+    vertical-align: middle;
+}
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-table tr:nth-child(even) td { background: #fafcfe; }
+.obj-title {
+    font-size: 1.05em;
+    font-weight: 600;
+    color: #1a5276;
+    margin-bottom: 8px;
+}
+canvas { display: block; margin: 0 auto; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.good { color: #27ae60; font-weight: 600; }
+.bad { color: #e74c3c; font-weight: 600; }
+.warn { color: #e67e22; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<a href="../16-ml-assumptions.html" class="back-link">← ML Assumptions Reference</a>
+
+<h1>12. Linear Regression (OLS)</h1>
+
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Fits a line minimizing squared residuals — the most assumption-heavy algorithm in common use</div>
+<ul>
+<li><strong>Assumes linearity:</strong> Relationship between each feature and the outcome MUST be linear. A quadratic or threshold relationship is invisible — the model draws a flat line through a curve.</li>
+<li><strong>Assumes normal residuals:</strong> Errors must be normally distributed for p-values and confidence intervals to be valid. Non-normal residuals → can't trust significance of any coefficient.</li>
+<li><strong>Assumes homoscedasticity:</strong> Variance of residuals must be constant across all predicted values. "Fan-shaped" residual plots mean standard errors are wrong — typically too small, producing false significance.</li>
+<li><strong>Assumes no multicollinearity:</strong> Features must not be strongly correlated. Correlated features → coefficients become unstable (flip signs, explode in magnitude), standard errors inflate.</li>
+<li><strong>Assumes independence of errors:</strong> No autocorrelation. Violated in time series, spatial data, or clustered data. Leads to underestimated standard errors.</li>
+<li><strong>Assumes no influential outliers:</strong> One extreme point can drag the entire regression line. Cook's distance > 1 means a single observation is controlling the fit.</li>
+<li style="color: #e74c3c;"><strong>Violation:</strong> Predicting house price from square footage — relationship is linear below 3000 sqft but flat above (luxury pricing is location-driven). OLS draws one line through both regimes, underestimating small homes and overestimating large ones.</li>
+<li style="color: #e67e22;"><strong>Real example:</strong> Ames housing: OLS reports "lot area" coefficient = $2.50/sqft (p<0.001). But residual plot shows massive fan-shape — cheap homes have tight residuals, expensive homes have huge variance. The $2.50 estimate is "significant" but its CI is 4× too narrow.</li>
+<li style="color: #27ae60;"><strong>Alternatives:</strong> Non-linear → polynomial regression, GAM, or range-based features. Heteroscedastic → weighted least squares or robust regression. Non-normal residuals → GLM with appropriate link. Multicollinear → ridge regression, LASSO, or drop redundant features.</li>
+</ul>
+</td>
+<td>
+<canvas id="c12" width="720" height="280"></canvas>
+</td>
+</tr>
+</table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+
+function setupCanvas(id) {
+    var c = document.getElementById(id);
+    var w = c.width, h = c.height;
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return {ctx: ctx, w: w, h: h};
+}
+
+// 12. Linear Regression — heteroscedasticity (fan-shaped residuals)
+(function() {
+    var s = setupCanvas('c12'), ctx = s.ctx, w = s.w, h = s.h;
+    var pad = 55;
+
+    ctx.fillStyle = '#555'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Linear Regression: non-linearity + heteroscedasticity on housing data', w/2, 18);
+
+    // Axes
+    ctx.strokeStyle = '#ccc'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad, 35); ctx.lineTo(pad, h-35); ctx.lineTo(w-20, h-35); ctx.stroke();
+
+    ctx.fillStyle = '#888'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Square Footage', w/2, h-10);
+    ctx.save(); ctx.translate(14, (35+h-35)/2); ctx.rotate(-Math.PI/2);
+    ctx.fillText('Price ($K)', 0, 0); ctx.restore();
+
+    var xS = function(sqft) { return pad + (sqft-500)/4500 * (w-pad-30); };
+    var yS = function(price) { return h-35 - (price/800) * (h-75); };
+
+    // Scatter: linear below 3000, flat above, with fan-shaped variance
+    var rng = function(seed) { return function() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }; }(42);
+    for (var i = 0; i < 60; i++) {
+        var sqft = 600 + rng() * 4200;
+        var truePrice;
+        if (sqft < 3000) truePrice = 50 + sqft * 0.12;
+        else truePrice = 400 + rng() * 200; // flat + noisy for luxury
+        var noise = (rng() - 0.5) * (sqft / 40); // fan-shaped noise
+        var price = Math.max(30, truePrice + noise);
+        ctx.fillStyle = 'rgba(41,128,185,0.5)';
+        ctx.beginPath(); ctx.arc(xS(sqft), yS(price), 4, 0, Math.PI*2); ctx.fill();
+    }
+
+    // OLS line (straight through everything)
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3.5;
+    ctx.beginPath(); ctx.moveTo(xS(600), yS(100)); ctx.lineTo(xS(4800), yS(520)); ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 11px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('OLS line (wrong!)', xS(3500), yS(530));
+
+    // True relationship (curve + flat)
+    ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 3; ctx.setLineDash([4,3]);
+    ctx.beginPath();
+    for (var sq = 600; sq <= 4800; sq += 50) {
+        var tp = sq < 3000 ? 50 + sq * 0.12 : 410;
+        if (sq === 600) ctx.moveTo(xS(sq), yS(tp));
+        else ctx.lineTo(xS(sq), yS(tp));
+    }
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#27ae60'; ctx.font = '17px -apple-system';
+    ctx.fillText('True relationship', xS(3200), yS(420));
+
+    // Annotations
+    ctx.fillStyle = '#e67e22'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('← tight residuals', xS(1200), yS(40));
+    ctx.fillText('huge variance →', xS(4000), yS(40));
+})();
+</script>
+
+</body>
+</html>
