@@ -73,10 +73,6 @@ Additional canvas/chart rules:
 - **devicePixelRatio scaling:** always use `window.devicePixelRatio` for retina
 - **Color palette:** #1a5276 (primary blue), #27ae60 (green), #e74c3c (red), #e67e22 (orange), rgba(26,82,118,0.35) (bar fill)
 
-## Layout index
-There is a layout.txt file that has list of all files to quickly understand what all concepts are in this directory.
-DONT update layout.txt. I will do it.
-
 ## TODO
 
 - Remove dead `.nav` CSS rules from ~289 HTML files (the `<div class="nav">` elements are already gone, but the style blocks remain as unused code)

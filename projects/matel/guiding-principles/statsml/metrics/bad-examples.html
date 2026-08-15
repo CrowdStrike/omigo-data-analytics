@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bad Metrics — 20 Real-World Disasters by Domain</title>
+<title>Bad Metrics — 25 Real-World Disasters by Domain</title>
 <style>
 body {
     font-family: -apple-system, BlinkMacSystemFont, sans-serif;
@@ -92,7 +92,7 @@ canvas {
 <body>
 
 
-<h1>Bad Metrics &mdash; 20 Real-World Disasters by Domain</h1>
+<h1>Bad Metrics &mdash; 25 Real-World Disasters by Domain</h1>
 <p class="subtitle">Each row: one metric that looked good on a dashboard but caused real damage. Why it fails and what it hides.</p>
 
 <table class="obj-table">
@@ -514,6 +514,24 @@ canvas {
 </td>
 <td>
     <canvas id="canvas24"></canvas>
+</td>
+</tr>
+
+<!-- Row 25: OS/UX - Download Time Remaining -->
+<tr>
+<td>
+    <span class="metric-domain">OS / UX</span>
+    <div class="metric-title">25. File Download "Time Remaining" — Reactive Estimate on Volatile Signal</div>
+    <div class="metric-desc"><ul>
+        <li><strong>Why bad:</strong> Estimated time remaining computed from a ~5-second moving average of instantaneous download speed. Speed fluctuates wildly on congested 90s/00s connections &mdash; estimate swings from "30 sec" to "3h 22min" to "2 min" every few seconds</li>
+        <li><strong>What it hides:</strong> The underlying bandwidth is noisy but the long-run average is stable. A short-window reactive estimate amplifies noise instead of filtering it &mdash; presenting jitter as information</li>
+        <li><strong>Real damage:</strong> Users can't plan around it (should I wait or leave?). Erodes trust in the OS. Became a cultural joke (Windows copy dialog). Emotionally manipulative &mdash; hope, despair, hope in 10-second cycles</li>
+        <li><strong>Statistical sin:</strong> Point estimate with zero smoothing on a high-variance signal. No confidence band, no trend detection, no acknowledgment that "I don't know yet" is valid output</li>
+        <li><strong>Fix:</strong> Use a cumulative average like car trip MPG &mdash; averages the entire journey so each new sample has less influence as N grows; stabilizes over time instead of thrashing. Or: EWMA with long half-life (~60s), show a range ("2&ndash;8 minutes"), or display "Estimating&hellip;" until signal stabilizes. The car metric works because it's a running mean over the whole trip, not a sliding window over the last 5 seconds</li>
+    </ul></div>
+</td>
+<td>
+    <canvas id="canvas25"></canvas>
 </td>
 </tr>
 
@@ -1467,6 +1485,81 @@ function setup(id) {
     ctx.font = 'bold 11px -apple-system, sans-serif'; ctx.textAlign = 'left';
     ctx.fillStyle = '#e74c3c'; ctx.fillRect(W - 200, 28, 12, 12); ctx.fillText('Nominal $', W - 184, 38);
     ctx.fillStyle = '#27ae60'; ctx.fillRect(W - 200, 44, 12, 12); ctx.fillText('2019-adjusted $', W - 184, 54);
+})();
+
+// Canvas 25: OS/UX - Windows Download Time Remaining
+(function() {
+    var s = setup('canvas25');
+    var ctx = s.ctx, W = s.W, H = s.H;
+    var pad = {top: 30, bottom: 35, left: 60, right: 140};
+    var cw = W - pad.left - pad.right, ch = H - pad.top - pad.bottom;
+
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system, sans-serif';
+    ctx.fillText('"Time Remaining" — Reactive Estimate on Noisy Signal', pad.left, 18);
+
+    // Simulated: actual download speed fluctuates, estimate wildly overreacts
+    var seconds = [];
+    for (var i = 0; i <= 60; i += 2) seconds.push(i);
+    // Actual avg speed: ~500 KB/s with noise
+    var actualSpeed = [480,520,450,510,490,530,100,120,480,510,490,500,520,50,80,500,510,530,490,480,510,500,490,520,500,510,480,530,490,500,510];
+    // Remaining file: 150MB, true ~5 min. Reactive estimate: remaining / instant_speed
+    var fileRemaining = 150000; // KB
+    var estimates = []; // in minutes
+    for (var i = 0; i < actualSpeed.length; i++) {
+        // 5-sec moving avg (window of ~2-3 samples at 2s intervals)
+        var windowSize = 2;
+        var sum = 0, count = 0;
+        for (var j = Math.max(0, i - windowSize + 1); j <= i; j++) { sum += actualSpeed[j]; count++; }
+        var avgSpeed = sum / count;
+        var remaining = fileRemaining / avgSpeed / 60; // minutes
+        fileRemaining -= actualSpeed[i] * 2; // consume 2 seconds worth
+        estimates.push(Math.min(remaining, 200));
+    }
+
+    // Axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad.left, pad.top); ctx.lineTo(pad.left, pad.top + ch); ctx.lineTo(pad.left + cw, pad.top + ch); ctx.stroke();
+    ctx.fillStyle = '#666'; ctx.font = '11px -apple-system, sans-serif';
+    for (var i = 0; i < seconds.length; i += 5) ctx.fillText(seconds[i] + 's', pad.left + (i / (seconds.length - 1)) * cw - 5, H - 12);
+    ctx.fillText('Minutes remaining →', 5, pad.top + 10);
+
+    var maxEst = 30;
+    // Y-axis labels
+    ctx.textAlign = 'right';
+    for (var i = 0; i <= 3; i++) { var v = i * 10; var yPos = pad.top + ch - (v / maxEst) * ch; ctx.fillText(v + 'min', pad.left - 5, yPos + 4); ctx.strokeStyle = '#e8e8e8'; ctx.beginPath(); ctx.moveTo(pad.left, yPos); ctx.lineTo(pad.left + cw, yPos); ctx.stroke(); }
+    ctx.textAlign = 'left';
+
+    // True remaining line (smooth)
+    ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 2; ctx.setLineDash([6, 3]); ctx.beginPath();
+    for (var i = 0; i < estimates.length; i++) {
+        var trueRemain = (150000 - i * 1000) / 500 / 60; // true: filesize/avg_speed
+        var x = pad.left + (i / (estimates.length - 1)) * cw;
+        var y = pad.top + ch - (Math.max(0, trueRemain) / maxEst) * ch;
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke(); ctx.setLineDash([]);
+
+    // Jittery estimate line
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2.5; ctx.beginPath();
+    for (var i = 0; i < estimates.length; i++) {
+        var x = pad.left + (i / (estimates.length - 1)) * cw;
+        var y = pad.top + ch - (Math.min(estimates[i], maxEst) / maxEst) * ch;
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Spike annotations
+    ctx.fillStyle = '#c0392b'; ctx.font = 'bold 11px -apple-system, sans-serif';
+    ctx.fillText('↑ "3h 22min"', pad.left + (6 / (estimates.length - 1)) * cw + 3, pad.top + 8);
+    ctx.fillText('↑ "2h 50min"', pad.left + (13 / (estimates.length - 1)) * cw + 3, pad.top + 8);
+
+    // Legend
+    ctx.font = '13px -apple-system, sans-serif'; var lx = W - 135;
+    ctx.fillStyle = '#e74c3c'; ctx.fillRect(lx, 35, 12, 12); ctx.fillStyle = '#333'; ctx.fillText('Displayed ETA', lx + 17, 46);
+    ctx.fillStyle = '#27ae60'; ctx.fillRect(lx, 55, 12, 12); ctx.fillStyle = '#333'; ctx.fillText('True remaining', lx + 17, 66);
+    ctx.fillStyle = '#555'; ctx.font = '11px -apple-system, sans-serif';
+    ctx.fillText('(5-sec window', lx, 82);
+    ctx.fillText(' on noisy speed)', lx, 94);
 })();
 
 </script>
