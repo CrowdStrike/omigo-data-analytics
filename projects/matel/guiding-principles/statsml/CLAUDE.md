@@ -73,6 +73,11 @@ Additional canvas/chart rules:
 - **devicePixelRatio scaling:** always use `window.devicePixelRatio` for retina
 - **Color palette:** #1a5276 (primary blue), #27ae60 (green), #e74c3c (red), #e67e22 (orange), rgba(26,82,118,0.35) (bar fill)
 
+
+## Best Practices
+Use predefined ui-templates to understand style, format, coloring, font etc scheme. Esp when multiple agents are created to write docs under a grid.
+
+
 ## TODO
 
 - Remove dead `.nav` CSS rules from ~289 HTML files (the `<div class="nav">` elements are already gone, but the style blocks remain as unused code)
