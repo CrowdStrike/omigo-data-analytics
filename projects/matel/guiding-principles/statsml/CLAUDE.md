@@ -75,8 +75,9 @@ Additional canvas/chart rules:
 
 
 ## Best Practices
-Use predefined ui-templates to understand style, format, coloring, font etc scheme. Esp when multiple agents are created to write docs under a grid.
-Dont include count of items in summary or in the card. Because thats a lose dependent number that need to be updated everytime.
+ - Use predefined ui-templates to understand style, format, coloring, font etc scheme. Esp when multiple agents are created to write docs under a grid.
+ - Dont include count of items in summary or in the card. Because thats a lose dependent number that need to be updated everytime.
+ - dont run any Git commands. I will do all Git stuff on my own. If git history is needed to find some previous version etc. then ask.
 
 
 ## TODO
