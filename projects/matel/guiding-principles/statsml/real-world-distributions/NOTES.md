@@ -29,6 +29,14 @@
 
 ---
 
+## Review Needed: Claims vs Examples
+
+These cards need a thorough review. Many are making bold claims instead of simply highlighting distribution examples. 
+
+Example: "Daily Steps — You're Either Sedentary or Active (No In-Between)" — this is an arbitrary assertion, not a demonstrated pattern. The cards should show what the data shape looks like and let the reader draw conclusions, not declare sweeping truths about human behavior.
+
+**Rule:** Show the shape, describe what you see, note why it's interesting. Don't assert causation or universality.
+
 ## Domain 2: Web Search / Ranking
 
 1. **Query frequency — Zipf's law (power law)**
