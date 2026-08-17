@@ -24,7 +24,7 @@ canvas { width: 100%; height: auto; }
 <body>
 
 <h1>E-Commerce &amp; Marketplace — Distribution Patterns</h1>
-<p class="subtitle">5 distributions you will encounter in any online marketplace dataset</p>
+<p class="subtitle">7 distributions you will encounter in any online marketplace dataset</p>
 
 <!-- 1. Position CTR -->
 <table class="obj-table">
@@ -137,6 +137,54 @@ canvas { width: 100%; height: auto; }
 </td>
 <td>
   <canvas id="canvas5b" width="400" height="340"></canvas>
+</td>
+</tr>
+</table>
+
+<!-- 6. Return Rate by Category -->
+<table class="obj-table">
+<tr>
+<td>
+  <span class="pitfall-label">CATEGORY SPLIT</span>
+  <h3>Return Rate by Category (Beta with Two Modes)</h3>
+  <p>Return rates aren't one distribution. Apparel clusters at 20-35% (fit uncertainty), electronics at 3-8% (DOA or wrong spec). Aggregating into "overall return rate of 15%" destroys the signal — a 15% rate in electronics is catastrophic, while 15% in apparel is unusually low. The beta shape per category tells you whether the problem is sizing, expectations, or defects.</p>
+  <ul>
+    <li>Apparel: beta(5, 15) &rarr; mode ~25%, range 10-40%</li>
+    <li>Electronics: beta(2, 30) &rarr; mode ~4%, range 1-12%</li>
+    <li>Aggregate "15%" is a Simpson's paradox — no category is actually at 15%</li>
+    <li>Seasonal spike: post-holiday returns shift both betas right by ~5%</li>
+    <li>Policy change detection: shape shift > mean shift as signal</li>
+  </ul>
+</td>
+<td>
+  <canvas id="canvas6" width="420" height="340"></canvas>
+</td>
+<td>
+  <canvas id="canvas6b" width="400" height="340"></canvas>
+</td>
+</tr>
+</table>
+
+<!-- 7. Search-to-Purchase Funnel -->
+<table class="obj-table">
+<tr>
+<td>
+  <span class="pitfall-label">FUNNEL DECAY</span>
+  <h3>Search to Purchase Funnel (Geometric with Spike)</h3>
+  <p>The number of product pages viewed before purchase follows geometric decay — each page has a ~30% conversion probability. But there's a spike at page 1 (impulse buys from ads/recommendations) and a secondary bump at pages 8-12 (comparison shoppers). The "average pages viewed" masks two completely different buyer behaviors that need different optimization strategies.</p>
+  <ul>
+    <li>Impulse buyers: 40% convert on page 1-2 (ad/rec driven)</li>
+    <li>Geometric middle: p&asymp;0.3 give-up rate per page</li>
+    <li>Comparison shoppers: bump at pages 8-12 (higher AOV)</li>
+    <li>Mobile vs desktop: mobile geometric decays faster (smaller screen fatigue)</li>
+    <li>Optimization: improving page 1 conversion vs improving page 8+ retention are different problems</li>
+  </ul>
+</td>
+<td>
+  <canvas id="canvas7" width="420" height="340"></canvas>
+</td>
+<td>
+  <canvas id="canvas7b" width="400" height="340"></canvas>
 </td>
 </tr>
 </table>
@@ -1051,6 +1099,391 @@ function drawBarChart(canvasId, labels, values, options) {
     ctx.fillText('0%', margin.left - 6, margin.top + h + 4);
     ctx.fillText('50%', margin.left - 6, margin.top + h / 2 + 4);
     ctx.fillText('100%', margin.left - 6, margin.top + 4);
+  })();
+})();
+
+// ============ 6. Return Rate by Category — Beta-Distributed, Bimodal ============
+(function() {
+  // Generate beta variates using the transformation method
+  // Beta(a,b) can be generated via gamma variates, but for simplicity use
+  // the rejection method with the relationship: if X~Gamma(a,1), Y~Gamma(b,1), then X/(X+Y)~Beta(a,b)
+  // We'll use a simpler approach: generate via inverse transform with jitter from normal approx
+  function randGamma(shape) {
+    // Marsaglia and Tsang's method for shape >= 1
+    if (shape < 1) {
+      return randGamma(shape + 1) * Math.pow(rng(), 1 / shape);
+    }
+    var d = shape - 1/3;
+    var c = 1 / Math.sqrt(9 * d);
+    while (true) {
+      var x = randNormal(0, 1);
+      var v = Math.pow(1 + c * x, 3);
+      if (v <= 0) continue;
+      var u = rng();
+      if (u < 1 - 0.0331 * x * x * x * x) return d * v;
+      if (Math.log(u) < 0.5 * x * x + d * (1 - v + Math.log(v))) return d * v;
+    }
+  }
+
+  function randBeta(a, b) {
+    var x = randGamma(a);
+    var y = randGamma(b);
+    return x / (x + y);
+  }
+
+  var data = [];
+  // 60% from beta(5,15) — apparel
+  for (var i = 0; i < 1200; i++) {
+    var val = randBeta(5, 15) * 100;
+    data.push(val);
+  }
+  // 40% from beta(2,30) — electronics
+  for (var i = 0; i < 800; i++) {
+    var val = randBeta(2, 30) * 100;
+    data.push(val);
+  }
+
+  drawHistogram('canvas6', data, {
+    bins: 35,
+    title: 'Return Rate Distribution (All Categories Mixed)',
+    xLabel: 'Return Rate (%)',
+    min: 0,
+    max: 50,
+    barColor: 'rgba(142,68,173,0.5)',
+    borderColor: '#8e44ad',
+    xFormat: function(v) { return v.toFixed(0) + '%'; }
+  });
+
+  // --- Insight: Two overlaid beta PDFs (canvas6b) ---
+  (function() {
+    var c = document.getElementById('canvas6b');
+    var dpr = window.devicePixelRatio || 1;
+    var cssW = c.width, cssH = c.height;
+    c.width = cssW * dpr; c.height = cssH * dpr;
+    c.style.width = cssW + 'px'; c.style.height = cssH + 'px';
+    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+
+    var margin = { top: 35, right: 15, bottom: 50, left: 45 };
+    var w = cssW - margin.left - margin.right;
+    var h = cssH - margin.top - margin.bottom;
+
+    // Background
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, cssW, cssH);
+
+    // Title
+    ctx.fillStyle = '#8e44ad';
+    ctx.font = 'bold 13px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Two Hidden Populations with Different Beta Shapes', cssW / 2, 18);
+
+    // Axes
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(margin.left, margin.top);
+    ctx.lineTo(margin.left, margin.top + h);
+    ctx.lineTo(margin.left + w, margin.top + h);
+    ctx.stroke();
+
+    // Beta PDF: f(x;a,b) = x^(a-1)*(1-x)^(b-1) / B(a,b)
+    // We'll compute unnormalized and scale for display
+    function betaPDF(x, a, b) {
+      if (x <= 0 || x >= 1) return 0;
+      return Math.pow(x, a - 1) * Math.pow(1 - x, b - 1);
+    }
+
+    // Compute PDFs over 0-50% range (x in [0, 0.5])
+    var xMin = 0, xMax = 50;
+    var nPts = 200;
+    var apparel = [], electronics = [];
+    var maxApparel = 0, maxElec = 0;
+
+    for (var i = 0; i <= nPts; i++) {
+      var pct = xMin + (xMax - xMin) * (i / nPts);
+      var x = pct / 100;
+      var pA = betaPDF(x, 5, 15);
+      var pE = betaPDF(x, 2, 30);
+      apparel.push(pA);
+      electronics.push(pE);
+      if (pA > maxApparel) maxApparel = pA;
+      if (pE > maxElec) maxElec = pE;
+    }
+
+    var maxPDF = Math.max(maxApparel, maxElec);
+
+    // Draw apparel beta (purple fill)
+    ctx.beginPath();
+    ctx.moveTo(margin.left, margin.top + h);
+    for (var i = 0; i <= nPts; i++) {
+      var px = margin.left + (i / nPts) * w;
+      var py = margin.top + h - (apparel[i] / maxPDF) * h * 0.9;
+      if (i === 0) ctx.lineTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.lineTo(margin.left + w, margin.top + h);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(142,68,173,0.25)';
+    ctx.fill();
+    ctx.beginPath();
+    for (var i = 0; i <= nPts; i++) {
+      var px = margin.left + (i / nPts) * w;
+      var py = margin.top + h - (apparel[i] / maxPDF) * h * 0.9;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.strokeStyle = '#8e44ad';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    // Draw electronics beta (blue fill)
+    ctx.beginPath();
+    ctx.moveTo(margin.left, margin.top + h);
+    for (var i = 0; i <= nPts; i++) {
+      var px = margin.left + (i / nPts) * w;
+      var py = margin.top + h - (electronics[i] / maxPDF) * h * 0.9;
+      if (i === 0) ctx.lineTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.lineTo(margin.left + w, margin.top + h);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(41,128,185,0.25)';
+    ctx.fill();
+    ctx.beginPath();
+    for (var i = 0; i <= nPts; i++) {
+      var px = margin.left + (i / nPts) * w;
+      var py = margin.top + h - (electronics[i] / maxPDF) * h * 0.9;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    // Dashed vertical line at 15% (aggregate mean)
+    var x15 = margin.left + (15 / 50) * w;
+    ctx.setLineDash([6, 4]);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x15, margin.top);
+    ctx.lineTo(x15, margin.top + h);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Annotation for the dashed line
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 10px -apple-system, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('Aggregate mean', x15 + 4, margin.top + 15);
+    ctx.font = '9px -apple-system, sans-serif';
+    ctx.fillText('lives in the gap —', x15 + 4, margin.top + 28);
+    ctx.fillText('no real category is here', x15 + 4, margin.top + 40);
+
+    // Legend
+    ctx.fillStyle = '#8e44ad';
+    ctx.font = 'bold 11px -apple-system, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.beginPath();
+    ctx.moveTo(margin.left + 5, margin.top + h + 18);
+    ctx.lineTo(margin.left + 25, margin.top + h + 18);
+    ctx.strokeStyle = '#8e44ad';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.fillText('Apparel beta(5,15)', margin.left + 30, margin.top + h + 22);
+
+    ctx.beginPath();
+    ctx.moveTo(margin.left + 5, margin.top + h + 34);
+    ctx.lineTo(margin.left + 25, margin.top + h + 34);
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.fillStyle = '#2980b9';
+    ctx.fillText('Electronics beta(2,30)', margin.left + 30, margin.top + h + 38);
+
+    // X labels
+    ctx.fillStyle = '#555';
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    for (var t = 0; t <= 5; t++) {
+      var val = xMin + (xMax - xMin) * (t / 5);
+      ctx.fillText(val.toFixed(0) + '%', margin.left + w * (t / 5), margin.top + h + 12);
+    }
+  })();
+})();
+
+// ============ 7. Search-to-Purchase Funnel — Geometric Decay with Spike ============
+(function() {
+  var data = [];
+  // 40% as value 1 or 2 (impulse buyers)
+  for (var i = 0; i < 800; i++) {
+    data.push(rng() < 0.6 ? 1 : 2);
+  }
+  // 45% as geometric(0.3) starting at page 3
+  for (var i = 0; i < 900; i++) {
+    // Geometric: number of trials until first success, p=0.3
+    var page = 3;
+    while (rng() > 0.3 && page < 20) {
+      page++;
+    }
+    data.push(page);
+  }
+  // 15% as normal(10, 2) clamped to 7-15 (comparison shoppers)
+  for (var i = 0; i < 300; i++) {
+    var val = Math.round(randNormal(10, 2));
+    if (val < 7) val = 7;
+    if (val > 15) val = 15;
+    data.push(val);
+  }
+
+  drawHistogram('canvas7', data, {
+    bins: 20,
+    title: 'Pages Viewed Before Purchase',
+    xLabel: 'Product Pages Viewed',
+    min: 0,
+    max: 20,
+    barColor: 'rgba(230,126,34,0.5)',
+    borderColor: '#e67e22',
+    xFormat: function(v) { return v.toFixed(0); }
+  });
+
+  // --- Insight: Conversion rate by page depth (canvas7b) ---
+  (function() {
+    var c = document.getElementById('canvas7b');
+    var dpr = window.devicePixelRatio || 1;
+    var cssW = c.width, cssH = c.height;
+    c.width = cssW * dpr; c.height = cssH * dpr;
+    c.style.width = cssW + 'px'; c.style.height = cssH + 'px';
+    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+
+    var margin = { top: 35, right: 15, bottom: 45, left: 50 };
+    var w = cssW - margin.left - margin.right;
+    var h = cssH - margin.top - margin.bottom;
+
+    // Background
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, cssW, cssH);
+
+    // Title
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 13px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Conversion Rate by Page Depth — Two Buyer Types', cssW / 2, 18);
+
+    // Axes
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(margin.left, margin.top);
+    ctx.lineTo(margin.left, margin.top + h);
+    ctx.lineTo(margin.left + w, margin.top + h);
+    ctx.stroke();
+
+    // Conversion rates by page (pages 1-15)
+    var convRates = [18, 12, 8, 5, 3, 2, 1.5, 1.2, 3.5, 4, 3.8, 2.5, 1.8, 1.2, 0.8];
+    var labels = [];
+    for (var i = 1; i <= 15; i++) labels.push(i);
+
+    var maxRate = Math.max.apply(null, convRates);
+    var barW = w / convRates.length;
+    var barPad = barW * 0.12;
+
+    // Bars — color by segment
+    for (var i = 0; i < convRates.length; i++) {
+      var barH = (convRates[i] / maxRate) * h;
+      var x = margin.left + i * barW + barPad;
+      var y = margin.top + h - barH;
+
+      if (i < 2) {
+        // Impulse buyers (pages 1-2)
+        ctx.fillStyle = 'rgba(41,128,185,0.6)';
+        ctx.strokeStyle = '#2980b9';
+      } else if (i >= 7 && i <= 10) {
+        // Comparison shoppers (pages 8-11)
+        ctx.fillStyle = 'rgba(39,174,96,0.6)';
+        ctx.strokeStyle = '#27ae60';
+      } else {
+        // Geometric decay
+        ctx.fillStyle = 'rgba(230,126,34,0.4)';
+        ctx.strokeStyle = '#e67e22';
+      }
+
+      ctx.fillRect(x, y, barW - 2 * barPad, barH);
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(x, y, barW - 2 * barPad, barH);
+    }
+
+    // Segment annotations
+    // Impulse bracket
+    var x1Start = margin.left + barPad;
+    var x1End = margin.left + 2 * barW - barPad;
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x1Start, margin.top + 8);
+    ctx.lineTo(x1Start, margin.top + 3);
+    ctx.lineTo(x1End, margin.top + 3);
+    ctx.lineTo(x1End, margin.top + 8);
+    ctx.stroke();
+    ctx.fillStyle = '#2980b9';
+    ctx.font = 'bold 9px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('IMPULSE', (x1Start + x1End) / 2, margin.top + 20);
+
+    // Comparison bracket (pages 9-11, indices 8-10)
+    var x2Start = margin.left + 7 * barW + barPad;
+    var x2End = margin.left + 11 * barW - barPad;
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x2Start, margin.top + 8);
+    ctx.lineTo(x2Start, margin.top + 3);
+    ctx.lineTo(x2End, margin.top + 3);
+    ctx.lineTo(x2End, margin.top + 8);
+    ctx.stroke();
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 9px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('COMPARISON SHOPPERS', (x2Start + x2End) / 2, margin.top + 20);
+
+    // X-axis labels
+    ctx.fillStyle = '#555';
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    for (var i = 0; i < labels.length; i++) {
+      var xPos = margin.left + i * barW + barW / 2;
+      ctx.fillText(labels[i], xPos, margin.top + h + 14);
+    }
+
+    // X label
+    ctx.fillStyle = '#333';
+    ctx.font = '12px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Page Number', margin.left + w / 2, margin.top + h + 34);
+
+    // Y-axis labels
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#555';
+    ctx.font = '11px -apple-system, sans-serif';
+    for (var t = 0; t <= 4; t++) {
+      var yVal = maxRate * (t / 4);
+      var yPos = margin.top + h - (h * t / 4);
+      ctx.fillText(yVal.toFixed(0) + '%', margin.left - 6, yPos + 4);
+    }
+
+    // Legend at bottom
+    ctx.fillStyle = 'rgba(41,128,185,0.6)';
+    ctx.fillRect(margin.left, margin.top + h + 28, 10, 10);
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = '9px -apple-system, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('Impulse (ad/rec)', margin.left + 14, margin.top + h + 37);
+
+    ctx.fillStyle = 'rgba(39,174,96,0.6)';
+    ctx.fillRect(margin.left + 110, margin.top + h + 28, 10, 10);
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('Comparison (high AOV)', margin.left + 124, margin.top + h + 37);
+
+    ctx.fillStyle = 'rgba(230,126,34,0.4)';
+    ctx.fillRect(margin.left + 250, margin.top + h + 28, 10, 10);
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('Geometric decay', margin.left + 264, margin.top + h + 37);
   })();
 })();
 </script>

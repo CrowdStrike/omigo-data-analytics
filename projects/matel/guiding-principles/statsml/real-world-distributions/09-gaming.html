@@ -139,6 +139,57 @@ canvas { width: 100%; height: auto; }
 </tr>
 </table>
 
+<!-- 6. Player Retention by Day -->
+<table class="obj-table">
+<tr>
+<td>
+    <span class="pitfall-label">RETENTION CLIFF</span>
+    <h3>Player Retention (Day 1/7/30 Staircase Survival)</h3>
+    <p>Player retention doesn't decay smoothly &mdash; it drops in discrete cliffs. Day 1 retention is typically 35-45% (half leave immediately). Day 7 is 15-20% of original. Day 30 is 5-8%. These aren't just measurement artifacts &mdash; they correspond to real friction points: tutorial completion (Day 1), content exhaustion (Day 7), and meta-game fatigue (Day 30). The "retained" population at Day 30+ has fundamentally different behavior from the Day 1 cohort.</p>
+    <ul>
+        <li>Day 1 cliff: 55-65% drop (tutorial/onboarding friction)</li>
+        <li>Day 7 cliff: another 50% of remaining (content wall)</li>
+        <li>Day 30 cliff: another 60% of remaining (meta-game or paywall)</li>
+        <li>Day 30+ survivors: 5-8% of original, but ~80% of revenue</li>
+        <li>Retention curve shape predicts LTV better than any engagement metric</li>
+        <li>Genre-dependent: casual games have steeper Day 1, slower Day 30</li>
+    </ul>
+</td>
+<td>
+    <canvas id="canvas6" width="420" height="340"></canvas>
+</td>
+<td>
+    <canvas id="canvas6b" width="400" height="340"></canvas>
+</td>
+</tr>
+</table>
+
+<!-- 7. In-Game Economy Inflation -->
+<table class="obj-table">
+<tr>
+<td>
+    <span class="pitfall-label">WEALTH GAP</span>
+    <h3>In-Game Currency Inflation (Exponential Player Divergence)</h3>
+    <p>In-game economies without proper sinks experience exponential inflation &mdash; veteran players accumulate currency exponentially while new players enter at a fixed starting amount. The distribution of player wealth becomes increasingly right-skewed over time, until the gap makes the economy non-functional for new entrants. This is the same divergence dynamic as real wealth inequality, compressed into months instead of generations.</p>
+    <ul>
+        <li>New player: starts with 1,000 gold (fixed)</li>
+        <li>3-month veteran: ~50,000 gold (farming + compounding)</li>
+        <li>1-year veteran: ~500,000+ gold (exponential growth)</li>
+        <li>Ratio of veteran/new wealth grows exponentially with server age</li>
+        <li>Gold sinks (taxes, repairs) slow but don't stop divergence</li>
+        <li>Auction house prices track veteran wealth, not new player affordability</li>
+        <li>Server resets exist because the distribution becomes unusable</li>
+    </ul>
+</td>
+<td>
+    <canvas id="canvas7" width="420" height="340"></canvas>
+</td>
+<td>
+    <canvas id="canvas7b" width="400" height="340"></canvas>
+</td>
+</tr>
+</table>
+
 <script>
 // Seeded RNG
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
@@ -1276,6 +1327,410 @@ function drawHistogram(canvasId, data, options) {
         ctx.font = '11px -apple-system, sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText('Time (seconds)', cssW / 2, cssH - 8);
+    })();
+})();
+
+// === 6. Player Retention by Day: Staircase Survival Curve ===
+(function() {
+    var localRng = mulberry32(606);
+
+    var data = [];
+    // Generate 2000 samples of "last day played"
+    // 58% uniform(0,1), 22% uniform(1,7), 12% uniform(7,30), 8% uniform(30,180)
+    for (var i = 0; i < 1160; i++) {
+        data.push(localRng() * 1); // Day 0-1
+    }
+    for (var i = 0; i < 440; i++) {
+        data.push(1 + localRng() * 6); // Day 1-7
+    }
+    for (var i = 0; i < 240; i++) {
+        data.push(7 + localRng() * 23); // Day 7-30
+    }
+    for (var i = 0; i < 160; i++) {
+        data.push(30 + localRng() * 150); // Day 30-180
+    }
+
+    drawHistogram('canvas6', data, {
+        color: 'rgba(192,57,43,0.5)',
+        strokeColor: '#c0392b',
+        bins: 45,
+        min: 0,
+        max: 90,
+        title: 'Player Churn Distribution (Last Day Played)',
+        xLabel: 'Last Day Active',
+        xTicks: 6,
+        xFormat: function(v) { return v.toFixed(0); }
+    });
+
+    // --- Insight: Retention Curve vs Smooth Exponential (canvas6b) ---
+    (function() {
+        var c = document.getElementById('canvas6b');
+        var dpr = window.devicePixelRatio || 1;
+        var cssW = c.width, cssH = c.height;
+        c.width = cssW * dpr; c.height = cssH * dpr;
+        c.style.width = cssW + 'px'; c.style.height = cssH + 'px';
+        var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+
+        var ml = 50, mr = 20, mt = 45, mb = 45;
+        var pW = cssW - ml - mr;
+        var pH = cssH - mt - mb;
+
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, cssW, cssH);
+
+        // Title
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Actual Retention vs Smooth Exponential Assumption', cssW / 2, 18);
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillStyle = '#666';
+        ctx.fillText('Cliffs at Day 1, 7, 30 — not smooth decay', cssW / 2, 32);
+
+        // Axes
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(ml, mt);
+        ctx.lineTo(ml, mt + pH);
+        ctx.lineTo(ml + pW, mt + pH);
+        ctx.stroke();
+
+        var maxDay = 60;
+
+        // Actual retention data points (step-like)
+        var retentionPts = [
+            { day: 0, pct: 100 },
+            { day: 1, pct: 40 },
+            { day: 3, pct: 28 },
+            { day: 7, pct: 18 },
+            { day: 14, pct: 12 },
+            { day: 30, pct: 7 },
+            { day: 60, pct: 5 }
+        ];
+
+        // Draw actual retention as step-like curve with steep drops
+        ctx.strokeStyle = 'rgba(192,57,43,0.9)';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        for (var i = 0; i < retentionPts.length; i++) {
+            var x = ml + (retentionPts[i].day / maxDay) * pW;
+            var y = mt + pH - (retentionPts[i].pct / 100) * pH;
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+
+        // Draw dots at each retention point
+        for (var i = 0; i < retentionPts.length; i++) {
+            var x = ml + (retentionPts[i].day / maxDay) * pW;
+            var y = mt + pH - (retentionPts[i].pct / 100) * pH;
+            ctx.beginPath();
+            ctx.arc(x, y, 4, 0, Math.PI * 2);
+            ctx.fillStyle = '#c0392b';
+            ctx.fill();
+        }
+
+        // Smooth exponential assumption: fit through Day 0=100%, decay rate ~0.05
+        // exp(-0.05*t) * 100
+        ctx.strokeStyle = 'rgba(100,100,100,0.6)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        var nPts = 120;
+        for (var i = 0; i <= nPts; i++) {
+            var t = (i / nPts) * maxDay;
+            var pct = 100 * Math.exp(-0.05 * t);
+            var x = ml + (t / maxDay) * pW;
+            var y = mt + pH - (pct / 100) * pH;
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Annotate cliff points
+        var cliffs = [
+            { day: 1, label: 'Day 1\n-60%', pct: 40 },
+            { day: 7, label: 'Day 7\n-55%', pct: 18 },
+            { day: 30, label: 'Day 30\n-42%', pct: 7 }
+        ];
+
+        for (var i = 0; i < cliffs.length; i++) {
+            var cx = ml + (cliffs[i].day / maxDay) * pW;
+            var cy = mt + pH - (cliffs[i].pct / 100) * pH;
+
+            // Vertical dashed line at cliff
+            ctx.strokeStyle = 'rgba(192,57,43,0.4)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 3]);
+            ctx.beginPath();
+            ctx.moveTo(cx, mt);
+            ctx.lineTo(cx, mt + pH);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Label
+            ctx.fillStyle = '#c0392b';
+            ctx.font = 'bold 9px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            var lines = cliffs[i].label.split('\n');
+            ctx.fillText(lines[0], cx, cy - 16);
+            ctx.fillText(lines[1], cx, cy - 6);
+        }
+
+        // Legend
+        ctx.strokeStyle = 'rgba(192,57,43,0.9)';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(ml + pW * 0.55, mt + pH - 50);
+        ctx.lineTo(ml + pW * 0.55 + 20, mt + pH - 50);
+        ctx.stroke();
+        ctx.fillStyle = '#c0392b';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('Actual retention', ml + pW * 0.55 + 24, mt + pH - 46);
+
+        ctx.strokeStyle = 'rgba(100,100,100,0.6)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(ml + pW * 0.55, mt + pH - 34);
+        ctx.lineTo(ml + pW * 0.55 + 20, mt + pH - 34);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#666';
+        ctx.fillText('Exponential assumption', ml + pW * 0.55 + 24, mt + pH - 30);
+
+        // Label where exponential over-predicts
+        var overX = ml + (7 / maxDay) * pW;
+        var expAt7 = 100 * Math.exp(-0.05 * 7);
+        var overY = mt + pH - (expAt7 / 100) * pH;
+        ctx.fillStyle = '#e67e22';
+        ctx.font = 'bold 9px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('Over-predicts!', overX + 8, overY + 3);
+
+        // Y axis labels
+        ctx.fillStyle = '#555';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText('100%', ml - 5, mt + 5);
+        ctx.fillText('50%', ml - 5, mt + pH / 2 + 3);
+        ctx.fillText('0%', ml - 5, mt + pH + 4);
+
+        // X axis labels
+        ctx.textAlign = 'center';
+        for (var i = 0; i <= 6; i++) {
+            var v = (maxDay / 6) * i;
+            var x = ml + (v / maxDay) * pW;
+            ctx.fillText(v.toFixed(0), x, mt + pH + 14);
+        }
+
+        // X label
+        ctx.fillStyle = '#555';
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Days Since Install', cssW / 2, cssH - 8);
+    })();
+})();
+
+// === 7. In-Game Economy Inflation: Exponential Divergence ===
+(function() {
+    var localRng = mulberry32(707);
+    function localRandn() {
+        var u = 0, v = 0;
+        while (u === 0) u = localRng();
+        while (v === 0) v = localRng();
+        return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+    }
+
+    var data = [];
+    // Log-normal mixture: 40% new players lognormal(7, 0.5), 35% mid lognormal(10, 1), 25% veterans lognormal(12, 1.5)
+    for (var i = 0; i < 800; i++) {
+        var val = Math.exp(7 + 0.5 * localRandn());
+        data.push(val);
+    }
+    for (var i = 0; i < 700; i++) {
+        var val = Math.exp(10 + 1.0 * localRandn());
+        data.push(val);
+    }
+    for (var i = 0; i < 500; i++) {
+        var val = Math.exp(12 + 1.5 * localRandn());
+        data.push(val);
+    }
+
+    drawHistogram('canvas7', data, {
+        color: 'rgba(230,126,34,0.5)',
+        strokeColor: '#e67e22',
+        bins: 40,
+        min: 0,
+        max: 500000,
+        title: 'Player Gold Distribution (6-Month-Old Server)',
+        xLabel: 'Gold (log scale)',
+        xTicks: 5,
+        xFormat: function(v) { if (v >= 1000) return (v/1000).toFixed(0) + 'K'; return v.toFixed(0); }
+    });
+
+    // --- Insight: Wealth Distribution Over Time (canvas7b) ---
+    (function() {
+        var c = document.getElementById('canvas7b');
+        var dpr = window.devicePixelRatio || 1;
+        var cssW = c.width, cssH = c.height;
+        c.width = cssW * dpr; c.height = cssH * dpr;
+        c.style.width = cssW + 'px'; c.style.height = cssH + 'px';
+        var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+
+        var ml = 50, mr = 20, mt = 45, mb = 45;
+        var pW = cssW - ml - mr;
+        var pH = cssH - mt - mb;
+
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, cssW, cssH);
+
+        // Title
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Wealth Distribution Spreads Exponentially with Server Age', cssW / 2, 18);
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillStyle = '#666';
+        ctx.fillText('Each month the distribution widens and right-shifts', cssW / 2, 32);
+
+        // Axes
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(ml, mt);
+        ctx.lineTo(ml, mt + pH);
+        ctx.lineTo(ml + pW, mt + pH);
+        ctx.stroke();
+
+        // Draw log-normal PDFs at different time points
+        // Month 1: mu=7.5, sigma=0.8
+        // Month 3: mu=9, sigma=1.2
+        // Month 6: mu=10.5, sigma=1.5
+        // Month 12: mu=12, sigma=2.0
+        var curves = [
+            { name: 'Month 1', mu: 7.5, sigma: 0.8, color: 'rgba(39,174,96,0.8)' },
+            { name: 'Month 3', mu: 9, sigma: 1.2, color: 'rgba(41,128,185,0.8)' },
+            { name: 'Month 6', mu: 10.5, sigma: 1.5, color: 'rgba(230,126,34,0.8)' },
+            { name: 'Month 12', mu: 12, sigma: 2.0, color: 'rgba(192,57,43,0.8)' }
+        ];
+
+        // We'll plot on log scale (x = log(gold))
+        var logMin = 5, logMax = 16;
+        var nPts = 200;
+
+        // Find max PDF value for normalization
+        var globalMax = 0;
+        for (var c2 = 0; c2 < curves.length; c2++) {
+            var peak = 1 / (curves[c2].sigma * Math.sqrt(2 * Math.PI));
+            if (peak > globalMax) globalMax = peak;
+        }
+
+        // Draw each curve
+        for (var c2 = 0; c2 < curves.length; c2++) {
+            var curve = curves[c2];
+            ctx.strokeStyle = curve.color;
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+
+            for (var i = 0; i <= nPts; i++) {
+                var logX = logMin + (i / nPts) * (logMax - logMin);
+                // Log-normal PDF in log-space = normal PDF
+                var z = (logX - curve.mu) / curve.sigma;
+                var pdf = (1 / (curve.sigma * Math.sqrt(2 * Math.PI))) * Math.exp(-0.5 * z * z);
+                var x = ml + (i / nPts) * pW;
+                var y = mt + pH - (pdf / globalMax) * pH * 0.9;
+                if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+
+            // Fill under curve lightly
+            ctx.fillStyle = curve.color.replace(/[\d.]+\)$/, '0.1)');
+            ctx.lineTo(ml + pW, mt + pH);
+            ctx.lineTo(ml, mt + pH);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        // Draw "New player starting gold" vertical line (1000 gold = ln(1000) ~ 6.9)
+        var newPlayerLog = Math.log(1000); // ~6.9
+        var npX = ml + ((newPlayerLog - logMin) / (logMax - logMin)) * pW;
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 3]);
+        ctx.beginPath();
+        ctx.moveTo(npX, mt);
+        ctx.lineTo(npX, mt + pH);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Label the line
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 9px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('New player', npX + 4, mt + pH * 0.4);
+        ctx.fillText('start (1K)', npX + 4, mt + pH * 0.4 + 12);
+
+        // Arrow showing "increasingly irrelevant"
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(npX + 3, mt + pH * 0.55);
+        ctx.lineTo(npX + 3, mt + pH * 0.65);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(npX, mt + pH * 0.65);
+        ctx.lineTo(npX + 3, mt + pH * 0.7);
+        ctx.lineTo(npX + 6, mt + pH * 0.65);
+        ctx.stroke();
+
+        // Legend
+        var legX = ml + pW * 0.6;
+        var legY = mt + 12;
+        for (var c2 = 0; c2 < curves.length; c2++) {
+            var ly = legY + c2 * 14;
+            ctx.strokeStyle = curves[c2].color;
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.moveTo(legX, ly);
+            ctx.lineTo(legX + 18, ly);
+            ctx.stroke();
+            ctx.fillStyle = curves[c2].color;
+            ctx.font = '10px -apple-system, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(curves[c2].name, legX + 22, ly + 4);
+        }
+
+        // X axis labels (log scale values)
+        ctx.fillStyle = '#555';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        var xTicks = [
+            { log: 6, label: '400' },
+            { log: 7, label: '1K' },
+            { log: 9, label: '8K' },
+            { log: 11, label: '60K' },
+            { log: 13, label: '440K' },
+            { log: 15, label: '3.3M' }
+        ];
+        for (var i = 0; i < xTicks.length; i++) {
+            var x = ml + ((xTicks[i].log - logMin) / (logMax - logMin)) * pW;
+            ctx.fillText(xTicks[i].label, x, mt + pH + 14);
+        }
+
+        // Y axis labels
+        ctx.fillStyle = '#555';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText('Density', ml - 5, mt + 5);
+        ctx.fillText('0', ml - 5, mt + pH + 4);
+
+        // X label
+        ctx.fillStyle = '#555';
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Gold (log scale)', cssW / 2, cssH - 8);
     })();
 })();
 </script>

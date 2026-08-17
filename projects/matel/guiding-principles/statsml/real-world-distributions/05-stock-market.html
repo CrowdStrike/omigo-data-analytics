@@ -139,6 +139,55 @@ canvas { width: 100%; height: auto; }
 </tr>
 </table>
 
+<!-- 6. Overnight Gap Distribution -->
+<table class="obj-table">
+<tr>
+<td>
+    <span class="pitfall-label">ASYMMETRIC FEAR</span>
+    <h3>Overnight Gap Returns (Fear Falls Faster Than Greed Rises)</h3>
+    <p>The distribution of overnight gaps (close-to-open returns) is fat-tailed and asymmetric. Negative gaps are larger and more frequent than positive gaps of the same magnitude. This reflects news arriving after hours — bad news triggers immediate selling at open, while good news gets absorbed more gradually. The skewness means symmetric risk models (VaR assuming normal) systematically underestimate downside overnight exposure.</p>
+    <ul>
+        <li>Negative skew: -0.4 to -0.8 (fear moves faster)</li>
+        <li>Tail index: ~3.5 (finite variance, but barely)</li>
+        <li>Magnitude: average gap &plusmn;0.3%, but 2%+ gaps happen 10x more than normal predicts</li>
+        <li>Earnings nights: gap distribution becomes bimodal (beat/miss)</li>
+        <li>Weekend effect: Monday gaps have fatter tails (2 nights of news)</li>
+    </ul>
+</td>
+<td>
+    <canvas id="canvas6" width="420" height="340"></canvas>
+</td>
+<td>
+    <canvas id="canvas6b" width="400" height="340"></canvas>
+</td>
+</tr>
+</table>
+
+<!-- 7. Implied Volatility Smile -->
+<table class="obj-table">
+<tr>
+<td>
+    <span class="pitfall-label">PRICED TAIL RISK</span>
+    <h3>Options Implied Volatility Smile (U-Shaped Pricing)</h3>
+    <p>If the market believed returns were normally distributed, implied volatility would be flat across strike prices. Instead it forms a "smile" (U-shape) or "smirk" (left-skewed U). Deep out-of-the-money puts have higher IV because the market knows left-tail events are more likely than normal suggests. The smile IS the market's admission that it doesn't believe in Gaussian returns — and the steepness tells you how scared the market is right now.</p>
+    <ul>
+        <li>ATM (at-the-money): baseline IV, ~20% for SPX typically</li>
+        <li>OTM puts (left wing): IV 25-35% — market prices crash risk</li>
+        <li>OTM calls (right wing): IV 22-28% — mild, less extreme</li>
+        <li>Steepness of left wing = market's "fear gauge" (correlated with VIX)</li>
+        <li>Post-2008: smile became permanent smirk (left wing never flattened)</li>
+        <li>Pre-1987 (Black Monday): smile didn't exist — market believed normal</li>
+    </ul>
+</td>
+<td>
+    <canvas id="canvas7" width="420" height="340"></canvas>
+</td>
+<td>
+    <canvas id="canvas7b" width="400" height="340"></canvas>
+</td>
+</tr>
+</table>
+
 <script>
 // Seeded RNG
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
@@ -1187,6 +1236,362 @@ function drawHistogram(canvasId, data, options) {
         ctx.textAlign = 'right';
         for (var v = 0; v <= maxPdf; v += 0.1) {
             ctx.fillText(v.toFixed(1), margin.left - 5, toY(v, maxPdf) + 3);
+        }
+    })();
+})();
+
+// === 6. Overnight Gap Distribution: Asymmetric Fat Tails ===
+(function() {
+    const data = [];
+    for (let i = 0; i < 2000; i++) {
+        const r = rng();
+        let x;
+        if (r < 0.05) {
+            // Negative tail events (5%)
+            x = randn() * 1 + (-2);
+        } else if (r < 0.08) {
+            // Positive tail events (3%)
+            x = randn() * 0.8 + 1.5;
+        } else {
+            // Main body with negative skew
+            x = randn() * 0.5 + 0.02;
+            // Apply asymmetry: negative values get magnified
+            if (x < 0) x *= 1.4;
+        }
+        data.push(x);
+    }
+    drawHistogram('canvas6', data, {
+        bins: 40,
+        title: 'Overnight Gap Returns (%)',
+        xLabel: 'Gap Return (%)',
+        range: [-5, 4],
+        color: 'rgba(44,62,80,0.5)',
+        strokeColor: '#2c3e50',
+        xDecimals: 1
+    });
+
+    // --- Insight: Asymmetry overlay (canvas6b) ---
+    (function() {
+        var c = document.getElementById('canvas6b');
+        var dpr = window.devicePixelRatio || 1;
+        var cssW = c.width, cssH = c.height;
+        c.width = cssW * dpr; c.height = cssH * dpr;
+        c.style.width = cssW + 'px'; c.style.height = cssH + 'px';
+        var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+
+        var margin = { top: 35, right: 20, bottom: 45, left: 50 };
+        var w = cssW - margin.left - margin.right;
+        var h = cssH - margin.top - margin.bottom;
+        var xMin = -5, xMax = 4;
+        var yMax = 0.9;
+
+        function toX(v) { return margin.left + (v - xMin) / (xMax - xMin) * w; }
+        function toY(v) { return margin.top + h - (v / yMax) * h; }
+
+        // Background
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, cssW, cssH);
+
+        // Title
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Asymmetry: Negative Gaps Extend Further Than Positive', cssW / 2, 18);
+
+        // Compute empirical density from sorted data
+        var sorted = data.slice().sort(function(a, b) { return a - b; });
+        var nBins = 60;
+        var binW = (xMax - xMin) / nBins;
+        var empCounts = new Array(nBins).fill(0);
+        for (var i = 0; i < sorted.length; i++) {
+            var idx = Math.floor((sorted[i] - xMin) / binW);
+            if (idx >= nBins) idx = nBins - 1;
+            if (idx < 0) idx = 0;
+            empCounts[idx]++;
+        }
+        var empMax = Math.max.apply(null, empCounts);
+        var empDensity = empCounts.map(function(c) { return c / empMax * 0.85; });
+
+        // Draw empirical density (filled)
+        ctx.fillStyle = 'rgba(44,62,80,0.25)';
+        ctx.beginPath();
+        ctx.moveTo(toX(xMin), toY(0));
+        for (var i = 0; i < nBins; i++) {
+            var xv = xMin + (i + 0.5) * binW;
+            ctx.lineTo(toX(xv), toY(empDensity[i]));
+        }
+        ctx.lineTo(toX(xMax), toY(0));
+        ctx.closePath();
+        ctx.fill();
+
+        // Empirical density line
+        ctx.strokeStyle = '#2c3e50';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        for (var i = 0; i < nBins; i++) {
+            var xv = xMin + (i + 0.5) * binW;
+            if (i === 0) ctx.moveTo(toX(xv), toY(empDensity[i]));
+            else ctx.lineTo(toX(xv), toY(empDensity[i]));
+        }
+        ctx.stroke();
+
+        // Normal overlay for comparison (symmetric)
+        var sigma = 0.6;
+        ctx.strokeStyle = 'rgba(39,174,96,0.8)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        for (var i = 0; i < nBins; i++) {
+            var xv = xMin + (i + 0.5) * binW;
+            var normVal = Math.exp(-0.5 * (xv * xv) / (sigma * sigma)) * 0.85;
+            if (i === 0) ctx.moveTo(toX(xv), toY(normVal));
+            else ctx.lineTo(toX(xv), toY(normVal));
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Highlight negative tail extending further
+        ctx.fillStyle = 'rgba(231,76,60,0.15)';
+        ctx.fillRect(toX(-5), margin.top, toX(-2) - toX(-5), h);
+
+        // Highlight positive tail (shorter)
+        ctx.fillStyle = 'rgba(39,174,96,0.08)';
+        ctx.fillRect(toX(2), margin.top, toX(4) - toX(2), h);
+
+        // Annotations
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Negative tail extends', toX(-3.5), margin.top + 50);
+        ctx.fillText('40% further than positive', toX(-3.5), margin.top + 63);
+
+        ctx.fillStyle = '#8e44ad';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.fillText('Symmetric VaR', toX(2.8), margin.top + 50);
+        ctx.fillText('underestimates downside', toX(2.8), margin.top + 63);
+        ctx.fillText('by 35%', toX(2.8), margin.top + 76);
+
+        // Legend
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.strokeStyle = '#2c3e50';
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(margin.left + 10, margin.top + h - 30);
+        ctx.lineTo(margin.left + 30, margin.top + h - 30);
+        ctx.stroke();
+        ctx.fillText('Empirical (asymmetric)', margin.left + 35, margin.top + h - 26);
+
+        ctx.strokeStyle = 'rgba(39,174,96,0.8)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(margin.left + 10, margin.top + h - 15);
+        ctx.lineTo(margin.left + 30, margin.top + h - 15);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#27ae60';
+        ctx.fillText('Normal (symmetric)', margin.left + 35, margin.top + h - 11);
+
+        // Axes
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(margin.left, margin.top);
+        ctx.lineTo(margin.left, margin.top + h);
+        ctx.lineTo(margin.left + w, margin.top + h);
+        ctx.stroke();
+
+        // X labels
+        ctx.fillStyle = '#555';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        for (var v = -5; v <= 4; v += 1) {
+            ctx.fillText(v + '%', toX(v), margin.top + h + 14);
+        }
+        ctx.fillText('Gap Return (%)', cssW / 2, margin.top + h + 30);
+
+        // Y labels
+        ctx.textAlign = 'right';
+        ctx.fillText('Density', margin.left - 5, margin.top + 10);
+    })();
+})();
+
+// === 7. Implied Volatility Smile: U-Shaped Market Pricing ===
+(function() {
+    const data = [];
+    // Generate IV values from a U-shaped distribution across strikes
+    for (let i = 0; i < 2000; i++) {
+        // Moneyness from 0.8 to 1.2
+        const moneyness = 0.8 + rng() * 0.4;
+        // U-shape: IV = 20 + 30*(moneyness-1)^2 + left skew + noise
+        let iv = 20 + 30 * Math.pow(moneyness - 1, 2);
+        // Left skew: extra IV for OTM puts
+        if (moneyness < 1.0) {
+            iv += 5 * (1.0 - moneyness);
+        }
+        // Add noise
+        iv += randn() * 1.5;
+        if (iv > 0) data.push(iv);
+    }
+    drawHistogram('canvas7', data, {
+        bins: 30,
+        title: 'Implied Volatility Across Strike Prices',
+        xLabel: 'IV (%)',
+        range: [15, 40],
+        color: 'rgba(26,82,118,0.5)',
+        strokeColor: '#1a5276',
+        xDecimals: 0
+    });
+
+    // --- Insight: Volatility Smile Curve (canvas7b) ---
+    (function() {
+        var c = document.getElementById('canvas7b');
+        var dpr = window.devicePixelRatio || 1;
+        var cssW = c.width, cssH = c.height;
+        c.width = cssW * dpr; c.height = cssH * dpr;
+        c.style.width = cssW + 'px'; c.style.height = cssH + 'px';
+        var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+
+        var margin = { top: 35, right: 20, bottom: 45, left: 50 };
+        var w = cssW - margin.left - margin.right;
+        var h = cssH - margin.top - margin.bottom;
+        var xMin = 0.80, xMax = 1.20;
+        var yMin = 15, yMax = 40;
+
+        function toX(v) { return margin.left + (v - xMin) / (xMax - xMin) * w; }
+        function toY(v) { return margin.top + h - (v - yMin) / (yMax - yMin) * h; }
+
+        // Background
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, cssW, cssH);
+
+        // Title
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText("The Volatility Smile — Market's Rejection of Normality", cssW / 2, 18);
+
+        // Draw the flat "normal assumption" line
+        ctx.strokeStyle = 'rgba(149,165,166,0.8)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(toX(xMin), toY(20));
+        ctx.lineTo(toX(xMax), toY(20));
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Label the flat line
+        ctx.fillStyle = 'rgba(149,165,166,0.9)';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText('If returns were truly normal', toX(1.18), toY(20) - 6);
+
+        // Draw the volatility smile curve (left wing steeper)
+        var nPts = 100;
+        var smilePts = [];
+        for (var i = 0; i < nPts; i++) {
+            var m = xMin + (xMax - xMin) * i / (nPts - 1);
+            // U-shape with left skew
+            var iv = 20 + 30 * Math.pow(m - 1.0, 2);
+            if (m < 1.0) iv += 5 * (1.0 - m); // left wing steeper
+            smilePts.push({ x: m, y: iv });
+        }
+
+        // Fill under the smile curve
+        var grad = ctx.createLinearGradient(margin.left, margin.top, margin.left, margin.top + h);
+        grad.addColorStop(0, 'rgba(26,82,118,0.3)');
+        grad.addColorStop(1, 'rgba(26,82,118,0.05)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.moveTo(toX(smilePts[0].x), toY(20));
+        for (var i = 0; i < nPts; i++) {
+            ctx.lineTo(toX(smilePts[i].x), toY(smilePts[i].y));
+        }
+        ctx.lineTo(toX(smilePts[nPts - 1].x), toY(20));
+        ctx.closePath();
+        ctx.fill();
+
+        // Draw the smile curve
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        for (var i = 0; i < nPts; i++) {
+            if (i === 0) ctx.moveTo(toX(smilePts[i].x), toY(smilePts[i].y));
+            else ctx.lineTo(toX(smilePts[i].x), toY(smilePts[i].y));
+        }
+        ctx.stroke();
+
+        // ATM marker
+        ctx.fillStyle = '#27ae60';
+        ctx.beginPath();
+        ctx.arc(toX(1.0), toY(20), 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#27ae60';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('ATM', toX(1.0), toY(20) + 16);
+
+        // Left wing annotation
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Left wing = crash', toX(0.85), toY(33) - 14);
+        ctx.fillText('insurance premium', toX(0.85), toY(33) - 2);
+
+        // Right wing annotation
+        ctx.fillStyle = '#2980b9';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.fillText('Right wing', toX(1.15), toY(25) - 10);
+        ctx.fillText('(milder)', toX(1.15), toY(25) + 2);
+
+        // Steepness annotation
+        ctx.fillStyle = '#8e44ad';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('Steepness = fear level', margin.left + 10, margin.top + h - 10);
+
+        // Arrow showing steepness on left
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(toX(0.88), toY(25));
+        ctx.lineTo(toX(0.83), toY(31));
+        ctx.stroke();
+        // Arrowhead
+        ctx.beginPath();
+        ctx.moveTo(toX(0.83), toY(31));
+        ctx.lineTo(toX(0.84), toY(29.5));
+        ctx.moveTo(toX(0.83), toY(31));
+        ctx.lineTo(toX(0.845), toY(30.8));
+        ctx.stroke();
+
+        // Axes
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(margin.left, margin.top);
+        ctx.lineTo(margin.left, margin.top + h);
+        ctx.lineTo(margin.left + w, margin.top + h);
+        ctx.stroke();
+
+        // X labels
+        ctx.fillStyle = '#555';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        var moneyLabels = [0.80, 0.85, 0.90, 0.95, 1.00, 1.05, 1.10, 1.15, 1.20];
+        for (var i = 0; i < moneyLabels.length; i++) {
+            ctx.fillText(moneyLabels[i].toFixed(2), toX(moneyLabels[i]), margin.top + h + 14);
+        }
+        ctx.fillText('Moneyness (Strike / Spot)', cssW / 2, margin.top + h + 30);
+
+        // Y labels
+        ctx.textAlign = 'right';
+        for (var v = 15; v <= 40; v += 5) {
+            ctx.fillText(v + '%', margin.left - 5, toY(v) + 3);
         }
     })();
 })();
