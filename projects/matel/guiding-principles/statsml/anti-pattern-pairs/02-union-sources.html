@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UNION Multiple Sources Trusting Schema Match</title>
+    <style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, sans-serif; background: #fff; color: #2c3e50; padding: 40px; line-height: 1.6; }
+h1 { font-size: 2rem; color: #1a5276; margin-bottom: 8px; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+.subtitle { color: #666; margin-bottom: 32px; font-size: 0.95rem; }
+.card-section { margin-bottom: 40px; }
+.card-section h2 { font-size: 1.3rem; color: #1a5276; margin-bottom: 12px; border-bottom: 2px solid #2980b9; padding-bottom: 4px; }
+table.layout { width: 100%; border-collapse: collapse; margin-top: 8px; }
+table.layout td { vertical-align: top; padding: 12px; }
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+canvas { width: 100%; border: 1px solid #e0e0e0; border-radius: 4px; }
+.key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 8px 12px; margin-top: 12px; font-size: 0.9rem; }
+.example { font-style: italic; color: #555; margin-top: 8px; font-size: 0.9rem; }
+ul { margin: 8px 0 8px 20px; font-size: 0.92rem; }
+li { margin-bottom: 4px; }
+    </style>
+</head>
+<body>
+    <h1>UNION Multiple Sources Trusting Schema Match</h1>
+    <p class="subtitle">Same column names + same types ≠ same semantics — 'amount' in USD vs cents vs local currency</p>
+
+    <div class="card-section">
+        <h2>The Anti-Pattern</h2>
+        <table class="layout">
+            <tr>
+                <td class="text-col">
+                    <p>Same column names + same types assumed = same data. No validation of semantic meaning.</p>
+                    <div class="key-point">Schema compatibility does not imply semantic compatibility. Two sources can have identical DDL yet encode fundamentally different things in identically-named columns.</div>
+                    <p style="margin-top: 12px; font-weight: 600;">Domain examples:</p>
+                    <ul>
+                        <li>Multi-hospital labs — "glucose" measured in mg/dL vs mmol/L</li>
+                        <li>Cross-region billing — "amount" in USD vs cents vs local currency</li>
+                        <li>Multi-platform analytics — "duration" in seconds vs milliseconds</li>
+                    </ul>
+                </td>
+                <td class="viz-col">
+                    <canvas id="c1" width="720" height="300"></canvas>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="card-section">
+        <h2>The Design Pattern</h2>
+        <table class="layout">
+            <tr>
+                <td class="text-col">
+                    <p>Add <code>source_system_id</code> to every row. Profile distributions PER SOURCE before combining.</p>
+                    <p style="margin-top: 8px;">Compare mean, std, null rate per source — if different for "same" column → semantic mismatch.</p>
+                    <div class="key-point">If two sources share a column name but their distributions differ by orders of magnitude, it is a semantic conflict — not a data quality issue.</div>
+                    <ul>
+                        <li>Tag every row with its origin system</li>
+                        <li>Compute per-source summary stats before UNION</li>
+                        <li>Flag scale mismatches (mean ratio &gt; 10×)</li>
+                        <li>Require explicit unit reconciliation before combining</li>
+                    </ul>
+                </td>
+                <td class="viz-col">
+                    <canvas id="c2" width="720" height="300"></canvas>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <script>
+    function setup(id) {
+        var canvas = document.getElementById(id);
+        var dpr = window.devicePixelRatio || 1;
+        var rect = { width: 720, height: 300 };
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        var ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0, 0, rect.width, rect.height);
+        return { ctx: ctx, w: rect.width, h: rect.height };
+    }
+
+    // Canvas 1: Chaotic mixed bars from different scales
+    (function() {
+        var s = setup('c1');
+        var ctx = s.ctx, w = s.w, h = s.h;
+
+        // Title
+        ctx.font = 'bold 14px system-ui';
+        ctx.fillStyle = '#e74c3c';
+        ctx.textAlign = 'center';
+        ctx.fillText("All labeled 'amount'", w / 2, 24);
+
+        var baseY = h - 40;
+        var maxBarH = h - 80;
+
+        // Bar data: mixed together chaotically
+        // USD values ~50, cents ~5000, INR ~4000
+        var bars = [
+            { val: 45, label: 'USD', group: 0 },
+            { val: 5200, label: 'cents', group: 1 },
+            { val: 3800, label: 'INR', group: 2 },
+            { val: 52, label: 'USD', group: 0 },
+            { val: 4800, label: 'cents', group: 1 },
+            { val: 48, label: 'USD', group: 0 },
+            { val: 4200, label: 'INR', group: 2 },
+            { val: 5500, label: 'cents', group: 1 },
+            { val: 55, label: 'USD', group: 0 },
+            { val: 4500, label: 'INR', group: 2 },
+            { val: 4900, label: 'cents', group: 1 },
+            { val: 3900, label: 'INR', group: 2 }
+        ];
+
+        var maxVal = 5500;
+        var barW = 40;
+        var gap = 12;
+        var startX = 60;
+
+        for (var i = 0; i < bars.length; i++) {
+            var x = startX + i * (barW + gap);
+            var barH = (bars[i].val / maxVal) * maxBarH;
+
+            ctx.fillStyle = 'rgba(26,82,118,0.35)';
+            ctx.fillRect(x, baseY - barH, barW, barH);
+
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(x, baseY - barH, barW, barH);
+
+            // Value label
+            ctx.font = '10px system-ui';
+            ctx.fillStyle = '#e74c3c';
+            ctx.textAlign = 'center';
+            ctx.fillText(bars[i].val, x + barW / 2, baseY - barH - 5);
+
+            // Source label below
+            ctx.font = '9px system-ui';
+            ctx.fillStyle = '#555';
+            ctx.fillText(bars[i].label, x + barW / 2, baseY + 14);
+        }
+
+        // Axis line
+        ctx.beginPath();
+        ctx.moveTo(50, baseY);
+        ctx.lineTo(w - 20, baseY);
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Chaos annotation
+        ctx.font = 'bold 12px system-ui';
+        ctx.fillStyle = '#e74c3c';
+        ctx.textAlign = 'right';
+        ctx.fillText('← 100× scale difference on same axis →', w - 30, h - 10);
+    })();
+
+    // Canvas 2: Per-source profiling with mismatch annotation
+    (function() {
+        var s = setup('c2');
+        var ctx = s.ctx, w = s.w, h = s.h;
+
+        var midX = w / 2;
+        var baseY = h - 50;
+        var chartH = h - 100;
+
+        // Left histogram: Source A (USD, mean ~$50)
+        ctx.font = 'bold 12px system-ui';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Source A: μ=$50', midX / 2, 30);
+
+        var binsA = [8, 22, 45, 38, 25, 12, 5];
+        var maxA = 45;
+        var barW = 30;
+        var startXA = 40;
+
+        for (var i = 0; i < binsA.length; i++) {
+            var x = startXA + i * (barW + 4);
+            var barH = (binsA[i] / maxA) * chartH;
+            ctx.fillStyle = 'rgba(26,82,118,0.35)';
+            ctx.fillRect(x, baseY - barH, barW, barH);
+            ctx.strokeStyle = '#1a5276';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x, baseY - barH, barW, barH);
+        }
+
+        // Axis labels for Source A
+        ctx.font = '10px system-ui';
+        ctx.fillStyle = '#666';
+        ctx.textAlign = 'center';
+        ctx.fillText('$20', startXA, baseY + 14);
+        ctx.fillText('$50', startXA + 3 * (barW + 4), baseY + 14);
+        ctx.fillText('$80', startXA + 6 * (barW + 4) + barW, baseY + 14);
+
+        // Axis line A
+        ctx.beginPath();
+        ctx.moveTo(startXA - 5, baseY);
+        ctx.lineTo(startXA + 7 * (barW + 4), baseY);
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Right histogram: Source B (cents, mean ~5000)
+        var startXB = midX + 40;
+        ctx.font = 'bold 12px system-ui';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Source B: μ=5000¢', midX + midX / 2, 30);
+
+        var binsB = [5, 18, 40, 42, 30, 15, 7];
+        var maxB = 42;
+
+        for (var i = 0; i < binsB.length; i++) {
+            var x = startXB + i * (barW + 4);
+            var barH = (binsB[i] / maxB) * chartH;
+            ctx.fillStyle = 'rgba(26,82,118,0.35)';
+            ctx.fillRect(x, baseY - barH, barW, barH);
+            ctx.strokeStyle = '#1a5276';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x, baseY - barH, barW, barH);
+        }
+
+        // Axis labels for Source B
+        ctx.font = '10px system-ui';
+        ctx.fillStyle = '#666';
+        ctx.textAlign = 'center';
+        ctx.fillText('2000¢', startXB, baseY + 14);
+        ctx.fillText('5000¢', startXB + 3 * (barW + 4), baseY + 14);
+        ctx.fillText('8000¢', startXB + 6 * (barW + 4) + barW, baseY + 14);
+
+        // Axis line B
+        ctx.beginPath();
+        ctx.moveTo(startXB - 5, baseY);
+        ctx.lineTo(startXB + 7 * (barW + 4), baseY);
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Orange annotation between the two
+        var annotX = midX;
+        var annotY = h / 2 + 10;
+
+        ctx.font = 'bold 13px system-ui';
+        ctx.fillStyle = '#e67e22';
+        ctx.textAlign = 'center';
+        ctx.fillText('100× scale', annotX, annotY - 8);
+        ctx.fillText('mismatch!', annotX, annotY + 8);
+
+        // Arrow left
+        ctx.beginPath();
+        ctx.moveTo(annotX - 50, annotY);
+        ctx.lineTo(annotX - 20, annotY);
+        ctx.strokeStyle = '#e67e22';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        // Arrowhead left
+        ctx.beginPath();
+        ctx.moveTo(annotX - 50, annotY);
+        ctx.lineTo(annotX - 44, annotY - 4);
+        ctx.lineTo(annotX - 44, annotY + 4);
+        ctx.closePath();
+        ctx.fillStyle = '#e67e22';
+        ctx.fill();
+
+        // Arrow right
+        ctx.beginPath();
+        ctx.moveTo(annotX + 20, annotY);
+        ctx.lineTo(annotX + 50, annotY);
+        ctx.strokeStyle = '#e67e22';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        // Arrowhead right
+        ctx.beginPath();
+        ctx.moveTo(annotX + 50, annotY);
+        ctx.lineTo(annotX + 44, annotY - 4);
+        ctx.lineTo(annotX + 44, annotY + 4);
+        ctx.closePath();
+        ctx.fillStyle = '#e67e22';
+        ctx.fill();
+    })();
+    </script>
+</body>
+</html>

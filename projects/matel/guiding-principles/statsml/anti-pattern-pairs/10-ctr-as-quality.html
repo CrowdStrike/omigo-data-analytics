@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Use CTR / Engagement as Item Quality Feature</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, sans-serif; background: #fff; color: #2c3e50; padding: 40px; line-height: 1.6; }
+h1 { font-size: 2rem; color: #1a5276; margin-bottom: 8px; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+.subtitle { color: #666; margin-bottom: 32px; font-size: 0.95rem; }
+.card-section { margin-bottom: 40px; }
+.card-section h2 { font-size: 1.3rem; color: #1a5276; margin-bottom: 12px; border-bottom: 2px solid #2980b9; padding-bottom: 4px; }
+table.layout { width: 100%; border-collapse: collapse; margin-top: 8px; }
+table.layout td { vertical-align: top; padding: 12px; }
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+canvas { width: 100%; border: 1px solid #e0e0e0; border-radius: 4px; }
+.key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 8px 12px; margin-top: 12px; font-size: 0.9rem; }
+.example { font-style: italic; color: #555; margin-top: 8px; font-size: 0.9rem; }
+ul { margin: 8px 0 8px 20px; font-size: 0.92rem; }
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Use CTR / Engagement as Item Quality Feature</h1>
+<p class="subtitle">CTR is 90% determined by position shown, not item quality</p>
+
+<div class="card-section">
+    <h2>The Anti-Pattern</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Position 1: 30% CTR. Same item at position 10: 2% CTR. Feature encodes YOUR ranking bias, not the entity's property.</p>
+                <div class="key-point">The feature reflects where you placed the item, not how good it is. You are training the model on your own previous decisions.</div>
+                <p class="example">Domain examples:</p>
+                <ul>
+                    <li>Search ranking</li>
+                    <li>Recommendations</li>
+                    <li>Ad targeting</li>
+                </ul>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Design Pattern</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Debias: CTR adjusted for position (CTR relative to position-average). Or: random-position holdout traffic (5%) to measure true quality. Or: log position and train position-aware models.</p>
+                <div class="key-point" style="border-left-color: #27ae60;">Remove the position signal to reveal the item signal.</div>
+                <ul>
+                    <li>Compute position-normalized CTR (item CTR / avg CTR at that position)</li>
+                    <li>Reserve 5% random-shuffle traffic as unbiased measurement</li>
+                    <li>Log position as a separate feature; let the model learn position effect</li>
+                    <li>Use causal inference to estimate counterfactual CTR</li>
+                </ul>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// Anti-Pattern: CTR by position — steep monotone decrease
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var values = [30, 15, 8, 4, 2];
+    var labels = ['Pos 1', 'Pos 2', 'Pos 3', 'Pos 4', 'Pos 5'];
+    var maxVal = 35;
+    var padLeft = 60, padRight = 40, padTop = 50, padBottom = 50;
+    var chartW = w - padLeft - padRight;
+    var chartH = h - padTop - padBottom;
+    var barW = chartW / values.length * 0.6;
+    var gap = chartW / values.length;
+
+    // Title
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('CTR = position, not quality!', w / 2, 24);
+
+    // Y-axis
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padLeft, padTop);
+    ctx.lineTo(padLeft, h - padBottom);
+    ctx.stroke();
+
+    // Y-axis labels and grid
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'right';
+    for (var i = 0; i <= 5; i++) {
+        var yVal = (maxVal / 5) * i;
+        var yPos = h - padBottom - (yVal / maxVal) * chartH;
+        ctx.fillText(Math.round(yVal) + '%', padLeft - 8, yPos + 4);
+        ctx.strokeStyle = '#eee';
+        ctx.beginPath();
+        ctx.moveTo(padLeft, yPos);
+        ctx.lineTo(w - padRight, yPos);
+        ctx.stroke();
+    }
+
+    // Y-axis title
+    ctx.save();
+    ctx.translate(16, h / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#666';
+    ctx.font = '12px system-ui';
+    ctx.fillText('CTR %', 0, 0);
+    ctx.restore();
+
+    // Bars
+    for (var i = 0; i < values.length; i++) {
+        var x = padLeft + gap * i + (gap - barW) / 2;
+        var barH = (values[i] / maxVal) * chartH;
+        var y = h - padBottom - barH;
+
+        // Bar fill — gradient from red to orange showing "wrong" signal
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillRect(x, y, barW, barH);
+
+        // Bar border
+        ctx.strokeStyle = '#c0392b';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x, y, barW, barH);
+
+        // Value label
+        ctx.font = 'bold 12px system-ui';
+        ctx.fillStyle = '#e74c3c';
+        ctx.textAlign = 'center';
+        ctx.fillText(values[i] + '%', x + barW / 2, y - 8);
+
+        // X-axis label
+        ctx.font = '11px system-ui';
+        ctx.fillStyle = '#333';
+        ctx.fillText(labels[i], x + barW / 2, h - padBottom + 18);
+    }
+
+    // Trend line
+    ctx.beginPath();
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]);
+    for (var i = 0; i < values.length; i++) {
+        var x = padLeft + gap * i + gap / 2;
+        var y = h - padBottom - (values[i] / maxVal) * chartH;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Annotation
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#e67e22';
+    ctx.textAlign = 'left';
+    ctx.fillText('Same item, different positions', w - padRight - 190, padTop + 20);
+    ctx.fillText('→ CTR follows position, not quality', w - padRight - 190, padTop + 36);
+})();
+
+// Design Pattern: True quality after debiasing
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var values = [12, 5, 18, 8, 14];
+    var labels = ['Item A', 'Item B', 'Item C', 'Item D', 'Item E'];
+    var maxVal = 25;
+    var padLeft = 60, padRight = 40, padTop = 50, padBottom = 50;
+    var chartW = w - padLeft - padRight;
+    var chartH = h - padTop - padBottom;
+    var barW = chartW / values.length * 0.6;
+    var gap = chartW / values.length;
+
+    // Title
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText('True quality signal revealed', w / 2, 24);
+
+    // Y-axis
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padLeft, padTop);
+    ctx.lineTo(padLeft, h - padBottom);
+    ctx.stroke();
+
+    // Y-axis labels and grid
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'right';
+    for (var i = 0; i <= 5; i++) {
+        var yVal = (maxVal / 5) * i;
+        var yPos = h - padBottom - (yVal / maxVal) * chartH;
+        ctx.fillText(Math.round(yVal) + '%', padLeft - 8, yPos + 4);
+        ctx.strokeStyle = '#eee';
+        ctx.beginPath();
+        ctx.moveTo(padLeft, yPos);
+        ctx.lineTo(w - padRight, yPos);
+        ctx.stroke();
+    }
+
+    // Y-axis title
+    ctx.save();
+    ctx.translate(16, h / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#666';
+    ctx.font = '12px system-ui';
+    ctx.fillText('Position-Adjusted CTR %', 0, 0);
+    ctx.restore();
+
+    // Bars
+    for (var i = 0; i < values.length; i++) {
+        var x = padLeft + gap * i + (gap - barW) / 2;
+        var barH = (values[i] / maxVal) * chartH;
+        var y = h - padBottom - barH;
+
+        // Bar fill — green showing correct/debiased signal
+        ctx.fillStyle = '#27ae60';
+        ctx.fillRect(x, y, barW, barH);
+
+        // Bar border
+        ctx.strokeStyle = '#1e8449';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x, y, barW, barH);
+
+        // Value label
+        ctx.font = 'bold 12px system-ui';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText(values[i] + '%', x + barW / 2, y - 8);
+
+        // X-axis label
+        ctx.font = '11px system-ui';
+        ctx.fillStyle = '#333';
+        ctx.fillText(labels[i], x + barW / 2, h - padBottom + 18);
+    }
+
+    // Annotation — same items note
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'left';
+    ctx.fillText('Same items as left chart — position bias removed', w - padRight - 280, padTop + 20);
+    ctx.fillText('Quality varies independently of original position', w - padRight - 280, padTop + 36);
+
+    // Small position indicators below labels
+    var origPositions = ['was Pos 1', 'was Pos 2', 'was Pos 3', 'was Pos 4', 'was Pos 5'];
+    ctx.font = '9px system-ui';
+    ctx.fillStyle = '#999';
+    ctx.textAlign = 'center';
+    for (var i = 0; i < origPositions.length; i++) {
+        var x = padLeft + gap * i + gap / 2;
+        ctx.fillText(origPositions[i], x, h - padBottom + 32);
+    }
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Overwrite Yesterday's Data Without Versioning</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, sans-serif; background: #fff; color: #2c3e50; padding: 40px; line-height: 1.6; }
+h1 { font-size: 2rem; color: #1a5276; margin-bottom: 8px; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+.subtitle { color: #666; margin-bottom: 32px; font-size: 0.95rem; }
+.card-section { margin-bottom: 40px; }
+.card-section h2 { font-size: 1.3rem; color: #1a5276; margin-bottom: 12px; border-bottom: 2px solid #2980b9; padding-bottom: 4px; }
+table.layout { width: 100%; border-collapse: collapse; margin-top: 8px; }
+table.layout td { vertical-align: top; padding: 12px; }
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+canvas { width: 100%; border: 1px solid #e0e0e0; border-radius: 4px; }
+.key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 8px 12px; margin-top: 12px; font-size: 0.9rem; }
+.example { font-style: italic; color: #555; margin-top: 8px; font-size: 0.9rem; }
+ul { margin: 8px 0 8px 20px; font-size: 0.92rem; }
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Overwrite Yesterday's Data Without Versioning</h1>
+<p class="subtitle">Bug yesterday &rarr; today's table wrong. Yesterday's table gone &mdash; can't compare, can't roll back</p>
+
+<div class="card-section">
+    <h2>The Anti-Pattern</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Daily pipeline overwrites the "current" table. No history is kept. When something goes wrong, investigation and rollback are impossible.</p>
+                <div class="key-point">Once overwritten, the previous state is permanently lost. You cannot diff, audit, or revert.</div>
+                <p style="margin-top: 12px; font-weight: 600; font-size: 0.92rem;">Domain examples:</p>
+                <ul>
+                    <li>Daily/hourly batch pipelines</li>
+                    <li>Feature store updates</li>
+                    <li>Reporting tables</li>
+                </ul>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Design Pattern</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Partition by date. Never delete. Compare today vs yesterday automatically. Keep 30+ days of history.</p>
+                <div class="key-point" style="border-left-color: #27ae60;">Every run lands in its own partition. The "current" view points to the latest, but all history remains accessible.</div>
+                <p style="margin-top: 12px; font-weight: 600; font-size: 0.92rem;">Steps:</p>
+                <ul>
+                    <li>Write each run to a date-partitioned path</li>
+                    <li>Create a "latest" view/symlink pointing to newest partition</li>
+                    <li>Auto-diff today vs yesterday on each run</li>
+                    <li>Rollback = update pointer to previous partition</li>
+                    <li>Retain at least 30 days before archiving</li>
+                </ul>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// Canvas 1: Anti-pattern - overwrite without versioning
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Title
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Daily Pipeline: Overwrite Mode', w / 2, 25);
+
+    // Timeline line
+    var tlY = 150;
+    var tlStartX = 80;
+    var tlEndX = w - 80;
+    ctx.strokeStyle = '#bbb';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(tlStartX, tlY);
+    ctx.lineTo(tlEndX, tlY);
+    ctx.stroke();
+
+    // Arrow at end
+    ctx.beginPath();
+    ctx.moveTo(tlEndX - 8, tlY - 6);
+    ctx.lineTo(tlEndX, tlY);
+    ctx.lineTo(tlEndX - 8, tlY + 6);
+    ctx.fillStyle = '#bbb';
+    ctx.fill();
+
+    // Day boxes
+    var days = [
+        { label: 'Day 1', x: 160, status: 'gone' },
+        { label: 'Day 2', x: 340, status: 'gone' },
+        { label: 'Day 3', x: 520, status: 'buggy' }
+    ];
+
+    days.forEach(function(day) {
+        var boxW = 100, boxH = 50;
+        var bx = day.x - boxW / 2;
+        var by = tlY - boxH - 20;
+
+        // Box
+        if (day.status === 'buggy') {
+            ctx.fillStyle = 'rgba(231, 76, 60, 0.15)';
+            ctx.strokeStyle = '#e74c3c';
+        } else {
+            ctx.fillStyle = 'rgba(200, 200, 200, 0.3)';
+            ctx.strokeStyle = '#aaa';
+        }
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(bx, by, boxW, boxH, 4);
+        ctx.fill();
+        ctx.stroke();
+
+        // Label
+        ctx.font = 'bold 13px system-ui';
+        ctx.fillStyle = day.status === 'buggy' ? '#e74c3c' : '#666';
+        ctx.textAlign = 'center';
+        ctx.fillText(day.label, day.x, by + 20);
+
+        if (day.status === 'buggy') {
+            ctx.font = '11px system-ui';
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillText('(current, buggy)', day.x, by + 36);
+        } else {
+            ctx.font = '11px system-ui';
+            ctx.fillStyle = '#999';
+            ctx.fillText('(overwritten)', day.x, by + 36);
+        }
+
+        // Dot on timeline
+        ctx.beginPath();
+        ctx.arc(day.x, tlY, 5, 0, Math.PI * 2);
+        ctx.fillStyle = day.status === 'buggy' ? '#e74c3c' : '#aaa';
+        ctx.fill();
+
+        // Red X over gone days
+        if (day.status === 'gone') {
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(bx + 10, by + 5);
+            ctx.lineTo(bx + boxW - 10, by + boxH - 5);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(bx + boxW - 10, by + 5);
+            ctx.lineTo(bx + 10, by + boxH - 5);
+            ctx.stroke();
+
+            // GONE! label
+            ctx.font = 'bold 13px system-ui';
+            ctx.fillStyle = '#e74c3c';
+            ctx.textAlign = 'center';
+            ctx.fillText('GONE!', day.x, tlY + 30);
+        }
+    });
+
+    // Bottom label
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText("Can't compare, can't roll back", w / 2, h - 30);
+
+    // Warning icon area
+    ctx.font = '12px system-ui';
+    ctx.fillStyle = '#e67e22';
+    ctx.textAlign = 'left';
+    ctx.fillText('Each run destroys the previous state', tlStartX, h - 55);
+})();
+
+// Canvas 2: Design pattern - partitioned versioning
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Title
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Daily Pipeline: Partition Mode', w / 2, 25);
+
+    // Timeline line
+    var tlY = 150;
+    var tlStartX = 80;
+    var tlEndX = w - 80;
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(tlStartX, tlY);
+    ctx.lineTo(tlEndX, tlY);
+    ctx.stroke();
+
+    // Arrow at end
+    ctx.beginPath();
+    ctx.moveTo(tlEndX - 8, tlY - 6);
+    ctx.lineTo(tlEndX, tlY);
+    ctx.lineTo(tlEndX - 8, tlY + 6);
+    ctx.fillStyle = '#27ae60';
+    ctx.fill();
+
+    // Partition boxes
+    var partitions = [
+        { label: 'dt=08-01', x: 160 },
+        { label: 'dt=08-02', x: 340 },
+        { label: 'dt=08-03', x: 520 }
+    ];
+
+    partitions.forEach(function(part) {
+        var boxW = 110, boxH = 50;
+        var bx = part.x - boxW / 2;
+        var by = tlY - boxH - 20;
+
+        // Box with green fill
+        ctx.fillStyle = 'rgba(39, 174, 96, 0.12)';
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(bx, by, boxW, boxH, 4);
+        ctx.fill();
+        ctx.stroke();
+
+        // Label
+        ctx.font = 'bold 13px system-ui';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText(part.label, part.x, by + 22);
+
+        // Preserved tag
+        ctx.font = '11px system-ui';
+        ctx.fillStyle = '#27ae60';
+        ctx.fillText('preserved', part.x, by + 38);
+
+        // Dot on timeline
+        ctx.beginPath();
+        ctx.arc(part.x, tlY, 5, 0, Math.PI * 2);
+        ctx.fillStyle = '#27ae60';
+        ctx.fill();
+    });
+
+    // Green diff arrows between partitions
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+
+    // Arrow from partition 1 to 2
+    ctx.beginPath();
+    ctx.moveTo(215, tlY + 20);
+    ctx.lineTo(285, tlY + 20);
+    ctx.stroke();
+    // Arrowhead
+    ctx.beginPath();
+    ctx.moveTo(280, tlY + 16);
+    ctx.lineTo(285, tlY + 20);
+    ctx.lineTo(280, tlY + 24);
+    ctx.stroke();
+
+    // Arrow from partition 2 to 3
+    ctx.beginPath();
+    ctx.moveTo(395, tlY + 20);
+    ctx.lineTo(465, tlY + 20);
+    ctx.stroke();
+    // Arrowhead
+    ctx.beginPath();
+    ctx.moveTo(460, tlY + 16);
+    ctx.lineTo(465, tlY + 20);
+    ctx.lineTo(460, tlY + 24);
+    ctx.stroke();
+
+    ctx.setLineDash([]);
+
+    // "diff any two dates" label
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('diff any two dates', w / 2, tlY + 38);
+
+    // Long diff arrow spanning all three
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 3]);
+    ctx.beginPath();
+    ctx.moveTo(160, tlY + 52);
+    ctx.lineTo(520, tlY + 52);
+    ctx.stroke();
+    // Arrowheads on both ends
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(165, tlY + 48);
+    ctx.lineTo(160, tlY + 52);
+    ctx.lineTo(165, tlY + 56);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(515, tlY + 48);
+    ctx.lineTo(520, tlY + 52);
+    ctx.lineTo(515, tlY + 56);
+    ctx.stroke();
+
+    // Rollback annotation
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText('Rollback: point to previous partition', w / 2, h - 30);
+
+    // Rollback arrow from Day 3 back to Day 2
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 2]);
+    ctx.beginPath();
+    ctx.moveTo(500, h - 55);
+    ctx.quadraticCurveTo(420, h - 75, 360, h - 55);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // Arrowhead
+    ctx.beginPath();
+    ctx.moveTo(365, h - 59);
+    ctx.lineTo(360, h - 55);
+    ctx.lineTo(366, h - 51);
+    ctx.stroke();
+
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#e67e22';
+    ctx.fillText('rollback', 430, h - 68);
+})();
+</script>
+
+</body>
+</html>

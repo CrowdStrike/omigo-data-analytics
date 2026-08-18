@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Report P-Value Without Effect Size</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, sans-serif; background: #fff; color: #2c3e50; padding: 40px; line-height: 1.6; }
+h1 { font-size: 2rem; color: #1a5276; margin-bottom: 8px; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+.subtitle { color: #666; margin-bottom: 32px; font-size: 0.95rem; }
+.card-section { margin-bottom: 40px; }
+.card-section h2 { font-size: 1.3rem; color: #1a5276; margin-bottom: 12px; border-bottom: 2px solid #2980b9; padding-bottom: 4px; }
+table.layout { width: 100%; border-collapse: collapse; margin-top: 8px; }
+table.layout td { vertical-align: top; padding: 12px; }
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+canvas { width: 100%; border: 1px solid #e0e0e0; border-radius: 4px; }
+.key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 8px 12px; margin-top: 12px; font-size: 0.9rem; }
+.example { font-style: italic; color: #555; margin-top: 8px; font-size: 0.9rem; }
+ul { margin: 8px 0 8px 20px; font-size: 0.92rem; }
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Report P-Value Without Effect Size</h1>
+<p class="subtitle">At n=100,000: enrichment 1.006&times; is &ldquo;significant&rdquo; (p&lt;0.001) but useless for classification</p>
+
+<div class="card-section">
+    <h2>The Anti-Pattern</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Statistical significance &ne; practical significance. Large n makes trivially small effects &ldquo;significant&rdquo;.</p>
+                <div class="key-point">With enough data, any non-zero effect becomes statistically significant&mdash;even effects too small to act on.</div>
+                <p class="example">Domain examples:</p>
+                <ul>
+                    <li>Large datasets (n &gt; 10k) where noise becomes &ldquo;significant&rdquo;</li>
+                    <li>Clinical trials with massive enrollment</li>
+                    <li>Any high-n analysis where effect size is not reported</li>
+                </ul>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Design Pattern</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Require BOTH p &lt; threshold AND enrichment &gt; minimum practical level. Gate: p &lt; 0.05/n_tests (Bonferroni) AND enrichment &gt; 1.5&times;. Report effect size FIRST, p-value second.</p>
+                <div class="key-point" style="border-left-color: #27ae60;">Practical significance gates prevent trivial effects from polluting results.</div>
+                <ul>
+                    <li>Compute effect size (enrichment, Cohen&rsquo;s d, odds ratio)</li>
+                    <li>Apply Bonferroni correction: p &lt; 0.05 / n_tests</li>
+                    <li>Require enrichment &gt; 1.5&times; minimum practical threshold</li>
+                    <li>Report effect size first, p-value second</li>
+                    <li>Reject results that pass p-value but fail effect size gate</li>
+                </ul>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// Anti-Pattern Canvas: Tiny effect that is "significant"
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Background
+    ctx.fillStyle = '#fefefe';
+    ctx.fillRect(0, 0, w, h);
+
+    // Chart area
+    var chartLeft = 120, chartRight = w - 80, chartTop = 50, chartBottom = h - 60;
+    var chartW = chartRight - chartLeft;
+    var chartH = chartBottom - chartTop;
+
+    // Title
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#2c3e50';
+    ctx.textAlign = 'center';
+    ctx.fillText('n = 100,000 — Statistically Significant, Practically Useless', w / 2, 28);
+
+    // Y-axis: enrichment scale from 0.9 to 1.1
+    var yMin = 0.9, yMax = 1.1;
+    function yPos(val) {
+        return chartBottom - ((val - yMin) / (yMax - yMin)) * chartH;
+    }
+
+    // Draw axes
+    ctx.strokeStyle = '#bbb';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(chartLeft, chartTop);
+    ctx.lineTo(chartLeft, chartBottom);
+    ctx.lineTo(chartRight, chartBottom);
+    ctx.stroke();
+
+    // Y-axis labels
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'right';
+    var yTicks = [0.9, 0.95, 1.0, 1.05, 1.1];
+    for (var i = 0; i < yTicks.length; i++) {
+        var y = yPos(yTicks[i]);
+        ctx.fillText(yTicks[i].toFixed(2) + 'x', chartLeft - 8, y + 4);
+        ctx.strokeStyle = '#eee';
+        ctx.beginPath();
+        ctx.moveTo(chartLeft, y);
+        ctx.lineTo(chartRight, y);
+        ctx.stroke();
+    }
+
+    // Baseline at 1.0
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    var baseY = yPos(1.0);
+    ctx.moveTo(chartLeft, baseY);
+    ctx.lineTo(chartRight, baseY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Label baseline
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'left';
+    ctx.fillText('Baseline (1.0x)', chartRight + 5, baseY + 4);
+
+    // Draw the enrichment bar at 1.006 — barely visible above baseline
+    var barWidth = 80;
+    var barX = chartLeft + chartW / 2 - barWidth / 2;
+    var barTop = yPos(1.006);
+    var barBottom = yPos(1.0);
+
+    // Bar fill
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.3)';
+    ctx.fillRect(barX, barTop, barWidth, barBottom - barTop);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(barX, barTop, barWidth, barBottom - barTop);
+
+    // Full bar from bottom
+    ctx.fillStyle = 'rgba(26, 82, 118, 0.15)';
+    ctx.fillRect(barX, barBottom, barWidth, chartBottom - barBottom);
+    ctx.strokeStyle = 'rgba(26, 82, 118, 0.4)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(barX, barBottom, barWidth, chartBottom - barBottom);
+
+    // Enrichment label
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('Enrichment: 1.006x', barX + barWidth / 2, barTop - 30);
+
+    // Arrow pointing to tiny gap
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(barX + barWidth / 2, barTop - 18);
+    ctx.lineTo(barX + barWidth / 2, barTop - 4);
+    ctx.lineTo(barX + barWidth / 2 - 4, barTop - 10);
+    ctx.moveTo(barX + barWidth / 2, barTop - 4);
+    ctx.lineTo(barX + barWidth / 2 + 4, barTop - 10);
+    ctx.stroke();
+
+    // P-value badge
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('p < 0.001', barX + barWidth / 2, chartBottom + 20);
+
+    // Red X — REJECT
+    var xCenterX = w - 55, xCenterY = h / 2;
+    ctx.font = 'bold 40px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('✗', xCenterX, xCenterY + 10);
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillText('REJECT', xCenterX, xCenterY + 32);
+
+    // Annotation: "Practically meaningless"
+    ctx.font = 'italic 11px system-ui';
+    ctx.fillStyle = '#999';
+    ctx.textAlign = 'center';
+    ctx.fillText('"Significant" but effect is 0.6% above baseline', w / 2, h - 10);
+})();
+
+// Design Pattern Canvas: Strong effect that passes both gates
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Background
+    ctx.fillStyle = '#fefefe';
+    ctx.fillRect(0, 0, w, h);
+
+    // Chart area
+    var chartLeft = 120, chartRight = w - 80, chartTop = 50, chartBottom = h - 60;
+    var chartW = chartRight - chartLeft;
+    var chartH = chartBottom - chartTop;
+
+    // Title
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#2c3e50';
+    ctx.textAlign = 'center';
+    ctx.fillText('Dual Gate: Effect Size + Statistical Significance', w / 2, 28);
+
+    // Y-axis: enrichment scale from 0 to 4
+    var yMin = 0, yMax = 4.0;
+    function yPos(val) {
+        return chartBottom - ((val - yMin) / (yMax - yMin)) * chartH;
+    }
+
+    // Draw axes
+    ctx.strokeStyle = '#bbb';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(chartLeft, chartTop);
+    ctx.lineTo(chartLeft, chartBottom);
+    ctx.lineTo(chartRight, chartBottom);
+    ctx.stroke();
+
+    // Y-axis labels
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'right';
+    var yTicks = [0, 1.0, 1.5, 2.0, 3.0, 4.0];
+    for (var i = 0; i < yTicks.length; i++) {
+        var y = yPos(yTicks[i]);
+        ctx.fillText(yTicks[i].toFixed(1) + 'x', chartLeft - 8, y + 4);
+        ctx.strokeStyle = '#eee';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(chartLeft, y);
+        ctx.lineTo(chartRight, y);
+        ctx.stroke();
+    }
+
+    // Baseline at 1.0
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    var baseY = yPos(1.0);
+    ctx.moveTo(chartLeft, baseY);
+    ctx.lineTo(chartRight, baseY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'left';
+    ctx.fillText('Baseline (1.0x)', chartRight + 5, baseY + 4);
+
+    // Threshold line at 1.5x (orange)
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([8, 4]);
+    ctx.beginPath();
+    var threshY = yPos(1.5);
+    ctx.moveTo(chartLeft, threshY);
+    ctx.lineTo(chartRight, threshY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Threshold label
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#e67e22';
+    ctx.textAlign = 'left';
+    ctx.fillText('Threshold (1.5x)', chartRight + 5, threshY + 4);
+
+    // Draw the enrichment bar at 3.2x
+    var barWidth = 80;
+    var barX = chartLeft + chartW / 2 - barWidth / 2;
+    var barTop = yPos(3.2);
+    var barBottomY = yPos(0);
+
+    // Bar fill - green tint
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.25)';
+    ctx.fillRect(barX, barTop, barWidth, barBottomY - barTop);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(barX, barTop, barWidth, barBottomY - barTop);
+
+    // Highlight portion above threshold
+    var aboveThreshTop = barTop;
+    var aboveThreshBottom = threshY;
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.4)';
+    ctx.fillRect(barX, aboveThreshTop, barWidth, aboveThreshBottom - aboveThreshTop);
+
+    // Enrichment label
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText('Enrichment: 3.2x', barX + barWidth / 2, barTop - 12);
+
+    // P-value badge
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('p < 0.001', barX + barWidth / 2, chartBottom + 20);
+
+    // Green checkmark — ACCEPT
+    var checkX = w - 55, checkY = h / 2;
+    ctx.font = 'bold 40px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText('✓', checkX, checkY + 10);
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillText('ACCEPT', checkX, checkY + 32);
+
+    // Annotation
+    ctx.font = 'italic 11px system-ui';
+    ctx.fillStyle = '#555';
+    ctx.textAlign = 'center';
+    ctx.fillText('Passes both gates: p < 0.001 AND enrichment 3.2x > 1.5x threshold', w / 2, h - 10);
+})();
+</script>
+
+</body>
+</html>

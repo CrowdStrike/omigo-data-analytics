@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile the Entire Column as One Distribution</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: #fff; color: #2c3e50; padding: 40px; line-height: 1.6; }
+        h1 { font-size: 2rem; color: #1a5276; margin-bottom: 8px; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+        .subtitle { color: #666; margin-bottom: 32px; font-size: 0.95rem; }
+        .card-section { margin-bottom: 40px; }
+        .card-section h2 { font-size: 1.3rem; color: #1a5276; margin-bottom: 12px; border-bottom: 2px solid #2980b9; padding-bottom: 4px; }
+        table.layout { width: 100%; border-collapse: collapse; margin-top: 8px; }
+        table.layout td { vertical-align: top; padding: 12px; }
+        table.layout td.text-col { width: 45%; }
+        table.layout td.viz-col { width: 55%; }
+        canvas { width: 100%; border: 1px solid #e0e0e0; border-radius: 4px; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 8px 12px; margin-top: 12px; font-size: 0.9rem; }
+        .example { font-style: italic; color: #555; margin-top: 8px; font-size: 0.9rem; }
+        ul { margin: 8px 0 8px 20px; font-size: 0.92rem; }
+        li { margin-bottom: 4px; }
+    </style>
+</head>
+<body>
+    <h1>Profile the Entire Column as One Distribution</h1>
+    <p class="subtitle">A mean across two clusters is fiction — it represents a state that never occurs</p>
+
+    <div class="card-section">
+        <h2>The Anti-Pattern</h2>
+        <table class="layout">
+            <tr>
+                <td class="text-col">
+                    <p>Compute mean, std, shape across ALL data as one population. If data has gaps, spikes, or sub-populations, the global profile is meaningless.</p>
+                    <div class="key-point">The computed mean may fall in a region where no data points exist — a phantom statistic describing nothing real.</div>
+                    <p style="margin-top: 12px; font-weight: 600;">Domain examples:</p>
+                    <ul>
+                        <li><strong>Troponin</strong> — two clusters: healthy baseline vs. cardiac event</li>
+                        <li><strong>Capital gain</strong> — spike at zero + continuous tail</li>
+                        <li><strong>Hemoglobin</strong> — male + female sub-populations</li>
+                    </ul>
+                </td>
+                <td class="viz-col">
+                    <canvas id="c1" width="720" height="300"></canvas>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="card-section">
+        <h2>The Design Pattern</h2>
+        <table class="layout">
+            <tr>
+                <td class="text-col">
+                    <p><strong>Step 1:</strong> Where does data EXIST? (gaps, spikes, clusters) — value existence mapping.</p>
+                    <p><strong>Step 2:</strong> Split at structural boundaries.</p>
+                    <p><strong>Step 3:</strong> Profile each segment independently.</p>
+                    <div class="key-point">Each segment gets its own mean, std, and shape — statistics that describe real observations.</div>
+                </td>
+                <td class="viz-col">
+                    <canvas id="c2" width="720" height="300"></canvas>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <script>
+    function setup(id) {
+        var canvas = document.getElementById(id);
+        var dpr = window.devicePixelRatio || 1;
+        var rect = { width: 720, height: 300 };
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        var ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0, 0, rect.width, rect.height);
+        return { ctx: ctx, w: rect.width, h: rect.height };
+    }
+
+    // Canvas 1: Anti-pattern — two clusters with wrong global mean
+    (function() {
+        var s = setup('c1');
+        var ctx = s.ctx, w = s.w, h = s.h;
+
+        // Seed-based pseudo-random for consistent dots
+        var seed = 42;
+        function rand() { seed = (seed * 16807 + 0) % 2147483647; return seed / 2147483647; }
+
+        // Draw cluster 1 (left) centered around x=150, y=180
+        ctx.fillStyle = 'rgba(26,82,118,0.35)';
+        for (var i = 0; i < 60; i++) {
+            var cx = 150 + (rand() - 0.5) * 120;
+            var cy = 180 + (rand() - 0.5) * 100;
+            ctx.beginPath();
+            ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Draw cluster 2 (right) centered around x=500, y=120
+        for (var i = 0; i < 60; i++) {
+            var cx = 500 + (rand() - 0.5) * 130;
+            var cy = 120 + (rand() - 0.5) * 90;
+            ctx.beginPath();
+            ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Draw wrong bell curve spanning both clusters (red dashed outline)
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        var bellCenterX = 325, bellWidth = 280, bellHeight = 120;
+        for (var x = 60; x <= 590; x++) {
+            var t = (x - bellCenterX) / bellWidth;
+            var y = h - 40 - bellHeight * Math.exp(-0.5 * t * t);
+            if (x === 60) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Draw dashed red vertical mean line in the gap between clusters
+        var meanX = 325;
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([8, 5]);
+        ctx.beginPath();
+        ctx.moveTo(meanX, 30);
+        ctx.lineTo(meanX, h - 30);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Label the mean line
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 13px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText('mean (in empty gap!)', meanX, 22);
+
+        // Label clusters
+        ctx.fillStyle = '#1a5276';
+        ctx.font = '12px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText('Cluster A', 150, h - 10);
+        ctx.fillText('Cluster B', 500, h - 10);
+    })();
+
+    // Canvas 2: Design pattern — two separate clean bell curves
+    (function() {
+        var s = setup('c2');
+        var ctx = s.ctx, w = s.w, h = s.h;
+
+        var baseY = h - 60;
+
+        // Helper: draw a bell curve
+        function drawBell(centerX, sigma, height, color, label) {
+            var spread = sigma * 4;
+            // Fill
+            ctx.fillStyle = color === '#1a5276' ? 'rgba(26,82,118,0.15)' : 'rgba(39,174,96,0.15)';
+            ctx.beginPath();
+            ctx.moveTo(centerX - spread, baseY);
+            for (var x = centerX - spread; x <= centerX + spread; x++) {
+                var t = (x - centerX) / sigma;
+                var y = baseY - height * Math.exp(-0.5 * t * t);
+                ctx.lineTo(x, y);
+            }
+            ctx.lineTo(centerX + spread, baseY);
+            ctx.closePath();
+            ctx.fill();
+
+            // Stroke
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2.5;
+            ctx.setLineDash([]);
+            ctx.beginPath();
+            for (var x = centerX - spread; x <= centerX + spread; x++) {
+                var t = (x - centerX) / sigma;
+                var y = baseY - height * Math.exp(-0.5 * t * t);
+                if (x === centerX - spread) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+
+            // Mean line (solid)
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.setLineDash([]);
+            ctx.beginPath();
+            ctx.moveTo(centerX, baseY);
+            ctx.lineTo(centerX, baseY - height - 10);
+            ctx.stroke();
+
+            // Label
+            ctx.fillStyle = color;
+            ctx.font = 'bold 13px system-ui';
+            ctx.textAlign = 'center';
+            ctx.fillText(label, centerX, baseY + 20);
+
+            // Green checkmark above curve
+            ctx.fillStyle = '#27ae60';
+            ctx.font = 'bold 20px system-ui';
+            ctx.fillText('✓', centerX, baseY - height - 20);
+        }
+
+        // Left bell curve: mu=20, sigma=5 — positioned at screen x=180
+        drawBell(180, 60, 150, '#1a5276', 'μ=20, σ=5');
+
+        // Right bell curve: mu=72, sigma=8 — positioned at screen x=520
+        drawBell(520, 75, 130, '#27ae60', 'μ=72, σ=8');
+
+        // Baseline
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(40, baseY);
+        ctx.lineTo(w - 40, baseY);
+        ctx.stroke();
+    })();
+    </script>
+</body>
+</html>

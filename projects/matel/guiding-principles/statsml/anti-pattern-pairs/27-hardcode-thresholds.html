@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hard-Code Thresholds from One Dataset</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, sans-serif; background: #fff; color: #2c3e50; padding: 40px; line-height: 1.6; }
+h1 { font-size: 2rem; color: #1a5276; margin-bottom: 8px; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+.subtitle { color: #666; margin-bottom: 32px; font-size: 0.95rem; }
+.card-section { margin-bottom: 40px; }
+.card-section h2 { font-size: 1.3rem; color: #1a5276; margin-bottom: 12px; border-bottom: 2px solid #2980b9; padding-bottom: 4px; }
+table.layout { width: 100%; border-collapse: collapse; margin-top: 8px; }
+table.layout td { vertical-align: top; padding: 12px; }
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+canvas { width: 100%; border: 1px solid #e0e0e0; border-radius: 4px; }
+.key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 8px 12px; margin-top: 12px; font-size: 0.9rem; }
+.example { font-style: italic; color: #555; margin-top: 8px; font-size: 0.9rem; }
+ul { margin: 8px 0 8px 20px; font-size: 0.92rem; }
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Hard-Code Thresholds from One Dataset</h1>
+<p class="subtitle">"Anomaly if &gt; 1000" works on THIS dataset. Deploy to new client: normal values are 5000+</p>
+
+<div class="card-section">
+<h2>The Anti-Pattern</h2>
+<table class="layout">
+<tr>
+<td class="text-col">
+<p>Magic numbers derived from one context. The threshold becomes meaningless in a new deployment. Requires manual tuning per client.</p>
+<div class="key-point">A hard-coded threshold encodes the <em>specific distribution</em> of one dataset as a universal truth.</div>
+<p class="example">Domain examples:</p>
+<ul>
+<li>Alerting systems</li>
+<li>Anomaly detection</li>
+<li>Data validation</li>
+</ul>
+</td>
+<td class="viz-col">
+<canvas id="c1"></canvas>
+</td>
+</tr>
+</table>
+</div>
+
+<div class="card-section">
+<h2>The Design Pattern</h2>
+<table class="layout">
+<tr>
+<td class="text-col">
+<p>Derive thresholds from data statistics (percentiles, mean + 3 sigma). Self-calibrating across populations.</p>
+<div class="key-point">Let each deployment discover its own boundary from its own data.</div>
+<p class="example">Steps:</p>
+<ul>
+<li>Collect baseline sample from the deployment</li>
+<li>Compute percentile (e.g., p99) or mean + k*sigma</li>
+<li>Set threshold = computed statistic</li>
+<li>Re-calibrate periodically as data evolves</li>
+</ul>
+</td>
+<td class="viz-col">
+<canvas id="c2"></canvas>
+</td>
+</tr>
+</table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// Canvas 1: Hard-coded threshold fails on new dataset
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var axisY = h - 50;
+    var lineY1 = 100;
+    var lineY2 = 190;
+
+    // Title
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('Fixed Threshold = 1000 (hard-coded)', 20, 28);
+
+    // Number line axis
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(60, axisY);
+    ctx.lineTo(w - 30, axisY);
+    ctx.stroke();
+
+    // Scale: 0 to 8000
+    var scaleMin = 0, scaleMax = 8000;
+    function xPos(val) {
+        return 60 + (val - scaleMin) / (scaleMax - scaleMin) * (w - 90);
+    }
+
+    // Axis ticks
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    for (var tick = 0; tick <= 8000; tick += 1000) {
+        var tx = xPos(tick);
+        ctx.beginPath();
+        ctx.moveTo(tx, axisY);
+        ctx.lineTo(tx, axisY + 6);
+        ctx.stroke();
+        ctx.fillText(tick.toString(), tx, axisY + 20);
+    }
+
+    // Red threshold line
+    var threshX = xPos(1000);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(threshX, 45);
+    ctx.lineTo(threshX, axisY);
+    ctx.stroke();
+
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('threshold = 1000', threshX, 42);
+
+    // Dataset A: values 200-800 (works fine)
+    ctx.fillStyle = 'rgba(26, 82, 118, 0.35)';
+    var aStart = xPos(200), aEnd = xPos(800);
+    ctx.fillRect(aStart, lineY1 - 15, aEnd - aStart, 30);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(aStart, lineY1 - 15, aEnd - aStart, 30);
+
+    ctx.font = '12px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'left';
+    ctx.fillText('Dataset A: values 200-800', aStart, lineY1 - 22);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Works fine here', aEnd + 10, lineY1 + 4);
+
+    // Dataset B: values 3000-7000 (ALL flagged!)
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.2)';
+    var bStart = xPos(3000), bEnd = xPos(7000);
+    ctx.fillRect(bStart, lineY2 - 15, bEnd - bStart, 30);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(bStart, lineY2 - 15, bEnd - bStart, 30);
+
+    ctx.font = '12px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'left';
+    ctx.fillText('Dataset B: values 3000-7000', bStart, lineY2 - 22);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('ALL flagged as anomalies!', bEnd + 10, lineY2 + 4);
+
+    // Red warning label
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('Useless in new context!', w / 2, axisY - 15);
+})();
+
+// Canvas 2: Self-adapting thresholds per deployment
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Title
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('Percentile-Based Thresholds (p99 per dataset)', 20, 28);
+
+    var midY1 = 110;
+    var midY2 = 210;
+
+    // Helper: draw a bell-ish distribution
+    function drawDist(cx, spread, baseY, color, label, threshVal, threshLabel) {
+        var left = cx - spread;
+        var right = cx + spread;
+
+        // Draw distribution shape
+        ctx.beginPath();
+        ctx.moveTo(left, baseY + 30);
+        ctx.quadraticCurveTo(left + spread * 0.3, baseY - 25, cx, baseY - 30);
+        ctx.quadraticCurveTo(cx + spread * 0.7, baseY - 25, right, baseY + 30);
+        ctx.closePath();
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.strokeStyle = color.replace('0.25', '1').replace('0.2', '1');
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Label
+        ctx.font = '12px system-ui';
+        ctx.fillStyle = '#2c3e50';
+        ctx.textAlign = 'left';
+        ctx.fillText(label, left, baseY - 40);
+
+        // Threshold line at p99
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([5, 3]);
+        ctx.beginPath();
+        ctx.moveTo(threshVal, baseY - 35);
+        ctx.lineTo(threshVal, baseY + 35);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Threshold label
+        ctx.font = 'bold 11px system-ui';
+        ctx.fillStyle = '#27ae60';
+        ctx.textAlign = 'center';
+        ctx.fillText(threshLabel, threshVal, baseY + 48);
+    }
+
+    // Scale: map value to x position
+    // Dataset A: center ~500, spread ~300, p99 at 950
+    // Dataset B: center ~5000, spread ~1500, p99 at 7200
+    // Use two separate regions of the canvas
+
+    var regionW = (w - 60) / 2;
+
+    // Dataset A region
+    var aCenterX = 60 + regionW * 0.45;
+    var aSpread = regionW * 0.38;
+    var aThreshX = 60 + regionW * 0.82;
+
+    drawDist(aCenterX, aSpread, midY1, 'rgba(26, 82, 118, 0.25)', 'Dataset A (values 200-800)', aThreshX, 'p99 = 950');
+
+    // Dataset B region
+    var bCenterX = 60 + regionW + regionW * 0.45;
+    var bSpread = regionW * 0.38;
+    var bThreshX = 60 + regionW + regionW * 0.82;
+
+    drawDist(bCenterX, bSpread, midY1, 'rgba(230, 126, 34, 0.25)', 'Dataset B (values 3000-7000)', bThreshX, 'p99 = 7200');
+
+    // Divider line
+    ctx.strokeStyle = '#ddd';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(60 + regionW, 45);
+    ctx.lineTo(60 + regionW, h - 40);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Green success message
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText('Self-adapting per deployment', w / 2, h - 20);
+
+    // Annotation arrows / notes
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#555';
+    ctx.textAlign = 'center';
+    ctx.fillText('Each dataset gets its own threshold', w / 2, midY1 + 70);
+    ctx.fillText('derived from its own distribution', w / 2, midY1 + 85);
+})();
+</script>
+
+</body>
+</html>

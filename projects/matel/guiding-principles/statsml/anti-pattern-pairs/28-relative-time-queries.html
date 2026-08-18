@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Relative Time in Pipeline Queries</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, sans-serif; background: #fff; color: #2c3e50; padding: 40px; line-height: 1.6; }
+h1 { font-size: 2rem; color: #1a5276; margin-bottom: 8px; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+.subtitle { color: #666; margin-bottom: 32px; font-size: 0.95rem; }
+.card-section { margin-bottom: 40px; }
+.card-section h2 { font-size: 1.3rem; color: #1a5276; margin-bottom: 12px; border-bottom: 2px solid #2980b9; padding-bottom: 4px; }
+table.layout { width: 100%; border-collapse: collapse; margin-top: 8px; }
+table.layout td { vertical-align: top; padding: 12px; }
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+canvas { width: 100%; border: 1px solid #e0e0e0; border-radius: 4px; }
+.key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 8px 12px; margin-top: 12px; font-size: 0.9rem; }
+.example { font-style: italic; color: #555; margin-top: 8px; font-size: 0.9rem; }
+ul { margin: 8px 0 8px 20px; font-size: 0.92rem; }
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Relative Time in Pipeline Queries</h1>
+<p class="subtitle">NOW() - INTERVAL shifts on retry &mdash; different data, no error, &lsquo;success&rsquo;</p>
+
+<div class="card-section">
+    <h2>The Anti-Pattern</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p><code>WHERE ts &gt; NOW() - INTERVAL '1 hour'</code></p>
+                <p style="margin-top: 8px;">Pipeline fails at 10:02, retries at 10:07 &mdash; window silently shifts 5 min. No error is raised. The query &ldquo;succeeds&rdquo; with different data.</p>
+                <div class="key-point">The result set changes between attempts with no indication anything went wrong.</div>
+                <p style="margin-top: 12px; font-weight: 600;">Domain examples:</p>
+                <ul>
+                    <li>Scheduled ETL</li>
+                    <li>Airflow DAGs</li>
+                    <li>Cron-triggered pipelines</li>
+                </ul>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Design Pattern</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Pre-construct absolute time boundaries. Pass as parameters. Same params = same results.</p>
+                <p style="margin-top: 12px; font-weight: 600;">Steps:</p>
+                <ul>
+                    <li>Scheduler computes <code>window_start</code> and <code>window_end</code> once</li>
+                    <li>Pass both as immutable parameters to the query</li>
+                    <li>Query becomes a pure function of its inputs</li>
+                    <li>Retries reuse the same parameters</li>
+                    <li>Backfills replay any historical window trivially</li>
+                </ul>
+                <div class="key-point" style="border-left-color: #27ae60;">Deterministic. Reproducible. Backfillable.</div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// Canvas 1: Anti-pattern — shifting time windows
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Timeline baseline
+    var tlY = 150;
+    var tlLeft = 60;
+    var tlRight = w - 40;
+
+    // Draw timeline axis
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(tlLeft, tlY);
+    ctx.lineTo(tlRight, tlY);
+    ctx.stroke();
+
+    // Arrow at end
+    ctx.beginPath();
+    ctx.moveTo(tlRight - 8, tlY - 5);
+    ctx.lineTo(tlRight, tlY);
+    ctx.lineTo(tlRight - 8, tlY + 5);
+    ctx.fill();
+
+    // Time markers
+    var times = ['09:02', '09:07', '10:02', '10:07'];
+    var positions = [120, 180, 500, 560];
+
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#2c3e50';
+    ctx.textAlign = 'center';
+    for (var i = 0; i < times.length; i++) {
+        ctx.beginPath();
+        ctx.moveTo(positions[i], tlY - 5);
+        ctx.lineTo(positions[i], tlY + 5);
+        ctx.stroke();
+        ctx.fillText(times[i], positions[i], tlY + 18);
+    }
+
+    // Window 1: 09:02 to 10:02 (first execution)
+    var w1Left = 120;
+    var w1Right = 500;
+    var w1Y = 70;
+
+    ctx.fillStyle = 'rgba(26, 82, 118, 0.15)';
+    ctx.fillRect(w1Left, w1Y, w1Right - w1Left, 30);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(w1Left, w1Y, w1Right - w1Left, 30);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Window @ 10:02 (failed)', (w1Left + w1Right) / 2, w1Y - 8);
+
+    // Window 2: 09:07 to 10:07 (retry)
+    var w2Left = 180;
+    var w2Right = 560;
+    var w2Y = 190;
+
+    ctx.fillStyle = 'rgba(230, 126, 34, 0.15)';
+    ctx.fillRect(w2Left, w2Y, w2Right - w2Left, 30);
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(w2Left, w2Y, w2Right - w2Left, 30);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Window @ 10:07 (retry)', (w2Left + w2Right) / 2, w2Y + 45);
+
+    // Highlight the difference zone (red overlap area)
+    // Left gap: 09:02–09:07 (in window 1 only)
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.3)';
+    ctx.fillRect(w1Left, w1Y, 60, 30);
+
+    // Right gap: 10:02–10:07 (in window 2 only)
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.3)';
+    ctx.fillRect(500, w2Y, 60, 30);
+
+    // Red callout for difference
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('5 min of different data!', 350, 140);
+
+    // Red arrows pointing to the gaps
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    // Arrow to left gap
+    ctx.beginPath();
+    ctx.moveTo(280, 138);
+    ctx.lineTo(150, 95);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(150, 95);
+    ctx.lineTo(156, 102);
+    ctx.moveTo(150, 95);
+    ctx.lineTo(158, 94);
+    ctx.stroke();
+
+    // Arrow to right gap
+    ctx.beginPath();
+    ctx.moveTo(420, 138);
+    ctx.lineTo(530, 195);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(530, 195);
+    ctx.lineTo(524, 188);
+    ctx.moveTo(530, 195);
+    ctx.lineTo(522, 196);
+    ctx.stroke();
+
+    // Execution points
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath();
+    ctx.arc(500, tlY, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '11px system-ui';
+    ctx.fillText('FAIL', 500, tlY - 12);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.beginPath();
+    ctx.arc(560, tlY, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#e67e22';
+    ctx.font = '11px system-ui';
+    ctx.fillText('RETRY', 560, tlY - 12);
+
+    // Bottom warning
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Backfill? Impossible. Reproduce? Can\'t.', w / 2, h - 25);
+
+    // Title
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('NOW() - INTERVAL shifts silently on retry', tlLeft, 25);
+})();
+
+// Canvas 2: Design pattern — fixed time boundaries
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Scheduler box
+    var schedX = 40, schedY = 40, schedW = 160, schedH = 50;
+    ctx.fillStyle = 'rgba(26, 82, 118, 0.1)';
+    ctx.fillRect(schedX, schedY, schedW, schedH);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(schedX, schedY, schedW, schedH);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Scheduler', schedX + schedW / 2, schedY + 22);
+    ctx.font = '11px system-ui';
+    ctx.fillText('(computes once)', schedX + schedW / 2, schedY + 40);
+
+    // Parameters box
+    var paramX = 280, paramY = 40, paramW = 200, paramH = 50;
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.1)';
+    ctx.fillRect(paramX, paramY, paramW, paramH);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(paramX, paramY, paramW, paramH);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('window_start, window_end', paramX + paramW / 2, paramY + 22);
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('(fixed, immutable)', paramX + paramW / 2, paramY + 40);
+
+    // Arrow from scheduler to params
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(schedX + schedW, schedY + schedH / 2);
+    ctx.lineTo(paramX, paramY + paramH / 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(paramX - 8, paramY + paramH / 2 - 4);
+    ctx.lineTo(paramX, paramY + paramH / 2);
+    ctx.lineTo(paramX - 8, paramY + paramH / 2 + 4);
+    ctx.fillStyle = '#1a5276';
+    ctx.fill();
+
+    // Query box (pure function)
+    var queryX = 280, queryY = 130, queryW = 200, queryH = 50;
+    ctx.fillStyle = 'rgba(26, 82, 118, 0.1)';
+    ctx.fillRect(queryX, queryY, queryW, queryH);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(queryX, queryY, queryW, queryH);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Query', queryX + queryW / 2, queryY + 22);
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('(pure function of inputs)', queryX + queryW / 2, queryY + 40);
+
+    // Arrow from params to query
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(paramX + paramW / 2, paramY + paramH);
+    ctx.lineTo(queryX + queryW / 2, queryY);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(queryX + queryW / 2 - 4, queryY - 8);
+    ctx.lineTo(queryX + queryW / 2, queryY);
+    ctx.lineTo(queryX + queryW / 2 + 4, queryY - 8);
+    ctx.fillStyle = '#27ae60';
+    ctx.fill();
+
+    // Retry scenario
+    var retryX = 530, retryY = 100, retryW = 150, retryH = 80;
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.08)';
+    ctx.fillRect(retryX, retryY, retryW, retryH);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 3]);
+    ctx.strokeRect(retryX, retryY, retryW, retryH);
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Retry', retryX + retryW / 2, retryY + 20);
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('Same params', retryX + retryW / 2, retryY + 38);
+    ctx.fillText('→ Same results', retryX + retryW / 2, retryY + 54);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('✓ Identical output', retryX + retryW / 2, retryY + 72);
+
+    // Arrow from query to retry
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(queryX + queryW, queryY + queryH / 2);
+    ctx.lineTo(retryX, retryY + retryH / 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(retryX - 8, retryY + retryH / 2 - 4);
+    ctx.lineTo(retryX, retryY + retryH / 2);
+    ctx.lineTo(retryX - 8, retryY + retryH / 2 + 4);
+    ctx.fillStyle = '#27ae60';
+    ctx.fill();
+
+    // Backfill scenario at bottom
+    var bfX = 80, bfY = 210, bfW = 560, bfH = 55;
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.06)';
+    ctx.fillRect(bfX, bfY, bfW, bfH);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(bfX, bfY, bfW, bfH);
+
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = '12px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Backfill: replay(window_start="09:00", window_end="10:00") → exact same query, any time', bfX + 15, bfY + 22);
+    ctx.fillText('Audit: every run is traceable to its explicit time parameters', bfX + 15, bfY + 42);
+
+    // Bottom green confirmation
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Deterministic. Reproducible. Backfillable.', w / 2, h - 15);
+
+    // Title
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Fixed boundaries → pure function → safe retries', 40, 25);
+})();
+</script>
+
+</body>
+</html>

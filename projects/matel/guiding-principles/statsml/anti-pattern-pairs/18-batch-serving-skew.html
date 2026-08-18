@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Train on Batch-Computed Features, Serve with Real-Time Features</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, sans-serif; background: #fff; color: #2c3e50; padding: 40px; line-height: 1.6; }
+h1 { font-size: 2rem; color: #1a5276; margin-bottom: 8px; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+.subtitle { color: #666; margin-bottom: 32px; font-size: 0.95rem; }
+.card-section { margin-bottom: 40px; }
+.card-section h2 { font-size: 1.3rem; color: #1a5276; margin-bottom: 12px; border-bottom: 2px solid #2980b9; padding-bottom: 4px; }
+table.layout { width: 100%; border-collapse: collapse; margin-top: 8px; }
+table.layout td { vertical-align: top; padding: 12px; }
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+canvas { width: 100%; border: 1px solid #e0e0e0; border-radius: 4px; }
+.key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 8px 12px; margin-top: 12px; font-size: 0.9rem; }
+.example { font-style: italic; color: #555; margin-top: 8px; font-size: 0.9rem; }
+ul { margin: 8px 0 8px 20px; font-size: 0.92rem; }
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Train on Batch-Computed Features, Serve with Real-Time Features</h1>
+<p class="subtitle">Batch SQL '30-day average' ≠ streaming pipeline rolling average — subtle differences compound</p>
+
+<div class="card-section">
+    <h2>The Anti-Pattern</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Training uses batch-computed features (perfect SQL queries), but serving uses a streaming pipeline with different edge cases, NULL handling, and timestamp logic. The same feature name produces subtly different values in each context.</p>
+                <ul>
+                    <li>Feature stores with separate batch and real-time compute paths</li>
+                    <li>Real-time ML serving with streaming aggregations</li>
+                    <li>Any system where batch-train and online-serve compute features differently</li>
+                    <li>Different NULL handling: SQL COALESCE vs. stream skip</li>
+                </ul>
+                <div class="key-point">Training-serving skew is invisible at deployment time and only shows up as silent accuracy loss in production.</div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Design Pattern</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Use a unified feature pipeline: the same code computes features for both training and serving. If impossible, log serving-time features and compare against batch offline. Alert on any systematic deviation.</p>
+                <ul>
+                    <li>Single compute_feature() function used by both paths</li>
+                    <li>If dual paths unavoidable: log serving features, replay against batch</li>
+                    <li>Parity monitoring: alert if |batch - serving| > epsilon</li>
+                    <li>Feature store with point-in-time correctness guarantees</li>
+                </ul>
+                <div class="key-point">Same name, same code, same result. If you can't guarantee this, you must monitor for drift between the two paths.</div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Two pipeline boxes side by side
+    var boxW = 260;
+    var boxH = 100;
+    var gap = 60;
+    var leftBox = (w - 2 * boxW - gap) / 2;
+    var rightBox = leftBox + boxW + gap;
+    var boxY = 30;
+
+    // Batch box
+    ctx.fillStyle = 'rgba(26,82,118,0.08)';
+    ctx.fillRect(leftBox, boxY, boxW, boxH);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(leftBox, boxY, boxW, boxH);
+
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('BATCH (SQL)', leftBox + boxW / 2, boxY + 22);
+
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('AVG(last 30d)', leftBox + boxW / 2, boxY + 45);
+    ctx.fillText('NULL → 0', leftBox + boxW / 2, boxY + 62);
+    ctx.fillText('timestamp: end_of_day', leftBox + boxW / 2, boxY + 79);
+
+    // Serving box
+    ctx.fillStyle = 'rgba(230,126,34,0.08)';
+    ctx.fillRect(rightBox, boxY, boxW, boxH);
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(rightBox, boxY, boxW, boxH);
+
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = '#e67e22';
+    ctx.textAlign = 'center';
+    ctx.fillText('SERVING (stream)', rightBox + boxW / 2, boxY + 22);
+
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('rolling_avg(30d)', rightBox + boxW / 2, boxY + 45);
+    ctx.fillText('NULL → skip', rightBox + boxW / 2, boxY + 62);
+    ctx.fillText('timestamp: event_time', rightBox + boxW / 2, boxY + 79);
+
+    // Big red "not equal" between them
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 36px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('≠', leftBox + boxW + gap / 2, boxY + boxH / 2 + 12);
+
+    // Diverging lines below
+    var lineY = boxY + boxH + 40;
+    var lineLeft = 100;
+    var lineRight = w - 100;
+    var lineW = lineRight - lineLeft;
+
+    // Batch line (blue)
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    var batchVals = [0.5, 0.52, 0.48, 0.51, 0.50, 0.53, 0.49, 0.52, 0.50, 0.51];
+    for (var i = 0; i < batchVals.length; i++) {
+        var x = lineLeft + lineW * (i / (batchVals.length - 1));
+        var y = lineY + 60 - batchVals[i] * 80;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Serving line (orange, diverges)
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    var servVals = [0.5, 0.49, 0.45, 0.43, 0.40, 0.38, 0.35, 0.33, 0.30, 0.28];
+    for (var i = 0; i < servVals.length; i++) {
+        var x = lineLeft + lineW * (i / (servVals.length - 1));
+        var y = lineY + 60 - servVals[i] * 80;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Labels for lines
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'left';
+    ctx.fillText('batch feature value', lineRight + 5, lineY + 60 - batchVals[9] * 80 + 4);
+    ctx.fillStyle = '#e67e22';
+    ctx.fillText('serving feature value', lineRight + 5, lineY + 60 - servVals[9] * 80 + 4);
+
+    // Divergence label
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Subtle differences compound over time', w / 2, h - 15);
+})();
+
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Single compute box at top center
+    var boxW = 220;
+    var boxH = 50;
+    var boxX = (w - boxW) / 2;
+    var boxY = 40;
+
+    ctx.fillStyle = 'rgba(39,174,96,0.1)';
+    ctx.fillRect(boxX, boxY, boxW, boxH);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(boxX, boxY, boxW, boxH);
+
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText('compute_feature()', boxX + boxW / 2, boxY + 30);
+
+    // Arrows going to Training and Serving
+    var arrowY = boxY + boxH + 5;
+    var trainX = w / 2 - 120;
+    var serveX = w / 2 + 120;
+    var targetY = arrowY + 60;
+
+    // Left arrow to Training
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(boxX + boxW * 0.3, boxY + boxH);
+    ctx.lineTo(trainX, targetY);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(trainX - 5, targetY - 8);
+    ctx.lineTo(trainX, targetY);
+    ctx.lineTo(trainX + 5, targetY - 8);
+    ctx.fillStyle = '#1a5276';
+    ctx.fill();
+
+    // Right arrow to Serving
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(boxX + boxW * 0.7, boxY + boxH);
+    ctx.lineTo(serveX, targetY);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(serveX - 5, targetY - 8);
+    ctx.lineTo(serveX, targetY);
+    ctx.lineTo(serveX + 5, targetY - 8);
+    ctx.fillStyle = '#e67e22';
+    ctx.fill();
+
+    // Training label
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Training', trainX, targetY + 20);
+
+    // Serving label
+    ctx.fillStyle = '#e67e22';
+    ctx.fillText('Serving', serveX, targetY + 20);
+
+    // Equals sign between them at target level
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 24px system-ui';
+    ctx.fillText('=', w / 2, targetY + 18);
+
+    // Parity monitoring box below
+    var monBoxY = targetY + 50;
+    var monBoxW = 440;
+    var monBoxX = (w - monBoxW) / 2;
+    var monBoxH = 45;
+
+    ctx.fillStyle = 'rgba(39,174,96,0.06)';
+    ctx.fillRect(monBoxX, monBoxY, monBoxW, monBoxH);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(monBoxX, monBoxY, monBoxW, monBoxH);
+
+    ctx.font = '12px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText('+ parity monitoring: alert if |batch − serving| > ε', w / 2, monBoxY + 28);
+
+    // Title
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText('Unified feature pipeline — same code, both paths', w / 2, 20);
+
+    // Bottom note
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    ctx.fillText('One source of truth eliminates training-serving skew', w / 2, h - 20);
+})();
+</script>
+
+</body>
+</html>

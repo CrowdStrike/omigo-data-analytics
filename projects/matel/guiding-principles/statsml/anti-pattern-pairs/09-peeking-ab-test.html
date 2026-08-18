@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Check A/B Test Results Daily Until Significant</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, sans-serif; background: #fff; color: #2c3e50; padding: 40px; line-height: 1.6; }
+h1 { font-size: 2rem; color: #1a5276; margin-bottom: 8px; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+.subtitle { color: #666; margin-bottom: 32px; font-size: 0.95rem; }
+.card-section { margin-bottom: 40px; }
+.card-section h2 { font-size: 1.3rem; color: #1a5276; margin-bottom: 12px; border-bottom: 2px solid #2980b9; padding-bottom: 4px; }
+table.layout { width: 100%; border-collapse: collapse; margin-top: 8px; }
+table.layout td { vertical-align: top; padding: 12px; }
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+canvas { width: 100%; border: 1px solid #e0e0e0; border-radius: 4px; }
+.key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 8px 12px; margin-top: 12px; font-size: 0.9rem; }
+.example { font-style: italic; color: #555; margin-top: 8px; font-size: 0.9rem; }
+ul { margin: 8px 0 8px 20px; font-size: 0.92rem; }
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Check A/B Test Results Daily Until Significant</h1>
+<p class="subtitle">Peeking inflates false positive rate from 5% to 25-50%</p>
+
+<div class="card-section">
+    <h2>The Anti-Pattern</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Check daily, stop when p &lt; 0.05. FPR inflates because you stop on false significance but never stop on "looks bad". Root cause: never computing test power upfront, so you don't know how long to run — you peek because you have no stopping rule.</p>
+                <div class="key-point">Every peek is a new hypothesis test. With 9 peeks at α=0.05, your true FPR is 25-50%, not 5%. Not calculating power means you can't know when to stop.</div>
+                <p class="example">Domain examples:</p>
+                <ul>
+                    <li>Every A/B test platform</li>
+                    <li>Product teams under pressure to "call it early"</li>
+                    <li>Growth teams that never ran a power calculation</li>
+                    <li>Tests launched without a pre-committed sample size</li>
+                </ul>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Design Pattern</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Fix sample size upfront (power analysis) — evaluate ONCE at the end. OR use sequential testing with always-valid p-values. No color-coding results until test is COMPLETE.</p>
+                <div class="key-point" style="border-left-color: #27ae60;">Pre-commit to a sample size. Evaluate once. FPR stays exactly at α.</div>
+                <p class="example">Steps:</p>
+                <ul>
+                    <li>Run power analysis before starting</li>
+                    <li>Fix n per group (e.g., 5000)</li>
+                    <li>Collect data — no peeking</li>
+                    <li>Evaluate once at planned endpoint</li>
+                    <li>OR use sequential methods (always-valid p-values)</li>
+                </ul>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// Canvas 1: P-value trajectory with peeking
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var padL = 60, padR = 30, padT = 40, padB = 50;
+    var plotW = w - padL - padR;
+    var plotH = h - padT - padB;
+
+    // Background
+    ctx.fillStyle = '#fafafa';
+    ctx.fillRect(padL, padT, plotW, plotH);
+
+    // Title
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#2c3e50';
+    ctx.textAlign = 'center';
+    ctx.fillText('Daily p-value peeking — optional stopping bias', w / 2, 20);
+
+    // Y-axis (p-value 0 to 1)
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1;
+    var yTicks = [0, 0.05, 0.2, 0.4, 0.6, 0.8, 1.0];
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#666';
+    for (var i = 0; i < yTicks.length; i++) {
+        var y = padT + plotH - (yTicks[i] * plotH);
+        ctx.beginPath();
+        ctx.moveTo(padL, y);
+        ctx.lineTo(padL + plotW, y);
+        ctx.stroke();
+        ctx.fillText(yTicks[i].toFixed(2), padL - 8, y + 4);
+    }
+
+    // X-axis labels (days)
+    var days = 9;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#666';
+    for (var d = 1; d <= days; d++) {
+        var x = padL + ((d - 0.5) / days) * plotW;
+        ctx.fillText('Day ' + d, x, h - 12);
+    }
+
+    // Alpha threshold line
+    var alphaY = padT + plotH - (0.05 * plotH);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(padL, alphaY);
+    ctx.lineTo(padL + plotW, alphaY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Alpha label
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'left';
+    ctx.fillText('α = 0.05', padL + plotW + 2, alphaY + 4);
+
+    // P-value trajectory (simulated random walk that dips below 0.05 on day 6)
+    var pValues = [0.45, 0.32, 0.18, 0.12, 0.08, 0.03, 0.07, 0.11, 0.09];
+    var stopDay = 5; // index where it first goes below 0.05 (day 6)
+
+    // Draw the trajectory
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (var i = 0; i <= stopDay; i++) {
+        var x = padL + ((i + 0.5) / days) * plotW;
+        var y = padT + plotH - (pValues[i] * plotH);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Draw dots on the line
+    for (var i = 0; i <= stopDay; i++) {
+        var x = padL + ((i + 0.5) / days) * plotW;
+        var y = padT + plotH - (pValues[i] * plotH);
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = i === stopDay ? '#e74c3c' : '#1a5276';
+        ctx.fill();
+    }
+
+    // Dashed continuation (what would have happened)
+    ctx.strokeStyle = '#aaa';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    var prevX = padL + ((stopDay + 0.5) / days) * plotW;
+    var prevY = padT + plotH - (pValues[stopDay] * plotH);
+    ctx.moveTo(prevX, prevY);
+    for (var i = stopDay + 1; i < days; i++) {
+        var x = padL + ((i + 0.5) / days) * plotW;
+        var y = padT + plotH - (pValues[i] * plotH);
+        ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Grey dots for continuation
+    for (var i = stopDay + 1; i < days; i++) {
+        var x = padL + ((i + 0.5) / days) * plotW;
+        var y = padT + plotH - (pValues[i] * plotH);
+        ctx.beginPath();
+        ctx.arc(x, y, 3, 0, Math.PI * 2);
+        ctx.fillStyle = '#aaa';
+        ctx.fill();
+    }
+
+    // STOP! marker
+    var stopX = padL + ((stopDay + 0.5) / days) * plotW;
+    var stopY = padT + plotH - (pValues[stopDay] * plotH);
+
+    // Arrow pointing to the stop point
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 16px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('STOP!', stopX, stopY - 20);
+
+    // Draw a small downward arrow
+    ctx.beginPath();
+    ctx.moveTo(stopX, stopY - 14);
+    ctx.lineTo(stopX - 4, stopY - 10);
+    ctx.lineTo(stopX + 4, stopY - 10);
+    ctx.closePath();
+    ctx.fill();
+
+    // FPR warning label
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('FPR inflated: 5% → 25-50%!', w / 2, h - 32);
+
+    // Y-axis title
+    ctx.save();
+    ctx.translate(16, padT + plotH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    ctx.fillText('p-value', 0, 0);
+    ctx.restore();
+})();
+
+// Canvas 2: Pre-committed sample size with no peeking
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var padL = 40, padR = 40, padT = 40, padB = 40;
+    var plotW = w - padL - padR;
+    var plotH = h - padT - padB;
+
+    // Title
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#2c3e50';
+    ctx.textAlign = 'center';
+    ctx.fillText('Fixed sample size — evaluate once at the end', w / 2, 20);
+
+    // Progress bar background
+    var barY = padT + 30;
+    var barH = 36;
+    ctx.fillStyle = '#ecf0f1';
+    ctx.strokeStyle = '#bdc3c7';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(padL, barY, plotW, barH, 4);
+    ctx.fill();
+    ctx.stroke();
+
+    // Progress bar fill (full)
+    ctx.fillStyle = '#27ae60';
+    ctx.beginPath();
+    ctx.roundRect(padL + 2, barY + 2, plotW - 4, barH - 4, 3);
+    ctx.fill();
+
+    // Progress bar label
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.fillText('n = 5000 per group (pre-committed)', w / 2, barY + barH / 2 + 4);
+
+    // No peeking zone box
+    var zoneY = barY + barH + 30;
+    var zoneH = 80;
+    var zoneX = padL + 60;
+    var zoneW = plotW - 120;
+
+    // Dashed border box
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([8, 5]);
+    ctx.strokeRect(zoneX, zoneY, zoneW, zoneH);
+    ctx.setLineDash([]);
+
+    // Fill with light orange
+    ctx.fillStyle = 'rgba(230, 126, 34, 0.08)';
+    ctx.fillRect(zoneX, zoneY, zoneW, zoneH);
+
+    // No peeking zone text
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#e67e22';
+    ctx.textAlign = 'center';
+    ctx.fillText('NO PEEKING ZONE', w / 2, zoneY + 30);
+
+    // Lock icons (text representation)
+    ctx.font = '20px system-ui';
+    ctx.fillText('🔒', zoneX + 30, zoneY + 55);
+    ctx.fillText('🔒', zoneX + zoneW - 30, zoneY + 55);
+
+    // Subtext in zone
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#e67e22';
+    ctx.fillText('Data collection in progress — results hidden', w / 2, zoneY + 65);
+
+    // Timeline arrow below the zone
+    var arrowY = zoneY + zoneH + 30;
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(padL, arrowY);
+    ctx.lineTo(padL + plotW, arrowY);
+    ctx.stroke();
+
+    // Arrow head
+    ctx.beginPath();
+    ctx.moveTo(padL + plotW, arrowY);
+    ctx.lineTo(padL + plotW - 8, arrowY - 5);
+    ctx.lineTo(padL + plotW - 8, arrowY + 5);
+    ctx.closePath();
+    ctx.fillStyle = '#666';
+    ctx.fill();
+
+    // Start marker
+    ctx.beginPath();
+    ctx.arc(padL + 10, arrowY, 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#1a5276';
+    ctx.fill();
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    ctx.fillText('START', padL + 10, arrowY + 16);
+
+    // EVALUATE marker at the end
+    var evalX = padL + plotW - 20;
+    ctx.beginPath();
+    ctx.arc(evalX, arrowY, 8, 0, Math.PI * 2);
+    ctx.fillStyle = '#27ae60';
+    ctx.fill();
+
+    // Green checkmark
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(evalX - 4, arrowY);
+    ctx.lineTo(evalX - 1, arrowY + 3);
+    ctx.lineTo(evalX + 5, arrowY - 4);
+    ctx.stroke();
+
+    // EVALUATE label
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText('EVALUATE', evalX, arrowY - 16);
+
+    // FPR stays at 5% label
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText('FPR stays at exactly 5%', w / 2, h - 12);
+})();
+</script>
+
+</body>
+</html>

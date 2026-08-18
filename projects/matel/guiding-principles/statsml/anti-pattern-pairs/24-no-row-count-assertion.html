@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>No Row Count Assertion After JOIN</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, sans-serif; background: #fff; color: #2c3e50; padding: 40px; line-height: 1.6; }
+h1 { font-size: 2rem; color: #1a5276; margin-bottom: 8px; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+.subtitle { color: #666; margin-bottom: 32px; font-size: 0.95rem; }
+.card-section { margin-bottom: 40px; }
+.card-section h2 { font-size: 1.3rem; color: #1a5276; margin-bottom: 12px; border-bottom: 2px solid #2980b9; padding-bottom: 4px; }
+table.layout { width: 100%; border-collapse: collapse; margin-top: 8px; }
+table.layout td { vertical-align: top; padding: 12px; }
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+canvas { width: 100%; border: 1px solid #e0e0e0; border-radius: 4px; }
+.key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 8px 12px; margin-top: 12px; font-size: 0.9rem; }
+.example { font-style: italic; color: #555; margin-top: 8px; font-size: 0.9rem; }
+ul { margin: 8px 0 8px 20px; font-size: 0.92rem; }
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>No Row Count Assertion After JOIN</h1>
+<p class="subtitle">Users (10K) JOIN Orders (50K) = 50K rows. Nobody checked. Revenue per user wrong by 5x.</p>
+
+<div class="card-section">
+    <h2>The Anti-Pattern</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>JOIN produces unexpected row count, nobody validates. Fanout or dropped rows go unnoticed.</p>
+                <div class="key-point">No assertion = silent error. Downstream metrics corrupted without any signal.</div>
+                <p style="margin-top: 12px; font-weight: 600; font-size: 0.92rem;">Domain examples:</p>
+                <ul>
+                    <li>Any pipeline with joins</li>
+                    <li>ETL</li>
+                    <li>Feature engineering on relational data</li>
+                </ul>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Design Pattern</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Assert row count before/after every join. If output &gt; left input &rarr; fanout &rarr; investigate. If output &lt; left &rarr; dropped rows &rarr; investigate.</p>
+                <div class="key-point" style="border-left-color: #27ae60;">Gate every join with a count assertion. Halt on unexpected changes.</div>
+                <p style="margin-top: 12px; font-weight: 600; font-size: 0.92rem;">Steps:</p>
+                <ul>
+                    <li>Record row count of left table before join</li>
+                    <li>Execute join</li>
+                    <li>Assert output count &asymp; left count (within tolerance)</li>
+                    <li>If assertion fails &rarr; halt and investigate</li>
+                    <li>Only proceed when count is validated</li>
+                </ul>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// Canvas 1: Anti-pattern - no assertion, silent fanout
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Draw "Users" table box
+    ctx.fillStyle = '#1a5276';
+    ctx.fillRect(40, 60, 140, 70);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Users', 110, 90);
+    ctx.font = '13px system-ui';
+    ctx.fillText('10K rows', 110, 112);
+
+    // Draw "Orders" table box
+    ctx.fillStyle = '#1a5276';
+    ctx.fillRect(40, 170, 140, 70);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillText('Orders', 110, 200);
+    ctx.font = '13px system-ui';
+    ctx.fillText('50K rows', 110, 222);
+
+    // JOIN arrow
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(180, 95);
+    ctx.lineTo(270, 145);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(180, 205);
+    ctx.lineTo(270, 155);
+    ctx.stroke();
+
+    // JOIN label
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('JOIN', 240, 130);
+
+    // Arrow to result
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(300, 150);
+    ctx.lineTo(380, 150);
+    ctx.lineTo(370, 143);
+    ctx.moveTo(380, 150);
+    ctx.lineTo(370, 157);
+    ctx.stroke();
+
+    // Result box
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(390, 110, 160, 80);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Result', 470, 140);
+    ctx.font = '13px system-ui';
+    ctx.fillText('50K rows', 470, 162);
+    ctx.font = '11px system-ui';
+    ctx.fillText('(expected 10K)', 470, 180);
+
+    // Red warning label
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 14px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('5x fanout! Revenue/user WRONG', 470, 225);
+
+    // No assertion label
+    ctx.fillStyle = '#999';
+    ctx.font = 'italic 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('No assertion = silent error', 470, 260);
+
+    // X mark (no check)
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(610, 120);
+    ctx.lineTo(640, 150);
+    ctx.moveTo(640, 120);
+    ctx.lineTo(610, 150);
+    ctx.stroke();
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('No check', 625, 165);
+})();
+
+// Canvas 2: Design pattern - assertion gate catches fanout
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Draw "Users" table box
+    ctx.fillStyle = '#1a5276';
+    ctx.fillRect(30, 60, 120, 70);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Users', 90, 88);
+    ctx.font = '12px system-ui';
+    ctx.fillText('10K rows', 90, 108);
+
+    // Draw "Orders" table box
+    ctx.fillStyle = '#1a5276';
+    ctx.fillRect(30, 170, 120, 70);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillText('Orders', 90, 198);
+    ctx.font = '12px system-ui';
+    ctx.fillText('50K rows', 90, 218);
+
+    // JOIN arrows
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(150, 95);
+    ctx.lineTo(220, 145);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(150, 205);
+    ctx.lineTo(220, 155);
+    ctx.stroke();
+
+    // JOIN label
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('JOIN', 200, 130);
+
+    // Arrow to gate
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(250, 150);
+    ctx.lineTo(320, 150);
+    ctx.lineTo(312, 143);
+    ctx.moveTo(320, 150);
+    ctx.lineTo(312, 157);
+    ctx.stroke();
+
+    // Assertion gate (green box)
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(330, 105, 160, 90);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('ASSERT', 410, 130);
+    ctx.font = '12px system-ui';
+    ctx.fillText('count ≈ 10K?', 410, 150);
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('Result: 50K', 410, 172);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('FAIL! 50K ≠ 10K', 410, 190);
+
+    // HALT output
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(490, 150);
+    ctx.lineTo(560, 150);
+    ctx.lineTo(552, 143);
+    ctx.moveTo(560, 150);
+    ctx.lineTo(552, 157);
+    ctx.stroke();
+
+    // HALT box
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(565, 120, 130, 60);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('HALT!', 630, 145);
+    ctx.font = '11px system-ui';
+    ctx.fillText('Fanout detected', 630, 163);
+    ctx.fillText('→ investigate', 630, 178);
+
+    // Green checkmark for the gate concept
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 14px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('✓ Gate catches error before proceeding', 380, 250);
+
+    // Blocked pipeline indicator
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([5, 3]);
+    ctx.beginPath();
+    ctx.moveTo(630, 185);
+    ctx.lineTo(630, 270);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Pipeline blocked', 630, 282);
+})();
+</script>
+
+</body>
+</html>

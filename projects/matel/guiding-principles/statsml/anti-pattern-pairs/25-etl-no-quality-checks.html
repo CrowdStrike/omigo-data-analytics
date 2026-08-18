@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ETL Pipeline with No Data Quality Checks</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, sans-serif; background: #fff; color: #2c3e50; padding: 40px; line-height: 1.6; }
+h1 { font-size: 2rem; color: #1a5276; margin-bottom: 8px; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+.subtitle { color: #666; margin-bottom: 32px; font-size: 0.95rem; }
+.card-section { margin-bottom: 40px; }
+.card-section h2 { font-size: 1.3rem; color: #1a5276; margin-bottom: 12px; border-bottom: 2px solid #2980b9; padding-bottom: 4px; }
+table.layout { width: 100%; border-collapse: collapse; margin-top: 8px; }
+table.layout td { vertical-align: top; padding: 12px; }
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+canvas { width: 100%; border: 1px solid #e0e0e0; border-radius: 4px; }
+.key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 8px 12px; margin-top: 12px; font-size: 0.9rem; }
+.example { font-style: italic; color: #555; margin-top: 8px; font-size: 0.9rem; }
+ul { margin: 8px 0 8px 20px; font-size: 0.92rem; }
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>ETL Pipeline with No Data Quality Checks</h1>
+<p class="subtitle">Garbage at step 2 propagates silently to step 5 — discovered weeks later by user complaint</p>
+
+<div class="card-section">
+    <h2>The Anti-Pattern</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Data flows raw → cleaned → transformed → modeled → served with no validation between steps. Each stage blindly trusts its input, so corruption introduced early silently propagates downstream until an end-user notices broken reports or wrong predictions.</p>
+                <div class="key-point">No assertions, no schema checks, no distribution monitoring between pipeline stages.</div>
+                <p class="example">Domain examples:</p>
+                <ul>
+                    <li>Airflow DAGs with no intermediate data checks</li>
+                    <li>Spark jobs chaining transformations without validation</li>
+                    <li>dbt models lacking tests on source freshness and row counts</li>
+                </ul>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Design Pattern</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Validation gate between every stage: schema + distribution + business rules. HALT on failure. The pipeline stops at the first sign of corruption, preventing downstream contamination.</p>
+                <div class="key-point">Every stage boundary is a checkpoint: validate schema, check distributions, enforce business rules. Fail fast.</div>
+                <ul>
+                    <li>Schema validation: column types, nullability, expected columns</li>
+                    <li>Distribution checks: null rate, value ranges, cardinality drift</li>
+                    <li>Business rules: referential integrity, monotonicity, completeness</li>
+                    <li>HALT and alert on any violation — never pass garbage forward</li>
+                </ul>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// Canvas 1: Anti-pattern — garbage propagates silently
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var stages = ['Raw', 'Cleaned', 'Transformed', 'Modeled', 'Served'];
+    var boxW = 100, boxH = 40;
+    var startX = 40, startY = 130;
+    var gap = 120;
+
+    // Draw stage boxes and arrows
+    for (var i = 0; i < stages.length; i++) {
+        var x = startX + i * gap;
+        var y = startY;
+
+        // Box color: stage 0 is blue, stages 1-4 are red (garbage)
+        if (i === 0) {
+            ctx.fillStyle = 'rgba(26, 82, 118, 0.15)';
+            ctx.strokeStyle = '#1a5276';
+        } else {
+            ctx.fillStyle = 'rgba(231, 76, 60, 0.15)';
+            ctx.strokeStyle = '#e74c3c';
+        }
+
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(x, y, boxW, boxH, 4);
+        ctx.fill();
+        ctx.stroke();
+
+        // Stage label
+        ctx.fillStyle = i === 0 ? '#1a5276' : '#e74c3c';
+        ctx.font = 'bold 12px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(stages[i], x + boxW / 2, y + 25);
+
+        // Stage number
+        ctx.font = '10px system-ui';
+        ctx.fillStyle = '#666';
+        ctx.fillText('Step ' + (i + 1), x + boxW / 2, y - 8);
+
+        // Arrow to next stage
+        if (i < stages.length - 1) {
+            var arrowStartX = x + boxW + 4;
+            var arrowEndX = x + gap - 4;
+            var arrowY = y + boxH / 2;
+
+            ctx.strokeStyle = i >= 1 ? '#e74c3c' : '#1a5276';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(arrowStartX, arrowY);
+            ctx.lineTo(arrowEndX - 8, arrowY);
+            ctx.stroke();
+
+            // Arrowhead
+            ctx.fillStyle = i >= 1 ? '#e74c3c' : '#1a5276';
+            ctx.beginPath();
+            ctx.moveTo(arrowEndX, arrowY);
+            ctx.lineTo(arrowEndX - 10, arrowY - 5);
+            ctx.lineTo(arrowEndX - 10, arrowY + 5);
+            ctx.closePath();
+            ctx.fill();
+        }
+    }
+
+    // Garbage indicator at step 2
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('💥 Garbage introduced', startX + 1 * gap + boxW / 2, startY + boxH + 22);
+
+    // Red propagation wave
+    ctx.setLineDash([4, 3]);
+    ctx.strokeStyle = 'rgba(231, 76, 60, 0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(startX + 1 * gap + boxW / 2, startY + boxH + 28);
+    ctx.lineTo(startX + 4 * gap + boxW / 2, startY + boxH + 28);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Label: No checks between stages
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('No checks between stages!', w / 2, 50);
+
+    // Label: Discovered at step 5
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Discovered at step 5, weeks later', startX + 4 * gap + boxW / 2, startY - 35);
+
+    // Warning arrow pointing down to step 5
+    var step5CenterX = startX + 4 * gap + boxW / 2;
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(step5CenterX, startY - 28);
+    ctx.lineTo(step5CenterX, startY - 14);
+    ctx.stroke();
+    ctx.fillStyle = '#e67e22';
+    ctx.beginPath();
+    ctx.moveTo(step5CenterX, startY - 10);
+    ctx.lineTo(step5CenterX - 4, startY - 16);
+    ctx.lineTo(step5CenterX + 4, startY - 16);
+    ctx.closePath();
+    ctx.fill();
+
+    // Silence indicators between stages (no validation)
+    ctx.fillStyle = '#999';
+    ctx.font = '9px system-ui';
+    ctx.textAlign = 'center';
+    for (var i = 0; i < 4; i++) {
+        var midX = startX + i * gap + boxW + (gap - boxW) / 2 + boxW / 2 - 10;
+        ctx.fillText('(no check)', midX, startY + boxH / 2 + 30);
+    }
+
+    // Timeline at bottom
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(40, h - 30);
+    ctx.lineTo(w - 40, h - 30);
+    ctx.stroke();
+
+    ctx.fillStyle = '#999';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Day 1', 50, h - 15);
+    ctx.textAlign = 'right';
+    ctx.fillText('Weeks later...', w - 50, h - 15);
+})();
+
+// Canvas 2: Design pattern — validation gates catch garbage
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var stages = ['Raw', 'Cleaned', 'Transformed', 'Modeled', 'Served'];
+    var boxW = 90, boxH = 38;
+    var startX = 30, startY = 135;
+    var gap = 138;
+
+    // Draw stage boxes, gates, and arrows
+    for (var i = 0; i < stages.length; i++) {
+        var x = startX + i * gap;
+        var y = startY;
+
+        // Box colors: stages 0-1 are blue (processed), 2-4 are light gray (never reached)
+        if (i <= 1) {
+            ctx.fillStyle = 'rgba(26, 82, 118, 0.15)';
+            ctx.strokeStyle = '#1a5276';
+        } else {
+            ctx.fillStyle = 'rgba(200, 200, 200, 0.2)';
+            ctx.strokeStyle = '#bbb';
+        }
+
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(x, y, boxW, boxH, 4);
+        ctx.fill();
+        ctx.stroke();
+
+        // Stage label
+        ctx.fillStyle = i <= 1 ? '#1a5276' : '#999';
+        ctx.font = 'bold 11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(stages[i], x + boxW / 2, y + 24);
+
+        // Stage number
+        ctx.font = '10px system-ui';
+        ctx.fillStyle = '#666';
+        ctx.fillText('Step ' + (i + 1), x + boxW / 2, y - 8);
+
+        // Arrow and gate to next stage
+        if (i < stages.length - 1) {
+            var arrowStartX = x + boxW + 2;
+            var arrowEndX = x + gap - 2;
+            var arrowY = y + boxH / 2;
+            var gateX = arrowStartX + (arrowEndX - arrowStartX) / 2 - 8;
+
+            // Arrow segment before gate
+            ctx.strokeStyle = i === 0 ? '#1a5276' : (i === 1 ? '#e74c3c' : '#ccc');
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(arrowStartX, arrowY);
+            ctx.lineTo(gateX - 4, arrowY);
+            ctx.stroke();
+
+            // Validation gate (diamond shape)
+            var gateColor = i === 1 ? '#e74c3c' : '#27ae60';
+            ctx.fillStyle = i === 1 ? 'rgba(231, 76, 60, 0.2)' : 'rgba(39, 174, 96, 0.2)';
+            ctx.strokeStyle = gateColor;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(gateX + 8, arrowY - 12);
+            ctx.lineTo(gateX + 20, arrowY);
+            ctx.lineTo(gateX + 8, arrowY + 12);
+            ctx.lineTo(gateX - 4, arrowY);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Gate label
+            ctx.fillStyle = gateColor;
+            ctx.font = 'bold 8px system-ui';
+            ctx.textAlign = 'center';
+            if (i === 1) {
+                ctx.fillText('HALT', gateX + 8, arrowY + 26);
+            } else {
+                ctx.fillText('PASS', gateX + 8, arrowY + 26);
+            }
+
+            // Arrow segment after gate (only if gate passes)
+            if (i !== 1) {
+                ctx.strokeStyle = '#27ae60';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(gateX + 22, arrowY);
+                ctx.lineTo(arrowEndX - 8, arrowY);
+                ctx.stroke();
+
+                // Arrowhead
+                ctx.fillStyle = '#27ae60';
+                ctx.beginPath();
+                ctx.moveTo(arrowEndX, arrowY);
+                ctx.lineTo(arrowEndX - 8, arrowY - 4);
+                ctx.lineTo(arrowEndX - 8, arrowY + 4);
+                ctx.closePath();
+                ctx.fill();
+            } else {
+                // X mark after halted gate
+                ctx.strokeStyle = '#e74c3c';
+                ctx.lineWidth = 2.5;
+                var xPos = gateX + 30;
+                ctx.beginPath();
+                ctx.moveTo(xPos - 5, arrowY - 5);
+                ctx.lineTo(xPos + 5, arrowY + 5);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(xPos + 5, arrowY - 5);
+                ctx.lineTo(xPos - 5, arrowY + 5);
+                ctx.stroke();
+            }
+        }
+    }
+
+    // HALT message callout at gate between step 2 and 3
+    var haltX = startX + 1 * gap + boxW + (gap - boxW) / 2;
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('HALT! Null rate exceeded tolerance', w / 2, 45);
+
+    // Arrow from HALT label to gate
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 2]);
+    ctx.beginPath();
+    ctx.moveTo(w / 2, 50);
+    ctx.lineTo(haltX, startY + boxH / 2 - 16);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Protected stages label
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Pipeline stops — downstream protected', w / 2, h - 25);
+
+    // Garbage label at step 2 output
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('garbage detected', startX + 1 * gap + boxW / 2, startY + boxH + 18);
+
+    // Shield icon hint on protected stages
+    ctx.fillStyle = '#ddd';
+    ctx.font = '16px system-ui';
+    for (var i = 2; i < 5; i++) {
+        var sx = startX + i * gap + boxW / 2;
+        ctx.textAlign = 'center';
+        ctx.fillText('🛡️', sx, startY + boxH + 20);
+    }
+})();
+</script>
+
+</body>
+</html>

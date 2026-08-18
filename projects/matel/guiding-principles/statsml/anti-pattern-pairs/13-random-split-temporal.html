@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Random Train/Test Split on Time-Ordered Data</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, sans-serif; background: #fff; color: #2c3e50; padding: 40px; line-height: 1.6; }
+h1 { font-size: 2rem; color: #1a5276; margin-bottom: 8px; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+.subtitle { color: #666; margin-bottom: 32px; font-size: 0.95rem; }
+.card-section { margin-bottom: 40px; }
+.card-section h2 { font-size: 1.3rem; color: #1a5276; margin-bottom: 12px; border-bottom: 2px solid #2980b9; padding-bottom: 4px; }
+table.layout { width: 100%; border-collapse: collapse; margin-top: 8px; }
+table.layout td { vertical-align: top; padding: 12px; }
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+canvas { width: 100%; border: 1px solid #e0e0e0; border-radius: 4px; }
+.key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 8px 12px; margin-top: 12px; font-size: 0.9rem; }
+.example { font-style: italic; color: #555; margin-top: 8px; font-size: 0.9rem; }
+ul { margin: 8px 0 8px 20px; font-size: 0.92rem; }
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Random Train/Test Split on Time-Ordered Data</h1>
+<p class="subtitle">Be aware of what data goes into training vs testing — make conscious decisions about temporal structure</p>
+
+<div class="card-section">
+    <h2>The Anti-Pattern</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Shuffling time-ordered data randomly mixes future observations into the training set. The model learns patterns that haven't occurred yet at prediction time, inflating performance by 10-30% compared to a proper temporal split.</p>
+                <ul>
+                    <li>Financial datasets — stock prices, transaction volumes</li>
+                    <li>User behavior — session logs, conversion funnels</li>
+                    <li>IoT sensors — equipment degradation, temperature readings</li>
+                    <li>Clinical events — patient vitals, treatment outcomes</li>
+                </ul>
+                <div class="key-point">A model that uses tomorrow's data to predict today is not a forecaster — it's a lookup table that fails in production.</div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Design Pattern</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Pay attention to what kind of data is used for training and testing. Be aware of the temporal structure and make conscious decisions — don't let a default shuffle decide for you.</p>
+                <ul>
+                    <li>Ask: does this data have a time dimension? If yes, decide explicitly how to handle it</li>
+                    <li>Temporal split is one option — train on past, test on future</li>
+                    <li>Expanding/sliding window CV for time-aware cross-validation</li>
+                    <li>Document your choice and why — the decision itself matters more than any one rule</li>
+                </ul>
+                <div class="key-point">The anti-pattern isn't "using random split" — it's doing it unconsciously, without asking whether the data's structure demands something else.</div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Timeline
+    var tlY = h * 0.5;
+    var tlLeft = 60;
+    var tlRight = w - 40;
+
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(tlLeft, tlY);
+    ctx.lineTo(tlRight, tlY);
+    ctx.stroke();
+
+    // Arrow at end
+    ctx.beginPath();
+    ctx.moveTo(tlRight - 8, tlY - 5);
+    ctx.lineTo(tlRight, tlY);
+    ctx.lineTo(tlRight - 8, tlY + 5);
+    ctx.fill();
+
+    // Month labels
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    for (var i = 0; i < 12; i++) {
+        var x = tlLeft + (tlRight - tlLeft) * (i / 11);
+        ctx.fillText(months[i], x, tlY + 20);
+        ctx.beginPath();
+        ctx.moveTo(x, tlY - 4);
+        ctx.lineTo(x, tlY + 4);
+        ctx.stroke();
+    }
+
+    // Random train/test dots scattered across timeline
+    var seed = 42;
+    function rand() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
+
+    var dots = [];
+    for (var i = 0; i < 24; i++) {
+        dots.push({
+            x: tlLeft + (tlRight - tlLeft) * (i / 23),
+            isTrain: rand() > 0.4
+        });
+    }
+
+    for (var i = 0; i < dots.length; i++) {
+        var d = dots[i];
+        var yOff = (i % 2 === 0) ? -25 : -40;
+        ctx.beginPath();
+        ctx.arc(d.x, tlY + yOff, 6, 0, Math.PI * 2);
+        ctx.fillStyle = d.isTrain ? '#1a5276' : '#e67e22';
+        ctx.fill();
+    }
+
+    // Highlight a future train point
+    var futureIdx = 20; // near the end
+    if (dots[futureIdx].isTrain) {
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(dots[futureIdx].x, tlY - 25, 12, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Red arrow and label
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 12px system-ui';
+        ctx.textAlign = 'left';
+        ctx.fillText('Future data in train!', dots[futureIdx].x - 60, tlY - 55);
+
+        ctx.beginPath();
+        ctx.moveTo(dots[futureIdx].x, tlY - 45);
+        ctx.lineTo(dots[futureIdx].x, tlY - 38);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
+
+    // Legend
+    ctx.font = '12px system-ui';
+    ctx.textAlign = 'left';
+    ctx.beginPath();
+    ctx.arc(tlLeft, h - 30, 6, 0, Math.PI * 2);
+    ctx.fillStyle = '#1a5276';
+    ctx.fill();
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('Train (scattered randomly)', tlLeft + 12, h - 26);
+
+    ctx.beginPath();
+    ctx.arc(tlLeft + 200, h - 30, 6, 0, Math.PI * 2);
+    ctx.fillStyle = '#e67e22';
+    ctx.fill();
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('Test (scattered randomly)', tlLeft + 212, h - 26);
+
+    // Title
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('Random shuffle mixes past and future', w / 2, 25);
+})();
+
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Timeline
+    var tlY = h * 0.5;
+    var tlLeft = 60;
+    var tlRight = w - 40;
+
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(tlLeft, tlY);
+    ctx.lineTo(tlRight, tlY);
+    ctx.stroke();
+
+    // Arrow
+    ctx.beginPath();
+    ctx.moveTo(tlRight - 8, tlY - 5);
+    ctx.lineTo(tlRight, tlY);
+    ctx.lineTo(tlRight - 8, tlY + 5);
+    ctx.fill();
+
+    // Month labels
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    for (var i = 0; i < 12; i++) {
+        var x = tlLeft + (tlRight - tlLeft) * (i / 11);
+        ctx.fillText(months[i], x, tlY + 20);
+        ctx.beginPath();
+        ctx.moveTo(x, tlY - 4);
+        ctx.lineTo(x, tlY + 4);
+        ctx.stroke();
+    }
+
+    // Split boundary at month 8 (Sep)
+    var splitX = tlLeft + (tlRight - tlLeft) * (7.5 / 11);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(splitX, tlY - 70);
+    ctx.lineTo(splitX, tlY + 40);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Split label
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText('SPLIT', splitX, tlY - 75);
+
+    // Train dots — all on left
+    for (var i = 0; i < 16; i++) {
+        var x = tlLeft + (splitX - tlLeft - 20) * (i / 15);
+        var yOff = (i % 2 === 0) ? -25 : -40;
+        ctx.beginPath();
+        ctx.arc(x, tlY + yOff, 6, 0, Math.PI * 2);
+        ctx.fillStyle = '#1a5276';
+        ctx.fill();
+    }
+
+    // Test dots — all on right
+    for (var i = 0; i < 8; i++) {
+        var x = splitX + 20 + (tlRight - splitX - 40) * (i / 7);
+        var yOff = (i % 2 === 0) ? -25 : -40;
+        ctx.beginPath();
+        ctx.arc(x, tlY + yOff, 6, 0, Math.PI * 2);
+        ctx.fillStyle = '#e67e22';
+        ctx.fill();
+    }
+
+    // Labels
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('TRAIN (past)', (tlLeft + splitX) / 2, h - 50);
+    ctx.fillStyle = '#e67e22';
+    ctx.fillText('TEST (future)', (splitX + tlRight) / 2, h - 50);
+
+    // Legend
+    ctx.font = '12px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText('Clean temporal separation — no future leakage', w / 2, h - 20);
+})();
+</script>
+
+</body>
+</html>

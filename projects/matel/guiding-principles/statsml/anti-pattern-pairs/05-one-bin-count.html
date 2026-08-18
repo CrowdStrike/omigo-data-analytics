@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Use One Bin Count for All Features</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, sans-serif; background: #fff; color: #2c3e50; padding: 40px; line-height: 1.6; }
+h1 { font-size: 2rem; color: #1a5276; margin-bottom: 8px; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+.subtitle { color: #666; margin-bottom: 32px; font-size: 0.95rem; }
+.card-section { margin-bottom: 40px; }
+.card-section h2 { font-size: 1.3rem; color: #1a5276; margin-bottom: 12px; border-bottom: 2px solid #2980b9; padding-bottom: 4px; }
+table.layout { width: 100%; border-collapse: collapse; margin-top: 8px; }
+table.layout td { vertical-align: top; padding: 12px; }
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+canvas { width: 100%; border: 1px solid #e0e0e0; border-radius: 4px; }
+.key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 8px 12px; margin-top: 12px; font-size: 0.9rem; }
+.example { font-style: italic; color: #555; margin-top: 8px; font-size: 0.9rem; }
+ul { margin: 8px 0 8px 20px; font-size: 0.92rem; }
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Use One Bin Count for All Features</h1>
+<p class="subtitle">20 bins for power-law: 1 bin has 80% of data, 19 bins are empty noise</p>
+
+<div class="card-section">
+    <h2>The Anti-Pattern</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>20 bins for everything — one-size-fits-all. Power-law feature: first bin overwhelms, rest are empty.</p>
+                <div class="key-point">Equal-width bins on skewed data produce one overloaded bin and many empty ones — you learn nothing about the distribution's structure.</div>
+                <p class="example">Domain examples:</p>
+                <ul>
+                    <li>Income (most clustered low, long tail to millions)</li>
+                    <li>Hospital charges (bulk under $10k, outliers to $500k)</li>
+                    <li>File sizes (many small files, few massive ones)</li>
+                    <li>Any skewed distribution with power-law or exponential tail</li>
+                </ul>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Design Pattern</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Multi-resolution: run at multiple bin counts. Equal-count (percentile-width) bins: width encodes density.</p>
+                <div class="key-point">Meta-distribution Gini: if &gt; 0.7, feature needs adaptive treatment.</div>
+                <ul>
+                    <li>Variable-width bins — narrow where data is dense, wide where sparse</li>
+                    <li>Each bin holds the same count of observations</li>
+                    <li>Width becomes the signal: narrow = high density, wide = low density</li>
+                    <li>No wasted bins, no information loss</li>
+                </ul>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// Anti-pattern: 20 equal-width bins on power-law data
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var marginLeft = 50, marginRight = 30, marginTop = 40, marginBottom = 50;
+    var plotW = w - marginLeft - marginRight;
+    var plotH = h - marginTop - marginBottom;
+    var numBins = 20;
+    var binWidth = plotW / numBins;
+
+    // Draw axes
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(marginLeft, marginTop);
+    ctx.lineTo(marginLeft, marginTop + plotH);
+    ctx.lineTo(marginLeft + plotW, marginTop + plotH);
+    ctx.stroke();
+
+    // Draw bins — first bin is dominant, rest nearly empty
+    for (var i = 0; i < numBins; i++) {
+        var x = marginLeft + i * binWidth;
+        var barH;
+        if (i === 0) {
+            barH = plotH * 0.9;
+        } else {
+            barH = 2 + Math.random() * 3;
+        }
+        var y = marginTop + plotH - barH;
+
+        ctx.fillStyle = 'rgba(26,82,118,0.35)';
+        ctx.fillRect(x + 1, y, binWidth - 2, barH);
+
+        if (i === 0) {
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x + 1, y, binWidth - 2, barH);
+        } else {
+            ctx.strokeStyle = '#1a5276';
+            ctx.lineWidth = 0.5;
+            ctx.strokeRect(x + 1, y, binWidth - 2, barH);
+        }
+    }
+
+    // Label "80%" on first bin
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 14px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('80%', marginLeft + binWidth / 2, marginTop + plotH * 0.05);
+
+    // Arrow and label for empty bins
+    var arrowStartX = marginLeft + binWidth * 4;
+    var arrowEndX = marginLeft + plotW - 20;
+    var arrowY = marginTop + plotH - 30;
+
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(arrowStartX, arrowY);
+    ctx.lineTo(arrowEndX, arrowY);
+    ctx.stroke();
+
+    // Arrowhead
+    ctx.beginPath();
+    ctx.moveTo(arrowEndX, arrowY);
+    ctx.lineTo(arrowEndX - 8, arrowY - 5);
+    ctx.lineTo(arrowEndX - 8, arrowY + 5);
+    ctx.closePath();
+    ctx.fillStyle = '#e74c3c';
+    ctx.fill();
+
+    // Label
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('19 bins empty/useless', (arrowStartX + arrowEndX) / 2, arrowY - 10);
+
+    // X-axis label
+    ctx.fillStyle = '#666';
+    ctx.font = '12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Feature value (equal-width bins)', marginLeft + plotW / 2, h - 10);
+})();
+
+// Design pattern: equal-count (variable-width) bins
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var marginLeft = 50, marginRight = 30, marginTop = 40, marginBottom = 60;
+    var plotW = w - marginLeft - marginRight;
+    var plotH = h - marginTop - marginBottom;
+
+    // Draw axes
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(marginLeft, marginTop);
+    ctx.lineTo(marginLeft, marginTop + plotH);
+    ctx.lineTo(marginLeft + plotW, marginTop + plotH);
+    ctx.stroke();
+
+    // 8 variable-width bins, all same height
+    // Widths: narrow on left (dense), wide on right (sparse)
+    var widths = [0.04, 0.05, 0.07, 0.09, 0.12, 0.16, 0.21, 0.26];
+    var totalW = 0;
+    for (var i = 0; i < widths.length; i++) totalW += widths[i];
+    // Normalize widths to fill plotW
+    for (var i = 0; i < widths.length; i++) widths[i] = (widths[i] / totalW) * plotW;
+
+    var barH = plotH * 0.7;
+    var barY = marginTop + (plotH - barH) / 2;
+    var x = marginLeft;
+
+    for (var i = 0; i < widths.length; i++) {
+        ctx.fillStyle = 'rgba(26,82,118,0.35)';
+        ctx.fillRect(x + 1, barY, widths[i] - 2, barH);
+
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x + 1, barY, widths[i] - 2, barH);
+
+        x += widths[i];
+    }
+
+    // Arrow underneath: narrow=dense -> wide=sparse
+    var arrowY = marginTop + plotH + 15;
+    var arrowStartX = marginLeft + 10;
+    var arrowEndX = marginLeft + plotW - 10;
+
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(arrowStartX, arrowY);
+    ctx.lineTo(arrowEndX, arrowY);
+    ctx.stroke();
+
+    // Arrowhead
+    ctx.beginPath();
+    ctx.moveTo(arrowEndX, arrowY);
+    ctx.lineTo(arrowEndX - 8, arrowY - 5);
+    ctx.lineTo(arrowEndX - 8, arrowY + 5);
+    ctx.closePath();
+    ctx.fillStyle = '#1a5276';
+    ctx.fill();
+
+    // Label on arrow
+    ctx.fillStyle = '#1a5276';
+    ctx.font = '12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('narrow = dense  →  wide = sparse', (arrowStartX + arrowEndX) / 2, arrowY + 16);
+
+    // Label: equal count per bin
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Equal count per bin (height uniform, width varies)', marginLeft + plotW / 2, marginTop - 10);
+})();
+</script>
+
+</body>
+</html>

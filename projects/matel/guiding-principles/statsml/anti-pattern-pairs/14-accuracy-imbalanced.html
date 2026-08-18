@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Evaluate with Accuracy on Imbalanced Data</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, sans-serif; background: #fff; color: #2c3e50; padding: 40px; line-height: 1.6; }
+h1 { font-size: 2rem; color: #1a5276; margin-bottom: 8px; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+.subtitle { color: #666; margin-bottom: 32px; font-size: 0.95rem; }
+.card-section { margin-bottom: 40px; }
+.card-section h2 { font-size: 1.3rem; color: #1a5276; margin-bottom: 12px; border-bottom: 2px solid #2980b9; padding-bottom: 4px; }
+table.layout { width: 100%; border-collapse: collapse; margin-top: 8px; }
+table.layout td { vertical-align: top; padding: 12px; }
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+canvas { width: 100%; border: 1px solid #e0e0e0; border-radius: 4px; }
+.key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 8px 12px; margin-top: 12px; font-size: 0.9rem; }
+.example { font-style: italic; color: #555; margin-top: 8px; font-size: 0.9rem; }
+ul { margin: 8px 0 8px 20px; font-size: 0.92rem; }
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Evaluate with Accuracy on Imbalanced Data</h1>
+<p class="subtitle">'95% accuracy!' on 95/5 data = predicting majority class always. Recall on rare class = 0%.</p>
+
+<div class="card-section">
+    <h2>The Anti-Pattern</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>On imbalanced data, a model that always predicts the majority class achieves high accuracy while catching zero rare-class events. The metric is misleading because it rewards ignoring the class you care about most.</p>
+                <ul>
+                    <li>Fraud detection — 0.1% positive rate</li>
+                    <li>Cancer screening — 1% prevalence</li>
+                    <li>Cybersecurity intrusion — 0.001% of traffic</li>
+                    <li>Equipment failure — rare but catastrophic</li>
+                </ul>
+                <div class="key-point">95% accuracy means nothing if the 5% you missed are the only cases that matter.</div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Design Pattern</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Evaluate with precision, recall, and F1 on the minority class. Report performance at multiple thresholds using a precision-recall curve. Let the business decide the operating point based on the cost of false positives vs. false negatives.</p>
+                <ul>
+                    <li>Precision: of predictions flagged positive, how many are correct?</li>
+                    <li>Recall: of actual positives, how many did the model catch?</li>
+                    <li>Plot the full PR curve — every threshold tells a different story</li>
+                    <li>Business picks the threshold based on cost tradeoff</li>
+                </ul>
+                <div class="key-point">The right metric depends on what's more expensive: missing a fraud case (FN) or flagging a legit transaction (FP).</div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Draw confusion matrix
+    var mLeft = 180;
+    var mTop = 50;
+    var cellW = 160;
+    var cellH = 80;
+
+    // Headers
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Predicted: Negative', mLeft + cellW / 2, mTop - 10);
+    ctx.fillText('Predicted: Positive', mLeft + cellW + cellW / 2, mTop - 10);
+
+    ctx.save();
+    ctx.translate(mLeft - 30, mTop + cellH);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Actual', 0, 0);
+    ctx.restore();
+
+    // TN block — large
+    ctx.fillStyle = 'rgba(26,82,118,0.15)';
+    ctx.fillRect(mLeft, mTop, cellW, cellH);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(mLeft, mTop, cellW, cellH);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 24px system-ui';
+    ctx.fillText('TN = 950', mLeft + cellW / 2, mTop + cellH / 2 + 8);
+
+    // FP block — empty (no false positives since always predicts negative)
+    ctx.fillStyle = '#f8f8f8';
+    ctx.fillRect(mLeft + cellW, mTop, cellW, cellH);
+    ctx.strokeStyle = '#ccc';
+    ctx.strokeRect(mLeft + cellW, mTop, cellW, cellH);
+    ctx.fillStyle = '#999';
+    ctx.font = '16px system-ui';
+    ctx.fillText('FP = 0', mLeft + cellW + cellW / 2, mTop + cellH / 2 + 6);
+
+    // FN block — all positives missed
+    ctx.fillStyle = 'rgba(231,76,60,0.15)';
+    ctx.fillRect(mLeft, mTop + cellH, cellW, cellH);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(mLeft, mTop + cellH, cellW, cellH);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 24px system-ui';
+    ctx.fillText('FN = 50', mLeft + cellW / 2, mTop + cellH + cellH / 2 + 8);
+
+    // TP block — zero
+    ctx.fillStyle = '#f8f8f8';
+    ctx.fillRect(mLeft + cellW, mTop + cellH, cellW, cellH);
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(mLeft + cellW, mTop + cellH, cellW, cellH);
+    ctx.fillStyle = '#999';
+    ctx.font = '16px system-ui';
+    ctx.fillText('TP = 0', mLeft + cellW + cellW / 2, mTop + cellH + cellH / 2 + 6);
+
+    // Recall label
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 14px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Recall = 0% — catches ZERO fraud!', w / 2, mTop + cellH * 2 + 35);
+
+    // Misleading accuracy badge (faded)
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 18px system-ui';
+    ctx.fillText('95% Accuracy', w / 2, h - 25);
+    ctx.globalAlpha = 1.0;
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(w / 2 - 65, h - 32);
+    ctx.lineTo(w / 2 + 65, h - 18);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(w / 2 - 65, h - 18);
+    ctx.lineTo(w / 2 + 65, h - 32);
+    ctx.stroke();
+})();
+
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Axes
+    var left = 80;
+    var right = w - 40;
+    var top = 30;
+    var bottom = h - 50;
+    var plotW = right - left;
+    var plotH = bottom - top;
+
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(left, top);
+    ctx.lineTo(left, bottom);
+    ctx.lineTo(right, bottom);
+    ctx.stroke();
+
+    // Axis labels
+    ctx.font = '12px system-ui';
+    ctx.fillStyle = '#2c3e50';
+    ctx.textAlign = 'center';
+    ctx.fillText('Recall →', left + plotW / 2, h - 15);
+
+    ctx.save();
+    ctx.translate(20, top + plotH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Precision →', 0, 0);
+    ctx.restore();
+
+    // Tick marks
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    for (var i = 0; i <= 10; i += 2) {
+        var x = left + plotW * (i / 10);
+        ctx.fillText((i * 10) + '%', x, bottom + 15);
+    }
+    ctx.textAlign = 'right';
+    for (var i = 0; i <= 10; i += 2) {
+        var y = bottom - plotH * (i / 10);
+        ctx.fillText((i * 10) + '%', left - 8, y + 4);
+    }
+
+    // PR curve
+    var prPoints = [
+        [0, 0.98], [0.1, 0.95], [0.2, 0.91], [0.3, 0.86],
+        [0.4, 0.80], [0.5, 0.73], [0.6, 0.64], [0.7, 0.53],
+        [0.8, 0.40], [0.9, 0.28], [1.0, 0.15]
+    ];
+
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (var i = 0; i < prPoints.length; i++) {
+        var x = left + plotW * prPoints[i][0];
+        var y = bottom - plotH * prPoints[i][1];
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Operating point
+    var opIdx = 5;
+    var opX = left + plotW * prPoints[opIdx][0];
+    var opY = bottom - plotH * prPoints[opIdx][1];
+    ctx.beginPath();
+    ctx.arc(opX, opY, 7, 0, Math.PI * 2);
+    ctx.fillStyle = '#e67e22';
+    ctx.fill();
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Label for operating point
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#e67e22';
+    ctx.textAlign = 'left';
+    ctx.fillText('chosen threshold', opX + 12, opY - 5);
+    ctx.font = '10px system-ui';
+    ctx.fillText('(recall=50%, precision=73%)', opX + 12, opY + 10);
+
+    // Title
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Precision-Recall Curve (minority class)', left + plotW / 2, top - 10);
+})();
+</script>
+
+</body>
+</html>

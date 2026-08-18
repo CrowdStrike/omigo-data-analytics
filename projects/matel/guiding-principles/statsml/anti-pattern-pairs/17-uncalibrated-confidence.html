@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trust Model Confidence at Face Value</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, sans-serif; background: #fff; color: #2c3e50; padding: 40px; line-height: 1.6; }
+h1 { font-size: 2rem; color: #1a5276; margin-bottom: 8px; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+.subtitle { color: #666; margin-bottom: 32px; font-size: 0.95rem; }
+.card-section { margin-bottom: 40px; }
+.card-section h2 { font-size: 1.3rem; color: #1a5276; margin-bottom: 12px; border-bottom: 2px solid #2980b9; padding-bottom: 4px; }
+table.layout { width: 100%; border-collapse: collapse; margin-top: 8px; }
+table.layout td { vertical-align: top; padding: 12px; }
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+canvas { width: 100%; border: 1px solid #e0e0e0; border-radius: 4px; }
+.key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 8px 12px; margin-top: 12px; font-size: 0.9rem; }
+.example { font-style: italic; color: #555; margin-top: 8px; font-size: 0.9rem; }
+ul { margin: 8px 0 8px 20px; font-size: 0.92rem; }
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Trust Model Confidence at Face Value</h1>
+<p class="subtitle">Model says '85% probability' but was never calibrated — actual rate could be 50% or 95%</p>
+
+<div class="card-section">
+    <h2>The Anti-Pattern</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Model outputs a score that users treat as a calibrated probability. Without verification, "when the model says 80%, does the event actually happen 80% of the time?" is unknown. Most models are overconfident by default.</p>
+                <ul>
+                    <li>All probabilistic classifiers (logistic regression, random forests, neural nets)</li>
+                    <li>Risk scores in healthcare and finance</li>
+                    <li>Churn prediction confidence</li>
+                    <li>Medical diagnosis probability estimates</li>
+                </ul>
+                <div class="key-point">A probability that isn't calibrated is just a ranking score wearing a lab coat.</div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Design Pattern</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Apply Platt scaling or isotonic regression after training to calibrate outputs. Plot the calibration curve (reliability diagram) to verify. If not calibrated, treat scores as ordinal (ranking) not cardinal (true probabilities).</p>
+                <ul>
+                    <li>Platt scaling: fit sigmoid on held-out set logits</li>
+                    <li>Isotonic regression: non-parametric monotonic calibration</li>
+                    <li>Plot reliability diagram: predicted vs. observed frequency</li>
+                    <li>If calibration is impossible, clearly label outputs as "scores" not "probabilities"</li>
+                </ul>
+                <div class="key-point">Calibrated probabilities enable rational decision-making. Uncalibrated scores only support ranking.</div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var left = 80;
+    var right = w - 50;
+    var top = 40;
+    var bottom = h - 50;
+    var plotW = right - left;
+    var plotH = bottom - top;
+
+    // Axes
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(left, top);
+    ctx.lineTo(left, bottom);
+    ctx.lineTo(right, bottom);
+    ctx.stroke();
+
+    // Axis labels
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#2c3e50';
+    ctx.textAlign = 'center';
+    ctx.fillText('Predicted Probability', left + plotW / 2, h - 15);
+    ctx.save();
+    ctx.translate(20, top + plotH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Actual Frequency', 0, 0);
+    ctx.restore();
+
+    // Ticks
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    for (var i = 0; i <= 10; i += 2) {
+        var x = left + plotW * (i / 10);
+        ctx.fillText((i * 10) + '%', x, bottom + 14);
+        var y = bottom - plotH * (i / 10);
+        ctx.textAlign = 'right';
+        ctx.fillText((i * 10) + '%', left - 8, y + 4);
+        ctx.textAlign = 'center';
+    }
+
+    // Perfect calibration diagonal (gray dashed)
+    ctx.strokeStyle = '#aaa';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(left, bottom);
+    ctx.lineTo(right, top);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Label diagonal
+    ctx.fillStyle = '#999';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.save();
+    ctx.translate(left + plotW * 0.3, bottom - plotH * 0.35);
+    ctx.rotate(-Math.atan(plotH / plotW));
+    ctx.fillText('Perfect calibration', 0, -8);
+    ctx.restore();
+
+    // Overconfident curve (bows below diagonal — model says high but actual is lower)
+    var uncalPoints = [
+        [0, 0.05], [0.1, 0.04], [0.2, 0.08], [0.3, 0.12],
+        [0.4, 0.18], [0.5, 0.25], [0.6, 0.30], [0.7, 0.40],
+        [0.8, 0.55], [0.9, 0.70], [1.0, 0.85]
+    ];
+
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (var i = 0; i < uncalPoints.length; i++) {
+        var x = left + plotW * uncalPoints[i][0];
+        var y = bottom - plotH * uncalPoints[i][1];
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Annotation points
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'left';
+
+    // Point at predicted=80%, actual=55%
+    var px = left + plotW * 0.8;
+    var py = bottom - plotH * 0.55;
+    ctx.beginPath();
+    ctx.arc(px, py, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillText('Says 80%, Actual: 55!', px + 8, py - 5);
+
+    // Point at predicted=60%, actual=30%
+    px = left + plotW * 0.6;
+    py = bottom - plotH * 0.30;
+    ctx.beginPath();
+    ctx.arc(px, py, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillText('Says 60%, Actual: 30!', px + 8, py + 15);
+
+    // Title
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('Uncalibrated: overconfident model', left + plotW / 2, top - 15);
+
+    // Legend
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(left, h - 15);
+    ctx.lineTo(left + 30, h - 15);
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Model output (uncalibrated)', left + 35, h - 11);
+})();
+
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var left = 80;
+    var right = w - 50;
+    var top = 40;
+    var bottom = h - 50;
+    var plotW = right - left;
+    var plotH = bottom - top;
+
+    // Axes
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(left, top);
+    ctx.lineTo(left, bottom);
+    ctx.lineTo(right, bottom);
+    ctx.stroke();
+
+    // Axis labels
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#2c3e50';
+    ctx.textAlign = 'center';
+    ctx.fillText('Predicted Probability', left + plotW / 2, h - 15);
+    ctx.save();
+    ctx.translate(20, top + plotH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Actual Frequency', 0, 0);
+    ctx.restore();
+
+    // Ticks
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    for (var i = 0; i <= 10; i += 2) {
+        var x = left + plotW * (i / 10);
+        ctx.fillText((i * 10) + '%', x, bottom + 14);
+        var y = bottom - plotH * (i / 10);
+        ctx.textAlign = 'right';
+        ctx.fillText((i * 10) + '%', left - 8, y + 4);
+        ctx.textAlign = 'center';
+    }
+
+    // Perfect calibration diagonal (gray dashed)
+    ctx.strokeStyle = '#aaa';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(left, bottom);
+    ctx.lineTo(right, top);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Calibrated curve (closely follows diagonal)
+    var calPoints = [
+        [0, 0.02], [0.1, 0.09], [0.2, 0.19], [0.3, 0.28],
+        [0.4, 0.38], [0.5, 0.49], [0.6, 0.58], [0.7, 0.69],
+        [0.8, 0.79], [0.9, 0.88], [1.0, 0.97]
+    ];
+
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (var i = 0; i < calPoints.length; i++) {
+        var x = left + plotW * calPoints[i][0];
+        var y = bottom - plotH * calPoints[i][1];
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Checkmark annotation
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    var px = left + plotW * 0.8;
+    var py = bottom - plotH * 0.79;
+    ctx.beginPath();
+    ctx.arc(px, py, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillText('80% predicted ≈ 80% actual ✓', px + 10, py + 4);
+
+    // Method label
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Platt scaling / isotonic regression', left + plotW * 0.4, top + 20);
+
+    // Title
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText('Calibrated: predictions match reality', left + plotW / 2, top - 15);
+
+    // Legend
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(left, h - 15);
+    ctx.lineTo(left + 30, h - 15);
+    ctx.stroke();
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('Calibrated model output', left + 35, h - 11);
+})();
+</script>
+
+</body>
+</html>

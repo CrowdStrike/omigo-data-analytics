@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Select Features on Full Dataset, Then Split</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, sans-serif; background: #fff; color: #2c3e50; padding: 40px; line-height: 1.6; }
+h1 { font-size: 2rem; color: #1a5276; margin-bottom: 8px; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+.subtitle { color: #666; margin-bottom: 32px; font-size: 0.95rem; }
+.card-section { margin-bottom: 40px; }
+.card-section h2 { font-size: 1.3rem; color: #1a5276; margin-bottom: 12px; border-bottom: 2px solid #2980b9; padding-bottom: 4px; }
+table.layout { width: 100%; border-collapse: collapse; margin-top: 8px; }
+table.layout td { vertical-align: top; padding: 12px; }
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+canvas { width: 100%; border: 1px solid #e0e0e0; border-radius: 4px; }
+.key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 8px 12px; margin-top: 12px; font-size: 0.9rem; }
+.example { font-style: italic; color: #555; margin-top: 8px; font-size: 0.9rem; }
+ul { margin: 8px 0 8px 20px; font-size: 0.92rem; }
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Select Features on Full Dataset, Then Split</h1>
+<p class="subtitle">Feature selection used test data to decide which features matter — +5-10% inflated</p>
+
+<div class="card-section">
+    <h2>The Anti-Pattern</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Running feature selection on the full dataset before splitting means the test set influenced which features were chosen. The selection process "peeked" at test data, inflating performance estimates by 5-10%.</p>
+                <ul>
+                    <li>Univariate feature selection (chi-square, ANOVA)</li>
+                    <li>Correlation screening against the target</li>
+                    <li>PCA on the full dataset before splitting</li>
+                    <li>Mutual information computed on all rows</li>
+                </ul>
+                <div class="key-point">Feature selection is a model decision. Any model decision using test data = data leakage.</div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Design Pattern</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Feature selection must happen inside the cross-validation loop. Each fold independently selects features using only training data. The final feature set is the intersection or consensus across all folds.</p>
+                <ul>
+                    <li>Wrap feature selection inside each CV fold</li>
+                    <li>Each fold: select features → train → evaluate (on fold's test)</li>
+                    <li>Final feature set = intersection of features selected across folds</li>
+                    <li>Guarantees test data never influences feature choice</li>
+                </ul>
+                <div class="key-point">If feature selection sees any test data, the entire evaluation is compromised — not just the selection step.</div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Full dataset box
+    var boxX = 160;
+    var boxY = 30;
+    var boxW = 400;
+    var boxH = 70;
+
+    ctx.fillStyle = 'rgba(26,82,118,0.08)';
+    ctx.fillRect(boxX, boxY, boxW, boxH);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(boxX, boxY, boxW, boxH);
+
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('FULL DATASET (train + test)', boxX + boxW / 2, boxY + 25);
+
+    // Feature selection spanning full dataset
+    ctx.fillStyle = 'rgba(231,76,60,0.12)';
+    ctx.fillRect(boxX + 20, boxY + 35, boxW - 40, 25);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(boxX + 20, boxY + 35, boxW - 40, 25);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Feature selection uses ALL data', boxX + boxW / 2, boxY + 52);
+
+    // Arrow down
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(w / 2, boxY + boxH + 5);
+    ctx.lineTo(w / 2, boxY + boxH + 40);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(w / 2 - 6, boxY + boxH + 34);
+    ctx.lineTo(w / 2, boxY + boxH + 40);
+    ctx.lineTo(w / 2 + 6, boxY + boxH + 34);
+    ctx.fill();
+
+    // Train/Test split boxes
+    var splitY = boxY + boxH + 50;
+    var trainW = 220;
+    var testW = 160;
+    var gap = 20;
+    var trainX = w / 2 - trainW - gap / 2;
+    var testX = w / 2 + gap / 2;
+
+    ctx.fillStyle = 'rgba(26,82,118,0.12)';
+    ctx.fillRect(trainX, splitY, trainW, 50);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(trainX, splitY, trainW, 50);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('TRAIN', trainX + trainW / 2, splitY + 30);
+
+    ctx.fillStyle = 'rgba(230,126,34,0.12)';
+    ctx.fillRect(testX, splitY, testW, 50);
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(testX, splitY, testW, 50);
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('TEST', testX + testW / 2, splitY + 30);
+
+    // Red leak label
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Test info leaked into selection!', w / 2, splitY + 80);
+
+    // Red dashed line from test box up to feature selection
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(testX + testW / 2, splitY);
+    ctx.lineTo(testX + testW / 2, boxY + 60);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Performance inflation note
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('+5-10% inflated performance estimate', w / 2, h - 20);
+})();
+
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Draw 5 CV fold bars
+    var barLeft = 80;
+    var barRight = w - 80;
+    var barW = barRight - barLeft;
+    var barH = 28;
+    var startY = 35;
+    var gap = 12;
+
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('5-Fold Cross-Validation with Embedded Feature Selection', w / 2, 20);
+
+    for (var fold = 0; fold < 5; fold++) {
+        var y = startY + fold * (barH + gap);
+        var testStart = fold * 0.2;
+        var testEnd = testStart + 0.2;
+
+        // Train portions (blue)
+        ctx.fillStyle = 'rgba(26,82,118,0.2)';
+        if (testStart > 0) {
+            ctx.fillRect(barLeft, y, barW * testStart, barH);
+        }
+        if (testEnd < 1) {
+            ctx.fillRect(barLeft + barW * testEnd, y, barW * (1 - testEnd), barH);
+        }
+
+        // Test portion (orange)
+        ctx.fillStyle = 'rgba(230,126,34,0.35)';
+        ctx.fillRect(barLeft + barW * testStart, y, barW * 0.2, barH);
+
+        // Border
+        ctx.strokeStyle = '#aaa';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(barLeft, y, barW, barH);
+
+        // Test portion border
+        ctx.strokeStyle = '#e67e22';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(barLeft + barW * testStart, y, barW * 0.2, barH);
+
+        // Fold label
+        ctx.font = '10px system-ui';
+        ctx.fillStyle = '#666';
+        ctx.textAlign = 'right';
+        ctx.fillText('Fold ' + (fold + 1), barLeft - 8, y + barH / 2 + 4);
+
+        // Process label
+        ctx.font = '10px system-ui';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'left';
+        ctx.fillText('select → train → eval', barRight + 10, y + barH / 2 + 4);
+    }
+
+    // Green checkmark at bottom
+    var checkY = startY + 5 * (barH + gap) + 10;
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 14px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('✓ Each fold independently selects features — no leakage', w / 2, checkY);
+
+    // Legend
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'left';
+    var legY = h - 20;
+    ctx.fillStyle = 'rgba(26,82,118,0.2)';
+    ctx.fillRect(barLeft, legY - 10, 14, 14);
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('Train (feature selection here)', barLeft + 20, legY);
+
+    ctx.fillStyle = 'rgba(230,126,34,0.35)';
+    ctx.fillRect(barLeft + 220, legY - 10, 14, 14);
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('Test (never seen during selection)', barLeft + 240, legY);
+})();
+</script>
+
+</body>
+</html>
