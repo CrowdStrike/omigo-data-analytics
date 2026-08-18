@@ -44,6 +44,7 @@ Distilled HTML templates from the project's best docs. Copy-paste and customize.
 ## Shared Conventions
 
 - **Color palette:** `#1a5276` (primary blue), `#27ae60` (green/positive), `#e74c3c` (red/negative), `#e67e22` (warning), `rgba(26,82,118,0.35)` (bar fill)
+- **Category label colors:** Use a **different color per category** for `.card-num` / `.card-label` labels. Same category text = same color. Assign via a `<script>` block mapping category names to colors. Pick from: `#795548` `#2980b9` `#27ae60` `#e74c3c` `#8e44ad` `#e67e22` `#16a085` `#d35400` `#c0392b` `#1abc9c` `#f39c12` `#1a5276`. See `02-nav-grid.html` for the script pattern.
 - **Canvas:** always use `window.devicePixelRatio` for retina scaling
 - **Section headers:** h2 with `border-bottom: 2px solid #2980b9`
 - **Alternating rows:** `:nth-child(even) td { background: #f0f8ff }` (badges) or `#fafcfe` (clean)
