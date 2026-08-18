@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logging Design Patterns</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #2c3e50;
+            max-width: 100%;
+            margin: 0;
+            padding: 30px 40px;
+            background: #fff;
+        }
+        h1 {
+            color: #1a5276;
+            font-size: 1.8rem;
+            margin-bottom: 4px;
+        }
+        .subtitle {
+            color: #666;
+            font-size: 1.05em;
+            margin-bottom: 24px;
+        }
+        h2 {
+            color: #1a5276;
+            font-size: 1.3em;
+            border-bottom: 2px solid #2980b9;
+            padding-bottom: 6px;
+            margin-top: 32px;
+        }
+        table.obj-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+        }
+        table.obj-table td {
+            vertical-align: top;
+            padding: 12px;
+        }
+        table.obj-table td:first-child {
+            width: 45%;
+        }
+        table.obj-table td:last-child {
+            width: 55%;
+            text-align: center;
+        }
+        .key-point {
+            background: #f8f9fa;
+            border-left: 3px solid #e74c3c;
+            padding: 10px 14px;
+            margin: 12px 0;
+            font-size: 0.93em;
+        }
+        .philosophy {
+            background: #f0f4f8;
+            border-left: 4px solid #2980b9;
+            padding: 12px 16px;
+            margin: 16px 0;
+            font-size: 0.93em;
+        }
+        ul { padding-left: 20px; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        code {
+            background: #e8f0f8;
+            color: #1a5276;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-size: 0.88em;
+        }
+        canvas {
+            display: block;
+            margin: 0 auto;
+            width: 100%;
+        }
+        .status {
+            display: inline-block;
+            background: #fef9e7;
+            border: 1px solid #f39c12;
+            color: #b7950b;
+            padding: 2px 10px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            margin-left: 12px;
+            vertical-align: middle;
+        }
+    </style>
+</head>
+<body>
+    <h1>Logging Design Patterns <span class="status">BACKLOG</span></h1>
+    <p class="subtitle">Why traditional class-based loggers fail in distributed data pipelines — and what patterns actually work.</p>
+
+    <h2>The Problem with Class-Based Loggers</h2>
+    <table class="obj-table">
+        <tr>
+            <td>
+                <p>Log4J-style loggers are designed around a simple model: <code>Logger.getLogger(ClassName.class)</code>. This assumes:</p>
+                <ul>
+                    <li>A class has one purpose → one log context.</li>
+                    <li>The class name tells you what's happening.</li>
+                    <li>Logs go to a local filesystem.</li>
+                </ul>
+                <p>All three assumptions break in modern data systems:</p>
+                <ul>
+                    <li><strong>Shared code, multiple pipelines</strong> — The same transformation class is reused across different pipelines. <code>JsonParser.class</code> tells you nothing about <em>which</em> data flow triggered the log.</li>
+                    <li><strong>Pipeline identity ≠ class identity</strong> — What matters is the DAG context: which pipeline, which stage, which partition, which retry.</li>
+                    <li><strong>Dynamic composition</strong> — Pipelines are composed at runtime from reusable operators. The class hierarchy doesn't reflect the execution graph.</li>
+                </ul>
+                <div class="key-point">
+                    Class-based loggers answer "where in the code?" but not "where in the data flow?" — and in pipelines, the second question is the one that matters.
+                </div>
+            </td>
+            <td>
+                <canvas id="c1" width="720" height="340"></canvas>
+            </td>
+        </tr>
+    </table>
+
+    <h2>Distributed Systems: Delayed & Fragmented</h2>
+    <table class="obj-table">
+        <tr>
+            <td>
+                <p>In distributed systems, logs are fundamentally different from local application logs:</p>
+                <ul>
+                    <li><strong>Clock skew</strong> — Nodes disagree on time. Log ordering requires logical clocks or vector timestamps, not wall-clock.</li>
+                    <li><strong>Network delay</strong> — Logs arrive out of order at the aggregator. A "first" error may appear after its downstream effects.</li>
+                    <li><strong>Partial visibility</strong> — At any moment, your aggregated view is incomplete. Late-arriving logs change the story retroactively.</li>
+                    <li><strong>Volume asymmetry</strong> — One noisy node can drown the signal from the node where the root cause lives.</li>
+                </ul>
+                <div class="philosophy">
+                    <strong>Core tension:</strong> Distributed logging needs global correlation but has only local causality. Correlation IDs (trace IDs, span IDs) bridge this gap — but only if propagated correctly through every hop.
+                </div>
+            </td>
+            <td>
+                <canvas id="c2" width="720" height="340"></canvas>
+            </td>
+        </tr>
+    </table>
+
+    <h2>Actor Systems: No Filesystem, Only Messages</h2>
+    <table class="obj-table">
+        <tr>
+            <td>
+                <p>Actor-based systems (Akka, Erlang/OTP, Orleans) break the logging model further:</p>
+                <ul>
+                    <li><strong>No shared state</strong> — Actors don't share memory or files. Each actor is an island.</li>
+                    <li><strong>Everything is a message</strong> — Logging itself must go through the message bus. High-throughput logging can back-pressure the system it's observing.</li>
+                    <li><strong>Supervision trees</strong> — Errors propagate via supervision, not stack traces. The "cause" lives in a different actor's mailbox.</li>
+                    <li><strong>Lifecycle opacity</strong> — Actors spawn, die, restart. The logger that started a trace may not exist when the trace completes.</li>
+                </ul>
+                <div class="key-point">
+                    In actor systems, the log IS a message — subject to the same backpressure, ordering guarantees (or lack thereof), and delivery semantics as the data it's trying to observe.
+                </div>
+            </td>
+            <td>
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+
+    <h2>Stack Traces: The Unreadable Wall</h2>
+    <table class="obj-table">
+        <tr>
+            <td>
+                <p>Large stack traces are a symptom of logging design failure:</p>
+                <ul>
+                    <li><strong>Framework noise</strong> — 80% of frames are framework internals (Spring, Netty, Kafka consumer loops). The signal is 2-3 lines buried in 200.</li>
+                    <li><strong>Async boundaries</strong> — Stack traces in async/reactive code are meaningless. The "call stack" doesn't represent the causal chain.</li>
+                    <li><strong>Retry amplification</strong> — One root failure generates N retries × M layers of wrapping. The same error appears dozens of times with slightly different stacks.</li>
+                </ul>
+                <p><strong>What works instead:</strong></p>
+                <ul>
+                    <li>Structured events over free-text messages</li>
+                    <li>Causal context (trace/span) over positional context (line number)</li>
+                    <li>Error classification (type + first occurrence) over stack dump repetition</li>
+                    <li>Correlation-first search over timestamp-first scroll</li>
+                </ul>
+                <div class="philosophy">
+                    <strong>Design principle:</strong> A log line should answer "what happened in this data flow?" not "what line of code ran?" The code is in git. The runtime context is only in the log.
+                </div>
+            </td>
+            <td>
+                <canvas id="c4" width="720" height="340"></canvas>
+            </td>
+        </tr>
+    </table>
+
+    <script>
+    const dpr = window.devicePixelRatio || 1;
+
+    function setupCanvas(id) {
+        const c = document.getElementById(id);
+        const w = c.width, h = c.height;
+        c.width = w * dpr;
+        c.height = h * dpr;
+        c.style.width = w + 'px';
+        c.style.height = h + 'px';
+        const ctx = c.getContext('2d');
+        ctx.scale(dpr, dpr);
+        return { ctx, w, h };
+    }
+
+    // C1: Class-based vs Pipeline-aware logging
+    (function() {
+        const { ctx, w, h } = setupCanvas('c1');
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Same Class, Different Pipelines — Logger Identity Problem', w/2, 20);
+
+        // Draw a shared class box in center
+        const boxW = 120, boxH = 50;
+        const cx = w/2, cy = h/2 - 10;
+
+        ctx.fillStyle = 'rgba(26,82,118,0.1)';
+        ctx.fillRect(cx - boxW/2, cy - boxH/2, boxW, boxH);
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(cx - boxW/2, cy - boxH/2, boxW, boxH);
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.fillText('JsonParser', cx, cy + 4);
+
+        // Incoming pipelines (left)
+        const pipelines = [
+            { label: 'Orders Pipeline', color: '#27ae60', y: cy - 70 },
+            { label: 'Events Pipeline', color: '#e67e22', y: cy },
+            { label: 'Logs Pipeline', color: '#8e44ad', y: cy + 70 }
+        ];
+
+        pipelines.forEach(function(p) {
+            ctx.beginPath();
+            ctx.moveTo(40, p.y);
+            ctx.lineTo(cx - boxW/2 - 10, cy);
+            ctx.strokeStyle = p.color;
+            ctx.lineWidth = 2;
+            ctx.globalAlpha = 0.6;
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+
+            ctx.font = '11px -apple-system, sans-serif';
+            ctx.fillStyle = p.color;
+            ctx.textAlign = 'left';
+            ctx.fillText(p.label, 10, p.y + 4);
+        });
+
+        // Log output (right) — all same label
+        ctx.beginPath();
+        ctx.moveTo(cx + boxW/2, cy);
+        ctx.lineTo(w - 100, cy);
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillStyle = '#e74c3c';
+        ctx.textAlign = 'left';
+        ctx.fillText('Log: JsonParser.class', w - 190, cy - 20);
+        ctx.fillText('Which pipeline? 🤷', w - 190, cy + 4);
+
+        // Annotation
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillStyle = '#888';
+        ctx.textAlign = 'center';
+        ctx.fillText('Class name is constant — pipeline context is lost', w/2, h - 12);
+    })();
+
+    // C2: Distributed log aggregation timeline
+    (function() {
+        const { ctx, w, h } = setupCanvas('c2');
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Distributed Logs: Out-of-Order Arrival', w/2, 20);
+
+        const nodes = ['Node A', 'Node B', 'Node C'];
+        const nodeY = [70, 150, 230];
+        const timeX = 80, timeW = w - 140;
+
+        // Time axis
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 1;
+        nodes.forEach(function(n, i) {
+            ctx.beginPath();
+            ctx.moveTo(timeX, nodeY[i]);
+            ctx.lineTo(timeX + timeW, nodeY[i]);
+            ctx.stroke();
+
+            ctx.font = '11px -apple-system, sans-serif';
+            ctx.fillStyle = '#2c3e50';
+            ctx.textAlign = 'right';
+            ctx.fillText(n, timeX - 10, nodeY[i] + 4);
+        });
+
+        // Events on each node (relative positions on timeline)
+        const events = [
+            { node: 0, t: 0.1, label: 'req start', color: '#27ae60' },
+            { node: 0, t: 0.3, label: 'call B', color: '#2980b9' },
+            { node: 1, t: 0.35, label: 'recv', color: '#2980b9' },
+            { node: 1, t: 0.5, label: 'call C', color: '#e67e22' },
+            { node: 2, t: 0.55, label: 'recv', color: '#e67e22' },
+            { node: 2, t: 0.7, label: 'ERROR', color: '#e74c3c' },
+            { node: 1, t: 0.75, label: 'timeout', color: '#e74c3c' },
+            { node: 0, t: 0.9, label: '500', color: '#e74c3c' }
+        ];
+
+        events.forEach(function(e) {
+            const x = timeX + e.t * timeW;
+            const y = nodeY[e.node];
+
+            ctx.beginPath();
+            ctx.arc(x, y, 5, 0, Math.PI * 2);
+            ctx.fillStyle = e.color;
+            ctx.fill();
+
+            ctx.font = '9px -apple-system, sans-serif';
+            ctx.fillStyle = e.color;
+            ctx.textAlign = 'center';
+            ctx.fillText(e.label, x, y - 12);
+        });
+
+        // Arrows showing propagation
+        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 1;
+        [[1, 3], [3, 4], [5, 6], [6, 7]].forEach(function(pair) {
+            var from = events[pair[0]], to = events[pair[1]];
+            ctx.beginPath();
+            ctx.moveTo(timeX + from.t * timeW, nodeY[from.node]);
+            ctx.lineTo(timeX + to.t * timeW, nodeY[to.node]);
+            ctx.stroke();
+        });
+        ctx.setLineDash([]);
+
+        // Aggregator view
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillStyle = '#888';
+        ctx.textAlign = 'center';
+        ctx.fillText('Aggregator sees: 500 → timeout → ERROR (reverse causal order)', w/2, h - 30);
+        ctx.fillText('Correlation ID is the only way to reconstruct the story', w/2, h - 12);
+    })();
+
+    // C3: Actor system message-based logging
+    (function() {
+        const { ctx, w, h } = setupCanvas('c3');
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Actor Systems: Logging via Message Bus', w/2, 20);
+
+        // Draw actors as circles
+        const actors = [
+            { label: 'Actor A', x: 100, y: 100, color: '#27ae60' },
+            { label: 'Actor B', x: 300, y: 80, color: '#2980b9' },
+            { label: 'Actor C', x: 500, y: 120, color: '#e67e22' },
+            { label: 'Log Actor', x: 350, y: 230, color: '#8e44ad' }
+        ];
+
+        actors.forEach(function(a) {
+            ctx.beginPath();
+            ctx.arc(a.x, a.y, 28, 0, Math.PI * 2);
+            ctx.fillStyle = a.color + '22';
+            ctx.fill();
+            ctx.strokeStyle = a.color;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            ctx.font = '10px -apple-system, sans-serif';
+            ctx.fillStyle = a.color;
+            ctx.textAlign = 'center';
+            ctx.fillText(a.label, a.x, a.y + 4);
+        });
+
+        // Messages to log actor
+        [0, 1, 2].forEach(function(i) {
+            var from = actors[i], to = actors[3];
+            ctx.beginPath();
+            ctx.setLineDash([4, 3]);
+            ctx.moveTo(from.x, from.y + 28);
+            ctx.lineTo(to.x, to.y - 28);
+            ctx.strokeStyle = from.color;
+            ctx.lineWidth = 1.5;
+            ctx.globalAlpha = 0.5;
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+            ctx.setLineDash([]);
+        });
+
+        // Backpressure annotation
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillStyle = '#e74c3c';
+        ctx.textAlign = 'center';
+        ctx.fillText('⚠ backpressure', 350, 260);
+
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillStyle = '#888';
+        ctx.fillText('Log messages compete with data messages on the same bus', w/2, h - 10);
+    })();
+
+    // C4: Stack trace signal-to-noise
+    (function() {
+        const { ctx, w, h } = setupCanvas('c4');
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Stack Trace: Signal Buried in Framework Noise', w/2, 20);
+
+        const startY = 45, lineH = 13;
+        const lines = [
+            { text: 'at o.s.w.s.FrameworkServlet.service(FrameworkServlet:897)', type: 'noise' },
+            { text: 'at o.s.w.s.FrameworkServlet.service(FrameworkServlet:883)', type: 'noise' },
+            { text: 'at javax.servlet.http.HttpServlet.service(HttpServlet:750)', type: 'noise' },
+            { text: 'at o.a.c.c.ApplicationFilterChain.doFilter(AppFilter:166)', type: 'noise' },
+            { text: 'at o.s.w.f.OncePerRequestFilter.doFilter(OncePerReq:113)', type: 'noise' },
+            { text: 'at com.app.pipeline.OrderParser.transform(OrderParser:42)', type: 'signal' },
+            { text: 'at com.app.pipeline.JsonParser.parse(JsonParser:118)', type: 'signal' },
+            { text: 'at o.a.k.c.internals.Fetcher.fetchRecords(Fetcher:583)', type: 'noise' },
+            { text: 'at o.a.k.c.internals.Fetcher.fetch(Fetcher:492)', type: 'noise' },
+            { text: 'at o.a.k.c.KafkaConsumer.poll(KafkaConsumer:1206)', type: 'noise' },
+            { text: 'at o.a.k.c.KafkaConsumer.poll(KafkaConsumer:1187)', type: 'noise' },
+            { text: 'at o.s.k.l.KafkaMessageListener.run(KafkaListener:88)', type: 'noise' },
+            { text: 'at java.lang.Thread.run(Thread:748)', type: 'noise' }
+        ];
+
+        const codeX = 30;
+        lines.forEach(function(line, i) {
+            const y = startY + i * lineH;
+            if (line.type === 'signal') {
+                ctx.fillStyle = 'rgba(39,174,96,0.12)';
+                ctx.fillRect(codeX - 4, y - 9, w - 60, lineH);
+            }
+            ctx.font = '9px monospace';
+            ctx.fillStyle = line.type === 'signal' ? '#27ae60' : '#999';
+            ctx.textAlign = 'left';
+            ctx.fillText(line.text, codeX, y);
+        });
+
+        // Annotation arrow pointing to signal lines
+        const signalY = startY + 5 * lineH;
+        ctx.beginPath();
+        ctx.moveTo(w - 40, signalY);
+        ctx.lineTo(w - 20, signalY);
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.font = 'bold 10px -apple-system, sans-serif';
+        ctx.fillStyle = '#27ae60';
+        ctx.textAlign = 'right';
+        ctx.fillText('← signal', w - 6, signalY - 4);
+        ctx.fillText('(2 lines)', w - 6, signalY + 10);
+
+        // Stats
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillStyle = '#e74c3c';
+        ctx.textAlign = 'center';
+        ctx.fillText('2 useful lines / 13 total = 15% signal', w/2, h - 30);
+        ctx.fillStyle = '#888';
+        ctx.fillText('Multiply by retries × layers × nodes = unreadable noise wall', w/2, h - 12);
+    })();
+    </script>
+</body>
+</html>
