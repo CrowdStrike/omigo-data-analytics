@@ -13,14 +13,6 @@ body {
     padding: 40px;
     line-height: 1.6;
 }
-.back-link {
-    color: #2980b9;
-    text-decoration: none;
-    font-size: 0.9rem;
-    margin-bottom: 20px;
-    display: inline-block;
-}
-.back-link:hover { text-decoration: underline; }
 h1 {
     font-size: 2rem;
     color: #1a5276;
@@ -43,8 +35,8 @@ h1 {
     padding: 20px 24px;
     vertical-align: middle;
 }
-.obj-table td:first-child { width: 45%; }
-.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-table td:first-child { width: 42%; }
+.obj-table td:last-child { width: 58%; text-align: center; }
 .obj-table tr:nth-child(even) td { background: #fafcfe; }
 .obj-title {
     font-size: 1.05em;
@@ -52,41 +44,110 @@ h1 {
     color: #1a5276;
     margin-bottom: 8px;
 }
+.obj-desc {
+    font-size: 0.9em;
+    color: #333;
+    margin-bottom: 10px;
+}
+.obj-detail {
+    font-size: 0.85em;
+    color: #555;
+    margin-top: 8px;
+}
 canvas { display: block; margin: 0 auto; }
-ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
-li { margin: 4px 0; }
 strong { color: #1a5276; }
 .good { color: #27ae60; font-weight: 600; }
 .bad { color: #e74c3c; font-weight: 600; }
 .warn { color: #e67e22; font-weight: 600; }
+.tag {
+    display: inline-block;
+    font-size: 0.75em;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-top: 6px;
+}
+.tag-break { background: #fdeaea; color: #c0392b; }
+.tag-check { background: #eafaf1; color: #1e8449; }
+.tag-fix { background: #fef9e7; color: #b7950b; }
 </style>
 </head>
 <body>
 
-<a href="../16-ml-assumptions.html" class="back-link">← ML Assumptions Reference</a>
-
-<h1>6. Gradient Boosting (XGBoost/LightGBM)</h1>
+<h1>Gradient Boosting Machines (GBM)</h1>
+<p class="subtitle">Sequential ensemble of shallow regression trees — each tree corrects the errors of all previous trees combined.</p>
 
 <table class="obj-table">
+
+<!-- Row 0: What It Does -->
 <tr>
 <td>
-<div class="obj-title">Assumptions &amp; What Breaks</div>
-<ul>
-<li><strong>Smooth loss landscape:</strong> gradient descent assumes smoothness. Noisy features create jagged loss surfaces.</li>
-<li><strong>No data leakage:</strong> later trees overfit to artifacts of earlier trees without careful regularization.</li>
-<li><strong>Sufficient data:</strong> more prone to overfitting than RF on small datasets. Residuals get noisier with depth.</li>
-<li><strong>Stationarity:</strong> assumes future data from same distribution. Concept drift breaks model silently.</li>
-<li class="bad">Violation: boosting AMPLIFIES noise because it focuses on hard examples (which may be mislabeled or noisy).</li>
-<li class="bad">Violation: near-perfect training accuracy but poor generalization; later trees memorize residual noise.</li>
-<li class="warn">Verify: early stopping on validation, learning curves (train vs val gap), SHAP for post-hoc explainability.</li>
-<li class="good">Alternative: statistical validation per split. Drift detection via distribution monitoring.</li>
-</ul>
-<p style="margin-top:12px; font-size:0.85em; color:#555;"><strong>Real example:</strong> XGBoost on 500 samples with 200 features. Training AUC=0.99, validation AUC=0.61. Trees 50-300 are memorizing noise in hard examples that are actually mislabeled.</p>
+<div class="obj-title">What It Does</div>
+<p class="obj-desc">Builds an additive model of many shallow regression trees. Tree₁ fits the target. Tree₂ fits the residuals of Tree₁. Tree₃ fits the residuals of (Tree₁ + Tree₂). Each tree is a weak learner (depth 3–6); their sum converges to a strong predictor. Learning rate (η) shrinks each tree's contribution to prevent overshoot.</p>
+<p class="obj-detail" style="margin-top: 8px;"><strong>Best For:</strong> Tabular data competitions (XGBoost/LightGBM), click-through rate, insurance pricing, ranking systems</p>
+<p class="obj-detail"><strong>Data:</strong> Structured/tabular features, moderate-to-large n. Handles mixed types, missing values (LightGBM). State-of-the-art for non-image, non-text tasks.</p>
+<p class="obj-detail"><strong>Key Params:</strong> n_estimators (num trees), learning_rate (η), max_depth, subsample, colsample. Early stopping on validation loss.</p>
 </td>
 <td>
-<canvas id="c6" width="720" height="280"></canvas>
+<canvas id="c0" width="720" height="300"></canvas>
 </td>
 </tr>
+
+<!-- Row 1: Noise Amplification -->
+<tr>
+<td>
+<div class="obj-title">Noise Amplification (Hard Example Focus)</div>
+<p class="obj-desc">Boosting works by <strong>focusing on examples the current ensemble gets wrong</strong>. Each new tree corrects the residuals from previous trees. Problem: "hard examples" are often hard because they're mislabeled, noisy, or outliers — not because they represent learnable patterns. Later trees fit noise with increasing confidence.</p>
+<p class="obj-detail"><span class="bad">Breaks:</span> 5% of labels are wrong. By tree 50, these mislabeled points dominate the residuals. Trees 50–300 exist solely to memorize these noise points, hurting generalization on clean data.</p>
+<p class="obj-detail"><span class="tag tag-check">Verify:</span> Inspect highest-residual examples — are they genuinely hard or mislabeled?</p>
+<p class="obj-detail"><span class="tag tag-fix">Fix:</span> Early stopping, lower learning rate, subsampling (stochastic GB), label cleaning</p>
+</td>
+<td>
+<canvas id="c1" width="720" height="300"></canvas>
+</td>
+</tr>
+
+<!-- Row 2: Overfitting with Depth -->
+<tr>
+<td>
+<div class="obj-title">Overfitting (Train/Validation Divergence)</div>
+<p class="obj-desc">Unlike Random Forest which converges, gradient boosting can <strong>overfit indefinitely</strong> — training loss keeps dropping while validation loss climbs. Each added tree reduces bias but increases variance. Without explicit stopping, the model achieves near-perfect training accuracy by memorizing every residual pattern, including noise.</p>
+<p class="obj-detail"><span class="bad">Breaks:</span> 500 samples, 200 features. Training AUC=0.99, validation AUC=0.61. Trees 50–300 memorize residual noise. The model is confident and wrong.</p>
+<p class="obj-detail"><span class="tag tag-check">Verify:</span> Learning curves (train vs. val), early stopping rounds, train-val gap</p>
+<p class="obj-detail"><span class="tag tag-fix">Fix:</span> Early stopping (patience=10–20), max_depth limits, L1/L2 regularization, min_child_weight</p>
+</td>
+<td>
+<canvas id="c2" width="720" height="300"></canvas>
+</td>
+</tr>
+
+<!-- Row 3: Stationarity (Concept Drift) -->
+<tr>
+<td>
+<div class="obj-title">Stationarity Assumption (No Concept Drift)</div>
+<p class="obj-desc">Gradient boosting assumes <strong>future data comes from the same distribution</strong> as training data. If the relationship between features and outcome shifts over time (concept drift), the model's predictions become increasingly wrong — but its confidence remains unchanged. Tree models don't extrapolate; they repeat whatever leaf pattern was learned from stale data.</p>
+<p class="obj-detail"><span class="bad">Breaks:</span> Model trained on 2019 spending patterns. Post-2020, customer behavior shifted dramatically. Model still predicts based on old patterns — high confidence, systematically wrong predictions.</p>
+<p class="obj-detail"><span class="tag tag-check">Verify:</span> Monitor prediction distributions over time, PSI (Population Stability Index), feature drift tracking</p>
+<p class="obj-detail"><span class="tag tag-fix">Fix:</span> Retrain periodically, sliding windows, online boosting, drift detection triggers</p>
+</td>
+<td>
+<canvas id="c3" width="720" height="300"></canvas>
+</td>
+</tr>
+
+<!-- Row 4: Sufficient Data for Sequential Learning -->
+<tr>
+<td>
+<div class="obj-title">Sufficient Data (Residuals Need Signal)</div>
+<p class="obj-desc">Each tree fits <strong>residuals from the previous ensemble</strong>. With small n, residuals become pure noise after just a few trees — there's no remaining signal to learn from. The model continues fitting anyway, creating complex rules for random patterns. Boosting is MORE prone to overfitting than RF on small datasets because it doesn't have bagging's variance protection.</p>
+<p class="obj-detail"><span class="bad">Breaks:</span> n=100, 50 features. After 5 trees, training residuals are dominated by noise. Trees 6–500 build elaborate memorization structures. Ensemble is much worse than a single regularized tree.</p>
+<p class="obj-detail"><span class="tag tag-check">Verify:</span> Residual analysis (are residuals structured or random?), OOF performance by tree count</p>
+<p class="obj-detail"><span class="tag tag-fix">Fix:</span> Very low learning rate + very few trees, or switch to simpler model (logistic, single tree)</p>
+</td>
+<td>
+<canvas id="c4" width="720" height="300"></canvas>
+</td>
+</tr>
+
 </table>
 
 <script>
@@ -102,64 +163,398 @@ function setupCanvas(id) {
     return {ctx: ctx, w: w, h: h};
 }
 
-// 6. Gradient Boosting — overfitting: train vs validation diverge
+// 0. What It Does — multiple regression trees combining into final prediction
 (function() {
-    var s = setupCanvas('c6'), ctx = s.ctx, w = s.w, h = s.h;
+    var s = setupCanvas('c0'), ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('GBM: Sum of Shallow Regression Trees', w/2, 18);
+
+    // Draw 3 small tree diagrams side by side, then "= Final Model" curve
+    var treeW = 130, treeH = 130, treeY = 45, gap = 20;
+    var startX = 30;
+
+    // Helper: draw a mini regression tree
+    function drawTree(x, y, label, splits, leafVals) {
+        // Tree box
+        ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1;
+        ctx.strokeRect(x, y, treeW, treeH);
+
+        // Root node
+        ctx.fillStyle = '#1a5276'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, x + treeW/2, y - 6);
+
+        var rootX = x + treeW/2, rootY = y + 25;
+        ctx.fillStyle = 'rgba(26,82,118,0.65)';
+        ctx.beginPath(); ctx.arc(rootX, rootY, 12, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.font = '13px system-ui';
+        ctx.fillText(splits[0], rootX, rootY + 4);
+
+        // Left child
+        var lx = x + treeW * 0.25, ly = y + 70;
+        ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(rootX - 5, rootY + 12); ctx.lineTo(lx, ly - 10); ctx.stroke();
+
+        // Right child
+        var rx = x + treeW * 0.75, ry = y + 70;
+        ctx.beginPath(); ctx.moveTo(rootX + 5, rootY + 12); ctx.lineTo(rx, ry - 10); ctx.stroke();
+
+        // Leaf nodes (rectangles with values)
+        ctx.fillStyle = 'rgba(39,174,96,0.7)';
+        ctx.fillRect(lx - 20, ly - 8, 40, 20);
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(leafVals[0], lx, ly + 6);
+
+        ctx.fillStyle = 'rgba(231,76,60,0.7)';
+        ctx.fillRect(rx - 20, ry - 8, 40, 20);
+        ctx.fillStyle = '#fff';
+        ctx.fillText(leafVals[1], rx, ry + 6);
+
+        // Leaf labels
+        ctx.fillStyle = '#555'; ctx.font = '13px system-ui';
+        ctx.fillText(leafVals[2] || '', lx, ly + 28);
+        ctx.fillText(leafVals[3] || '', rx, ry + 28);
+    }
+
+    // Tree 1: fits target
+    drawTree(startX, treeY, 'Tree₁ (target)', ['x<5'], ['+80', '+20', '', '']);
+
+    // Plus sign
+    ctx.fillStyle = '#e67e22'; ctx.font = 'bold 20px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('+', startX + treeW + gap/2, treeY + treeH/2);
+
+    // Tree 2: fits residuals of tree 1
+    var t2x = startX + treeW + gap;
+    drawTree(t2x, treeY, 'Tree₂ (residual₁)', ['x<3'], ['+25', '-10', '', '']);
+
+    // Plus sign
+    ctx.fillStyle = '#e67e22'; ctx.font = 'bold 20px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('+', t2x + treeW + gap/2, treeY + treeH/2);
+
+    // Tree 3: fits residuals of tree 1+2
+    var t3x = t2x + treeW + gap;
+    drawTree(t3x, treeY, 'Tree₃ (residual₂)', ['x<7'], ['+8', '-5', '', '']);
+
+    // Equals sign and final prediction
+    ctx.fillStyle = '#e67e22'; ctx.font = 'bold 20px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('+  ...  =', t3x + treeW + 35, treeY + treeH/2);
+
+    // Final staircase approximation on right
+    var fX = t3x + treeW + 80, fW = 150, fH = 120, fY = treeY + 10;
+
+    // Axes
+    ctx.strokeStyle = '#bbb'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(fX, fY + fH); ctx.lineTo(fX + fW, fY + fH); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(fX, fY); ctx.lineTo(fX, fY + fH); ctx.stroke();
+
+    // True curve (smooth)
+    ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    for (var i = 0; i <= fW; i += 2) {
+        var t = i / fW;
+        var y = fY + fH - (0.2 + 0.6 * Math.sin(t * Math.PI)) * fH;
+        if (i === 0) ctx.moveTo(fX + i, y); else ctx.lineTo(fX + i, y);
+    }
+    ctx.stroke(); ctx.setLineDash([]);
+
+    // GBM stepped approximation (gets closer with more steps)
+    ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 2.5;
+    var steps = [0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1.0];
+    var heights = [0.22, 0.48, 0.7, 0.8, 0.78, 0.58, 0.35, 0.22];
+    ctx.beginPath();
+    steps.forEach(function(s, i) {
+        var x1 = fX + s * fW;
+        var x2 = fX + (steps[i+1] || 1.0) * fW;
+        var y = fY + fH - heights[i] * fH;
+        if (i === 0) ctx.moveTo(x1, y);
+        ctx.lineTo(x2, y);
+        if (i < steps.length - 1) ctx.lineTo(x2, fY + fH - heights[i+1] * fH);
+    });
+    ctx.stroke();
+
+    // Labels for final panel
+    ctx.fillStyle = '#1a5276'; ctx.font = '13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('x', fX + fW/2, fY + fH + 14);
+    ctx.fillStyle = '#27ae60'; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('Final', fX + fW/2, fY - 4);
+
+    // Bottom explanation
+    ctx.fillStyle = '#333'; ctx.font = '13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('F(x) = η·Tree₁(x) + η·Tree₂(x) + η·Tree₃(x) + ...    (η = learning rate)', w/2, h - 12);
+})();
+
+// 1. Noise Amplification — bubble chart showing sample weights growing on noise
+(function() {
+    var s = setupCanvas('c1'), ctx = s.ctx, w = s.w, h = s.h;
     var pad = 55;
 
-    ctx.fillStyle = '#555'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
-    ctx.fillText('Gradient Boosting: later trees memorize noise', w/2, 18);
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('Sample weights after 50 boosting rounds', w/2, 18);
 
-    ctx.strokeStyle = '#ccc'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(pad, 35); ctx.lineTo(pad, h-35); ctx.lineTo(w-20, h-35); ctx.stroke();
+    // Scatter with varying bubble sizes = sample weight
+    var samples = [
+        // Clean: small weight after many rounds (correctly classified)
+        {x:80, y:180, w:3, cls:0, noise:false}, {x:120, y:170, w:4, cls:0, noise:false},
+        {x:160, y:190, w:3, cls:0, noise:false}, {x:100, y:210, w:2, cls:0, noise:false},
+        {x:200, y:165, w:3, cls:0, noise:false}, {x:140, y:220, w:4, cls:0, noise:false},
+        {x:450, y:80, w:3, cls:1, noise:false}, {x:500, y:100, w:4, cls:1, noise:false},
+        {x:530, y:70, w:2, cls:1, noise:false}, {x:480, y:120, w:3, cls:1, noise:false},
+        {x:560, y:90, w:3, cls:1, noise:false}, {x:510, y:60, w:4, cls:1, noise:false},
+        // Mislabeled/noisy: HUGE weight (boosting keeps trying to fix them)
+        {x:460, y:170, w:22, cls:0, noise:true}, {x:150, y:90, w:20, cls:1, noise:true},
+        {x:490, y:200, w:18, cls:0, noise:true}
+    ];
 
-    ctx.fillStyle = '#888'; ctx.font = '17px -apple-system'; ctx.textAlign = 'center';
-    ctx.fillText('Number of trees', w/2, h-10);
-    ctx.save(); ctx.translate(14, (35+h-35)/2); ctx.rotate(-Math.PI/2);
-    ctx.fillText('AUC', 0, 0); ctx.restore();
-
-    var numPts = 30;
-    var xS = function(i) { return pad + i/(numPts-1) * (w-pad-30); };
-    var yS = function(v) { return h-35 - (v-0.4)/0.65 * (h-75); };
-
-    ctx.strokeStyle = '#2980b9'; ctx.lineWidth = 3.5;
-    ctx.beginPath();
-    for (var i = 0; i < numPts; i++) {
-        var auc = 0.5 + 0.49 * (1 - Math.exp(-i/5));
-        i===0 ? ctx.moveTo(xS(i), yS(auc)) : ctx.lineTo(xS(i), yS(auc));
-    }
-    ctx.stroke();
-
-    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3.5;
-    ctx.beginPath();
-    for (var i = 0; i < numPts; i++) {
-        var auc;
-        if (i < 10) auc = 0.5 + 0.22 * (1 - Math.exp(-i/3));
-        else auc = 0.72 - (i-10)/20 * 0.15 + (Math.random()-0.5)*0.02;
-        i===0 ? ctx.moveTo(xS(i), yS(auc)) : ctx.lineTo(xS(i), yS(auc));
-    }
-    ctx.stroke();
-
-    ctx.fillStyle = '#27ae60';
-    ctx.beginPath(); ctx.arc(xS(10), yS(0.72), 6, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = '#27ae60'; ctx.font = '17px -apple-system'; ctx.textAlign = 'left';
-    ctx.fillText('early stop here', xS(10)+10, yS(0.72)+4);
-
-    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px -apple-system'; ctx.textAlign = 'center';
-    var gapX = xS(22);
-    ctx.fillText('Gap = overfitting', gapX, yS(0.8));
-    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1; ctx.setLineDash([2,2]);
-    ctx.beginPath(); ctx.moveTo(gapX, yS(0.97)); ctx.lineTo(gapX, yS(0.60)); ctx.stroke();
+    // Decision boundary
+    ctx.strokeStyle = '#888'; ctx.lineWidth = 1.5; ctx.setLineDash([4,4]);
+    ctx.beginPath(); ctx.moveTo(310, 30); ctx.lineTo(310, h-20); ctx.stroke();
     ctx.setLineDash([]);
+    ctx.fillStyle = '#555'; ctx.font = '13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('boundary', 310, h-8);
 
-    ctx.font = '17px -apple-system'; ctx.textAlign = 'left';
-    ctx.fillStyle = '#2980b9'; ctx.fillRect(w-180, 40, 14, 3); ctx.fillText('Training AUC', w-160, 46);
-    ctx.fillStyle = '#e74c3c'; ctx.fillRect(w-180, 56, 14, 3); ctx.fillText('Validation AUC', w-160, 62);
+    // Draw samples
+    samples.forEach(function(s) {
+        if (s.noise) {
+            ctx.fillStyle = 'rgba(231,76,60,0.5)';
+            ctx.beginPath(); ctx.arc(s.x, s.y, s.w, 0, Math.PI*2); ctx.fill();
+            ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(s.x, s.y, s.w, 0, Math.PI*2); ctx.stroke();
+        } else {
+            ctx.fillStyle = s.cls ? 'rgba(39,174,96,0.7)' : 'rgba(41,128,185,0.7)';
+            ctx.beginPath(); ctx.arc(s.x, s.y, s.w, 0, Math.PI*2); ctx.fill();
+        }
+    });
 
-    ctx.fillStyle = '#888'; ctx.font = '17px -apple-system'; ctx.textAlign = 'right';
-    ctx.fillText('1.0', pad-5, yS(1.0)+4);
-    ctx.fillText('0.7', pad-5, yS(0.7)+4);
-    ctx.fillText('0.5', pad-5, yS(0.5)+4);
+    // Labels for noisy points
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Mislabeled — weight 50×', 505, 185);
+    ctx.fillText('normal after 50 rounds', 505, 202);
+
+    // Legend
+    ctx.fillStyle = '#555'; ctx.font = '13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Bubble size = sample weight', pad, h-8);
+
+    ctx.fillStyle = 'rgba(41,128,185,0.7)';
+    ctx.beginPath(); ctx.arc(w-180, 35, 4, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#555'; ctx.font = '13px system-ui';
+    ctx.fillText('Clean (low weight)', w-170, 39);
+
+    ctx.fillStyle = 'rgba(231,76,60,0.5)';
+    ctx.beginPath(); ctx.arc(w-180, 58, 10, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(w-180, 58, 10, 0, Math.PI*2); ctx.stroke();
+    ctx.fillStyle = '#555';
+    ctx.fillText('Noisy (huge weight)', w-165, 62);
+})();
+
+// 2. Overfitting — waterfall showing what each tree block adds
+(function() {
+    var s = setupCanvas('c2'), ctx = s.ctx, w = s.w, h = s.h;
+    var pad = 55;
+
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('What each block of trees contributes to validation AUC', w/2, 18);
+
+    // Waterfall bars
+    var blocks = [
+        {label:'Trees\n1-10', gain:+0.18, type:'good'},
+        {label:'Trees\n11-30', gain:+0.06, type:'good'},
+        {label:'Trees\n31-50', gain:+0.02, type:'ok'},
+        {label:'Trees\n51-100', gain:-0.01, type:'bad'},
+        {label:'Trees\n101-200', gain:-0.04, type:'bad'},
+        {label:'Trees\n201-500', gain:-0.07, type:'bad'}
+    ];
+
+    var barW = 80, gap = 20, startX = pad + 30;
+    var baseY = h - 60, scale = 400; // pixels per AUC unit
+    var runningY = baseY - 0.5 * scale; // start at AUC 0.5
+
+    // Baseline
+    ctx.strokeStyle = '#bbb'; ctx.lineWidth = 1; ctx.setLineDash([3,3]);
+    ctx.beginPath(); ctx.moveTo(pad, baseY); ctx.lineTo(w-20, baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#555'; ctx.font = '13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('AUC 0.5', pad - 5, baseY + 4);
+
+    blocks.forEach(function(b, i) {
+        var x = startX + i * (barW + gap);
+        var barH = Math.abs(b.gain) * scale;
+        var y = b.gain > 0 ? runningY - barH : runningY;
+
+        // Bar
+        if (b.type === 'good') ctx.fillStyle = 'rgba(39,174,96,0.75)';
+        else if (b.type === 'ok') ctx.fillStyle = 'rgba(230,126,34,0.3)';
+        else ctx.fillStyle = 'rgba(231,76,60,0.5)';
+        ctx.fillRect(x, y, barW, barH);
+
+        if (b.type === 'good') ctx.strokeStyle = '#27ae60';
+        else if (b.type === 'ok') ctx.strokeStyle = '#e67e22';
+        else ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1.5; ctx.strokeRect(x, y, barW, barH);
+
+        // Value label
+        ctx.fillStyle = b.gain > 0 ? '#27ae60' : '#e74c3c';
+        ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText((b.gain > 0 ? '+' : '') + b.gain.toFixed(2), x + barW/2, y - 6);
+
+        // Block label
+        var lines = b.label.split('\n');
+        ctx.fillStyle = '#555'; ctx.font = '13px system-ui';
+        lines.forEach(function(l, li) {
+            ctx.fillText(l, x + barW/2, baseY + 15 + li * 14);
+        });
+
+        // Connector line
+        if (b.gain > 0) runningY -= barH; else runningY += barH;
+        if (i < blocks.length - 1) {
+            ctx.strokeStyle = '#888'; ctx.lineWidth = 1; ctx.setLineDash([2,2]);
+            ctx.beginPath(); ctx.moveTo(x + barW, runningY); ctx.lineTo(x + barW + gap, runningY); ctx.stroke();
+            ctx.setLineDash([]);
+        }
+    });
+
+    // Annotation
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('← Signal', startX + barW, 45);
+    ctx.fillText('Memorization →', startX + 4*(barW+gap), 45);
+})();
+
+// 3. Concept Drift — two distribution overlays (train vs deploy)
+(function() {
+    var s = setupCanvas('c3'), ctx = s.ctx, w = s.w, h = s.h;
+    var pad = 50;
+
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('Feature distribution: training vs. deployment (6 months later)', w/2, 18);
+
+    ctx.strokeStyle = '#bbb'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad, 35); ctx.lineTo(pad, h-40); ctx.lineTo(w-25, h-40); ctx.stroke();
+
+    ctx.fillStyle = '#555'; ctx.font = '13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('Spending Amount ($)', w/2, h-10);
+
+    var xS = function(v) { return pad + v / 500 * (w - pad - 40); };
+    var yS = function(v) { return h - 40 - v * (h - 85); };
+
+    // Training distribution (centered at 200)
+    ctx.fillStyle = 'rgba(41,128,185,0.15)';
+    ctx.beginPath(); ctx.moveTo(xS(0), yS(0));
+    for (var x = 0; x <= 500; x += 3) {
+        var y = 0.7 * Math.exp(-Math.pow(x - 200, 2) / 4000);
+        ctx.lineTo(xS(x), yS(y));
+    }
+    ctx.lineTo(xS(500), yS(0)); ctx.fill();
+
+    ctx.strokeStyle = '#2980b9'; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (var x = 0; x <= 500; x += 3) {
+        var y = 0.7 * Math.exp(-Math.pow(x - 200, 2) / 4000);
+        if (x === 0) ctx.moveTo(xS(x), yS(y)); else ctx.lineTo(xS(x), yS(y));
+    }
+    ctx.stroke();
+
+    // Deployment distribution (shifted to 320, different shape)
+    ctx.fillStyle = 'rgba(231,76,60,0.12)';
+    ctx.beginPath(); ctx.moveTo(xS(0), yS(0));
+    for (var x = 0; x <= 500; x += 3) {
+        var y = 0.5 * Math.exp(-Math.pow(x - 320, 2) / 5000) + 0.15 * Math.exp(-Math.pow(x - 150, 2) / 1500);
+        ctx.lineTo(xS(x), yS(y));
+    }
+    ctx.lineTo(xS(500), yS(0)); ctx.fill();
+
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (var x = 0; x <= 500; x += 3) {
+        var y = 0.5 * Math.exp(-Math.pow(x - 320, 2) / 5000) + 0.15 * Math.exp(-Math.pow(x - 150, 2) / 1500);
+        if (x === 0) ctx.moveTo(xS(x), yS(y)); else ctx.lineTo(xS(x), yS(y));
+    }
+    ctx.stroke();
+
+    // Model's learned split point
+    ctx.strokeStyle = '#e67e22'; ctx.lineWidth = 2; ctx.setLineDash([5,4]);
+    ctx.beginPath(); ctx.moveTo(xS(250), 35); ctx.lineTo(xS(250), h-40); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e67e22'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('Model split (stale)', xS(250), 33);
+
+    // Legend
+    ctx.font = '13px system-ui'; ctx.textAlign = 'left';
+    ctx.strokeStyle = '#2980b9'; ctx.lineWidth = 2.5; ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(w-230, 42); ctx.lineTo(w-205, 42); ctx.stroke();
+    ctx.fillStyle = '#2980b9'; ctx.fillText('Training (2019)', w-200, 46);
+
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(w-230, 62); ctx.lineTo(w-205, 62); ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.fillText('Deployment (2020)', w-200, 66);
+})();
+
+// 4. Sufficient Data — heatmap grid: trees vs samples showing where memorization starts
+(function() {
+    var s = setupCanvas('c4'), ctx = s.ctx, w = s.w, h = s.h;
+    var pad = 65;
+
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('Validation AUC by (n_samples × n_trees)', w/2, 18);
+
+    // Grid: rows = sample sizes, cols = tree counts
+    var rows = ['n=50', 'n=200', 'n=1000', 'n=5000'];
+    var cols = ['5', '20', '50', '100', '200', '500'];
+    var data = [
+        [0.62, 0.64, 0.58, 0.52, 0.48, 0.44], // n=50
+        [0.65, 0.71, 0.72, 0.70, 0.67, 0.63], // n=200
+        [0.67, 0.74, 0.78, 0.80, 0.80, 0.79], // n=1000
+        [0.68, 0.76, 0.81, 0.84, 0.86, 0.86]  // n=5000
+    ];
+
+    var cellW = (w - pad - 50) / cols.length;
+    var cellH = (h - 80) / rows.length;
+    var gridX = pad, gridY = 40;
+
+    // Color function: green for high AUC, red for low
+    function aucColor(v) {
+        if (v >= 0.78) return 'rgba(39,174,96,0.75)';
+        if (v >= 0.70) return 'rgba(39,174,96,0.2)';
+        if (v >= 0.62) return 'rgba(230,126,34,0.2)';
+        return 'rgba(231,76,60,0.25)';
+    }
+
+    // Draw cells
+    for (var r = 0; r < rows.length; r++) {
+        for (var c = 0; c < cols.length; c++) {
+            var x = gridX + c * cellW;
+            var y = gridY + r * cellH;
+            var v = data[r][c];
+
+            ctx.fillStyle = aucColor(v);
+            ctx.fillRect(x, y, cellW - 2, cellH - 2);
+            ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1;
+            ctx.strokeRect(x, y, cellW - 2, cellH - 2);
+
+            ctx.fillStyle = v < 0.60 ? '#c0392b' : '#333';
+            ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(v.toFixed(2), x + cellW/2, y + cellH/2 + 5);
+        }
+    }
+
+    // Row labels
+    ctx.fillStyle = '#555'; ctx.font = '13px system-ui'; ctx.textAlign = 'right';
+    rows.forEach(function(r, i) {
+        ctx.fillText(r, gridX - 8, gridY + i * cellH + cellH/2 + 4);
+    });
+
+    // Column labels
+    ctx.textAlign = 'center';
+    cols.forEach(function(c, i) {
+        ctx.fillText(c, gridX + i * cellW + cellW/2, gridY + rows.length * cellH + 15);
+    });
+    ctx.fillText('Number of trees →', gridX + cols.length * cellW / 2, h - 8);
+
+    // Highlight the "sweet spot" vs "danger zone"
+    ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 2.5;
+    ctx.strokeRect(gridX + 2*cellW, gridY + 2*cellH, cellW*3 - 2, cellH*2 - 2);
+
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2.5;
+    ctx.strokeRect(gridX + 3*cellW, gridY, cellW*3 - 2, cellH - 2);
 })();
 </script>
 
