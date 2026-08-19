@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clutch Players & the Mixture Problem</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 40px 20px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+.math-box { background: #f8fafb; border: 1px solid #e0e0e0; border-radius: 6px; padding: 16px 20px; margin: 12px 0; font-size: 0.9em; }
+.math-box code { background: #eef2f7; padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
+</style>
+</head>
+<body>
+
+<h1>Clutch Players & the Mixture Problem</h1>
+<p class="subtitle">A handful of elite tennis players genuinely perform differently under pressure. You'll never find them by averaging over the entire tour — because the population isn't one population.</p>
+
+<div class="philosophy">
+<strong>Why this is fascinating:</strong> Magnus & Klaassen (1999) found that at the population level, point outcomes in tennis appear i.i.d. (independent and identically distributed). No momentum, no clutch. But this masks a fat-tailed individual effect: rare players (think Nadal on clay at Roland Garros, Federer in Wimbledon finals) show statistically significant state-dependence. The pooled test answers "does the average player show clutch?" when the real question is "does ANY player, and which ones?"
+</div>
+
+<h2>The Pooled Null</h2>
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">The Average Player Test</div>
+<p>Take 500 ATP players and model P(win point) as a function of recent history. Run a regression with "won previous point" as a predictor.</p>
+<p><strong>Result:</strong> The coefficient on "won previous point" is near zero (β ≈ -0.003, p = 0.52). Conclusion: no momentum effect at the population level.</p>
+<p>The pooled analysis suggests point outcomes are independent — past success doesn't predict future success.</p>
+</td>
+<td>
+<canvas id="pooledCanvas"></canvas>
+</td>
+</tr>
+</table>
+
+<h2>The Mixture Underneath</h2>
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">Heterogeneity Revealed</div>
+<p>The population is NOT homogeneous. Most players (~95%) truly show no momentum — their coefficient IS near zero.</p>
+<p>But ~5% have a genuine positive momentum effect (β = 0.03 to 0.08). When you pool them, the 95% zeros overwhelm the 5% real effects.</p>
+<div class="math-box">
+Population = 0.95 × N(0, σ₁²) + 0.05 × N(0.055, σ₂²)
+</div>
+<p><strong>The mixture LOOKS like a single distribution centered at zero.</strong> The elite clutch players are statistically drowned out.</p>
+</td>
+<td>
+<canvas id="mixtureCanvas"></canvas>
+</td>
+</tr>
+</table>
+
+<h2>Why This Matters Beyond Tennis</h2>
+<table class="obj-table">
+<tr>
+<td>
+<div class="obj-title">The Universal Statistical Sin</div>
+<p><strong>Medicine:</strong> "Drug X shows no average effect" → maybe it works brilliantly for 8% of patients with a specific genotype, but is neutral or harmful for the rest.</p>
+<p><strong>Education:</strong> "Teaching method A is no better than B on average" → maybe it's transformative for visual learners (15% of students) but worse for others.</p>
+<p><strong>Machine Learning:</strong> "Feature Z has no predictive power" → maybe it's highly predictive for a rare subpopulation that drives 20% of revenue.</p>
+<ul>
+<li>Pooling heterogeneous groups creates false null conclusions</li>
+<li>The right question: "Does it work for ANYONE?" not "Does it work on average?"</li>
+<li>Test for heterogeneity first, THEN decide if pooling is valid</li>
+</ul>
+</td>
+<td>
+<canvas id="stratifiedCanvas"></canvas>
+</td>
+</tr>
+</table>
+
+<div class="philosophy">
+<strong>The statistical lesson:</strong> When you reject an effect based on a pooled sample, you're implicitly assuming the population is homogeneous. If it isn't — if there's a mixture — your test is answering the wrong question. The right approach: test for heterogeneity first (random effects, mixture models, subgroup analysis), THEN decide if a pooled null is meaningful. A null result from a pooled test is only as valid as the homogeneity assumption underneath it.
+</div>
+
+<script>
+function setupCanvas(canvas, logicalWidth, logicalHeight) {
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = logicalWidth * dpr;
+    canvas.height = logicalHeight * dpr;
+    canvas.style.width = logicalWidth + 'px';
+    canvas.style.height = logicalHeight + 'px';
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return ctx;
+}
+
+function drawPooledDistribution() {
+    const canvas = document.getElementById('pooledCanvas');
+    const ctx = setupCanvas(canvas, 720, 380);
+
+    // Draw normal distribution centered at zero
+    const centerX = 360;
+    const centerY = 280;
+    const scale = 1500;
+
+    ctx.beginPath();
+    ctx.moveTo(80, centerY);
+
+    for (let x = 80; x <= 640; x++) {
+        const t = (x - centerX) / 100;
+        const y = centerY - scale * Math.exp(-t * t / 0.5);
+        ctx.lineTo(x, y);
+    }
+
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Fill under curve
+    ctx.lineTo(640, centerY);
+    ctx.lineTo(80, centerY);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(26,82,118,0.15)';
+    ctx.fill();
+
+    // Axes
+    ctx.beginPath();
+    ctx.moveTo(60, centerY);
+    ctx.lineTo(660, centerY);
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY);
+    ctx.lineTo(centerX, 50);
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([5, 5]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Labels
+    ctx.fillStyle = '#333';
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Momentum coefficient β', 360, 320);
+    ctx.fillText('0', centerX, 300);
+    ctx.fillText('-0.04', 160, 300);
+    ctx.fillText('+0.04', 560, 300);
+
+    ctx.save();
+    ctx.translate(30, 200);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Frequency', 0, 0);
+    ctx.restore();
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.fillText('Population Distribution of Momentum Effect', 360, 30);
+
+    ctx.fillStyle = '#666';
+    ctx.font = '13px sans-serif';
+    ctx.fillText('Centered at zero — no clutch effect detected', 360, 50);
+}
+
+function drawMixtureDistribution() {
+    const canvas = document.getElementById('mixtureCanvas');
+    const ctx = setupCanvas(canvas, 720, 380);
+
+    const centerX = 360;
+    const centerY = 280;
+    const scale1 = 1800;
+    const scale2 = 200;
+
+    // Draw majority distribution (centered at 0)
+    ctx.beginPath();
+    ctx.moveTo(80, centerY);
+
+    for (let x = 80; x <= 640; x++) {
+        const t = (x - centerX) / 85;
+        const y = centerY - scale1 * Math.exp(-t * t / 0.4);
+        ctx.lineTo(x, y);
+    }
+
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.lineTo(640, centerY);
+    ctx.lineTo(80, centerY);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(26,82,118,0.15)';
+    ctx.fill();
+
+    // Draw elite distribution (shifted right, flatter)
+    const eliteCenter = 510;
+    ctx.beginPath();
+    ctx.moveTo(350, centerY);
+
+    for (let x = 350; x <= 640; x++) {
+        const t = (x - eliteCenter) / 80;
+        const y = centerY - scale2 * Math.exp(-t * t / 0.8);
+        ctx.lineTo(x, y);
+    }
+
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.lineTo(640, centerY);
+    ctx.lineTo(350, centerY);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(231,76,60,0.15)';
+    ctx.fill();
+
+    // Axes
+    ctx.beginPath();
+    ctx.moveTo(60, centerY);
+    ctx.lineTo(660, centerY);
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = '#333';
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Momentum coefficient β', 360, 320);
+    ctx.fillText('0', centerX, 300);
+    ctx.fillText('-0.04', 160, 300);
+    ctx.fillText('+0.08', 600, 300);
+
+    ctx.save();
+    ctx.translate(30, 200);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Frequency', 0, 0);
+    ctx.restore();
+
+    // Legend
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 13px sans-serif';
+    ctx.fillText('■', 80, 80);
+    ctx.fillStyle = '#333';
+    ctx.font = '13px sans-serif';
+    ctx.fillText('Majority: no effect (~95% of players)', 100, 80);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 13px sans-serif';
+    ctx.fillText('■', 80, 105);
+    ctx.fillStyle = '#333';
+    ctx.font = '13px sans-serif';
+    ctx.fillText('Rare elite: real clutch effect (~5%)', 100, 105);
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('The Mixture Decomposed', 360, 30);
+
+    ctx.fillStyle = '#666';
+    ctx.font = '13px sans-serif';
+    ctx.fillText('Two populations — the 95% drowns out the 5%', 360, 50);
+}
+
+function drawStratifiedComparison() {
+    const canvas = document.getElementById('stratifiedCanvas');
+    const ctx = setupCanvas(canvas, 720, 380);
+
+    // Left side: Pooled Test
+    ctx.fillStyle = '#f8f8f8';
+    ctx.fillRect(40, 60, 280, 240);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 15px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Pooled Test', 180, 90);
+
+    ctx.fillStyle = '#333';
+    ctx.font = '13px sans-serif';
+    ctx.fillText('Test all 500 players', 180, 120);
+    ctx.fillText('as one group', 180, 140);
+
+    // Result box
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(80, 170, 200, 60);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillText('No Effect', 180, 195);
+    ctx.font = '12px sans-serif';
+    ctx.fillText('β = -0.003, p = 0.52', 180, 215);
+
+    // Arrow
+    ctx.beginPath();
+    ctx.moveTo(330, 180);
+    ctx.lineTo(380, 180);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(380, 180);
+    ctx.lineTo(370, 175);
+    ctx.moveTo(380, 180);
+    ctx.lineTo(370, 185);
+    ctx.stroke();
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillText('What you miss', 355, 165);
+
+    // Right side: Stratified Test
+    ctx.fillStyle = '#f0f8f0';
+    ctx.fillRect(400, 60, 280, 240);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillText('Stratified Test', 540, 90);
+
+    ctx.fillStyle = '#333';
+    ctx.font = '13px sans-serif';
+    ctx.fillText('Test subgroups', 540, 120);
+    ctx.fillText('separately', 540, 140);
+
+    // Result boxes
+    ctx.fillStyle = '#bdc3c7';
+    ctx.fillRect(420, 165, 110, 50);
+    ctx.fillStyle = '#333';
+    ctx.font = 'bold 13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Null for 95%', 475, 185);
+    ctx.font = '11px sans-serif';
+    ctx.fillText('β ≈ 0.001', 475, 205);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(550, 165, 110, 50);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 13px sans-serif';
+    ctx.fillText('Strong for 5%', 605, 185);
+    ctx.font = '11px sans-serif';
+    ctx.fillText('β = 0.03-0.08', 605, 205);
+
+    // Bottom note
+    ctx.fillStyle = '#666';
+    ctx.font = 'italic 12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('The pooled test answers "average effect" when you need "any effect"', 360, 340);
+}
+
+drawPooledDistribution();
+drawMixtureDistribution();
+drawStratifiedComparison();
+</script>
+
+</body>
+</html>

@@ -196,6 +196,57 @@ li { margin-bottom: 4px; }
     </table>
 </div>
 
+<!-- Section 5 -->
+<div class="card-section">
+    <h2>5. Anonymization & Obfuscation → Extended Retention</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>If data can no longer identify an individual, retention limits relax or disappear entirely (GDPR Recital 26 exempts truly anonymized data).</p>
+                <ul>
+                    <li><strong>Generalization</strong> — replace precise values with ranges (age 34 → 30-39, ZIP 10013 → 100xx). Reduces re-identification while preserving distribution shape.</li>
+                    <li><strong>k-Anonymity</strong> — ensure every record is indistinguishable from at least k−1 others on quasi-identifiers. Enables indefinite retention of the generalized dataset.</li>
+                    <li><strong>Differential privacy</strong> — inject calibrated noise so no single record materially affects query output. Aggregates become retainable; raw rows are still deletable.</li>
+                    <li><strong>Tokenization / Pseudonymization</strong> — replace identifiers with opaque tokens. Caution: still "personal data" under GDPR if re-linkable. Extends retention only if the mapping key is destroyed.</li>
+                    <li><strong>Suppression</strong> — drop rare combinations entirely. High privacy, but loses tail-distribution signal.</li>
+                </ul>
+                <div class="key-point">
+                    <strong>The tradeoff:</strong> Stronger anonymization extends retention but degrades analytical utility. The decision is: how much signal loss can you tolerate in exchange for keeping data longer?
+                </div>
+                <p class="example">Example: Raw clickstream expires at 90 days. Aggregate session-duration histograms (k≥50, no user-ID) can be retained indefinitely — same trend signal, no compliance clock.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c5" width="720" height="380"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<!-- Section 6 -->
+<div class="card-section">
+    <h2>6. Practical Retention Strategy</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>A layered approach: keep raw data short, progressively anonymize for longer horizons.</p>
+                <ul>
+                    <li><strong>Hot tier (0–30 days)</strong> — full-fidelity raw data. Needed for debugging, real-time personalization, support tickets.</li>
+                    <li><strong>Warm tier (30–90 days)</strong> — pseudonymized. User IDs tokenized, timestamps rounded to day. Still joinable if legally required.</li>
+                    <li><strong>Cold tier (90 days–2 years)</strong> — k-anonymous aggregates. Group-level patterns, no individual traces. Mapping keys destroyed.</li>
+                    <li><strong>Archive (2+ years)</strong> — differentially private summaries. Statistical properties preserved, re-identification mathematically bounded.</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Key insight:</strong> You don't lose the data — you lose the ability to link it back to individuals. The statistical signal survives; the compliance liability doesn't.
+                </div>
+                <p class="example">Example: "Average session duration increased 12% in Q3" is derivable from archive-tier DP summaries — no raw tracking data needed.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c6" width="720" height="380"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
 <script>
 // Canvas setup with devicePixelRatio
 function setup(id) {
@@ -472,6 +523,235 @@ function setup(id) {
     ctx.fillStyle = '#888';
     ctx.textAlign = 'center';
     ctx.fillText('Each stage inherits the most restrictive policy from its inputs', w/2, h - 10);
+})();
+
+// C5: Anonymization techniques — privacy vs utility tradeoff
+(function() {
+    var canvas = document.getElementById('c5');
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 380 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    var w = rect.width, h = rect.height;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Anonymization: Privacy Gain vs Analytical Utility', w/2, 25);
+
+    var techniques = [
+        { label: 'Raw\n(none)', privacy: 5, utility: 98 },
+        { label: 'Pseudo-\nnymization', privacy: 35, utility: 90 },
+        { label: 'Generali-\nzation', privacy: 55, utility: 72 },
+        { label: 'k-Anonymity\n(k=50)', privacy: 75, utility: 55 },
+        { label: 'Differential\nPrivacy', privacy: 92, utility: 40 },
+        { label: 'Full\nSuppression', privacy: 99, utility: 5 }
+    ];
+
+    var plotX = 80, plotW = w - 140, plotY = 55, plotH = 240;
+
+    // Axes
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(plotX, plotY);
+    ctx.lineTo(plotX, plotY + plotH);
+    ctx.lineTo(plotX + plotW, plotY + plotH);
+    ctx.stroke();
+
+    // Y-axis label
+    ctx.save();
+    ctx.translate(18, plotY + plotH/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    ctx.fillText('Score (%)', 0, 0);
+    ctx.restore();
+
+    // Grid lines
+    ctx.strokeStyle = '#f0f0f0';
+    for (var g = 0; g <= 4; g++) {
+        var gy = plotY + plotH - (g * plotH / 4);
+        ctx.beginPath();
+        ctx.moveTo(plotX, gy);
+        ctx.lineTo(plotX + plotW, gy);
+        ctx.stroke();
+        ctx.font = '9px system-ui';
+        ctx.fillStyle = '#999';
+        ctx.textAlign = 'right';
+        ctx.fillText((g * 25) + '', plotX - 6, gy + 3);
+    }
+
+    var barGroupW = plotW / techniques.length;
+    var barW = barGroupW * 0.3;
+
+    techniques.forEach(function(t, i) {
+        var cx = plotX + i * barGroupW + barGroupW/2;
+
+        // Privacy bar (green)
+        var ph = (t.privacy / 100) * plotH;
+        ctx.fillStyle = 'rgba(39,174,96,0.6)';
+        ctx.fillRect(cx - barW - 2, plotY + plotH - ph, barW, ph);
+
+        // Utility bar (blue)
+        var uh = (t.utility / 100) * plotH;
+        ctx.fillStyle = 'rgba(26,82,118,0.5)';
+        ctx.fillRect(cx + 2, plotY + plotH - uh, barW, uh);
+
+        // Label (handle line breaks)
+        ctx.font = '9px system-ui';
+        ctx.fillStyle = '#2c3e50';
+        ctx.textAlign = 'center';
+        var lines = t.label.split('\n');
+        lines.forEach(function(line, li) {
+            ctx.fillText(line, cx, plotY + plotH + 14 + li * 12);
+        });
+    });
+
+    // Legend
+    ctx.fillStyle = 'rgba(39,174,96,0.6)';
+    ctx.fillRect(plotX + plotW - 180, plotY + 4, 10, 10);
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#2c3e50';
+    ctx.textAlign = 'left';
+    ctx.fillText('Privacy protection', plotX + plotW - 166, plotY + 13);
+
+    ctx.fillStyle = 'rgba(26,82,118,0.5)';
+    ctx.fillRect(plotX + plotW - 180, plotY + 20, 10, 10);
+    ctx.fillText('Analytical utility', plotX + plotW - 166, plotY + 29);
+
+    // Retention arrow
+    ctx.beginPath();
+    ctx.moveTo(plotX + 10, h - 18);
+    ctx.lineTo(plotX + plotW - 10, h - 18);
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(plotX + plotW - 10, h - 18);
+    ctx.lineTo(plotX + plotW - 18, h - 23);
+    ctx.lineTo(plotX + plotW - 18, h - 13);
+    ctx.fillStyle = '#e67e22';
+    ctx.fill();
+
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#e67e22';
+    ctx.textAlign = 'center';
+    ctx.fillText('← Short retention                         Longer permissible retention →', w/2, h - 4);
+})();
+
+// C6: Tiered retention strategy
+(function() {
+    var canvas = document.getElementById('c6');
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 380 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    var w = rect.width, h = rect.height;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Tiered Retention: Progressive Anonymization Over Time', w/2, 25);
+
+    var tiers = [
+        { label: 'Hot', time: '0–30d', method: 'Raw (full fidelity)', color: '#e74c3c', signal: 100 },
+        { label: 'Warm', time: '30–90d', method: 'Pseudonymized', color: '#e67e22', signal: 88 },
+        { label: 'Cold', time: '90d–2yr', method: 'k-Anonymous aggregates', color: '#2980b9', signal: 62 },
+        { label: 'Archive', time: '2yr+', method: 'DP summaries', color: '#1a5276', signal: 40 }
+    ];
+
+    var tierW = (w - 80) / tiers.length;
+    var startX = 40, tierY = 55, tierH = 110;
+
+    tiers.forEach(function(t, i) {
+        var x = startX + i * tierW;
+
+        // Tier box
+        ctx.fillStyle = t.color + '15';
+        ctx.fillRect(x + 4, tierY, tierW - 8, tierH);
+        ctx.strokeStyle = t.color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x + 4, tierY, tierW - 8, tierH);
+
+        // Tier label
+        ctx.font = 'bold 13px system-ui';
+        ctx.fillStyle = t.color;
+        ctx.textAlign = 'center';
+        ctx.fillText(t.label, x + tierW/2, tierY + 24);
+
+        // Time range
+        ctx.font = '11px system-ui';
+        ctx.fillStyle = '#555';
+        ctx.fillText(t.time, x + tierW/2, tierY + 42);
+
+        // Method
+        ctx.font = '10px system-ui';
+        ctx.fillStyle = '#2c3e50';
+        var methodLines = t.method.split(' ');
+        if (methodLines.length > 2) {
+            ctx.fillText(methodLines.slice(0, 2).join(' '), x + tierW/2, tierY + 64);
+            ctx.fillText(methodLines.slice(2).join(' '), x + tierW/2, tierY + 78);
+        } else {
+            ctx.fillText(t.method, x + tierW/2, tierY + 70);
+        }
+
+        // Arrow to next
+        if (i < tiers.length - 1) {
+            ctx.beginPath();
+            ctx.moveTo(x + tierW - 4, tierY + tierH/2);
+            ctx.lineTo(x + tierW + 4, tierY + tierH/2);
+            ctx.strokeStyle = '#999';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x + tierW + 4, tierY + tierH/2);
+            ctx.lineTo(x + tierW - 1, tierY + tierH/2 - 4);
+            ctx.lineTo(x + tierW - 1, tierY + tierH/2 + 4);
+            ctx.fillStyle = '#999';
+            ctx.fill();
+        }
+    });
+
+    // Signal retention bar chart below tiers
+    var barY = tierY + tierH + 40;
+    var barH = 80;
+
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    ctx.fillText('Statistical signal retained (%)', w/2, barY - 8);
+
+    tiers.forEach(function(t, i) {
+        var x = startX + i * tierW;
+        var bw = tierW * 0.5;
+        var bh = (t.signal / 100) * barH;
+
+        ctx.fillStyle = t.color + '55';
+        ctx.fillRect(x + tierW/2 - bw/2, barY + barH - bh, bw, bh);
+        ctx.strokeStyle = t.color;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x + tierW/2 - bw/2, barY + barH - bh, bw, bh);
+
+        // Percentage
+        ctx.font = 'bold 11px system-ui';
+        ctx.fillStyle = t.color;
+        ctx.textAlign = 'center';
+        ctx.fillText(t.signal + '%', x + tierW/2, barY + barH - bh - 6);
+    });
+
+    // Bottom annotation
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#888';
+    ctx.textAlign = 'center';
+    ctx.fillText('Signal degrades gracefully — compliance liability drops to zero at archive tier', w/2, h - 10);
 })();
 </script>
 
