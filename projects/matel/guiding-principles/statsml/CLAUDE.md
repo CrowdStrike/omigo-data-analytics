@@ -83,3 +83,18 @@ Additional canvas/chart rules:
 ## TODO
 
 - Remove dead `.nav` CSS rules from ~289 HTML files (the `<div class="nav">` elements are already gone, but the style blocks remain as unused code)
+
+
+## Thoughts
+- 17-folk-wisdom-fallacies.html: girls grow faster than boys
+- concepts: bayesian statistics wrt AB testing, Multi Arm Bandit - challenges in real life
+- real-world-distributions/01-ecommerce.html: multiple items buying in single session. not restricting to just the item at the start
+- domain pitfalls - without proper identification, AI agents masquerading as humans poisonsing user generated content and tracking data
+- Double Counting AI assisted work - AI agents writing emails from sender, then AI agents reading emails to summarize.
+- rename 151-forced-participation-data-poisoning.html to forced survey participation impact.
+- Human Psychology - building affection, attraction, attachment to AI generated content faking human expressions, emotions. Changing the reality, twisting expections
+  from real world interaction 
+- Human Psychology: Freedom to talk to Chat Bot without having to be super politically correct which at times can be restricting.
+- High churn rate at 4, 8 yrs mark - Iniial Stock grants expiry
+- Survey and Feedback question bias response to the position rank
+- 
