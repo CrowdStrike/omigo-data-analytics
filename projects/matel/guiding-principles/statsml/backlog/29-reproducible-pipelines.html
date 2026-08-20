@@ -3,173 +3,974 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Reproducible Data Pipelines & Deterministic Output — Discussion Backlog</title>
+<title>Reproducible Data Pipelines & Deterministic Output</title>
 <style>
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #fff; color: #2c3e50; line-height: 1.6; }
-h1 { color: #1a5276; border-bottom: 3px solid #2980b9; padding-bottom: 10px; }
-h2 { color: #1a5276; margin-top: 30px; }
-.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-.obj-table td { padding: 20px; vertical-align: top; border: 1px solid #2980b9; }
-.obj-table td:first-child { width: 45%; }
-.obj-table td:last-child { width: 55%; }
-.obj-title { color: #1a5276; font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
-ul { margin: 10px 0; padding-left: 20px; }
-li { margin-bottom: 6px; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+
+/* Each content section */
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+/* 2-col layout table */
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+/* Canvas styling */
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+/* Key-point callout (red accent) */
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+/* Open-question callout (orange accent) */
+.questions {
+    background: #f8f9fa;
+    border-left: 3px solid #e67e22;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+/* Example line (italic, muted) */
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+/* Lists within text column */
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
 strong { color: #1a5276; }
-code { background: #e8f0f8; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; color: #1a5276; }
-.questions { background: #fff8e1; border-left: 3px solid #f39c12; padding: 10px 15px; margin: 10px 0; font-size: 0.9em; }
-.danger { background: #fdecea; border-left: 3px solid #e74c3c; padding: 10px 15px; margin: 10px 0; font-size: 0.9em; }
-.status { display: inline-block; background: #e8f0f8; color: #1a5276; padding: 3px 10px; border-radius: 12px; font-size: 0.85em; font-weight: bold; margin-bottom: 20px; }
+code {
+    background: #f8f9fa;
+    border: 1px solid #e0e0e0;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 0.85em;
+    color: #1a5276;
+}
+
+/* Full-width comparison table (inside a card-section) */
+table.compare {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+table.compare th, table.compare td {
+    border: 1px solid #e0e0e0;
+    padding: 8px 10px;
+    text-align: left;
+    vertical-align: top;
+}
+table.compare th {
+    background: #f8f9fa;
+    color: #1a5276;
+}
 </style>
 </head>
 <body>
 
 <h1>Reproducible Data Pipelines & Deterministic Output</h1>
-<span class="status">Discussion — Design Philosophy</span>
+<p class="subtitle">A pipeline should produce identical output given identical input — regardless of when it runs, how many times it retries, or which environment executes it. This is the design philosophy that contains query determinism but reaches further: ingestion through model output, plus the audit trail that lets you replay any past decision.</p>
 
-<p><strong>Core idea:</strong> A data pipeline should produce identical output given identical input, regardless of when it runs, how many times it retries, or what environment it executes in. This is the broader design philosophy that encompasses query determinism but goes further — covering the entire pipeline from ingestion to output.</p>
-
-<h2>What Breaks Reproducibility</h2>
-
-<table class="obj-table">
-<tr>
-<td>
-<div class="obj-title">Temporal & Environmental</div>
-<ul>
-<li><strong>Wall-clock dependencies</strong> — <code>NOW()</code>, <code>CURRENT_DATE</code>, time-based partitions that shift</li>
-<li><strong>Floating-point non-determinism</strong> — different hardware (x86 vs ARM, GPU generations) produces different rounding</li>
-<li><strong>Hash randomization</strong> — Python dict ordering pre-3.7, <code>PYTHONHASHSEED</code> changing set iteration order</li>
-<li><strong>External API calls</strong> — third-party services returning different results over time (exchange rates, model endpoints)</li>
-</ul>
-</td>
-<td>
-<div class="obj-title">Execution & Concurrency</div>
-<ul>
-<li><strong>Parallel execution non-determinism</strong> — reducer order in MapReduce, Spark partition shuffles, thread scheduling</li>
-<li><strong>Random seeds not fixed</strong> — sampling, train/test splits, initialization of models</li>
-<li><strong>Model training non-determinism</strong> — GPU thread scheduling, cuDNN non-deterministic algorithms, gradient accumulation order</li>
-<li><strong>Dependency drift</strong> — unpinned library versions, OS-level differences, transitive dependency updates</li>
-</ul>
-</td>
-</tr>
-</table>
-
-<div class="danger">
-<strong>The insidious ones:</strong> Floating-point non-determinism and parallel execution order are especially dangerous because they produce results that look correct — they're just slightly different each time. You won't catch these with eyeball checks; you need bit-for-bit output comparison.
+<!-- Section 1 -->
+<div class="card-section">
+    <h2>1. What Breaks Reproducibility</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Non-determinism enters from two directions — the world outside the process, and the way the process itself executes.</p>
+                <p style="margin-top:12px"><strong>Temporal &amp; environmental</strong></p>
+                <ul>
+                    <li><strong>Wall-clock dependencies</strong> — <code>NOW()</code>, <code>CURRENT_DATE</code>, time-based partitions that shift under you</li>
+                    <li><strong>Floating-point drift</strong> — x86 vs ARM, different GPU generations, different rounding</li>
+                    <li><strong>Hash randomization</strong> — <code>PYTHONHASHSEED</code> changing set/dict iteration order</li>
+                    <li><strong>External API calls</strong> — exchange rates, model endpoints, third-party services that move</li>
+                </ul>
+                <p style="margin-top:12px"><strong>Execution &amp; concurrency</strong></p>
+                <ul>
+                    <li><strong>Parallel execution order</strong> — reducer order, Spark shuffles, thread scheduling</li>
+                    <li><strong>Unfixed random seeds</strong> — sampling, train/test splits, weight initialization</li>
+                    <li><strong>Training non-determinism</strong> — GPU scheduling, non-deterministic cuDNN kernels, gradient accumulation order</li>
+                    <li><strong>Dependency drift</strong> — unpinned libraries, OS differences, transitive upgrades</li>
+                </ul>
+                <div class="key-point">
+                    <strong>The insidious ones:</strong> floating-point drift and parallel ordering produce results that <em>look</em> correct — just slightly different each run. Eyeball checks never catch them; only bit-for-bit output comparison does.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
 </div>
 
-<h2>Design Principles</h2>
-
-<table class="obj-table">
-<tr>
-<td>
-<div class="obj-title">Referential Transparency</div>
-<ul>
-<li><strong>Same input → same output</strong> — the fundamental contract. If <code>f(x) = y</code> today, then <code>f(x) = y</code> tomorrow.</li>
-<li><strong>Version everything</strong> — code, data, config, dependencies, environment. If any of these change, you have a different pipeline.</li>
-<li><strong>Snapshots over live queries</strong> — read from a frozen snapshot, not a live table that might change mid-execution.</li>
-<li><strong>Explicit side effects</strong> — every write, every external call, every non-deterministic operation must be declared and isolated.</li>
-</ul>
-</td>
-<td>
-<div class="obj-title">Content-Addressed Storage</div>
-<ul>
-<li><strong>Hash of input determines output location</strong> — if the input hasn't changed, the output shouldn't be recomputed.</li>
-<li><strong>Enables memoization</strong> — skip stages whose inputs haven't changed since last run.</li>
-<li><strong>Natural deduplication</strong> — same data written twice goes to the same location.</li>
-<li><strong>Audit trail</strong> — can always trace output back to the exact inputs and code that produced it.</li>
-</ul>
-</td>
-</tr>
-</table>
-
-<h2>Practical Techniques</h2>
-
-<table class="obj-table">
-<tr>
-<td>
-<div class="obj-title">Environment & Dependencies</div>
-<ul>
-<li>Pinned dependency versions (<code>pip freeze</code>, lockfiles)</li>
-<li>Containerized execution (Docker with pinned base images)</li>
-<li>Fixed random seeds at every non-deterministic call site</li>
-<li>Deterministic serialization (sorted JSON keys, stable Parquet row order)</li>
-<li>Sorted outputs — don't rely on implicit ordering from databases or hash maps</li>
-</ul>
-</td>
-<td>
-<div class="obj-title">Data Versioning</div>
-<ul>
-<li><strong>DVC</strong> — git for data, tracks versions of large files</li>
-<li><strong>LakeFS</strong> — git-like branching for data lakes</li>
-<li><strong>Delta Lake time travel</strong> — query any historical version of a table</li>
-<li><strong>Immutable partitions</strong> — write-once, never overwrite (date-partitioned, append-only)</li>
-<li><strong>Input manifests</strong> — record exact file paths, sizes, checksums consumed by each run</li>
-</ul>
-</td>
-</tr>
-</table>
-
-<h2>The Determinism Spectrum</h2>
-
-<table class="obj-table">
-<tr>
-<td>
-<div class="obj-title">Not all stages CAN be deterministic</div>
-<ul>
-<li><strong>Fully deterministic:</strong> SQL transforms, feature engineering, aggregations, data cleaning (pure functions on snapshots)</li>
-<li><strong>Deterministic with effort:</strong> Model training (fix all seeds, use deterministic cuDNN, accept perf hit), sampling (fix seed)</li>
-<li><strong>Inherently non-deterministic:</strong> Real-time API calls, user interaction, live sensor data</li>
-</ul>
-<p>Strategy: isolate non-deterministic stages, checkpoint around them, and accept that the checkpoint itself becomes the reproducible artifact.</p>
-</td>
-<td>
-<div class="obj-title">Cost/Benefit Analysis</div>
-<ul>
-<li><strong>Cost of reproducibility:</strong> snapshotting everything is expensive (storage, complexity, slower iteration)</li>
-<li><strong>Cost of non-reproducibility:</strong> can't debug production issues, can't audit model decisions, can't compare experiments, can't satisfy regulatory requirements</li>
-<li><strong>Pragmatic approach:</strong> full reproducibility for model training and evaluation, best-effort for exploratory/ad-hoc work</li>
-</ul>
-</td>
-</tr>
-</table>
-
-<h2>Relationship to Testing</h2>
-
-<div class="danger">
-<strong>Critical insight:</strong> If a pipeline isn't deterministic, you can't write assertions about its output. Testing requires reproducibility. A non-reproducible pipeline is an untestable pipeline.
+<!-- Section 2 -->
+<div class="card-section">
+    <h2>2. Design Principles</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p><strong>Referential transparency</strong> — the contract is that <code>f(x)</code> returning <code>y</code> today means <code>f(x)</code> returns <code>y</code> tomorrow.</p>
+                <ul>
+                    <li><strong>Version everything</strong> — code, data, config, dependencies, environment. If any of these change, it is a different pipeline.</li>
+                    <li><strong>Snapshots over live queries</strong> — read a frozen snapshot, never a table that can change mid-execution.</li>
+                    <li><strong>Explicit side effects</strong> — every write, external call, and non-deterministic operation is declared and isolated.</li>
+                </ul>
+                <p style="margin-top:12px"><strong>Content-addressed storage</strong> — the hash of the input determines where the output lives.</p>
+                <ul>
+                    <li><strong>Memoization</strong> — unchanged input hash means the stage is skipped, not recomputed.</li>
+                    <li><strong>Deduplication</strong> — the same bytes written twice land in the same place.</li>
+                    <li><strong>Audit trail</strong> — any output traces back to the exact inputs and code that produced it.</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Where staleness enters:</strong> a cache keyed on a hash that omits one input — a config flag, a library version — will happily serve a stale artifact that looks fresh. The key must cover everything the stage reads.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
 </div>
 
-<ul>
-<li>Unit tests assert exact output for known input — requires determinism</li>
-<li>Integration tests verify end-to-end behavior — requires reproducibility of the full chain</li>
-<li>Regression tests catch unintended changes — requires that "unchanged" actually means "same output"</li>
-<li>If your test passes 99% of the time, you have a non-deterministic pipeline, not a flaky test</li>
-</ul>
-
-<h2>Streaming Systems</h2>
-
-<div class="questions">
-<strong>Open question:</strong> How does this interact with streaming systems where input is inherently unbounded?
-<ul>
-<li>Windowing makes bounded sub-problems — but window boundaries can differ across runs</li>
-<li>Watermarks are heuristic — late data produces different results</li>
-<li>Event-time processing helps but doesn't solve non-deterministic arrival order</li>
-<li>Approach: streaming for freshness, batch replay for correctness — the "lambda architecture" tension</li>
-</ul>
+<!-- Section 3 -->
+<div class="card-section">
+    <h2>3. Practical Techniques</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p><strong>Environment &amp; dependencies</strong></p>
+                <ul>
+                    <li>Pinned versions — <code>pip freeze</code>, lockfiles, no floating ranges</li>
+                    <li>Containerized execution with pinned base images</li>
+                    <li>Fixed seeds at every non-deterministic call site</li>
+                    <li>Deterministic serialization — sorted JSON keys, stable Parquet row order</li>
+                    <li>Explicitly sorted outputs — never rely on implicit database or hash-map ordering</li>
+                </ul>
+                <p style="margin-top:12px"><strong>Data versioning</strong></p>
+                <ul>
+                    <li><strong>DVC</strong> — git-style tracking for large files</li>
+                    <li><strong>LakeFS</strong> — git-like branching over a data lake</li>
+                    <li><strong>Delta Lake time travel</strong> — query any historical version of a table</li>
+                    <li><strong>Immutable partitions</strong> — write-once, append-only, never overwrite</li>
+                    <li><strong>Input manifests</strong> — exact paths, sizes, and checksums consumed by each run</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Point-in-time correctness:</strong> a feature computed against a mutable table answers "what is true now", not "what was true at label time". The same query, run twice, silently trains on future information.
+                </div>
+                <p class="example">Example: <code>lifetime_orders</code> read live is larger than the value that existed when the churn label was set — the model learns from orders that had not happened yet.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
 </div>
 
-<h2>Key Discussion Points</h2>
-
-<div class="questions">
-<ul>
-<li>Where on the spectrum from "fully deterministic" to "best effort" should each pipeline stage sit?</li>
-<li>Cost of reproducibility (snapshotting everything) vs cost of non-reproducibility (can't debug, can't audit)</li>
-<li>How does this interact with streaming systems where input is inherently unbounded?</li>
-<li>Should reproducibility be a hard gate (pipeline fails if non-determinism detected) or a soft metric?</li>
-</ul>
+<!-- Section 4 -->
+<div class="card-section">
+    <h2>4. The Determinism Spectrum</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Not every stage <em>can</em> be deterministic. Classify each one honestly instead of claiming a guarantee you cannot hold.</p>
+                <ul>
+                    <li><strong>Fully deterministic</strong> — SQL transforms, feature engineering, aggregations, cleaning: pure functions over snapshots.</li>
+                    <li><strong>Deterministic with effort</strong> — model training and sampling: fix all seeds, force deterministic kernels, accept the performance cost.</li>
+                    <li><strong>Inherently non-deterministic</strong> — live API calls, user interaction, real-time sensor feeds.</li>
+                </ul>
+                <p style="margin-top:12px"><strong>Cost on both sides</strong></p>
+                <ul>
+                    <li><strong>Of reproducibility</strong> — storage for snapshots, added complexity, slower iteration.</li>
+                    <li><strong>Of non-reproducibility</strong> — cannot debug production, cannot audit a decision, cannot compare experiments, cannot answer a regulator.</li>
+                    <li><strong>Pragmatic split</strong> — full reproducibility for training and evaluation; best-effort for exploratory work.</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Strategy:</strong> isolate the non-deterministic stages, checkpoint immediately around them, and accept that the checkpoint — not the stage — becomes the reproducible artifact.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
 </div>
 
+<!-- Section 5 -->
+<div class="card-section">
+    <h2>5. Relationship to Testing</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Testing is downstream of reproducibility: if output moves between runs, there is nothing stable to assert on.</p>
+                <ul>
+                    <li><strong>Unit tests</strong> assert exact output for known input — requires determinism.</li>
+                    <li><strong>Integration tests</strong> verify end-to-end behavior — requires the whole chain to be reproducible.</li>
+                    <li><strong>Regression tests</strong> catch unintended change — requires that "unchanged" genuinely means "same output".</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Critical insight:</strong> a non-reproducible pipeline is an untestable pipeline. If a test passes most of the time, the pipeline is non-deterministic — the test is not flaky.
+                </div>
+                <p class="example">Example: an unseeded split spreads evaluation AUC across a band; some runs land under the assertion threshold. Fixing the seed collapses the band to one value, and the assertion becomes meaningful.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c5" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<!-- Section 6 -->
+<div class="card-section">
+    <h2>6. Streaming Systems</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Streaming input is unbounded, so "same input" has to be defined before determinism can even be discussed.</p>
+                <ul>
+                    <li><strong>Windowing</strong> creates bounded sub-problems — but window boundaries can land differently across runs.</li>
+                    <li><strong>Watermarks are heuristic</strong> — how long you wait decides whether late data is counted.</li>
+                    <li><strong>Event-time processing</strong> helps, but does not remove non-deterministic arrival order.</li>
+                </ul>
+                <div class="questions">
+                    <strong>Open question:</strong> the lambda-architecture tension — streaming for freshness, batch replay for correctness. Which number is the official one when the replay disagrees with the live stream?
+                </div>
+                <p class="example">Example: an event arriving after the watermark closes is included in a later replay but was missing from the live run — the same window reports two different totals, both defensible.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c6" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<!-- Section 7 -->
+<div class="card-section">
+    <h2>7. Audit Replay & Open Decisions</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>The practical test of reproducibility is an audit question: can you reconstruct the exact input state as it was at the moment a decision was made?</p>
+                <ul>
+                    <li>Where on the spectrum from "fully deterministic" to "best effort" should each stage sit?</li>
+                    <li>Should reproducibility be a hard gate — pipeline fails when non-determinism is detected — or a soft metric that is tracked and reviewed?</li>
+                    <li>Does the manifest retention window cover the audit horizon, or does it expire first?</li>
+                </ul>
+                <div class="questions">
+                    <strong>The trap:</strong> snapshots and manifests are usually retained on a storage-cost schedule, while audits are requested on a legal schedule. When the second is longer than the first, the decision is unreplayable no matter how deterministic the code was.
+                </div>
+                <p class="example">Example: a decision from six months ago is technically deterministic, but its input snapshot expired at ninety days — the code replays, the data does not.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c7" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+// Canvas setup with devicePixelRatio
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// C1: The reproducibility stack — pinned vs floating layers
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('The Reproducibility Stack: Pinned vs Floating Layers', w/2, 25);
+
+    var layers = [
+        { name: 'Code version', how: 'git SHA recorded in run manifest', pinned: true },
+        { name: 'Data snapshot', how: 'as-of timestamp, immutable partition', pinned: true },
+        { name: 'Config / params', how: 'hashed and stored with the output', pinned: true },
+        { name: 'Environment', how: 'dependency range resolves at build time', pinned: false },
+        { name: 'Random seed', how: 'unset — split and init vary per run', pinned: false }
+    ];
+
+    var boxX = 150, boxW = w - boxX - 96;
+    var startY = 46, rowH = 42, boxH = 30;
+
+    layers.forEach(function(l, i) {
+        var y = startY + i * rowH;
+        var col = l.pinned ? '#27ae60' : '#e74c3c';
+
+        ctx.font = '11px system-ui';
+        ctx.fillStyle = '#2c3e50';
+        ctx.textAlign = 'right';
+        ctx.fillText(l.name, boxX - 12, y + 20);
+
+        ctx.fillStyle = l.pinned ? 'rgba(39,174,96,0.10)' : 'rgba(231,76,60,0.10)';
+        ctx.fillRect(boxX, y, boxW, boxH);
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 1.5;
+        if (!l.pinned) { ctx.setLineDash([4, 3]); }
+        ctx.strokeRect(boxX, y, boxW, boxH);
+        ctx.setLineDash([]);
+
+        ctx.font = '10px system-ui';
+        ctx.fillStyle = '#555';
+        ctx.textAlign = 'left';
+        ctx.fillText(l.how, boxX + 10, y + 19);
+
+        ctx.font = 'bold 10px system-ui';
+        ctx.fillStyle = col;
+        ctx.textAlign = 'left';
+        ctx.fillText(l.pinned ? 'PINNED' : 'FLOATS', boxX + boxW + 10, y + 19);
+
+        if (i < layers.length - 1) {
+            ctx.strokeStyle = '#eee';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(boxX, y + rowH - 6);
+            ctx.lineTo(boxX + boxW, y + rowH - 6);
+            ctx.stroke();
+        }
+    });
+
+    // Bracket showing the floating layers break the guarantee
+    var fy = startY + 3 * rowH;
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(boxX - 118, fy + 2);
+    ctx.lineTo(boxX - 126, fy + 2);
+    ctx.lineTo(boxX - 126, fy + rowH + boxH - 2);
+    ctx.lineTo(boxX - 118, fy + rowH + boxH - 2);
+    ctx.stroke();
+
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#888';
+    ctx.textAlign = 'center';
+    ctx.fillText('Every layer must be pinned — one floating layer is enough to change the output', w/2, h - 10);
+})();
+
+// C2: Content-addressed DAG — cache hits vs recompute, and where staleness enters
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Content Addressing: Cache Hit vs Recompute', w/2, 25);
+
+    var nodes = [
+        { label: 'Ingest', hash: 'a91f', state: 'hit' },
+        { label: 'Clean', hash: '4c07', state: 'hit' },
+        { label: 'Features', hash: 'bd52', state: 'new' },
+        { label: 'Train', hash: '7e10', state: 'new' },
+        { label: 'Evaluate', hash: '0fa8', state: 'new' }
+    ];
+
+    var startX = 22, cellW = (w - 2 * startX) / nodes.length;
+    var boxW = cellW - 22, boxY = 104, boxH = 62;
+
+    // change marker above the Features node
+    var changeX = startX + 2 * cellW + cellW/2;
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(changeX, 58);
+    ctx.lineTo(changeX, boxY - 4);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#e67e22';
+    ctx.textAlign = 'center';
+    ctx.fillText('config flag changed → new input hash', changeX, 50);
+
+    nodes.forEach(function(n, i) {
+        var cx = startX + i * cellW + cellW/2;
+        var x = cx - boxW/2;
+        var hit = n.state === 'hit';
+        var col = hit ? '#27ae60' : '#e67e22';
+
+        ctx.fillStyle = hit ? 'rgba(39,174,96,0.10)' : 'rgba(230,126,34,0.10)';
+        ctx.fillRect(x, boxY, boxW, boxH);
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(x, boxY, boxW, boxH);
+
+        ctx.font = 'bold 12px system-ui';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText(n.label, cx, boxY + 24);
+
+        ctx.font = '10px system-ui';
+        ctx.fillStyle = col;
+        ctx.fillText(hit ? 'cache hit' : 'recompute', cx, boxY + 42);
+
+        ctx.font = '9px system-ui';
+        ctx.fillStyle = '#888';
+        ctx.fillText('key ' + n.hash, cx, boxY + 56);
+
+        // artifact marker under each node
+        ctx.fillStyle = hit ? 'rgba(26,82,118,0.35)' : 'rgba(230,126,34,0.35)';
+        ctx.fillRect(cx - 16, boxY + boxH + 16, 32, 12);
+        ctx.font = '9px system-ui';
+        ctx.fillStyle = '#555';
+        ctx.fillText(hit ? 'reused' : 'written', cx, boxY + boxH + 42);
+
+        if (i < nodes.length - 1) {
+            var ax = x + boxW + 4;
+            ctx.strokeStyle = '#999';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(ax, boxY + boxH/2);
+            ctx.lineTo(ax + 12, boxY + boxH/2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(ax + 14, boxY + boxH/2);
+            ctx.lineTo(ax + 7, boxY + boxH/2 - 4);
+            ctx.lineTo(ax + 7, boxY + boxH/2 + 4);
+            ctx.fillStyle = '#999';
+            ctx.fill();
+        }
+    });
+
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#2c3e50';
+    ctx.textAlign = 'left';
+    ctx.fillText('materialized artifact store', startX + 4, boxY + boxH + 74);
+
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#888';
+    ctx.textAlign = 'center';
+    ctx.fillText('Staleness enters when the key omits an input the stage actually reads', w/2, h - 10);
+})();
+
+// C3: Point-in-time correctness — as-of snapshot vs live table
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Point-in-Time Correctness: As-Of Snapshot vs Live Table', w/2, 25);
+
+    var rows = [
+        { id: 'user A', asOf: 6, live: 9 },
+        { id: 'user B', asOf: 12, live: 14 },
+        { id: 'user C', asOf: 3, live: 11 },
+        { id: 'user D', asOf: 8, live: 8 },
+        { id: 'user E', asOf: 5, live: 13 }
+    ];
+    var maxV = 16;
+
+    var plotX = 70, plotY = 62, plotW = w - 130, plotH = 172;
+
+    // axes
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(plotX, plotY);
+    ctx.lineTo(plotX, plotY + plotH);
+    ctx.lineTo(plotX + plotW, plotY + plotH);
+    ctx.stroke();
+
+    // gridlines
+    for (var g = 0; g <= 4; g++) {
+        var gy = plotY + plotH - (g * plotH / 4);
+        ctx.strokeStyle = '#f0f0f0';
+        ctx.beginPath();
+        ctx.moveTo(plotX, gy);
+        ctx.lineTo(plotX + plotW, gy);
+        ctx.stroke();
+        ctx.font = '9px system-ui';
+        ctx.fillStyle = '#999';
+        ctx.textAlign = 'right';
+        ctx.fillText((g * maxV / 4).toFixed(0), plotX - 6, gy + 3);
+    }
+
+    ctx.save();
+    ctx.translate(20, plotY + plotH/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    ctx.fillText('lifetime_orders', 0, 0);
+    ctx.restore();
+
+    var groupW = plotW / rows.length, barW = groupW * 0.26;
+
+    rows.forEach(function(r, i) {
+        var cx = plotX + i * groupW + groupW/2;
+
+        var ah = (r.asOf / maxV) * plotH;
+        ctx.fillStyle = 'rgba(26,82,118,0.35)';
+        ctx.fillRect(cx - barW - 2, plotY + plotH - ah, barW, ah);
+
+        var lh = (r.live / maxV) * plotH;
+        ctx.fillStyle = 'rgba(231,76,60,0.45)';
+        ctx.fillRect(cx + 2, plotY + plotH - lh, barW, lh);
+
+        ctx.font = '9px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#1a5276';
+        ctx.fillText(r.asOf, cx - barW/2 - 2, plotY + plotH - ah - 4);
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillText(r.live, cx + barW/2 + 2, plotY + plotH - lh - 4);
+
+        ctx.font = '10px system-ui';
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillText(r.id, cx, plotY + plotH + 15);
+    });
+
+    // legend
+    ctx.fillStyle = 'rgba(26,82,118,0.35)';
+    ctx.fillRect(plotX + plotW - 210, plotY + 4, 10, 10);
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#2c3e50';
+    ctx.textAlign = 'left';
+    ctx.fillText('as-of label date (correct)', plotX + plotW - 196, plotY + 13);
+    ctx.fillStyle = 'rgba(231,76,60,0.45)';
+    ctx.fillRect(plotX + plotW - 210, plotY + 20, 10, 10);
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('live table today (leaked)', plotX + plotW - 196, plotY + 29);
+
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#888';
+    ctx.textAlign = 'center';
+    ctx.fillText('The gap is future information — same query, different answer, silent leakage', w/2, h - 10);
+})();
+
+// C4: Determinism spectrum — three achievable zones
+(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Determinism Spectrum: What Each Stage Can Promise', w/2, 25);
+
+    var zones = [
+        { head: 'FULLY DETERMINISTIC', col: '#27ae60', items: ['SQL transforms', 'Feature engineering', 'Aggregations', 'Data cleaning'], cost: 'cost to enforce: low' },
+        { head: 'DETERMINISTIC W/ EFFORT', col: '#e67e22', items: ['Model training', 'Sampling & splits', 'Embedding generation', 'Hyperparam search'], cost: 'cost to enforce: high' },
+        { head: 'INHERENTLY NOT', col: '#e74c3c', items: ['Live API calls', 'User interaction', 'Real-time sensors', 'Third-party scores'], cost: 'checkpoint instead' }
+    ];
+
+    var pad = 16, colW = (w - pad * 4) / 3, topY = 44, boxH = h - topY - 42;
+
+    zones.forEach(function(z, i) {
+        var x = pad + i * (colW + pad);
+
+        ctx.fillStyle = z.col === '#27ae60' ? 'rgba(39,174,96,0.08)' : (z.col === '#e67e22' ? 'rgba(230,126,34,0.08)' : 'rgba(231,76,60,0.08)');
+        ctx.fillRect(x, topY, colW, boxH);
+        ctx.strokeStyle = z.col;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, topY, colW, boxH);
+
+        ctx.font = 'bold 11px system-ui';
+        ctx.fillStyle = z.col;
+        ctx.textAlign = 'center';
+        ctx.fillText(z.head, x + colW/2, topY + 22);
+
+        ctx.font = '11px system-ui';
+        ctx.textAlign = 'left';
+        z.items.forEach(function(it, j) {
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillText('• ' + it, x + 14, topY + 50 + j * 22);
+        });
+
+        ctx.font = '10px system-ui';
+        ctx.fillStyle = '#555';
+        ctx.textAlign = 'center';
+        ctx.fillText(z.cost, x + colW/2, topY + boxH - 14);
+    });
+
+    // arrow across the top of the zones
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad, topY - 8);
+    ctx.lineTo(w - pad, topY - 8);
+    ctx.stroke();
+
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#888';
+    ctx.textAlign = 'center';
+    ctx.fillText('Isolate the right-hand stages and checkpoint them — the checkpoint is the reproducible artifact', w/2, h - 10);
+})();
+
+// C5: Seed control — metric spread across unseeded runs vs one seeded value
+(function() {
+    var s = setup('c5');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Unseeded Runs vs One Seeded Run: Eval AUC', w/2, 25);
+
+    var bins = [
+        { lo: 0.806, n: 2 },
+        { lo: 0.810, n: 5 },
+        { lo: 0.814, n: 9 },
+        { lo: 0.818, n: 12 },
+        { lo: 0.822, n: 8 },
+        { lo: 0.826, n: 4 },
+        { lo: 0.830, n: 2 }
+    ];
+    var maxN = 13, binW = 0.004;
+    var xMin = 0.804, xMax = 0.836;
+    var threshold = 0.815, seeded = 0.8207;
+
+    var plotX = 58, plotY = 58, plotW = w - 108, plotH = 176;
+
+    function sx(v) { return plotX + ((v - xMin) / (xMax - xMin)) * plotW; }
+
+    // axes
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(plotX, plotY);
+    ctx.lineTo(plotX, plotY + plotH);
+    ctx.lineTo(plotX + plotW, plotY + plotH);
+    ctx.stroke();
+
+    // gridlines
+    for (var g = 1; g <= 4; g++) {
+        var gy = plotY + plotH - (g * plotH / 4);
+        ctx.strokeStyle = '#f0f0f0';
+        ctx.beginPath();
+        ctx.moveTo(plotX, gy);
+        ctx.lineTo(plotX + plotW, gy);
+        ctx.stroke();
+    }
+
+    ctx.save();
+    ctx.translate(18, plotY + plotH/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    ctx.fillText('runs', 0, 0);
+    ctx.restore();
+
+    // bars
+    bins.forEach(function(b) {
+        var x0 = sx(b.lo), x1 = sx(b.lo + binW);
+        var bh = (b.n / maxN) * plotH;
+        var fails = (b.lo + binW) <= threshold;
+        ctx.fillStyle = fails ? 'rgba(231,76,60,0.45)' : 'rgba(26,82,118,0.35)';
+        ctx.fillRect(x0 + 1, plotY + plotH - bh, (x1 - x0) - 2, bh);
+        ctx.strokeStyle = fails ? '#e74c3c' : '#1a5276';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x0 + 1, plotY + plotH - bh, (x1 - x0) - 2, bh);
+    });
+
+    // x ticks
+    ctx.font = '9px system-ui';
+    ctx.fillStyle = '#999';
+    ctx.textAlign = 'center';
+    [0.806, 0.812, 0.818, 0.824, 0.830, 0.836].forEach(function(v) {
+        ctx.fillText(v.toFixed(3), sx(v), plotY + plotH + 14);
+    });
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.fillText('eval AUC', plotX + plotW/2, plotY + plotH + 32);
+
+    // assertion threshold
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(sx(threshold), plotY);
+    ctx.lineTo(sx(threshold), plotY + plotH);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'left';
+    ctx.fillText('assert AUC > 0.815', sx(threshold) + 6, plotY + 12);
+    ctx.fillText('runs left of the line fail', sx(threshold) + 6, plotY + 26);
+
+    // seeded value
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(sx(seeded), plotY - 6);
+    ctx.lineTo(sx(seeded), plotY + plotH);
+    ctx.stroke();
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillText('seeded: 0.8207 every run', sx(seeded), plotY - 12);
+
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#888';
+    ctx.textAlign = 'center';
+    ctx.fillText('A spread this wide makes any exact assertion meaningless — the pipeline is the flake', w/2, h - 6);
+})();
+
+// C6: Streaming replay divergence — watermark and late data
+(function() {
+    var s = setup('c6');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Same Window, Two Runs: Late Event Changes the Total', w/2, 25);
+
+    var axX = 74, axW = w - 180;
+    var events = [0.08, 0.20, 0.34, 0.47, 0.60, 0.71];
+    var windowEnd = 0.78, lateEvent = 0.88;
+
+    function ex(f) { return axX + f * axW; }
+
+    function drawRun(y, label, includeLate, total, col) {
+        // window band
+        ctx.fillStyle = 'rgba(26,82,118,0.08)';
+        ctx.fillRect(ex(0), y - 22, ex(windowEnd) - ex(0), 44);
+
+        // timeline
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(axX, y);
+        ctx.lineTo(axX + axW, y);
+        ctx.stroke();
+
+        ctx.font = '11px system-ui';
+        ctx.fillStyle = '#2c3e50';
+        ctx.textAlign = 'right';
+        ctx.fillText(label, axX - 10, y + 4);
+
+        // in-window events
+        events.forEach(function(f) {
+            ctx.fillStyle = 'rgba(26,82,118,0.35)';
+            ctx.fillRect(ex(f) - 4, y - 12, 8, 24);
+            ctx.strokeStyle = '#1a5276';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(ex(f) - 4, y - 12, 8, 24);
+        });
+
+        // late event
+        ctx.fillStyle = includeLate ? 'rgba(39,174,96,0.45)' : 'rgba(231,76,60,0.20)';
+        ctx.fillRect(ex(lateEvent) - 4, y - 12, 8, 24);
+        ctx.strokeStyle = includeLate ? '#27ae60' : '#e74c3c';
+        ctx.lineWidth = 1;
+        if (!includeLate) { ctx.setLineDash([3, 2]); }
+        ctx.strokeRect(ex(lateEvent) - 4, y - 12, 8, 24);
+        ctx.setLineDash([]);
+
+        // watermark
+        ctx.strokeStyle = '#e67e22';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.moveTo(ex(windowEnd), y - 26);
+        ctx.lineTo(ex(windowEnd), y + 26);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // result
+        ctx.font = 'bold 12px system-ui';
+        ctx.fillStyle = col;
+        ctx.textAlign = 'left';
+        ctx.fillText('sum = ' + total, axX + axW + 14, y + 4);
+    }
+
+    drawRun(96, 'Live run', false, 41, '#e74c3c');
+    drawRun(196, 'Batch replay', true, 47, '#27ae60');
+
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#e67e22';
+    ctx.textAlign = 'center';
+    ctx.fillText('watermark closes window', ex(windowEnd), 58);
+
+    ctx.fillStyle = '#888';
+    ctx.textAlign = 'center';
+    ctx.fillText('late event', ex(lateEvent), 58);
+
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#999';
+    ctx.textAlign = 'center';
+    ctx.fillText('event time →', axX + axW/2, 248);
+
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#888';
+    ctx.textAlign = 'center';
+    ctx.fillText('Both totals are defensible — the pipeline must declare which one is official', w/2, h - 10);
+})();
+
+// C7: Audit replay — can the input state at decision time be reconstructed?
+(function() {
+    var s = setup('c7');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Audit Replay: Reconstructing State at Decision Time', w/2, 25);
+
+    var axX = 60, axW = w - 120, axY = 190;
+    var dayMin = -180, dayMax = 0;
+
+    function dx(d) { return axX + ((d - dayMin) / (dayMax - dayMin)) * axW; }
+
+    // retention bands
+    ctx.fillStyle = 'rgba(231,76,60,0.12)';
+    ctx.fillRect(dx(-180), 100, dx(-90) - dx(-180), 44);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(dx(-180), 100, dx(-90) - dx(-180), 44);
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = 'rgba(39,174,96,0.12)';
+    ctx.fillRect(dx(-90), 100, dx(0) - dx(-90), 44);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(dx(-90), 100, dx(0) - dx(-90), 44);
+
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('snapshots expired', (dx(-180) + dx(-90)) / 2, 120);
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#555';
+    ctx.fillText('code replays, inputs are gone', (dx(-180) + dx(-90)) / 2, 136);
+
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('replayable window', (dx(-90) + dx(0)) / 2, 120);
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#555';
+    ctx.fillText('manifest + snapshot + seed retained', (dx(-90) + dx(0)) / 2, 136);
+
+    // axis
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(axX, axY);
+    ctx.lineTo(axX + axW, axY);
+    ctx.stroke();
+
+    [-180, -135, -90, -45, 0].forEach(function(d) {
+        ctx.beginPath();
+        ctx.moveTo(dx(d), axY - 4);
+        ctx.lineTo(dx(d), axY + 4);
+        ctx.strokeStyle = '#ccc';
+        ctx.stroke();
+        ctx.font = '9px system-ui';
+        ctx.fillStyle = '#999';
+        ctx.textAlign = 'center';
+        ctx.fillText(d === 0 ? 'today' : d + 'd', dx(d), axY + 18);
+    });
+
+    // manifest retention boundary
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(dx(-90), 96);
+    ctx.lineTo(dx(-90), axY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#e67e22';
+    ctx.textAlign = 'center';
+    ctx.fillText('manifest retention: 90d', dx(-90), 88);
+
+    // audited decision marker
+    var dDay = -150;
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(dx(dDay), axY);
+    ctx.lineTo(dx(dDay), axY + 34);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(dx(dDay), axY, 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#1a5276';
+    ctx.fill();
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('decision under audit', dx(dDay), axY + 48);
+
+    // audit horizon arrow
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(dx(-180), 64);
+    ctx.lineTo(dx(0), 64);
+    ctx.stroke();
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#888';
+    ctx.textAlign = 'center';
+    ctx.fillText('audit horizon: 180d', (dx(-180) + dx(0)) / 2, 56);
+
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#888';
+    ctx.textAlign = 'center';
+    ctx.fillText('Deterministic code is not enough when the inputs expire before the audit arrives', w/2, h - 8);
+})();
+</script>
 
 </body>
 </html>

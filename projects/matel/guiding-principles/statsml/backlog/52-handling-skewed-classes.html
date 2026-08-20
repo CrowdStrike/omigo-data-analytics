@@ -1,79 +1,316 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Backlog — Handling Skewed Classes</title>
-<style>
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 30px; background: #f9f9f9; color: #333; max-width: 900px; }
-h1 { color: #1a5276; margin-bottom: 8px; }
-.subtitle { color: #555; font-size: 0.95em; margin-bottom: 24px; }
-h2 { color: #2980b9; font-size: 1.1em; margin-top: 24px; margin-bottom: 8px; }
-ul { padding-left: 20px; }
-li { margin-bottom: 6px; font-size: 14px; line-height: 1.5; }
-.status { display: inline-block; background: #e67e22; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: 700; margin-bottom: 16px; }
-table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-th, td { text-align: left; padding: 8px 12px; border: 1px solid #ddd; font-size: 13px; }
-th { background: #1a5276; color: white; }
-td:first-child { font-weight: 600; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Handling Skewed Classes</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #2c3e50;
+            max-width: 100%;
+            margin: 0;
+            padding: 30px 40px;
+            background: #fff;
+        }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+        h2 {
+            color: #1a5276;
+            font-size: 1.3em;
+            border-bottom: 2px solid #2980b9;
+            padding-bottom: 6px;
+            margin-top: 32px;
+        }
+        table.obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+        table.obj-table td { vertical-align: top; padding: 12px; }
+        table.obj-table td:first-child { width: 45%; }
+        table.obj-table td:last-child { width: 55%; text-align: center; }
+        .key-point {
+            background: #f8f9fa;
+            border-left: 3px solid #e74c3c;
+            padding: 10px 14px;
+            margin: 12px 0;
+            font-size: 0.93em;
+        }
+        .philosophy {
+            background: #f0f4f8;
+            border-left: 4px solid #2980b9;
+            padding: 12px 16px;
+            margin: 16px 0;
+            font-size: 0.93em;
+        }
+        ul { padding-left: 20px; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        code {
+            background: #e8f0f8;
+            color: #1a5276;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-size: 0.88em;
+        }
+        canvas { display: block; margin: 0 auto; width: 100%; }
+        .status {
+            display: inline-block;
+            background: #fef9e7;
+            border: 1px solid #f39c12;
+            color: #b7950b;
+            padding: 2px 10px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            margin-left: 12px;
+            vertical-align: middle;
+        }
+        table.compare { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9em; }
+        table.compare th { background: #1a5276; color: #fff; padding: 8px 12px; text-align: left; }
+        table.compare td { padding: 8px 12px; border-bottom: 1px solid #eee; }
+        table.compare tr:nth-child(even) td { background: #f8fafb; }
+        table.compare td:first-child { font-weight: 600; }
+    </style>
 </head>
 <body>
+    <h1>Handling Skewed Classes <span class="status">BACKLOG</span></h1>
+    <p class="subtitle">Workflow for imbalanced problems — generating controlled skew, choosing between resampling and cost-sensitive learning, and testing without accuracy illusions.</p>
 
-<span class="status">BACKLOG</span>
-<h1>Handling Skewed Classes</h1>
-<p class="subtitle">End-to-end framework for working with imbalanced class distributions — from generating realistic skewed datasets to choosing metrics that don't lie.</p>
+    <h2>The Trivial Baseline</h2>
+    <table class="obj-table">
+        <tr>
+            <td>
+                <p>At 100:1 imbalance, a model that always predicts the majority class scores 99% accuracy. The number rises with skew while the model gets less useful.</p>
+                <ul>
+                    <li>Any accuracy figure has to be read against the majority-class rate, not against zero.</li>
+                    <li>Skew alone is not the hard part. Skew <em>plus class overlap</em> is — a well-separated 1000:1 problem is easier than an overlapping 10:1 one.</li>
+                </ul>
+                <div class="key-point">
+                    Report the majority-class baseline next to any accuracy number, or the reader has no way to tell whether the model did anything.
+                </div>
+            </td>
+            <td>
+                <canvas id="c1" width="720" height="310"></canvas>
+            </td>
+        </tr>
+    </table>
 
-<h2>Goal</h2>
-<p>Define a principled workflow for skewed-class problems that covers synthetic dataset generation with controlled imbalance ratios, sampling strategies (over/under/hybrid), statistical testing under imbalance, and metric selection that exposes real model behavior on the minority class.</p>
+    <h2>Resample or Reweight</h2>
+    <table class="obj-table">
+        <tr>
+            <td>
+                <p>Two routes to the same goal, with different costs. Both change the decision boundary; only one changes the data.</p>
+                <ul>
+                    <li><strong>Resampling</strong> alters the training distribution. Synthetic points may not lie on the real data manifold, and oversampling before the split leaks across folds.</li>
+                    <li><strong>Class weights + threshold tuning</strong> leaves the data alone and moves the operating point. Usually the first thing to try, and often sufficient.</li>
+                    <li>Either way the test set stays untouched at the true prevalence — resampling it invalidates every metric computed on it.</li>
+                </ul>
+                <div class="philosophy">
+                    Resampling and reweighting are both statements about relative error cost. Prefer stating that cost directly.
+                </div>
+            </td>
+            <td>
+                <canvas id="c2" width="720" height="310"></canvas>
+            </td>
+        </tr>
+    </table>
 
-<h2>Dataset Generation</h2>
-<ul>
-<li><strong>Controlled imbalance ratios</strong> — generate datasets at 10:1, 100:1, 1000:1 to study how methods degrade</li>
-<li><strong>Class overlap</strong> — vary separability independently from ratio; imbalance + overlap is the hard case</li>
-<li><strong>Multimodal minority class</strong> — minority class isn't always one cluster; test with fragmented subpopulations</li>
-<li><strong>Feature noise injection</strong> — irrelevant features that dilute signal, especially harmful at high imbalance</li>
-<li><strong>Temporal drift in class ratio</strong> — ratio shifts over time (e.g., fraud rate changing); test stationarity assumptions</li>
-</ul>
+    <h2>To Cover</h2>
+    <table class="compare">
+        <tr><th>Area</th><th>Items</th></tr>
+        <tr>
+            <td>Dataset generation</td>
+            <td>Controlled ratios at 10:1 / 100:1 / 1000:1; class overlap varied independently of ratio; multimodal minority; noise features; ratio drift over time</td>
+        </tr>
+        <tr>
+            <td>Sampling</td>
+            <td>Random over/under; SMOTE and variants with their interpolation assumptions; hybrids (SMOTE+Tomek, SMOTE+ENN); ensemble undersampling (EasyEnsemble, BalanceCascade)</td>
+        </tr>
+        <tr>
+            <td>Cost-sensitive</td>
+            <td>Class weights; explicit cost matrix; post-hoc threshold selection on a validation set</td>
+        </tr>
+        <tr>
+            <td>Validation</td>
+            <td>Stratified k-fold; resample inside the fold only; McNemar's test for paired model comparison; permutation tests when accuracy misleads</td>
+        </tr>
+        <tr>
+            <td>Calibration</td>
+            <td>Probabilities skew after resampling; Platt scaling and isotonic regression as post-hoc corrections</td>
+        </tr>
+        <tr>
+            <td>Metrics</td>
+            <td>AUC-PR over AUC-ROC; F-beta with beta from costs; MCC; expected cost = FP·c<sub>FP</sub> + FN·c<sub>FN</sub>; lift for top-k triage</td>
+        </tr>
+    </table>
 
-<h2>Sampling Strategies</h2>
-<ul>
-<li><strong>Random oversampling</strong> — baseline; when it works, when it overfits</li>
-<li><strong>SMOTE and variants</strong> — interpolation assumptions, failure modes with high-dimensional or non-convex classes</li>
-<li><strong>Random undersampling</strong> — information loss trade-off, ensemble-based undersampling (EasyEnsemble, BalanceCascade)</li>
-<li><strong>Hybrid (SMOTE + Tomek / SMOTE + ENN)</strong> — cleaning noisy synthetic points</li>
-<li><strong>Class-weight adjustment</strong> — cost-sensitive learning as an alternative to resampling; when to prefer it</li>
-<li><strong>Threshold tuning</strong> — don't resample, adjust decision boundary post-training</li>
-</ul>
+    <h2>Open Questions</h2>
+    <ul>
+        <li>At what ratio does each sampling method start producing artifacts rather than help?</li>
+        <li>How do you check that SMOTE points respect the true manifold instead of bridging across a gap?</li>
+        <li>When does resampling genuinely beat class weights plus a tuned threshold?</li>
+        <li>Minimum minority-class count for a metric estimate with a usable bootstrap interval?</li>
+    </ul>
 
-<h2>Statistical Testing Under Imbalance</h2>
-<ul>
-<li><strong>Stratified cross-validation</strong> — maintaining class ratio in every fold; failure of naive k-fold at extreme ratios</li>
-<li><strong>Significance testing on minority class</strong> — small n in minority → wide confidence intervals; how many minority samples before a t-test/bootstrap is meaningful</li>
-<li><strong>Permutation tests</strong> — model performance vs. random label assignment; especially important when accuracy is misleading</li>
-<li><strong>Calibration under imbalance</strong> — predicted probabilities are systematically off; Platt scaling and isotonic regression post-hoc</li>
-<li><strong>McNemar's test for model comparison</strong> — comparing two classifiers on the same imbalanced test set without accuracy illusions</li>
-</ul>
+    <script>
+    const dpr = window.devicePixelRatio || 1;
 
-<h2>Metrics</h2>
-<ul>
-<li><strong>Why accuracy fails</strong> — 99% accuracy at 100:1 imbalance means predicting majority always; the trivial baseline trap</li>
-<li><strong>Precision-Recall trade-off</strong> — PR curve over ROC when negatives dominate; AUC-PR as primary metric</li>
-<li><strong>F-beta scores</strong> — F1 vs. F2 vs. F0.5; choosing beta based on cost of FP vs FN</li>
-<li><strong>Matthews Correlation Coefficient (MCC)</strong> — balanced measure that works even at extreme ratios; when it disagrees with F1</li>
-<li><strong>Cohen's Kappa</strong> — agreement above chance; sensitive to prevalence in ways MCC isn't</li>
-<li><strong>Cost-sensitive metrics</strong> — expected cost = FP×cost_FP + FN×cost_FN; domain-driven metric design</li>
-<li><strong>Lift and gain charts</strong> — operational metrics for ranked predictions (top-k retrieval scenarios)</li>
-</ul>
+    function setupCanvas(id) {
+        const c = document.getElementById(id);
+        const w = c.width, h = c.height;
+        c.width = w * dpr;
+        c.height = h * dpr;
+        c.style.width = w + 'px';
+        c.style.height = h + 'px';
+        const ctx = c.getContext('2d');
+        ctx.scale(dpr, dpr);
+        return { ctx, w, h };
+    }
 
-<h2>Key Questions</h2>
-<ul>
-<li>At what imbalance ratio does each sampling method start to fail or introduce artifacts?</li>
-<li>How do we validate that SMOTE-generated points respect the true data manifold?</li>
-<li>When is resampling genuinely better than cost-sensitive learning + threshold tuning?</li>
-<li>What's the minimum minority-class sample size for reliable metric estimation (bootstrap CI width)?</li>
-<li>How should train-time imbalance handling interact with test-time evaluation (never resample the test set — but what about validation)?</li>
-</ul>
+    // C1: majority-class accuracy climbs with imbalance
+    (function() {
+        const { ctx, w, h } = setupCanvas('c1');
+        ctx.font = 'bold 16px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Accuracy of a Model That Predicts Nothing', w / 2, 24);
 
+        var ratios = [
+            { label: '1:1', pct: 50 },
+            { label: '4:1', pct: 80 },
+            { label: '10:1', pct: 90.9 },
+            { label: '100:1', pct: 99.0 },
+            { label: '1000:1', pct: 99.9 }
+        ];
+
+        var plotX = 80, plotY = 52, plotW = w - 150, plotH = h - 116;
+
+        ctx.strokeStyle = '#95a5a6';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(plotX, plotY);
+        ctx.lineTo(plotX, plotY + plotH);
+        ctx.lineTo(plotX + plotW, plotY + plotH);
+        ctx.stroke();
+
+        var slot = plotW / ratios.length;
+        ratios.forEach(function(r, i) {
+            var bh = ((r.pct - 40) / 60) * plotH;
+            var x = plotX + i * slot + slot * 0.24;
+            var bw = slot * 0.52;
+            ctx.fillStyle = 'rgba(231,76,60,0.50)';
+            ctx.fillRect(x, plotY + plotH - bh, bw, bh);
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 1.6;
+            ctx.strokeRect(x, plotY + plotH - bh, bw, bh);
+
+            ctx.font = 'bold 13px -apple-system, sans-serif';
+            ctx.fillStyle = '#e74c3c';
+            ctx.textAlign = 'center';
+            ctx.fillText(r.pct.toFixed(1) + '%', x + bw / 2, plotY + plotH - bh - 8);
+
+            ctx.font = '13px -apple-system, sans-serif';
+            ctx.fillStyle = '#4a5866';
+            ctx.fillText(r.label, x + bw / 2, plotY + plotH + 20);
+        });
+
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.fillStyle = '#4a5866';
+        ctx.textAlign = 'center';
+        ctx.fillText('majority : minority', plotX + plotW / 2, plotY + plotH + 42);
+
+        ctx.fillStyle = '#e67e22';
+        ctx.fillText('the metric improves as the problem gets harder', plotX + plotW / 2, plotY - 14);
+    })();
+
+    // C2: threshold shifts the operating point
+    (function() {
+        const { ctx, w, h } = setupCanvas('c2');
+        ctx.font = 'bold 16px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Score Distributions and Where You Cut', w / 2, 24);
+
+        var plotX = 70, plotY = 52, plotW = w - 130, plotH = h - 116;
+
+        ctx.strokeStyle = '#95a5a6';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(plotX, plotY + plotH);
+        ctx.lineTo(plotX + plotW, plotY + plotH);
+        ctx.stroke();
+
+        function bell(mu, sd, scale) {
+            var pts = [];
+            for (var i = 0; i <= 200; i++) {
+                var t = i / 200;
+                var v = Math.exp(-Math.pow((t - mu) / sd, 2) / 2) * scale;
+                pts.push([t, v]);
+            }
+            return pts;
+        }
+
+        function draw(pts, color, alpha) {
+            ctx.beginPath();
+            ctx.moveTo(plotX, plotY + plotH);
+            pts.forEach(function(p) {
+                ctx.lineTo(plotX + p[0] * plotW, plotY + plotH - p[1] * plotH);
+            });
+            ctx.lineTo(plotX + plotW, plotY + plotH);
+            ctx.closePath();
+            ctx.fillStyle = alpha;
+            ctx.fill();
+            ctx.beginPath();
+            pts.forEach(function(p, i) {
+                var x = plotX + p[0] * plotW, y = plotY + plotH - p[1] * plotH;
+                i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+            });
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2.6;
+            ctx.stroke();
+        }
+
+        draw(bell(0.36, 0.13, 0.92), '#2980b9', 'rgba(41,128,185,0.22)');
+        draw(bell(0.66, 0.11, 0.30), '#e74c3c', 'rgba(231,76,60,0.35)');
+
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.fillStyle = '#2980b9';
+        ctx.textAlign = 'center';
+        ctx.fillText('majority', plotX + 0.30 * plotW, plotY + 26);
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillText('minority', plotX + 0.75 * plotW, plotY + plotH - 96);
+
+        // default 0.5 threshold
+        var t1 = plotX + 0.5 * plotW;
+        ctx.beginPath();
+        ctx.setLineDash([5, 4]);
+        ctx.moveTo(t1, plotY + 4);
+        ctx.lineTo(t1, plotY + plotH);
+        ctx.strokeStyle = '#95a5a6';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = '#5a6875';
+        ctx.fillText('0.5 default', t1, plotY);
+
+        // tuned threshold
+        var t2 = plotX + 0.56 * plotW;
+        ctx.beginPath();
+        ctx.moveTo(t2, plotY + 4);
+        ctx.lineTo(t2, plotY + plotH);
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 2.6;
+        ctx.stroke();
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillStyle = '#27ae60';
+        ctx.textAlign = 'left';
+        ctx.fillText('tuned to cost', t2 + 8, plotY + 20);
+
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.fillStyle = '#4a5866';
+        ctx.textAlign = 'center';
+        ctx.fillText('model score →', plotX + plotW / 2, plotY + plotH + 28);
+        ctx.fillStyle = '#e67e22';
+        ctx.fillText('moving the cut needs no resampling and no retraining', plotX + plotW / 2, plotY + plotH + 48);
+    })();
+    </script>
 </body>
 </html>

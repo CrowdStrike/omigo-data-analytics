@@ -3,129 +3,922 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Partial Ordering & Replication Lag — Discussion Backlog</title>
+<title>Partial Ordering & Replication Lag</title>
 <style>
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #fff; color: #2c3e50; line-height: 1.6; }
-h1 { color: #1a5276; border-bottom: 3px solid #2980b9; padding-bottom: 10px; }
-h2 { color: #1a5276; margin-top: 30px; }
-.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-.obj-table td { padding: 20px; vertical-align: top; border: 1px solid #2980b9; }
-.obj-table td:first-child { width: 45%; }
-.obj-table td:last-child { width: 55%; }
-.obj-title { color: #1a5276; font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
-ul { margin: 10px 0; padding-left: 20px; }
-li { margin-bottom: 6px; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+
+/* Each content section */
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+/* 2-col layout table */
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+/* Canvas styling */
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+/* Key-point callout (red accent) */
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+/* Example line (italic, muted) */
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+/* Open-question callout (orange accent) */
+.questions {
+    background: #f8f9fa;
+    border-left: 3px solid #e67e22;
+    padding: 10px 14px;
+    margin-top: 16px;
+    font-size: 0.9rem;
+}
+
+/* Status badge */
+.status {
+    display: inline-block;
+    background: #f8f9fa;
+    border: 1px solid #1a5276;
+    color: #1a5276;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    margin-bottom: 24px;
+}
+
+code {
+    background: #f8f9fa;
+    border: 1px solid #e0e0e0;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 0.85em;
+    color: #1a5276;
+}
+
 strong { color: #1a5276; }
-code { background: #e8f0f8; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; color: #1a5276; }
-.questions { background: #fff8e1; border-left: 3px solid #f39c12; padding: 10px 15px; margin: 10px 0; font-size: 0.9em; }
-.danger { background: #fdecea; border-left: 3px solid #e74c3c; padding: 10px 15px; margin: 10px 0; font-size: 0.9em; }
-.status { display: inline-block; background: #e8f0f8; color: #1a5276; padding: 3px 10px; border-radius: 12px; font-size: 0.85em; font-weight: bold; margin-bottom: 20px; }
+
+/* Lists within text column */
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
 </style>
 </head>
 <body>
 
 <h1>Partial Ordering of Events & Replication Lag</h1>
+<p class="subtitle">In a distributed system, a total order over events is something the infrastructure invents, not something that exists. Only causally related events have a real "happened before" — everything else is genuinely unordered, and pipelines that assume otherwise break silently under replication lag.</p>
 <span class="status">TO DISCUSS</span>
 
-<p>In distributed systems, total ordering of events is a fiction. Events produced by independent actors have no inherent order — only events with a causal relationship have a guaranteed "happened before." Data systems that assume total ordering break silently under replication lag, network partitions, and multi-region writes.</p>
+<!-- Section 1 -->
+<div class="card-section">
+    <h2>1. Total Order Is a Fiction</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p><strong>Events are only partially ordered.</strong> The "happened before" relation is a partial order: it orders some pairs and leaves the rest incomparable.</p>
+                <ul>
+                    <li><strong>Independent producers</strong> — user A clicks in Tokyo, user B clicks in London. There is no fact about which came first; the pair is concurrent, not merely unknown.</li>
+                    <li><strong>Causally related events</strong> — user A searches, then clicks a result. This pair <em>is</em> ordered, because the first could have influenced the second.</li>
+                    <li><strong>The illusion of timestamps</strong> — stamping every event produces a total order, but the order across concurrent events is an artifact of which clocks were read.</li>
+                    <li><strong>Clock skew</strong> — independent nodes disagree by milliseconds at best. Timestamp order can therefore contradict causal order.</li>
+                </ul>
+                <div class="key-point">
+                    <strong>The trap:</strong> a pipeline that sorts by timestamp and treats the result as ground truth has baked an arbitrary total order onto a partially ordered reality. Any conclusion that depends on the relative order of concurrent events is a conclusion about clock noise.
+                </div>
+                <p class="example">Test: swap two concurrent events in the input and re-run. If the output changes, the output was never about the data.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="380"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
 
-<h2>The Core Problem: Total Order Is a Lie</h2>
+<!-- Section 2 -->
+<div class="card-section">
+    <h2>2. Working With the Order That Actually Exists</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p><strong>Accept the partial order.</strong> Design analyses that are correct given only the causal edges, with no appeal to a global timeline.</p>
+                <ul>
+                    <li><strong>Vector clocks / version vectors</strong> — track "happened before" without synchronized clocks, and report concurrency explicitly instead of guessing.</li>
+                    <li><strong>Lamport clocks</strong> — cheaper: if <code>a &rarr; b</code> then <code>L(a) &lt; L(b)</code>, but a smaller counter does <em>not</em> prove causality, so they cannot detect concurrency.</li>
+                    <li><strong>Causal consistency</strong> — guarantees you observe causes before effects while leaving concurrent events unordered.</li>
+                    <li><strong>CRDTs</strong> — converge to the same state regardless of delivery order.</li>
+                    <li><strong>Commutative operations</strong> — <code>SUM</code>, <code>COUNT</code>, <code>MAX</code>, <code>SET UNION</code> are order-insensitive by construction; <code>LAST_VALUE</code>, rolling windows and sessionization are not.</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Key insight:</strong> if the result differs depending on how concurrent events happened to be ordered, that sensitivity is a bug in the analysis, not a property of the data.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
 
-<table class="obj-table">
-<tr>
-<td>
-<div class="obj-title">Why Events Are Only Partially Ordered</div>
-<ul>
-<li><strong>Independent producers:</strong> user A clicks in Tokyo, user B clicks in London — there is NO fact about which happened "first." It depends on whose clock you trust.</li>
-<li><strong>Causally related events:</strong> user A searches → user A clicks result. THESE have an order (search caused click). But it's a partial order, not total.</li>
-<li><strong>The illusion of timestamps:</strong> assigning a timestamp creates a total order — but it's arbitrary. Different observers with different clocks would assign different orders.</li>
-</ul>
-<div class="questions">A data pipeline that sorts by timestamp and treats the result as ground truth is baking an arbitrary total order onto a partially ordered reality. Any analysis that depends on the ordering of independent events is fragile.</div>
-</td>
-<td>
-<div class="obj-title">Accepting Partial Order</div>
-<p>Design systems and analyses that work correctly given ONLY the causal relationships, not a total timestamp order:</p>
-<ul>
-<li><strong>Vector clocks / version vectors:</strong> track "happened before" without requiring synchronized clocks</li>
-<li><strong>Causal consistency:</strong> guarantee you see causes before effects, but don't impose order on independent events</li>
-<li><strong>CRDTs:</strong> data structures that converge regardless of event delivery order</li>
-<li><strong>Commutative operations:</strong> if the result doesn't depend on order (SUM, COUNT, SET UNION) → safe under reordering</li>
-</ul>
-<div class="questions">Key insight: if your analysis gives different results depending on the arbitrary ordering of concurrent events, your analysis has a bug — it's sensitive to noise in the timestamp.</div>
-</td>
-</tr>
-</table>
+<!-- Section 3 -->
+<div class="card-section">
+    <h2>3. Replication Lag: How It Shows Up</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p><strong>Lag is staleness, not loss.</strong> The write is committed and durable on the primary; a replica simply has not applied it yet. Every read served from that replica sees an older, internally valid state.</p>
+                <ul>
+                    <li><strong>Read-your-own-writes failure</strong> — write to the primary, read from a replica, and the value is not there yet.</li>
+                    <li><strong>Causal inversion</strong> — an effect becomes visible before its cause, producing a state that never existed on the primary.</li>
+                    <li><strong>Split-brain reads</strong> — one query fans out to replicas at different lag; rows from different instants land in one result set.</li>
+                    <li><strong>Monotonicity violation</strong> — a second read routed to a further-behind replica returns earlier data than the first. Time appears to move backward.</li>
+                    <li><strong>Phantom deletions</strong> — a row is read as present, then the replica applies a delete that was already committed upstream, so the row vanishes retroactively.</li>
+                </ul>
+                <div class="key-point">
+                    <strong>The insidious part:</strong> lag is variable. Tests pass at zero lag, production fails intermittently at tens of milliseconds, and incidents fail catastrophically at seconds. The bug is not reproducible because the lag is not reproducible.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
 
-<h2>Replication Lag: The Practical Manifestation</h2>
+<!-- Section 4 -->
+<div class="card-section">
+    <h2>4. Consequences for Data Analysis</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p><strong>Cross-table reads inherit the worst lag involved.</strong> Joining tables served by replicas at different lag produces a snapshot that was never simultaneously true.</p>
+                <ul>
+                    <li><strong>Inconsistent joins</strong> — if the child table is fresher than the parent, you get orphan rows (an order whose user is invisible). If the parent is fresher, you get undercounts (a user whose orders are invisible).</li>
+                    <li><strong>Counts disagree</strong> — <code>COUNT</code> on the parent and <code>SUM</code> over the children reconcile only if both sides are at the same instant.</li>
+                    <li><strong>Feature store inconsistency</strong> — a feature computed from a current table joined to a lagging one describes a state that never existed, and it will not match at training time.</li>
+                    <li><strong>Time-travel artifacts</strong> — an analytics snapshot with some tables at T and others at T&minus;3s has no single point in time it was real.</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Impact:</strong> nearly every analytical pipeline reads replicas for throughput, so nearly every cross-table result is potentially an inconsistent snapshot unless the read is pinned to one point in time.
+                </div>
+                <p class="example">Mitigation: read a single MVCC snapshot or a versioned table (Delta / Iceberg time travel) rather than several live replicas.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
 
-<table class="obj-table">
-<tr>
-<td>
-<div class="obj-title">What Replication Lag Does to Data</div>
-<ul>
-<li><strong>Read-your-own-writes failure:</strong> write to primary, read from replica — data isn't there yet. Pipeline sees stale state.</li>
-<li><strong>Causal inversion:</strong> event B (caused by A) replicates before A. Pipeline sees effect before cause → impossible state → broken analysis.</li>
-<li><strong>Split-brain reads:</strong> query hits two replicas at different lag — rows from different points in time mixed in one result set.</li>
-<li><strong>Monotonicity violation:</strong> read replica at lag=2s, then read same replica at lag=5s (caught up differently). Second read returns EARLIER data than first. Time goes backward.</li>
-<li><strong>Phantom deletions:</strong> row created on primary, read on replica (exists), then replica catches up to a DELETE that happened between the two events. Row disappears retroactively.</li>
-</ul>
-<div class="danger"><strong>The insidious part:</strong> replication lag is variable. System works perfectly at lag=0 (tests pass), fails intermittently at lag=50ms (prod), and catastrophically at lag=5s (during incident). Bugs are non-reproducible because lag varies.</div>
-</td>
-<td>
-<div class="obj-title">Consequences for Data Analysis</div>
-<ul>
-<li><strong>Inconsistent joins:</strong> join users table (replica A, lag=1s) with orders table (replica B, lag=3s) — new user's order exists but user doesn't. Orphan row.</li>
-<li><strong>Counts disagree:</strong> COUNT(*) from orders = 1000. SUM from order_items for those orders = 980 items worth. 20 order_items haven't replicated yet.</li>
-<li><strong>Feature store inconsistency:</strong> feature computed from table A (current) joined with table B (lagging). Feature value is based on a state that never existed.</li>
-<li><strong>Time-travel artifacts:</strong> analytics query captures a snapshot that's internally inconsistent — some tables are at T, others at T-3s. No single point in time this snapshot was real.</li>
-</ul>
-<div class="questions">If your analysis pipeline reads from replicas (nearly all do for performance), every cross-table analysis is potentially reading an inconsistent snapshot. Do we need snapshot isolation guarantees for profiling?</div>
-</td>
-</tr>
-</table>
+<!-- Section 5 -->
+<div class="card-section">
+    <h2>5. Design Patterns for Partial-Order Awareness</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p><strong>Make out-of-order arrival a normal case</strong> rather than an exception to be prevented.</p>
+                <ul>
+                    <li><strong>Idempotent processing</strong> — a duplicate or reordered event leaves the result unchanged.</li>
+                    <li><strong>Commutative aggregation</strong> — prefer operations whose result is independent of arrival order.</li>
+                    <li><strong>Watermarks</strong> — an explicit, machine-readable claim that all events up to some event time are believed to have arrived. Uncertainty becomes a value, not an assumption.</li>
+                    <li><strong>Grace periods</strong> — hold a window open past its end so late arrivals still land in the right bucket.</li>
+                    <li><strong>Reprocessing</strong> — immutable sources plus deterministic transforms so anything that arrives after the grace period can be corrected, not lost.</li>
+                    <li><strong>Consistent snapshots</strong> — one point-in-time read instead of several independent replica reads.</li>
+                </ul>
+                <div class="key-point">
+                    <strong>The tradeoff:</strong> a longer grace period buys completeness and pays in latency. Both are legitimate choices; an implicit grace period of zero is not.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c5" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
 
-<h2>Design Patterns for Partial Order Awareness</h2>
+<!-- Section 6 -->
+<div class="card-section">
+    <h2>6. What Must Not Depend on Ordering</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p><strong>Invariants that must hold for any arrival order</strong> of concurrent events:</p>
+                <ul>
+                    <li><strong>Correctness</strong> — the final result is identical for every valid interleaving.</li>
+                    <li><strong>Completeness</strong> — the system can state when it has enough data, instead of waiting indefinitely.</li>
+                    <li><strong>Determinism</strong> — the same set of events yields the same output, regardless of the sequence in which they arrived.</li>
+                </ul>
+                <p><strong>What may legitimately depend on ordering:</strong></p>
+                <ul>
+                    <li><strong>Latency</strong> — out-of-order input delays emission until the watermark advances.</li>
+                    <li><strong>Intermediate state</strong> — in-flight aggregates may be temporarily wrong, provided they converge.</li>
+                    <li><strong>Efficiency</strong> — sorted input can be processed faster; unsorted input must still be processed correctly.</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Do not conflate the models:</strong> eventual consistency promises only that replicas converge. It permits an effect to be observed before its cause in the interim. Causal consistency is the strictly stronger guarantee that forbids that inversion, and it is usually the one an analytical pipeline actually needs.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c6" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+    <div class="questions">
+        <strong>Open questions for discussion</strong>
+        <ul>
+            <li>Should the profiling pipeline detect order-dependent operations and flag them (for example, "this rolling window assumes a total order over independent events")?</li>
+            <li>How do we set the completeness/timeliness boundary — is the grace period a tunable per pipeline, or derived from observed lag distributions?</li>
+            <li>What is the right abstraction for late-arriving events: retraction, recompute, or append-correction?</li>
+            <li>Can we inject variable replication lag in test environments to surface ordering bugs before production does?</li>
+            <li>Relationship to exactly-once semantics: is at-least-once delivery plus idempotency sufficient in practice?</li>
+        </ul>
+    </div>
+</div>
 
-<table class="obj-table">
-<tr>
-<td>
-<div class="obj-title">Accept and Design Around It</div>
-<ul>
-<li><strong>Idempotent processing:</strong> if the same event arrives twice (or out of order), result is the same</li>
-<li><strong>Commutative aggregations:</strong> prefer operations where order doesn't matter (SUM, COUNT, MAX, UNION)</li>
-<li><strong>Watermarks:</strong> "I believe all events before time T have arrived" — explicit uncertainty boundary</li>
-<li><strong>Grace periods:</strong> don't close a window until lag_max has elapsed — accept late arrivals</li>
-<li><strong>Reprocessing:</strong> design so you CAN reprocess when late data arrives — immutable source, reproducible transforms</li>
-<li><strong>Consistent snapshots:</strong> read from a single point-in-time snapshot (MVCC, Delta Lake time travel) instead of multiple replicas</li>
-</ul>
-</td>
-<td>
-<div class="obj-title">What Must NOT Depend on Ordering</div>
-<ul>
-<li><strong>Correctness:</strong> final result should be the same regardless of event delivery order (for concurrent events)</li>
-<li><strong>Completeness:</strong> system should know when it has "enough" data (watermarks) vs waiting forever</li>
-<li><strong>Determinism:</strong> given the same set of events (unordered), produce the same output — don't let arrival order affect results</li>
-</ul>
-<p><strong>What CAN depend on ordering:</strong></p>
-<ul>
-<li><strong>Latency:</strong> out-of-order events mean delayed results (wait for watermark)</li>
-<li><strong>Intermediate states:</strong> in-flight aggregations may be temporarily wrong — but converge</li>
-<li><strong>Efficiency:</strong> sorted input is faster to process, but unsorted must still produce correct results</li>
-</ul>
-</td>
-</tr>
-</table>
+<script>
+// Canvas setup with devicePixelRatio
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
 
-<h2>Key Discussion Points</h2>
+function arrowHead(ctx, x1, y1, x2, y2, color) {
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 7 * Math.cos(ang - 0.4), y2 - 7 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 7 * Math.cos(ang + 0.4), y2 - 7 * Math.sin(ang + 0.4));
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+}
 
-<ul>
-<li>Should the profiling pipeline detect operations that are order-dependent and flag them? (e.g., "this rolling window assumes total ordering of independent events")</li>
-<li>How to handle the tension between "wait for all data" (completeness) and "produce results now" (timeliness)?</li>
-<li>What's the right abstraction for a pipeline stage that needs to handle late-arriving events? (Retraction? Recompute? Append correction?)</li>
-<li>Testing under replication lag: can we simulate variable lag in test environments to catch ordering bugs?</li>
-<li>Relationship to exactly-once semantics: is it achievable? Is at-least-once + idempotency sufficient?</li>
-</ul>
+// C1: happened-before DAG vs a forced wall-clock total order
+(function() {
+    var canvas = document.getElementById('c1');
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 380 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    var w = rect.width, h = rect.height;
 
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Happened-Before (Partial Order) vs Forced Wall-Clock Order', w / 2, 25);
+
+    function tx(t) { return 80 + (t / 70) * 570; }
+
+    // --- Upper panel: true causal structure ---
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'left';
+    ctx.fillText('True structure: only causal edges order events', 20, 48);
+
+    var yA = 100, yB = 175;
+    [[yA, 'Node A'], [yB, 'Node B']].forEach(function(p) {
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(80, p[0]);
+        ctx.lineTo(668, p[0]);
+        ctx.stroke();
+        arrowHead(ctx, 80, p[0], 668, p[0], '#ccc');
+        ctx.font = '10px system-ui';
+        ctx.fillStyle = '#666';
+        ctx.textAlign = 'left';
+        ctx.fillText(p[1], 20, p[0] + 4);
+    });
+
+    var evA = [{ n: 'a1', t: 10 }, { n: 'a2', t: 40 }];
+    var evB = [{ n: 'b1', t: 25 }, { n: 'b2', t: 55 }];
+
+    function node(e, y, above) {
+        ctx.beginPath();
+        ctx.arc(tx(e.t), y, 6, 0, Math.PI * 2);
+        ctx.fillStyle = '#1a5276';
+        ctx.fill();
+        ctx.font = 'bold 11px system-ui';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText(e.n, tx(e.t), above ? y - 12 : y + 20);
+    }
+    evA.forEach(function(e) { node(e, yA, true); });
+    evB.forEach(function(e) { node(e, yB, false); });
+
+    // Causal edge a1 -> b1 (message)
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(tx(10) + 6, yA + 4);
+    ctx.lineTo(tx(25) - 6, yB - 6);
+    ctx.stroke();
+    arrowHead(ctx, tx(10), yA, tx(25) - 6, yB - 6, '#27ae60');
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'left';
+    ctx.fillText('message: a1 → b1 (real order)', tx(25) + 6, yB - 14);
+
+    // Same-node program order edges
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 1.5;
+    [[tx(10), tx(40), yA], [tx(25), tx(55), yB]].forEach(function(seg) {
+        ctx.beginPath();
+        ctx.moveTo(seg[0] + 7, seg[2]);
+        ctx.lineTo(seg[1] - 8, seg[2]);
+        ctx.stroke();
+        arrowHead(ctx, seg[0], seg[2], seg[1] - 8, seg[2], '#27ae60');
+    });
+
+    // Concurrency marker a2 || b2
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(tx(40), yA + 8);
+    ctx.lineTo(tx(55), yB - 8);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'left';
+    ctx.fillText('a2 ∥ b1 and a2 ∥ b2 — no causal path either way,', 80, 218);
+    ctx.fillText('so no true order exists between them', 80, 232);
+
+    // --- Lower panel: forced total order ---
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'left';
+    ctx.fillText('Sorted by wall-clock timestamp: a total order the system invented', 20, 262);
+
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(50, 310);
+    ctx.lineTo(668, 310);
+    ctx.stroke();
+    arrowHead(ctx, 50, 310, 668, 310, '#ccc');
+
+    var seq = ['a1', 'b1', 'a2', 'b2'];
+    var bx = [70, 220, 370, 520], bw = 110;
+    seq.forEach(function(nm, i) {
+        var real = (nm === 'a1' || nm === 'b1');
+        ctx.fillStyle = real ? 'rgba(26,82,118,0.35)' : 'rgba(231,76,60,0.12)';
+        ctx.fillRect(bx[i], 292, bw, 34);
+        ctx.strokeStyle = real ? '#1a5276' : '#e74c3c';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(bx[i], 292, bw, 34);
+        ctx.font = 'bold 12px system-ui';
+        ctx.fillStyle = real ? '#1a5276' : '#e74c3c';
+        ctx.textAlign = 'center';
+        ctx.fillText(nm, bx[i] + bw / 2, 314);
+    });
+
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'left';
+    ctx.fillText('swap b1 and a2 here: nothing observable changes', bx[1], 286);
+
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#888';
+    ctx.textAlign = 'center';
+    ctx.fillText('Only the causal edges are facts — every other adjacency in the sorted list is an artifact of the clocks', w / 2, h - 10);
+})();
+
+// C2: vector clocks resolve what skewed wall clocks cannot
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Vector Clocks Resolve What Wall Clocks Cannot', w / 2, 25);
+
+    var yA = 90, yB = 160;
+    [[yA, 'Node A'], [yB, 'Node B']].forEach(function(p) {
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(85, p[0]);
+        ctx.lineTo(660, p[0]);
+        ctx.stroke();
+        arrowHead(ctx, 85, p[0], 660, p[0], '#ccc');
+        ctx.font = '10px system-ui';
+        ctx.fillStyle = '#666';
+        ctx.textAlign = 'left';
+        ctx.fillText(p[1], 20, p[0] + 4);
+    });
+
+    var ev = [
+        { n: 'e1', vc: '[1,0]', ts: 'clock A: .050', x: 200, y: yA, above: true },
+        { n: 'e2', vc: '[2,0]', ts: 'clock A: .080', x: 450, y: yA, above: true },
+        { n: 'f1', vc: '[0,1]', ts: 'clock B: .010', x: 150, y: yB, above: false },
+        { n: 'f2', vc: '[1,2]', ts: 'clock B: .030', x: 340, y: yB, above: false }
+    ];
+
+    ev.forEach(function(e) {
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, 6, 0, Math.PI * 2);
+        ctx.fillStyle = '#1a5276';
+        ctx.fill();
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 11px system-ui';
+        ctx.fillStyle = '#1a5276';
+        ctx.fillText(e.n + '  ' + e.vc, e.x, e.above ? e.y - 26 : e.y + 34);
+        ctx.font = '9px system-ui';
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillText(e.ts, e.x, e.above ? e.y - 13 : e.y + 47);
+    });
+
+    // program-order edges
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 1.5;
+    [[200, 450, yA], [150, 340, yB]].forEach(function(seg) {
+        ctx.beginPath();
+        ctx.moveTo(seg[0] + 7, seg[2]);
+        ctx.lineTo(seg[1] - 8, seg[2]);
+        ctx.stroke();
+        arrowHead(ctx, seg[0], seg[2], seg[1] - 8, seg[2], '#27ae60');
+    });
+
+    // message e1 -> f2
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(206, yA + 5);
+    ctx.lineTo(334, yB - 7);
+    ctx.stroke();
+    arrowHead(ctx, 206, yA, 334, yB - 7, '#27ae60');
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'left';
+    ctx.fillText('message', 250, yA + 38);
+
+    // verdicts
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('[1,0] ≤ [1,2]  →  e1 happened before f2  (detected correctly)', 90, 232);
+    ctx.fillStyle = '#e67e22';
+    ctx.fillText('[2,0] vs [1,2]  →  neither dominates  →  concurrent, left unordered', 90, 250);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Wall clock: node B is 40 ms behind, so f2 (.030) sorts before e1 (.050) — a real causal edge reversed', 90, 268);
+
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#888';
+    ctx.textAlign = 'center';
+    ctx.fillText('Skew can be bounded but never eliminated; causality needs logical clocks, not timestamps', w / 2, h - 8);
+})();
+
+// C3: primary/replica lag, stale read
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Replication Lag: A Read That Misses a Committed Write', w / 2, 25);
+
+    function tx(t) { return 90 + (t / 500) * 560; }
+    var yP = 95, yR = 165, yC = 232;
+
+    [[yP, 'Primary'], [yR, 'Replica'], [yC, 'Client']].forEach(function(p) {
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(90, p[0]);
+        ctx.lineTo(660, p[0]);
+        ctx.stroke();
+        arrowHead(ctx, 90, p[0], 660, p[0], '#ccc');
+        ctx.font = '10px system-ui';
+        ctx.fillStyle = '#666';
+        ctx.textAlign = 'left';
+        ctx.fillText(p[1], 20, p[0] + 4);
+    });
+
+    // stale window band on the replica line
+    ctx.fillStyle = 'rgba(230,126,34,0.18)';
+    ctx.fillRect(tx(100), yR - 10, tx(280) - tx(100), 20);
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.strokeRect(tx(100), yR - 10, tx(280) - tx(100), 20);
+    ctx.setLineDash([]);
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#e67e22';
+    ctx.textAlign = 'center';
+    ctx.fillText('stale window: replica still serves x = 0', (tx(100) + tx(280)) / 2, yR - 18);
+
+    // primary commit
+    ctx.beginPath();
+    ctx.arc(tx(100), yP, 6, 0, Math.PI * 2);
+    ctx.fillStyle = '#27ae60';
+    ctx.fill();
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText('x = 1 committed', tx(100), yP - 14);
+
+    // replica apply
+    ctx.beginPath();
+    ctx.arc(tx(280), yR, 6, 0, Math.PI * 2);
+    ctx.fillStyle = '#27ae60';
+    ctx.fill();
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'left';
+    ctx.fillText('x = 1 applied', tx(280) + 10, yR + 4);
+
+    // replication arrow
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(tx(100), yP + 8);
+    ctx.lineTo(tx(280) - 4, yR - 10);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    arrowHead(ctx, tx(100), yP, tx(280) - 4, yR - 10, '#999');
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#999';
+    ctx.textAlign = 'left';
+    ctx.fillText('replicate: lag = 180 ms', tx(100) + 14, yP + 32);
+
+    // client write
+    ctx.beginPath();
+    ctx.arc(tx(90), yC, 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#1a5276';
+    ctx.fill();
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(tx(90), yC - 6);
+    ctx.lineTo(tx(100) - 2, yP + 10);
+    ctx.stroke();
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('write x = 1', tx(90), yC + 18);
+
+    // client stale read
+    ctx.beginPath();
+    ctx.arc(tx(200), yC, 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fill();
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(tx(200), yC - 6);
+    ctx.lineTo(tx(200), yR + 12);
+    ctx.stroke();
+    arrowHead(ctx, tx(200), yC, tx(200), yR + 12, '#e74c3c');
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('read → returns x = 0', tx(200), yC + 18);
+
+    // time axis ticks
+    ctx.font = '9px system-ui';
+    ctx.fillStyle = '#999';
+    ctx.textAlign = 'center';
+    [0, 100, 200, 300, 400, 500].forEach(function(t) {
+        ctx.fillText(t + (t === 500 ? ' ms' : ''), tx(t), yC + 34);
+    });
+
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#888';
+    ctx.textAlign = 'center';
+    ctx.fillText('Read-your-own-writes broken: the write is durable, the replica has simply not applied it yet', w / 2, h - 8);
+})();
+
+// C4: two replicas, two different points in time
+(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('One Query, Two Replicas, Two Different Instants', w / 2, 25);
+
+    function tx(sec) { return 110 + ((sec + 4) / 4) * 520; }
+    var yU = 100, yO = 170;
+
+    // query line at T
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(tx(0), 48);
+    ctx.lineTo(tx(0), 205);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'right';
+    ctx.fillText('query issued at T', tx(0) - 6, 44);
+
+    [[yU, 'users replica', -1, '1 s behind'], [yO, 'orders replica', -3, '3 s behind']].forEach(function(p) {
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(110, p[0]);
+        ctx.lineTo(tx(0), p[0]);
+        ctx.stroke();
+        ctx.font = '10px system-ui';
+        ctx.fillStyle = '#666';
+        ctx.textAlign = 'left';
+        ctx.fillText(p[1], 14, p[0] + 4);
+
+        // visible portion
+        ctx.fillStyle = 'rgba(26,82,118,0.35)';
+        ctx.fillRect(110, p[0] - 9, tx(p[2]) - 110, 18);
+        // invisible portion
+        ctx.fillStyle = 'rgba(231,76,60,0.12)';
+        ctx.fillRect(tx(p[2]), p[0] - 9, tx(0) - tx(p[2]), 18);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.strokeRect(tx(p[2]), p[0] - 9, tx(0) - tx(p[2]), 18);
+        ctx.setLineDash([]);
+
+        ctx.font = '9px system-ui';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('visible to the query', (110 + tx(p[2])) / 2, p[0] + 3);
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillText('not applied yet (' + p[3] + ')', (tx(p[2]) + tx(0)) / 2, p[0] + 3);
+    });
+
+    // divergence bracket
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(tx(-3), 138);
+    ctx.lineTo(tx(-1), 138);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(tx(-3), 133);
+    ctx.lineTo(tx(-3), 143);
+    ctx.moveTo(tx(-1), 133);
+    ctx.lineTo(tx(-1), 143);
+    ctx.stroke();
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#e67e22';
+    ctx.textAlign = 'center';
+    ctx.fillText('2 s of divergence between the two sides of the join', (tx(-3) + tx(-1)) / 2, 130);
+
+    // time axis
+    ctx.font = '9px system-ui';
+    ctx.fillStyle = '#999';
+    ctx.textAlign = 'center';
+    [-4, -3, -2, -1, 0].forEach(function(sec) {
+        ctx.fillText(sec === 0 ? 'T' : 'T' + sec + 's', tx(sec), 220);
+    });
+
+    // outcomes
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Parent fresher than child (this case): users present, their orders invisible → undercounts', 60, 248);
+    ctx.fillText('Child fresher than parent: orders present, their user invisible → orphan rows', 60, 266);
+
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#888';
+    ctx.textAlign = 'center';
+    ctx.fillText('No single instant existed at which this joined result was true', w / 2, h - 8);
+})();
+
+// C5: watermark and grace period
+(function() {
+    var s = setup('c5');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Watermarks and Grace Periods: When Is "Enough" Data In?', w / 2, 25);
+
+    function tx(t) { return 70 + (t / 10) * 580; }
+    var yLine = 165;
+
+    // grace band
+    ctx.fillStyle = 'rgba(230,126,34,0.15)';
+    ctx.fillRect(tx(5), 60, tx(7.5) - tx(5), 130);
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#e67e22';
+    ctx.textAlign = 'center';
+    ctx.fillText('grace period', (tx(5) + tx(7.5)) / 2, 74);
+    ctx.fillText('late arrivals still counted', (tx(5) + tx(7.5)) / 2, 88);
+
+    // window end
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(tx(5), 60);
+    ctx.lineTo(tx(5), 195);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'right';
+    ctx.fillText('window [0,5) ends', tx(5) - 6, 56);
+
+    // watermark / emit
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(tx(7.5), 60);
+    ctx.lineTo(tx(7.5), 195);
+    ctx.stroke();
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'left';
+    ctx.fillText('watermark passes → emit result', tx(7.5) + 6, 56);
+
+    // arrival axis
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(70, yLine);
+    ctx.lineTo(660, yLine);
+    ctx.stroke();
+    arrowHead(ctx, 70, yLine, 660, yLine, '#ccc');
+
+    var events = [
+        { t: 1.2, c: '#1a5276', lbl: 'on time' },
+        { t: 2.0, c: '#1a5276', lbl: '' },
+        { t: 3.4, c: '#1a5276', lbl: '' },
+        { t: 4.1, c: '#1a5276', lbl: '' },
+        { t: 5.9, c: '#e67e22', lbl: 'late, still in window' },
+        { t: 8.7, c: '#e74c3c', lbl: 'past grace → reprocess' }
+    ];
+    events.forEach(function(e, i) {
+        ctx.beginPath();
+        ctx.arc(tx(e.t), yLine, 6, 0, Math.PI * 2);
+        ctx.fillStyle = e.c;
+        ctx.fill();
+        if (e.lbl) {
+            ctx.font = '10px system-ui';
+            ctx.fillStyle = e.c;
+            ctx.textAlign = 'center';
+            ctx.fillText(e.lbl, tx(e.t), yLine + (i === 5 ? 40 : 24));
+        }
+    });
+
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'left';
+    ctx.fillText('events for window [0,5) plotted by arrival time', 70, yLine - 14);
+
+    // axis ticks
+    ctx.font = '9px system-ui';
+    ctx.fillStyle = '#999';
+    ctx.textAlign = 'center';
+    [0, 2, 4, 6, 8, 10].forEach(function(t) {
+        ctx.beginPath();
+        ctx.moveTo(tx(t), yLine);
+        ctx.lineTo(tx(t), yLine + 5);
+        ctx.strokeStyle = '#ccc';
+        ctx.stroke();
+        ctx.fillText(t + (t === 10 ? ' s' : ''), tx(t), yLine + 60);
+    });
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.fillText('arrival (processing) time', w / 2, yLine + 76);
+
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#888';
+    ctx.textAlign = 'center';
+    ctx.fillText('A longer grace period buys completeness and pays in latency', w / 2, h - 8);
+})();
+
+// C6: consistency ladder
+(function() {
+    var s = setup('c6');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Consistency Ladder: Guarantee vs Coordination Cost', w / 2, 25);
+
+    var models = [
+        { name: 'Linearizable', g1: 'one global order,', g2: 'reads see latest write', cost: 'needs consensus', color: '#1a5276' },
+        { name: 'Sequential', g1: 'one global order,', g2: 'reads may be stale', cost: 'total-order broadcast', color: '#1a5276' },
+        { name: 'Causal', g1: 'cause before effect,', g2: 'concurrent left unordered', cost: 'version metadata only', color: '#27ae60' },
+        { name: 'Eventual', g1: 'replicas converge,', g2: 'any order until they do', cost: 'no ordering promise', color: '#e67e22' }
+    ];
+
+    var bw = 158, bh = 86;
+    models.forEach(function(m, i) {
+        var x = 22 + i * 172;
+        var y = 56 + i * 34;
+
+        ctx.fillStyle = m.color + '15';
+        ctx.fillRect(x, y, bw, bh);
+        ctx.strokeStyle = m.color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, bw, bh);
+
+        ctx.font = 'bold 12px system-ui';
+        ctx.fillStyle = m.color;
+        ctx.textAlign = 'center';
+        ctx.fillText(m.name, x + bw / 2, y + 20);
+
+        ctx.font = '10px system-ui';
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillText(m.g1, x + bw / 2, y + 40);
+        ctx.fillText(m.g2, x + bw / 2, y + 54);
+
+        ctx.font = '9px system-ui';
+        ctx.fillStyle = m.color;
+        ctx.fillText(m.cost, x + bw / 2, y + 74);
+
+        if (i < models.length - 1) {
+            ctx.strokeStyle = '#999';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(x + bw + 2, y + bh / 2 + 8);
+            ctx.lineTo(x + bw + 10, y + bh / 2 + 20);
+            ctx.stroke();
+            arrowHead(ctx, x + bw + 2, y + bh / 2 + 8, x + bw + 10, y + bh / 2 + 20, '#999');
+        }
+    });
+
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#999';
+    ctx.textAlign = 'left';
+    ctx.fillText('stronger guarantee, more coordination', 22, 50);
+    ctx.textAlign = 'right';
+    ctx.fillText('weaker guarantee, cheaper and more available', 698, 268);
+
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#888';
+    ctx.textAlign = 'center';
+    ctx.fillText('Causal is the weakest model that still forbids seeing an effect before its cause', w / 2, h - 8);
+})();
+</script>
 
 </body>
 </html>
