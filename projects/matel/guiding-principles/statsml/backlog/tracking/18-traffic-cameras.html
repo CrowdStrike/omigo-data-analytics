@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Traffic Cameras (Pure Video)</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2c3e50; max-width: 100%; margin: 0; padding: 30px 40px; background: #fff; }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+        .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
+        .obj-table { width: 100%; border-collapse: collapse; }
+        .obj-table td { vertical-align: top; padding: 16px; border: 1px solid #2980b9; }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; text-align: center; }
+        ul { padding-left: 20px; margin: 8px 0; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        canvas { display: block; margin: 0 auto; }
+    </style>
+</head>
+<body>
+    <h1>Traffic Cameras (Pure Video)</h1>
+    <p class="subtitle">Government cameras at every major intersection record continuous video of everything passing by — stored for days or weeks.</p>
+
+    <table class="obj-table">
+        <tr>
+            <td>
+                <div class="obj-title">What is it?</div>
+                <p>City and state departments install cameras at traffic intersections. They record continuous video footage — every car, pedestrian, and cyclist that passes. The footage is stored for days to weeks on local servers. No real-time analysis. Just raw recording that can be retrieved later if needed for an investigation.</p>
+            </td>
+            <td><canvas id="c1" width="720" height="240"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">What does it collect?</div>
+                <ul>
+                    <li>Continuous video of all traffic at the intersection</li>
+                    <li>Every vehicle that passes (make, model, color visible)</li>
+                    <li>Pedestrians and cyclists</li>
+                    <li>Timestamps for every frame</li>
+                    <li>License plates (readable if close enough)</li>
+                    <li>Patterns: traffic volume, peak hours</li>
+                </ul>
+            </td>
+            <td><canvas id="c2" width="720" height="240"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">Why do they collect it?</div>
+                <p><strong>What they tell you:</strong> Traffic management and accident investigation.</p>
+                <p><strong>What they don't tell you:</strong> Police retrieve footage retroactively to track suspects' routes. Footage can reconstruct anyone's travel path by combining multiple cameras. Private companies sometimes get access for commercial research. There's rarely any policy limiting how long footage is kept.</p>
+            </td>
+            <td><canvas id="c3" width="720" height="240"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">How much can they see?</div>
+                <p>At each camera: a full view of the intersection. Cars are clearly identifiable. Pedestrians less so. Combined across dozens of cameras on a route, your entire journey can be reconstructed after the fact. Not real-time, but permanent record.</p>
+                <div class="key-point">Intrusiveness: Medium-High. Passive recording. Not targeted. But retrievable retroactively, which means your past movements are never truly gone.</div>
+            </td>
+            <td><canvas id="c4" width="720" height="240"></canvas></td>
+        </tr>
+    </table>
+
+    <script>
+    const dpr = window.devicePixelRatio || 1;
+    function setupCanvas(id) {
+        const c = document.getElementById(id);
+        const w = 720, h = 240;
+        c.width = w * dpr; c.height = h * dpr;
+        c.style.width = w + 'px'; c.style.height = h + 'px';
+        const ctx = c.getContext('2d');
+        ctx.scale(dpr, dpr);
+        return { ctx, w, h };
+    }
+
+    // C1: Intersection view from above with camera positions and coverage cones
+    (function() {
+        const { ctx, w, h } = setupCanvas('c1');
+        ctx.fillStyle = '#f5f5f5';
+        ctx.fillRect(0, 0, w, h);
+
+        const cx = w / 2, cy = h / 2;
+
+        // Draw intersection roads
+        ctx.fillStyle = '#bdc3c7';
+        // Horizontal road
+        ctx.fillRect(0, cy - 30, w, 60);
+        // Vertical road
+        ctx.fillRect(cx - 30, 0, 60, h);
+
+        // Lane markings - horizontal
+        ctx.strokeStyle = '#fff';
+        ctx.setLineDash([15, 10]);
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, cy);
+        ctx.lineTo(cx - 30, cy);
+        ctx.moveTo(cx + 30, cy);
+        ctx.lineTo(w, cy);
+        ctx.stroke();
+
+        // Lane markings - vertical
+        ctx.beginPath();
+        ctx.moveTo(cx, 0);
+        ctx.lineTo(cx, cy - 30);
+        ctx.moveTo(cx, cy + 30);
+        ctx.lineTo(cx, h);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Crosswalks
+        ctx.fillStyle = '#fff';
+        for (let i = 0; i < 5; i++) {
+            ctx.fillRect(cx - 28 + i * 12, cy - 38, 8, 8);
+            ctx.fillRect(cx - 28 + i * 12, cy + 30, 8, 8);
+            ctx.fillRect(cx - 38, cy - 28 + i * 12, 8, 8);
+            ctx.fillRect(cx + 30, cy - 28 + i * 12, 8, 8);
+        }
+
+        // Camera positions at corners with coverage cones
+        const cameras = [
+            { x: cx - 55, y: cy - 55, angle: Math.PI / 4 },
+            { x: cx + 55, y: cy - 55, angle: 3 * Math.PI / 4 },
+            { x: cx - 55, y: cy + 55, angle: -Math.PI / 4 },
+            { x: cx + 55, y: cy + 55, angle: -3 * Math.PI / 4 }
+        ];
+
+        cameras.forEach(cam => {
+            // Coverage cone
+            ctx.fillStyle = 'rgba(231, 76, 60, 0.12)';
+            ctx.beginPath();
+            ctx.moveTo(cam.x, cam.y);
+            ctx.arc(cam.x, cam.y, 90, cam.angle - 0.5, cam.angle + 0.5);
+            ctx.closePath();
+            ctx.fill();
+
+            // Camera dot
+            ctx.fillStyle = '#e74c3c';
+            ctx.beginPath();
+            ctx.arc(cam.x, cam.y, 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Camera outline
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+        });
+
+        // Some cars on the road
+        ctx.fillStyle = '#1a5276';
+        ctx.fillRect(cx - 80, cy - 18, 30, 14);
+        ctx.fillRect(cx + 50, cy + 6, 30, 14);
+        ctx.fillStyle = '#27ae60';
+        ctx.fillRect(cx - 14, cy - 80, 14, 28);
+        ctx.fillStyle = '#e67e22';
+        ctx.fillRect(cx + 2, cy + 55, 14, 28);
+
+        // Label
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('4 cameras per intersection — full 360° coverage', 10, 230);
+    })();
+
+    // C2: Storage timeline showing footage retention days
+    (function() {
+        const { ctx, w, h } = setupCanvas('c2');
+        ctx.fillStyle = '#fafafa';
+        ctx.fillRect(0, 0, w, h);
+
+        // Title
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Footage Retention Timeline', w / 2, 20);
+
+        const left = 80, right = w - 40;
+        const top = 50, bottom = 190;
+        const days = 30;
+
+        // Y axis - storage fullness
+        ctx.strokeStyle = '#2c3e50';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(left, top);
+        ctx.lineTo(left, bottom);
+        ctx.lineTo(right, bottom);
+        ctx.stroke();
+
+        // X axis labels (days)
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#666';
+        for (let d = 0; d <= days; d += 5) {
+            const x = left + (d / days) * (right - left);
+            ctx.beginPath();
+            ctx.moveTo(x, bottom);
+            ctx.lineTo(x, bottom + 5);
+            ctx.stroke();
+            ctx.fillText('Day ' + d, x, bottom + 17);
+        }
+
+        // Y axis label
+        ctx.save();
+        ctx.translate(20, (top + bottom) / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.textAlign = 'center';
+        ctx.fillText('Footage Available', 0, 0);
+        ctx.restore();
+
+        // Retention blocks - showing footage that exists vs deleted
+        const barH = (bottom - top) / days;
+        for (let d = 0; d < days; d++) {
+            const x = left + (d / days) * (right - left);
+            const bw = (right - left) / days - 1;
+
+            if (d < 7) {
+                // Full retention - first 7 days
+                ctx.fillStyle = '#1a5276';
+                ctx.fillRect(x, top, bw, bottom - top);
+            } else if (d < 14) {
+                // Partial - some cameras still have it
+                ctx.fillStyle = 'rgba(26, 82, 118, 0.5)';
+                ctx.fillRect(x, top + 40, bw, bottom - top - 40);
+            } else if (d < 21) {
+                // Mostly gone
+                ctx.fillStyle = 'rgba(26, 82, 118, 0.25)';
+                ctx.fillRect(x, top + 80, bw, bottom - top - 80);
+            } else {
+                // Deleted
+                ctx.fillStyle = 'rgba(26, 82, 118, 0.08)';
+                ctx.fillRect(x, top + 110, bw, bottom - top - 110);
+            }
+        }
+
+        // Annotations
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+
+        ctx.fillStyle = '#1a5276';
+        ctx.fillText('Full', left + 70, top - 5);
+
+        ctx.fillStyle = '#e67e22';
+        ctx.fillText('Fading', left + 220, top - 5);
+
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillText('Mostly gone', left + 400, top - 5);
+
+        // Key insight
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 10px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('No law requires deletion — some cities keep footage 90+ days', left, bottom + 35);
+    })();
+
+    // C3: Green/red split — what they say vs what they do
+    (function() {
+        const { ctx, w, h } = setupCanvas('c3');
+
+        // Left half - green
+        ctx.fillStyle = 'rgba(39, 174, 96, 0.08)';
+        ctx.fillRect(0, 0, w / 2, h);
+
+        // Right half - red
+        ctx.fillStyle = 'rgba(231, 76, 60, 0.08)';
+        ctx.fillRect(w / 2, 0, w / 2, h);
+
+        // Divider
+        ctx.strokeStyle = '#bdc3c7';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(w / 2, 0);
+        ctx.lineTo(w / 2, h);
+        ctx.stroke();
+
+        // Headers
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#27ae60';
+        ctx.fillText('What They Say', w / 4, 25);
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillText('What They Do', 3 * w / 4, 25);
+
+        // Left items
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        const leftItems = [
+            '"Traffic flow management"',
+            '"Accident investigation"',
+            '"Public safety"',
+            '"Signal timing optimization"',
+            '"Congestion monitoring"'
+        ];
+        leftItems.forEach((item, i) => {
+            ctx.fillStyle = '#27ae60';
+            ctx.beginPath();
+            ctx.arc(30, 55 + i * 35, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillText(item, 42, 59 + i * 35);
+        });
+
+        // Right items
+        const rightItems = [
+            'Retroactively track suspect routes',
+            'Reconstruct anyone\'s full journey',
+            'Share with private companies',
+            'No deletion policy enforced',
+            'Cross-reference with other systems'
+        ];
+        rightItems.forEach((item, i) => {
+            ctx.fillStyle = '#e74c3c';
+            ctx.beginPath();
+            ctx.arc(w / 2 + 20, 55 + i * 35, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillText(item, w / 2 + 32, 59 + i * 35);
+        });
+    })();
+
+    // C4: Intrusiveness gauge at ~55%
+    (function() {
+        const { ctx, w, h } = setupCanvas('c4');
+        ctx.fillStyle = '#fafafa';
+        ctx.fillRect(0, 0, w, h);
+
+        const cx = w / 2, cy = 150;
+        const radius = 100;
+        const startAngle = Math.PI;
+        const endAngle = 2 * Math.PI;
+        const level = 0.55; // 55% intrusiveness
+
+        // Background arc
+        ctx.lineWidth = 28;
+        ctx.strokeStyle = '#ecf0f1';
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, startAngle, endAngle);
+        ctx.stroke();
+
+        // Colored arc segments: green -> orange -> red
+        const segments = [
+            { start: 0, end: 0.33, color: '#27ae60' },
+            { start: 0.33, end: 0.66, color: '#e67e22' },
+            { start: 0.66, end: 1.0, color: '#e74c3c' }
+        ];
+        segments.forEach(seg => {
+            const drawEnd = Math.min(seg.end, level);
+            if (seg.start < level) {
+                ctx.strokeStyle = seg.color;
+                ctx.beginPath();
+                ctx.arc(cx, cy, radius, startAngle + seg.start * Math.PI, startAngle + drawEnd * Math.PI);
+                ctx.stroke();
+            }
+        });
+
+        // Needle
+        const needleAngle = startAngle + level * Math.PI;
+        ctx.strokeStyle = '#2c3e50';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + Math.cos(needleAngle) * 75, cy + Math.sin(needleAngle) * 75);
+        ctx.stroke();
+
+        // Center dot
+        ctx.fillStyle = '#2c3e50';
+        ctx.beginPath();
+        ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Label
+        ctx.font = 'bold 22px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#e67e22';
+        ctx.fillText('55%', cx, cy + 40);
+
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = '#666';
+        ctx.fillText('Intrusiveness Level: Medium-High', cx, cy + 60);
+
+        // Scale labels
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillStyle = '#27ae60';
+        ctx.textAlign = 'left';
+        ctx.fillText('Low', cx - radius - 10, cy + 20);
+        ctx.fillStyle = '#e74c3c';
+        ctx.textAlign = 'right';
+        ctx.fillText('High', cx + radius + 10, cy + 20);
+        ctx.fillStyle = '#e67e22';
+        ctx.textAlign = 'center';
+        ctx.fillText('Medium', cx, cy - radius - 10);
+    })();
+    </script>
+</body>
+</html>

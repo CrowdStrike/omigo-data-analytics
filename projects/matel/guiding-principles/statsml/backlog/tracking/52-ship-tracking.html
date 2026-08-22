@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ship Tracking (AIS)</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2c3e50; max-width: 100%; margin: 0; padding: 30px 40px; background: #fff; }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+        .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
+        .obj-table { width: 100%; border-collapse: collapse; }
+        .obj-table td { vertical-align: top; padding: 16px; border: 1px solid #2980b9; }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; text-align: center; }
+        ul { padding-left: 20px; margin: 8px 0; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        canvas { display: block; margin: 0 auto; }
+    </style>
+</head>
+<body>
+    <h1>Ship Tracking (AIS)</h1>
+    <p class="subtitle">Every large ship broadcasts its location to the world. When one goes silent, people notice.</p>
+    <table class="obj-table">
+        <tr>
+            <td>
+                <div class="obj-title">What is it?</div>
+                <p>AIS stands for Automatic Identification System. Every large ship carries a radio transponder. It broadcasts the ship's position, speed, and identity every few seconds. Nearby ships hear it. Coastal stations hear it. Satellites hear it from space.</p>
+                <p>International law requires it. Any vessel over 300 tons on an international voyage must keep AIS on at all times. It was designed to prevent collisions. Now it does much more.</p>
+            </td>
+            <td><canvas id="c1" width="720" height="240"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">What does it collect?</div>
+                <ul>
+                    <li><strong>MMSI</strong> — a unique 9-digit ID for each ship, like a license plate</li>
+                    <li><strong>Position</strong> — latitude and longitude from GPS, updated every 2-10 seconds while moving</li>
+                    <li><strong>Speed and heading</strong> — how fast and which direction</li>
+                    <li><strong>Ship type</strong> — tanker, cargo, fishing, passenger</li>
+                    <li><strong>Cargo type</strong> — hazardous, non-hazardous, category codes</li>
+                    <li><strong>Destination</strong> — where the ship says it is going</li>
+                    <li><strong>Draft</strong> — how deep the ship sits in water (reveals how loaded it is)</li>
+                    <li><strong>ETA</strong> — estimated arrival time</li>
+                </ul>
+            </td>
+            <td><canvas id="c2" width="720" height="240"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">Why do they collect it?</div>
+                <p><strong>What they tell you:</strong> Safety. Ships need to see each other to avoid collisions, especially in fog, at night, or in crowded shipping lanes. Port authorities need to manage traffic. Search and rescue teams need to find ships in distress.</p>
+                <p><strong>What they don't tell you:</strong> Governments track sanctions violations. A tanker that turns off its AIS near Iran, then reappears days later riding lower in the water — it loaded oil illegally. Fishing fleets go dark in marine reserves to poach. Intelligence agencies watch naval movements. Commodity traders buy AIS data to predict oil supply before official reports come out.</p>
+                <div class="key-point">When a ship turns off its transponder, that silence itself is a signal. It tells analysts exactly where to look.</div>
+            </td>
+            <td><canvas id="c3" width="720" height="240"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">How much can they see?</div>
+                <p>Satellites now cover the entire ocean. There is no hiding spot. Even mid-Pacific, hundreds of miles from any coast, satellites pick up AIS signals from orbit.</p>
+                <p>Analysts combine AIS with satellite imagery. A ship goes dark? They task a satellite to photograph that area. They see the ship anyway. They see it doing ship-to-ship transfers — pumping oil to another vessel to disguise origin.</p>
+                <p>The coverage is global, continuous, and increasingly automated. Machine learning flags anomalies: unexpected route changes, speed drops near sanctioned ports, transponder gaps. About 90,000 ships broadcast at any given moment.</p>
+                <div class="key-point">You can turn off your transponder. You cannot turn off the satellites watching from above.</div>
+            </td>
+            <td><canvas id="c4" width="720" height="240"></canvas></td>
+        </tr>
+    </table>
+    <script>
+    const dpr = window.devicePixelRatio || 1;
+    function setupCanvas(id) {
+        const c = document.getElementById(id);
+        const w = 720, h = 240;
+        c.width = w * dpr;
+        c.height = h * dpr;
+        c.style.width = w + 'px';
+        c.style.height = h + 'px';
+        const ctx = c.getContext('2d');
+        ctx.scale(dpr, dpr);
+        return { ctx, w, h };
+    }
+
+    // C1: Ship broadcasting signal waves to satellite
+    (function() {
+        const { ctx, w, h } = setupCanvas('c1');
+
+        // Sky gradient
+        const sky = ctx.createLinearGradient(0, 0, 0, h);
+        sky.addColorStop(0, '#1a5276');
+        sky.addColorStop(0.6, '#aed6f1');
+        sky.addColorStop(0.7, '#85c1e9');
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, w, h);
+
+        // Water
+        ctx.fillStyle = '#2471a3';
+        ctx.fillRect(0, h * 0.7, w, h * 0.3);
+
+        // Water waves
+        ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 5; i++) {
+            ctx.beginPath();
+            for (let x = 0; x < w; x += 5) {
+                ctx.lineTo(x, h * 0.72 + i * 14 + Math.sin(x * 0.02 + i) * 3);
+            }
+            ctx.stroke();
+        }
+
+        // Ship hull
+        const sx = 280, sy = h * 0.68;
+        ctx.fillStyle = '#2c3e50';
+        ctx.beginPath();
+        ctx.moveTo(sx - 60, sy);
+        ctx.lineTo(sx + 80, sy);
+        ctx.lineTo(sx + 70, sy + 20);
+        ctx.lineTo(sx - 50, sy + 20);
+        ctx.closePath();
+        ctx.fill();
+
+        // Ship cabin
+        ctx.fillStyle = '#5d6d7e';
+        ctx.fillRect(sx - 20, sy - 30, 50, 30);
+        ctx.fillStyle = '#f0f0f0';
+        ctx.fillRect(sx - 15, sy - 25, 12, 10);
+        ctx.fillRect(sx + 5, sy - 25, 12, 10);
+
+        // Antenna
+        ctx.strokeStyle = '#2c3e50';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(sx + 10, sy - 30);
+        ctx.lineTo(sx + 10, sy - 55);
+        ctx.stroke();
+
+        // Signal waves from antenna
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1.5;
+        for (let i = 1; i <= 4; i++) {
+            ctx.beginPath();
+            ctx.arc(sx + 10, sy - 55, i * 18, -Math.PI * 0.8, -Math.PI * 0.2);
+            ctx.stroke();
+        }
+
+        // Satellite
+        const satX = 520, satY = 40;
+        ctx.fillStyle = '#7f8c8d';
+        ctx.fillRect(satX - 8, satY - 5, 16, 10);
+        // Solar panels
+        ctx.fillStyle = '#1a5276';
+        ctx.fillRect(satX - 35, satY - 4, 25, 8);
+        ctx.fillRect(satX + 10, satY - 4, 25, 8);
+        // Panel lines
+        ctx.strokeStyle = '#aaa';
+        ctx.lineWidth = 0.5;
+        for (let i = 1; i < 4; i++) {
+            ctx.beginPath();
+            ctx.moveTo(satX - 35 + i * 6, satY - 4);
+            ctx.lineTo(satX - 35 + i * 6, satY + 4);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(satX + 10 + i * 6, satY - 4);
+            ctx.lineTo(satX + 10 + i * 6, satY + 4);
+            ctx.stroke();
+        }
+
+        // Signal line from ship to satellite (dashed)
+        ctx.setLineDash([6, 4]);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(sx + 10, sy - 55 - 18 * 4);
+        ctx.lineTo(satX, satY + 10);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Labels
+        ctx.fillStyle = '#fff';
+        ctx.font = '11px sans-serif';
+        ctx.fillText('AIS Transponder', sx - 30, sy - 60);
+        ctx.fillText('Satellite', satX - 18, satY + 22);
+        ctx.fillText('Signal broadcast', sx + 60, sy - 90);
+    })();
+
+    // C2: Ship with labeled data fields around it
+    (function() {
+        const { ctx, w, h } = setupCanvas('c2');
+
+        // Background
+        ctx.fillStyle = '#f4f6f7';
+        ctx.fillRect(0, 0, w, h);
+
+        // Water strip
+        ctx.fillStyle = '#d4e6f1';
+        ctx.fillRect(0, h * 0.6, w, h * 0.4);
+
+        // Ship (larger, centered)
+        const sx = w / 2, sy = h * 0.55;
+        ctx.fillStyle = '#2c3e50';
+        ctx.beginPath();
+        ctx.moveTo(sx - 80, sy);
+        ctx.lineTo(sx + 100, sy);
+        ctx.lineTo(sx + 120, sy + 10);
+        ctx.lineTo(sx + 90, sy + 28);
+        ctx.lineTo(sx - 70, sy + 28);
+        ctx.lineTo(sx - 90, sy + 10);
+        ctx.closePath();
+        ctx.fill();
+
+        // Cabin
+        ctx.fillStyle = '#5d6d7e';
+        ctx.fillRect(sx - 30, sy - 35, 60, 35);
+        ctx.fillStyle = '#aed6f1';
+        ctx.fillRect(sx - 25, sy - 28, 15, 12);
+        ctx.fillRect(sx - 5, sy - 28, 15, 12);
+        ctx.fillRect(sx + 15, sy - 28, 15, 12);
+
+        // Cargo containers
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillRect(sx + 40, sy - 15, 30, 15);
+        ctx.fillStyle = '#27ae60';
+        ctx.fillRect(sx + 50, sy - 28, 30, 13);
+        ctx.fillStyle = '#e67e22';
+        ctx.fillRect(sx - 65, sy - 12, 28, 12);
+
+        // Data labels with lines
+        const labels = [
+            { text: 'MMSI: 211334120', x: 100, y: 30, tx: sx - 40, ty: sy - 30 },
+            { text: 'Speed: 14.2 knots', x: 540, y: 30, tx: sx + 50, ty: sy - 10 },
+            { text: 'Heading: 247°', x: 560, y: 80, tx: sx + 80, ty: sy + 10 },
+            { text: 'Type: Bulk Carrier', x: 80, y: 90, tx: sx - 60, ty: sy + 5 },
+            { text: 'Dest: Rotterdam', x: 100, y: 190, tx: sx - 30, ty: sy + 25 },
+            { text: 'Draft: 12.4m', x: 540, y: 190, tx: sx + 60, ty: sy + 25 },
+        ];
+
+        ctx.font = 'bold 11px sans-serif';
+        labels.forEach(l => {
+            // Line
+            ctx.strokeStyle = '#1a5276';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 2]);
+            ctx.beginPath();
+            ctx.moveTo(l.x + 40, l.y + 5);
+            ctx.lineTo(l.tx, l.ty);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Label background
+            const tw = ctx.measureText(l.text).width + 12;
+            ctx.fillStyle = '#1a5276';
+            ctx.beginPath();
+            ctx.roundRect(l.x - 2, l.y - 10, tw, 22, 4);
+            ctx.fill();
+
+            // Label text
+            ctx.fillStyle = '#fff';
+            ctx.fillText(l.text, l.x + 4, l.y + 5);
+        });
+    })();
+
+    // C3: Ship route going dark near sanctioned coast
+    (function() {
+        const { ctx, w, h } = setupCanvas('c3');
+
+        // Ocean background
+        ctx.fillStyle = '#d4e6f1';
+        ctx.fillRect(0, 0, w, h);
+
+        // Coastline (sanctioned territory)
+        ctx.fillStyle = '#f5cba7';
+        ctx.beginPath();
+        ctx.moveTo(350, 0);
+        ctx.bezierCurveTo(380, 40, 360, 80, 390, 120);
+        ctx.bezierCurveTo(410, 160, 370, 200, 400, 240);
+        ctx.lineTo(500, 240);
+        ctx.lineTo(500, 0);
+        ctx.closePath();
+        ctx.fill();
+
+        // Coast border
+        ctx.strokeStyle = '#e67e22';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(350, 0);
+        ctx.bezierCurveTo(380, 40, 360, 80, 390, 120);
+        ctx.bezierCurveTo(410, 160, 370, 200, 400, 240);
+        ctx.stroke();
+
+        // Sanctioned territory label
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText('SANCTIONED', 410, 90);
+        ctx.fillText('TERRITORY', 415, 106);
+
+        // Exclusion zone (dashed circle)
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.arc(390, 130, 80, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Ship route - visible part (solid green, coming from left)
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(40, 180);
+        ctx.lineTo(80, 170);
+        ctx.lineTo(130, 155);
+        ctx.lineTo(180, 145);
+        ctx.lineTo(220, 140);
+        ctx.stroke();
+
+        // Route dots (visible)
+        ctx.fillStyle = '#27ae60';
+        for (let x = 40; x <= 220; x += 30) {
+            ctx.beginPath();
+            ctx.arc(x, 180 - (x - 40) * 0.22, 4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Dark zone (dotted red, near coast)
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 6]);
+        ctx.beginPath();
+        ctx.moveTo(220, 140);
+        ctx.lineTo(260, 135);
+        ctx.lineTo(300, 130);
+        ctx.lineTo(340, 125);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Question marks in dark zone
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 14px sans-serif';
+        ctx.fillText('?', 255, 125);
+        ctx.fillText('?', 290, 120);
+        ctx.fillText('?', 325, 115);
+
+        // AIS OFF label
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.fillText('AIS OFF', 260, 160);
+
+        // Ship reappears (solid green again, going right-down)
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(500, 150);
+        ctx.lineTo(550, 160);
+        ctx.lineTo(600, 175);
+        ctx.lineTo(650, 190);
+        ctx.lineTo(690, 200);
+        ctx.stroke();
+
+        // Route dots (reappears)
+        ctx.fillStyle = '#27ae60';
+        for (let x = 500; x <= 690; x += 35) {
+            ctx.beginPath();
+            ctx.arc(x, 150 + (x - 500) * 0.26, 4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Labels
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.fillText('AIS ON', 60, 200);
+        ctx.fillText('AIS ON', 590, 215);
+
+        // Ship icon at start
+        ctx.fillStyle = '#1a5276';
+        ctx.beginPath();
+        ctx.moveTo(30, 180);
+        ctx.lineTo(50, 175);
+        ctx.lineTo(50, 185);
+        ctx.closePath();
+        ctx.fill();
+
+        // Ship icon at end (heavier/lower - loaded)
+        ctx.fillStyle = '#1a5276';
+        ctx.beginPath();
+        ctx.moveTo(685, 198);
+        ctx.lineTo(700, 193);
+        ctx.lineTo(700, 205);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#666';
+        ctx.font = '10px sans-serif';
+        ctx.fillText('rides lower (loaded)', 620, 228);
+    })();
+
+    // C4: Ocean with satellite coverage zones and ship dots
+    (function() {
+        const { ctx, w, h } = setupCanvas('c4');
+
+        // Deep ocean
+        ctx.fillStyle = '#1a5276';
+        ctx.fillRect(0, 0, w, h);
+
+        // Satellite coverage zones (overlapping translucent circles)
+        const zones = [
+            { x: 150, y: 90, r: 100 },
+            { x: 350, y: 120, r: 110 },
+            { x: 550, y: 80, r: 95 },
+            { x: 250, y: 180, r: 90 },
+            { x: 480, y: 190, r: 100 },
+        ];
+
+        zones.forEach(z => {
+            ctx.fillStyle = 'rgba(133, 193, 233, 0.15)';
+            ctx.beginPath();
+            ctx.arc(z.x, z.y, z.r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(133, 193, 233, 0.3)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        });
+
+        // Grid lines (subtle)
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx.lineWidth = 0.5;
+        for (let x = 0; x < w; x += 60) {
+            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+        }
+        for (let y = 0; y < h; y += 60) {
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+        }
+
+        // Visible ships (green dots)
+        const visibleShips = [
+            { x: 80, y: 60 }, { x: 160, y: 130 }, { x: 230, y: 70 },
+            { x: 310, y: 160 }, { x: 400, y: 90 }, { x: 450, y: 145 },
+            { x: 530, y: 60 }, { x: 580, y: 130 }, { x: 640, y: 80 },
+            { x: 120, y: 180 }, { x: 280, y: 200 }, { x: 500, y: 200 },
+            { x: 370, y: 50 }, { x: 190, y: 150 }, { x: 620, y: 180 },
+        ];
+
+        visibleShips.forEach(s => {
+            ctx.fillStyle = '#27ae60';
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, 4, 0, Math.PI * 2);
+            ctx.fill();
+            // Small pulse ring
+            ctx.strokeStyle = 'rgba(39, 174, 96, 0.4)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, 7, 0, Math.PI * 2);
+            ctx.stroke();
+        });
+
+        // Dark/hidden ships (red dots, no pulse)
+        const darkShips = [
+            { x: 420, y: 210 }, { x: 330, y: 220 }, { x: 670, y: 150 },
+            { x: 90, y: 210 }, { x: 560, y: 220 },
+        ];
+
+        darkShips.forEach(s => {
+            ctx.fillStyle = '#e74c3c';
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, 4, 0, Math.PI * 2);
+            ctx.fill();
+            // X mark
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(s.x - 6, s.y - 6); ctx.lineTo(s.x + 6, s.y + 6);
+            ctx.moveTo(s.x + 6, s.y - 6); ctx.lineTo(s.x - 6, s.y + 6);
+            ctx.stroke();
+        });
+
+        // Satellites at top
+        const sats = [150, 360, 560];
+        sats.forEach(sx => {
+            ctx.fillStyle = '#f0f0f0';
+            ctx.fillRect(sx - 5, 8, 10, 6);
+            ctx.fillRect(sx - 16, 9, 10, 4);
+            ctx.fillRect(sx + 6, 9, 10, 4);
+        });
+
+        // Legend
+        ctx.fillStyle = '#27ae60';
+        ctx.beginPath(); ctx.arc(30, h - 30, 5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = '11px sans-serif';
+        ctx.fillText('Visible (AIS on)', 42, h - 26);
+
+        ctx.fillStyle = '#e74c3c';
+        ctx.beginPath(); ctx.arc(180, h - 30, 5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.fillText('Dark (AIS off)', 192, h - 26);
+
+        ctx.fillStyle = 'rgba(133, 193, 233, 0.4)';
+        ctx.beginPath(); ctx.arc(320, h - 30, 5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.fillText('Satellite coverage zone', 332, h - 26);
+
+        // Stats
+        ctx.fillStyle = 'rgba(255,255,255,0.8)';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.fillText('~90,000 ships tracked globally at any moment', w - 290, h - 26);
+    })();
+    </script>
+</body>
+</html>

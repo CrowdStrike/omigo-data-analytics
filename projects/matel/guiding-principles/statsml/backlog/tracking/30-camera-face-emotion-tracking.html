@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face & Emotion Tracking</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2c3e50; max-width: 100%; margin: 0; padding: 30px 40px; background: #fff; }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+        .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
+        .obj-table { width: 100%; border-collapse: collapse; }
+        .obj-table td { vertical-align: top; padding: 16px; border: 1px solid #2980b9; }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; text-align: center; }
+        ul { padding-left: 20px; margin: 8px 0; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        canvas { display: block; margin: 0 auto; }
+    </style>
+</head>
+<body>
+    <h1>Face & Emotion Tracking</h1>
+    <p class="subtitle">Cameras in stores, billboards, and your phone estimate your age, gender, mood, and identity — just from looking at your face.</p>
+
+    <table class="obj-table">
+        <tr>
+            <td>
+                <div class="obj-title">What is it?</div>
+                <p>Cameras powered by AI that look at your face and guess who you are, how old you are, what gender you are, and how you're feeling. Used in stores to count visitors and guess demographics. Smart billboards change ads based on who's looking. Your phone uses it for Face ID. Some companies claim they can read emotions from micro-expressions — happy, sad, confused, angry.</p>
+            </td>
+            <td><canvas id="c1" width="720" height="240"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">What does it collect?</div>
+                <ul>
+                    <li>Face geometry (distance between eyes, nose shape, jaw line)</li>
+                    <li>Estimated age range and gender</li>
+                    <li>Claimed emotional state (happy, neutral, angry, surprised)</li>
+                    <li>Whether you've been seen before (re-identification)</li>
+                    <li>Attention direction (are you looking at the display?)</li>
+                    <li>Dwell time in front of products/ads</li>
+                </ul>
+            </td>
+            <td><canvas id="c2" width="720" height="240"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">Why do they collect it?</div>
+                <p><strong>What they tell you:</strong> Security. Unlock your phone faster. Personalized experiences. Counting store visitors.</p>
+                <p><strong>What they don't tell you:</strong> Advertisers adjust prices and content based on your apparent mood. Stores track which demographics browse which sections. Emotion AI is used in job interviews to "score" candidates. Police use it for surveillance without consent.</p>
+            </td>
+            <td><canvas id="c3" width="720" height="240"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">How much can they see?</div>
+                <p>They build a mathematical map of your face. They claim to know if you're happy or frustrated. They can recognize you across multiple visits without you knowing. Some systems work from 30+ feet away. The emotion detection is scientifically questionable, but companies sell it anyway and make decisions based on it.</p>
+                <div class="key-point">Intrusiveness: Very High. No consent asked. Can't opt out of having a face. Emotion claims are pseudoscience applied at scale.</div>
+            </td>
+            <td><canvas id="c4" width="720" height="240"></canvas></td>
+        </tr>
+    </table>
+
+    <script>
+    const dpr = window.devicePixelRatio || 1;
+    function setupCanvas(id) {
+        const c = document.getElementById(id);
+        const w = 720, h = 240;
+        c.width = w * dpr; c.height = h * dpr;
+        c.style.width = w + 'px'; c.style.height = h + 'px';
+        const ctx = c.getContext('2d');
+        ctx.scale(dpr, dpr);
+        return { ctx, w, h };
+    }
+
+    // C1: Face outline with measurement lines and detected attribute labels
+    (function() {
+        const { ctx, w, h } = setupCanvas('c1');
+        const cx = 220, cy = 120;
+
+        // Face oval
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, 65, 85, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Eyes
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(cx - 22, cy - 15, 14, 8, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.ellipse(cx + 22, cy - 15, 14, 8, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Pupils
+        ctx.fillStyle = '#1a5276';
+        ctx.beginPath();
+        ctx.arc(cx - 22, cy - 15, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(cx + 22, cy - 15, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Nose
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - 5);
+        ctx.lineTo(cx - 8, cy + 18);
+        ctx.lineTo(cx + 8, cy + 18);
+        ctx.stroke();
+
+        // Mouth (neutral line)
+        ctx.beginPath();
+        ctx.moveTo(cx - 18, cy + 35);
+        ctx.quadraticCurveTo(cx, cy + 38, cx + 18, cy + 35);
+        ctx.stroke();
+
+        // Measurement lines (dashed)
+        ctx.setLineDash([4, 3]);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1.5;
+
+        // Eye distance measurement
+        ctx.beginPath();
+        ctx.moveTo(cx - 22, cy - 35);
+        ctx.lineTo(cx + 22, cy - 35);
+        ctx.stroke();
+        // Arrows on measurement
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(cx - 22, cy - 38);
+        ctx.lineTo(cx - 22, cy - 32);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx + 22, cy - 38);
+        ctx.lineTo(cx + 22, cy - 32);
+        ctx.stroke();
+
+        // Jaw width measurement
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(cx - 55, cy + 50);
+        ctx.lineTo(cx + 55, cy + 50);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(cx - 55, cy + 47);
+        ctx.lineTo(cx - 55, cy + 53);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx + 55, cy + 47);
+        ctx.lineTo(cx + 55, cy + 53);
+        ctx.stroke();
+
+        // Nose-to-chin measurement (vertical)
+        ctx.setLineDash([4, 3]);
+        ctx.strokeStyle = '#e67e22';
+        ctx.beginPath();
+        ctx.moveTo(cx + 50, cy + 18);
+        ctx.lineTo(cx + 50, cy + 85);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(cx + 47, cy + 18);
+        ctx.lineTo(cx + 53, cy + 18);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx + 47, cy + 85);
+        ctx.lineTo(cx + 53, cy + 85);
+        ctx.stroke();
+
+        // Detected attributes panel (right side)
+        ctx.fillStyle = 'rgba(26,82,118,0.35)';
+        ctx.beginPath();
+        ctx.roundRect(380, 30, 300, 180, 8);
+        ctx.fill();
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect(380, 30, 300, 180, 8);
+        ctx.stroke();
+
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('DETECTED ATTRIBUTES', 400, 58);
+
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = '#2c3e50';
+        const attrs = [
+            { label: 'Age:', value: '28-34', conf: '72%' },
+            { label: 'Gender:', value: 'F', conf: '89%' },
+            { label: 'Mood:', value: 'Neutral', conf: '61%' },
+            { label: 'Gaze:', value: 'Looking at display', conf: '94%' },
+            { label: 'Seen before:', value: 'Yes (visit #3)', conf: '78%' }
+        ];
+
+        attrs.forEach((a, i) => {
+            const y = 85 + i * 26;
+            ctx.fillStyle = '#1a5276';
+            ctx.font = 'bold 12px -apple-system, sans-serif';
+            ctx.fillText(a.label, 400, y);
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = '12px -apple-system, sans-serif';
+            ctx.fillText(a.value, 490, y);
+            ctx.fillStyle = '#666';
+            ctx.font = '10px -apple-system, sans-serif';
+            ctx.fillText('(' + a.conf + ' conf)', 600, y);
+        });
+
+        // Measurement labels
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = '9px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('44px', cx, cy - 42);
+        ctx.fillText('110px', cx, cy + 63);
+        ctx.fillStyle = '#e67e22';
+        ctx.fillText('67px', cx + 63, cy + 52);
+    })();
+
+    // C2: Row of face icons with detected emotions and confidence percentages
+    (function() {
+        const { ctx, w, h } = setupCanvas('c2');
+
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Emotion Detection Confidence — How Accurate Is It Really?', w / 2, 22);
+
+        const emotions = [
+            { emoji: 'Happy', conf: 91, color: '#27ae60', reliable: true },
+            { emoji: 'Neutral', conf: 84, color: '#1a5276', reliable: true },
+            { emoji: 'Surprised', conf: 67, color: '#e67e22', reliable: false },
+            { emoji: 'Angry', conf: 48, color: '#e74c3c', reliable: false },
+            { emoji: 'Sad', conf: 39, color: '#e74c3c', reliable: false },
+            { emoji: 'Confused', conf: 23, color: '#e74c3c', reliable: false }
+        ];
+
+        const startX = 70;
+        const spacing = 110;
+
+        emotions.forEach((e, i) => {
+            const x = startX + i * spacing;
+            const y = 75;
+
+            // Face circle
+            ctx.fillStyle = e.reliable ? 'rgba(39,174,96,0.15)' : 'rgba(231,76,60,0.12)';
+            ctx.beginPath();
+            ctx.arc(x, y, 30, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = e.color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(x, y, 30, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Simple face expression
+            ctx.fillStyle = '#2c3e50';
+            // Eyes
+            ctx.beginPath();
+            ctx.arc(x - 10, y - 8, 3, 0, Math.PI * 2);
+            ctx.arc(x + 10, y - 8, 3, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Mouth varies by emotion
+            ctx.strokeStyle = '#2c3e50';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            if (e.emoji === 'Happy') {
+                ctx.arc(x, y + 5, 12, 0.1 * Math.PI, 0.9 * Math.PI);
+            } else if (e.emoji === 'Sad') {
+                ctx.arc(x, y + 18, 12, 1.1 * Math.PI, 1.9 * Math.PI);
+            } else if (e.emoji === 'Angry') {
+                ctx.moveTo(x - 12, y + 10);
+                ctx.lineTo(x + 12, y + 10);
+            } else if (e.emoji === 'Surprised') {
+                ctx.arc(x, y + 10, 8, 0, Math.PI * 2);
+            } else if (e.emoji === 'Confused') {
+                ctx.moveTo(x - 10, y + 8);
+                ctx.quadraticCurveTo(x, y + 14, x + 10, y + 6);
+            } else {
+                ctx.moveTo(x - 12, y + 10);
+                ctx.lineTo(x + 12, y + 10);
+            }
+            ctx.stroke();
+
+            // Emotion label
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = '11px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(e.emoji, x, y + 50);
+
+            // Confidence bar background
+            ctx.fillStyle = '#eee';
+            ctx.fillRect(x - 30, y + 58, 60, 10);
+
+            // Confidence bar filled
+            ctx.fillStyle = e.color;
+            ctx.fillRect(x - 30, y + 58, (e.conf / 100) * 60, 10);
+
+            // Confidence percentage
+            ctx.font = 'bold 11px -apple-system, sans-serif';
+            ctx.fillStyle = e.color;
+            ctx.fillText(e.conf + '%', x, y + 84);
+
+            // Question mark for unreliable
+            if (!e.reliable) {
+                ctx.fillStyle = '#e74c3c';
+                ctx.font = 'bold 16px -apple-system, sans-serif';
+                ctx.fillText('?', x + 28, y - 18);
+            }
+        });
+
+        // Bottom note
+        ctx.fillStyle = '#666';
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Research shows emotion detection from faces is unreliable — context matters more than expression.', w / 2, h - 16);
+    })();
+
+    // C3: Split green/red — phone unlock convenience vs mass surveillance
+    (function() {
+        const { ctx, w, h } = setupCanvas('c3');
+        const midX = w / 2;
+
+        // Left: green (convenience)
+        ctx.fillStyle = '#27ae60';
+        ctx.beginPath();
+        ctx.roundRect(20, 20, midX - 30, h - 40, [8, 0, 0, 8]);
+        ctx.fill();
+
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('What They Tell You', midX / 2 + 10, 48);
+
+        // Phone icon (simple rectangle)
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(midX / 2 - 15, 62, 50, 80, 6);
+        ctx.stroke();
+        // Screen
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.fillRect(midX / 2 - 9, 72, 38, 55);
+        // Face icon on screen
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(midX / 2 + 10, 95, 12, 0, Math.PI * 2);
+        ctx.stroke();
+        // Checkmark
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(midX / 2 + 2, 97);
+        ctx.lineTo(midX / 2 + 8, 103);
+        ctx.lineTo(midX / 2 + 18, 88);
+        ctx.stroke();
+
+        ctx.fillStyle = '#fff';
+        ctx.font = '11px -apple-system, sans-serif';
+        const good = ['Unlock phone instantly', 'Secure authentication', 'Count store visitors', 'Personalized experience'];
+        good.forEach((t, i) => {
+            ctx.fillText(t, midX / 2 + 10, 158 + i * 18);
+        });
+
+        // Right: red (surveillance)
+        ctx.fillStyle = '#e74c3c';
+        ctx.beginPath();
+        ctx.roundRect(midX + 10, 20, midX - 30, h - 40, [0, 8, 8, 0]);
+        ctx.fill();
+
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText("What They Don't Tell You", midX + midX / 2, 48);
+
+        // Surveillance camera icon
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        // Camera body
+        ctx.beginPath();
+        ctx.moveTo(midX + midX / 2 - 25, 80);
+        ctx.lineTo(midX + midX / 2 + 15, 68);
+        ctx.lineTo(midX + midX / 2 + 15, 92);
+        ctx.lineTo(midX + midX / 2 - 25, 104);
+        ctx.closePath();
+        ctx.stroke();
+        // Lens
+        ctx.beginPath();
+        ctx.arc(midX + midX / 2 + 20, 80, 8, 0, Math.PI * 2);
+        ctx.stroke();
+        // Mount
+        ctx.beginPath();
+        ctx.moveTo(midX + midX / 2 - 20, 104);
+        ctx.lineTo(midX + midX / 2 - 20, 120);
+        ctx.lineTo(midX + midX / 2 - 35, 120);
+        ctx.stroke();
+
+        // Scanning lines radiating from camera
+        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+        ctx.lineWidth = 1;
+        for (let a = -0.4; a <= 0.4; a += 0.2) {
+            ctx.beginPath();
+            ctx.moveTo(midX + midX / 2 + 28, 80);
+            ctx.lineTo(midX + midX / 2 + 70, 80 + a * 60);
+            ctx.stroke();
+        }
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = '#fff';
+        ctx.font = '11px -apple-system, sans-serif';
+        const bad = ['Track you without consent', 'Score job candidates by face', 'Adjust prices by your mood', 'Police mass surveillance'];
+        bad.forEach((t, i) => {
+            ctx.fillText(t, midX + midX / 2, 140 + i * 18);
+        });
+
+        // Divider
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(midX, 20);
+        ctx.lineTo(midX, h - 20);
+        ctx.stroke();
+        ctx.setLineDash([]);
+    })();
+
+    // C4: Intrusiveness gauge at ~88%
+    (function() {
+        const { ctx, w, h } = setupCanvas('c4');
+        const cx = w / 2, cy = 145;
+        const r = 90;
+
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Intrusiveness Level', cx, 25);
+
+        // Gauge background — segmented arc
+        ctx.lineWidth = 22;
+
+        // Green zone (0-33%)
+        ctx.strokeStyle = '#27ae60';
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, Math.PI, Math.PI * 1.33);
+        ctx.stroke();
+
+        // Orange zone (33-66%)
+        ctx.strokeStyle = '#e67e22';
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, Math.PI * 1.33, Math.PI * 1.66);
+        ctx.stroke();
+
+        // Red zone (66-100%)
+        ctx.strokeStyle = '#e74c3c';
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, Math.PI * 1.66, Math.PI * 2);
+        ctx.stroke();
+
+        // Tick marks
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        for (let i = 0; i <= 10; i++) {
+            const angle = Math.PI + (Math.PI * i / 10);
+            const inner = r - 11;
+            const outer = r + 11;
+            ctx.beginPath();
+            ctx.moveTo(cx + Math.cos(angle) * inner, cy + Math.sin(angle) * inner);
+            ctx.lineTo(cx + Math.cos(angle) * outer, cy + Math.sin(angle) * outer);
+            ctx.stroke();
+        }
+
+        // Needle pointing to ~88% (very high)
+        const needleAngle = Math.PI + (Math.PI * 0.88);
+        ctx.strokeStyle = '#2c3e50';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + Math.cos(needleAngle) * 70, cy + Math.sin(needleAngle) * 70);
+        ctx.stroke();
+
+        // Needle base circle
+        ctx.fillStyle = '#2c3e50';
+        ctx.beginPath();
+        ctx.arc(cx, cy, 7, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Zone labels
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#27ae60';
+        ctx.fillText('Low', cx - 100, cy + 30);
+        ctx.fillStyle = '#e67e22';
+        ctx.fillText('Medium', cx, cy - 100);
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillText('High', cx + 100, cy + 30);
+
+        // Reading text
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 16px -apple-system, sans-serif';
+        ctx.fillText('VERY HIGH', cx, cy + 50);
+
+        ctx.fillStyle = '#666';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillText("No consent asked. Can't opt out of having a face.", cx, cy + 68);
+        ctx.fillText('Emotion claims are pseudoscience applied at scale.', cx, cy + 82);
+    })();
+    </script>
+</body>
+</html>

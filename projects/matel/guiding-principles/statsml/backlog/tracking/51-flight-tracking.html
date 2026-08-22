@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flight Tracking (ADS-B)</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2c3e50; max-width: 100%; margin: 0; padding: 30px 40px; background: #fff; }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+        .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
+        .obj-table { width: 100%; border-collapse: collapse; }
+        .obj-table td { vertical-align: top; padding: 16px; border: 1px solid #2980b9; }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; text-align: center; }
+        ul { padding-left: 20px; margin: 8px 0; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        canvas { display: block; margin: 0 auto; }
+    </style>
+</head>
+<body>
+    <h1>Flight Tracking (ADS-B)</h1>
+    <p class="subtitle">Every plane screams its location into the sky. Anyone with a $20 radio can listen.</p>
+    <table class="obj-table">
+        <tr>
+            <td>
+                <div class="obj-title">What is it?</div>
+                <p>ADS-B stands for Automatic Dependent Surveillance-Broadcast. Every commercial plane has a transmitter. It broadcasts position, altitude, speed, and identity on 1090 MHz. The signal is unencrypted. No authentication. No opt-out.</p>
+                <p>A cheap USB dongle (RTL-SDR, about $20) plugged into a laptop picks up these signals. Websites like Flightradar24 and ADS-B Exchange crowdsource thousands of these receivers worldwide. The result: real-time tracking of nearly every aircraft on Earth.</p>
+                <div class="key-point">The system was designed for safety. It was never designed for privacy. Now anyone can watch.</div>
+            </td>
+            <td><canvas id="c1" width="720" height="240"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">What does it collect?</div>
+                <ul>
+                    <li><strong>ICAO address</strong> — unique ID for each aircraft, like a license plate</li>
+                    <li><strong>Latitude and longitude</strong> — exact position, updated every second</li>
+                    <li><strong>Altitude</strong> — barometric and GPS altitude</li>
+                    <li><strong>Ground speed and heading</strong> — how fast, which direction</li>
+                    <li><strong>Callsign</strong> — flight number (e.g., UAL417)</li>
+                    <li><strong>Vertical rate</strong> — climbing or descending</li>
+                    <li><strong>Squawk code</strong> — emergency codes visible to everyone</li>
+                </ul>
+                <div class="key-point">All of this broadcasts continuously. No request needed. No consent given. The plane just talks.</div>
+            </td>
+            <td><canvas id="c2" width="720" height="240"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">Why do they collect it?</div>
+                <p><strong>What they tell you:</strong> ADS-B replaces old radar. Radar is expensive, has blind spots, and can't cover oceans. ADS-B gives air traffic control better accuracy. Planes see each other. Collisions get avoided. Search and rescue finds crashed planes faster.</p>
+                <p><strong>What they don't tell you:</strong> The open broadcast means hobbyists, journalists, and activists track private jets. @ElonJet tracked Musk's movements in real time using public ADS-B data. Planespotters exposed CIA rendition flights by matching tail numbers to shell companies. Governments tried to suppress this. They failed. The signal is physics. You cannot un-broadcast radio waves.</p>
+                <div class="key-point">The FAA offers a "privacy" program (LADD) that hides data from FAA feeds. But it cannot stop anyone with their own receiver from listening directly.</div>
+            </td>
+            <td><canvas id="c3" width="720" height="240"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">How much can they see?</div>
+                <p>A single ground receiver covers roughly 200-300 miles in every direction. At cruising altitude, planes are line-of-sight to receivers hundreds of miles away.</p>
+                <p>Crowdsourced networks (ADS-B Exchange has 30,000+ feeders) cover most of the populated world. Satellites now pick up ADS-B over oceans. There are almost no gaps left.</p>
+                <p>Historical data is stored forever. You can look up where any plane was on any date. Pattern analysis reveals: where billionaires vacation, which military aircraft flew where, how often a CEO visits a competitor's headquarters.</p>
+                <div class="key-point">You can hide your phone. You can use a VPN. But if you fly private, your movements are public record broadcast at the speed of light.</div>
+            </td>
+            <td><canvas id="c4" width="720" height="240"></canvas></td>
+        </tr>
+    </table>
+    <script>
+    const dpr = window.devicePixelRatio || 1;
+    function setupCanvas(id) {
+        const c = document.getElementById(id);
+        const w = 720, h = 240;
+        c.width = w * dpr;
+        c.height = h * dpr;
+        c.style.width = w + 'px';
+        c.style.height = h + 'px';
+        const ctx = c.getContext('2d');
+        ctx.scale(dpr, dpr);
+        return { ctx, w, h };
+    }
+
+    // Canvas 1: Airplane broadcasting radio waves to ground receiver
+    (function() {
+        const { ctx, w, h } = setupCanvas('c1');
+        // Sky gradient
+        const sky = ctx.createLinearGradient(0, 0, 0, h);
+        sky.addColorStop(0, '#e8f4fd');
+        sky.addColorStop(1, '#f0f8ff');
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, w, h);
+
+        // Ground
+        ctx.fillStyle = '#27ae60';
+        ctx.fillRect(0, h - 30, w, 30);
+
+        // Airplane body
+        const px = 200, py = 70;
+        ctx.fillStyle = '#1a5276';
+        ctx.beginPath();
+        ctx.ellipse(px, py, 40, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Wings
+        ctx.beginPath();
+        ctx.moveTo(px - 5, py);
+        ctx.lineTo(px - 20, py - 25);
+        ctx.lineTo(px + 10, py - 25);
+        ctx.lineTo(px + 5, py);
+        ctx.fillStyle = '#1a5276';
+        ctx.fill();
+        // Tail
+        ctx.beginPath();
+        ctx.moveTo(px - 35, py);
+        ctx.lineTo(px - 45, py - 18);
+        ctx.lineTo(px - 30, py - 18);
+        ctx.lineTo(px - 28, py);
+        ctx.fill();
+        // Nose
+        ctx.beginPath();
+        ctx.moveTo(px + 40, py);
+        ctx.lineTo(px + 55, py);
+        ctx.lineTo(px + 40, py - 3);
+        ctx.fill();
+
+        // Radio waves (concentric arcs broadcasting downward)
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1.5;
+        for (let i = 1; i <= 5; i++) {
+            ctx.beginPath();
+            ctx.arc(px + 20, py + 10, i * 22, 0.3, Math.PI - 0.3);
+            ctx.globalAlpha = 1 - (i * 0.15);
+            ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+
+        // Ground receiver (antenna)
+        const rx = 480, ry = h - 30;
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(rx, ry);
+        ctx.lineTo(rx, ry - 50);
+        ctx.stroke();
+        // Antenna arms
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(rx - 15, ry - 40);
+        ctx.lineTo(rx, ry - 50);
+        ctx.lineTo(rx + 15, ry - 40);
+        ctx.stroke();
+        // Receiver box
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillRect(rx - 12, ry - 10, 24, 10);
+
+        // Signal lines from plane to receiver
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = '#e67e22';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(px + 30, py + 15);
+        ctx.lineTo(rx, ry - 50);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Labels
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('1090 MHz Broadcast', px + 20, py + 95);
+        ctx.fillText('$20 USB Receiver', rx, ry - 60);
+        ctx.fillText('Unencrypted', (px + rx) / 2, py + 40);
+
+        // Label on plane
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillStyle = '#fff';
+        ctx.fillText('ADS-B', px, py + 4);
+    })();
+
+    // Canvas 2: Flight path with data points
+    (function() {
+        const { ctx, w, h } = setupCanvas('c2');
+        // Background
+        ctx.fillStyle = '#f7fbfe';
+        ctx.fillRect(0, 0, w, h);
+
+        // Flight path curve
+        const points = [
+            { x: 60, y: 180 },
+            { x: 150, y: 150 },
+            { x: 250, y: 100 },
+            { x: 370, y: 70 },
+            { x: 490, y: 55 },
+            { x: 580, y: 60 },
+            { x: 660, y: 90 }
+        ];
+
+        // Draw path
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+            const xc = (points[i - 1].x + points[i].x) / 2;
+            const yc = (points[i - 1].y + points[i].y) / 2;
+            ctx.quadraticCurveTo(points[i - 1].x, points[i - 1].y, xc, yc);
+        }
+        ctx.stroke();
+
+        // Data points with labels
+        const data = [
+            { x: 60, y: 180, label: '40.7128°N\n74.0060°W\nALT: 2,400ft\n180 kts' },
+            { x: 250, y: 100, label: '41.0534°N\n73.5387°W\nALT: 18,000ft\n340 kts' },
+            { x: 490, y: 55, label: '41.8781°N\n72.6298°W\nALT: 35,000ft\n485 kts' },
+            { x: 660, y: 90, label: '42.3601°N\n71.0589°W\nALT: 28,000ft\n420 kts' }
+        ];
+
+        data.forEach((d, i) => {
+            // Dot
+            ctx.beginPath();
+            ctx.arc(d.x, d.y, 6, 0, Math.PI * 2);
+            ctx.fillStyle = '#e74c3c';
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Label box
+            const lines = d.label.split('\n');
+            const boxW = 95, boxH = lines.length * 13 + 8;
+            const bx = d.x - boxW / 2;
+            const by = i % 2 === 0 ? d.y - boxH - 12 : d.y + 14;
+
+            ctx.fillStyle = 'rgba(255,255,255,0.92)';
+            ctx.strokeStyle = '#1a5276';
+            ctx.lineWidth = 1;
+            ctx.fillRect(bx, by, boxW, boxH);
+            ctx.strokeRect(bx, by, boxW, boxH);
+
+            ctx.font = '10px monospace';
+            ctx.fillStyle = '#2c3e50';
+            ctx.textAlign = 'center';
+            lines.forEach((line, li) => {
+                ctx.fillText(line, d.x, by + 12 + li * 13);
+            });
+        });
+
+        // Small plane icons along path
+        ctx.font = '16px sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('✈', 370, 65);
+
+        // Title
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillStyle = '#666';
+        ctx.textAlign = 'left';
+        ctx.fillText('Every second: position, altitude, speed broadcast', 20, h - 10);
+    })();
+
+    // Canvas 3: Split view - safety vs surveillance
+    (function() {
+        const { ctx, w, h } = setupCanvas('c3');
+        const mid = w / 2;
+
+        // Left side - green safety
+        ctx.fillStyle = '#eafaf1';
+        ctx.fillRect(0, 0, mid, h);
+
+        // Right side - red surveillance
+        ctx.fillStyle = '#fdedec';
+        ctx.fillRect(mid, 0, mid, h);
+
+        // Divider
+        ctx.strokeStyle = '#2c3e50';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 3]);
+        ctx.beginPath();
+        ctx.moveTo(mid, 0);
+        ctx.lineTo(mid, h);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // LEFT: Safety icon - shield with checkmark
+        const lx = mid / 2, ly = 90;
+        ctx.beginPath();
+        ctx.moveTo(lx, ly - 40);
+        ctx.quadraticCurveTo(lx + 40, ly - 35, lx + 40, ly);
+        ctx.quadraticCurveTo(lx + 40, ly + 30, lx, ly + 45);
+        ctx.quadraticCurveTo(lx - 40, ly + 30, lx - 40, ly);
+        ctx.quadraticCurveTo(lx - 40, ly - 35, lx, ly - 40);
+        ctx.fillStyle = '#27ae60';
+        ctx.fill();
+
+        // Checkmark
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(lx - 15, ly);
+        ctx.lineTo(lx - 3, ly + 14);
+        ctx.lineTo(lx + 18, ly - 12);
+        ctx.stroke();
+
+        // Left labels
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillStyle = '#27ae60';
+        ctx.textAlign = 'center';
+        ctx.fillText('THE STATED REASON', lx, 155);
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillText('Collision avoidance', lx, 175);
+        ctx.fillText('Search and rescue', lx, 192);
+        ctx.fillText('Air traffic control', lx, 209);
+        ctx.fillText('Ocean coverage', lx, 226);
+
+        // RIGHT: Surveillance eye
+        const rx = mid + mid / 2, ry = 90;
+        // Eye shape
+        ctx.beginPath();
+        ctx.moveTo(rx - 45, ry);
+        ctx.quadraticCurveTo(rx, ry - 35, rx + 45, ry);
+        ctx.quadraticCurveTo(rx, ry + 35, rx - 45, ry);
+        ctx.fillStyle = '#e74c3c';
+        ctx.fill();
+        // Iris
+        ctx.beginPath();
+        ctx.arc(rx, ry, 16, 0, Math.PI * 2);
+        ctx.fillStyle = '#2c3e50';
+        ctx.fill();
+        // Pupil
+        ctx.beginPath();
+        ctx.arc(rx, ry, 7, 0, Math.PI * 2);
+        ctx.fillStyle = '#e74c3c';
+        ctx.fill();
+        // Highlight
+        ctx.beginPath();
+        ctx.arc(rx - 4, ry - 4, 3, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff';
+        ctx.fill();
+
+        // Right labels
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillStyle = '#e74c3c';
+        ctx.textAlign = 'center';
+        ctx.fillText('THE ACTUAL EFFECT', rx, 155);
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillText('@ElonJet tracked Musk', rx, 175);
+        ctx.fillText('CIA flights exposed', rx, 192);
+        ctx.fillText('Billionaire patterns revealed', rx, 209);
+        ctx.fillText('No way to opt out', rx, 226);
+    })();
+
+    // Canvas 4: Map grid with multiple planes and trail lines
+    (function() {
+        const { ctx, w, h } = setupCanvas('c4');
+        // Map-like background
+        ctx.fillStyle = '#f0f7fa';
+        ctx.fillRect(0, 0, w, h);
+
+        // Grid lines
+        ctx.strokeStyle = 'rgba(26, 82, 118, 0.1)';
+        ctx.lineWidth = 1;
+        for (let x = 0; x <= w; x += 60) {
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, h);
+            ctx.stroke();
+        }
+        for (let y = 0; y <= h; y += 40) {
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(w, y);
+            ctx.stroke();
+        }
+
+        // Coverage circles (receiver ranges)
+        const receivers = [
+            { x: 180, y: 120, r: 100 },
+            { x: 400, y: 100, r: 110 },
+            { x: 580, y: 140, r: 95 }
+        ];
+        receivers.forEach(rec => {
+            ctx.beginPath();
+            ctx.arc(rec.x, rec.y, rec.r, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(39, 174, 96, 0.08)';
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(39, 174, 96, 0.3)';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([4, 3]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Receiver icon (small triangle)
+            ctx.beginPath();
+            ctx.moveTo(rec.x, rec.y - 6);
+            ctx.lineTo(rec.x - 5, rec.y + 4);
+            ctx.lineTo(rec.x + 5, rec.y + 4);
+            ctx.closePath();
+            ctx.fillStyle = '#27ae60';
+            ctx.fill();
+        });
+
+        // Planes with dotted trails
+        const planes = [
+            { x: 120, y: 60, trail: [{ x: 70, y: 80 }, { x: 90, y: 72 }, { x: 105, y: 66 }], color: '#1a5276' },
+            { x: 320, y: 150, trail: [{ x: 250, y: 180 }, { x: 275, y: 170 }, { x: 298, y: 160 }], color: '#e74c3c' },
+            { x: 500, y: 70, trail: [{ x: 440, y: 50 }, { x: 460, y: 56 }, { x: 480, y: 63 }], color: '#1a5276' },
+            { x: 620, y: 180, trail: [{ x: 570, y: 160 }, { x: 588, y: 167 }, { x: 605, y: 174 }], color: '#e67e22' },
+            { x: 280, y: 80, trail: [{ x: 230, y: 100 }, { x: 248, y: 93 }, { x: 265, y: 86 }], color: '#1a5276' },
+            { x: 450, y: 190, trail: [{ x: 410, y: 200 }, { x: 425, y: 197 }, { x: 438, y: 193 }], color: '#e74c3c' }
+        ];
+
+        planes.forEach(plane => {
+            // Trail (dotted)
+            ctx.setLineDash([2, 3]);
+            ctx.strokeStyle = plane.color;
+            ctx.lineWidth = 1.5;
+            ctx.globalAlpha = 0.5;
+            ctx.beginPath();
+            ctx.moveTo(plane.trail[0].x, plane.trail[0].y);
+            plane.trail.forEach(p => ctx.lineTo(p.x, p.y));
+            ctx.lineTo(plane.x, plane.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.globalAlpha = 1;
+
+            // Trail dots
+            plane.trail.forEach((p, i) => {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+                ctx.fillStyle = plane.color;
+                ctx.globalAlpha = 0.3 + i * 0.2;
+                ctx.fill();
+            });
+            ctx.globalAlpha = 1;
+
+            // Plane icon (small arrow/triangle)
+            const angle = Math.atan2(plane.y - plane.trail[2].y, plane.x - plane.trail[2].x);
+            ctx.save();
+            ctx.translate(plane.x, plane.y);
+            ctx.rotate(angle);
+            ctx.beginPath();
+            ctx.moveTo(10, 0);
+            ctx.lineTo(-6, -5);
+            ctx.lineTo(-3, 0);
+            ctx.lineTo(-6, 5);
+            ctx.closePath();
+            ctx.fillStyle = plane.color;
+            ctx.fill();
+            ctx.restore();
+        });
+
+        // Legend
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillStyle = '#666';
+        ctx.textAlign = 'left';
+        ctx.fillText('30,000+ ground receivers worldwide', 15, h - 10);
+        ctx.textAlign = 'right';
+        ctx.fillText('Coverage: nearly global', w - 15, h - 10);
+
+        // Stats box
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.fillRect(w - 170, 8, 160, 50);
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(w - 170, 8, 160, 50);
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'left';
+        ctx.fillText('Live at any moment:', w - 162, 25);
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillText('~10,000 planes tracked', w - 162, 40);
+        ctx.fillText('History stored indefinitely', w - 162, 53);
+    })();
+    </script>
+</body>
+</html>
