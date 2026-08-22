@@ -10,7 +10,7 @@ Distilled HTML templates from the project's best docs. Copy-paste and customize.
 | 04 | [Two-Col Catalog — Badges](04-two-col-catalog-badges.html) | "Hall of shame" style: domain pill badges, `<th>` header row, 17px bold canvas fonts, `#fafafa` bg, nav-link back button. | `reference/metrics/bad-examples.html` |
 | 05 | [Two-Col Catalog — Clean](05-two-col-catalog-clean.html) | Technical reference: CSS reset, white bg, centered canvas (`margin: 0 auto`), h2 section dividers between groups, philosophy callout box. | `reference/metrics/metric-testing.html` |
 | 06 | [Sectioned Cards — Callout](06-sectioned-cards-callout.html) | Bias catalogs, pitfall lists, concept galleries. Repeated card sections each with h2 + 2-col table (prose/key-point/example \| tall canvas). White bg, red-accent callout boxes, italic examples. | `reference/cognitive-biases/06-measurement-reporting.html` |
-| 07 | [Claim Dissection Cards](07-claim-dissection-cards.html) | Dissecting claims, proverbs, or assertions into component fallacies. TOC → repeated cards with quote, flaw table, undefined terms, counterexamples. Optional math callout. | `18-folk-wisdom-fallacies.html` |
+| 07 | [Claim Dissection Cards](07-claim-dissection-cards.html) | Dissecting claims, proverbs, or assertions into component fallacies. TOC → repeated cards with quote, flaw table, undefined terms, counterexamples. Optional math callout. | `folk-wisdom/21-hard-work-pays-off.html` |
 
 ## Template 05 vs 06 — Key Differences
 

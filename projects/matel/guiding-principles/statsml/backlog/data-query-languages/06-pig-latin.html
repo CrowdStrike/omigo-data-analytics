@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>7. Pig Latin</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 40px 20px; color: #2a2a2a; font-size: 15px; line-height: 1.6; }
+h1 { color: #1a5276; font-size: 1.6em; margin-bottom: 4px; }
+.subtitle { color: #666; font-size: 1.0em; margin-bottom: 20px; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 0 0 28px; font-size: 0.93em; }
+h2 { font-size: 1.15em; color: #1a5276; margin: 28px 0 10px; border-bottom: 2px solid #2980b9; padding-bottom: 4px; }
+table.layout { width: 100%; border-collapse: collapse; margin-top: 8px; }
+table.layout td { vertical-align: top; padding: 14px 16px; border: 1px solid #e8f0f6; }
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; background: #fbfcfd; }
+table.layout td.viz-col pre { background: #f4f4f4; padding: 12px; border-radius: 4px; overflow-x: auto; font-size: 0.84em; line-height: 1.55; }
+table.layout td.viz-col code { font-size: 0.88em; }
+.label { font-weight: 600; color: #1a5276; font-size: 0.88em; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; }
+.text-col p { margin: 6px 0; font-size: 0.93em; color: #333; }
+.text-col ul { margin: 6px 0 6px 18px; }
+.text-col li { margin: 4px 0; font-size: 0.93em; color: #333; }
+.key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 8px 12px; margin-top: 10px; font-size: 0.88em; color: #444; }
+.viz-note { font-size: 0.82em; color: #777; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<h1>7. Pig Latin</h1>
+<div class="subtitle">Dataflow DAGs for Hadoop — the transitional language between MapReduce and SQL-on-cluster.</div>
+<div class="philosophy"><strong>Core trade-off:</strong> Higher-level than MapReduce but lower than SQL. You describe dataflow steps and the system compiles to MapReduce jobs. Proved the concept — then was replaced by exactly what it proved.<br><br><strong>Bottom-up vs top-down:</strong> SQL is top-down — you declare the final result and the optimizer works backward to find the path. Pig Latin is bottom-up — you build the result step by step, each line transforming the previous output. Like Splunk SPL, you think in a pipeline: load → filter → group → project → store. The programmer sees the data flow; in SQL, only the optimizer does.</div>
+
+<h2>What It Is</h2>
+<table class="layout">
+<tr>
+<td class="text-col">
+<p>A dataflow language developed at Yahoo (2008) that compiles procedural data transformation scripts into sequences of MapReduce jobs on Hadoop.</p>
+<p>You write LOAD, FILTER, GROUP, FOREACH, JOIN, STORE — the compiler plans the MapReduce stages. Explicit data flow, implicit parallelism.</p>
+<div class="key-point"><strong>Why it mattered:</strong> proved that a higher-level abstraction over MapReduce was viable and necessary — paving the way for SQL-on-Hadoop.</div>
+</td>
+<td class="viz-col">
+<div class="label">Compilation Pipeline</div>
+<canvas id="pipeline-chart" style="width:100%; height:200px;"></canvas>
+<div class="viz-note">Each Pig statement becomes one or more MapReduce stages.</div>
+</td>
+</tr>
+</table>
+
+<h2>Strengths & Weaknesses</h2>
+<table class="layout">
+<tr>
+<td class="text-col">
+<div class="label">Strengths</div>
+<ul>
+<li>Much easier than raw MapReduce for multi-step pipelines</li>
+<li>Handles nested data (bags, tuples, maps) naturally</li>
+<li>Extensible via User Defined Functions (UDFs)</li>
+<li>Good for ETL where step ordering matters</li>
+<li>Lazy evaluation enables some optimization</li>
+</ul>
+<div class="label" style="margin-top:14px;">Weaknesses</div>
+<ul>
+<li>No optimizer in early versions — execution order was literal</li>
+<li>Another language to learn (neither SQL nor Java)</li>
+<li>Made redundant by HiveQL and then Spark SQL</li>
+<li>No interactive queries — batch only</li>
+<li>Small community; effectively abandoned by 2017</li>
+</ul>
+</td>
+<td class="viz-col">
+<div class="label">Top-Down vs Bottom-Up</div>
+<canvas id="paradigm-chart" style="width:100%; height:220px;"></canvas>
+<div class="viz-note">SQL hides the plan → better optimization. Pipeline shows the plan → better debugging.</div>
+</td>
+</tr>
+</table>
+
+<h2>Business Use Case</h2>
+<table class="layout">
+<tr>
+<td class="text-col">
+<p><strong>Historical context (2008–2014):</strong> Hadoop ETL pipelines at Yahoo, where analysts needed to process web-scale data without writing raw Java MapReduce.</p>
+<p><strong>What it solved:</strong> reduced a 200-line Java MapReduce job to 10 lines of Pig, making data engineers 10× more productive on batch ETL.</p>
+<p><strong>Why it died:</strong> once SQL itself could compile to distributed plans (Hive, then Spark SQL), there was no reason to learn a separate language that offered less optimization.</p>
+</td>
+<td class="viz-col">
+<div class="label">Same Task — Three Eras</div>
+<canvas id="eras-chart" style="width:100%; height:180px;"></canvas>
+<div class="viz-note">Lines of code for word-count: MapReduce ~200, Pig ~10, Spark SQL ~3.</div>
+</td>
+</tr>
+</table>
+
+<h2>Example</h2>
+<table class="layout">
+<tr>
+<td class="text-col">
+<p><strong>Scenario:</strong> process web server access logs to find URLs with the most 500-errors.</p>
+<p>Each statement transforms the data one step further. The compiler sees the full DAG and can merge stages where possible.</p>
+<p><strong>Key operators used:</strong></p>
+<ul>
+<li><code>LOAD</code> — read from HDFS</li>
+<li><code>FILTER</code> — narrow rows</li>
+<li><code>GROUP</code> — collect by key</li>
+<li><code>FOREACH...GENERATE</code> — project/transform</li>
+<li><code>ORDER</code> — sort output</li>
+<li><code>STORE</code> — write back to HDFS</li>
+</ul>
+</td>
+<td class="viz-col">
+<div class="label">Pig Latin Script</div>
+<pre><code>-- Load web server logs
+logs = LOAD '/data/access_logs'
+    USING PigStorage('\t')
+    AS (ip:chararray, ts:chararray,
+        method:chararray, url:chararray,
+        status:int, bytes:int);
+
+-- Keep only server errors
+errors = FILTER logs BY status >= 500;
+
+-- Group by URL
+by_url = GROUP errors BY url;
+
+-- Count errors per URL
+counts = FOREACH by_url GENERATE
+    group AS url,
+    COUNT(errors) AS error_count;
+
+-- Top offenders
+ranked = ORDER counts BY error_count DESC;
+top20 = LIMIT ranked 20;
+
+-- Write output
+STORE top20 INTO '/output/error_hotspots';</code></pre>
+</td>
+</tr>
+</table>
+
+</body>
+<script>
+(function() {
+var dpr = window.devicePixelRatio || 1;
+
+function initCanvas(id) {
+  var c = document.getElementById(id);
+  var cssW = c.clientWidth, cssH = c.clientHeight;
+  c.width = Math.round(cssW * dpr);
+  c.height = Math.round(cssH * dpr);
+  var ctx = c.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx: ctx, w: cssW, h: cssH };
+}
+
+// --- Pipeline chart: vertical flow ---
+(function() {
+  var d = initCanvas('pipeline-chart');
+  var ctx = d.ctx, w = d.w, h = d.h;
+  var steps = [
+    { label: 'Pig Latin Script', sub: 'LOAD → FILTER → GROUP → STORE', color: '#1a5276' },
+    { label: 'Logical Plan', sub: 'DAG of operators', color: '#2980b9' },
+    { label: 'Physical Plan', sub: 'MapReduce jobs', color: '#e67e22' },
+    { label: 'Hadoop Cluster', sub: 'Distributed execution', color: '#27ae60' }
+  ];
+  var boxW = 180, boxH = 34, gap = 12;
+  var totalH = steps.length * boxH + (steps.length - 1) * gap;
+  var startY = (h - totalH) / 2;
+  var cx = w / 2;
+
+  for (var i = 0; i < steps.length; i++) {
+    var y = startY + i * (boxH + gap);
+    ctx.fillStyle = steps[i].color;
+    ctx.beginPath();
+    ctx.roundRect(cx - boxW/2, y, boxW, boxH, 5);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = '600 12px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(steps[i].label, cx, y + 12);
+    ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.fillText(steps[i].sub, cx, y + 25);
+
+    if (i < steps.length - 1) {
+      var arrowY = y + boxH + 2;
+      ctx.strokeStyle = '#999';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(cx, arrowY);
+      ctx.lineTo(cx, arrowY + gap - 4);
+      ctx.stroke();
+      ctx.fillStyle = '#999';
+      ctx.beginPath();
+      ctx.moveTo(cx - 4, arrowY + gap - 6);
+      ctx.lineTo(cx + 4, arrowY + gap - 6);
+      ctx.lineTo(cx, arrowY + gap - 1);
+      ctx.fill();
+    }
+  }
+})();
+
+// --- Paradigm chart: top-down vs bottom-up comparison ---
+(function() {
+  var d = initCanvas('paradigm-chart');
+  var ctx = d.ctx, w = d.w, h = d.h;
+
+  var colW = w / 2 - 20;
+  var lx = 10, rx = w / 2 + 10;
+
+  // Headers
+  ctx.font = '600 13px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#1a5276';
+  ctx.fillText('Top-Down (SQL)', lx + colW/2, 18);
+  ctx.fillStyle = '#e67e22';
+  ctx.fillText('Bottom-Up (Pig, SPL, KQL)', rx + colW/2, 18);
+
+  // SQL side: single block
+  ctx.fillStyle = '#1a5276';
+  ctx.beginPath();
+  ctx.roundRect(lx + 10, 35, colW - 20, 40, 5);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.font = '600 11px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('SELECT ... FROM ... WHERE ... GROUP BY', lx + colW/2, 50);
+  ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('Declare the end result', lx + colW/2, 64);
+
+  // Arrow down to hidden optimizer
+  ctx.strokeStyle = '#1a5276';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(lx + colW/2, 78); ctx.lineTo(lx + colW/2, 95); ctx.stroke();
+  ctx.fillStyle = 'rgba(26,82,118,0.12)';
+  ctx.beginPath(); ctx.roundRect(lx + 20, 98, colW - 40, 30, 4); ctx.fill();
+  ctx.fillStyle = '#1a5276';
+  ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('⚙ Optimizer decides path (hidden)', lx + colW/2, 116);
+  ctx.strokeStyle = '#1a5276';
+  ctx.beginPath(); ctx.moveTo(lx + colW/2, 131); ctx.lineTo(lx + colW/2, 148); ctx.stroke();
+  ctx.fillStyle = '#27ae60';
+  ctx.beginPath(); ctx.roundRect(lx + 30, 151, colW - 60, 26, 4); ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.font = '600 11px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.fillText('Result', lx + colW/2, 167);
+
+  // Pig side: pipeline steps
+  var steps = ['LOAD', 'FILTER', 'GROUP', 'FOREACH', 'STORE'];
+  var stepH = 28, stepGap = 6, startY = 35;
+  for (var i = 0; i < steps.length; i++) {
+    var sy = startY + i * (stepH + stepGap);
+    ctx.fillStyle = '#e67e22';
+    ctx.globalAlpha = 0.8 + i * 0.04;
+    ctx.beginPath(); ctx.roundRect(rx + 20, sy, colW - 40, stepH, 4); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#fff';
+    ctx.font = '600 11px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(steps[i], rx + colW/2, sy + stepH/2 + 1);
+    if (i < steps.length - 1) {
+      ctx.strokeStyle = '#c0392b';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(rx + colW/2, sy + stepH + 1);
+      ctx.lineTo(rx + colW/2, sy + stepH + stepGap - 1);
+      ctx.stroke();
+    }
+  }
+
+  // Labels at bottom
+  ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#555';
+  ctx.fillText('You never see intermediate steps', lx + colW/2, h - 8);
+  ctx.fillText('You see data at every stage', rx + colW/2, h - 8);
+})();
+
+// --- Eras chart: bar chart of lines-of-code ---
+(function() {
+  var d = initCanvas('eras-chart');
+  var ctx = d.ctx, w = d.w, h = d.h;
+  var data = [
+    { label: 'MapReduce (2004)', lines: 200, color: '#e74c3c' },
+    { label: 'Pig Latin (2008)', lines: 10, color: '#e67e22' },
+    { label: 'Spark SQL (2015)', lines: 3, color: '#27ae60' }
+  ];
+  var barH = 32, gap = 18, labelW = 130;
+  var maxVal = 200;
+  var plotW = w - labelW - 50;
+  var totalH = data.length * barH + (data.length - 1) * gap;
+  var startY = (h - totalH) / 2;
+
+  ctx.textBaseline = 'middle';
+  for (var i = 0; i < data.length; i++) {
+    var y = startY + i * (barH + gap);
+    var barW = (data[i].lines / maxVal) * plotW;
+
+    ctx.fillStyle = data[i].color;
+    ctx.beginPath();
+    ctx.roundRect(labelW, y, Math.max(barW, 20), barH, 4);
+    ctx.fill();
+
+    ctx.fillStyle = '#333';
+    ctx.font = '600 12px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(data[i].label, labelW - 10, y + barH/2);
+
+    ctx.fillStyle = '#fff';
+    ctx.font = '600 13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('~' + data[i].lines + ' lines', labelW + 8, y + barH/2);
+  }
+
+  ctx.fillStyle = '#888';
+  ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Lines of code for word-count task', w/2, h - 6);
+})();
+})();
+</script>
+</html>
