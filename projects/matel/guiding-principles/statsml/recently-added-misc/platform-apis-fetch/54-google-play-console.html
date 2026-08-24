@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Google Play Console — Platform APIs</title>
+<style>
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        line-height: 1.6;
+        color: #2c3e50;
+        max-width: 100%;
+        margin: 0;
+        padding: 30px 40px;
+        background: #fff;
+    }
+    h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+    .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+    .verified { display: inline-block; background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-bottom: 16px; }
+    h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
+    .status { display: inline-block; background: #fef9e7; border: 1px solid #f39c12; color: #b7950b; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-left: 12px; vertical-align: middle; }
+    table.obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+    table.obj-table td { vertical-align: top; padding: 12px; }
+    table.obj-table td:first-child { width: 45%; }
+    table.obj-table td:last-child { width: 55%; }
+    pre { background: #f4f4f4; padding: 14px; border-radius: 6px; overflow-x: auto; font-size: 0.82em; text-align: left; }
+    canvas { display: block; margin: 16px auto 0; width: 100%; }
+    .key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+    .section-label { font-weight: bold; color: #1a5276; margin-top: 16px; display: block; }
+    .section-label:first-child { margin-top: 0; }
+    ul { padding-left: 20px; }
+    li { margin-bottom: 6px; font-size: 0.93em; }
+    code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-size: 0.88em; }
+    .scope-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+    .scope-tag { background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 3px 8px; border-radius: 4px; font-size: 0.78em; font-family: monospace; }
+    p { font-size: 0.93em; }
+</style>
+</head>
+<body>
+
+<h1>Google Play Console <span class="status">BACKLOG</span></h1>
+<p class="subtitle">Play Developer API for purchases and subscriptions, Reporting API for vitals, Pub/Sub notifications, and bulk report exports to Cloud Storage.</p>
+<span class="verified">Last verified: August 2026</span>
+
+<h2>Overview</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+    <span class="section-label">What It Provides</span>
+    <p>Four separable surfaces, with different auth, different shapes, and different privacy behaviour:</p>
+    <ul>
+        <li><strong>Google Play Developer API</strong> (<code>androidpublisher</code>) — release management (edits, bundles, tracks), <code>purchases.subscriptionsv2.get</code>, <code>purchases.products.get</code>, <code>purchases.voidedpurchases.list</code>, <code>orders</code>, and <code>reviews.list</code> / <code>reviews.reply</code>.</li>
+        <li><strong>Real-time Developer Notifications (RTDN)</strong> — subscription and voided-purchase events delivered to a Cloud Pub/Sub topic you own, base64-encoded in the message data.</li>
+        <li><strong>Play Developer Reporting API</strong> — programmatic access to Android vitals and related metric sets: crash rate, ANR rate, excessive wakeups, stuck partial wake locks, slow rendering, error-report counts. Queried as metric sets with dimensions and time granularity, plus freshness metadata.</li>
+        <li><strong>Bulk report exports</strong> — Play Console can write CSV reports (installs, ratings, reviews, crashes, financial) to a Cloud Storage bucket assigned to your developer account. This is the path for historical backfill.</li>
+    </ul>
+
+    <span class="section-label">Authentication &amp; Scopes</span>
+    <ul>
+        <li><strong>Service account</strong> in a Google Cloud project, linked to the Play Console developer account, with per-app or account-level permissions granted inside Play Console. Linking in Cloud alone is not sufficient — the grant inside Play Console is a separate, easily forgotten step.</li>
+        <li>OAuth scope <code>https://www.googleapis.com/auth/androidpublisher</code> for the Developer API; the Reporting API is a distinct service with its own enablement.</li>
+        <li>RTDN requires the Pub/Sub topic to grant publish rights to Google's Play notification service account, and your subscriber needs its own credentials.</li>
+        <li>Bulk exports are read via Cloud Storage IAM on the assigned bucket, not via the Play APIs.</li>
+    </ul>
+    <div class="scope-list">
+        <span class="scope-tag">androidpublisher</span>
+        <span class="scope-tag">service account JSON</span>
+        <span class="scope-tag">Play Console grant</span>
+        <span class="scope-tag">pubsub.subscriber</span>
+        <span class="scope-tag">storage.objectViewer</span>
+    </div>
+
+    <span class="section-label">Granularity — the crux</span>
+    <ul>
+        <li><strong>Purchase-level and identified (your customers only):</strong> <code>subscriptionsv2.get</code> keyed by purchase token returns full subscription state — line items, expiry, acknowledgement state, <code>obfuscatedExternalAccountId</code> if you set it, <code>linkedPurchaseToken</code> on upgrade/resubscribe. RTDN is event-level. This is the identified path.</li>
+        <li><strong>Aggregate only, thresholded:</strong> everything statistical — installs, acquisition funnels, ratings, and vitals. Reported as counts and rates over dimensions (country, device model, Android version, app version), never per user.</li>
+    </ul>
+    <p>Vitals metrics arrive as rate-plus-denominator pairs (for example a crash rate together with a count of distinct users in the denominator), which is what makes them usable — a rate without its denominator cannot be pooled across dimensions correctly, and Play does give you the denominator. Use it.</p>
+
+    <div class="key-point"><strong>What people assume and do not get.</strong> No per-user install/uninstall timeline. No per-user session or engagement stream (that is your own analytics SDK's job). Play Install Referrer gives an attribution string to <em>your app on the device</em>, not a console report. Reviews API surfaces reviews with a reply channel but is not a complete historical corpus — use the bulk export for history. Vitals only cover devices with Play services reporting enabled and consented, so the vitals denominator is a subset of your install base, not all of it.</div>
+
+    <span class="section-label">Key Endpoints</span>
+    <ul>
+        <li><code>GET purchases.subscriptionsv2.get</code> — <code>packageName</code> + <code>token</code></li>
+        <li><code>POST purchases.subscriptions.acknowledge</code> — mandatory; unacknowledged purchases are refunded automatically</li>
+        <li><code>GET purchases.voidedpurchases.list</code> — refunds/chargebacks/revocations, paged, bounded lookback</li>
+        <li><code>GET reviews.list</code>, <code>POST reviews.reply</code></li>
+        <li>Reporting API: <code>vitals.errors.counts</code>, <code>vitals.crashrate</code>, <code>vitals.anrrate</code>, <code>vitals.excessivewakeuprate</code>, <code>vitals.stuckbackgroundwakelockrate</code>, <code>vitals.slowrenderingrate</code>, each with a <code>:query</code> method and a <code>:get</code> for freshness</li>
+        <li><code>anomalies.list</code> — Play's own flagged metric anomalies</li>
+    </ul>
+
+    <span class="section-label">Rate Limits</span>
+    <p>Standard Google API quota model: per-project per-minute request quotas visible and adjustable in the Cloud console, <code>429</code>/<code>RESOURCE_EXHAUSTED</code> on breach, exponential backoff expected. Do not hard-code a number — read it from your project's quota page, since defaults differ by API and change. Additional practical bounds:</p>
+    <ul>
+        <li><code>voidedpurchases.list</code> has a bounded lookback window; a gap in polling past that window is unrecoverable.</li>
+        <li>Reporting API responses carry <strong>freshness</strong> metadata (latest available day per granularity). Recent days are incomplete and will be restated — always read freshness rather than assuming "yesterday is final".</li>
+        <li>RTDN delivery is at-least-once and out-of-order; dedupe on message ID and re-fetch canonical state with <code>subscriptionsv2.get</code> rather than trusting event ordering.</li>
+    </ul>
+
+    <span class="section-label">Business Scenarios</span>
+    <ul>
+        <li>Subscription lifecycle: entitlement grant/revoke, churn, grace-period and hold-state recovery</li>
+        <li>Refund and chargeback reconciliation</li>
+        <li>Release health gating: block a staged rollout on ANR/crash rate regression</li>
+        <li>Review sentiment monitoring and response SLAs</li>
+        <li>Device/OS fragmentation analysis for support-matrix decisions</li>
+    </ul>
+
+    <span class="section-label">Key Restrictions &amp; Gotchas</span>
+    <ul>
+        <li><strong>Thresholding and aggregation floors.</strong> Console and API aggregate views withhold or coarsen small cells. Narrow slices — a rare device model in a small country on one app version — return nothing rather than a small number.</li>
+        <li><strong>Vitals denominators are consent-gated.</strong> Crash rate is computed over reporting-enabled devices. If reporting consent correlates with device tier or region (it does), the rate is not a population rate.</li>
+        <li><strong>Restatement is normal.</strong> The last several days of any vitals or install series move. Snapshot with an <code>as_of</code> date or your dashboards will disagree with themselves.</li>
+        <li><strong>The newest day is partial, and a naive comparison invents a decline.</strong> The freshness metadata exists precisely because the latest period has not finished filling in. Putting it on a chart beside closed days, or comparing "today" against last week without excluding the open period, produces a drop that reflects delivery lag rather than user behaviour — and it disappears on re-query the next day, which then reads as a recovery. Read <code>freshnessInfo</code> and truncate the series to the latest complete period.</li>
+        <li><strong>Purchase token churn.</strong> Upgrades, downgrades and resubscribes mint new tokens with <code>linkedPurchaseToken</code> chaining; treating tokens as stable user keys double-counts subscribers.</li>
+        <li><strong>Test purchases</strong> from license-test accounts appear in the purchase APIs and must be filtered out of revenue analysis.</li>
+        <li><strong>Uninstalls are not events.</strong> There is no uninstall webhook; you infer it from aggregate install/uninstall report deltas.</li>
+    </ul>
+
+    <div class="key-point"><strong>The statistical caveat that matters most.</strong> As on the App Store, aggregate reporting suppresses low-volume rows, which means missingness is a deterministic function of the count in the cell — missing <em>because</em> small. The consequence is directional, not merely a loss of precision: any unweighted average over surviving cells is an average over high-volume cells. For vitals this bites hardest exactly where you care, because a crash confined to one uncommon device model is both the most actionable finding and the most likely to be suppressed. Two habits help. First, always pool using the reported denominators (sum numerators, sum denominators) instead of averaging rates, so cell size enters the estimate correctly. Second, when cells are suppressed, reconcile against the unsuppressed total and treat the residual as a bounded unknown rather than zero. Assuming a suppressed cell is zero is the same error as assuming an unobserved crash did not happen.</div>
+</td>
+<td>
+    <p style="font-size:0.85em; color:#555; margin-bottom:8px;"><strong>purchases.subscriptionsv2.get</strong> — canonical subscription state</p>
+    <pre>{
+  "kind": "androidpublisher#subscriptionPurchaseV2",
+  "regionCode": "US",
+  "startTime": "2026-05-21T18:04:11.220Z",
+  "subscriptionState": "SUBSCRIPTION_STATE_ACTIVE",
+  "latestOrderId": "GPA.3311-4422-5533-66771",
+  "linkedPurchaseToken": "hjklmnop...",
+  "acknowledgementState":
+      "ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED",
+  "externalAccountIdentifiers": {
+    "obfuscatedExternalAccountId": "u_9f31c2ab",
+    "obfuscatedExternalProfileId": null
+  },
+  "lineItems": [
+    {
+      "productId": "pro_monthly",
+      "expiryTime": "2026-09-21T18:04:09.000Z",
+      "autoRenewingPlan": {
+        "autoRenewEnabled": true,
+        "recurringPrice": { "currencyCode": "USD",
+                            "units": "9", "nanos": 990000000 }
+      },
+      "offerDetails": { "basePlanId": "monthly",
+                        "offerId": "intro-50off" }
+    }
+  ]
+}
+// States: ACTIVE, CANCELED, IN_GRACE_PERIOD,
+//   ON_HOLD, PAUSED, EXPIRED, PENDING</pre>
+
+    <p style="font-size:0.85em; color:#555; margin-top:16px; margin-bottom:8px;"><strong>RTDN via Pub/Sub</strong> — decoded <code>message.data</code></p>
+    <pre>{
+  "version": "1.0",
+  "packageName": "com.example.app",
+  "eventTimeMillis": "1755902411000",
+  "subscriptionNotification": {
+    "version": "1.0",
+    "notificationType": 3,      // SUBSCRIPTION_CANCELED
+    "purchaseToken": "abcdefgh...",
+    "subscriptionId": "pro_monthly"
+  }
+}
+// At-least-once, unordered. Dedupe on messageId,
+// then re-read subscriptionsv2.get for truth.</pre>
+
+    <p style="font-size:0.85em; color:#555; margin-top:16px; margin-bottom:8px;"><strong>Reporting API</strong> — vitals query, with denominators and a suppressed cell</p>
+    <pre>{
+  "rows": [
+    { "startTime": { "year": 2026, "month": 8, "day": 21 },
+      "dimensions": [
+        { "dimension": "versionCode", "int64Value": "4120" },
+        { "dimension": "deviceModel",
+          "stringValue": "google/oriole" }],
+      "metrics": [
+        { "metric": "userPerceivedAnrRate",
+          "decimalValue": { "value": "0.0043" } },
+        { "metric": "distinctUsers",
+          "decimalValue": { "value": "41208" } }] },
+
+    { "startTime": { "year": 2026, "month": 8, "day": 21 },
+      "dimensions": [
+        { "dimension": "versionCode", "int64Value": "4120" },
+        { "dimension": "deviceModel",
+          "stringValue": "oem_x/rare_sku" }],
+      "metrics": [] }
+    //  ^ empty: cell below the aggregation floor.
+    //    NOT a zero ANR rate. The rare-device
+    //    regression you are hunting hides here.
+  ],
+  "freshnessInfo": {
+    "freshnesses": [
+      { "aggregationPeriod": "DAILY",
+        "latestEndTime": { "year": 2026, "month": 8, "day": 20 } },
+      { "aggregationPeriod": "HOURLY",
+        "latestEndTime": { "year": 2026, "month": 8,
+                           "day": 21, "hours": 14 } }]
+  }
+}</pre>
+
+    <p style="font-size:0.85em; color:#555; margin-top:20px; margin-bottom:8px;"><strong>ANR and crash rate across staged releases — and why pooling method matters</strong></p>
+    <canvas id="vitalsCanvas" height="380"></canvas>
+</td>
+</tr>
+</table>
+
+<script>
+(function() {
+    const canvas = document.getElementById('vitalsCanvas');
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+
+    // Illustrative release series.
+    const releases = ['4.09', '4.10', '4.11', '4.12', '4.13', '4.14', '4.15', '4.16'];
+    const anr   = [0.42, 0.39, 0.55, 0.81, 0.74, 0.48, 0.36, 0.31];
+    const crash = [0.61, 0.58, 0.63, 0.69, 0.66, 0.57, 0.49, 0.44];
+    // naive unweighted mean over surviving (unsuppressed) device cells
+    const naive = [0.31, 0.29, 0.40, 0.58, 0.53, 0.35, 0.27, 0.23];
+
+    function draw() {
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * dpr;
+        canvas.height = 380 * dpr;
+        canvas.style.height = '380px';
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(dpr, dpr);
+
+        const W = rect.width;
+        const H = 380;
+        const pad = { top: 62, right: 24, bottom: 78, left: 56 };
+        const plotW = W - pad.left - pad.right;
+        const plotH = H - pad.top - pad.bottom;
+
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Android vitals across releases', W / 2, 20);
+        ctx.font = 'italic 10px -apple-system, sans-serif';
+        ctx.fillStyle = '#888';
+        ctx.fillText('illustrative values — shape of the argument, not measured rates', W / 2, 36);
+
+        const yMax = 1.0;
+        const yv = v => pad.top + plotH - (v / yMax) * plotH;
+
+        // gridlines
+        ctx.font = '10px -apple-system, sans-serif';
+        for (let v = 0; v <= 1.0001; v += 0.2) {
+            const y = yv(v);
+            ctx.strokeStyle = '#eee';
+            ctx.beginPath();
+            ctx.moveTo(pad.left, y);
+            ctx.lineTo(pad.left + plotW, y);
+            ctx.stroke();
+            ctx.fillStyle = '#666';
+            ctx.textAlign = 'right';
+            ctx.fillText(v.toFixed(1) + '%', pad.left - 8, y + 4);
+        }
+
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(pad.left, pad.top);
+        ctx.lineTo(pad.left, pad.top + plotH);
+        ctx.lineTo(pad.left + plotW, pad.top + plotH);
+        ctx.stroke();
+
+        const stepX = plotW / (releases.length - 1);
+        const px = i => pad.left + stepX * i;
+
+        // bad-behaviour threshold band (illustrative Play guidance zone)
+        ctx.fillStyle = 'rgba(231,76,60,0.07)';
+        ctx.fillRect(pad.left, pad.top, plotW, yv(0.47) - pad.top);
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.beginPath();
+        ctx.moveTo(pad.left, yv(0.47));
+        ctx.lineTo(pad.left + plotW, yv(0.47));
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.font = 'italic 9px -apple-system, sans-serif';
+        ctx.fillStyle = '#e74c3c';
+        ctx.textAlign = 'left';
+        ctx.fillText('elevated-rate zone (illustrative)', pad.left + 6, yv(0.47) - 5);
+
+        function series(data, color, dash) {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.setLineDash(dash || []);
+            ctx.beginPath();
+            for (let i = 0; i < data.length; i++) {
+                const x = px(i), y = yv(data[i]);
+                if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+            ctx.setLineDash([]);
+            for (let i = 0; i < data.length; i++) {
+                ctx.beginPath();
+                ctx.arc(px(i), yv(data[i]), 3.5, 0, Math.PI * 2);
+                ctx.fillStyle = color;
+                ctx.fill();
+            }
+        }
+
+        series(crash, '#e67e22');
+        series(anr, '#e74c3c');
+        series(naive, '#8e44ad', [5, 4]);
+
+        // x labels
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillStyle = '#2c3e50';
+        ctx.textAlign = 'center';
+        for (let i = 0; i < releases.length; i++) {
+            ctx.fillText('v' + releases[i], px(i), pad.top + plotH + 16);
+        }
+
+        // annotate the regression
+        const ri = 3;
+        ctx.strokeStyle = '#999';
+        ctx.setLineDash([2, 3]);
+        ctx.beginPath();
+        ctx.moveTo(px(ri), yv(anr[ri]) - 8);
+        ctx.lineTo(px(ri), pad.top + 6);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.font = 'italic 9px -apple-system, sans-serif';
+        ctx.fillStyle = '#666';
+        ctx.textAlign = 'center';
+        ctx.fillText('rollout halted', px(ri), pad.top + 2);
+
+        // legend
+        const lg = [
+            ['ANR rate (denominator-pooled)', '#e74c3c', false],
+            ['Crash rate (denominator-pooled)', '#e67e22', false],
+            ['ANR: unweighted mean of visible cells', '#8e44ad', true]
+        ];
+        let lx = pad.left;
+        const ly = H - 24;
+        ctx.font = '10px -apple-system, sans-serif';
+        for (const [label, color, dashed] of lg) {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.setLineDash(dashed ? [4, 3] : []);
+            ctx.beginPath();
+            ctx.moveTo(lx, ly);
+            ctx.lineTo(lx + 18, ly);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = '#2c3e50';
+            ctx.textAlign = 'left';
+            ctx.fillText(label, lx + 24, ly + 3.5);
+            lx += 30 + ctx.measureText(label).width;
+        }
+
+        ctx.font = 'italic 10px -apple-system, sans-serif';
+        ctx.fillStyle = '#8e44ad';
+        ctx.textAlign = 'center';
+        ctx.fillText('the dashed series understates every release: suppressed small-device cells are the worst ones', W / 2, H - 6);
+    }
+
+    draw();
+    window.addEventListener('resize', draw);
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Box API — Platform APIs</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #2c3e50;
+            max-width: 100%;
+            margin: 0;
+            padding: 30px 40px;
+            background: #fff;
+        }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 12px; }
+        .verified { display: inline-block; background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-bottom: 16px; }
+        h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
+        .status { display: inline-block; background: #fef9e7; border: 1px solid #f39c12; color: #b7950b; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-left: 12px; vertical-align: middle; }
+        table.obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+        table.obj-table td { vertical-align: top; padding: 12px; }
+        table.obj-table td:first-child { width: 45%; }
+        table.obj-table td:last-child { width: 55%; }
+        .section-head { color: #1a5276; font-weight: bold; font-size: 0.95em; margin-top: 16px; margin-bottom: 6px; }
+        .section-head:first-child { margin-top: 0; }
+        p { font-size: 0.93em; }
+        pre { background: #f4f4f4; padding: 14px; border-radius: 6px; overflow-x: auto; font-size: 0.8em; text-align: left; white-space: pre; font-family: ui-monospace, Menlo, monospace; }
+        code { font-family: ui-monospace, Menlo, monospace; font-size: 0.92em; }
+        canvas { display: block; margin: 16px auto 0; width: 100%; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        ul { padding-left: 20px; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        .scope-list { margin: 8px 0 4px 0; line-height: 2.2; }
+        .scope-tag { background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 3px 8px; border-radius: 4px; font-size: 0.78em; font-family: ui-monospace, Menlo, monospace; white-space: nowrap; }
+        .scope-tag.elev { background: #fef5e7; border-color: #e67e22; color: #a04000; }
+    </style>
+</head>
+<body>
+    <h1>Box <span class="status">BACKLOG</span></h1>
+    <p class="subtitle">Files and folders with custom metadata templates, tasks, retention and legal hold, enterprise events, and watermarking</p>
+    <span class="verified">Last verified: August 2026</span>
+
+    <h2>Overview</h2>
+    <table class="obj-table">
+        <tr>
+            <td>
+                <p class="section-head">What It Provides</p>
+                <p>Box is a REST API over a content model that is deliberately governance-first. Beyond files, folders, and versions, it exposes structured <strong>metadata templates</strong> (typed, enterprise-scoped key/value schemas attached to content), <strong>tasks</strong> and task assignments for review workflows, <strong>retention policies</strong> and <strong>legal holds</strong> that override user deletion, an <strong>enterprise event stream</strong>, and <strong>watermarking</strong> on preview and download.</p>
+                <p>The distinguishing feature versus consumer file APIs is that governance objects are first-class and queryable — you can search on metadata field values, not only on names and content.</p>
+
+                <p class="section-head">Authentication &amp; Scopes</p>
+                <ul>
+                    <li><strong>OAuth 2.0</strong> (3-legged, user-delegated) for apps acting as a person.</li>
+                    <li><strong>JWT server authentication</strong> for service-account apps. The app gets its own Box account ("Service Account") whose root folder is empty — it sees nothing until content is explicitly shared with it or it impersonates a user.</li>
+                    <li><strong>Client Credentials Grant</strong> as the newer alternative to JWT for server-to-server.</li>
+                    <li><strong>App authorization is admin-gated.</strong> A Box admin must authorize the app in the Admin Console before its scopes take effect, and separately grant elevated scopes such as "Manage enterprise properties" (required for events, retention, and legal hold).</li>
+                    <li><strong><code>As-User</code> header</strong> lets an app with user-impersonation scope act on another user's behalf without a per-user OAuth flow.</li>
+                </ul>
+                <div class="scope-list">
+                    <span class="scope-tag">root_readonly</span>
+                    <span class="scope-tag">root_readwrite</span>
+                    <span class="scope-tag">manage_webhook</span>
+                    <span class="scope-tag elev">manage_managed_users</span>
+                    <span class="scope-tag elev">manage_enterprise_properties</span>
+                    <span class="scope-tag elev">manage_data_retention</span>
+                    <span class="scope-tag elev">manage_legal_hold</span>
+                </div>
+                <p style="font-size:0.82em; color:#888; font-style:italic;">Orange badges are elevated scopes: an admin must grant them in the Admin Console before events, retention, or legal hold return anything.</p>
+
+                <div class="key-point"><strong>The service account trap.</strong> A freshly created JWT app authenticates successfully and then returns an empty folder listing for folder id <code>0</code>. This is correct behaviour, not a bug — the service account is a distinct Box user. Either impersonate a real user with <code>As-User</code> or collaborate the service account onto the folders it needs.</div>
+
+                <p class="section-head">Granularity</p>
+                <p>Folder id <code>0</code> is always the root. Objects are addressed by opaque numeric-string ids. Field selection via <code>?fields=</code> is not cosmetic — many fields (<code>metadata</code>, <code>permissions</code>, <code>expires_at</code>, <code>tags</code>) are omitted from the default representation entirely and only appear when explicitly requested. Metadata is scoped: <code>global</code> (with the built-in <code>properties</code> free-form template) and <code>enterprise_&lt;id&gt;</code> for admin-defined templates.</p>
+
+                <p class="section-head">Key Endpoints</p>
+                <ul>
+                    <li><code>GET /2.0/folders/{id}/items</code>, <code>GET /2.0/files/{id}</code></li>
+                    <li><code>GET /2.0/files/{id}/versions</code>, <code>POST /2.0/files/{id}/versions/{vid}/current</code> (promote)</li>
+                    <li><code>GET|POST /2.0/files/{id}/metadata/{scope}/{template}</code>, <code>PUT</code> with JSON-Patch-style ops</li>
+                    <li><code>GET /2.0/metadata_templates/{scope}/{key}/schema</code></li>
+                    <li><code>POST /2.0/metadata_queries/execute_read</code> — query content by metadata field values</li>
+                    <li><code>GET|POST /2.0/tasks</code>, <code>/2.0/task_assignments</code></li>
+                    <li><code>GET /2.0/retention_policies</code>, <code>/2.0/file_version_retentions</code></li>
+                    <li><code>GET /2.0/legal_hold_policies</code>, <code>/2.0/legal_hold_policy_assignments</code></li>
+                    <li><code>GET /2.0/events</code> — user stream (<code>stream_position</code>) and <code>stream_type=admin_logs</code> / <code>admin_logs_streaming</code></li>
+                    <li><code>POST /2.0/web_links</code>, <code>PUT /2.0/files/{id}#request_watermark</code> style watermark endpoints under <code>/watermark</code></li>
+                </ul>
+
+                <p class="section-head">Rate Limits</p>
+                <p>Box applies per-API-key and per-user limits and returns HTTP <code>429</code> with a <code>Retry-After</code> header when exceeded; uploads have their own separate ceiling from general API calls. Rather than hard-coding a number, treat <code>Retry-After</code> as authoritative and retry with jitter. Two structural points matter more than the raw ceiling: (1) <code>metadata_queries/execute_read</code> is markedly more expensive than a folder listing and is the usual source of throttling in metadata-driven integrations, and (2) the admin event stream is rate-limited independently of content APIs, so a backfill of audit history will not starve your file operations.</p>
+
+                <p class="section-head">Business Scenarios</p>
+                <ul>
+                    <li>Regulated-industry document control: contracts, clinical records, loan files</li>
+                    <li>Metadata-driven routing — classify on upload, then query by field to feed downstream systems</li>
+                    <li>eDiscovery and legal hold orchestration</li>
+                    <li>Records-retention automation with defensible deletion evidence</li>
+                    <li>Watermarked external review of sensitive documents</li>
+                </ul>
+
+                <p class="section-head">Key Restrictions &amp; Gotchas</p>
+                <div class="key-point"><strong>Version history and the audit log outlive the visible file — by design.</strong> A file under a retention policy or legal hold cannot be permanently deleted by its owner; the user sees it vanish, the content is preserved and discoverable. Separately, admin event log retention is plan-tiered: the standard <code>admin_logs</code> window is bounded (roughly the last year for most enterprises), while <code>admin_logs_streaming</code> is a near-real-time tail with only a short lookback. Neither is "forever", and the two windows are not the same.</div>
+                <ul>
+                    <li><strong><code>admin_logs_streaming</code> has no <code>created_after</code>/<code>created_before</code> filtering</strong> and is explicitly at-least-once — you will see duplicate <code>event_id</code>s and must de-duplicate. Use <code>admin_logs</code> for historical windows and <code>admin_logs_streaming</code> for the live tail; do not try to make one do both.</li>
+                    <li><strong>Metadata queries require an <code>ancestor_folder_id</code></strong> and an indexed template field. You cannot query across the whole enterprise without scoping to a folder subtree.</li>
+                    <li><strong>Deleting a metadata template deletes its instances.</strong> There is no soft-delete for template schemas; the field values attached to thousands of files go with it.</li>
+                    <li><strong>Watermarking is a preview/download treatment, not encryption.</strong> Applying a watermark does not prevent a collaborator with download permission from obtaining the file; and the watermark is applied at render time, so the stored bytes are unmarked.</li>
+                    <li><strong>Tasks are not a workflow engine.</strong> The API gives you tasks, assignments, and completion state — no branching, no escalation, no SLA timers. Box Relay is a separate product and is not fully exposed as a public API.</li>
+                    <li><strong>No content-level diff between versions.</strong> <code>versions</code> gives you a chain with sizes and SHA-1 (<code>sha1</code> / <code>file_version.sha1</code>); comparing requires downloading both.</li>
+                    <li><strong>Trash is a real, addressable state.</strong> Items sit in <code>/2.0/folders/trash/items</code> for a configurable enterprise-wide period before purge; a "deleted" file is still enumerable there, and admins can extend or disable auto-purge.</li>
+                    <li><strong><code>etag</code> is the concurrency primitive.</strong> Updates without <code>If-Match</code> will happily clobber a concurrent edit.</li>
+                    <li>Shared links expose <code>download_count</code> and <code>preview_count</code> only when requested via <code>fields</code>, and only for links your token is permitted to inspect — these are not available for links created by other users.</li>
+                </ul>
+            </td>
+            <td>
+                <p class="section-head">GET /2.0/files/{file_id}?fields=name,metadata,version_number</p>
+                <pre>{
+  "type": "file",
+  "id": "12345678901",
+  "etag": "7",
+  "name": "MSA - Northwind 2026.pdf",
+  "sha1_masked": "EXAMPLE_SHA1_redacted",  // Note: masked for illustration; real value is a 40-char hex content hash
+  "size": 1048576,
+  "version_number": "7",
+  "created_at": "2026-02-11T08:22:10-08:00",
+  "modified_at": "2026-08-18T13:40:02-07:00",
+  "content_created_at": "2026-02-10T22:15:00-08:00",
+  "item_status": "active",
+  "parent": { "type": "folder", "id": "98765432", "name": "Contracts" },
+  "file_version": {
+    "type": "file_version",
+    "id": "556677889",
+    "sha1_masked": "EXAMPLE_SHA1_redacted"  // Note: masked for illustration
+  },
+  "metadata": {
+    "enterprise_54321": {
+      "contractRecord": {
+        "$type": "contractRecord-9f3c1b2a",
+        "$id": "EXAMPLE_UUID_redacted",  // Note: masked for illustration
+        "$parent": "file_12345678901",
+        "$template": "contractRecord",
+        "$scope": "enterprise_54321",
+        "$version": 3,
+        "counterparty": "Northwind Traders",
+        "contractValue": 480000,
+        "effectiveDate": "2026-03-01T00:00:00Z",
+        "renewalType": "auto",
+        "$canEdit": true
+      }
+    }
+  }
+}</pre>
+
+                <p class="section-head">GET /2.0/events?stream_type=admin_logs</p>
+                <pre>{
+  "chunk_size": 2,
+  "next_stream_position": "1152922976252290886",
+  "entries": [
+    {
+      "type": "event",
+      "event_id": "EXAMPLE_EVENT_UUID_redacted",  // Note: masked for illustration
+      "event_type": "DELETE",
+      "created_at": "2026-08-20T16:41:09-07:00",
+      "created_by": {
+        "type": "user",
+        "id": "22334455",
+        "name": "Priya Menon",
+        "login": "priya@company.com"
+      },
+      "source": {
+        "type": "file",
+        "id": "12345678901",
+        "name": "MSA - Northwind 2026.pdf",
+        "parent": { "type": "folder", "id": "98765432" },
+        "owned_by": { "type": "user", "id": "22334455" }
+      },
+      "ip_address": "203.0.113.44"
+    },
+    {
+      "type": "event",
+      "event_id": "EXAMPLE_EVENT_UUID_redacted",  // Note: masked for illustration
+      "event_type": "LEGAL_HOLD_ASSIGNMENT_CREATE",
+      "created_at": "2026-08-20T16:44:31-07:00",
+      "created_by": { "type": "user", "id": "1", "name": "Admin" },
+      "additional_details": {
+        "legal_hold_policy_id": "99001122",
+        "assigned_to_type": "folder",
+        "assigned_to_id": "98765432"
+      }
+    }
+  ]
+}</pre>
+
+                <p class="section-head">Metadata Richness by Object Type</p>
+                <canvas id="richnessChart" height="380"></canvas>
+            </td>
+        </tr>
+    </table>
+
+    <script>
+    (function() {
+        const canvas = document.getElementById('richnessChart');
+        const ctx = canvas.getContext('2d');
+        const H = 380;
+
+        // Qualitative comparison of what governance surfaces each object type exposes.
+        const objects = [
+            { name: 'file',              custom: 3, gov: 3, audit: 3, color: '#1a5276' },
+            { name: 'folder',            custom: 3, gov: 3, audit: 3, color: '#1a5276' },
+            { name: 'file_version',      custom: 0, gov: 3, audit: 2, color: '#8e44ad' },
+            { name: 'web_link',          custom: 2, gov: 1, audit: 2, color: '#27ae60' },
+            { name: 'task',              custom: 0, gov: 0, audit: 2, color: '#e67e22' },
+            { name: 'shared_link',       custom: 0, gov: 1, audit: 2, color: '#e67e22' },
+            { name: 'user / group',      custom: 1, gov: 0, audit: 3, color: '#e74c3c' }
+        ];
+
+        const series = [
+            { key: 'custom', label: 'Custom metadata templates', color: '#1a5276' },
+            { key: 'gov',    label: 'Retention / legal hold',    color: '#8e44ad' },
+            { key: 'audit',  label: 'Admin event coverage',      color: '#e67e22' }
+        ];
+
+        function resize() {
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = H * dpr;
+            canvas.style.height = H + 'px';
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            draw(rect.width, H);
+        }
+
+        function draw(W, H) {
+            ctx.clearRect(0, 0, W, H);
+            const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+
+            const padL = 60, padR = 24, padT = 48, padB = 92;
+            const plotW = Math.max(160, W - padL - padR);
+            const plotH = H - padT - padB;
+            const maxV = 3;
+
+            ctx.fillStyle = '#1a5276';
+            ctx.font = 'bold 13px ' + font;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillText('Which governance surfaces attach to which object type', 12, 10);
+            ctx.fillStyle = '#888';
+            ctx.font = 'italic 10px ' + font;
+            ctx.fillText('none / partial / full — qualitative, from the documented object schemas', 12, 28);
+
+            // y axis ticks
+            const yFor = v => padT + plotH - (v / maxV) * plotH;
+            const tickLabels = ['none', 'partial', 'most', 'full'];
+            ctx.font = '10px ' + font;
+            for (let v = 0; v <= maxV; v++) {
+                const gy = yFor(v);
+                ctx.strokeStyle = v === 0 ? '#999' : '#eee';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(padL, gy);
+                ctx.lineTo(padL + plotW, gy);
+                ctx.stroke();
+                ctx.fillStyle = '#888';
+                ctx.textAlign = 'right';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(tickLabels[v], padL - 8, gy);
+            }
+
+            const groupW = plotW / objects.length;
+            const barW = Math.min(18, (groupW * 0.72) / series.length);
+
+            objects.forEach((o, i) => {
+                const gx = padL + groupW * i + groupW / 2;
+                const totalW = barW * series.length + 4 * (series.length - 1);
+                let bx = gx - totalW / 2;
+
+                series.forEach(s => {
+                    const v = o[s.key];
+                    const top = yFor(v);
+                    const hh = padT + plotH - top;
+                    if (hh > 0) {
+                        ctx.fillStyle = s.color === '#1a5276' ? 'rgba(26,82,118,0.35)' : s.color + '55';
+                        ctx.fillRect(bx, top, barW, hh);
+                        ctx.strokeStyle = s.color;
+                        ctx.lineWidth = 1.5;
+                        ctx.strokeRect(bx, top, barW, hh);
+                    } else {
+                        // zero marker
+                        ctx.strokeStyle = '#ccc';
+                        ctx.lineWidth = 1.5;
+                        ctx.beginPath();
+                        ctx.moveTo(bx, padT + plotH);
+                        ctx.lineTo(bx + barW, padT + plotH);
+                        ctx.stroke();
+                    }
+                    bx += barW + 4;
+                });
+
+                ctx.save();
+                ctx.translate(gx, padT + plotH + 10);
+                ctx.rotate(-Math.PI / 9);
+                ctx.fillStyle = '#2c3e50';
+                ctx.font = '10.5px ' + font;
+                ctx.textAlign = 'right';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(o.name, 0, 0);
+                ctx.restore();
+            });
+
+            // legend
+            const ly = H - 30;
+            ctx.font = '11px ' + font;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            let lx = 12;
+            series.forEach(s => {
+                ctx.fillStyle = s.color;
+                ctx.fillRect(lx, ly - 5, 11, 11);
+                ctx.fillStyle = '#2c3e50';
+                ctx.fillText(s.label, lx + 16, ly);
+                lx += ctx.measureText(s.label).width + 42;
+            });
+
+            ctx.fillStyle = '#888';
+            ctx.font = 'italic 10px ' + font;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText('Note: file_version carries no custom metadata — templates attach to the file, so field history is not versioned with content.', 12, H - 6);
+        }
+
+        window.addEventListener('resize', resize);
+        resize();
+    })();
+    </script>
+</body>
+</html>

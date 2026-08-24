@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenStreetMap, Mapbox &amp; HERE — Platform APIs</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #2c3e50;
+            max-width: 100%;
+            margin: 0;
+            padding: 30px 40px;
+            background: #fff;
+        }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 12px; }
+        .verified { display: inline-block; background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-bottom: 16px; }
+        .status { display: inline-block; background: #fef9e7; border: 1px solid #f39c12; color: #b7950b; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-left: 12px; vertical-align: middle; }
+        h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
+        table.obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+        table.obj-table td { vertical-align: top; padding: 16px; border: 1px solid #ddd; }
+        table.obj-table td:first-child { width: 45%; }
+        table.obj-table td:last-child { width: 55%; }
+        .section-head { color: #1a5276; font-weight: bold; margin-top: 16px; margin-bottom: 6px; font-size: 0.95em; }
+        .section-head:first-child { margin-top: 0; }
+        pre {
+            background: #f8f9fa;
+            border-left: 3px solid #1a5276;
+            font-family: ui-monospace, Menlo, monospace;
+            font-size: 0.78em;
+            white-space: pre;
+            overflow-x: auto;
+            padding: 12px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        canvas { display: block; margin: 16px auto 0; width: 100%; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        ul { padding-left: 20px; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-size: 0.88em; }
+        .scope-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+        .scope-tag { background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 3px 8px; border-radius: 4px; font-size: 0.78em; font-family: monospace; }
+    </style>
+</head>
+<body>
+
+<h1>OpenStreetMap, Mapbox &amp; HERE <span class="status">BACKLOG</span></h1>
+<p class="subtitle">Three different bargains for geospatial data: own the whole database with its full edit history, or rent routing, isolines and live traffic per call.</p>
+<span class="verified">Last verified: August 2026</span>
+
+<h2>Overview</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+    <p class="section-head">What It Provides</p>
+    <p>OpenStreetMap is the outlier in the entire platform-API landscape covered by this backlog: you can have the <strong>whole dataset</strong>. Not a paginated window, not a sampled export, not a per-call answer — the complete planet as a file you host yourself.</p>
+    <ul>
+        <li><strong>Planet extracts</strong> — the full database as <code>.osm.pbf</code> (Protocol Buffer binary) or XML, republished on a regular cadence</li>
+        <li><strong>Regional extracts</strong> — continent / country / metro subsets from community mirrors such as Geofabrik, so you rarely need the whole planet</li>
+        <li><strong>Diffs</strong> — minutely / hourly / daily replication files to keep a local mirror current without re-downloading</li>
+        <li><strong>Data model</strong> — <code>node</code> (point), <code>way</code> (ordered node list: line or area), <code>relation</code> (ordered member list: routes, multipolygons), each carrying free-form <code>key=value</code> tags</li>
+    </ul>
+    <p>Mapbox and HERE sell the opposite bargain: high-quality <em>derived answers</em> over a proprietary road graph, delivered per request, with an SLA — and no way to mirror the graph.</p>
+
+    <p class="section-head">Authentication &amp; Scopes</p>
+    <ul>
+        <li><strong>OSM extracts</strong> — no authentication. Plain HTTP download. The editing API requires an account, but reading bulk data does not.</li>
+        <li><strong>Overpass API</strong> — no key; a shared community service with fair-use expectations rather than a contract</li>
+        <li><strong>Mapbox</strong> — access token per request, scoped to public / secret token types, billed per request or per tile load against tiered plans</li>
+        <li><strong>HERE</strong> — API key (or OAuth token for some products), tiered plans per service family</li>
+    </ul>
+    <div class="scope-list">
+        <span class="scope-tag">osm: none</span>
+        <span class="scope-tag">mapbox: access_token</span>
+        <span class="scope-tag">here: apiKey</span>
+    </div>
+
+    <p class="section-head">Granularity</p>
+    <ul>
+        <li>OSM is element-level: every node, way and relation is individually addressable by ID and by version</li>
+        <li>Tags are free-form, so schema is convention, not constraint — the same real-world concept may be tagged several ways</li>
+        <li>Mapbox and HERE expose request-level granularity: one origin/destination pair, one isoline budget, one matrix block. There is no element you can enumerate.</li>
+    </ul>
+
+    <p class="section-head">Key Capabilities — Overpass API</p>
+    <p>Overpass is a read-only query language (Overpass QL) over a continuously updated OSM mirror. It handles the queries a flat extract cannot: <em>select by tag, inside this bounding box or named area, with this geometry, recursing to member nodes</em>. Output as JSON or XML, optionally with element metadata (version, changeset, timestamp, user).</p>
+    <div class="key-point"><strong>Use Overpass for targeted pulls, not bulk.</strong> It is a shared community resource, and a query that would return a country's worth of features is the wrong tool — download the regional extract instead. Treat rate as an etiquette question: back off on failure, cache aggressively, and never build a production hot path that fans out to Overpass per user request.</div>
+
+    <p class="section-head">Key Capabilities — Full Edit History</p>
+    <p>This is the genuinely distinctive part for research. OSM records not just the current state but every edit that produced it:</p>
+    <ul>
+        <li><strong>Changesets</strong> — a bundle of edits by one user, with timestamp, comment, editor software and bounding box</li>
+        <li><strong>Per-element version history</strong> — every element has a monotonic <code>version</code>; you can retrieve any prior version of any node, way or relation</li>
+        <li><strong>Full-history dumps</strong> — the planet including all versions of all elements, so you can reconstruct the map <em>as it stood on any past date</em> offline</li>
+    </ul>
+    <div class="key-point"><strong>Almost no commercial geo API offers this.</strong> Mapbox and HERE give you the current graph; ask them what a junction looked like three years ago and there is no endpoint. OSM lets you rebuild the past state exactly, which makes it usable for provenance auditing, for measuring data-quality drift, and for building genuinely retrospective panels rather than as-of-today snapshots pretending to be history.</div>
+
+    <p class="section-head">Licence — a legal constraint, not a technical one</p>
+    <p>OSM data is licensed under the Open Database Licence (ODbL). In practical terms it carries attribution and share-alike obligations on <em>derived databases</em>: if you build a database substantially from OSM and distribute it, the share-alike term is in scope. Rendered images and analytical results are treated differently from databases, and the boundary between "derived database" and "produced work" is exactly where the interesting cases sit.</p>
+    <div class="key-point"><strong>This is a legal question, not an engineering one.</strong> Whether a particular derived dataset triggers share-alike depends on how it was built and what is being distributed — get counsel before productizing. Nothing here is legal advice. The engineering point that <em>is</em> safe to state: plan the licence question before the pipeline, because retrofitting attribution and share-alike onto a shipped data product is far more expensive than designing for it.</div>
+
+    <p class="section-head">Key Capabilities — Mapbox</p>
+    <ul>
+        <li><strong>Directions</strong> — routing with profiles (driving, driving-with-traffic, walking, cycling), turn-by-turn steps, geometry</li>
+        <li><strong>Map Matching</strong> — snap a noisy GPS trace onto the road network; the workhorse for telematics cleanup</li>
+        <li><strong>Isochrone</strong> — the reachable polygon within a time or distance budget from an origin</li>
+        <li><strong>Matrix</strong> — travel times / distances between many origins and destinations in one call</li>
+        <li><strong>Geocoding</strong> — forward and reverse, with permanent vs. temporary result-storage terms</li>
+        <li><strong>Tiles</strong> — vector and raster tiles, styles, plus the client SDKs</li>
+    </ul>
+
+    <p class="section-head">Key Capabilities — HERE</p>
+    <ul>
+        <li><strong>Routing</strong> — multi-modal, truck profiles with vehicle attributes, plus <strong>matrix routing</strong> and <strong>isoline routing</strong></li>
+        <li><strong>Geocoding &amp; Search</strong> — forward, reverse, autosuggest, discover</li>
+        <li><strong>Traffic Flow</strong> — observed speeds and jam factor on road segments as a first-class product</li>
+        <li><strong>Traffic Incidents</strong> — accidents, closures, roadworks as structured records with location and validity window</li>
+    </ul>
+    <p>Live traffic is where the commercial providers are genuinely irreplaceable. OSM has no traffic layer at all — it describes the road, not the state of the road.</p>
+
+    <p class="section-head">Rate Limits &amp; Pricing</p>
+    <p>Described qualitatively on purpose. Mapbox bills per API request and per tile load against a monthly free allowance and then tiered rates; some endpoints have distinct per-minute request ceilings and per-call size caps (number of coordinates, matrix dimensions). HERE prices per transaction against tiered plans, with different products metered separately. Both change their published figures; verify against current pricing pages rather than trusting a number copied into a doc.</p>
+    <div class="key-point"><strong>Access-policy changes create false time-series structure.</strong> A tier change, a per-call coordinate cap, or a matrix-size limit that tightens mid-study changes how much you sampled, not what the world did. If a geospatial panel shows a step change at a date, check the billing and quota history before writing an explanation about traffic or urban form.</div>
+
+    <p class="section-head">Business Scenarios</p>
+    <ul>
+        <li>Catchment / accessibility analysis from isochrones (retail siting, service coverage)</li>
+        <li>Fleet and delivery routing with truck attributes and live traffic</li>
+        <li>Map-matching telematics traces before any speed or harsh-braking metric is computed</li>
+        <li>POI-density and infrastructure studies from OSM extracts</li>
+        <li>Data-quality and provenance auditing using OSM full history</li>
+    </ul>
+
+    <p class="section-head">Key Restrictions &amp; Gotchas</p>
+    <div class="key-point">
+        <ul style="margin-bottom:0;">
+            <li>OSM has no SLA, no uptime guarantee, and no traffic layer — it is a volunteer database, not a vendor</li>
+            <li>OSM tag schemas are conventions; expect synonyms, regional dialects and abandoned tagging schemes in the same extract</li>
+            <li>Overpass is not a bulk-extraction tool and not a production dependency</li>
+            <li>Geocoding results from commercial providers usually carry storage restrictions — check whether you are allowed to persist the coordinates you got back</li>
+            <li>Mapbox and HERE road graphs cannot be mirrored; you rent the answer, and the answer can change silently between versions</li>
+            <li>Matrix and isoline endpoints have per-call size caps that force you to tile large problems, which changes cost and latency structure</li>
+        </ul>
+    </div>
+
+    <p class="section-head">Methodological caution: OSM counts measure mappers</p>
+    <div class="key-point"><strong>A count of OSM features is partly a measure of mapper activity, not of the world.</strong> Coverage and tag completeness are hugely uneven by geography and by tag: contributor density correlates with urbanity, with local community strength, and with one-off mapping campaigns (humanitarian activations, corporate import projects, university courses). A city with twice the mapped cafés may simply have twice the mappers.</div>
+    <p>Consequences for any analysis built on OSM feature counts:</p>
+    <ul>
+        <li>Never read raw feature counts as ground-truth prevalence. They are prevalence multiplied by an unknown, spatially autocorrelated observation probability.</li>
+        <li>Cross-region comparisons need a completeness proxy or an internal ratio that shares the same observation bias in numerator and denominator.</li>
+        <li>Time series of feature counts contain campaign spikes. An import that lands ten thousand buildings in one changeset is a data event, not an urban event — and the full history is exactly what lets you find it and exclude it.</li>
+        <li>Tag completeness varies independently of geometry completeness: a building may exist with no <code>building:levels</code>, a road with no <code>maxspeed</code>. Missing tags are not zeros.</li>
+    </ul>
+</td>
+<td>
+    <p class="section-head">Overpass QL — cafés in a bounding box, with element metadata</p>
+    <pre>[out:json][timeout:60];
+// bbox order: south, west, north, east
+node["amenity"="cafe"](52.5100,13.3800,52.5300,13.4200);
+out meta;
+
+// A second form: everything tagged as a hospital
+// inside a named administrative area, geometry
+// resolved down to member nodes.
+//
+// area["name"="Berlin"]["admin_level"="4"]->.a;
+// (
+//   node["amenity"="hospital"](area.a);
+//   way ["amenity"="hospital"](area.a);
+//   rel ["amenity"="hospital"](area.a);
+// );
+// out meta geom;</pre>
+
+    <p class="section-head">Overpass JSON result — abridged</p>
+    <pre>{
+  "version": 0.6,
+  "generator": "Overpass API",
+  "osm3s": {
+    "timestamp_osm_base": "2026-08-20T09:14:02Z",
+    "copyright": "ODbL 1.0 / OpenStreetMap contributors"
+  },
+  "elements": [
+    {
+      "type": "node",
+      "id": 2419312345,
+      "lat": 52.5211934,
+      "lon": 13.4013277,
+      "timestamp": "2025-11-04T18:22:41Z",
+      "version": 7,
+      "changeset": 158204411,
+      "user": "some_mapper",
+      "uid": 1042287,
+      "tags": {
+        "amenity": "cafe",
+        "name": "Kaffeehaus",
+        "cuisine": "coffee_shop",
+        "outdoor_seating": "yes",
+        "wheelchair": "limited"
+      }
+    }
+  ]
+}
+
+// version=7 means this node has SIX prior states.
+// Each is individually retrievable:
+//   /api/0.6/node/2419312345/history
+//   /api/0.6/node/2419312345/3
+// And the changeset that made this edit:
+//   /api/0.6/changeset/158204411
+//
+// That is the capability Mapbox and HERE do not
+// have an endpoint for. Note also what is NOT
+// here: no traffic, no travel time, no SLA.</pre>
+
+    <p class="section-head">Capability matrix — nobody has all of it</p>
+    <canvas id="capMatrix" height="380"></canvas>
+</td>
+</tr>
+</table>
+
+<script>
+(function() {
+    const canvas = document.getElementById('capMatrix');
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+
+    // 0 = absent (red), 1 = partial / conditional (orange), 2 = available (green)
+    const rows = [
+        { label: 'Bulk dataset download',      vals: [2, 0, 0] },
+        { label: 'Full edit history',          vals: [2, 0, 0] },
+        { label: 'Ad-hoc attribute query',     vals: [2, 1, 1] },
+        { label: 'Redistributable derived data', vals: [1, 0, 0] },
+        { label: 'Routing / directions',       vals: [1, 2, 2] },
+        { label: 'Isochrone / isoline',        vals: [1, 2, 2] },
+        { label: 'Travel-time matrix',         vals: [1, 2, 2] },
+        { label: 'Live traffic flow',          vals: [0, 1, 2] },
+        { label: 'Incident feed',              vals: [0, 0, 2] },
+        { label: 'SLA / support contract',     vals: [0, 2, 2] }
+    ];
+    const cols = ['OpenStreetMap', 'Mapbox', 'HERE'];
+
+    const cellColor = ['#e74c3c', '#e67e22', '#27ae60'];
+    const cellMark  = ['no', 'partial', 'yes'];
+
+    function draw() {
+        const rect = canvas.getBoundingClientRect();
+        const H = 380;
+        canvas.width = rect.width * dpr;
+        canvas.height = H * dpr;
+        canvas.style.height = H + 'px';
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        const W = rect.width;
+        ctx.clearRect(0, 0, W, H);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, W, H);
+
+        const pad = { top: 52, right: 20, bottom: 46, left: Math.min(200, W * 0.36) };
+        const gridW = W - pad.left - pad.right;
+        const gridH = H - pad.top - pad.bottom;
+        const colW = gridW / cols.length;
+        const rowH = gridH / rows.length;
+
+        // Title
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('OSM owns the substrate and the past; the vendors own traffic and the SLA', 4, 16);
+
+        // Column headers
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#555';
+        cols.forEach(function(c, j) {
+            ctx.fillText(c, pad.left + colW * (j + 0.5), pad.top - 14);
+        });
+
+        ctx.textBaseline = 'middle';
+        rows.forEach(function(r, i) {
+            const cy = pad.top + rowH * (i + 0.5);
+
+            // Zebra band
+            if (i % 2 === 1) {
+                ctx.fillStyle = 'rgba(26,82,118,0.04)';
+                ctx.fillRect(pad.left, pad.top + rowH * i, gridW, rowH);
+            }
+
+            // Row label
+            ctx.font = '10.5px -apple-system, sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillStyle = (i < 4) ? '#1a5276' : '#2c3e50';
+            ctx.fillText(r.label, pad.left - 10, cy);
+
+            r.vals.forEach(function(v, j) {
+                const cx = pad.left + colW * (j + 0.5);
+                const bw = Math.min(colW - 18, 92);
+                const bh = Math.min(rowH - 6, 20);
+
+                ctx.beginPath();
+                ctx.rect(cx - bw / 2, cy - bh / 2, bw, bh);
+                ctx.fillStyle = cellColor[v];
+                ctx.globalAlpha = 0.85;
+                ctx.fill();
+                ctx.globalAlpha = 1;
+                ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 9.5px -apple-system, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(cellMark[v], cx, cy + 0.5);
+            });
+        });
+        ctx.textBaseline = 'alphabetic';
+
+        // Grid border + column separators
+        ctx.strokeStyle = '#ddd';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(pad.left, pad.top, gridW, gridH);
+        for (let j = 1; j < cols.length; j++) {
+            ctx.beginPath();
+            ctx.moveTo(pad.left + colW * j, pad.top);
+            ctx.lineTo(pad.left + colW * j, pad.top + gridH);
+            ctx.stroke();
+        }
+
+        // Divider between the "own the data" rows and the "rent the answer" rows
+        ctx.strokeStyle = '#8e44ad';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 4]);
+        const dy = pad.top + rowH * 4;
+        ctx.beginPath();
+        ctx.moveTo(pad.left, dy);
+        ctx.lineTo(pad.left + gridW, dy);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = '#8e44ad';
+        ctx.font = 'italic 9.5px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('above: own the database', pad.left + 4, dy - 4);
+        ctx.fillText('below: rent the answer', pad.left + 4, dy + 12);
+
+        // Legend
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        const legend = [
+            { t: 'available', c: cellColor[2] },
+            { t: 'partial / conditional', c: cellColor[1] },
+            { t: 'absent', c: cellColor[0] }
+        ];
+        let lx = pad.left;
+        const ly = H - 22;
+        legend.forEach(function(it) {
+            ctx.fillStyle = it.c;
+            ctx.fillRect(lx, ly - 8, 11, 11);
+            ctx.fillStyle = '#666';
+            ctx.fillText(it.t, lx + 15, ly);
+            lx += ctx.measureText(it.t).width + 40;
+        });
+
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'italic 10px -apple-system, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText('no column is all green — a geo stack is always a blend', W - 4, H - 4);
+    }
+
+    draw();
+    window.addEventListener('resize', draw);
+})();
+</script>
+
+</body>
+</html>

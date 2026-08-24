@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tracking Data: Payment & Transaction Tracking</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2c3e50; max-width: 100%; margin: 0; padding: 30px 40px; background: #fff; }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+        .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
+        .obj-table { width: 100%; border-collapse: collapse; }
+        .obj-table td { vertical-align: top; padding: 16px; border: 1px solid #2980b9; }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; text-align: center; }
+        ul { padding-left: 20px; margin: 8px 0; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        .obj-table td:last-child .payload,
+        .obj-table td:last-child .payload-note { text-align: left; }
+        .payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 12px 0; }
+        .payload-note { font-size: 0.82em; color: #666; margin: 12px 0 -6px 0; font-style: italic; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        .key-point strong:first-child { color: #1a5276; }
+        .lede { font-size: 0.95em; margin: 0 0 10px 0; }
+        .lbl { display: inline-block; font-size: 0.7em; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; margin: 10px 0 2px 0; }
+        .lbl-purpose { background: #eaf2fb; color: #1a5276; }
+        .lbl-effect { background: #fdf0e6; color: #a8501c; }
+        li b { color: #1a5276; font-weight: 600; }
+        canvas { display: block; margin: 0 auto; }
+    </style>
+</head>
+<body>
+    <h1>Tracking Data: Payment & Transaction Tracking</h1>
+    <p class="subtitle">A card payment is authorised by passing a record between several parties. Each keeps a copy, and each copy carries a category code and a descriptor string built for a statement line.</p>
+
+    <table class="obj-table">
+        <tr>
+            <td>
+                <div class="obj-title">What is it?</div>
+                <p class="lede">A record passed between parties so each can decide whether to approve.</p>
+                <ul>
+                    <li><b>Route:</b> terminal to acquirer, across the card network, to the issuing bank, and back</li>
+                    <li><b>Each hop retains it</b> — every one needed the record to decide</li>
+                    <li><b>Settlement is separate,</b> and later, so a transaction can appear, change or disappear after the fact</li>
+                    <li><b>Built for authorisation, not analysis</b> — a numeric category code plus a short descriptor string for a statement line</li>
+                </ul>
+                <div class="key-point"><strong>Merchant name is a guess:</strong> the field is not supplied, so the name in a spending app is usually parsed out of the descriptor string.</div>
+            </td>
+            <td><canvas id="c1" width="720" height="320"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">What does it collect?</div>
+                <ul>
+                    <li><b>Amount and currency,</b> in minor units</li>
+                    <li><b>Authorisation timestamp,</b> and a later settlement timestamp</li>
+                    <li><b>Merchant category code</b> — a coarse ISO classification</li>
+                    <li><b>Descriptor string,</b> formatted for a statement line</li>
+                    <li><b>Card entry mode</b> and the last four digits</li>
+                    <li><b>Acquirer reference</b> for the transaction</li>
+                    <li><b>Derived:</b> merchant name and id, parsed from the descriptor</li>
+                    <li><b>Derived:</b> a category label and a recurring-payment flag</li>
+                </ul>
+                <div class="key-point"><strong>Merchant detail sits below the split:</strong> the descriptor was built for a statement line — facilitator prefixes, truncation, inconsistent spacing. Any per-merchant figure depends on a parsing step with its own error rate, visible here as <code>parse_conf</code>.</div>
+                <div class="key-point"><strong>Coarse and inconsistent:</strong> two records for the same shop can land under different merchant IDs, and one MCC covers a wide range of businesses.</div>
+            </td>
+            <td><canvas id="c2" width="720" height="320"></canvas>
+<p class="payload-note">Sample payload — illustrative structure, not real captured data.</p>
+<pre class="payload">{
+  // ── standard fields carried on a card transaction ──
+  "amount":       { "value": 4137, "currency": "USD" },  // minor units
+  "auth_ts":      "2026-08-22T19:02:11Z",
+  "mcc":          "5812",          // ISO 18245 category: eating places
+  "descriptor":   "SQ *THE CORNER  AUSTIN     TX",
+  "card_last4":   "…4417",
+  "entry_mode":   "contactless",
+  "acquirer_ref": "7710…",
+  "settled_ts":   null,            // authorised, not yet settled
+
+  // ── inferred / plausible, added downstream ──
+  "merchant_name":  "The Corner",  // parsed out of descriptor
+  "merchant_id":    "m_88213",     // assigned by the normalisation step
+  "category_label": "Restaurants",
+  "is_recurring":   false,
+  "parse_conf":     0.71
+}</pre>
+</td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">Why is it collected?</div>
+                <div class="lbl lbl-purpose">Stated purpose</div>
+                <ul>
+                    <li><b>Authorise, clear and settle</b> — each step needs the record</li>
+                    <li><b>Fraud detection</b> on the same data, and genuinely effective: a card used in two distant places within minutes is a pattern only the full history reveals</li>
+                </ul>
+                <div class="lbl lbl-effect">Additional consequence</div>
+                <ul>
+                    <li>The same history supports <b>aggregate spending products and audience segments</b></li>
+                    <li>The <b>category code</b> does most of that work — built to route a charge, it doubles as a coarse proxy for the kind of place a person went</li>
+                </ul>
+                <div class="key-point"><strong>"Aggregated" and "anonymous" are different claims:</strong> aggregation only protects while a cell holds enough people, and a merchant-plus-day cell in a small town may hold one. Stripping the name also leaves the pattern, and a spending pattern over time is close to unique — a published result in the re-identification literature, not an inference from this page.</div>
+            </td>
+            <td><canvas id="c3" width="720" height="320"></canvas></td>
+        </tr>
+    </table>
+
+    <script>
+    const dpr = window.devicePixelRatio || 1;
+    // Validated categorical palette (CVD-checked, see REVIEW-NOTES.md).
+    // Red is deliberately NOT in the rotation - it stays reserved for
+    // genuine error / alarm states so it keeps its meaning.
+    const P = {
+      blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+      aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+      ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+    };
+    const SERIES = [P.blue, P.green, P.violet, P.orange, P.aqua, P.magenta, P.yellow];
+    // Translucent fill derived from a palette token, so a shape's fill always
+    // matches its own series hue instead of a hardcoded blue.
+    function tint(hex, a) {
+      const n = parseInt(hex.slice(1), 16);
+      return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+    }
+    // Rounded-rect path helper (works without native ctx.roundRect).
+    function rr(ctx, x, y, w, h, r) {
+      r = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    function setupCanvas(id) {
+        const c = document.getElementById(id);
+        const w = c.getAttribute('width') ? +c.getAttribute('width') : 720;
+        const h = c.getAttribute('height') ? +c.getAttribute('height') : 240;
+        c.width = w * dpr; c.height = h * dpr;
+        c.style.width = w + 'px'; c.style.height = h + 'px';
+        const ctx = c.getContext('2d');
+        ctx.scale(dpr, dpr);
+        return { ctx, w, h };
+    }
+
+    // C1: Flow diagram — the authorisation record passed along a chain of hops.
+    // Hue walks SERIES across the hops in order, so each party on the path is
+    // identifiable and the sequence is readable off the colours.
+    (function() {
+        const { ctx, w, h } = setupCanvas('c1');
+        const cx = w / 2, cy = 128;
+
+        ctx.fillStyle = P.ink;
+        ctx.font = 'bold 15px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('One authorisation, passed hop by hop', w / 2, 20);
+
+        // Parties that must see the record to authorise it, in path order
+        const recipients = [
+            { label: '1 Terminal', x: 360, y: 48, color: P.blue },
+            { label: '2 Acquirer', x: 132, y: 76, color: P.green },
+            { label: '3 Card network', x: 588, y: 76, color: P.violet },
+            { label: '4 Issuing bank', x: 132, y: 190, color: P.orange },
+            { label: '5 Merchant', x: 588, y: 190, color: P.aqua }
+        ];
+
+        recipients.forEach(r => {
+            // Draw line from center to recipient, in that hop's hue
+            ctx.strokeStyle = r.color;
+            ctx.lineWidth = 2;
+            ctx.setLineDash([4, 3]);
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(r.x, r.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Arrow head
+            const angle = Math.atan2(r.y - cy, r.x - cx);
+            const ax = r.x - 20 * Math.cos(angle);
+            const ay = r.y - 20 * Math.sin(angle);
+            ctx.beginPath();
+            ctx.moveTo(r.x - 10 * Math.cos(angle), r.y - 10 * Math.sin(angle));
+            ctx.lineTo(ax - 8 * Math.cos(angle - 0.5), ay - 8 * Math.sin(angle - 0.5));
+            ctx.lineTo(ax - 8 * Math.cos(angle + 0.5), ay - 8 * Math.sin(angle + 0.5));
+            ctx.closePath();
+            ctx.fillStyle = r.color;
+            ctx.fill();
+
+            // Label
+            ctx.fillStyle = r.color;
+            ctx.font = 'bold 14px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(r.label, r.x, r.y + 5);
+        });
+
+        // The record itself, in the middle — neutral ink, because it is the one
+        // object all five hops share rather than a sixth party.
+        ctx.fillStyle = P.ink;
+        rr(ctx, cx - 40, cy - 25, 80, 50, 8);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('AUTH', cx, cy - 5);
+        ctx.fillText('REQUEST', cx, cy + 10);
+
+        // Footer band: settlement is a later step, so it gets its own hue
+        // rather than joining the authorisation chain.
+        const fy = 232, fh = 66;
+        ctx.fillStyle = tint(P.magenta, 0.10);
+        ctx.fillRect(20, fy, w - 40, fh);
+        ctx.fillStyle = P.magenta;
+        ctx.fillRect(20, fy, 4, fh);
+        ctx.textAlign = 'left';
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillStyle = P.text;
+        ctx.fillText('Each of the five hops must see the record to approve or decline it,', 38, fy + 20);
+        ctx.fillText('so each can retain a copy of the same authorisation.', 38, fy + 38);
+        ctx.fillStyle = P.magenta;
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.fillText('Settlement (magenta) is a later, separate step — which is why a row can change after it appears.', 38, fy + 57);
+    })();
+
+    // C2: Calendar heatmap showing spending density over a month.
+    // The cell ramp stays a single hue — it encodes a magnitude, and a
+    // categorical palette would destroy that reading. The other hues on the
+    // canvas mark things that are genuinely different in kind from a total:
+    // which rows are weekend rows, what the record carries, what it omits.
+    (function() {
+        const { ctx, w, h } = setupCanvas('c2');
+        const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        const weekend = [false, false, false, false, false, true, true];
+        const weeks = 5;
+        const cellW = 70, cellH = 26;
+        const startX = 80, startY = 40;
+
+        ctx.fillStyle = P.ink;
+        ctx.font = 'bold 15px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Recurring structure in a card stream — illustrative, not recorded data', w / 2, 20);
+
+        // Day labels — weekend rows in violet, weekdays in blue
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.textAlign = 'right';
+        days.forEach((d, i) => {
+            ctx.fillStyle = weekend[i] ? P.violet : P.blue;
+            ctx.fillText(d, startX - 10, startY + i * cellH + 17);
+        });
+
+        // Spending pattern data (higher on paydays and weekends)
+        const data = [
+            [0.2, 0.3, 0.1, 0.4, 0.9, 0.1, 0.2],  // Week 1
+            [0.8, 0.5, 0.3, 0.2, 0.6, 0.7, 0.3],  // Week 2 (payday Fri week 1)
+            [0.3, 0.2, 0.1, 0.2, 0.3, 0.8, 0.9],  // Week 3 (weekend splurge)
+            [0.2, 0.1, 0.1, 0.1, 0.9, 0.4, 0.3],  // Week 4 (payday)
+            [0.7, 0.6, 0.4, 0.2, 0.3, 0.8, 0.7]   // Week 5
+        ];
+
+        for (let week = 0; week < weeks; week++) {
+            for (let day = 0; day < 7; day++) {
+                const val = data[week][day];
+                ctx.fillStyle = tint(P.blue, val * 0.75);
+                ctx.fillRect(startX + week * cellW, startY + day * cellH, cellW - 4, cellH - 4);
+                // weekend rows outlined in violet so the grouping reads down
+                // the column as well as in the axis labels
+                ctx.strokeStyle = weekend[day] ? tint(P.violet, 0.55) : P.grid;
+                ctx.lineWidth = 1;
+                ctx.strokeRect(startX + week * cellW, startY + day * cellH, cellW - 4, cellH - 4);
+            }
+        }
+
+        // Ramp legend — one hue, five steps, because this is a magnitude
+        const lx = startX + weeks * cellW + 22;
+        ctx.textAlign = 'left';
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.fillStyle = P.blue;
+        ctx.fillText('card total', lx, startY + 10);
+        [0.15, 0.35, 0.55, 0.75].forEach(function(v, k) {
+            ctx.fillStyle = tint(P.blue, v);
+            ctx.fillRect(lx + k * 18, startY + 18, 16, 14);
+            ctx.strokeStyle = P.grid;
+            ctx.strokeRect(lx + k * 18, startY + 18, 16, 14);
+        });
+        ctx.fillStyle = P.mute;
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillText('low → high', lx, startY + 46);
+        ctx.fillStyle = P.violet;
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.fillText('violet rows —', lx, startY + 72);
+        ctx.fillText('Sat and Sun', lx, startY + 87);
+
+        // Footer strip: what the stream carries vs what it never sees.
+        const fy = 232, fh = 66;
+        ctx.fillStyle = P.grid;
+        ctx.fillRect(20, fy, w - 40, fh);
+        ctx.textAlign = 'left';
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillStyle = P.green;
+        ctx.fillRect(38, fy + 12, 9, 9);
+        ctx.fillStyle = P.text;
+        ctx.fillText('A regular cycle is structure the record carries — the cause of it is not.', 55, fy + 21);
+        ctx.fillStyle = P.orange;
+        ctx.fillRect(38, fy + 34, 9, 9);
+        ctx.fillStyle = P.text;
+        ctx.fillText('A pale cell means little card activity, not little spending —', 55, fy + 43);
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.fillText('cash leaves no row at all, so a category total is a lower bound of unknown tightness.', 55, fy + 60);
+    })();
+
+    // C3: how many people are left in one "aggregated" cell
+    (function() {
+        const { ctx, w, h } = setupCanvas('c3');
+
+        // Aggregation is a protection only while a cell still holds enough people.
+        // Each bar adds one breakdown dimension to the same "aggregated" report.
+        // Illustrative counts — the collapse is the point, not the values.
+        const CELLS = [
+            { a: 'City',     b: 'month',      n: 90000, txt: '~90,000' },
+            { a: 'District', b: 'month',      n: 7000,  txt: '~7,000' },
+            { a: 'District', b: 'day',        n: 240,   txt: '~240' },
+            { a: 'Merchant', b: 'day',        n: 30,    txt: '~30' },
+            { a: 'Merchant', b: 'day, small town', n: 1, txt: '1' }
+        ];
+        const LO = 0.7, HI = 200000;
+        const padL = 214, padR = 96, base = 240;
+        const plotW = w - padL - padR;
+        const xOf = n => padL + (Math.log10(n) - Math.log10(LO)) /
+                                (Math.log10(HI) - Math.log10(LO)) * plotW;
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.ink;
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillText('People left in one cell of an "aggregated" report', w / 2, 24);
+        ctx.fillStyle = P.mute;
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillText('each row adds one breakdown to the same released figures', w / 2, 42);
+
+        const TICKS = [[1, '1'], [100, '100'], [10000, '10k'], [200000, '200k']];
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        TICKS.forEach(t => {
+            const x = xOf(t[0]);
+            ctx.beginPath(); ctx.moveTo(x, 56); ctx.lineTo(x, base); ctx.stroke();
+            ctx.fillStyle = P.mute;
+            ctx.font = '11px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(t[1], x, base + 16);
+        });
+        ctx.strokeStyle = P.grid;
+        ctx.beginPath(); ctx.moveTo(padL, base); ctx.lineTo(w - padR + 40, base); ctx.stroke();
+
+        const barH = 22, gap = 12, top = 66;
+        CELLS.forEach((c, i) => {
+            const y = top + i * (barH + gap);
+            const alone = c.n <= 1;
+            const hue = alone ? P.orange : P.blue;
+            const x1 = Math.max(xOf(c.n), padL + 3);
+            ctx.fillStyle = tint(hue, alone ? 0.45 : 0.30);
+            ctx.fillRect(padL, y, x1 - padL, barH);
+            ctx.strokeStyle = hue; ctx.lineWidth = 1.2;
+            ctx.strokeRect(padL, y, x1 - padL, barH);
+
+            ctx.textAlign = 'right';
+            ctx.fillStyle = P.text;
+            ctx.font = '13px -apple-system, sans-serif';
+            ctx.fillText(c.a + '  ×  ' + c.b, padL - 10, y + barH / 2 + 4);
+
+            ctx.textAlign = 'left';
+            ctx.fillStyle = hue;
+            ctx.font = 'bold 13px -apple-system, sans-serif';
+            ctx.fillText(c.txt, x1 + 8, y + barH / 2 + 4);
+        });
+
+        ctx.textAlign = 'left';
+        ctx.fillStyle = P.orange;
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.fillText('a cell of one is a single person\'s spending, still labelled aggregated', padL, base + 38);
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.mute;
+        ctx.font = 'italic 11px -apple-system, sans-serif';
+        ctx.fillText('Illustrative counts — log scale so the collapse fits. Not measured from any scheme.', w / 2, base + 60);
+    })();
+
+    </script>
+</body>
+</html>

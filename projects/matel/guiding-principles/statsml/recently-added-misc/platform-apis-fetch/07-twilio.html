@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Twilio — Platform APIs</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #2c3e50;
+            max-width: 100%;
+            margin: 0;
+            padding: 30px 40px;
+            background: #fff;
+        }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+        .verified { display: inline-block; background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-bottom: 16px; }
+        h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
+        .status { display: inline-block; background: #fef9e7; border: 1px solid #f39c12; color: #b7950b; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-left: 12px; vertical-align: middle; }
+        table.obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+        table.obj-table td { vertical-align: top; padding: 12px; }
+        table.obj-table td:first-child { width: 45%; }
+        table.obj-table td:last-child { width: 55%; }
+        pre { background: #f4f4f4; padding: 14px; border-radius: 6px; overflow-x: auto; font-size: 0.82em; text-align: left; }
+        canvas { display: block; margin: 16px auto 0; width: 100%; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        ul { padding-left: 20px; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        .section-title { font-weight: bold; color: #1a5276; font-size: 1.05em; margin-bottom: 8px; margin-top: 16px; }
+        .scope-list { margin: 8px 0 12px; }
+        .scope-tag { display: inline-block; background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 1px 8px; border-radius: 10px; font-size: 0.78em; font-family: ui-monospace, Menlo, monospace; margin: 3px 4px 3px 0; }
+    </style>
+</head>
+<body>
+    <h1>Twilio <span class="status">BACKLOG</span></h1>
+    <p class="subtitle">Messaging and voice CPaaS: Message and Call resources, recordings, status callbacks, Voice Insights, and the Verify OTP service.</p>
+    <span class="verified">Last verified: August 2026</span>
+
+    <h2>Overview</h2>
+    <table class="obj-table">
+        <tr>
+            <td>
+                <p style="font-size:0.93em;">Twilio exposes a flat, resource-oriented REST API rooted at the account: <code>https://api.twilio.com/2010-04-01/Accounts/{AccountSid}/...</code>. Almost everything analytically interesting is a subresource of an account or of a single Message/Call SID. The API is strong on <em>what Twilio itself did</em> (accepted, queued, priced, recorded) and progressively weaker the further downstream you go — carrier delivery and handset receipt are reported by third parties, or not at all.</p>
+
+                <div class="section-title">What It Provides</div>
+                <ul>
+                    <li><strong>Messages</strong> — per-message record with <code>sid</code>, <code>status</code>, <code>direction</code>, <code>from</code>/<code>to</code>, <code>body</code>, <code>num_segments</code>, <code>num_media</code>, <code>price</code>, <code>price_unit</code>, <code>error_code</code>, <code>error_message</code>, <code>messaging_service_sid</code>, and the <code>date_created</code> / <code>date_sent</code> / <code>date_updated</code> triple.</li>
+                    <li><strong>Calls</strong> — <code>sid</code>, <code>status</code>, <code>duration</code>, <code>price</code>, <code>direction</code>, <code>from</code>/<code>to</code>, <code>start_time</code>/<code>end_time</code>, and <code>answered_by</code> (populated only when Answering Machine Detection was requested on the call).</li>
+                    <li><strong>Recordings</strong> — separate resources with their own SIDs, listed under the account or under a specific Call. Media is fetched from a distinct URL; the metadata resource and the audio are not the same thing.</li>
+                    <li><strong>Status callbacks</strong> — Twilio POSTs form-encoded (not JSON) updates to your <code>StatusCallback</code> URL on status transitions, carrying <code>MessageStatus</code> / <code>CallStatus</code> and, on failure, <code>ErrorCode</code>.</li>
+                    <li><strong>Voice Insights</strong> — per-call summary plus network-quality metrics (jitter, packet loss, MOS) and SIP/carrier edge detail. Higher-detail Advanced Features are a paid add-on, enabled per account.</li>
+                    <li><strong>Verify</strong> — a managed OTP service (Verifications and VerificationChecks) covering SMS, voice, email, and TOTP channels.</li>
+                </ul>
+
+                <div class="section-title">Authentication &amp; Scopes</div>
+                <div class="scope-list"><span class="scope-tag">Account SID + Auth Token</span><span class="scope-tag">API Key SID + Secret</span><span class="scope-tag">Subaccount SID</span><span class="scope-tag">(no OAuth scope model)</span></div>
+                <ul>
+                    <li>HTTP Basic authentication. The crude form is <code>AccountSid</code> as username and <code>AuthToken</code> as password; the preferred form is an <strong>API Key SID + Secret</strong>, which can be revoked independently without rotating the account credential.</li>
+                    <li>There is no OAuth scope model on the classic REST API — a credential that can read messages can generally also send them. Least privilege is achieved structurally, via <strong>subaccounts</strong>, not via scopes.</li>
+                    <li>Subaccounts are the standard tenant-isolation and cost-attribution boundary. Parent credentials can reach into subaccounts; subaccount credentials cannot reach out.</li>
+                    <li>Inbound webhooks should be validated using the <code>X-Twilio-Signature</code> header. Without that check, your callback endpoint accepts delivery receipts from anyone.</li>
+                </ul>
+
+                <div class="section-title">Granularity</div>
+                <ul>
+                    <li>Per message and per call — one row per event, with monetary cost attached. This is unusually good for analytics: cost and outcome live on the same record.</li>
+                    <li><code>num_segments</code> is the billing unit for SMS, not the message. A long body or a single non-GSM-7 character silently multiplies segments and cost.</li>
+                    <li><code>price</code> is populated asynchronously and may be <code>null</code> immediately after send. Pulling cost data too early yields systematic undercounting.</li>
+                    <li>Voice Insights metrics are per call leg, and quality metrics only exist where Twilio was in the media path.</li>
+                </ul>
+
+                <div class="section-title">Key Endpoints</div>
+                <ul>
+                    <li><code>GET /2010-04-01/Accounts/{AccountSid}/Messages.json</code> — filterable by <code>To</code>, <code>From</code>, <code>DateSent</code>.</li>
+                    <li><code>GET .../Messages/{MessageSid}.json</code></li>
+                    <li><code>POST .../Messages.json</code> — send; accepts <code>StatusCallback</code>.</li>
+                    <li><code>GET .../Calls.json</code> and <code>GET .../Calls/{CallSid}.json</code></li>
+                    <li><code>GET .../Recordings.json</code>, <code>GET .../Calls/{CallSid}/Recordings.json</code></li>
+                    <li><code>GET .../Messages/{MessageSid}/Media.json</code> — MMS attachments.</li>
+                    <li>Verify: <code>POST /v2/Services/{ServiceSid}/Verifications</code> then <code>POST .../VerificationCheck</code>.</li>
+                    <li>Voice Insights: per-call Summary and Metrics resources under the Insights base path.</li>
+                </ul>
+
+                <div class="section-title">Rate Limits</div>
+                <ul>
+                    <li>API-level throttling returns <strong>HTTP 429</strong> with Twilio error <strong>20429</strong>. Retry with exponential backoff; do not retry sends blindly, as a retried POST can double-send.</li>
+                    <li>Outbound SMS <em>throughput</em> is a separate concept from API rate limit. It is governed by the sending number type (long code, toll-free, short code), the Messaging Service pool, and carrier-imposed campaign limits — in the US, A2P 10DLC brand and campaign vetting assigns a throughput tier. Twilio queues rather than rejects excess, so oversending shows up as growing latency between <code>date_created</code> and <code>date_sent</code>, not as errors. Treat the effective messages-per-second as a property of your specific number and campaign registration, and measure it rather than assuming a documented constant.</li>
+                    <li>List endpoints paginate with <code>PageSize</code> (maximum 1000) and a <code>next_page_uri</code>. Follow <code>next_page_uri</code> verbatim; do not reconstruct page URLs.</li>
+                </ul>
+
+                <div class="section-title">Business Scenarios</div>
+                <ul>
+                    <li>Deliverability analysis by carrier, region, and number type — provided you accept that "not delivered" and "no receipt" are different things.</li>
+                    <li>Per-campaign cost reconciliation using <code>price</code> and <code>num_segments</code> against internal send logs.</li>
+                    <li>OTP funnel measurement: verification start rate, check success rate, channel fallback rate.</li>
+                    <li>Voice quality regression detection using Voice Insights MOS and packet loss by carrier edge.</li>
+                    <li>Contact-centre analytics: answer rate, <code>answered_by</code> voicemail detection, abandonment via <code>duration</code> distribution.</li>
+                </ul>
+
+                <div class="key-point">
+                    <strong><code>sent</code> is not <code>delivered</code>, and <code>delivered</code> is hearsay.</strong> <code>sent</code> means the carrier accepted the message. <code>delivered</code> means a carrier returned a delivery receipt. Some carriers and some entire regions never return DLRs, so perfectly received messages remain permanently at <code>sent</code>. Conversely, a few carriers return a positive DLR on accepting the message into their own queue. Any dashboard computing "delivery rate = delivered / total" is measuring carrier reporting behaviour at least as much as actual delivery, and comparing that rate across countries compares two different measurement instruments.
+                </div>
+
+                <div class="key-point">
+                    <strong>Silent carrier filtering looks like success.</strong> A message can be accepted, marked <code>sent</code>, billed, and then dropped by carrier spam filtering with no error surfaced — or surfaced late as <code>undelivered</code> with error 30007. Cost is incurred regardless of outcome, so revenue-per-message-sent and cost-per-message-sent do not share a denominator.
+                </div>
+
+                <div class="section-title">Key Restrictions &amp; Gotchas</div>
+                <ul>
+                    <li><strong>Status callbacks are not ordered or guaranteed-once.</strong> They arrive out of order and can be duplicated. Persist by <code>MessageSid</code> and only advance state monotonically; do not treat callback arrival order as the true transition order.</li>
+                    <li><strong>Terminal states are ambiguous.</strong> <code>failed</code> means Twilio or the carrier rejected it; <code>undelivered</code> means it was accepted and then reported as not reaching the handset. Collapsing both into "failed" destroys the distinction between your problem and the carrier's.</li>
+                    <li><strong>Message bodies are subject to redaction and retention policy.</strong> Twilio supports account-level redaction of message bodies and recording media; where enabled, historical <code>body</code> values read back empty. An analytics pipeline that assumes bodies are permanently retrievable will silently lose content on old records.</li>
+                    <li><strong>Recording a call has legal consent implications</strong> that vary by jurisdiction and by party (one-party vs all-party consent). The API will happily record where the law will not. Consent capture is your responsibility and is not represented in the Recording resource.</li>
+                    <li><strong>Voice Insights Advanced Features are gated and paid.</strong> Basic call summary is broadly available; the detailed metrics many teams design dashboards around require enabling the add-on, and data is not retroactively backfilled for periods before it was enabled.</li>
+                    <li><strong>Verify never returns the OTP code to you.</strong> You cannot log it, inspect it, or verify it yourself — only submit a user-supplied code to VerificationCheck. This is deliberate and it means Verify cannot be instrumented the way a self-built OTP flow can.</li>
+                    <li><strong><code>answered_by</code> is empty unless AMD was requested</strong> at call creation, and it is a probabilistic classifier, not ground truth. Absence of the field is not evidence a human answered.</li>
+                    <li><strong>Timestamps are RFC 2822 strings</strong> in the classic API, not ISO 8601, and are UTC. <code>date_sent</code> is null until the carrier handoff occurs.</li>
+                    <li><strong>Deleting a Message resource is possible and irreversible</strong>, and deleted records vanish from list endpoints — reconciliation totals can shrink retroactively if anyone runs cleanup.</li>
+                </ul>
+            </td>
+            <td>
+                <div class="section-title">GET /2010-04-01/Accounts/{AccountSid}/Messages/{MessageSid}.json</div>
+<pre>{
+  "sid_masked": "EXAMPLE_SM_SID_redacted",  // Note: masked for illustration; real SIDs start with SM + 32 hex chars
+  "account_sid_masked": "EXAMPLE_AC_SID_redacted",  // Note: masked for illustration; real SIDs start with AC + 32 hex chars
+  "messaging_service_sid_masked": "EXAMPLE_MG_SID_redacted",  // Note: masked for illustration; real SIDs start with MG + 32 hex chars
+  "from": "+14155550142",
+  "to": "+447700900123",
+  "body": "Order 4417 shipped. Track: exmpl.co/t/4417",
+  "direction": "outbound-api",
+  "status": "sent",
+  "num_segments": "1",
+  "num_media": "0",
+  "price": "-0.04000",
+  "price_unit": "USD",
+  "error_code": null,
+  "error_message": null,
+  "date_created": "Sat, 22 Aug 2026 14:02:11 +0000",
+  "date_sent": "Sat, 22 Aug 2026 14:02:13 +0000",
+  "date_updated": "Sat, 22 Aug 2026 14:02:13 +0000",
+  "uri": "/2010-04-01/Accounts/EXAMPLE_AC.../Messages/EXAMPLE_SM....json",  // Note: masked for illustration
+  "subresource_uris": {
+    "media": "/2010-04-01/Accounts/EXAMPLE_AC.../Messages/EXAMPLE_SM.../Media.json",
+    "feedback": "/2010-04-01/Accounts/EXAMPLE_AC.../Messages/EXAMPLE_SM.../Feedback.json"
+  }
+}</pre>
+
+                <div class="section-title">StatusCallback POST (form-encoded, not JSON)</div>
+<pre>MessageSid=SM_MASKED
+MessageStatus=undelivered
+ErrorCode=30007
+SmsSid=SM_MASKED
+SmsStatus=undelivered
+AccountSid=AC_MASKED
+From=%2B14155550142
+To=%2B447700900123</pre>
+
+                <canvas id="smsLifecycle" height="380"></canvas>
+            </td>
+        </tr>
+    </table>
+
+    <script>
+    (function() {
+        const canvas = document.getElementById('smsLifecycle');
+        const ctx = canvas.getContext('2d');
+        const dpr = window.devicePixelRatio || 1;
+        const FONT = '-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+
+        function draw() {
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = 380 * dpr;
+            canvas.style.height = '380px';
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.scale(dpr, dpr);
+
+            const W = rect.width;
+            const H = 380;
+            ctx.clearRect(0, 0, W, H);
+
+            const marginLeft = 10;
+            const marginRight = 10;
+            const chartW = W - marginLeft - marginRight;
+
+            // Title
+            ctx.font = 'bold 13px ' + FONT;
+            ctx.fillStyle = '#1a5276';
+            ctx.textAlign = 'center';
+            ctx.fillText('SMS Message Status Lifecycle — and where reporting stops', W / 2, 20);
+
+            const cols = 5;
+            const colW = chartW / cols;
+            const boxW = Math.max(74, Math.min(112, colW - 22));
+            const boxH = 30;
+            const rowY = [72, 142, 214, 286];
+
+            function cx(col) { return marginLeft + col * colW + colW / 2; }
+
+            const nodes = {
+                accepted:    { col: 0, row: 1, label: 'accepted',    color: '#1a5276' },
+                queued:      { col: 1, row: 1, label: 'queued',      color: '#1a5276' },
+                sending:     { col: 2, row: 1, label: 'sending',     color: '#1a5276' },
+                sent:        { col: 3, row: 1, label: 'sent',        color: '#e67e22' },
+                delivered:   { col: 4, row: 0, label: 'delivered',   color: '#27ae60' },
+                undelivered: { col: 4, row: 2, label: 'undelivered', color: '#e67e22' },
+                failed:      { col: 3, row: 3, label: 'failed',      color: '#e74c3c' }
+            };
+
+            function box(n) {
+                const x = cx(n.col) - boxW / 2;
+                const y = rowY[n.row] - boxH / 2;
+                return { x: x, y: y, w: boxW, h: boxH, cx: cx(n.col), cy: rowY[n.row] };
+            }
+
+            function drawBox(n) {
+                const b = box(n);
+                ctx.fillStyle = 'rgba(26,82,118,0.35)';
+                if (n.color === '#27ae60') ctx.fillStyle = 'rgba(39,174,96,0.20)';
+                if (n.color === '#e74c3c') ctx.fillStyle = 'rgba(231,76,60,0.16)';
+                if (n.color === '#e67e22') ctx.fillStyle = 'rgba(230,126,34,0.18)';
+                ctx.fillRect(b.x, b.y, b.w, b.h);
+                ctx.strokeStyle = n.color;
+                ctx.lineWidth = 1.6;
+                ctx.strokeRect(b.x, b.y, b.w, b.h);
+                ctx.font = 'bold 11px ' + FONT;
+                ctx.fillStyle = '#2c3e50';
+                ctx.textAlign = 'center';
+                ctx.fillText(n.label, b.cx, b.cy + 4);
+            }
+
+            function arrow(x1, y1, x2, y2, dashed, color, label, labelDy) {
+                ctx.save();
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 1.6;
+                if (dashed) ctx.setLineDash([5, 4]);
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                if (Math.abs(y1 - y2) < 1) {
+                    ctx.lineTo(x2 - 7, y2);
+                } else {
+                    const mx = (x1 + x2) / 2;
+                    ctx.bezierCurveTo(mx, y1, mx, y2, x2 - 7, y2);
+                }
+                ctx.stroke();
+                ctx.restore();
+
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.moveTo(x2, y2);
+                ctx.lineTo(x2 - 8, y2 - 4.5);
+                ctx.lineTo(x2 - 8, y2 + 4.5);
+                ctx.closePath();
+                ctx.fill();
+
+                if (label) {
+                    ctx.font = '9px ' + FONT;
+                    ctx.fillStyle = '#666';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(label, (x1 + x2) / 2, (y1 + y2) / 2 + (labelDy || -6));
+                }
+            }
+
+            function edge(fromKey, toKey, dashed, color, label, labelDy) {
+                const a = box(nodes[fromKey]);
+                const b = box(nodes[toKey]);
+                arrow(a.x + a.w, a.cy, b.x, b.cy, dashed, color, label, labelDy);
+            }
+
+            // Happy path: every transition here fires a StatusCallback
+            edge('accepted', 'queued', false, '#1a5276', 'callback');
+            edge('queued', 'sending', false, '#1a5276', 'callback');
+            edge('sending', 'sent', false, '#1a5276', 'callback');
+
+            // Downstream: depends entirely on carrier DLR
+            edge('sent', 'delivered', true, '#27ae60', 'carrier DLR', -8);
+            edge('sent', 'undelivered', true, '#e67e22', 'carrier DLR + ErrorCode', 14);
+
+            // Rejection before handoff
+            edge('sending', 'failed', false, '#e74c3c', 'rejected pre-handoff', 14);
+
+            Object.keys(nodes).forEach(function(k) { drawBox(nodes[k]); });
+
+            // The silent third outcome: no DLR ever arrives
+            const sentB = box(nodes.sent);
+            ctx.save();
+            ctx.strokeStyle = '#888';
+            ctx.setLineDash([3, 3]);
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.moveTo(sentB.cx, sentB.y + sentB.h);
+            ctx.lineTo(sentB.cx, rowY[3] - 4);
+            ctx.stroke();
+            ctx.restore();
+            ctx.font = 'italic 9px ' + FONT;
+            ctx.fillStyle = '#888';
+            ctx.textAlign = 'left';
+            ctx.fillText('no DLR ever returned', sentB.cx + 6, rowY[3] - 34);
+            ctx.fillText('stays at "sent" forever', sentB.cx + 6, rowY[3] - 22);
+
+            // Legend
+            let ly = 322;
+            ctx.textAlign = 'left';
+            ctx.font = '10px ' + FONT;
+
+            ctx.strokeStyle = '#1a5276';
+            ctx.lineWidth = 1.6;
+            ctx.setLineDash([]);
+            ctx.beginPath(); ctx.moveTo(marginLeft, ly); ctx.lineTo(marginLeft + 26, ly); ctx.stroke();
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillText('solid: Twilio observes it directly — StatusCallback fires', marginLeft + 32, ly + 3.5);
+
+            ly += 16;
+            ctx.strokeStyle = '#e67e22';
+            ctx.setLineDash([5, 4]);
+            ctx.beginPath(); ctx.moveTo(marginLeft, ly); ctx.lineTo(marginLeft + 26, ly); ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillText('dashed: carrier-reported — optional, delayed, or absent', marginLeft + 32, ly + 3.5);
+
+            ly += 18;
+            ctx.font = 'italic 10px ' + FONT;
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillText('"delivered / total" measures carrier DLR coverage as much as delivery. Not comparable across regions.', marginLeft, ly + 3.5);
+        }
+
+        draw();
+        window.addEventListener('resize', draw);
+    })();
+    </script>
+</body>
+</html>

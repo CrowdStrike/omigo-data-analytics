@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tracking Data: WiFi Probe Requests</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2c3e50; max-width: 100%; margin: 0; padding: 30px 40px; background: #fff; }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+        .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
+        .obj-table { width: 100%; border-collapse: collapse; }
+        .obj-table td { vertical-align: top; padding: 16px; border: 1px solid #2980b9; }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; text-align: center; }
+        ul { padding-left: 20px; margin: 8px 0; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        .obj-table td:last-child .payload,
+        .obj-table td:last-child .payload-note { text-align: left; }
+        .payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 12px 0; }
+        .payload-note { font-size: 0.82em; color: #666; margin: 12px 0 -6px 0; font-style: italic; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        .key-point strong:first-child { color: #1a5276; }
+        .lede { font-size: 0.95em; margin: 0 0 10px 0; }
+        .lbl { display: inline-block; font-size: 0.7em; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; margin: 10px 0 2px 0; }
+        .lbl-purpose { background: #eaf2fb; color: #1a5276; }
+        .lbl-effect { background: #fdf0e6; color: #a8501c; }
+        li b { color: #1a5276; font-weight: 600; }
+        canvas { display: block; margin: 0 auto; }
+    </style>
+</head>
+<body>
+    <h1>Tracking Data: WiFi Probe Requests</h1>
+    <p class="subtitle">A phone with WiFi on transmits scan frames whether or not it connects — and any receiver in range can log them.</p>
+    <table class="obj-table">
+        <tr>
+            <td>
+                <div class="obj-title">What is it?</div>
+                <p class="lede">Short frames a phone sends to ask whether any access point is in range.</p>
+                <ul>
+                    <li><b>When:</b> WiFi on but not connected — the phone probes periodically</li>
+                    <li><b>Wildcard probes</b> leave the network-name field empty; most modern phones send these</li>
+                    <li><b>Directed probes</b> name specific saved networks one by one — older behaviour, still seen</li>
+                    <li><b>Unencrypted and unaddressed</b>, so any receiver in range can log the frame without participating</li>
+                </ul>
+                <div class="key-point"><strong>Connecting is not required to be counted:</strong> having the radio on and scanning is enough, which is why footfall deployments use this signal rather than the guest network.</div>
+            </td>
+            <td><canvas id="c1" width="720" height="320"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">What does it collect?</div>
+                <ul>
+                    <li><b>Source MAC address</b> — usually randomised, not the hardware ID</li>
+                    <li><b>Network name</b> requested, when the probe is a directed one</li>
+                    <li><b>Signal strength</b>, from which a range is estimated</li>
+                    <li><b>Timestamp</b> of each probe</li>
+                    <li><b>Capability fields</b>, which hint at device class</li>
+                    <li><b>Probe frequency</b> and how long probes keep arriving</li>
+                </ul>
+                <div class="key-point"><strong><code>locally_administered</code> decides whether the dataset means anything:</strong> when set, the address is randomised — not a device identifier, and it changes while the same phone is still in the room. Counting distinct <code>src_addr</code> values overcounts devices, and overcounts most for the longest visits, so the bias tracks dwell time and cannot be divided out.</div>
+                <div class="key-point"><strong><code>visitor_key</code> is a guess:</strong> the sensor clustering on capability fields to undo randomisation. The record admits it by leaving <code>oui_vendor</code> null.</div>
+                <div class="key-point"><strong>Where names appear, the set beats any one name:</strong> a home network plus an employer's plus a hotel's narrows a device far more than a common coffee-shop SSID. But note the direction — that distinguishes a device within the observed population, which is not identifying anyone. With wildcard probes there is no name at all.</div>
+            </td>
+            <td><canvas id="c2" width="720" height="320"></canvas>
+<p class="payload-note">Sample payload — illustrative structure, not real captured data.</p>
+<pre class="payload">{
+  // ── present in the raw 802.11 frame ──
+  "frame_type":   "probe_request",
+  "src_addr":     "5e:8a:41:…",
+  "ssid":         "",            // wildcard probe, no name given
+  "ie_supported_rates": [1, 2, 5.5, 11, 6, 9, 12, 18],
+  "ie_ht_capabilities": "0x016e",
+  "channel":      6,
+  "rssi_dbm":     -68,           // radiotap header
+  "ts":           "2026-08-22T13:04:51.207Z",
+
+  // ── inferred / plausible, added by the sensor ──
+  "locally_administered": true,  // bit 1 of octet 0 is set
+  "oui_vendor":   null,          // no vendor: address is randomised
+  "est_range_m":  7.5,           // RSSI + path-loss assumption
+  "rotation_suspected": true,
+  "visitor_key":  "vk_c19d…"     // clustered, not observed
+}</pre>
+</td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">Why is it collected?</div>
+                <div class="lbl lbl-purpose">Stated purpose</div>
+                <ul>
+                    <li><b>Counting</b> — footfall, dwell and path, which a venue cannot get from till receipts</li>
+                    <li><b>Passive</b> — an estimate without a turnstile or asking anyone to do anything</li>
+                </ul>
+                <div class="lbl lbl-effect">Additional consequence</div>
+                <ul>
+                    <li><b>A count needs distinctness, and distinctness is the same operation as recognition</b> — a sensor that can decide two observations are one device can decide two visits are</li>
+                    <li>A <b>captive-portal login</b> supplies an identifier the radio layer does not</li>
+                </ul>
+                <div class="key-point"><strong>The unit is a radio interface, not a person:</strong> a visitor with a phone, watch and earbuds contributes several; a visitor with WiFi off contributes none. Both errors are systematic, so the measured population is not the walking one — and staff standing near a sensor all day are its longest-dwell observations.</div>
+            </td>
+            <td><canvas id="c3" width="720" height="320"></canvas></td>
+        </tr>
+    </table>
+    <script>
+    const dpr = window.devicePixelRatio || 1;
+    // Validated categorical palette (CVD-checked, see REVIEW-NOTES.md).
+    // Red is deliberately NOT in the rotation - it stays reserved for
+    // genuine error / alarm states so it keeps its meaning.
+    const P = {
+      blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+      aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+      ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+    };
+    const SERIES = [P.blue, P.green, P.violet, P.orange, P.aqua, P.magenta, P.yellow];
+    // Rounded-rect path helper (works without native ctx.roundRect).
+    function rr(ctx, x, y, w, h, r) {
+      r = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    function setupCanvas(id) { const c = document.getElementById(id); const w = c.getAttribute('width') ? +c.getAttribute('width') : 720;
+        const h = c.getAttribute('height') ? +c.getAttribute('height') : 240; c.width = w * dpr; c.height = h * dpr; c.style.width = w + 'px'; c.style.height = h + 'px'; const ctx = c.getContext('2d'); ctx.scale(dpr, dpr); return { ctx, w, h }; }
+
+    // Hue scheme, held constant across all four canvases on this page:
+    //   blue   = what a receiver actually observes on the air
+    //   green  = the device, and the ground truth about it
+    //   violet = the receiving infrastructure, and the wildcard (no-name) case
+    //   orange = what the sensor derives on top of the observations
+    // Where a canvas contrasts plain categories instead (C2's two devices), those take
+    // SERIES order. Red stays reserved for alarm states and is not used here.
+
+    // C1: Phone broadcasting probe requests into the air
+    (function() {
+        const { ctx, w, h } = setupCanvas('c1');
+        const cx = w/2, cy = h/2 + 12;
+
+        // legend strip along the top — the two probe kinds this chart contrasts
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = P.blue;
+        ctx.fillRect(150, 22, 11, 11);
+        ctx.fillText('directed probe — names one saved network', 168, 32);
+        ctx.fillStyle = P.violet;
+        ctx.fillRect(150, 42, 11, 11);
+        ctx.fillText('wildcard probe — the name field is left empty', 168, 52);
+
+        // Phone in center — green, the device itself
+        ctx.strokeStyle = P.green;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); rr(ctx, cx - 18, cy - 35, 36, 70, 5); ctx.stroke();
+        ctx.fillStyle = P.grid;
+        ctx.fillRect(cx - 14, cy - 28, 28, 50);
+        // WiFi icon on phone
+        ctx.strokeStyle = P.green;
+        ctx.lineWidth = 2;
+        for (let i = 1; i <= 3; i++) {
+            ctx.beginPath(); ctx.arc(cx, cy - 10, i * 7, -Math.PI * 0.7, -Math.PI * 0.3); ctx.stroke();
+        }
+        // Broadcast waves going outward — blue, the frames on the air
+        ctx.strokeStyle = P.blue;
+        ctx.globalAlpha = 0.3;
+        ctx.lineWidth = 1.5;
+        for (let r = 50; r <= 100; r += 25) {
+            ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+        // What a directed probe can name, vs the wildcard case
+        const ssids = [
+            { angle: -0.8, name: '"home-network"', wildcard: false },
+            { angle: -0.2, name: '"employer-guest"', wildcard: false },
+            { angle: 0.4, name: '"hotel-lobby"', wildcard: false },
+            { angle: 1.0, name: '"cafe-chain"', wildcard: false },
+            { angle: 1.8, name: '"airport-free"', wildcard: false },
+            { angle: 2.5, name: '(empty — wildcard)', wildcard: true }
+        ];
+        ctx.font = '13px monospace';
+        ctx.textAlign = 'center';
+        ssids.forEach(s => {
+            const x = cx + Math.cos(s.angle) * 130;
+            const y = cy + Math.sin(s.angle) * 85;
+            ctx.fillStyle = s.wildcard ? P.violet : P.blue;
+            ctx.fillText(s.name, x, y);
+        });
+        // Label
+        ctx.fillStyle = P.mute;
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Most current phones send the wildcard form; either way the frame is readable by any receiver in range', cx, h - 10);
+    })();
+
+    // C2: Two saved-network sets differ — distinguishing within the observed set,
+    // which is not the same as identifying anyone. Names are placeholders.
+    (function() {
+        const { ctx, w, h } = setupCanvas('c2');
+        // Device A
+        ctx.fillStyle = P.blue;
+        ctx.beginPath(); ctx.arc(150, 50, 15, 0, Math.PI * 2); ctx.fill();
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Device A', 150, 80);
+        const networksA = ['home-a', 'employer-a', 'airport-a', 'hotel-a'];
+        ctx.font = '12px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = P.text;
+        networksA.forEach((n, i) => {
+            ctx.fillStyle = '#f8f9fa';
+            ctx.fillRect(80, 92 + i * 24, 140, 18);
+            ctx.strokeStyle = P.blue;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(80, 92 + i * 24, 140, 18);
+            ctx.fillStyle = P.blue;
+            ctx.fillText(n, 86, 105 + i * 24);
+        });
+        // Device B
+        ctx.fillStyle = P.green;
+        ctx.beginPath(); ctx.arc(400, 50, 15, 0, Math.PI * 2); ctx.fill();
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.green;
+        ctx.fillText('Device B', 400, 80);
+        const networksB = ['home-b', 'employer-b', 'airport-b', 'hotel-b'];
+        ctx.font = '12px monospace';
+        ctx.textAlign = 'left';
+        networksB.forEach((n, i) => {
+            ctx.fillStyle = '#f8f9fa';
+            ctx.fillRect(330, 92 + i * 24, 140, 18);
+            ctx.strokeStyle = P.green;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(330, 92 + i * 24, 140, 18);
+            ctx.fillStyle = P.green;
+            ctx.fillText(n, 336, 105 + i * 24);
+        });
+        // Difference marker — the inference drawn from the two sets, so the derived hue
+        ctx.fillStyle = P.orange;
+        ctx.font = 'bold 24px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('≠', 275, 130);
+        // The wildcard case, in the same violet C1 uses for it: no name to compare at all
+        ctx.fillStyle = P.violet;
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.fillRect(484, 91, 11, 11);
+        ctx.textAlign = 'left';
+        ctx.fillText('With wildcard probes there is', 502, 100);
+        ctx.fillText('no name to compare, so this', 502, 115);
+        ctx.fillText('comparison is unavailable', 502, 130);
+        // Note
+        ctx.fillStyle = P.orange;
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('The combination distinguishes; any single common name does not', w/2, h - 30);
+        ctx.fillStyle = P.mute;
+        ctx.fillText('Distinguishing a device within the observed set is not identifying a person', w/2, h - 12);
+    })();
+
+    // C3: what a probe deployment actually has (discrete sightings at fixed receivers)
+    // versus what it reports (a path and a dwell time). Blue = observed, orange = derived,
+    // violet = the receiving infrastructure, grey = the venue, which is not data.
+    (function() {
+        const { ctx, w, h } = setupCanvas('c3');
+
+        // header strip: the measured / derived split, reused as the legend
+        ctx.fillStyle = P.blue;
+        ctx.fillRect(50, 10, 11, 11);
+        ctx.fillStyle = P.blue;
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('observed: a probe reached a receiver', 68, 20);
+        ctx.fillStyle = P.orange;
+        ctx.fillRect(330, 10, 11, 11);
+        ctx.fillStyle = P.orange;
+        ctx.fillText('derived: the path and the dwell between sightings', 348, 20);
+
+        // Store floor plan — neutral field, not data
+        ctx.strokeStyle = P.grid;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(50, 34, 620, 150);
+        // Store sections
+        const sections = [
+            { x: 60, y: 42, w: 140, h: 66, label: 'Electronics' },
+            { x: 60, y: 112, w: 140, h: 64, label: 'Clothing' },
+            { x: 220, y: 42, w: 140, h: 134, label: 'Grocery' },
+            { x: 380, y: 42, w: 140, h: 66, label: 'Home' },
+            { x: 380, y: 112, w: 140, h: 64, label: 'Sports' },
+            { x: 540, y: 42, w: 120, h: 134, label: 'Checkout' }
+        ];
+        sections.forEach(s => {
+            ctx.fillStyle = '#f8f9fa';
+            ctx.fillRect(s.x, s.y, s.w, s.h);
+            ctx.strokeStyle = P.grid;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(s.x, s.y, s.w, s.h);
+            ctx.fillStyle = P.mute;
+            ctx.font = '12px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(s.label, s.x + s.w/2, s.y + s.h/2 + 4);
+        });
+        // WiFi receivers — the infrastructure hue, not red: a receiver is not an alarm
+        const receivers = [
+            { x: 50, y: 34 }, { x: 360, y: 34 }, { x: 670, y: 34 },
+            { x: 50, y: 184 }, { x: 360, y: 184 }, { x: 670, y: 184 }
+        ];
+        receivers.forEach(r => {
+            ctx.fillStyle = P.violet;
+            ctx.beginPath();
+            ctx.moveTo(r.x, r.y - 6); ctx.lineTo(r.x - 5, r.y + 4); ctx.lineTo(r.x + 5, r.y + 4);
+            ctx.closePath(); ctx.fill();
+        });
+        // Sequence of sightings; the line between them is interpolation, not observation
+        const path = [
+            { x: 60, y: 120 }, { x: 130, y: 75 }, { x: 200, y: 90 },
+            { x: 290, y: 110 }, { x: 350, y: 100 }, { x: 420, y: 75 },
+            { x: 500, y: 130 }, { x: 580, y: 100 }, { x: 620, y: 90 }
+        ];
+        const dwell = [3, 8, 3, 12, 3, 6, 4, 3, 3];
+        ctx.strokeStyle = P.orange;
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([5, 3]);
+        ctx.beginPath();
+        path.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // Sightings: the dot itself is observed, its radius is the derived dwell — so the
+        // dot is blue and the dwell ring around it is orange
+        path.forEach((p, i) => {
+            const size = dwell[i];
+            ctx.strokeStyle = P.orange;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.arc(p.x, p.y, size + 2, 0, Math.PI * 2); ctx.stroke();
+            ctx.fillStyle = P.blue;
+            ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill();
+        });
+
+        // Footer band: the same dwell values as a bar row, so the ring sizes are readable
+        const barY = 268, barMax = 46, bx0 = 60, bstep = 62;
+        ctx.strokeStyle = P.grid;
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(bx0 - 8, barY); ctx.lineTo(bx0 + 8 * bstep + 24, barY); ctx.stroke();
+        dwell.forEach((d, i) => {
+            const bh = (d / 12) * barMax;
+            const bxx = bx0 + i * bstep;
+            ctx.fillStyle = P.orange;
+            ctx.globalAlpha = 0.55;
+            ctx.fillRect(bxx, barY - bh, 26, bh);
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = P.blue;
+            ctx.fillRect(bxx, barY, 26, 3);
+            ctx.fillStyle = P.mute;
+            ctx.font = '11px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(String(i + 1), bxx + 13, barY + 15);
+        });
+        ctx.fillStyle = P.orange;
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('derived dwell per sighting, in order', 60, 210);
+        ctx.fillStyle = P.blue;
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.fillText('each blue tick is one sighting — the height above it is interpolated between sightings', 60, 226);
+        ctx.fillStyle = P.violet;
+        ctx.textAlign = 'right';
+        ctx.fillText('▲ = receiver', 670, 210);
+        ctx.fillStyle = P.mute;
+        ctx.fillText('Schematic — illustrative dwell units', 670, 226);
+    })();
+
+    </script>
+</body>
+</html>

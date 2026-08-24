@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shopify — Platform APIs</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2c3e50; max-width: 100%; margin: 0; padding: 30px 40px; background: #fff; }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 14px; }
+        .verified { font-size: 0.8em; color: #888; border: 1px solid #ddd; display: inline-block; padding: 2px 10px; border-radius: 4px; margin-bottom: 18px; }
+        .status { display: inline-block; background: #e67e22; color: #fff; font-size: 0.75em; font-weight: bold; padding: 2px 10px; border-radius: 4px; vertical-align: middle; margin-left: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+        h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
+        .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
+        .section-label { font-weight: bold; color: #1a5276; margin-top: 16px; display: block; }
+        .section-label:first-child { margin-top: 0; }
+        .obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+        .obj-table td { vertical-align: top; padding: 16px; border: 1px solid #2980b9; }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; }
+        ul { padding-left: 20px; margin: 6px 0 10px; }
+        li { margin-bottom: 5px; font-size: 0.93em; }
+        p { font-size: 0.93em; margin: 6px 0; }
+        pre.payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 12px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 10px 0 16px; border-radius: 4px; text-align: left; }
+        .payload-note { font-size: 0.82em; color: #666; margin: 10px 0 -4px 0; font-style: italic; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        canvas { display: block; width: 100%; margin-top: 12px; }
+    </style>
+</head>
+<body>
+    <h1>Shopify <span class="status">BACKLOG</span></h1>
+    <p class="subtitle">Orders and line items, customers, abandoned checkouts, fulfillments, refunds, products and variants with inventory — under a cost-based GraphQL leaky bucket, with bulk operations for anything large.</p>
+    <span class="verified">Last verified: August 2026</span>
+
+    <h2>Overview</h2>
+    <table class="obj-table">
+        <tr>
+            <td>
+                <span class="section-label">What It Provides</span>
+                <ul>
+                    <li><strong>Orders</strong> — header with financial and fulfillment status, plus <code>lineItems</code> carrying product/variant references, quantity, price, discount allocations, and tax lines. Also <code>shippingLines</code>, <code>transactions</code>, and note attributes.</li>
+                    <li><strong>Customers</strong> — contact detail, addresses, marketing consent state, order count, total spent, and tags.</li>
+                    <li><strong>Abandoned checkouts</strong> — carts that reached checkout and did not convert, with line items and, where captured, an email.</li>
+                    <li><strong>Fulfillments &amp; fulfillment orders</strong> — what shipped, from which location, with tracking. The modern model splits an order into fulfillment orders per location.</li>
+                    <li><strong>Refunds &amp; returns</strong> — refund line items, restocking behaviour, and the transactions that moved money back.</li>
+                    <li><strong>Products, variants, inventory</strong> — variant-level pricing and <code>inventoryLevels</code> per location.</li>
+                    <li><strong>Webhooks</strong> for order, fulfillment, refund, product, and inventory events; <code>shop/redact</code> and <code>customers/redact</code> for mandatory GDPR handling.</li>
+                </ul>
+
+                <span class="section-label">Authentication &amp; Scopes</span>
+                <ul>
+                    <li><strong>Admin API access token</strong> in the <code>X-Shopify-Access-Token</code> header. Custom apps get a token directly; public apps go through OAuth per shop.</li>
+                    <li><strong>Granular scopes</strong> — <code>read_orders</code>, <code>read_all_orders</code>, <code>read_customers</code>, <code>read_products</code>, <code>read_inventory</code>, <code>read_fulfillments</code>, and so on.</li>
+                    <li><strong><code>read_all_orders</code> is separately gated.</strong> With only <code>read_orders</code>, the Admin API returns orders from roughly the last 60 days. Older orders are simply absent — not an error, just missing rows. This is the most commonly misdiagnosed gap in Shopify extraction.</li>
+                    <li><strong>Protected customer data</strong> requires explicit approval for apps handling PII fields; without it, fields like email and address are redacted from responses.</li>
+                    <li><strong>Per-shop tokens.</strong> One token, one shop. There is no cross-shop query for a multi-store merchant.</li>
+                </ul>
+                <div class="key-point">A historical order backfill that "works" but returns nothing before 60 days ago is almost always a missing <code>read_all_orders</code> grant, not a pagination bug. The API does not tell you rows were withheld.</div>
+
+                <span class="section-label">Granularity</span>
+                <p>Order and line item, timestamped to the second with timezone. Money fields use <code>MoneyBag</code> in GraphQL, giving both <code>shopMoney</code> and <code>presentmentMoney</code> — the shop's currency and the currency the buyer saw. Mixing them across a multi-currency store produces totals that reconcile to nothing.</p>
+
+                <span class="section-label">API Surfaces</span>
+                <ul>
+                    <li><strong>GraphQL Admin API</strong> — the primary and actively developed surface. Versioned quarterly (<code>/admin/api/2026-07/graphql.json</code>); each version is supported for about a year.</li>
+                    <li><strong>REST Admin API</strong> — legacy. Shopify has been moving new capability to GraphQL only, and some newer objects have no REST equivalent.</li>
+                    <li><strong>Bulk Operations</strong> — asynchronous GraphQL queries whose results land as a JSONL file. This is the correct tool for full extracts.</li>
+                </ul>
+
+                <span class="section-label">Rate Limits — the Leaky Bucket</span>
+                <p>GraphQL Admin uses a cost-based leaky bucket rather than a request count:</p>
+                <ul>
+                    <li>Each query is assigned a <strong>calculated cost</strong> before execution, driven by the number of fields and the connection page sizes you requested.</li>
+                    <li>The cost is deducted from a per-shop bucket. The bucket refills at a constant leak rate, and its capacity and leak rate scale with the shop's plan tier (Plus and Enterprise get materially more).</li>
+                    <li>Every response carries <code>extensions.cost</code>, including <code>requestedQueryCost</code>, <code>actualQueryCost</code>, and <code>throttleStatus</code> with <code>currentlyAvailable</code>, <code>maximumAvailable</code>, and <code>restoreRate</code>.</li>
+                    <li>If <code>requestedQueryCost</code> exceeds the bucket's maximum capacity, the query is rejected outright and no amount of waiting helps — you must reduce page size or field depth.</li>
+                    <li><code>actualQueryCost</code> is usually lower than requested, because Shopify refunds the difference when a connection returns fewer nodes than the <code>first:</code> argument allowed for.</li>
+                </ul>
+                <div class="key-point">This changes the shape of a correct client. Instead of counting requests, read <code>throttleStatus.currentlyAvailable</code> from every response and pace the next request against <code>restoreRate</code>. Requesting <code>first: 250</code> everywhere maximises requested cost and therefore throttling — a smaller page size often yields higher sustained throughput because the bucket stays out of the floor.</div>
+                <p>REST Admin uses a simpler request-count bucket per shop, also scaling with plan, and returns the <code>X-Shopify-Shop-Api-Call-Limit</code> header. The two surfaces have independent budgets.</p>
+
+                <span class="section-label">Bulk Operations</span>
+                <p>Submit a query via <code>bulkOperationRunQuery</code>, poll the returned operation (or wait for the <code>bulk_operations/finish</code> webhook), then download a JSONL file from the signed URL. Constraints worth knowing:</p>
+                <ul>
+                    <li><strong>One bulk operation at a time per shop.</strong> A second submission fails while one is running.</li>
+                    <li><strong>The JSONL is flattened, not nested.</strong> Parent and child objects appear as separate lines, with children carrying a <code>__parentId</code>. You reassemble the hierarchy yourself, and children are not guaranteed to appear adjacent to their parent — you cannot stream-parse assuming locality without buffering.</li>
+                    <li><strong>The download URL expires.</strong> Fetch it promptly.</li>
+                    <li>Bulk operations bypass the leaky bucket, which is the whole reason to use them for backfill.</li>
+                </ul>
+
+                <span class="section-label">Business Scenarios</span>
+                <ul>
+                    <li><strong>Cohort and LTV analysis</strong> — first-order date by customer, repeat purchase intervals.</li>
+                    <li><strong>Cart abandonment funnels</strong> — abandoned checkouts joined against subsequent orders.</li>
+                    <li><strong>Inventory and demand planning</strong> — variant-level sell-through against inventory levels per location.</li>
+                    <li><strong>Discount and promotion effectiveness</strong> — <code>discountAllocations</code> at the line level, which is the only place per-item discount attribution exists.</li>
+                    <li><strong>Return-rate analysis by product and variant.</strong></li>
+                    <li><strong>Multi-channel attribution</strong> — order <code>sourceName</code> and <code>customerJourneySummary</code> where available.</li>
+                </ul>
+
+                <span class="section-label">Key Restrictions &amp; Gotchas</span>
+                <ul>
+                    <li><strong>Orders are mutable after creation.</strong> Refunds, edits, and cancellations rewrite totals. An order pulled at creation and the same order pulled a month later are different rows. Re-sync on <code>updated_at</code>, not just <code>created_at</code>.</li>
+                    <li><strong>Financial status is current state, not history.</strong> <code>displayFinancialStatus</code> tells you the order is <code>PARTIALLY_REFUNDED</code> now. It does not tell you when it was paid, when the refund happened, or in what order. The <code>transactions</code> array is closer to a history and should be the basis for any revenue timeline — the status field is a summary.</li>
+                    <li><strong>Test orders exist.</strong> The <code>test</code> flag marks orders created by payment-gateway test mode. Filter them or your revenue is wrong.</li>
+                    <li><strong>Abandoned checkout is not a full funnel.</strong> Shopify records checkouts that reached the checkout step, not add-to-cart, and not sessions. It cannot answer "what fraction of visitors added to cart" — that is storefront analytics, a different data source entirely.</li>
+                    <li><strong>Deleted orders are gone.</strong> There is no tombstone endpoint listing deleted order IDs. If you do not capture the <code>orders/delete</code> webhook, your warehouse keeps rows Shopify no longer has.</li>
+                    <li><strong>No historical inventory series.</strong> <code>inventoryLevel.quantities</code> is the level now. Stockout history must be sampled going forward; it cannot be reconstructed.</li>
+                    <li><strong>Deprecation is on a clock.</strong> Quarterly API versions with roughly a year of support means an unmaintained integration breaks on a known schedule. Shopify's ongoing REST-to-GraphQL migration has already removed some REST capability.</li>
+                    <li><strong>GIDs, not integers.</strong> GraphQL identifiers are <code>gid://shopify/Order/5502...</code>. They do not equal REST numeric IDs textually, so a warehouse fed from both surfaces will fail to join without normalisation.</li>
+                    <li><strong>Webhooks are at-least-once and can be missed.</strong> A reconciliation sweep on <code>updated_at</code> is not optional; webhook delivery alone will drift.</li>
+                </ul>
+            </td>
+            <td>
+                <p class="payload-note">POST /admin/api/2026-07/graphql.json — orders with line items. Note <code>extensions.cost</code>.</p>
+<pre class="payload">{
+  "data": {
+    "orders": {
+      "edges": [{
+        "node": {
+          "id": "gid://shopify/Order/5502981234567",
+          "name": "#1042",
+          "createdAt": "2026-08-14T11:22:41Z",
+          "updatedAt": "2026-08-19T08:03:12Z",
+          "processedAt": "2026-08-14T11:22:44Z",
+          "test": false,
+          "displayFinancialStatus": "PARTIALLY_REFUNDED",
+          "displayFulfillmentStatus": "FULFILLED",
+          "sourceName": "web",
+          "currentTotalPriceSet": {
+            "shopMoney":        { "amount": "74.50", "currencyCode": "USD" },
+            "presentmentMoney": { "amount": "68.20", "currencyCode": "EUR" }
+          },
+          "totalRefundedSet": {
+            "shopMoney": { "amount": "24.00", "currencyCode": "USD" }
+          },
+          "customer": {
+            "id": "gid://shopify/Customer/7213445566",
+            "numberOfOrders": "4"
+          },
+          "lineItems": {
+            "edges": [{
+              "node": {
+                "id": "gid://shopify/LineItem/13998877665",
+                "title": "Merino Crew — Charcoal / M",
+                "quantity": 2,
+                "sku": "MC-CHR-M",
+                "variant": { "id": "gid://shopify/ProductVariant/44112233" },
+                "originalTotalSet": {
+                  "shopMoney": { "amount": "98.00", "currencyCode": "USD" }
+                },
+                "discountAllocations": [{
+                  "allocatedAmountSet": {
+                    "shopMoney": { "amount": "9.80", "currencyCode": "USD" }
+                  }
+                }]
+              }
+            }]
+          }
+        }
+      }],
+      "pageInfo": { "hasNextPage": true, "endCursor_masked": "EXAMPLE_CURSOR_redacted" }  // Note: masked for illustration; real cursors are base64-encoded
+    }
+  },
+  "extensions": {
+    "cost": {
+      "requestedQueryCost": 302,
+      "actualQueryCost": 47,
+      "throttleStatus": {
+        "maximumAvailable": 2000.0,
+        "currentlyAvailable": 1953,
+        "restoreRate": 100.0
+      }
+    }
+  }
+}</pre>
+                <p class="payload-note">Requested 302, charged 47 — the connections returned fewer nodes than <code>first:</code> permitted and Shopify refunded the difference. Pacing off <code>requestedQueryCost</code> alone leaves most of the bucket unused; pacing off <code>currentlyAvailable</code> is correct.</p>
+
+                <p class="payload-note">Bulk operation JSONL — flattened, reassembled via <code>__parentId</code>.</p>
+<pre class="payload">{"id":"gid://shopify/Order/5502981234567","name":"#1042", ...}
+{"id":"gid://shopify/LineItem/13998877665","quantity":2,
+ "__parentId":"gid://shopify/Order/5502981234567"}
+{"id":"gid://shopify/LineItem/13998877666","quantity":1,
+ "__parentId":"gid://shopify/Order/5502981234567"}
+{"id":"gid://shopify/Order/5502981234568","name":"#1043", ...}</pre>
+
+                <canvas id="bucketChart" height="380"></canvas>
+            </td>
+        </tr>
+    </table>
+
+    <script>
+    (function() {
+        const canvas = document.getElementById('bucketChart');
+        const ctx = canvas.getContext('2d');
+        const dpr = window.devicePixelRatio || 1;
+
+        function draw() {
+            const rect = canvas.getBoundingClientRect();
+            const W = rect.width;
+            const H = 380;
+            canvas.width = W * dpr;
+            canvas.height = H * dpr;
+            canvas.style.height = H + 'px';
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.scale(dpr, dpr);
+            ctx.clearRect(0, 0, W, H);
+
+            ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+            ctx.fillStyle = '#1a5276';
+            ctx.textAlign = 'center';
+            ctx.fillText('Leaky bucket under burst vs paced load', W / 2, 22);
+            ctx.font = 'italic 10px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+            ctx.fillStyle = '#888';
+            ctx.fillText('Simulated. Capacity and restore rate are per-shop and plan-dependent; the mechanism is what matters.', W / 2, 40);
+
+            const marginTop = 60;
+            const marginBottom = 84;
+            const marginLeft = 58;
+            const marginRight = 22;
+            const chartW = W - marginLeft - marginRight;
+            const chartH = H - marginTop - marginBottom;
+
+            const CAP = 2000;
+            const RESTORE = 100;       // points per tick
+            const TICKS = 40;
+
+            // Burst client: fires a costly query every tick until throttled
+            const burst = [];
+            const paced = [];
+            let bBucket = CAP, pBucket = CAP;
+            let bThrottled = 0;
+            const burstCost = 260;
+            const pacedCost = 95;
+
+            for (let t = 0; t <= TICKS; t++) {
+                burst.push(bBucket);
+                paced.push(pBucket);
+
+                // restore first
+                bBucket = Math.min(CAP, bBucket + RESTORE);
+                pBucket = Math.min(CAP, pBucket + RESTORE);
+
+                // burst client: always attempts
+                if (bBucket >= burstCost) bBucket -= burstCost;
+                else bThrottled++;
+
+                // paced client: only spends what the restore rate sustains
+                if (pBucket - pacedCost >= CAP * 0.35) pBucket -= pacedCost;
+            }
+
+            // axes
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+            ctx.textAlign = 'right';
+            for (let t = 0; t <= 4; t++) {
+                const v = (CAP / 4) * t;
+                const y = marginTop + chartH - (v / CAP) * chartH;
+                ctx.fillStyle = '#666';
+                ctx.fillText(v.toString(), marginLeft - 8, y + 4);
+                ctx.beginPath();
+                ctx.strokeStyle = '#eee';
+                ctx.lineWidth = 1;
+                ctx.moveTo(marginLeft, y);
+                ctx.lineTo(W - marginRight, y);
+                ctx.stroke();
+            }
+
+            ctx.save();
+            ctx.translate(15, marginTop + chartH / 2);
+            ctx.rotate(-Math.PI / 2);
+            ctx.textAlign = 'center';
+            ctx.font = '10px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+            ctx.fillStyle = '#666';
+            ctx.fillText('currentlyAvailable (points)', 0, 0);
+            ctx.restore();
+
+            ctx.beginPath();
+            ctx.strokeStyle = '#999';
+            ctx.moveTo(marginLeft, marginTop + chartH);
+            ctx.lineTo(W - marginRight, marginTop + chartH);
+            ctx.stroke();
+
+            function X(i) { return marginLeft + (i / TICKS) * chartW; }
+            function Y(v) { return marginTop + chartH - (v / CAP) * chartH; }
+
+            // throttle floor band
+            ctx.fillStyle = 'rgba(231,76,60,0.08)';
+            ctx.fillRect(marginLeft, Y(burstCost), chartW, marginTop + chartH - Y(burstCost));
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.moveTo(marginLeft, Y(burstCost));
+            ctx.lineTo(W - marginRight, Y(burstCost));
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.font = 'italic 10px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+            ctx.fillStyle = '#e74c3c';
+            ctx.textAlign = 'left';
+            ctx.fillText('below requestedQueryCost → THROTTLED', marginLeft + 6, Y(burstCost) + 14);
+
+            function series(arr, color, width) {
+                ctx.strokeStyle = color;
+                ctx.lineWidth = width;
+                ctx.beginPath();
+                for (let i = 0; i < arr.length; i++) {
+                    if (i === 0) ctx.moveTo(X(i), Y(arr[i]));
+                    else ctx.lineTo(X(i), Y(arr[i]));
+                }
+                ctx.stroke();
+            }
+
+            series(paced, '#27ae60', 2.2);
+            series(burst, '#e74c3c', 2.2);
+
+            // fill under burst to emphasise depletion
+            ctx.fillStyle = 'rgba(26,82,118,0.35)';
+            ctx.globalAlpha = 0.25;
+            ctx.beginPath();
+            ctx.moveTo(X(0), Y(burst[0]));
+            for (let i = 1; i < burst.length; i++) ctx.lineTo(X(i), Y(burst[i]));
+            ctx.lineTo(X(burst.length - 1), marginTop + chartH);
+            ctx.lineTo(X(0), marginTop + chartH);
+            ctx.closePath();
+            ctx.fill();
+            ctx.globalAlpha = 1;
+
+            // legend
+            const legend = [
+                { c: '#e74c3c', t: 'burst client — first: 250 every request (cost ' + burstCost + ')' },
+                { c: '#27ae60', t: 'paced client — smaller pages, reads throttleStatus (cost ' + pacedCost + ')' }
+            ];
+            ctx.textAlign = 'left';
+            for (let i = 0; i < legend.length; i++) {
+                const ly = H - 52 + i * 16;
+                ctx.fillStyle = legend[i].c;
+                ctx.fillRect(marginLeft, ly - 7, 18, 3);
+                ctx.font = '11px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+                ctx.fillStyle = '#2c3e50';
+                ctx.fillText(legend[i].t, marginLeft + 24, ly - 2);
+            }
+
+            ctx.font = 'italic 10px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+            ctx.fillStyle = '#666';
+            ctx.fillText('The burst client drains to the floor and thereafter completes roughly one query per ' +
+                Math.ceil(burstCost / RESTORE) + ' ticks. Bigger pages bought less throughput.', marginLeft, H - 12);
+
+            ctx.font = '10px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+            ctx.fillStyle = '#666';
+            ctx.textAlign = 'center';
+            ctx.fillText('time (bucket refills at restoreRate = ' + RESTORE + '/tick)', marginLeft + chartW / 2, marginTop + chartH + 20);
+        }
+
+        draw();
+        window.addEventListener('resize', draw);
+    })();
+    </script>
+</body>
+</html>

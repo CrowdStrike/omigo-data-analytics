@@ -9,6 +9,7 @@ When the user makes a statement, conclusion, or design decision, do NOT simply a
 3. If the reasoning has a gap or unstated assumption, point it out
 4. If a simpler explanation or counterexample exists, present it
 5. If the conclusion is correct, confirm it with the reasoning — not just "yes"
+6. nefore creating a new html page or grid, check if there is something from backlog that already exists
 
 This applies especially to:
 - Statistical assumptions and when they hold
@@ -77,24 +78,29 @@ Additional canvas/chart rules:
 ## Best Practices
  - Use predefined ui-templates to understand style, format, coloring, font etc scheme. Esp when multiple agents are created to write docs under a grid.
  - Dont include count of items in summary or in the card. Because thats a lose dependent number that need to be updated everytime.
- - dont run any Git commands. I will do all Git stuff on my own. If git history is needed to find some previous version etc. then ask.
+ - Dont run any Git commands. I will do all Git stuff on my own. If git history is needed to find some previous version etc. then ask.
+ - Dont do extensive testing to verify the rendering of html docs unless told to do so specifically.
+ - dont put any cross reference links from one page to another except the index grid cards where it is for navigation. no back, home links kind of things either.
+ - Some grid pages like backlog may have self reference links which is okay
+ - Grid pages with cards should hae index number for each card. That index number should match the file index number in naming convention
 
+## Folder-Level Instructions
 
-## TODO
+Each subfolder has its own `CLAUDE.md` with folder-specific context and pending TODOs. See:
+
+| Folder | Focus |
+|--------|-------|
+| `ab-testing/` | A/B testing pitfalls and methodology |
+| `domains/` | Industry-specific data traps |
+| `folk-wisdom/` | Popular sayings decomposed for hidden fallacies |
+| `real-world-distributions/` | Surprising shapes from real data |
+| `cognitive-biases/` | Human psychology failures in analysis |
+| `metrics/` | Good/bad metrics, vanity metrics, reporting |
+| `backlog/` | Unresolved topics and future directions |
+| `interesting-problems-paradoxes/` | Classic puzzles and real-world analogues |
+| `common-bad-practices/` | Organizational anti-patterns in data teams |
+
+## Global TODO
 
 - Remove dead `.nav` CSS rules from ~289 HTML files (the `<div class="nav">` elements are already gone, but the style blocks remain as unused code)
 
-
-## Thoughts
-- 17-folk-wisdom-fallacies.html: girls grow faster than boys
-- concepts: bayesian statistics wrt AB testing, Multi Arm Bandit - challenges in real life
-- real-world-distributions/01-ecommerce.html: multiple items buying in single session. not restricting to just the item at the start
-- domain pitfalls - without proper identification, AI agents masquerading as humans poisonsing user generated content and tracking data
-- Double Counting AI assisted work - AI agents writing emails from sender, then AI agents reading emails to summarize.
-- rename 151-forced-participation-data-poisoning.html to forced survey participation impact.
-- Human Psychology - building affection, attraction, attachment to AI generated content faking human expressions, emotions. Changing the reality, twisting expections
-  from real world interaction 
-- Human Psychology: Freedom to talk to Chat Bot without having to be super politically correct which at times can be restricting.
-- High churn rate at 4, 8 yrs mark - Iniial Stock grants expiry
-- Survey and Feedback question bias response to the position rank
-- 

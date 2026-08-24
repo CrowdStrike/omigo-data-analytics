@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Apple HealthKit — Platform APIs</title>
+<style>
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        line-height: 1.6;
+        color: #2c3e50;
+        max-width: 100%;
+        margin: 0;
+        padding: 30px 40px;
+        background: #fff;
+    }
+    h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+    .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+    .verified { display: inline-block; background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-bottom: 16px; }
+    h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
+    .status { display: inline-block; background: #fef9e7; border: 1px solid #f39c12; color: #b7950b; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-left: 12px; vertical-align: middle; }
+    table.obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+    table.obj-table td { vertical-align: top; padding: 12px; }
+    table.obj-table td:first-child { width: 45%; }
+    table.obj-table td:last-child { width: 55%; }
+    pre { background: #f4f4f4; padding: 14px; border-radius: 6px; overflow-x: auto; font-size: 0.82em; text-align: left; }
+    canvas { display: block; margin: 16px auto 0; width: 100%; }
+    .key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+    .section-label { font-weight: bold; color: #1a5276; margin-top: 16px; display: block; }
+    .section-label:first-child { margin-top: 0; }
+    .payload-note { font-size: 0.85em; color: #555; margin: 12px 0 8px 0; }
+    ul { padding-left: 20px; }
+    li { margin-bottom: 6px; font-size: 0.93em; }
+    code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-size: 0.88em; }
+    .scope-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+    .scope-tag { background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 3px 8px; border-radius: 4px; font-size: 0.78em; font-family: monospace; }
+    p { font-size: 0.93em; }
+</style>
+</head>
+<body>
+
+<h1>Apple HealthKit <span class="status">BACKLOG</span></h1>
+<p class="subtitle">On-device health datastore on iOS and watchOS. There is no server API — data is readable only by code running on the user's own device.</p>
+<span class="verified">Last verified: August 2026</span>
+
+<h2>Overview</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+    <span class="section-label">What It Provides</span>
+    <p>A typed, sample-level local store, <code>HKHealthStore</code>, holding health and fitness records written by Apple's own apps, by paired devices such as Apple Watch, and by third-party apps. It is an aggregator and a permission broker, not a measurement system of its own.</p>
+
+    <div class="key-point"><strong>There is no HealthKit API to call from a server.</strong> No REST base URL, no OAuth server-to-server flow, no client credentials, no way for a backend to pull a user's health data. Reads happen only from code executing on that user's iPhone or Apple Watch, against the local store, with per-type permission granted by that user. Health data is encrypted on device; when the user enables iCloud sync it moves between their own devices under Apple's control and is not exposed to developers.
+    <br><br>
+    <strong>Pipeline consequence:</strong> any design that assumes a scheduled server-side fetch is impossible here. You must ship a mobile app. Ingestion is device-initiated, happens only when that app is launched or briefly woken in the background, and stops permanently on uninstall. Gaps are the normal case, not an incident.</div>
+
+    <span class="section-label">Authentication &amp; Permissions</span>
+    <ul>
+        <li>Per-data-type authorization, with read and write requested independently via <code>requestAuthorization(toShare:read:)</code>. There is no "all health data" grant.</li>
+        <li>Requires the HealthKit capability/entitlement plus purpose strings in <code>Info.plist</code>.</li>
+        <li>The user can grant, deny, or later revoke any single type from the Health app, at any time, with no callback to your app.</li>
+    </ul>
+    <div class="scope-list">
+        <span class="scope-tag">com.apple.developer.healthkit</span>
+        <span class="scope-tag">NSHealthShareUsageDescription</span>
+        <span class="scope-tag">NSHealthUpdateUsageDescription</span>
+        <span class="scope-tag">HKObjectType.quantityType(.heartRate)</span>
+        <span class="scope-tag">HKObjectType.categoryType(.sleepAnalysis)</span>
+        <span class="scope-tag">HKObjectType.workoutType()</span>
+    </div>
+
+    <div class="key-point"><strong>Missingness is not identifiable.</strong> An app can query its <em>write</em> authorization status, but deliberately cannot determine read authorization. A denied read does not error — it returns an empty result set, indistinguishable from "this user has no data of that type". So an absent value means one of: permission denied, device not worn, or a true zero, and the API will not tell you which. Every imputation rule, every complete-case average, and every "engagement dropped" conclusion drawn from HealthKit data rests on an unobservable missingness mechanism. Record your own permission-request outcomes over time; it is the only way to partially recover the distinction.</div>
+
+    <span class="section-label">Granularity</span>
+    <ul>
+        <li><strong>Optical heart rate on Apple Watch</strong> is duty-cycled, not continuous. Background readings are intermittent — sparse when the wrist is still, suppressed during motion, and absent when the watch is off. During an active workout session the sampling is far denser. Two days with the same nominal "heart rate" coverage can differ by an order of magnitude in sample count.</li>
+        <li><strong><code>heartRateVariabilitySDNN</code></strong> arrives opportunistically — a handful of readings per day, taken under conditions the API does not describe. It is not a continuous series and daily means over it are means of a convenience sample.</li>
+        <li><strong><code>oxygenSaturation</code></strong> background readings are periodic and frequently absent altogether.</li>
+        <li><strong><code>stepCount</code></strong> arrives as interval samples with a start and end. These must be summed over non-overlapping windows. Averaging them, or summing overlapping ones, is wrong.</li>
+        <li>Every sample carries <code>HKSourceRevision</code> (writing app and build) and optionally <code>HKDevice</code> (hardware, model, firmware).</li>
+    </ul>
+
+    <div class="key-point"><strong>Source metadata is part of the measurement definition, not bookkeeping.</strong> A heart rate from a chest strap is derived from beat-to-beat R-R intervals. One from an optical wrist sensor is a periodic, motion-sensitive, duty-cycled estimate. One typed in by hand is a single spot reading. All three land in HealthKit under <code>heartRate</code> in count/min. Sleep staging from actigraphy plus PPG is a model inference, not polysomnography. Pooling across sources without a source or device term confounds algorithm and hardware with physiology, and the resulting "effect" can be entirely an artefact of who owns which watch.</div>
+
+    <span class="section-label">Key Record Types</span>
+    <ul>
+        <li><strong><code>HKQuantityType</code></strong> — <code>heartRate</code> (count/min), <code>heartRateVariabilitySDNN</code> (ms), <code>restingHeartRate</code>, <code>walkingHeartRateAverage</code>, <code>stepCount</code>, <code>distanceWalkingRunning</code>, <code>activeEnergyBurned</code>, <code>basalEnergyBurned</code>, <code>vo2Max</code> (mL/kg·min), <code>oxygenSaturation</code> (%), <code>respiratoryRate</code>, <code>bodyMass</code>, <code>appleExerciseTime</code>, <code>appleStandTime</code>.</li>
+        <li><strong><code>HKCategoryType</code></strong> — chiefly <code>sleepAnalysis</code>, whose <code>HKCategoryValueSleepAnalysis</code> values are <code>inBed</code>, <code>asleepUnspecified</code>, the stage values <code>asleepREM</code> / <code>asleepCore</code> / <code>asleepDeep</code>, and <code>awake</code>. Each is its own interval sample, so a night is a sequence of adjacent samples rather than one record.</li>
+        <li><strong><code>HKElectrocardiogram</code></strong> — single-lead Apple Watch ECG with voltage measurements and a classification. Separate from the irregular-rhythm and high/low heart rate notifications, which are <em>events emitted by Apple's own algorithms</em> with their own thresholds and detection latency, not raw signal.</li>
+        <li><strong><code>HKWorkout</code></strong> with <code>HKWorkoutActivityType</code>; routes via <code>HKWorkoutRoute</code> under <code>HKSeriesType</code>; dense series such as beat-to-beat data via <code>HKQuantitySeries</code>.</li>
+    </ul>
+
+    <div class="key-point"><strong>Sleep stages are not guaranteed to exist historically.</strong> The <code>asleepREM</code> / <code>asleepCore</code> / <code>asleepDeep</code> values arrived with iOS 16 and watchOS 9. Data recorded before that, and data written by third-party apps that do not stage, appears only as <code>asleepUnspecified</code> or <code>inBed</code>. A stage-level time series therefore has a hard left edge determined by OS version and by which app was writing — a discontinuity that looks exactly like a change in the user's sleep architecture if you do not check the value distribution by date.</div>
+
+    <span class="section-label">Queries</span>
+    <ul>
+        <li><code>HKSampleQuery</code> — raw samples over a predicate, with sort and limit.</li>
+        <li><code>HKStatisticsQuery</code> — one aggregate over one window. <code>HKStatisticsCollectionQuery</code> — bucketed rollups (hourly, daily) that apply HealthKit's own source handling, which is why it is the right tool for "steps per day".</li>
+        <li><code>HKAnchoredObjectQuery</code> — incremental sync. Returns additions <em>and deletions</em> since an opaque anchor. Persist the anchor rather than a timestamp; a timestamp cannot express a retraction.</li>
+        <li><code>HKObserverQuery</code> plus background delivery to wake the app when new data of a type lands.</li>
+        <li><code>HKQuery.predicateForSamples(withStart:end:options:)</code> — the standard time predicate.</li>
+    </ul>
+
+    <span class="section-label">Rate Limits &amp; Quotas</span>
+    <p>There are no request quotas, because there are no requests — reads are local storage and IPC. The real constraints are OS-side and qualitative rather than published numbers:</p>
+    <ul>
+        <li>Background delivery frequency is a <em>hint</em>. Wake-ups are coalesced and throttled by the system according to battery, thermal state, and Low Power Mode. Immediate delivery is available only for a small subset of types, blood glucose being the canonical example; for most types the effective cadence is much coarser than requested.</li>
+        <li>Large historical queries are memory-bound. Pulling years of heart-rate samples in a single query can be terminated by the OS. Page by date range and by <code>limit</code>.</li>
+        <li>Upload throughput is your own backend's problem, plus whatever connectivity the user happens to have.</li>
+    </ul>
+
+    <span class="section-label">Business Scenarios</span>
+    <ul>
+        <li>Decentralised clinical trials and remote patient monitoring, where a companion study app is the capture layer.</li>
+        <li>Insurance and workplace wellness programmes tied to activity targets — noting that the incentive to inflate the source is created by the programme itself.</li>
+        <li>Fitness and coaching apps that read workouts and heart rate, and write workouts back so the user's Health app stays coherent.</li>
+        <li>Chronic condition management: glucose, blood pressure, weight trend.</li>
+        <li>Sleep and activity cohort research, with the standing caveat that the cohort is iPhone owners who installed <em>and kept</em> an app.</li>
+    </ul>
+
+    <span class="section-label">Key Restrictions &amp; Gotchas</span>
+    <ul>
+        <li><strong>No server API and no bulk export for developers.</strong> A user can export their own Health archive from the Health app; you cannot request one. No cross-user access, no population queries, no way to read anyone else's store.</li>
+        <li><strong>No guaranteed backfill.</strong> You see what is on the device when your app first runs. History that predates the device, or that was pruned, is simply not there.</li>
+        <li><strong>Deletions require handling.</strong> Only <code>HKAnchoredObjectQuery</code> surfaces deleted objects. Ignore them and your copy silently diverges from what the user sees in Health.</li>
+        <li><strong>Multi-source double counting.</strong> The iPhone pedometer, a paired Watch, and a third-party app can all write steps for the same hour. The Health app applies a user-visible source priority ordering, and some types are de-duplicated for display, so the number the user sees is not the sum of raw samples. A pipeline that sums raw samples inflates — and inflates most for users with the most devices, which correlates with income and engagement.</li>
+        <li><strong>Composite scores are model outputs, not measurements.</strong> Third-party apps write readiness, recovery, stress, and sleep scores into the store as opaque values. Those models change with app and firmware versions, so a long series of a vendor score is a series of different definitions.</li>
+        <li><strong>Per-type revocation makes ragged panels.</strong> A user can revoke heart rate on day 40 while leaving steps on. Your panel becomes unbalanced mid-study, silently.</li>
+        <li><strong>Availability is conditional.</strong> Gate on <code>HKHealthStore.isHealthDataAvailable()</code>; support varies by device class, and some types exist only where the relevant sensor does.</li>
+        <li><strong>Policy limits, not just technical ones.</strong> App Review requires a health-related primary purpose, and HealthKit data may not be used for advertising or sold to data brokers. This constrains business models, not only code.</li>
+        <li><strong>User-entered values are unvalidated.</strong> Hand-typed weights and injected step counts are indistinguishable from sensor data except through source metadata.</li>
+    </ul>
+</td>
+<td>
+    <p class="payload-note"><strong>App-side serialization</strong> — this is <em>not</em> an API response, because no API exists. It is how an iOS app would flatten samples it read from the local store before uploading them to its own backend. Nothing produces this JSON but code you wrote.</p>
+    <pre>{
+  "uploadedBy": "com.example.studyapp",
+  "uploadedAt": "2026-08-21T07:42:11Z",
+  "anchorAfterUpload": "&lt;opaque HKQueryAnchor blob&gt;",
+
+  "quantitySamples": [
+    {
+      "type": "HKQuantityTypeIdentifierHeartRate",
+      "uuid": "EXAMPLE_UUID_redacted",  // Note: masked for illustration
+      "value": 58,
+      "unit": "count/min",
+      "startDate": "2026-08-21T02:14:30Z",
+      "endDate":   "2026-08-21T02:14:30Z",
+      "sourceRevision": {
+        "source": { "name": "Apple Watch",
+                    "bundleIdentifier": "com.apple.health.&lt;uuid&gt;" },
+        "productType": "Watch7,4",
+        "version": "11.2"
+      },
+      "device": { "name": "Apple Watch", "model": "Watch",
+                  "hardwareVersion": "Watch7,4",
+                  "softwareVersion": "11.2" },
+      "metadata": { "HKMetadataKeyHeartRateMotionContext": 1 }
+    },
+    {
+      "type": "HKQuantityTypeIdentifierHeartRateVariabilitySDNN",
+      "uuid": "EXAMPLE_UUID_redacted",  // Note: masked for illustration
+      "value": 41.8,
+      "unit": "ms",
+      "startDate": "2026-08-21T05:03:12Z",
+      "endDate":   "2026-08-21T05:04:12Z",
+      "sourceRevision": {
+        "source": { "name": "Apple Watch" },
+        "productType": "Watch7,4", "version": "11.2"
+      }
+    }
+  ],
+
+  "categorySamples": [
+    { "type": "HKCategoryTypeIdentifierSleepAnalysis",
+      "value": 0, "valueName": "inBed",
+      "startDate": "2026-08-20T22:58:00Z",
+      "endDate":   "2026-08-21T06:59:00Z",
+      "sourceRevision": { "source": { "name": "Apple Watch" } } },
+
+    { "value": 3, "valueName": "asleepCore",
+      "startDate": "2026-08-20T23:18:00Z",
+      "endDate":   "2026-08-20T23:45:00Z" },
+    { "value": 4, "valueName": "asleepDeep",
+      "startDate": "2026-08-20T23:45:00Z",
+      "endDate":   "2026-08-21T00:15:00Z" },
+    { "value": 3, "valueName": "asleepCore",
+      "startDate": "2026-08-21T00:15:00Z",
+      "endDate":   "2026-08-21T00:35:00Z" },
+    { "value": 5, "valueName": "asleepREM",
+      "startDate": "2026-08-21T00:35:00Z",
+      "endDate":   "2026-08-21T00:48:00Z" },
+    { "value": 2, "valueName": "awake",
+      "startDate": "2026-08-21T00:48:00Z",
+      "endDate":   "2026-08-21T00:52:00Z" }
+  ],
+
+  "deletedObjects": [
+    { "uuid": "EXAMPLE_UUID_redacted" }  // Note: masked for illustration
+  ],
+
+  "collectionCaveats": {
+    "readAuthorizationObservable": false,
+    "note": "empty arrays cannot be distinguished from denial"
+  }
+}</pre>
+
+    <p class="payload-note"><strong>Single-night hypnogram from <code>sleepAnalysis</code> samples</strong> — each block is one interval sample. This is an inference from PPG plus actigraphy, not polysomnography, and the fact that stages appear at all depends on the watchOS version and on which app wrote the night. The same night recorded by a third-party writer may collapse to a single <code>asleepUnspecified</code> block.</p>
+
+    <canvas id="hypnogram" height="380"></canvas>
+</td>
+</tr>
+</table>
+
+<script>
+(function() {
+    const canvas = document.getElementById('hypnogram');
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+
+    // Minutes measured from 23:00. Total window 23:00 -> 07:00 = 480 min.
+    const TOTAL = 480;
+    const STAGES = ['Awake', 'REM', 'Core', 'Deep'];
+    const COLORS = {
+        'Awake': '#e74c3c',
+        'REM':   '#e67e22',
+        'Core':  '#1a5276',
+        'Deep':  '#27ae60'
+    };
+
+    const segments = [
+        [  0,  18, 'Awake'],
+        [ 18,  45, 'Core' ],
+        [ 45,  75, 'Deep' ],
+        [ 75,  95, 'Core' ],
+        [ 95, 108, 'REM'  ],
+        [108, 112, 'Awake'],
+        [112, 140, 'Core' ],
+        [140, 170, 'Deep' ],
+        [170, 190, 'Core' ],
+        [190, 215, 'REM'  ],
+        [215, 220, 'Awake'],
+        [220, 250, 'Core' ],
+        [250, 268, 'Deep' ],
+        [268, 295, 'Core' ],
+        [295, 325, 'REM'  ],
+        [325, 330, 'Awake'],
+        [330, 365, 'Core' ],
+        [365, 378, 'Deep' ],
+        [378, 405, 'Core' ],
+        [405, 440, 'REM'  ],
+        [440, 448, 'Awake'],
+        [448, 466, 'Core' ],
+        [466, 480, 'Awake']
+    ];
+
+    function clockLabel(min) {
+        let h = Math.floor((23 * 60 + min) / 60) % 24;
+        return (h < 10 ? '0' + h : h) + ':00';
+    }
+
+    function draw() {
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * dpr;
+        canvas.height = 380 * dpr;
+        canvas.style.height = '380px';
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(dpr, dpr);
+
+        const W = rect.width;
+        const H = 380;
+        ctx.clearRect(0, 0, W, H);
+
+        const pad = { top: 58, right: 18, bottom: 76, left: 62 };
+        const plotW = Math.max(60, W - pad.left - pad.right);
+        const plotH = H - pad.top - pad.bottom;
+        const rowH = plotH / STAGES.length;
+
+        const x = m => pad.left + (m / TOTAL) * plotW;
+        const rowCenter = i => pad.top + rowH * (i + 0.5);
+
+        // Title
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.fillText('Sleep stage segments for one night, as stored in HealthKit', W / 2, 22);
+        ctx.font = 'italic 10.5px -apple-system, sans-serif';
+        ctx.fillStyle = '#888';
+        ctx.fillText('inferred stages, not polysomnography — availability depends on OS version and writing app', W / 2, 39);
+
+        // Horizontal band gridlines
+        ctx.strokeStyle = '#e8e8e8';
+        ctx.lineWidth = 1;
+        for (let i = 0; i <= STAGES.length; i++) {
+            const y = pad.top + rowH * i;
+            ctx.beginPath();
+            ctx.moveTo(pad.left, y);
+            ctx.lineTo(pad.left + plotW, y);
+            ctx.stroke();
+        }
+
+        // Hourly gridlines + clock labels
+        ctx.font = '11px -apple-system, sans-serif';
+        for (let m = 0; m <= TOTAL; m += 60) {
+            const px = x(m);
+            ctx.strokeStyle = '#e8e8e8';
+            ctx.beginPath();
+            ctx.moveTo(px, pad.top);
+            ctx.lineTo(px, pad.top + plotH);
+            ctx.stroke();
+            ctx.fillStyle = '#555';
+            ctx.textAlign = 'center';
+            ctx.fillText(clockLabel(m), px, pad.top + plotH + 17);
+        }
+
+        // Axes
+        ctx.strokeStyle = '#2c3e50';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(pad.left, pad.top);
+        ctx.lineTo(pad.left, pad.top + plotH);
+        ctx.lineTo(pad.left + plotW, pad.top + plotH);
+        ctx.stroke();
+
+        // Stage labels
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.textAlign = 'right';
+        STAGES.forEach((s, i) => {
+            ctx.fillStyle = COLORS[s];
+            ctx.fillText(s, pad.left - 10, rowCenter(i) + 4);
+        });
+
+        // Step connectors between consecutive segments
+        const blockH = Math.min(20, rowH * 0.52);
+        ctx.strokeStyle = 'rgba(26,82,118,0.35)';
+        ctx.lineWidth = 1.5;
+        for (let k = 0; k < segments.length - 1; k++) {
+            const i0 = STAGES.indexOf(segments[k][2]);
+            const i1 = STAGES.indexOf(segments[k + 1][2]);
+            const px = x(segments[k][1]);
+            ctx.beginPath();
+            ctx.moveTo(px, rowCenter(i0));
+            ctx.lineTo(px, rowCenter(i1));
+            ctx.stroke();
+        }
+
+        // Stage blocks
+        segments.forEach(seg => {
+            const i = STAGES.indexOf(seg[2]);
+            const x0 = x(seg[0]);
+            const w = Math.max(1.5, x(seg[1]) - x0);
+            ctx.fillStyle = COLORS[seg[2]];
+            ctx.fillRect(x0, rowCenter(i) - blockH / 2, w, blockH);
+        });
+
+        // X axis caption
+        ctx.textAlign = 'center';
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillText('clock time', pad.left + plotW / 2, pad.top + plotH + 38);
+
+        // Legend
+        const legend = STAGES.map(s => ({ c: COLORS[s], t: s }));
+        ctx.font = '10.5px -apple-system, sans-serif';
+        let totalLegendW = 0;
+        legend.forEach(l => { totalLegendW += 11 + 5 + ctx.measureText(l.t).width + 16; });
+        let lx = Math.max(pad.left, pad.left + (plotW - totalLegendW) / 2);
+        const ly = H - 16;
+        legend.forEach(l => {
+            ctx.fillStyle = l.c;
+            ctx.fillRect(lx, ly - 8, 11, 9);
+            ctx.fillStyle = '#555';
+            ctx.textAlign = 'left';
+            ctx.fillText(l.t, lx + 16, ly);
+            lx += 11 + 5 + ctx.measureText(l.t).width + 16;
+        });
+    }
+
+    draw();
+    window.addEventListener('resize', draw);
+})();
+</script>
+</body>
+</html>

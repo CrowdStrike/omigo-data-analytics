@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tracking Data: Phone Motion Sensors</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2c3e50; max-width: 100%; margin: 0; padding: 30px 40px; background: #fff; }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+        .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
+        .obj-table { width: 100%; border-collapse: collapse; }
+        .obj-table td { vertical-align: top; padding: 16px; border: 1px solid #2980b9; }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; text-align: center; }
+        ul { padding-left: 20px; margin: 8px 0; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        .obj-table td:last-child .payload,
+        .obj-table td:last-child .payload-note { text-align: left; }
+        .payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 12px 0; }
+        .payload-note { font-size: 0.82em; color: #666; margin: 12px 0 -6px 0; font-style: italic; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        .key-point strong:first-child { color: #1a5276; }
+        .lede { font-size: 0.95em; margin: 0 0 10px 0; }
+        .lbl { display: inline-block; font-size: 0.7em; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; margin: 10px 0 2px 0; }
+        .lbl-purpose { background: #eaf2fb; color: #1a5276; }
+        .lbl-effect { background: #fdf0e6; color: #a8501c; }
+        li b { color: #1a5276; font-weight: 600; }
+        canvas { display: block; margin: 0 auto; }
+    </style>
+</head>
+<body>
+    <h1>Tracking Data: Phone Motion Sensors</h1>
+    <p class="subtitle">The accelerometer and gyroscope report acceleration and rotation rate many times a second. Activity labels are classifier output computed from those samples, not readings.</p>
+
+    <table class="obj-table">
+        <tr>
+            <td>
+                <div class="obj-title">What is it?</div>
+                <p class="lede">Six numbers, sampled many times a second.</p>
+                <ul>
+                    <li><b>Accelerometer:</b> acceleration along three axes</li>
+                    <li><b>Gyroscope:</b> rate of rotation about three axes</li>
+                    <li><b>Sampling rate:</b> tens to hundreds of times a second, depending on what the requesting code asks for</li>
+                    <li><b>Everything else is computed</b> — orientation, step count and activity label come from integrating or differentiating the series and comparing against a model or threshold</li>
+                </ul>
+                <div class="key-point"><strong>Access gates:</strong> web pages reach these sensors through a documented browser event. Access was originally ungated, and browsers later moved motion and orientation behind a permission request; native apps read the same sensors under whatever the platform requires. For analysis, the gate controls who subscribes, not what the sensor resolves.</div>
+            </td>
+            <td><canvas id="c1" width="720" height="320"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">What does it collect?</div>
+                <ul>
+                    <li><b>Acceleration</b> on three axes, with and without gravity</li>
+                    <li><b>Rotation rate</b> about three axes</li>
+                    <li><b>Sampling interval</b> the subscriber asked for</li>
+                    <li><b>Derived: orientation</b>, from integrating rotation rate</li>
+                    <li><b>Derived: step count and cadence</b>, from peak spacing</li>
+                    <li><b>Derived: activity label</b> — walking, driving, still</li>
+                    <li><b>Derived: carry mode</b> — held, or resting on a surface</li>
+                </ul>
+                <div class="key-point"><strong>Interval sets the ceiling:</strong> at a coarse interval only gross activity survives; at a fine one the same stream carries the small oscillations gait and keystroke inference depend on. Everything below the split is a window-level classification, not a reading — and the null shows the classifier declining to commit.</div>
+                <div class="key-point"><strong>Derived fields are noisier than their source:</strong> differencing to get a rate amplifies noise, since adjacent samples differ little while their independent errors add — and each further derivative is worse. Integration fails the other way, accumulating small bias into unbounded drift. So <code>step_cadence</code> and <code>gait_vector</code> are not "the same data, summarised"; they carry error the accelerometer output does not, which is why these pipelines low-pass filter before differentiating and why a fine interval alone does not buy precision.</div>
+            </td>
+            <td><canvas id="c2" width="720" height="320"></canvas>
+<p class="payload-note">Sample payload — illustrative structure, not real captured data.</p>
+<pre class="payload">{
+  // ── documented in public API (DeviceMotionEvent) ──
+  "interval": 16,                 // ms between samples
+  "acceleration":               { "x": 0.11, "y": -0.04, "z": 0.27 },
+  "accelerationIncludingGravity":{ "x": 0.09, "y": -9.73, "z": 0.31 },
+  "rotationRate":               { "alpha": 1.8, "beta": -0.6, "gamma": 0.2 },
+  // units: acceleration m/s², rotationRate deg/s
+
+  // ── inferred / plausible, added downstream ──
+  "activity":      "walking",     // classifier over a window of samples
+  "step_cadence":  1.9,           // steps/sec, from peak spacing
+  "carry_mode":    "in_hand",
+  "gait_vector":   [0.31, -0.08, …],
+  "surface":       null           // stairs vs flat: undetermined
+}</pre>
+</td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">Why is it collected?</div>
+                <div class="lbl lbl-purpose">Stated purpose</div>
+                <ul>
+                    <li><b>The interface needs them</b> — rotating the screen, tilt in games, step counting, steadying the camera</li>
+                </ul>
+                <div class="lbl lbl-effect">Additional consequence</div>
+                <ul>
+                    <li>A stream fine enough to rotate the screen is <b>fine enough to tell walking from driving</b>, and to count paces</li>
+                    <li>None of that needs a new sensor or a permission — <b>just different arithmetic on the same numbers</b></li>
+                </ul>
+                <div class="key-point"><strong>It measures a phone, not a person:</strong> a way of walking is not a name, and the signal changes more when the phone moves from pocket to bag than it does between two people.</div>
+            </td>
+            <td><canvas id="c3" width="720" height="320"></canvas></td>
+        </tr>
+    </table>
+
+    <script>
+    const dpr = window.devicePixelRatio || 1;
+    // Validated categorical palette (CVD-checked, see REVIEW-NOTES.md).
+    // Red is deliberately NOT in the rotation - it stays reserved for
+    // genuine error / alarm states so it keeps its meaning.
+    const P = {
+      blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+      aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+      ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+    };
+    const SERIES = [P.blue, P.green, P.violet, P.orange, P.aqua, P.magenta, P.yellow];
+    // Translucent fill from a palette hex, so a shape keeps its hue but stays light.
+    function tint(hex, a) {
+      const n = parseInt(hex.slice(1), 16);
+      return 'rgba(' + (n >> 16) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+    }
+    // Rounded-rect path helper (works without native ctx.roundRect).
+    function rr(ctx, x, y, w, h, r) {
+      r = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    function setupCanvas(id) {
+        const c = document.getElementById(id);
+        const w = c.getAttribute('width') ? +c.getAttribute('width') : 720;
+        const h = c.getAttribute('height') ? +c.getAttribute('height') : 240;
+        c.width = w * dpr;
+        c.height = h * dpr;
+        c.style.width = w + 'px';
+        c.style.height = h + 'px';
+        const ctx = c.getContext('2d');
+        ctx.scale(dpr, dpr);
+        return { ctx, w, h };
+    }
+
+    // Canvas 1: Phone with 3 axes and rotation arrows
+    (function() {
+        const { ctx, w, h } = setupCanvas('c1');
+
+        // Draw phone body
+        const px = w / 2 - 30, py = h / 2 - 50, pw = 60, ph = 100;
+        ctx.fillStyle = '#34495e';
+        rr(ctx, px, py, pw, ph, 8);
+        ctx.fill();
+
+        // Phone screen
+        ctx.fillStyle = P.grid;
+        ctx.fillRect(px + 5, py + 12, pw - 10, ph - 24);
+
+        // Home button
+        ctx.beginPath();
+        ctx.arc(px + pw / 2, py + ph - 8, 4, 0, Math.PI * 2);
+        ctx.strokeStyle = '#7f8c8d';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // X axis (red) - horizontal
+        ctx.beginPath();
+        ctx.moveTo(px - 60, h / 2);
+        ctx.lineTo(px + pw + 60, h / 2);
+        ctx.strokeStyle = P.magenta;
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+        // Arrow head
+        ctx.beginPath();
+        ctx.moveTo(px + pw + 60, h / 2);
+        ctx.lineTo(px + pw + 50, h / 2 - 6);
+        ctx.lineTo(px + pw + 50, h / 2 + 6);
+        ctx.closePath();
+        ctx.fillStyle = P.magenta;
+        ctx.fill();
+        ctx.fillStyle = P.magenta;
+        ctx.font = 'bold 16px -apple-system, sans-serif';
+        ctx.fillText('X', px + pw + 65, h / 2 + 5);
+
+        // Y axis (green) - vertical
+        ctx.beginPath();
+        ctx.moveTo(w / 2, py + ph + 40);
+        ctx.lineTo(w / 2, py - 40);
+        ctx.strokeStyle = P.green;
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+        // Arrow head
+        ctx.beginPath();
+        ctx.moveTo(w / 2, py - 40);
+        ctx.lineTo(w / 2 - 6, py - 30);
+        ctx.lineTo(w / 2 + 6, py - 30);
+        ctx.closePath();
+        ctx.fillStyle = P.green;
+        ctx.fill();
+        ctx.fillStyle = P.green;
+        ctx.font = 'bold 16px -apple-system, sans-serif';
+        ctx.fillText('Y', w / 2 + 8, py - 35);
+
+        // Z axis (blue) - diagonal (depth)
+        ctx.beginPath();
+        ctx.moveTo(w / 2 + 30, h / 2 + 30);
+        ctx.lineTo(w / 2 - 50, h / 2 - 50);
+        ctx.strokeStyle = P.blue;
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+        // Arrow head
+        ctx.beginPath();
+        ctx.moveTo(w / 2 - 50, h / 2 - 50);
+        ctx.lineTo(w / 2 - 38, h / 2 - 46);
+        ctx.lineTo(w / 2 - 46, h / 2 - 38);
+        ctx.closePath();
+        ctx.fillStyle = P.blue;
+        ctx.fill();
+        ctx.fillStyle = P.blue;
+        ctx.font = 'bold 16px -apple-system, sans-serif';
+        ctx.fillText('Z', w / 2 - 65, h / 2 - 50);
+
+        // Rotation arrow around X axis (right side)
+        ctx.beginPath();
+        ctx.arc(px + pw + 30, h / 2, 20, -Math.PI * 0.7, Math.PI * 0.4);
+        ctx.strokeStyle = P.magenta;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 3]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Rotation arrow around Y axis (top)
+        ctx.beginPath();
+        ctx.arc(w / 2, py - 10, 18, Math.PI * 0.8, Math.PI * 1.9);
+        ctx.strokeStyle = P.green;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 3]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Labels
+        ctx.fillStyle = '#555';
+        ctx.font = '14px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('Accelerometer: detects movement', 420, 40);
+        ctx.fillText('Gyroscope: detects rotation', 420, 60);
+        ctx.fillText('3 axes each = 6 data streams', 420, 80);
+
+        // Left side labels
+        ctx.textAlign = 'right';
+        ctx.fillText('Tilt', 130, 80);
+        ctx.fillText('Shake', 130, 100);
+        ctx.fillText('Rotate', 130, 120);
+        ctx.fillText('Move', 130, 140);
+        ctx.textAlign = 'left';
+
+        // Title
+        ctx.fillStyle = P.blue;
+        ctx.font = 'bold 15px -apple-system, sans-serif';
+        ctx.fillText('Six measured series —', 420, 200);
+        ctx.fillText('everything else is computed', 420, 218);
+    })();
+
+    // Canvas 2: Timeline with different activity patterns
+    (function() {
+        const { ctx, w, h } = setupCanvas('c2');
+        const baseline = h / 2;
+        const segWidth = w / 4;
+
+        // Background segments
+        const segments = [
+            { label: 'Walking', color: 'rgba(42,120,214,0.08)' },
+            { label: 'Driving', color: 'rgba(0,131,0,0.08)' },
+            { label: 'Typing', color: 'rgba(217,89,38,0.08)' },
+            { label: 'Idle', color: tint(P.magenta, 0.08) }
+        ];
+
+        segments.forEach((seg, i) => {
+            ctx.fillStyle = seg.color;
+            ctx.fillRect(i * segWidth, 30, segWidth, h - 60);
+
+            // Segment divider
+            if (i > 0) {
+                ctx.beginPath();
+                ctx.moveTo(i * segWidth, 30);
+                ctx.lineTo(i * segWidth, h - 30);
+                ctx.strokeStyle = P.grid;
+                ctx.lineWidth = 1;
+                ctx.setLineDash([4, 4]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+        });
+
+        // Baseline
+        ctx.beginPath();
+        ctx.moveTo(20, baseline);
+        ctx.lineTo(w - 20, baseline);
+        ctx.strokeStyle = P.grid;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Walking pattern: rhythmic sine wave
+        ctx.beginPath();
+        ctx.strokeStyle = P.blue;
+        ctx.lineWidth = 2.5;
+        for (let x = 10; x < segWidth - 10; x++) {
+            const y = baseline + Math.sin(x * 0.12) * 40 + Math.sin(x * 0.24) * 15;
+            if (x === 10) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+
+        // Driving pattern: smooth with occasional bumps
+        ctx.beginPath();
+        ctx.strokeStyle = P.green;
+        ctx.lineWidth = 2.5;
+        for (let x = 0; x < segWidth - 10; x++) {
+            const absX = x + segWidth;
+            const bump1 = x > 60 && x < 80 ? Math.sin((x - 60) * 0.16) * 25 : 0;
+            const bump2 = x > 130 && x < 145 ? Math.sin((x - 130) * 0.2) * 18 : 0;
+            const y = baseline + Math.sin(x * 0.02) * 8 + bump1 + bump2;
+            if (x === 0) ctx.moveTo(absX, y);
+            else ctx.lineTo(absX, y);
+        }
+        ctx.stroke();
+
+        // Typing pattern: small rapid oscillations
+        ctx.beginPath();
+        ctx.strokeStyle = P.orange;
+        ctx.lineWidth = 2.5;
+        for (let x = 0; x < segWidth - 10; x++) {
+            const absX = x + segWidth * 2;
+            const tap = (x % 7 === 3) ? ((x % 3) - 1) * 8 : 0;   // fixed pattern
+            const y = baseline + Math.sin(x * 0.5) * 6 + tap;
+            if (x === 0) ctx.moveTo(absX, y);
+            else ctx.lineTo(absX, y);
+        }
+        ctx.stroke();
+
+        // Idle: flat line with tiny noise
+        ctx.beginPath();
+        ctx.strokeStyle = P.magenta;
+        ctx.lineWidth = 2.5;
+        for (let x = 0; x < segWidth - 20; x++) {
+            const absX = x + segWidth * 3;
+            const y = baseline + Math.sin(x * 0.8) * 1.5;
+            if (x === 0) ctx.moveTo(absX, y);
+            else ctx.lineTo(absX, y);
+        }
+        ctx.stroke();
+
+        // Labels at top
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.blue;
+        ctx.fillText('Walking', segWidth * 0.5, 22);
+        ctx.fillStyle = P.green;
+        ctx.fillText('Driving', segWidth * 1.5, 22);
+        ctx.fillStyle = P.orange;
+        ctx.fillText('Typing', segWidth * 2.5, 22);
+        ctx.fillStyle = P.magenta;
+        ctx.fillText('Idle', segWidth * 3.5, 22);
+
+        // Descriptions at bottom
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.fillStyle = '#555';
+        ctx.fillText('Periodic', segWidth * 0.5, h - 10);
+        ctx.fillText('Smooth + shocks', segWidth * 1.5, h - 10);
+        ctx.fillText('Low amplitude — hard case', segWidth * 2.5, h - 10);
+        ctx.fillText('Near flat', segWidth * 3.5, h - 10);
+        ctx.textAlign = 'left';
+
+        // Caption: these are drawn shapes, not recorded traces
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.mute;
+        ctx.font = 'italic 12px -apple-system, sans-serif';
+        ctx.fillText('Schematic shapes, not recorded traces — coarse classes separate because the shapes differ', w / 2, 12);
+        ctx.textAlign = 'left';
+    })();
+
+    // Canvas 3: One stream, two computations over it
+    (function() {
+        const { ctx, w, h } = setupCanvas('c3');
+
+        // One hardcoded walking-like trace, read twice. Screen rotation needs
+        // only the slow average; step cadence needs the peaks the same samples
+        // already contain. Illustrative shape, not measured data.
+        const SIG = [
+          0.10, 0.62, 0.28, -0.18, 0.05, 0.70, 0.34, -0.12, 0.02, 0.66,
+          0.30, -0.16, 0.08, 0.72, 0.36, -0.10, 0.04, 0.64, 0.26, -0.14,
+          0.06, 0.68, 0.32, -0.15, 0.09, 0.71, 0.33, -0.11
+        ];
+        const PEAKS = [1, 5, 9, 13, 17, 21, 25];   // stride peak indices
+
+        const padL = 34, padR = 18, top = 40;
+        const plotW = w - padL - padR, traceH = 96;
+        const xAt = i => padL + (i / (SIG.length - 1)) * plotW;
+        const yAt = v => top + traceH / 2 - v * (traceH / 2.4);
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.ink;
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillText('One accelerometer stream', w / 2, 22);
+
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(padL, yAt(0)); ctx.lineTo(w - padR, yAt(0)); ctx.stroke();
+
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.beginPath();
+        SIG.forEach((v, i) => i ? ctx.lineTo(xAt(i), yAt(v)) : ctx.moveTo(xAt(i), yAt(v)));
+        ctx.stroke();
+
+        // reading 1: the slow average - all screen rotation needs
+        const avg = SIG.reduce((a, b) => a + b, 0) / SIG.length;
+        ctx.strokeStyle = P.aqua; ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath(); ctx.moveTo(padL, yAt(avg)); ctx.lineTo(w - padR, yAt(avg)); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.textAlign = 'left';
+        ctx.fillStyle = P.aqua;
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.fillText('which way is up  →  rotate the screen', padL + 4, yAt(avg) + 30);
+
+        // reading 2: the peaks, already present in the same samples
+        ctx.fillStyle = P.orange;
+        PEAKS.forEach(i => {
+            ctx.beginPath(); ctx.arc(xAt(i), yAt(SIG[i]), 4, 0, Math.PI * 2); ctx.fill();
+        });
+        const b1 = xAt(PEAKS[2]), b2 = xAt(PEAKS[3]), by = top + traceH + 34;
+        ctx.strokeStyle = P.orange; ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(b1, by - 7); ctx.lineTo(b1, by); ctx.lineTo(b2, by); ctx.lineTo(b2, by - 7);
+        ctx.stroke();
+        ctx.textAlign = 'center';
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = P.orange;
+        ctx.fillText('one stride', (b1 + b2) / 2, by + 16);
+        ctx.textAlign = 'left';
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.fillText('spacing of the peaks  →  pace, walking or driving', b2 + 16, by + 4);
+
+        ctx.textAlign = 'center';
+        ctx.font = 'italic 12px -apple-system, sans-serif';
+        ctx.fillStyle = P.text;
+        ctx.fillText('The second reading needs no extra sensor and no permission — the peaks were always there.', w / 2, h - 26);
+        ctx.fillStyle = P.mute;
+        ctx.font = 'italic 11px -apple-system, sans-serif';
+        ctx.fillText('Illustrative trace — shape only, not measured data.', w / 2, h - 9);
+    })();
+
+    </script>
+</body>
+</html>

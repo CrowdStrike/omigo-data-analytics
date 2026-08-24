@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Outlook Calendar — Platform APIs</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #2c3e50;
+            max-width: 100%;
+            margin: 0;
+            padding: 30px 40px;
+            background: #fff;
+        }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+        .verified { display: inline-block; background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-bottom: 16px; }
+        h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
+        .status { display: inline-block; background: #fef9e7; border: 1px solid #f39c12; color: #b7950b; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-left: 12px; vertical-align: middle; }
+        table.obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+        table.obj-table td { vertical-align: top; padding: 12px; }
+        table.obj-table td:first-child { width: 45%; }
+        table.obj-table td:last-child { width: 55%; }
+        pre { background: #f4f4f4; padding: 14px; border-radius: 6px; overflow-x: auto; font-size: 0.82em; text-align: left; }
+        canvas { display: block; margin: 16px auto 0; width: 100%; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        ul { padding-left: 20px; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        .section-title { font-weight: bold; color: #1a5276; font-size: 1.05em; margin-bottom: 8px; margin-top: 16px; }
+        .scope-list { margin: 8px 0 12px; }
+        .scope-tag { display: inline-block; background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 1px 8px; border-radius: 10px; font-size: 0.78em; font-family: ui-monospace, Menlo, monospace; margin: 3px 4px 3px 0; }
+    </style>
+</head>
+<body>
+    <h1>Outlook Calendar <span class="status">BACKLOG</span></h1>
+    <p class="subtitle">Microsoft Graph calendar surface — events, calendars and calendar groups, rooms and places, free/busy via getSchedule, findMeetingTimes, and attendee response tracking.</p>
+    <span class="verified">Last verified: August 2026</span>
+
+    <h2>Overview</h2>
+    <table class="obj-table">
+        <tr>
+            <td>
+                <p style="font-size:0.93em;">The calendar surface looks like a single resource with several convenience endpoints. It is not. <code>/events</code>, <code>/calendarView</code>, <code>/getSchedule</code>, and <code>findMeetingTimes</code> return structurally different things at different fidelity, and picking the wrong one produces answers that are internally consistent and quietly wrong — most often by undercounting recurring meetings by an order of magnitude.</p>
+                <p style="font-size:0.93em;">Recurrence is the organising difficulty. Exchange stores a recurring meeting as one master object plus a small set of exception objects, and expansion into occurrences is a server-side operation you must explicitly ask for.</p>
+
+                <div class="key-point"><strong><code>GET /events</code> does not return recurring occurrences.</strong> A weekly standup running for two years appears as exactly one item with <code>type: "seriesMaster"</code> and a <code>recurrence</code> block. Any "meeting hours per person" or "room utilisation" metric built on <code>/events</code> counts that standup once. Use <code>GET /calendarView?startDateTime=&amp;endDateTime=</code>, which expands the series server-side into <code>occurrence</code> and <code>exception</code> items, or <code>GET /events/{id}/instances</code> for a single series. The failure is silent — the response is valid, the totals are plausible, and nothing signals that the expansion did not happen.</div>
+
+                <div class="section-title">What It Provides</div>
+                <ul>
+                    <li><strong>Events</strong> — <code>subject</code>, <code>start</code> / <code>end</code> as <code>dateTimeTimeZone</code>, <code>organizer</code>, <code>attendees[]</code> with <code>type</code> (<code>required</code>, <code>optional</code>, <code>resource</code>) and <code>status.response</code>, <code>location</code> / <code>locations[]</code>, <code>isAllDay</code>, <code>isCancelled</code>, <code>showAs</code>, <code>sensitivity</code>, <code>responseRequested</code>, <code>onlineMeeting</code> linkage, <code>seriesMasterId</code>, and <code>iCalUId</code>.</li>
+                    <li><strong>Calendars and calendar groups</strong> — the default calendar, additional calendars, shared calendars, and <code>calendarPermissions</code>.</li>
+                    <li><strong>Calendar view</strong> — server-expanded occurrences over a bounded window.</li>
+                    <li><strong>Free/busy</strong> — <code>POST /calendar/getSchedule</code> returning <code>scheduleItems</code> with availability status per interval, plus <code>workingHours</code>.</li>
+                    <li><strong>Meeting-time suggestions</strong> — <code>POST /findMeetingTimes</code> returning ranked <code>meetingTimeSuggestions</code> with a <code>confidence</code> score and per-attendee availability.</li>
+                    <li><strong>Places</strong> — <code>/places/microsoft.graph.room</code> and <code>/places/microsoft.graph.roomList</code> with capacity, floor, building, and accessibility attributes.</li>
+                    <li><strong>Delta and notifications</strong> — <code>/calendarView/delta</code> and <code>/events/delta</code> for incremental sync; subscriptions for push.</li>
+                </ul>
+
+                <div class="section-title">Authentication &amp; Scopes</div>
+                <div class="scope-list"><span class="scope-tag">Calendars.ReadBasic</span><span class="scope-tag">Calendars.Read</span><span class="scope-tag">Calendars.Read.Shared</span><span class="scope-tag">Calendars.ReadWrite</span><span class="scope-tag">Calendars.ReadWrite.Shared</span><span class="scope-tag">Place.Read.All</span><span class="scope-tag">MailboxSettings.Read</span></div>
+                <ul>
+                    <li>Entra ID app registration, OAuth 2.0. Delegated or application permissions.</li>
+                    <li><code>Calendars.Read</code>, <code>Calendars.ReadBasic</code> (reduced properties), <code>Calendars.ReadWrite</code>. <code>Calendars.Read.Shared</code> / <code>Calendars.ReadWrite.Shared</code> are needed for calendars others have shared or delegated to the signed-in user — the plain scope does not cover them.</li>
+                    <li><code>Place.Read.All</code> for rooms and room lists. Creating or editing places requires <code>Place.ReadWrite.All</code> and an administrative role.</li>
+                    <li><code>Schedule.Read.All</code> is a Teams shifts scope and is <em>not</em> what <code>getSchedule</code> uses; <code>getSchedule</code> runs under <code>Calendars.Read</code> (or <code>Calendars.Read.Shared</code> for other users' calendars).</li>
+                    <li><code>MailboxSettings.Read</code> is required to read a user's configured working hours and time zone independently of <code>getSchedule</code>.</li>
+                    <li>Application permission <code>Calendars.Read</code> covers every mailbox in the tenant, including room mailboxes, unless narrowed with an Exchange Online Application Access Policy. The same caveat applies here as to mail.</li>
+                </ul>
+
+                <div class="section-title">Granularity</div>
+                <p style="font-size:0.93em;">One <code>event</code> per attendee mailbox per meeting — the organiser's copy and each attendee's copy are separate objects with different <code>id</code> values. <code>iCalUId</code> is the cross-mailbox join key; <code>id</code> is not, and (as with mail) default ids change when an item moves, so <code>Prefer: IdType="ImmutableId"</code> matters for anything persisted. Within a series, occurrences share a <code>seriesMasterId</code>; a modified occurrence becomes <code>type: "exception"</code> and a deleted one is simply absent from <code>calendarView</code> rather than present-and-cancelled.</p>
+
+                <div class="section-title">Key Endpoints</div>
+                <ul>
+                    <li><code>GET /v1.0/users/{id}/events</code> — masters and singles, no expansion</li>
+                    <li><code>GET /v1.0/users/{id}/calendarView?startDateTime=2026-08-01T00:00:00&amp;endDateTime=2026-08-31T00:00:00</code> — expanded; range is mandatory</li>
+                    <li><code>GET /v1.0/users/{id}/events/{id}/instances?startDateTime=&amp;endDateTime=</code> — expand one series</li>
+                    <li><code>GET /v1.0/users/{id}/calendars</code>, <code>/calendarGroups</code>, <code>/calendars/{id}/calendarPermissions</code></li>
+                    <li><code>POST /v1.0/users/{id}/calendar/getSchedule</code> — body carries <code>schedules[]</code>, <code>startTime</code>, <code>endTime</code>, <code>availabilityViewInterval</code></li>
+                    <li><code>POST /v1.0/users/{id}/findMeetingTimes</code> — body carries <code>attendees</code>, <code>timeConstraint</code>, <code>meetingDuration</code> (ISO 8601), <code>minimumAttendeePercentage</code>, <code>maxCandidates</code></li>
+                    <li><code>GET /v1.0/places/microsoft.graph.roomList</code>, then <code>GET /v1.0/places/{roomList-email}/microsoft.graph.roomList/rooms</code></li>
+                    <li><code>GET /v1.0/users/{id}/calendarView/delta?startDateTime=&amp;endDateTime=</code></li>
+                    <li>Send <code>Prefer: outlook.timezone="India Standard Time"</code> to have <code>start</code> / <code>end</code> returned in a chosen zone instead of UTC.</li>
+                </ul>
+
+                <div class="section-title">Rate Limits</div>
+                <ul>
+                    <li>Graph throttles per application per tenant; Exchange additionally throttles per mailbox on a resource-cost basis, so an expensive expansion consumes more budget than a cheap metadata read at identical request counts. Both surface as <code>429</code> with <code>Retry-After</code>.</li>
+                    <li>The documented Outlook ceilings apply here as they do to mail: <strong>10,000 requests per 10 minutes per mailbox per app</strong> and <strong>4 concurrent requests per mailbox</strong>. Room mailboxes count as mailboxes — a room-utilisation crawl serialises against that same limit per room.</li>
+                    <li><code>POST /$batch</code> accepts at most 20 requests; the constituent requests are still throttled individually, and batching several <code>calendarView</code> reads against the <em>same</em> mailbox does not evade the concurrency cap.</li>
+                    <li><code>findMeetingTimes</code> and <code>getSchedule</code> are computed operations, materially more expensive per call than a read, and <code>getSchedule</code> caps the number of mailboxes per request — chunk the <code>schedules</code> array rather than sending hundreds.</li>
+                    <li><code>$top</code> is capped; follow <code>@odata.nextLink</code> verbatim. <code>calendarView</code> over a long range plus a busy calendar is many sequential pages.</li>
+                </ul>
+
+                <div class="section-title">Business Scenarios</div>
+                <ul>
+                    <li><strong>Meeting-cost modelling</strong> — attendee count times duration across <code>calendarView</code>, with <code>showAs</code> and <code>responseStatus</code> used to exclude declines and tentative holds. Scheduled duration is an upper bound, not actual attendance.</li>
+                    <li><strong>Room utilisation and right-sizing</strong> — booked hours against <code>capacity</code> from <code>/places</code>, and the more useful comparison of booked capacity against actual attendee count.</li>
+                    <li><strong>Fragmentation analysis</strong> — from <code>getSchedule</code>, measuring how much of a working day is contiguous focus time rather than how many hours are booked.</li>
+                    <li><strong>Recurring-meeting hygiene</strong> — series with persistently high decline rates or where the organiser has left the organisation.</li>
+                    <li><strong>Cross-team collaboration mapping</strong> — attendee lists joined to directory attributes, which reveals organisational structure more honestly than the reporting hierarchy does.</li>
+                </ul>
+
+                <div class="section-title">Key Restrictions &amp; Gotchas</div>
+                <ul>
+                    <li><strong><code>getSchedule</code> returns free/busy only, and cross-tenant detail is a policy outcome.</strong> For external attendees you may get availability with no <code>subject</code> or <code>location</code>, or you may get <code>availabilityView</code> populated entirely with <code>0</code> (free) because the organisational relationship and sharing policy in Exchange permit nothing more. An external calendar that appears empty is usually a permission result, not an empty calendar. Check the per-schedule <code>error</code> object rather than trusting an all-free view.</li>
+                    <li><strong><code>findMeetingTimes</code> is a suggestion engine, not a booking call.</strong> It returns ranked candidates with <code>confidence</code> and <code>organizerAvailability</code>; it reserves nothing, and by the time you create the event the slot may be taken. It also applies defaults you did not set — business hours, a minimum attendee percentage, and a candidate cap — so an empty <code>meetingTimeSuggestions</code> array with <code>emptySuggestionsReason</code> populated is the normal way it says no. Read that field; the HTTP status is still 200.</li>
+                    <li><strong>Attendee <code>responseStatus</code> is unreliable for external participants.</strong> Cross-organisation responses depend on federation and on the response actually being sent back; a genuine acceptance can persist as <code>none</code> or <code>notResponded</code> indefinitely. Treating <code>none</code> as "did not attend" systematically undercounts external participation.</li>
+                    <li><strong>The organiser's copy and the attendee's copy can disagree.</strong> Response state, categories, reminders, and even the body differ per mailbox. Attendance and response analytics must state which copy they read; aggregating both double-counts the meeting.</li>
+                    <li><strong>Room data requires Exchange-side configuration.</strong> <code>/places</code> returns rooms that exist as room mailboxes and, for the room-list traversal, rooms that have been added to a configured room list. Capacity, floor, and building are administrator-entered metadata and are frequently null or stale. An empty room list means nobody configured one — not that the organisation has no rooms.</li>
+                    <li><strong>A room booking is not attendance.</strong> The resource mailbox auto-accepts under its booking policy, so <code>responseStatus: "accepted"</code> for a room means the policy allowed it, nothing about whether anyone showed up.</li>
+                    <li><strong><code>calendarView</code> requires a bounded range and enforces a maximum window</strong>, so multi-year analysis must be chunked and stitched. Chunk boundaries cutting through a long event produce duplicates across chunks — deduplicate on <code>id</code> or <code>iCalUId</code> plus start time.</li>
+                    <li><strong>Cancelled and declined meetings behave inconsistently.</strong> A cancelled series master may remain with <code>isCancelled: true</code>; individually deleted occurrences vanish from <code>calendarView</code> with no tombstone. Reconstructing "what was on the calendar as of last Tuesday" is not possible after the fact — you need a persisted snapshot.</li>
+                    <li><strong>Delta on <code>calendarView</code> is range-bound and its token expires.</strong> An expired token returns <code>410 Gone</code> and forces a full re-read of the window. A rolling window also means events ageing out of the range appear as removals that are not deletions.</li>
+                    <li><strong>Time zone handling is a common source of fabricated findings.</strong> <code>dateTimeTimeZone</code> carries an explicit zone name, all-day events use midnight boundaries in the event's own zone, and without <code>Prefer: outlook.timezone</code> or a read of <code>mailboxSettings</code> the derived "after-hours meeting" rate is an artefact of UTC.</li>
+                    <li><strong>Private events return reduced content.</strong> <code>sensitivity: "private"</code> restricts what a delegate sees, and an app-only read may return the time block without subject or attendees. Absent fields are a privacy behaviour, not missing data.</li>
+                </ul>
+            </td>
+            <td>
+                <div class="section-title">GET /v1.0/users/{id}/events (series master — not expanded)</div>
+<pre>{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#users('9e2c...')/events",
+  "value": [
+    {
+      "id_masked": "EXAMPLE_EVENT_ID_redacted",  // Note: masked for illustration
+      "iCalUId_masked": "EXAMPLE_ICAL_UID_redacted",  // Note: masked for illustration
+      "createdDateTime": "2025-11-04T07:12:41.7Z",
+      "lastModifiedDateTime": "2026-08-12T04:55:02.1Z",
+      "subject": "Data Platform standup",
+      "type": "seriesMaster",
+      "seriesMasterId": null,
+      "isAllDay": false,
+      "isCancelled": false,
+      "isOrganizer": true,
+      "responseRequested": true,
+      "showAs": "busy",
+      "sensitivity": "normal",
+      "start": { "dateTime": "2025-11-05T09:30:00.0000000", "timeZone": "India Standard Time" },
+      "end":   { "dateTime": "2025-11-05T09:45:00.0000000", "timeZone": "India Standard Time" },
+      "recurrence": {
+        "pattern": {
+          "type": "weekly",
+          "interval": 1,
+          "daysOfWeek": [ "monday", "tuesday", "wednesday", "thursday" ],
+          "firstDayOfWeek": "sunday",
+          "index": "first"
+        },
+        "range": {
+          "type": "endDate",
+          "startDate": "2025-11-05",
+          "endDate": "2027-11-05",
+          "recurrenceTimeZone": "India Standard Time",
+          "numberOfOccurrences": 0
+        }
+      },
+      "organizer": {
+        "emailAddress": { "name": "Amit Jaiswal", "address": "a.jaiswal@acme.com" }
+      },
+      "attendees": [
+        {
+          "type": "required",
+          "emailAddress": { "name": "R. Nair", "address": "r.nair@acme.com" },
+          "status": { "response": "accepted", "time": "2025-11-04T07:20:11Z" }
+        },
+        {
+          "type": "optional",
+          "emailAddress": { "name": "External Partner", "address": "p@partner.example" },
+          "status": { "response": "none", "time": "0001-01-01T00:00:00Z" }
+        },
+        {
+          "type": "resource",
+          "emailAddress": { "name": "Bengaluru-3-Kaveri", "address": "kaveri@acme.com" },
+          "status": { "response": "accepted", "time": "2025-11-04T07:12:44Z" }
+        }
+      ],
+      "onlineMeeting": {
+        "joinUrl": "https://teams.microsoft.com/l/meetup-join/19%3Ameeting_..."
+      },
+      "responseStatus": { "response": "organizer", "time": "0001-01-01T00:00:00Z" }
+    }
+  ]
+}</pre>
+                <p style="font-size:0.85em; color:#666; font-style:italic; margin-top:-4px;">One object. Roughly 400 real occurrences. The external attendee's <code>none</code> may or may not mean anything.</p>
+
+                <div class="section-title">POST /v1.0/users/{id}/calendar/getSchedule</div>
+<pre>{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#Collection(microsoft.graph.scheduleInformation)",
+  "value": [
+    {
+      "scheduleId": "r.nair@acme.com",
+      "availabilityView": "000022200011000000",
+      "scheduleItems": [
+        {
+          "isPrivate": false,
+          "status": "busy",
+          "subject": "Q3 reconciliation review",
+          "location": "Bengaluru-3-Kaveri",
+          "start": { "dateTime": "2026-08-18T11:00:00.0000000", "timeZone": "UTC" },
+          "end":   { "dateTime": "2026-08-18T12:00:00.0000000", "timeZone": "UTC" }
+        },
+        {
+          "isPrivate": true,
+          "status": "oof",
+          "subject": null,
+          "start": { "dateTime": "2026-08-18T13:30:00.0000000", "timeZone": "UTC" },
+          "end":   { "dateTime": "2026-08-18T14:00:00.0000000", "timeZone": "UTC" }
+        }
+      ],
+      "workingHours": {
+        "daysOfWeek": [ "monday", "tuesday", "wednesday", "thursday", "friday" ],
+        "startTime": "09:00:00.0000000",
+        "endTime": "18:00:00.0000000",
+        "timeZone": { "name": "India Standard Time" }
+      }
+    },
+    {
+      "scheduleId": "p@partner.example",
+      "availabilityView": "000000000000000000",
+      "scheduleItems": [],
+      "error": {
+        "message": "Unable to retrieve free/busy information.",
+        "responseCode": "unknown"
+      }
+    }
+  ]
+}</pre>
+                <p style="font-size:0.85em; color:#666; font-style:italic; margin-top:-4px;">All-zero <code>availabilityView</code> with an <code>error</code> object present is "not permitted", not "free all day".</p>
+                <canvas id="calEndpointChart" height="380"></canvas>
+            </td>
+        </tr>
+    </table>
+
+    <script>
+    (function() {
+        const canvas = document.getElementById('calEndpointChart');
+        const ctx = canvas.getContext('2d');
+        const dpr = window.devicePixelRatio || 1;
+
+        // Capability matrix: which calendar endpoint answers which question.
+        // 2 = yes, 1 = partial / policy-dependent, 0 = no.
+        const caps = [
+            'expands recurrence',
+            'returns subject + body',
+            'attendee response status',
+            'cross-tenant free/busy',
+            'suggests new slots',
+            'room capacity metadata'
+        ];
+        const eps = [
+            { name: '/events',          vals: [0, 2, 2, 0, 0, 0] },
+            { name: '/calendarView',    vals: [2, 2, 2, 0, 0, 0] },
+            { name: '/events/{id}/instances', vals: [2, 2, 2, 0, 0, 0] },
+            { name: '/getSchedule',     vals: [2, 1, 0, 1, 0, 0] },
+            { name: 'findMeetingTimes', vals: [2, 0, 1, 1, 2, 1] },
+            { name: '/places',          vals: [0, 0, 0, 0, 0, 2] }
+        ];
+        const colFor = function(v) {
+            return v === 2 ? '#27ae60' : (v === 1 ? '#e67e22' : '#e74c3c');
+        };
+
+        function draw() {
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = 380 * dpr;
+            canvas.style.height = '380px';
+            ctx.scale(dpr, dpr);
+
+            const W = rect.width;
+            const H = 380;
+            ctx.clearRect(0, 0, W, H);
+
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#1a5276';
+            ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('Which calendar endpoint answers which question', W / 2, 20);
+            ctx.fillStyle = '#666';
+            ctx.font = 'italic 10px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('green = yes, orange = partial or policy-dependent, red = no', W / 2, 35);
+
+            const labelW = Math.min(150, W * 0.30);
+            const left = labelW + 10;
+            const top = 118;
+            const right = W - 14;
+            const cw = Math.max(80, right - left);
+            const colW = cw / caps.length;
+            const rowH = 34;
+
+            // rotated-ish column headers, wrapped to two lines
+            ctx.textAlign = 'center';
+            ctx.font = '9.5px -apple-system, BlinkMacSystemFont, sans-serif';
+            caps.forEach(function(c, j) {
+                const cx = left + colW * j + colW / 2;
+                const words = c.split(' ');
+                let line1 = '', line2 = '';
+                words.forEach(function(wd) {
+                    if ((line1 + ' ' + wd).trim().length <= 11 && line2 === '') line1 = (line1 + ' ' + wd).trim();
+                    else line2 = (line2 + ' ' + wd).trim();
+                });
+                ctx.fillStyle = '#2c3e50';
+                ctx.fillText(line1, cx, top - 26);
+                if (line2) ctx.fillText(line2, cx, top - 14);
+            });
+
+            ctx.strokeStyle = '#eee';
+            ctx.lineWidth = 1;
+            for (var j = 0; j <= caps.length; j++) {
+                const x = left + colW * j;
+                ctx.beginPath();
+                ctx.moveTo(x, top - 6);
+                ctx.lineTo(x, top + eps.length * rowH);
+                ctx.stroke();
+            }
+
+            // highlight the recurrence-expansion column before markers are drawn
+            ctx.fillStyle = 'rgba(26,82,118,0.35)';
+            ctx.globalAlpha = 0.35;
+            ctx.fillRect(left, top, colW, eps.length * rowH);
+            ctx.globalAlpha = 1;
+
+            eps.forEach(function(ep, i) {
+                const y = top + i * rowH;
+
+                ctx.beginPath();
+                ctx.moveTo(left, y);
+                ctx.lineTo(left + cw, y);
+                ctx.strokeStyle = '#eee';
+                ctx.stroke();
+
+                ctx.fillStyle = '#1a5276';
+                ctx.font = 'bold 10.5px ui-monospace, Menlo, monospace';
+                ctx.textAlign = 'right';
+                ctx.fillText(ep.name, labelW, y + rowH / 2 + 4);
+
+                ep.vals.forEach(function(v, j) {
+                    const cx = left + colW * j + colW / 2;
+                    const cy = y + rowH / 2;
+                    ctx.fillStyle = colFor(v);
+                    if (v === 2) {
+                        ctx.beginPath();
+                        ctx.arc(cx, cy, 8, 0, Math.PI * 2);
+                        ctx.fill();
+                    } else if (v === 1) {
+                        ctx.beginPath();
+                        ctx.arc(cx, cy, 8, Math.PI / 2, Math.PI * 1.5);
+                        ctx.fill();
+                        ctx.strokeStyle = colFor(v);
+                        ctx.lineWidth = 1.5;
+                        ctx.beginPath();
+                        ctx.arc(cx, cy, 8, 0, Math.PI * 2);
+                        ctx.stroke();
+                        ctx.lineWidth = 1;
+                    } else {
+                        ctx.strokeStyle = colFor(v);
+                        ctx.lineWidth = 1.5;
+                        ctx.beginPath();
+                        ctx.moveTo(cx - 5, cy - 5);
+                        ctx.lineTo(cx + 5, cy + 5);
+                        ctx.moveTo(cx + 5, cy - 5);
+                        ctx.lineTo(cx - 5, cy + 5);
+                        ctx.stroke();
+                        ctx.lineWidth = 1;
+                    }
+                });
+            });
+
+            const bottom = top + eps.length * rowH;
+            ctx.beginPath();
+            ctx.moveTo(left, bottom);
+            ctx.lineTo(left + cw, bottom);
+            ctx.strokeStyle = '#eee';
+            ctx.stroke();
+
+            ctx.fillStyle = '#e74c3c';
+            ctx.font = 'italic 10.5px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Column 1 is the trap: only /events fails it, and /events is the endpoint people reach for first.', W / 2, bottom + 22);
+            ctx.fillStyle = '#666';
+            ctx.font = 'italic 10px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('No single endpoint fills a row. Every real calendar pipeline joins at least three of them.', W / 2, bottom + 37);
+        }
+
+        draw();
+        window.addEventListener('resize', draw);
+    })();
+    </script>
+</body>
+</html>

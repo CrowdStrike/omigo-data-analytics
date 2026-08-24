@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tracking Data: Red Light & Speed Cameras</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2c3e50; max-width: 100%; margin: 0; padding: 30px 40px; background: #fff; }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+        .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
+        .obj-table { width: 100%; border-collapse: collapse; }
+        .obj-table td { vertical-align: top; padding: 16px; border: 1px solid #2980b9; }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; text-align: center; }
+        ul { padding-left: 20px; margin: 8px 0; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        .obj-table td:last-child .payload,
+        .obj-table td:last-child .payload-note { text-align: left; }
+        .payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 12px 0; }
+        .payload-note { font-size: 0.82em; color: #666; margin: 12px 0 -6px 0; font-style: italic; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        .key-point strong:first-child { color: #1a5276; }
+        .lede { font-size: 0.95em; margin: 0 0 10px 0; }
+        .lbl { display: inline-block; font-size: 0.7em; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; margin: 10px 0 2px 0; }
+        .lbl-purpose { background: #eaf2fb; color: #1a5276; }
+        .lbl-effect { background: #fdf0e6; color: #a8501c; }
+        li b { color: #1a5276; font-weight: 600; }
+        canvas { display: block; margin: 0 auto; }
+    </style>
+</head>
+<body>
+    <h1>Tracking Data: Red Light & Speed Cameras</h1>
+    <p class="subtitle">They record every vehicle that passes, because the violation test is applied after the measurement — not before it.</p>
+    <table class="obj-table">
+        <tr>
+            <td>
+                <div class="obj-title">What is it?</div>
+                <p class="lede">Measure first, apply the threshold second.</p>
+                <ul>
+                    <li><b>Siting:</b> mounted at intersections and along roads</li>
+                    <li><b>Plate:</b> read with OCR from the image</li>
+                    <li><b>Speed:</b> measured with radar or a pair of inductive loops</li>
+                    <li><b>Trigger:</b> every vehicle, not only violators — the threshold test is applied after the measurement</li>
+                    <li><b>Consequence:</b> a record exists whether or not a ticket follows</li>
+                </ul>
+                <div class="key-point"><strong>The ticket is one row selected from the table:</strong> the table is every pass, and it is the larger object — which is why retention policy on non-violating rows matters more analytically than the ticket rule.</div>
+            </td>
+            <td><canvas id="c1" width="720" height="320"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">What does it collect?</div>
+                <ul>
+                    <li><b>Plate number</b>, from OCR on the image</li>
+                    <li><b>Timestamp</b> — the exact second of the pass</li>
+                    <li><b>Speed</b> at that moment</li>
+                    <li><b>Lane position</b> and direction of travel</li>
+                    <li><b>Photo</b> of the vehicle, front and/or rear</li>
+                    <li><b>Colour, make, model</b>, from the image</li>
+                    <li><b>Camera location</b> — GPS coordinates</li>
+                </ul>
+                <div class="key-point"><strong>Nothing here measures speed directly:</strong> two timestamps and a loop spacing are measured; the speed is arithmetic on top, inheriting the timing error of both detectors and the survey error of the distance. Hence the tolerance, and the issue threshold sitting above the posted limit.</div>
+                <div class="key-point"><strong>The plate has the same structure:</strong> a string plus a confidence — an OCR read, not a reading off the vehicle.</div>
+                <div class="key-point"><strong>Dropping the uncertainty columns turns estimates into facts:</strong> keeping <code>speed_mph</code> and <code>plate_text</code> while dropping <code>speed_tol_mph</code> and <code>plate_conf</code> leaves nothing to flag a low-confidence read with.</div>
+            </td>
+            <td><canvas id="c2" width="720" height="320"></canvas>
+<p class="payload-note">Sample payload — illustrative structure, not real captured data.</p>
+<pre class="payload">// No public API for an enforcement vendor's record.
+// Reconstruction; field names kept generic.
+// ── inferred / plausible ──
+{
+  "camera_id":   "RLC-2291",
+
+  // measured at the roadside
+  "loop_a_ts":   "2026-08-22T14:23:07.412Z",
+  "loop_b_ts":   "2026-08-22T14:23:07.618Z",
+  "loop_gap_m":  3.0,
+  "signal_phase":"red",
+
+  // derived from the rows above
+  "speed_mph":   32.6,
+  "speed_tol_mph": 1.5,
+  "posted_mph":  25,
+  "threshold_mph": 30,        // issue only above this
+
+  // derived from the image
+  "plate_text":  "7ABC123",
+  "plate_conf":  0.91
+}</pre>
+</td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">Why is it collected?</div>
+                <div class="lbl lbl-purpose">Stated purpose</div>
+                <ul>
+                    <li><b>Enforcement</b> of the signal phase and the posted limit</li>
+                    <li><b>A record for every vehicle</b> — nothing can know which pass is a violation until it is measured</li>
+                </ul>
+                <div class="lbl lbl-effect">Additional consequence</div>
+                <ul>
+                    <li><b>Non-violating passes are the majority</b>, and carry a plate, a place and a time just as violating ones do — so the table is a sighting log</li>
+                    <li>Aggregated <b>speed distributions</b> are a saleable product, and retention policy decides for how long</li>
+                </ul>
+                <div class="key-point"><strong>A plate is a vehicle, not a person:</strong> per-plate statistics describe a vehicle's history, and a shared or fleet vehicle mixes several drivers into one set of rows. Cameras also sit where past violations and budget put them, so a citywide traffic model fitted on that footprint measures placement as much as traffic.</div>
+            </td>
+            <td><canvas id="c3" width="720" height="320"></canvas></td>
+        </tr>
+    </table>
+    <script>
+    const dpr = window.devicePixelRatio || 1;
+    // Validated categorical palette (CVD-checked, see REVIEW-NOTES.md).
+    // Red is deliberately NOT in the rotation - it stays reserved for
+    // genuine error / alarm states so it keeps its meaning.
+    const P = {
+      blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+      aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+      ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+    };
+    const SERIES = [P.blue, P.green, P.violet, P.orange, P.aqua, P.magenta, P.yellow];
+    // Translucent fill from a palette hex, so a shape keeps its hue but stays light.
+    function tint(hex, a) {
+      const n = parseInt(hex.slice(1), 16);
+      return 'rgba(' + (n >> 16) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+    }
+    // Rounded-rect path helper (works without native ctx.roundRect).
+    function rr(ctx, x, y, w, h, r) {
+      r = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    function setupCanvas(id) { const c = document.getElementById(id); const w = c.getAttribute('width') ? +c.getAttribute('width') : 720;
+        const h = c.getAttribute('height') ? +c.getAttribute('height') : 240; c.width = w * dpr; c.height = h * dpr; c.style.width = w + 'px'; c.style.height = h + 'px'; const ctx = c.getContext('2d'); ctx.scale(dpr, dpr); return { ctx, w, h }; }
+
+    // C1: Intersection diagram showing camera capturing all vehicles
+    (function() {
+        const { ctx, w, h } = setupCanvas('c1');
+        // Road
+        ctx.fillStyle = P.grid;
+        ctx.fillRect(0, h/2 - 30, w, 60);
+        // Lane markings
+        ctx.setLineDash([15, 10]);
+        ctx.strokeStyle = P.grid;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(0, h/2); ctx.lineTo(w, h/2); ctx.stroke();
+        ctx.setLineDash([]);
+        // Cars passing
+        const cars = [
+            { x: 100, color: P.blue },
+            { x: 250, color: P.green },
+            { x: 400, color: P.orange },
+            { x: 550, color: P.magenta }
+        ];
+        cars.forEach(car => {
+            ctx.fillStyle = car.color;
+            ctx.fillRect(car.x, h/2 - 20, 60, 25);
+            ctx.fillRect(car.x + 10, h/2 - 30, 40, 12);
+            // Plate
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(car.x + 45, h/2 - 12, 14, 8);
+            ctx.fillStyle = '#333';
+            ctx.font = '11px -apple-system, sans-serif';
+            ctx.fillText('PLT', car.x + 46, h/2 - 6);
+        });
+        // Camera
+        ctx.fillStyle = P.text;
+        ctx.fillRect(340, 20, 6, 50);
+        ctx.fillStyle = P.blue;
+        ctx.beginPath(); ctx.arc(343, 15, 12, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = P.magenta;
+        ctx.beginPath(); ctx.arc(343, 15, 4, 0, Math.PI * 2); ctx.fill();
+        // Scan lines from camera to each car
+        ctx.strokeStyle = tint(P.magenta, 0.3);
+        ctx.lineWidth = 1;
+        cars.forEach(car => {
+            ctx.beginPath(); ctx.moveTo(343, 25); ctx.lineTo(car.x + 30, h/2 - 20); ctx.stroke();
+        });
+        // Label
+        ctx.fillStyle = P.text;
+        ctx.font = '15px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Every pass is measured; the threshold test comes after', w/2, h - 20);
+    })();
+
+    // C2: Data fields extracted from each capture
+    (function() {
+        const { ctx, w, h } = setupCanvas('c2');
+        // Plate image
+        ctx.fillStyle = '#f4f4f4';
+        ctx.strokeStyle = P.blue;
+        ctx.lineWidth = 2;
+        ctx.fillRect(40, 30, 140, 60);
+        ctx.strokeRect(40, 30, 140, 60);
+        ctx.fillStyle = P.blue;
+        ctx.font = 'bold 22px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('ABC 1234', 110, 68);
+        // Arrow
+        ctx.strokeStyle = P.orange;
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(200, 60); ctx.lineTo(280, 60); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(270, 50); ctx.lineTo(280, 60); ctx.lineTo(270, 70); ctx.stroke();
+        // Data fields
+        const fields = ['Plate: ABC 1234', 'Speed: 47 mph', 'Time: 14:32:07', 'Lane: 2 / East', 'Color: Blue Sedan', 'Loc: 34.05, -118.24'];
+        ctx.font = '14px monospace';
+        ctx.textAlign = 'left';
+        fields.forEach((f, i) => {
+            const y = 30 + i * 28;
+            ctx.fillStyle = '#f8f9fa';
+            ctx.fillRect(300, y, 200, 22);
+            ctx.strokeStyle = P.blue;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(300, y, 200, 22);
+            ctx.fillStyle = P.text;
+            ctx.fillText(f, 310, y + 16);
+        });
+        // Label
+        ctx.fillStyle = P.mute;
+        ctx.font = '14px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('OCR extracts structured data from every frame', w/2, h - 15);
+    })();
+
+    // C3: Every pass is measured; the issue threshold selects a small tail.
+    // Illustrative counts for one site, consistent with the posted limit and
+    // issue threshold in the payload above.
+    (function() {
+        const { ctx, w, h } = setupCanvas('c3');
+
+        const BINS = [
+            { lo: 16, n: 120 }, { lo: 18, n: 340 }, { lo: 20, n: 820 },
+            { lo: 22, n: 1450 }, { lo: 24, n: 1900 }, { lo: 26, n: 1520 },
+            { lo: 28, n: 840 }, { lo: 30, n: 310 }, { lo: 32, n: 120 },
+            { lo: 34, n: 44 }, { lo: 36, n: 16 }, { lo: 38, n: 6 }
+        ];
+        const POSTED = 25, THRESHOLD = 30;
+        const total = BINS.reduce((a, b) => a + b.n, 0);
+        const over = BINS.filter(b => b.lo >= THRESHOLD).reduce((a, b) => a + b.n, 0);
+
+        const padL = 56, padR = 34, base = 226, maxH = 148;
+        const plotW = w - padL - padR;
+        const bw = plotW / BINS.length;
+        const maxN = Math.max.apply(null, BINS.map(b => b.n));
+        const xOf = mph => padL + ((mph - 16) / 24) * plotW;
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.ink;
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillText('Measured speed of every pass at one site', w / 2, 24);
+        ctx.fillStyle = P.mute;
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillText('the threshold picks out the shaded tail; the rest of the passes are recorded too', w / 2, 42);
+
+        BINS.forEach((b, i) => {
+            const x = padL + i * bw;
+            const bh = (b.n / maxN) * maxH;
+            const hot = b.lo >= THRESHOLD;
+            ctx.fillStyle = hot ? tint(P.orange, 0.55) : tint(P.blue, 0.30);
+            ctx.fillRect(x + 1, base - bh, bw - 2, bh);
+            ctx.strokeStyle = hot ? P.orange : P.blue;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x + 1, base - bh, bw - 2, bh);
+        });
+
+        // axis
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(padL, base); ctx.lineTo(w - padR, base); ctx.stroke();
+        ctx.fillStyle = P.text;
+        ctx.font = '11px -apple-system, sans-serif';
+        [16, 20, 24, 28, 32, 36, 40].forEach(t => {
+            ctx.fillText(String(t), xOf(t), base + 16);
+        });
+        ctx.fillStyle = P.mute;
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillText('speed, mph', w / 2, base + 34);
+        ctx.save();
+        ctx.translate(18, base - maxH / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillText('passes', 0, 0);
+        ctx.restore();
+
+        // posted limit and issue threshold
+        ctx.strokeStyle = P.aqua; ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath(); ctx.moveTo(xOf(POSTED), base); ctx.lineTo(xOf(POSTED), 58); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = P.aqua;
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText('posted 25', xOf(POSTED) - 6, 70);
+
+        ctx.strokeStyle = P.orange; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(xOf(THRESHOLD), base); ctx.lineTo(xOf(THRESHOLD), 58); ctx.stroke();
+        ctx.textAlign = 'left';
+        ctx.fillStyle = P.orange;
+        ctx.fillText('issue threshold 30', xOf(THRESHOLD) + 6, 70);
+
+        const pct = Math.round((over / total) * 1000) / 10;
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillText(pct + '% of passes', xOf(THRESHOLD) + 6, 88);
+        ctx.fillStyle = P.blue;
+        ctx.textAlign = 'right';
+        ctx.fillText((100 - pct).toFixed(1) + '% of passes', xOf(THRESHOLD) - 6, 88);
+
+        ctx.textAlign = 'center';
+        ctx.font = 'italic 12px -apple-system, sans-serif';
+        ctx.fillStyle = P.text;
+        ctx.fillText('A table filtered to citations keeps the tail. The distribution it came from is the wider object.', w / 2, h - 26);
+        ctx.fillStyle = P.mute;
+        ctx.font = 'italic 11px -apple-system, sans-serif';
+        ctx.fillText('Illustrative counts for one site — the shape, not a measured site.', w / 2, h - 9);
+    })();
+
+    </script>
+</body>
+</html>

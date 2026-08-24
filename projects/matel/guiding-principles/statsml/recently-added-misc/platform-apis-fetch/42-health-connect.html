@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Android Health Connect — Platform APIs</title>
+<style>
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        line-height: 1.6;
+        color: #2c3e50;
+        max-width: 100%;
+        margin: 0;
+        padding: 30px 40px;
+        background: #fff;
+    }
+    h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+    .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+    .verified { display: inline-block; background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-bottom: 16px; }
+    h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
+    .status { display: inline-block; background: #fef9e7; border: 1px solid #f39c12; color: #b7950b; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-left: 12px; vertical-align: middle; }
+    table.obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+    table.obj-table td { vertical-align: top; padding: 12px; }
+    table.obj-table td:first-child { width: 45%; }
+    table.obj-table td:last-child { width: 55%; }
+    pre { background: #f4f4f4; padding: 14px; border-radius: 6px; overflow-x: auto; font-size: 0.82em; text-align: left; }
+    canvas { display: block; margin: 16px auto 0; width: 100%; }
+    .key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+    .section-label { font-weight: bold; color: #1a5276; margin-top: 16px; display: block; }
+    .section-label:first-child { margin-top: 0; }
+    .payload-note { font-size: 0.85em; color: #555; margin: 12px 0 8px 0; }
+    ul { padding-left: 20px; }
+    li { margin-bottom: 6px; font-size: 0.93em; }
+    code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-size: 0.88em; }
+    .scope-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+    .scope-tag { background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 3px 8px; border-radius: 4px; font-size: 0.78em; font-family: monospace; }
+    p { font-size: 0.93em; }
+</style>
+</head>
+<body>
+
+<h1>Android Health Connect <span class="status">BACKLOG</span></h1>
+<p class="subtitle">On-device health datastore and Android API surface that replaced the Google Fit APIs. No REST endpoint exists — records are readable only on the user's device.</p>
+<span class="verified">Last verified: August 2026</span>
+
+<h2>Overview</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+    <span class="section-label">What It Provides</span>
+    <p>A local, typed datastore plus a per-type permission model, accessed from an Android app through the Health Connect Jetpack client (<code>HealthConnectClient</code>). It is part of the platform on Android 14 and later; on earlier versions it shipped as a separately installed app from Play. Like HealthKit, it is an aggregator and a consent broker — it holds whatever installed apps and paired devices choose to write, and validates almost none of it.</p>
+
+    <div class="key-point"><strong>There is no Health Connect server API.</strong> No REST base URL, no service account, no OAuth server-to-server pull, no way for a backend to read a user's records. Code must be running on that user's device, holding per-record-type permission, and any data that reaches your servers got there because an app you shipped explicitly uploaded it.
+    <br><br>
+    <strong>Pipeline consequence:</strong> ingestion is device-initiated and intermittent. It happens when your app is in the foreground, or during whatever constrained background window the OS grants — subject to Doze, App Standby buckets, and OEM battery managers that are considerably more aggressive than stock Android. Gaps of days are normal, not incidents. Uninstall ends the series permanently and retroactive recovery is impossible.</div>
+
+    <div class="key-point"><strong>The Google Fit APIs are gone, and that closed the last cloud path on Android.</strong> Google deprecated the Google Fit REST API and the Fit Android/SDK surfaces, announcing the wind-down in 2024 with Health Connect as the stated migration target and shutdown proceeding over the following years. This matters more than a routine deprecation: the Fit REST API was one of the few genuine server-to-server health endpoints, where a backend holding a refresh token could pull a user's steps without any app running. That capability no longer exists. An architecture inherited from a Fit-era integration and redrawn against Health Connect is wrong at the transport layer, not merely at field mapping.</div>
+
+    <span class="section-label">Authentication &amp; Permissions</span>
+    <ul>
+        <li>Per-record-type read and write permission strings, declared in the manifest and granted by the user through the Health Connect permission UI. There is no aggregate health scope.</li>
+        <li>Reading records older than a rolling recent window — roughly the last 30 days by default — additionally requires the historic-data permission. Reading while your app is not in the foreground requires its own separate permission.</li>
+        <li>Google operates a declaration and review process for apps requesting health permissions on Play. Access is not self-serve.</li>
+        <li>If the user revokes all permissions, the OS can reset your app's access state entirely, and later reads return nothing until access is re-granted.</li>
+    </ul>
+    <div class="scope-list">
+        <span class="scope-tag">android.permission.health.READ_STEPS</span>
+        <span class="scope-tag">android.permission.health.WRITE_STEPS</span>
+        <span class="scope-tag">android.permission.health.READ_SLEEP</span>
+        <span class="scope-tag">android.permission.health.READ_HEART_RATE</span>
+        <span class="scope-tag">android.permission.health.READ_EXERCISE</span>
+        <span class="scope-tag">android.permission.health.READ_HEALTH_DATA_HISTORY</span>
+        <span class="scope-tag">android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND</span>
+    </div>
+
+    <span class="section-label">Granularity — the interval / instantaneous split</span>
+    <p>The data model distinguishes two record shapes, and that distinction determines which aggregations are legitimate:</p>
+    <ul>
+        <li><strong><code>IntervalRecord</code></strong> — has a start and an end time. <code>StepsRecord</code>, <code>DistanceRecord</code>, <code>ActiveCaloriesBurnedRecord</code>. Summing these over non-overlapping windows is valid; that is what they are for.</li>
+        <li><strong><code>InstantaneousRecord</code></strong> — a single timestamp. <code>WeightRecord</code>, <code>RestingHeartRateRecord</code>, <code>BloodPressureRecord</code>. Summing these is meaningless. Averaging them is defensible only once you accept that the sampling times were chosen by the user or by an opaque device policy, never by you.</li>
+        <li><strong>Series records</strong> — <code>HeartRateRecord</code> carries a list of samples, so one record spans a period and contains many values. Its density reflects the writing device's duty cycle, not a fixed rate, and it collapses when the wearable is off the wrist.</li>
+    </ul>
+
+    <div class="key-point"><strong>Health Connect does not de-duplicate across apps, and this is the most common analysis error.</strong> If a phone pedometer, a wearable's companion app, and a fitness tracker all write steps for the same walk, you read three overlapping <code>StepsRecord</code> sets. Naive summation triple-counts. There is no platform-side reconciliation to lean on: every record carries <code>dataOrigin.packageName</code> precisely because deduplication is the consumer's responsibility. Do it per data origin, over non-overlapping time windows, with a documented priority rule for choosing an origin. The bias is not uniform — it is largest for users with the most devices and apps, which correlates with engagement and income, so the inflation is confounded with the outcome you probably care about.</div>
+
+    <div class="key-point"><strong><code>recordingMethod</code> and <code>dataOrigin</code> are part of the measurement definition.</strong> <code>Metadata</code> carries a recording method — automatically recorded, actively recorded (a user-started session), or manual entry — which lets you separate a typed-in weight from a scale reading, and a sensor-derived step count from a hand-logged one. Treat these as covariates, not provenance trivia: a heart rate from a chest strap (beat-to-beat R-R intervals), from an optical wrist sensor (periodic, motion-sensitive, duty-cycled), and from a manual spot entry are three different measurements sharing one class name. Sleep staging from actigraphy plus PPG is a model inference, not polysomnography. Pooling across origins without a source term confounds hardware and algorithm with physiology.</div>
+
+    <span class="section-label">Key Record Types</span>
+    <ul>
+        <li><strong>Activity</strong> — <code>StepsRecord</code>, <code>DistanceRecord</code>, <code>TotalCaloriesBurnedRecord</code>, <code>ActiveCaloriesBurnedRecord</code>, <code>SpeedRecord</code>, <code>PowerRecord</code>, <code>CyclingPedalingCadenceRecord</code>.</li>
+        <li><strong>Cardio &amp; vitals</strong> — <code>HeartRateRecord</code> (series), <code>RestingHeartRateRecord</code>, <code>HeartRateVariabilityRmssdRecord</code>, <code>OxygenSaturationRecord</code>, <code>RespiratoryRateRecord</code>, <code>BloodPressureRecord</code>, <code>BloodGlucoseRecord</code>.</li>
+        <li><strong>Sleep</strong> — <code>SleepSessionRecord</code>, containing a list of <code>Stage</code> entries with types AWAKE, SLEEPING, OUT_OF_BED, LIGHT, DEEP, REM. Stage presence depends entirely on the writing app: a session may contain only SLEEPING, or no stages at all, so a stage-level series is not guaranteed to exist.</li>
+        <li><strong>Exercise</strong> — <code>ExerciseSessionRecord</code> with laps, segments, and an optional <code>ExerciseRoute</code>.</li>
+        <li><strong>Body &amp; nutrition</strong> — <code>WeightRecord</code>, <code>BodyFatRecord</code>, <code>NutritionRecord</code>, <code>HydrationRecord</code>.</li>
+    </ul>
+
+    <div class="key-point"><strong>Vendor composite scores are not first-class types.</strong> There is no readiness, recovery, strain, or sleep-score record. When a vendor app writes such a value it lands as an opaque number attributed to that package, and its definition changes with app and firmware releases. A multi-year series of a sleep score is therefore a series of different models, not a longitudinal measurement, and part of any trend in it is the vendor's release history rather than the user's sleep.</div>
+
+    <span class="section-label">Reading &amp; Aggregation</span>
+    <ul>
+        <li><code>readRecords</code> with a time-range filter and an optional data-origin filter.</li>
+        <li><code>getChangesToken</code> / <code>getChanges</code> — differential sync, and the correct incremental ingestion mechanism. It reports deletions as well as upserts, and signals when a token has expired so you know a full re-read is required.</li>
+        <li><code>aggregate</code>, plus <code>aggregateGroupByPeriod</code> and <code>aggregateGroupByDuration</code> for bucketed rollups. The aggregate result exposes which data origins contributed — exactly the information needed to detect overlap — but it does not resolve the overlap for you.</li>
+        <li><code>clientRecordId</code> with <code>clientRecordVersion</code> — your app's idempotency key for writes, and the mechanism for upserting a correction instead of duplicating a record.</li>
+    </ul>
+
+    <span class="section-label">Rate Limits &amp; Quotas</span>
+    <p>No network quota, because there is no network call. The constraints are OS-side and better treated qualitatively than as a budget to count against:</p>
+    <ul>
+        <li>The platform rate-limits reads and writes to protect the datastore and the battery, surfacing this to the client as an exception rather than degrading silently. The enforced thresholds are not a published fixed table, so batch bulk operations and implement back-off rather than assuming a number.</li>
+        <li>Large historical reads must be paged. A year of heart-rate series records in one call is a memory hazard.</li>
+        <li>Background execution is the real ceiling. Doze, App Standby buckets, and vendor battery managers determine how often a sync worker actually runs, and this varies enormously across manufacturers. Two users on the same app build can have very different data latency for reasons unrelated to their health.</li>
+    </ul>
+
+    <span class="section-label">Business Scenarios</span>
+    <ul>
+        <li>Cross-app fitness and wellness aggregation, which is the case Health Connect was built for.</li>
+        <li>Remote patient monitoring and decentralised trials on Android, with a study app as the capture layer.</li>
+        <li>Insurance and employer wellness programmes — where the absence of platform deduplication combined with permitted manual entry makes the incentive structure a data-quality problem.</li>
+        <li>Migration work: replacing a Google Fit REST integration, which in practice means re-architecting from a server pull to a device push.</li>
+    </ul>
+
+    <span class="section-label">Key Restrictions &amp; Gotchas</span>
+    <ul>
+        <li><strong>No REST endpoint, no server credentials, no cross-user or population queries.</strong> One user, one device, one app, with that user's explicit per-type consent.</li>
+        <li><strong>No raw sensor stream.</strong> Health Connect is a records datastore. Live accelerometer or PPG access is a different surface — <code>SensorManager</code> on the phone, Health Services on Wear OS — with different permissions and different battery behaviour.</li>
+        <li><strong>No record type is guaranteed to be present.</strong> Coverage is a function of which apps the user installed and permitted. A study requiring SpO2 will find a large fraction of participants with none, and that fraction correlates with device price.</li>
+        <li><strong>Default history is a short rolling window.</strong> Without the historic-data permission a fresh install yields roughly a month of backfill at best.</li>
+        <li><strong>A denied read looks like an empty result.</strong> As with HealthKit, absence conflates refusal, non-wear, and a true zero. Log your own permission grant state over time or the missingness mechanism is unrecoverable.</li>
+        <li><strong>Per-type revocation produces ragged panels</strong> — unbalanced mid-study, silently, with no server-side signal.</li>
+        <li><strong>Manual entry is indistinguishable from sensor data except via <code>recordingMethod</code>.</strong> Filter on it deliberately; do not discover it after the analysis.</li>
+        <li><strong>Aggregates hide the overlap.</strong> A daily step total from <code>aggregate</code> looks authoritative. Inspect the contributing data origins before believing it.</li>
+    </ul>
+</td>
+<td>
+    <p class="payload-note"><strong>Client-side serialization</strong> — records read on-device via <code>HealthConnectClient.readRecords</code>, flattened by the app before upload. This is <em>not</em> an HTTP response; no endpoint returns it. Note that two packages have written overlapping step records for the same afternoon.</p>
+    <pre>{
+  "readAt": "2026-08-21T08:10:44Z",
+  "changesTokenAfterRead": "&lt;opaque changes token&gt;",
+
+  "sleepSessionRecords": [
+    {
+      "recordType": "SleepSessionRecord",
+      "startTime": "2026-08-20T22:58:00Z",
+      "endTime":   "2026-08-21T06:59:00Z",
+      "stages": [
+        { "stage": "AWAKE",       "startTime": "2026-08-20T22:58:00Z",
+                                  "endTime":   "2026-08-20T23:16:00Z" },
+        { "stage": "LIGHT",       "startTime": "2026-08-20T23:16:00Z",
+                                  "endTime":   "2026-08-20T23:45:00Z" },
+        { "stage": "DEEP",        "startTime": "2026-08-20T23:45:00Z",
+                                  "endTime":   "2026-08-21T00:15:00Z" },
+        { "stage": "REM",         "startTime": "2026-08-21T00:35:00Z",
+                                  "endTime":   "2026-08-21T00:48:00Z" },
+        { "stage": "OUT_OF_BED",  "startTime": "2026-08-21T02:04:00Z",
+                                  "endTime":   "2026-08-21T02:11:00Z" }
+      ],
+      "metadata": {
+        "id": "EXAMPLE_UUID_redacted",  // Note: masked for illustration
+        "dataOrigin": { "packageName": "com.fitbit.FitbitMobile" },
+        "lastModifiedTime": "2026-08-21T07:02:19Z",
+        "clientRecordId": "night-2026-08-20",
+        "clientRecordVersion": 2,
+        "recordingMethod": "RECORDING_METHOD_AUTOMATICALLY_RECORDED",
+        "device": { "manufacturer": "Fitbit", "model": "Sense 2",
+                    "type": "DEVICE_TYPE_WATCH" }
+      }
+    }
+  ],
+
+  "heartRateRecords": [
+    {
+      "recordType": "HeartRateRecord",
+      "startTime": "2026-08-21T06:00:00Z",
+      "endTime":   "2026-08-21T06:05:00Z",
+      "samples": [
+        { "time": "2026-08-21T06:00:12Z", "beatsPerMinute": 54 },
+        { "time": "2026-08-21T06:01:20Z", "beatsPerMinute": 56 },
+        { "time": "2026-08-21T06:02:31Z", "beatsPerMinute": 55 },
+        { "time": "2026-08-21T06:04:02Z", "beatsPerMinute": 61 }
+      ],
+      "metadata": {
+        "id": "EXAMPLE_UUID_redacted",  // Note: masked for illustration
+        "dataOrigin": { "packageName": "com.fitbit.FitbitMobile" },
+        "lastModifiedTime": "2026-08-21T06:06:00Z",
+        "recordingMethod": "RECORDING_METHOD_AUTOMATICALLY_RECORDED",
+        "device": { "manufacturer": "Fitbit", "model": "Sense 2",
+                    "type": "DEVICE_TYPE_WATCH" }
+      }
+    }
+  ],
+
+  "stepsRecords": [
+    { "recordType": "StepsRecord", "count": 3120,
+      "startTime": "2026-08-21T14:00:00Z",
+      "endTime":   "2026-08-21T14:38:00Z",
+      "metadata": {
+        "dataOrigin": { "packageName": "com.fitbit.FitbitMobile" },
+        "recordingMethod": "RECORDING_METHOD_AUTOMATICALLY_RECORDED",
+        "device": { "type": "DEVICE_TYPE_WATCH" } } },
+
+    { "recordType": "StepsRecord", "count": 2984,
+      "startTime": "2026-08-21T14:02:00Z",
+      "endTime":   "2026-08-21T14:37:00Z",
+      "metadata": {
+        "dataOrigin": { "packageName": "com.google.android.apps.fitness" },
+        "recordingMethod": "RECORDING_METHOD_AUTOMATICALLY_RECORDED",
+        "device": { "type": "DEVICE_TYPE_PHONE" } } },
+
+    { "recordType": "StepsRecord", "count": 5000,
+      "startTime": "2026-08-21T18:00:00Z",
+      "endTime":   "2026-08-21T18:45:00Z",
+      "metadata": {
+        "dataOrigin": { "packageName": "com.example.tracker" },
+        "recordingMethod": "RECORDING_METHOD_MANUAL_ENTRY" } }
+  ]
+}</pre>
+
+    <p class="payload-note"><strong>Daily steps decomposed by <code>dataOrigin</code></strong> — the stacked bars are what naive summation over all records produces. The dashed line is the defensible total after selecting one origin per non-overlapping window. The gap is pure double counting, and it is not a constant offset: it widens on days when more writers happened to be active.</p>
+
+    <canvas id="stepsByOrigin" height="380"></canvas>
+</td>
+</tr>
+</table>
+
+<script>
+(function() {
+    const canvas = document.getElementById('stepsByOrigin');
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const series = [
+        { name: 'com.google.android.apps.fitness', color: '#1a5276',
+          v: [7100, 6400, 8200, 5900, 7800, 11200, 4300] },
+        { name: 'com.fitbit.FitbitMobile',         color: '#27ae60',
+          v: [6800, 6100, 7900, 5600, 7400, 10800, 4100] },
+        { name: 'phone pedometer',                 color: '#e67e22',
+          v: [3200, 2900, 4100, 2400, 3600,  5200, 1800] }
+    ];
+    // De-duplicated: one origin chosen per non-overlapping window.
+    const dedup = [7400, 6600, 8500, 6100, 8000, 11600, 4500];
+
+    const YMAX = 30000;
+    const yticks = [0, 5000, 10000, 15000, 20000, 25000, 30000];
+    const fmt = n => (n / 1000) + 'k';
+
+    function draw() {
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * dpr;
+        canvas.height = 380 * dpr;
+        canvas.style.height = '380px';
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(dpr, dpr);
+
+        const W = rect.width;
+        const H = 380;
+        ctx.clearRect(0, 0, W, H);
+
+        const pad = { top: 58, right: 20, bottom: 92, left: 58 };
+        const plotW = Math.max(60, W - pad.left - pad.right);
+        const plotH = H - pad.top - pad.bottom;
+
+        const y = v => pad.top + plotH - (v / YMAX) * plotH;
+        const slot = plotW / days.length;
+        const barW = Math.min(46, slot * 0.52);
+
+        // Title
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.fillText('Daily step total by data origin — naive sum vs de-duplicated', W / 2, 22);
+        ctx.font = 'italic 10.5px -apple-system, sans-serif';
+        ctx.fillStyle = '#888';
+        ctx.fillText('Health Connect does not reconcile overlapping records; the consumer must', W / 2, 39);
+
+        // Gridlines + y labels
+        ctx.font = '11px -apple-system, sans-serif';
+        yticks.forEach(t => {
+            const py = y(t);
+            ctx.strokeStyle = '#e8e8e8';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(pad.left, py);
+            ctx.lineTo(pad.left + plotW, py);
+            ctx.stroke();
+            ctx.fillStyle = '#555';
+            ctx.textAlign = 'right';
+            ctx.fillText(fmt(t), pad.left - 8, py + 4);
+        });
+
+        // Axes
+        ctx.strokeStyle = '#2c3e50';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(pad.left, pad.top);
+        ctx.lineTo(pad.left, pad.top + plotH);
+        ctx.lineTo(pad.left + plotW, pad.top + plotH);
+        ctx.stroke();
+
+        // Y axis title
+        ctx.save();
+        ctx.translate(15, pad.top + plotH / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.textAlign = 'center';
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillText('steps per day', 0, 0);
+        ctx.restore();
+
+        // Stacked bars
+        days.forEach((d, i) => {
+            const cx = pad.left + slot * (i + 0.5);
+            let acc = 0;
+            series.forEach(s => {
+                const y0 = y(acc);
+                const y1 = y(acc + s.v[i]);
+                ctx.fillStyle = s.color;
+                ctx.fillRect(cx - barW / 2, y1, barW, y0 - y1);
+                acc += s.v[i];
+            });
+            ctx.fillStyle = '#888';
+            ctx.font = '10px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(fmt(acc), cx, y(acc) - 5);
+
+            ctx.fillStyle = '#555';
+            ctx.font = '11px -apple-system, sans-serif';
+            ctx.fillText(d, cx, pad.top + plotH + 17);
+        });
+
+        // De-duplicated dashed line
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        days.forEach((d, i) => {
+            const cx = pad.left + slot * (i + 0.5);
+            const py = y(dedup[i]);
+            if (i === 0) ctx.moveTo(cx, py); else ctx.lineTo(cx, py);
+        });
+        ctx.stroke();
+        ctx.setLineDash([]);
+        days.forEach((d, i) => {
+            const cx = pad.left + slot * (i + 0.5);
+            ctx.beginPath();
+            ctx.arc(cx, y(dedup[i]), 3, 0, Math.PI * 2);
+            ctx.fillStyle = '#e74c3c';
+            ctx.fill();
+        });
+
+        // Double-counting annotation on the Saturday column
+        const iAnn = 5;
+        const cxA = pad.left + slot * (iAnn + 0.5);
+        const totA = series.reduce((a, s) => a + s.v[iAnn], 0);
+        const yTop = y(totA);
+        const yBot = y(dedup[iAnn]);
+        const ax = cxA + barW / 2 + 12;
+        ctx.font = 'bold 10.5px -apple-system, sans-serif';
+        if (ax + 14 + ctx.measureText('double counted').width < pad.left + plotW) {
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(ax, yTop);
+            ctx.lineTo(ax, yBot);
+            ctx.moveTo(ax - 4, yTop); ctx.lineTo(ax + 4, yTop);
+            ctx.moveTo(ax - 4, yBot); ctx.lineTo(ax + 4, yBot);
+            ctx.stroke();
+            ctx.fillStyle = '#e74c3c';
+            ctx.textAlign = 'left';
+            ctx.fillText('double counted', ax + 7, (yTop + yBot) / 2 - 4);
+            ctx.fillStyle = '#888';
+            ctx.font = 'italic 10px -apple-system, sans-serif';
+            ctx.fillText('same walk, three writers', ax + 7, (yTop + yBot) / 2 + 10);
+        }
+
+        // Legend, wrapping to a second row if needed
+        const legend = series.map(s => ({ c: s.color, t: s.name, dash: false }));
+        legend.push({ c: '#e74c3c', t: 'de-duplicated total (one origin per window)', dash: true });
+
+        ctx.font = '10px -apple-system, sans-serif';
+        let lx = pad.left;
+        let ly = H - 34;
+        legend.forEach(l => {
+            const tw = ctx.measureText(l.t).width;
+            if (lx + 18 + tw > pad.left + plotW) { lx = pad.left; ly += 15; }
+            if (l.dash) {
+                ctx.strokeStyle = l.c;
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 3]);
+                ctx.beginPath();
+                ctx.moveTo(lx, ly - 4);
+                ctx.lineTo(lx + 14, ly - 4);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            } else {
+                ctx.fillStyle = l.c;
+                ctx.fillRect(lx, ly - 8, 11, 9);
+            }
+            ctx.fillStyle = '#555';
+            ctx.textAlign = 'left';
+            ctx.fillText(l.t, lx + 18, ly);
+            lx += 18 + tw + 18;
+        });
+    }
+
+    draw();
+    window.addEventListener('resize', draw);
+})();
+</script>
+</body>
+</html>

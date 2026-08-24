@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asana &amp; monday.com APIs — Platform APIs</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2c3e50; max-width: 100%; margin: 0; padding: 30px 40px; background: #fff; }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+        .verified { font-size: 0.8em; color: #888; margin-bottom: 18px; border: 1px solid #ddd; display: inline-block; padding: 2px 10px; border-radius: 4px; }
+        .status { display: inline-block; background: #e67e22; color: #fff; font-size: 0.75em; font-weight: bold; padding: 2px 10px; border-radius: 4px; vertical-align: middle; margin-left: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+        h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
+        .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
+        .obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+        .obj-table td { vertical-align: top; padding: 16px; border: 1px solid #2980b9; }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; text-align: center; }
+        ul { padding-left: 20px; margin: 8px 0; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        .payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 12px 0; text-align: left; }
+        .payload-note { font-size: 0.82em; color: #666; margin: 12px 0 -6px 0; font-style: italic; text-align: left; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        .scope-tag { display: inline-block; background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 1px 8px; border-radius: 10px; font-size: 0.78em; font-family: ui-monospace, Menlo, monospace; margin: 3px 4px 3px 0; }
+        canvas { display: block; margin: 16px auto 0; width: 100%; }
+    </style>
+</head>
+<body>
+    <h1>Asana &amp; monday.com APIs <span class="status">Backlog</span></h1>
+    <p class="subtitle">Tasks, projects, boards and custom fields from two work-management platforms — one REST with field masks, one GraphQL with a complexity budget.</p>
+    <span class="verified">Last verified: August 2026</span>
+
+    <h2>Overview</h2>
+    <table class="obj-table">
+        <tr>
+            <td>
+                <div class="obj-title">What It Provides</div>
+                <p>Both platforms model the same domain — a container of work items with user-defined columns — but expose it through opposite API styles.</p>
+                <ul>
+                    <li><strong>Asana</strong> — REST at <code>https://app.asana.com/api/1.0/</code>. Resources: workspaces, teams, projects, sections, tasks, subtasks, stories (the activity feed), custom fields, tags, portfolios, goals, attachments, time-tracking entries. Every object has a <code>gid</code> string id and a <code>resource_type</code>.</li>
+                    <li><strong>monday.com</strong> — GraphQL only, single endpoint <code>https://api.monday.com/v2</code>. Objects: boards, groups, items, subitems, <code>column_values</code>, updates, users, teams, workspaces, activity logs.</li>
+                </ul>
+                <p>In both, the interesting business data is not in the built-in fields — it is in the <strong>customer-defined columns</strong>, which are typed, per-container, and renameable.</p>
+
+                <div class="obj-title" style="margin-top: 18px;">Authentication &amp; Scopes</div>
+                <ul>
+                    <li><strong>Asana:</strong> Personal Access Token as <code>Authorization: Bearer</code>, or OAuth 2.0 for multi-tenant apps. Asana's OAuth historically granted broad access on behalf of the user; a finer-grained scope model is available on newer apps, so check what your app registration actually requested rather than assuming.</li>
+                    <li><strong>monday.com:</strong> a personal API token, or OAuth for marketplace apps, sent in the <code>Authorization</code> header. Scopes are explicit and coarse-grained per object family.</li>
+                </ul>
+                <div>
+                    <span class="scope-tag">asana: default (full user access)</span>
+                    <span class="scope-tag">asana: openid / email / profile</span>
+                    <span class="scope-tag">monday: boards:read</span>
+                    <span class="scope-tag">monday: boards:write</span>
+                    <span class="scope-tag">monday: users:read</span>
+                    <span class="scope-tag">monday: workspaces:read</span>
+                    <span class="scope-tag">monday: updates:read</span>
+                    <span class="scope-tag">monday: account:read</span>
+                    <span class="scope-tag">monday: webhooks:write</span>
+                </div>
+
+                <div class="obj-title" style="margin-top: 18px;">Granularity</div>
+                <ul>
+                    <li><strong>Asana task</strong> — one record with <code>created_at</code>, <code>modified_at</code>, <code>completed_at</code>, <code>due_on</code>, assignee, memberships (project + section), and <code>custom_fields</code> as an array of typed field objects carrying both the definition and the value.</li>
+                    <li><strong>Asana story</strong> — one record per comment or system event on a task ("changed the assignee to …"). This is the closest thing to a per-task history.</li>
+                    <li><strong>monday item</strong> — one record whose <code>column_values</code> is an array of <code>{ id, type, text, value }</code>, where <code>value</code> is a JSON <em>string</em> that must be parsed again, and <code>text</code> is a display rendering.</li>
+                    <li><strong>monday activity log</strong> — per-board event stream with the changed column, before/after payload, user and timestamp.</li>
+                </ul>
+
+                <div class="obj-title" style="margin-top: 18px;">Key Endpoints</div>
+                <ul>
+                    <li>Asana: <code>GET /tasks</code> (requires <code>project</code>, <code>section</code>, <code>tag</code>, or <code>assignee</code>+<code>workspace</code>), <code>GET /tasks/{task_gid}</code>, <code>GET /tasks/{task_gid}/stories</code>, <code>GET /tasks/{task_gid}/subtasks</code>.</li>
+                    <li>Asana: <code>POST /workspaces/{workspace_gid}/tasks/search</code> — the only server-side filtered search; results are not guaranteed complete for very large result sets and cannot be sorted arbitrarily.</li>
+                    <li>Asana: <code>GET /projects/{project_gid}/custom_field_settings</code> — the column definitions for a project.</li>
+                    <li>Asana: <code>GET /events?resource={gid}&amp;sync={token}</code> — a sync-token change stream. The token expires if not polled often enough, and recovery means a full re-read.</li>
+                    <li>Asana: <code>GET /workspaces/{gid}/audit_log_events</code> — admin/security events, available on higher enterprise tiers only.</li>
+                    <li>monday: <code>query { boards(ids: [...]) { items_page(limit: 100, cursor: $c) { cursor items { id name column_values { id type text value } } } } }</code>.</li>
+                    <li>monday: <code>items_page_by_column_values</code> for filtered reads; <code>activity_logs(from:, to:)</code> for board history; <code>next_items_page(cursor:)</code> to continue.</li>
+                </ul>
+
+                <div class="obj-title" style="margin-top: 18px;">Rate Limits</div>
+                <ul>
+                    <li><strong>Asana</strong> — per-token limits on requests per minute, with a separate and much tighter budget for search and for write-heavy operations. Cost is also shaped by response size, so wide <code>opt_fields</code> requests count for more. Honour <code>Retry-After</code> on <code>429</code>.</li>
+                    <li><strong>monday.com</strong> — two independent budgets: a <em>complexity</em> budget consumed by the estimated cost of each GraphQL query, and a conventional per-minute request cap. Complexity is charged whether or not the query returns rows, so a badly shaped query with an empty result still spends budget.</li>
+                    <li>monday returns remaining complexity inside the response when you ask for it (<code>complexity { before after query reset_in_x_seconds }</code>) — instrument this rather than guessing.</li>
+                    <li>Published numbers differ by plan and have changed more than once. Read the limit from headers or the complexity block instead of hard-coding.</li>
+                </ul>
+
+                <div class="obj-title" style="margin-top: 18px;">Business Scenarios</div>
+                <ul>
+                    <li><strong>Cross-tool portfolio roll-up</strong> — normalising tasks from both platforms into one status vocabulary.</li>
+                    <li><strong>Throughput and ageing</strong> — completions per period, and open-item age distribution.</li>
+                    <li><strong>Intake analytics</strong> — request forms feed items whose custom fields encode request type, priority and requesting team.</li>
+                    <li><strong>Workload balance</strong> — assignee counts weighted by a custom effort column.</li>
+                    <li><strong>Process compliance</strong> — items that skipped a required status, detectable only from the activity log / stories feed.</li>
+                </ul>
+
+                <div class="obj-title" style="margin-top: 18px;">Restrictions &amp; Gotchas</div>
+                <ul>
+                    <li><strong>Asana returns a minimal representation by default.</strong> Omit <code>opt_fields</code> and you get little more than <code>gid</code>, <code>name</code> and <code>resource_type</code> — silently, with no hint that the field you wanted exists. Many "the API doesn't expose that" reports are missing field masks.</li>
+                    <li><strong>Asana tasks cannot be listed workspace-wide.</strong> <code>GET /tasks</code> demands a narrowing parameter, so a full extract means iterating projects — and a task in several projects will be fetched several times, while a task in none is unreachable that way.</li>
+                    <li><strong>monday's <code>column_values.value</code> is JSON-in-a-string</strong> whose inner shape depends on the column type. <code>text</code> is a locale- and format-dependent rendering, not a parseable value. Type on <code>type</code>, parse <code>value</code>, and never sum <code>text</code>.</li>
+                    <li><strong>Column and field identity is unstable across containers.</strong> The same business concept ("Priority") is a different column id on every board and a different custom-field gid in every project, and either can be renamed while keeping its id. Build an explicit mapping table; do not join on display names.</li>
+                    <li><strong>History coverage is asymmetric and bounded.</strong> monday's <code>activity_logs</code> serves a rolling window whose length depends on plan; Asana's stories feed is per-task and mixes human comments with system events, and Asana's audit log is gated to top enterprise tiers. Neither gives a cheap account-wide "everything that changed yesterday".</li>
+                    <li><strong>GraphQL nesting multiplies cost, not convenience.</strong> Fetching boards → items → column_values → updates in one query is elegant and will exhaust the complexity budget. Flatten into several cheaper queries.</li>
+                    <li><strong>Deleted and archived objects vanish from normal reads.</strong> Archived monday boards and deleted Asana tasks disappear, so a recomputed historical total can shrink between runs. Snapshot, or accept drift.</li>
+                    <li><strong>Status columns are free text underneath.</strong> Anyone can add a label, so a status taxonomy learned from last quarter's data will encounter unseen categories.</li>
+                </ul>
+                <div class="key-point">These feeds record <strong>declared state, not performed work</strong>. A task moved to Done means somebody clicked Done — the timing reflects when they got round to updating the board, which is often batched at the end of a day or a sprint. Duration metrics built on these timestamps measure bookkeeping latency plus real work, mixed together and not separable.</div>
+            </td>
+            <td>
+                <p class="payload-note">Sample payload — GET /api/1.0/tasks/{task_gid}?opt_fields=… (Asana, abbreviated).</p>
+<pre class="payload">{
+  "data": {
+    "gid": "1204987654321098",
+    "resource_type": "task",
+    "name": "Migrate ingestion job to new warehouse",
+    "created_at": "2026-07-29T06:11:02.418Z",
+    "modified_at": "2026-08-19T11:44:57.203Z",
+    "completed": false,
+    "completed_at": null,
+    "due_on": "2026-08-29",
+    "assignee": {
+      "gid": "1198877665544332",
+      "resource_type": "user",
+      "name": "Amit Jaiswal"
+    },
+    "memberships": [
+      {
+        "project": { "gid": "1201122334455667", "name": "Data Platform" },
+        "section": { "gid": "1201122334455990", "name": "In Progress" }
+      }
+    ],
+    "custom_fields": [
+      {
+        "gid": "1200099887766554",
+        "name": "Priority",
+        "resource_subtype": "enum",
+        "enum_value": { "gid": "12009", "name": "High", "color": "red" }
+      },
+      {
+        "gid": "1200099887766555",
+        "name": "Effort (days)",
+        "resource_subtype": "number",
+        "number_value": 5
+      }
+    ],
+    "num_subtasks": 3
+  }
+}</pre>
+                <p class="payload-note">Sample payload — POST https://api.monday.com/v2 (monday.com GraphQL response, abbreviated).</p>
+<pre class="payload">{
+  "data": {
+    "boards": [
+      {
+        "id": "7654321098",
+        "name": "Data Platform",
+        "items_page": {
+          "cursor": "MSw5NzY1NDMyMTA5OCwxMDA=",
+          "items": [
+            {
+              "id": "7654399001",
+              "name": "Migrate ingestion job",
+              "created_at": "2026-07-29T06:11:02Z",
+              "column_values": [
+                {
+                  "id": "status",
+                  "type": "status",
+                  "text": "Working on it",
+                  "value": "{\"index\":0,\"post_id\":null}"
+                },
+                {
+                  "id": "numeric_effort",
+                  "type": "numbers",
+                  "text": "5",
+                  "value": "\"5\""
+                },
+                {
+                  "id": "date4",
+                  "type": "date",
+                  "text": "2026-08-29",
+                  "value": "{\"date\":\"2026-08-29\"}"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "account_id": 1234567,
+  "extensions": {
+    "complexity": {
+      "before": 5000000,
+      "query": 20106,
+      "after": 4979894,
+      "reset_in_x_seconds": 41
+    }
+  }
+}</pre>
+                <p class="payload-note">The <code>value</code> fields are JSON strings inside JSON — a second parse step, with a shape that varies by column <code>type</code>.</p>
+                <canvas id="c1" height="380"></canvas>
+            </td>
+        </tr>
+    </table>
+
+    <script>
+    (function() {
+        const canvas = document.getElementById('c1');
+        const ctx = canvas.getContext('2d');
+
+        // Two cost models, illustrative: what one "page of work items" costs you
+        const asana = [
+            { label: 'GET /projects',                cost: 1,  note: '1 request' },
+            { label: 'GET /tasks?project=…',         cost: 1,  note: '1 request per page' },
+            { label: '+ opt_fields (wide response)', cost: 1,  note: 'same count, larger payload' },
+            { label: 'GET /tasks/{gid}/stories',     cost: 100, note: '1 request per task — the real cost' }
+        ];
+        const mondayQ = [
+            { label: 'boards { name }',                            cost: 1,  note: 'trivial complexity' },
+            { label: '+ items_page(limit:100)',                    cost: 30, note: 'charged per item requested' },
+            { label: '+ column_values',                            cost: 55, note: 'multiplies by items' },
+            { label: '+ updates { body }',                         cost: 100, note: 'nesting compounds' }
+        ];
+
+        function draw() {
+            const dpr = window.devicePixelRatio || 1;
+            const w = canvas.offsetWidth || 600;
+            const h = 380;
+            canvas.width = w * dpr;
+            canvas.height = h * dpr;
+            canvas.style.height = h + 'px';
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.scale(dpr, dpr);
+            ctx.clearRect(0, 0, w, h);
+
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#1a5276';
+            ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('Two cost models for the same extract', w / 2, 22);
+            ctx.fillStyle = '#666';
+            ctx.font = 'italic 11px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillText('relative cost of adding one more thing to the read — illustrative, not published figures', w / 2, 39);
+
+            const panelW = (w - 36) / 2;
+            const panels = [
+                { x: 12,               title: 'Asana — cost is REQUEST COUNT', rows: asana,   color: '#1a5276' },
+                { x: 24 + panelW,      title: 'monday.com — cost is QUERY COMPLEXITY', rows: mondayQ, color: '#27ae60' }
+            ];
+
+            panels.forEach(function(p) {
+                ctx.textAlign = 'left';
+                ctx.fillStyle = p.color;
+                ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, sans-serif';
+                ctx.fillText(p.title, p.x, 66);
+
+                const barH = 22;
+                const gap = 40;
+                const top = 86;
+                const barLeft = p.x;
+                const barMax = panelW - 8;
+
+                p.rows.forEach(function(r, i) {
+                    const y = top + i * (barH + gap);
+                    const bw = Math.max((r.cost / 100) * barMax, 3);
+
+                    // track
+                    ctx.fillStyle = 'rgba(26,82,118,0.10)';
+                    ctx.fillRect(barLeft, y, barMax, barH);
+
+                    ctx.fillStyle = r.cost >= 100 ? '#e74c3c' : (r.cost >= 50 ? '#e67e22' : p.color);
+                    ctx.globalAlpha = 0.85;
+                    ctx.fillRect(barLeft, y, bw, barH);
+                    ctx.globalAlpha = 1;
+
+                    ctx.fillStyle = '#2c3e50';
+                    ctx.font = '10.5px ui-monospace, Menlo, monospace';
+                    ctx.textAlign = 'left';
+                    ctx.fillText(r.label, barLeft, y - 6);
+
+                    ctx.fillStyle = '#777';
+                    ctx.font = 'italic 10px -apple-system, BlinkMacSystemFont, sans-serif';
+                    ctx.fillText(r.note, barLeft + 2, y + barH + 13);
+                });
+            });
+
+            // divider
+            ctx.strokeStyle = '#e5e5e5';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(w / 2, 56);
+            ctx.lineTo(w / 2, h - 42);
+            ctx.stroke();
+
+            ctx.fillStyle = '#e74c3c';
+            ctx.font = 'italic 11px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Red bars are where a naive extract stalls: per-task fan-out on one side, nested fields on the other.', w / 2, h - 22);
+        }
+
+        draw();
+        window.addEventListener('resize', draw);
+    })();
+    </script>
+</body>
+</html>

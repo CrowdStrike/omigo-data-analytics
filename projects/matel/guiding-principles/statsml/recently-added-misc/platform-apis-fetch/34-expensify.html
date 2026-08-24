@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expensify — Platform APIs</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2c3e50; max-width: 100%; margin: 0; padding: 30px 40px; background: #fff; }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 14px; }
+        .verified { font-size: 0.8em; color: #888; border: 1px solid #ddd; display: inline-block; padding: 2px 10px; border-radius: 4px; margin-bottom: 18px; }
+        .status { display: inline-block; background: #e67e22; color: #fff; font-size: 0.75em; font-weight: bold; padding: 2px 10px; border-radius: 4px; vertical-align: middle; margin-left: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+        h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
+        .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
+        .section-label { font-weight: bold; color: #1a5276; margin-top: 16px; display: block; }
+        .section-label:first-child { margin-top: 0; }
+        .obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+        .obj-table td { vertical-align: top; padding: 16px; border: 1px solid #2980b9; }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; }
+        ul { padding-left: 20px; margin: 6px 0 10px; }
+        li { margin-bottom: 5px; font-size: 0.93em; }
+        p { font-size: 0.93em; margin: 6px 0; }
+        pre.payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 12px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 10px 0 16px; border-radius: 4px; text-align: left; }
+        .payload-note { font-size: 0.82em; color: #666; margin: 10px 0 -4px 0; font-style: italic; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        canvas { display: block; width: 100%; margin-top: 12px; }
+    </style>
+</head>
+<body>
+    <h1>Expensify <span class="status">BACKLOG</span></h1>
+    <p class="subtitle">Expense reports, receipt images, SmartScan-extracted fields, policy categories and tags, violations, and the approval chain — retrieved through a template-driven export job rather than a conventional resource API.</p>
+    <span class="verified">Last verified: August 2026</span>
+
+    <h2>Overview</h2>
+    <table class="obj-table">
+        <tr>
+            <td>
+                <span class="section-label">What It Provides</span>
+                <p>Expensify's Integration Server exposes expense reports and the individual expenses (transactions) inside them, plus policy configuration: category lists, tag lists, employee lists, and the approval workflow. Receipt images are retrievable as URLs or as downloadable files, and each expense carries the fields SmartScan extracted from the receipt.</p>
+                <p>The API is job-oriented, not resource-oriented. You POST a <code>requestJobDescription</code> describing a job type — <code>reportExport</code>, <code>create</code>, <code>get</code>, <code>download</code>, <code>update</code> — and the server executes it. For exports, the output shape is defined by a Freemarker template you supply, so the same job can emit CSV, JSON, or an accounting-package-specific format.</p>
+
+                <span class="section-label">Authentication &amp; Scopes</span>
+                <ul>
+                    <li><strong>partnerUserID / partnerUserSecret</strong> — a credential pair generated from Expensify account settings, sent inside the JSON job description, not as an HTTP header.</li>
+                    <li>No OAuth flow and no per-scope grants. The credential inherits whatever the owning user can see, which for a policy admin is every report on that policy.</li>
+                    <li>Because access is coarse, the practical scoping mechanism is the job's <code>filters</code> block (date range, policy ID list, report ID list, export state).</li>
+                </ul>
+                <div class="key-point">There is no read-only credential tier. The same secret that runs <code>reportExport</code> can run <code>create</code> and <code>update</code>. Treat it as a write credential in any threat model, and keep extraction jobs in a separate service from anything that mutates.</div>
+
+                <span class="section-label">Granularity</span>
+                <p>Report-level and expense-level. Each report has a status, a total, a submitter, and a policy; each expense has a merchant, amount, currency, date, category, tag set, comment, receipt reference, and reimbursable/billable flags. Violations attach to individual expenses and, in aggregate, to the report.</p>
+
+                <span class="section-label">Key Endpoints</span>
+                <ul>
+                    <li><code>POST /Integration-Server/ExpensifyIntegrations</code> — single endpoint; behaviour selected by job <code>type</code>.</li>
+                    <li><code>type: "file"</code> + <code>inputSettings.type: "combinedReportData"</code> — the export job that returns reports with nested expenses.</li>
+                    <li><code>type: "download"</code> — second call that fetches the file the export job generated.</li>
+                    <li><code>type: "get"</code> + <code>inputSettings.type: "policy"</code> — categories, tags, employee list, approval configuration.</li>
+                    <li><code>type: "create"</code> — push expenses in from an external source.</li>
+                </ul>
+                <div class="key-point">Export is asynchronous in two steps. The first call returns a generated filename (via <code>onReceive.immediateResponse: ["returnRandomFileName"]</code>); a second <code>download</code> call retrieves the content. Any client that assumes one request returns data will appear to succeed and return nothing useful.</div>
+
+                <span class="section-label">Rate Limits</span>
+                <p>Expensify does not publish a numeric request quota for the Integration Server. What is documented in practice is a constraint on concurrency and job size: large exports are slow, overlapping jobs from the same credential can be rejected or serialised, and the guidance is to run exports sequentially with generous timeouts rather than fanning out in parallel. Chunk by date range or policy rather than by trying to raise throughput.</p>
+
+                <span class="section-label">Business Scenarios</span>
+                <ul>
+                    <li><strong>Accounting sync</strong> — export approved reports on a schedule and mark them exported so the next run does not re-emit them.</li>
+                    <li><strong>Spend analytics</strong> — category and tag rollups, merchant concentration, per-department burn.</li>
+                    <li><strong>Policy compliance monitoring</strong> — which violations fire most, which are routinely overridden by approvers.</li>
+                    <li><strong>Approval cycle-time measurement</strong> — how long reports sit at each approver, subject to the timestamp limits noted below.</li>
+                    <li><strong>Receipt archival</strong> — pull receipt images for audit or for independent re-extraction.</li>
+                </ul>
+
+                <span class="section-label">Key Restrictions &amp; Gotchas</span>
+                <ul>
+                    <li><strong>SmartScan fields are model output.</strong> <code>merchant</code>, <code>amount</code>, and <code>created</code> as first captured are OCR inferences. When a user corrects them, Expensify stores the correction in a parallel field — <code>modifiedMerchant</code>, <code>modifiedAmount</code>, <code>modifiedCreated</code> — and leaves the original intact.</li>
+                    <li><strong>The export is report-centric.</strong> <code>combinedReportData</code> walks reports and then their expenses. Expenses that have never been attached to a report are not reliably reachable this way.</li>
+                    <li><strong>The export state filter is stateful.</strong> Filtering on <code>markedAsExported</code> and then marking rows exported makes your pipeline non-idempotent: a failed downstream load cannot simply be re-run.</li>
+                    <li><strong>Only current status is on the report.</strong> There is no per-transition history object giving the timestamp of every submit, reject, resubmit, and approve.</li>
+                    <li><strong>Custom template = custom schema.</strong> Two teams exporting the same data with different Freemarker templates produce incomparable files. The template is part of your data contract and belongs in version control.</li>
+                    <li><strong>Currency.</strong> Reports mix currencies; the converted amount depends on the exchange rate captured at report time, so re-deriving totals later with today's rates will not reconcile.</li>
+                </ul>
+                <div class="key-point">Treating the raw SmartScan value as observed fact imports Expensify's OCR error rate into your spend analysis, silently. The correct read of an expense amount is "modified value if present, else scanned value", and the presence of a modification is itself a signal — it is a human flagging that the model was wrong. Count those corrections; they are your only in-band estimate of extraction error.</div>
+            </td>
+            <td>
+                <p class="payload-note">Request — POST /Integration-Server/ExpensifyIntegrations, <code>requestJobDescription</code> parameter.</p>
+<pre class="payload">{
+  "type": "file",
+  "credentials": {
+    "partnerUserID": "acme_integration",
+    "partnerUserSecret": "••••••••••••••••"
+  },
+  "onReceive": {
+    "immediateResponse": ["returnRandomFileName"]
+  },
+  "inputSettings": {
+    "type": "combinedReportData",
+    "filters": {
+      "startDate": "2026-07-01",
+      "endDate": "2026-07-31",
+      "markedAsExported": "Exported to warehouse",
+      "policyIDList": "A1B2C3D4E5F6A7B8",
+      "limit": "1000"
+    }
+  },
+  "outputSettings": {
+    "fileExtension": "json",
+    "fileBasename": "expensify_2026_07_"
+  }
+}</pre>
+
+                <p class="payload-note">Response of the rendered export template — report with nested transactions.</p>
+<pre class="payload">{
+  "reportID": 401993204,
+  "reportName": "Client visit — Berlin",
+  "status": "APPROVED",
+  "policyID": "A1B2C3D4E5F6A7B8",
+  "policyName": "Acme Global T&amp;E",
+  "submitterEmail": "j.okoro@acme.example",
+  "currency": "USD",
+  "total": 148730,
+  "submitted": "2026-07-24",
+  "approvedBy": "d.lin@acme.example",
+  "transactionList": [
+    {
+      "transactionID": "8827301998",
+      "created": "2026-07-19",
+      "modifiedCreated": "2026-07-18",
+      "merchant": "HOTEL ADLON KEMPIN",
+      "modifiedMerchant": "Hotel Adlon Kempinski",
+      "amount": 92400,
+      "modifiedAmount": 0,
+      "currency": "EUR",
+      "convertedAmount": 100850,
+      "exchangeRate": 1.0914,
+      "category": "Lodging",
+      "tag": "EMEA:Sales:Q3-Berlin",
+      "comment": "2 nights, client meetings",
+      "mccGroup": "Hotels",
+      "reimbursable": true,
+      "billable": true,
+      "receiptObject": {
+        "receiptID": "r_5518823001",
+        "url": "https://www.expensify.com/receipts/w_5518823001.jpg",
+        "state": "SCANCOMPLETE"
+      },
+      "violations": [
+        { "name": "receiptRequired", "type": "warning" },
+        { "name": "categoryOutOfPolicy", "type": "violation" }
+      ]
+    }
+  ]
+}</pre>
+                <p class="payload-note">Note <code>modifiedMerchant</code> present but <code>modifiedAmount: 0</code> — the user corrected the OCR merchant string and accepted the scanned amount. The two fields carry different evidential weight and should not be flattened into one column without recording which won.</p>
+
+                <canvas id="approvalChart" height="380"></canvas>
+            </td>
+        </tr>
+    </table>
+
+    <script>
+    (function() {
+        const canvas = document.getElementById('approvalChart');
+        const ctx = canvas.getContext('2d');
+        const dpr = window.devicePixelRatio || 1;
+
+        function draw() {
+            const rect = canvas.getBoundingClientRect();
+            const W = rect.width;
+            const H = 380;
+            canvas.width = W * dpr;
+            canvas.height = H * dpr;
+            canvas.style.height = H + 'px';
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.scale(dpr, dpr);
+            ctx.clearRect(0, 0, W, H);
+
+            const stages = [
+                { label: 'OPEN',       n: 1000, color: '#1a5276' },
+                { label: 'SUBMITTED',  n: 942,  color: '#2980b9' },
+                { label: 'APPROVED',   n: 806,  color: '#27ae60' },
+                { label: 'REIMBURSED', n: 771,  color: '#8e44ad' }
+            ];
+            const lost = ['58 never submitted', '136 rejected or held', '35 pending payment'];
+
+            const marginTop = 58;
+            const marginLeft = 105;
+            const marginRight = 150;
+            const chartW = W - marginLeft - marginRight;
+            const barH = 40;
+            const gap = 30;
+
+            ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+            ctx.fillStyle = '#1a5276';
+            ctx.textAlign = 'center';
+            ctx.fillText('Report Status Funnel — terminal state only, not a transition log', W / 2, 22);
+            ctx.font = 'italic 10px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+            ctx.fillStyle = '#888';
+            ctx.fillText('Illustrative volumes. The API reports where each report is now; it does not report how it got there.', W / 2, 40);
+
+            const maxN = stages[0].n;
+
+            for (let i = 0; i < stages.length; i++) {
+                const y = marginTop + i * (barH + gap);
+                const bw = (stages[i].n / maxN) * chartW;
+
+                ctx.fillStyle = stages[i].color;
+                ctx.globalAlpha = 0.85;
+                ctx.fillRect(marginLeft, y, bw, barH);
+                ctx.globalAlpha = 1;
+
+                ctx.font = '12px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+                ctx.fillStyle = '#2c3e50';
+                ctx.textAlign = 'right';
+                ctx.fillText(stages[i].label, marginLeft - 10, y + barH / 2 + 4);
+
+                ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+                ctx.textAlign = 'left';
+                ctx.fillText(stages[i].n.toLocaleString(), marginLeft + bw + 8, y + barH / 2 + 4);
+
+                if (i < lost.length) {
+                    const ny = y + barH + gap / 2;
+                    ctx.strokeStyle = '#e74c3c';
+                    ctx.lineWidth = 1;
+                    ctx.setLineDash([3, 3]);
+                    ctx.beginPath();
+                    ctx.moveTo(marginLeft + (stages[i + 1].n / maxN) * chartW, ny);
+                    ctx.lineTo(marginLeft + bw, ny);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+
+                    ctx.font = 'italic 10px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+                    ctx.fillStyle = '#e74c3c';
+                    ctx.textAlign = 'left';
+                    ctx.fillText(lost[i], marginLeft + bw + 8, ny + 3);
+                }
+            }
+
+            const footY = marginTop + stages.length * (barH + gap) + 6;
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+            ctx.fillStyle = '#666';
+            ctx.textAlign = 'left';
+            ctx.fillText('A report that was rejected once and resubmitted is indistinguishable', marginLeft - 60, footY + 14);
+            ctx.fillText('from one approved on the first pass. Both read APPROVED.', marginLeft - 60, footY + 30);
+        }
+
+        draw();
+        window.addEventListener('resize', draw);
+    })();
+    </script>
+</body>
+</html>

@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telegram — Platform APIs</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #2c3e50;
+            max-width: 100%;
+            margin: 0;
+            padding: 30px 40px;
+            background: #fff;
+        }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+        .verified { display: inline-block; background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-bottom: 16px; }
+        h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
+        .status { display: inline-block; background: #fef9e7; border: 1px solid #f39c12; color: #b7950b; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-left: 12px; vertical-align: middle; }
+        table.obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+        table.obj-table td { vertical-align: top; padding: 12px; }
+        table.obj-table td:first-child { width: 45%; }
+        table.obj-table td:last-child { width: 55%; }
+        pre { background: #f4f4f4; padding: 14px; border-radius: 6px; overflow-x: auto; font-size: 0.82em; text-align: left; }
+        canvas { display: block; margin: 16px auto 0; width: 100%; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        ul { padding-left: 20px; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        .section-title { font-weight: bold; color: #1a5276; font-size: 1.05em; margin-bottom: 8px; margin-top: 16px; }
+    </style>
+</head>
+<body>
+    <h1>Telegram <span class="status">BACKLOG</span></h1>
+    <p class="subtitle">Bot API polling and webhooks, channel posts, and chat member counts — plus the sharp line between the Bot API and the MTProto client API.</p>
+    <span class="verified">Last verified: August 2026</span>
+
+    <h2>Overview</h2>
+    <table class="obj-table">
+        <tr>
+            <td>
+                <p style="font-size:0.93em;">Telegram exposes two entirely different surfaces. The <strong>Bot API</strong> is a simple HTTPS/JSON wrapper at <code>https://api.telegram.org/bot{token}/METHOD</code>, designed so a bot can only see what has been deliberately routed to it. The <strong>MTProto client API</strong> (<code>api_id</code>/<code>api_hash</code>, used via TDLib, Telethon, or similar) authenticates as a real user account and can see everything that user can see. Most disappointment with "the Telegram API" is actually the discovery that the Bot API is narrow by design and the broad alternative carries account-ban risk.</p>
+
+                <div class="section-title">What It Provides</div>
+                <ul>
+                    <li><strong>Update objects</strong> — the single delivery envelope. Carries at most one of <code>message</code>, <code>edited_message</code>, <code>channel_post</code>, <code>edited_channel_post</code>, <code>callback_query</code>, <code>inline_query</code>, <code>my_chat_member</code>, <code>chat_member</code>, <code>chat_join_request</code>, <code>message_reaction</code>, <code>message_reaction_count</code>, plus payment and poll updates.</li>
+                    <li><strong>Two mutually exclusive transports</strong> — <code>getUpdates</code> long polling, or <code>setWebhook</code> push to an HTTPS endpoint. Setting a webhook makes <code>getUpdates</code> fail; you must <code>deleteWebhook</code> to go back to polling.</li>
+                    <li><strong>Channel posts</strong> — if the bot is a member (typically an administrator) of a channel, it receives <code>channel_post</code> and <code>edited_channel_post</code> updates for new content going forward.</li>
+                    <li><strong>Chat metadata</strong> — <code>getChat</code>, <code>getChatMemberCount</code>, <code>getChatMember</code>, <code>getChatAdministrators</code>.</li>
+                    <li><strong>File access</strong> — <code>getFile</code> returns a <code>file_path</code> which is then fetched from <code>https://api.telegram.org/file/bot{token}/{file_path}</code>.</li>
+                </ul>
+
+                <div class="section-title">Authentication &amp; Scopes</div>
+                <ul>
+                    <li><strong>Bot API:</strong> a single bearer-style bot token issued by BotFather, embedded in the URL path. There is no scope system and no per-method permission model — capability is determined entirely by what the bot has been added to and its administrator rights in each chat.</li>
+                    <li>There is no OAuth, no user consent screen, and no way for a bot to act on a user's behalf. The bot is always itself.</li>
+                    <li><strong>MTProto:</strong> <code>api_id</code> and <code>api_hash</code> registered against a Telegram account, then a full user login (phone number, code, optional 2FA password). The resulting session is a user session with that user's full visibility.</li>
+                    <li>Group-level behaviour is toggled in BotFather, not in the API: <em>privacy mode</em>, <em>can join groups</em>, and <em>inline mode</em> are account settings on the bot.</li>
+                </ul>
+
+                <div class="section-title">Granularity</div>
+                <ul>
+                    <li>Per update, per message. Each <code>Update</code> has a monotonically increasing <code>update_id</code>, which is the only ordering and de-duplication key you get.</li>
+                    <li><code>getUpdates</code> requires acknowledgement by <code>offset</code>: passing <code>offset = last_update_id + 1</code> confirms and discards everything earlier. Acknowledgement is destructive and irreversible.</li>
+                    <li>Member data is aggregate-only via the Bot API: a count, plus the administrator list. No individual-member enumeration.</li>
+                    <li>Reactions arrive as <code>message_reaction</code> (individual, requires the bot to be an administrator) and <code>message_reaction_count</code> (anonymous aggregate), and both must be explicitly requested.</li>
+                </ul>
+
+                <div class="section-title">Key Endpoints</div>
+                <ul>
+                    <li><code>GET /bot{token}/getUpdates?offset=&amp;timeout=&amp;allowed_updates=</code></li>
+                    <li><code>POST /bot{token}/setWebhook</code> — <code>url</code>, <code>secret_token</code>, <code>allowed_updates</code>, <code>drop_pending_updates</code>.</li>
+                    <li><code>GET /bot{token}/getWebhookInfo</code> — exposes <code>pending_update_count</code> and <code>last_error_message</code>; the first place to look when updates stop arriving.</li>
+                    <li><code>GET /bot{token}/getChat?chat_id=</code></li>
+                    <li><code>GET /bot{token}/getChatMemberCount?chat_id=</code></li>
+                    <li><code>GET /bot{token}/getChatAdministrators?chat_id=</code></li>
+                    <li><code>GET /bot{token}/getFile?file_id=</code></li>
+                    <li><code>POST /bot{token}/sendMessage</code>, <code>forwardMessage</code>, <code>copyMessage</code>.</li>
+                </ul>
+
+                <div class="section-title">Rate Limits</div>
+                <ul>
+                    <li>Limits are enforced by response, not published as a contract. On throttling the API returns <code>ok: false</code> with <code>error_code: 429</code> and a <code>parameters.retry_after</code> value in seconds. <strong>Honour <code>retry_after</code> rather than assuming a fixed rate</strong> — it is the only authoritative number.</li>
+                    <li>Limits differ by target: per-chat message rate is much tighter than global send rate, and broadcast to a large audience is expected to be paced over time rather than burst. Telegram's own guidance for bulk notification is on the order of <strong>30 messages per second</strong> across all chats, with a much lower per-group ceiling of roughly <strong>20 messages per minute</strong> to the same group chat. Both are advisory guidance rather than a versioned contract and have been revised — treat them as a design budget, not a guarantee.</li>
+                    <li>Webhook delivery has its own back-pressure: if your endpoint is slow or erroring, Telegram retries and <code>pending_update_count</code> grows. A persistently failing webhook can have its updates dropped.</li>
+                    <li>MTProto enforces <code>FLOOD_WAIT_x</code> errors with a mandatory wait in seconds, and is substantially more aggressive than the Bot API. Repeated violations escalate to session and account restrictions.</li>
+                </ul>
+
+                <div class="section-title">Business Scenarios</div>
+                <ul>
+                    <li>Support and ops bots: ticket intake, alert routing, on-call acknowledgement via <code>callback_query</code>.</li>
+                    <li>Own-channel content analytics: post cadence, edit frequency, reaction aggregates, subscriber count trend sampled over time.</li>
+                    <li>Community moderation signals from <code>chat_member</code> and <code>chat_join_request</code> updates — joins, leaves, bans, promotion events.</li>
+                    <li>Payment and subscription flows using the Bot API payments methods.</li>
+                    <li>Notification delivery where email is unreliable, with the hard constraint that the user must opt in by messaging the bot first.</li>
+                </ul>
+
+                <div class="key-point">
+                    <strong>There is no Bot API method to enumerate the members of a group or channel.</strong> <code>getChatMemberCount</code> gives you a scalar and <code>getChatAdministrators</code> gives you the admins; that is the entirety of member visibility. You cannot list subscribers, cannot build an audience roster, and cannot compute per-member activity coverage. Any tool that appears to do this is running an MTProto user session, not a bot. This is an intentional anti-scraping design decision, not a gap awaiting a new endpoint.
+                </div>
+
+                <div class="key-point">
+                    <strong>A bot has no history and a short memory.</strong> It cannot read messages sent before it joined a chat, and <code>getUpdates</code> only serves updates from roughly the last 24 hours — unacknowledged updates older than that are discarded. If your consumer is down for a day, that window is gone permanently; there is no replay, no cursor into the past, and no backfill endpoint. Telegram is a push transport that you must persist yourself, not a queryable message store.
+                </div>
+
+                <div class="section-title">Key Restrictions &amp; Gotchas</div>
+                <ul>
+                    <li><strong>Privacy mode is on by default.</strong> In a group, a bot receives only messages that are commands addressed to it, replies to its own messages, or messages mentioning it — plus service messages. Seeing all group traffic requires explicitly disabling privacy mode via BotFather, and the change takes effect on re-add for existing groups. Analytics built assuming full group visibility will silently sample a biased subset: command-issuing users only.</li>
+                    <li><strong>Bots cannot initiate contact.</strong> The user must message the bot, or add it to a group, before the bot can send them anything. There is no way to message a user by phone number or username. This makes bot-based outbound campaigns structurally impossible.</li>
+                    <li><strong><code>allowed_updates</code> is an opt-in filter with a non-empty default.</strong> Update types added after your integration was written — <code>message_reaction</code> most notably — are not delivered unless you list them explicitly. Omitting the parameter does <em>not</em> mean "send me everything."</li>
+                    <li><strong>Per-post view counts are not exposed.</strong> Channel view counters are visible in the client but the Bot API does not return them for arbitrary channels. Reach and impression metrics that Telegram itself displays are not available programmatically through the Bot API.</li>
+                    <li><strong>File size limits are asymmetric and low.</strong> A bot can download files up to roughly 20 MB and upload up to roughly 50 MB through the cloud Bot API. Running a <strong>local Bot API server</strong> removes several of these limits and gives direct filesystem access to files, but that is additional infrastructure you must operate.</li>
+                    <li><strong><code>file_path</code> from <code>getFile</code> is short-lived.</strong> Treat it as a one-shot download URL, not a stable reference. The durable identifier is <code>file_id</code> — and even that is only stable for the same bot.</li>
+                    <li><strong>Webhook and polling cannot coexist</strong>, and switching between them under load loses updates unless you drain first. <code>drop_pending_updates: true</code> is a deliberate data-loss flag.</li>
+                    <li><strong>MTProto is a Terms of Service question, not a technical one.</strong> A user session can read full history, enumerate members, and download large media — but automating a user account for data collection is a bannable use, and the ban lands on a real phone number. Flood control is aggressive and escalating. Treat MTProto as a last resort with legal review, not as "the API with fewer limits."</li>
+                    <li><strong>Deleted messages produce no update.</strong> The Bot API does not notify you when a message is deleted, so a locally persisted mirror of a chat will drift permanently out of sync with what users actually see.</li>
+                </ul>
+            </td>
+            <td>
+                <div class="section-title">GET /bot{token}/getUpdates?offset=904417&amp;timeout=30&amp;allowed_updates=["message","channel_post","message_reaction"]</div>
+<pre>{
+  "ok": true,
+  "result": [
+    {
+      "update_id": 904417,
+      "channel_post": {
+        "message_id": 2841,
+        "sender_chat": {
+          "id": -1001234567890,
+          "title": "Release Notes",
+          "username": "example_release_notes",
+          "type": "channel"
+        },
+        "chat": {
+          "id": -1001234567890,
+          "title": "Release Notes",
+          "username": "example_release_notes",
+          "type": "channel"
+        },
+        "date": 1755871331,
+        "text": "Build 4.18.2 rolling out to 10% of traffic."
+      }
+    },
+    {
+      "update_id": 904418,
+      "message": {
+        "message_id": 5162,
+        "from": {
+          "id": 88214417,
+          "is_bot": false,
+          "first_name": "Priya",
+          "username": "priya_k",
+          "language_code": "en"
+        },
+        "chat": {
+          "id": 88214417,
+          "first_name": "Priya",
+          "username": "priya_k",
+          "type": "private"
+        },
+        "date": 1755871402,
+        "text": "/status 4417",
+        "entities": [
+          { "offset": 0, "length": 7, "type": "bot_command" }
+        ]
+      }
+    }
+  ]
+}</pre>
+
+                <div class="section-title">GET /bot{token}/getChatMemberCount?chat_id=-1001234567890</div>
+<pre>{ "ok": true, "result": 18342 }</pre>
+                <p style="font-size:0.88em; color:#666; margin-top:-6px;">A scalar. There is no companion method that returns the 18,342 members.</p>
+
+                <div class="section-title">Throttled response shape</div>
+<pre>{
+  "ok": false,
+  "error_code": 429,
+  "description": "Too Many Requests: retry after 27",
+  "parameters": { "retry_after": 27 }
+}</pre>
+
+                <canvas id="apiBreadth" height="380"></canvas>
+            </td>
+        </tr>
+    </table>
+
+    <script>
+    (function() {
+        const canvas = document.getElementById('apiBreadth');
+        const ctx = canvas.getContext('2d');
+        const dpr = window.devicePixelRatio || 1;
+        const FONT = '-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+
+        // score: 0 = not possible, 1 = possible but conditional/limited, 2 = fully available
+        const rows = [
+            { label: 'Receive updates addressed to self', bot: 2, mt: 2 },
+            { label: 'Read all group messages',           bot: 1, mt: 2, note: 'bot: privacy mode off' },
+            { label: 'Read channel posts after joining',  bot: 2, mt: 2 },
+            { label: 'Read full channel history',         bot: 0, mt: 2 },
+            { label: 'Enumerate group / channel members', bot: 0, mt: 2 },
+            { label: 'List administrators only',          bot: 2, mt: 2 },
+            { label: 'Per-post view counts',              bot: 0, mt: 2 },
+            { label: 'Initiate contact with a user',      bot: 0, mt: 2 },
+            { label: 'Backfill older than ~24h',          bot: 0, mt: 2 },
+            { label: 'Download large media',              bot: 1, mt: 2, note: 'bot: ~20 MB cap' },
+            { label: 'Deletion notifications',            bot: 0, mt: 2 }
+        ];
+
+        function draw() {
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = 380 * dpr;
+            canvas.style.height = '380px';
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.scale(dpr, dpr);
+
+            const W = rect.width;
+            const H = 380;
+            ctx.clearRect(0, 0, W, H);
+
+            const marginTop = 44;
+            const marginBottom = 52;
+            const labelW = Math.min(232, W * 0.44);
+            const marginRight = 16;
+            const chartX = labelW + 8;
+            const chartW = W - chartX - marginRight;
+            const chartH = H - marginTop - marginBottom;
+
+            ctx.font = 'bold 13px ' + FONT;
+            ctx.fillStyle = '#1a5276';
+            ctx.textAlign = 'center';
+            ctx.fillText('Bot API vs MTProto client API — capability breadth', W / 2, 18);
+            ctx.font = 'italic 10px ' + FONT;
+            ctx.fillStyle = '#888';
+            ctx.fillText('bar length = 0 not possible / 1 conditional / 2 available', W / 2, 33);
+
+            // gridlines at 0, 1, 2
+            ctx.font = '9px ' + FONT;
+            for (let t = 0; t <= 2; t++) {
+                const x = chartX + (t / 2) * chartW;
+                ctx.strokeStyle = '#eee';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(x, marginTop - 4);
+                ctx.lineTo(x, marginTop + chartH);
+                ctx.stroke();
+            }
+
+            const rowH = chartH / rows.length;
+            const barH = Math.min(9, rowH / 2 - 2.5);
+
+            for (let i = 0; i < rows.length; i++) {
+                const r = rows[i];
+                const yc = marginTop + i * rowH + rowH / 2;
+
+                ctx.font = '10px ' + FONT;
+                ctx.fillStyle = '#2c3e50';
+                ctx.textAlign = 'right';
+                ctx.fillText(r.label, labelW, yc + 3);
+
+                // MTProto bar (top)
+                const mtW = (r.mt / 2) * chartW;
+                ctx.fillStyle = '#8e44ad';
+                ctx.fillRect(chartX, yc - barH - 2, mtW, barH);
+
+                // Bot API bar (bottom)
+                const botW = (r.bot / 2) * chartW;
+                ctx.fillStyle = r.bot === 0 ? '#e74c3c' : (r.bot === 1 ? '#e67e22' : '#1a5276');
+                if (r.bot === 0) {
+                    // draw a small stub + explicit marker so "zero" is visible
+                    ctx.fillRect(chartX, yc + 2, 3, barH);
+                    ctx.font = 'bold 9px ' + FONT;
+                    ctx.textAlign = 'left';
+                    ctx.fillText('not available via Bot API', chartX + 8, yc + 2 + barH - 0.5);
+                } else {
+                    ctx.fillRect(chartX, yc + 2, botW, barH);
+                    if (r.note) {
+                        ctx.font = '9px ' + FONT;
+                        ctx.fillStyle = '#666';
+                        ctx.textAlign = 'left';
+                        ctx.fillText(r.note, chartX + botW + 6, yc + 2 + barH - 0.5);
+                    }
+                }
+            }
+
+            // axis
+            ctx.strokeStyle = '#888';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(chartX, marginTop + chartH);
+            ctx.lineTo(chartX + chartW, marginTop + chartH);
+            ctx.stroke();
+
+            // Legend
+            let lx = chartX;
+            const ly = H - 30;
+            ctx.textAlign = 'left';
+            ctx.font = '10px ' + FONT;
+
+            const legend = [
+                { c: '#8e44ad', t: 'MTProto (user session)' },
+                { c: '#1a5276', t: 'Bot API' },
+                { c: '#e67e22', t: 'Bot API, conditional' },
+                { c: '#e74c3c', t: 'Bot API, none' }
+            ];
+            for (let i = 0; i < legend.length; i++) {
+                ctx.fillStyle = legend[i].c;
+                ctx.fillRect(lx, ly - 8, 12, 9);
+                ctx.fillStyle = '#2c3e50';
+                ctx.fillText(legend[i].t, lx + 16, ly);
+                lx += ctx.measureText(legend[i].t).width + 34;
+            }
+
+            ctx.font = 'italic 10px ' + FONT;
+            ctx.fillStyle = '#e74c3c';
+            ctx.textAlign = 'left';
+            ctx.fillText('MTProto breadth is not free: FLOOD_WAIT throttling, ToS exposure, and account-ban risk on a real number.', chartX, H - 10);
+        }
+
+        draw();
+        window.addEventListener('resize', draw);
+    })();
+    </script>
+</body>
+</html>

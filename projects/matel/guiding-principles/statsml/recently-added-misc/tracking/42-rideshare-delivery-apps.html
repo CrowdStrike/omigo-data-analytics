@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tracking Data: Rideshare & Delivery Apps</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2c3e50; max-width: 100%; margin: 0; padding: 30px 40px; background: #fff; }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+        .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
+        .obj-table { width: 100%; border-collapse: collapse; }
+        .obj-table td { vertical-align: top; padding: 16px; border: 1px solid #2980b9; }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; text-align: center; }
+        ul { padding-left: 20px; margin: 8px 0; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        .obj-table td:last-child .payload,
+        .obj-table td:last-child .payload-note { text-align: left; }
+        .payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 12px 0; }
+        .payload-note { font-size: 0.82em; color: #666; margin: 12px 0 -6px 0; font-style: italic; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        .key-point strong:first-child { color: #1a5276; }
+        .lede { font-size: 0.95em; margin: 0 0 10px 0; }
+        .lbl { display: inline-block; font-size: 0.7em; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; margin: 10px 0 2px 0; }
+        .lbl-purpose { background: #eaf2fb; color: #1a5276; }
+        .lbl-effect { background: #fdf0e6; color: #a8501c; }
+        li b { color: #1a5276; font-weight: 600; }
+        canvas { display: block; margin: 0 auto; }
+    </style>
+</head>
+<body>
+    <h1>Tracking Data: Rideshare & Delivery Apps</h1>
+    <p class="subtitle">A trip record is an origin, a destination, and two timestamps. Repeated over months, the origin-destination pair is the identifying object — and it stays identifying after the rider ID is stripped.</p>
+
+    <table class="obj-table">
+        <!-- Row 1: What is it? -->
+        <tr>
+            <td>
+                <div class="obj-title">What is it?</div>
+                <p class="lede">Location access, granted for matching, scoped wider than the trip.</p>
+                <ul>
+                    <li><b>Why access is needed:</b> to match a vehicle or courier to an address</li>
+                    <li><b>The permission granted</b> is usually broader than the trip itself</li>
+                    <li><b>Outside an active trip:</b> whether location is sampled depends on the permission level chosen and the app's background configuration</li>
+                </ul>
+            </td>
+            <td>
+                <canvas id="c1" width="720" height="320"></canvas>
+            </td>
+        </tr>
+        <!-- Row 2: What does it collect? -->
+        <tr>
+            <td>
+                <div class="obj-title">What does it collect?</div>
+                <ul>
+                    <li><b>Pickup and dropoff coordinates</b> per trip, with accuracy estimates</li>
+                    <li><b>Request, start and end timestamps</b>; route polyline for the completed trip</li>
+                    <li><b>Fare, tip</b> and the price multiplier applied at request time</li>
+                    <li><b>Order contents</b> on the delivery side — items, merchant, category</li>
+                    <li><b>Quote outcome</b> — accepted, or the request abandoned</li>
+                    <li><b>Location samples outside a trip</b>, where the granted permission allows it</li>
+                </ul>
+<div class="key-point"><strong>Stripping <code>rider_id</code> does not anonymise:</strong> the identifying object is the origin–destination pair, not either endpoint, and a repeated late-night pair points at one household and one workplace.</div>
+<div class="key-point"><strong><code>pickup_rounded</code> looks like the fix and mostly is not:</strong> two decimal places is roughly a one-kilometre cell, and coarsening each endpoint separately barely dents the joint uniqueness of the pair. Reducing precision on the components is not the same as reducing precision on the thing that identifies.</div>
+            </td>
+            <td>
+                <canvas id="c2" width="720" height="320"></canvas>
+<p class="payload-note">Sample payload — illustrative structure, not real captured data.</p>
+<pre class="payload">// Trip receipts and partner APIs expose pickup and
+// dropoff points with timestamps. The internal field
+// names below are generic reconstruction.
+{
+  // ── present in the trip record ──
+  "trip_id":       "t-9f41…",
+  "rider_id":      "u-2210…",
+  "requested_at":  "2026-08-22T23:12:04Z",
+  "pickup":        { "lat": 30.2672, "lon": -97.7431, "accuracy_m": 12 },
+  "dropoff":       { "lat": 30.2849, "lon": -97.7341, "accuracy_m": 8 },
+  "dropoff_ts":    "2026-08-22T23:26:51Z",
+  "distance_km":   3.1,
+
+  // ── inferred / plausible ──
+  "pickup_label":     "home",     // most frequent late-night origin
+  "surge_multiplier": 1.4,
+  "pickup_rounded":   { "lat": 30.27, "lon": -97.74 },
+  "route_polyline":   "…"
+}</pre>
+</td>
+        </tr>
+        <!-- Row 3: Why do they collect it? -->
+        <tr>
+            <td>
+                <div class="obj-title">Why is it collected?</div>
+                <div class="lbl lbl-purpose">Stated purpose</div>
+                <ul>
+                    <li><b>The trip record is the product:</b> matching needs both positions, the fare needs distance and duration, and arrival estimates need the route driven</li>
+                    <li><b>Supply positioning:</b> historical origin-destination volume by time of day tells the platform where demand appears before it appears</li>
+                </ul>
+                <div class="lbl lbl-effect">Additional consequence</div>
+                <ul>
+                    <li><b>Willingness to pay becomes observable per account</b> — aggregate pricing comes from supply and demand, but the same record shows which individual accepted which multiplier</li>
+                    <li><b>Labels emerge unprompted</b> — the modal late-night origin and weekday-morning destination name themselves</li>
+                </ul>
+                <div class="key-point"><strong>Whether a per-rider price response happens is not established here</strong> — that is a claim about an internal system. The structural point stands without it: the data required for legitimate aggregate pricing is the same data that makes individual price discrimination computable.</div>
+            </td>
+            <td>
+                <canvas id="c3" width="720" height="320"></canvas>
+            </td>
+        </tr>
+        <!-- Row 4: How much can they see? -->
+    </table>
+
+    <script>
+        const dpr = window.devicePixelRatio || 1;
+    // Validated categorical palette (CVD-checked, see REVIEW-NOTES.md).
+    // Red is deliberately NOT in the rotation - it stays reserved for
+    // genuine error / alarm states so it keeps its meaning.
+    const P = {
+      blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+      aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+      ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+    };
+    const SERIES = [P.blue, P.green, P.violet, P.orange, P.aqua, P.magenta, P.yellow];
+    // Rounded-rect path helper (works without native ctx.roundRect).
+    function rr(ctx, x, y, w, h, r) {
+      r = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+    // Alpha variant of a palette token, so tints stay derived from the
+    // palette instead of being pasted in as fresh hex/rgba literals.
+    function tint(hex, a) {
+      const n = parseInt(hex.slice(1), 16);
+      return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+    }
+
+        function setupCanvas(id) {
+            const c = document.getElementById(id);
+            const w = c.getAttribute('width') ? +c.getAttribute('width') : 720;
+        const h = c.getAttribute('height') ? +c.getAttribute('height') : 240;
+            c.width = w * dpr; c.height = h * dpr;
+            c.style.width = w + 'px'; c.style.height = h + 'px';
+            const ctx = c.getContext('2d');
+            ctx.scale(dpr, dpr);
+            return { ctx, w, h };
+        }
+
+        // Canvas 1: Map-like visualization with labeled location dots connected by routes
+        (function() {
+            const { ctx, w, h } = setupCanvas('c1');
+
+            // Relaid for 320px: the nodes now spread over a taller field and a
+            // footer band carries the "what is absent" line.
+            // One hue per endpoint — these are five distinct places, not one series.
+            const locations = [
+                { x: 110, y: 150, label: 'Home',   color: SERIES[0] },
+                { x: 370, y: 88,  label: 'Work',   color: SERIES[1] },
+                { x: 580, y: 160, label: 'Gym',    color: SERIES[2] },
+                { x: 268, y: 236, label: 'Bar',    color: SERIES[3] },
+                { x: 512, y: 248, label: 'Clinic', color: SERIES[4] }
+            ];
+
+            // Title
+            ctx.fillStyle = P.ink;
+            ctx.font = 'bold 17px -apple-system, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText('Frequent origin–destination pairs — schematic', 20, 26);
+            ctx.fillStyle = P.mute;
+            ctx.font = '12px -apple-system, sans-serif';
+            ctx.fillText('Each endpoint is a separate place. The identifying object is the pair, not either end.', 20, 44);
+
+            // Draw connecting route lines, each tinted from its destination hue
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 4]);
+            const connections = [[0,1],[1,2],[0,3],[0,4],[1,0]];
+            connections.forEach(([a, b]) => {
+                ctx.strokeStyle = tint(locations[b].color, 0.45);
+                ctx.beginPath();
+                ctx.moveTo(locations[a].x, locations[a].y);
+                // Slight curve for visual interest
+                const mx = (locations[a].x + locations[b].x) / 2;
+                const my = (locations[a].y + locations[b].y) / 2 - 20;
+                ctx.quadraticCurveTo(mx, my, locations[b].x, locations[b].y);
+                ctx.stroke();
+            });
+            ctx.setLineDash([]);
+
+            // Draw location dots and labels
+            locations.forEach(loc => {
+                ctx.beginPath();
+                ctx.arc(loc.x, loc.y, 10, 0, Math.PI * 2);
+                ctx.fillStyle = loc.color;
+                ctx.fill();
+
+                ctx.beginPath();
+                ctx.arc(loc.x, loc.y, 10, 0, Math.PI * 2);
+                ctx.strokeStyle = loc.color;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(loc.x, loc.y, 4, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = loc.color;
+                ctx.font = 'bold 16px -apple-system, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(loc.label, loc.x, loc.y - 18);
+            });
+
+            // Footer band: what the same picture does not contain
+            rr(ctx, 20, 274, 680, 34, 8);
+            ctx.fillStyle = tint(P.mute, 0.09);
+            ctx.fill();
+            ctx.strokeStyle = P.grid;
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            ctx.fillStyle = P.mute;
+            ctx.font = '13px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Absent: every trip not booked through the app — walking, driving, transit, a lift.', 360, 296);
+        })();
+
+        // Canvas 2: Booked trips by day and time block — coverage, not activity
+        (function() {
+            const { ctx, w, h } = setupCanvas('c2');
+
+            const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+            const times = ['6am', '9am', '12pm', '3pm', '6pm', '9pm', '12am', '3am'];
+            // Relaid for 320px: taller cells and a legend band, instead of the
+            // 22px rows that ran out at y=222 on the old 240px canvas.
+            const cellW = 80;
+            const cellH = 26;
+            const startX = 80;
+            const startY = 62;
+
+            // Illustrative booking density (0-3). Rows = time blocks, cols = days.
+            const data = [
+                [2, 2, 2, 2, 2, 0, 0],
+                [3, 3, 3, 3, 3, 0, 0],
+                [1, 1, 1, 1, 1, 1, 1],
+                [1, 1, 1, 1, 1, 1, 0],
+                [3, 3, 3, 3, 3, 1, 1],
+                [1, 1, 1, 1, 2, 3, 2],
+                [0, 0, 0, 0, 3, 3, 2],
+                [0, 0, 0, 0, 0, 3, 1]
+            ];
+
+            // Each day is its own column category, so each column gets its own
+            // hue in SERIES order; density within a column is carried by alpha.
+            // Seven days, seven series hues — no cycling required.
+            const dayHue = days.map((d, i) => SERIES[i]);
+            const alphaFor = [0, 0.20, 0.50, 1];
+
+            // Title
+            ctx.fillStyle = P.ink;
+            ctx.font = 'bold 17px -apple-system, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText('Bookings by day and time block — schematic', 20, 26);
+            ctx.fillStyle = P.mute;
+            ctx.font = '12px -apple-system, sans-serif';
+            ctx.fillText('Colour is the day; depth of colour is how many bookings fell in that block.', 20, 44);
+
+            // Day headers, each in its column's hue so the header is the legend
+            ctx.font = 'bold 15px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            days.forEach((day, i) => {
+                ctx.fillStyle = dayHue[i];
+                ctx.fillText(day, startX + i * cellW + cellW / 2, startY - 8);
+            });
+
+            // Time labels
+            ctx.textAlign = 'right';
+            ctx.font = '15px -apple-system, sans-serif';
+            ctx.fillStyle = P.text;
+            times.forEach((time, i) => {
+                ctx.fillText(time, startX - 8, startY + i * cellH + cellH / 2 + 5);
+            });
+
+            // Draw cells — hue by day, depth by count
+            data.forEach((row, ri) => {
+                row.forEach((val, ci) => {
+                    const x = startX + ci * cellW;
+                    const y = startY + ri * cellH;
+
+                    if (val === 0) {
+                        // No booking. Left as a neutral empty cell, not a pale
+                        // version of the day hue — nothing was observed here.
+                        ctx.fillStyle = tint(P.mute, 0.07);
+                    } else {
+                        ctx.fillStyle = tint(dayHue[ci], alphaFor[val]);
+                    }
+                    ctx.fillRect(x + 1, y + 1, cellW - 2, cellH - 2);
+
+                    ctx.strokeStyle = P.grid;
+                    ctx.lineWidth = 0.5;
+                    ctx.strokeRect(x + 1, y + 1, cellW - 2, cellH - 2);
+                });
+            });
+
+            // Legend band in the space the taller layout opened up. The swatch
+            // row and the caveat line sit on separate baselines — side by side
+            // the right-aligned caveat ran back into the last swatch.
+            const legY = 288;
+            ctx.textAlign = 'left';
+            ctx.font = '12px -apple-system, sans-serif';
+            let lx = 80;
+            [['no booking', tint(P.mute, 0.07)],
+             ['fewer', tint(P.blue, 0.20)],
+             ['more', tint(P.blue, 0.50)],
+             ['most', P.blue]].forEach(([lbl, fill]) => {
+                ctx.fillStyle = fill;
+                ctx.fillRect(lx, legY - 10, 18, 12);
+                ctx.strokeStyle = P.grid;
+                ctx.lineWidth = 0.5;
+                ctx.strokeRect(lx, legY - 10, 18, 12);
+                ctx.fillStyle = P.mute;
+                ctx.fillText(lbl, lx + 24, legY);
+                lx += 34 + lbl.length * 7;
+            });
+            ctx.fillStyle = P.mute;
+            ctx.font = 'italic 12px -apple-system, sans-serif';
+            ctx.fillText('An empty block is a block with no booking, not a block with no travel.', 80, legY + 20);
+        })();
+
+        // Canvas 3: A network-level multiplier, and the per-account row it creates
+        (function() {
+            const { ctx, w, h } = setupCanvas('c3');
+
+            // Title
+            ctx.fillStyle = P.ink;
+            ctx.font = 'bold 17px -apple-system, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText('Multiplier is computed on the network; the response is recorded per account', 20, 26);
+            ctx.fillStyle = P.mute;
+            ctx.font = '12px -apple-system, sans-serif';
+            ctx.fillText('Schematic — illustrative shape, not measured multipliers.', 20, 44);
+
+            // Relaid for 320px: the plot is 60px taller and the callout became a
+            // footer band, so no line sits within 20px of the bottom edge.
+            const chartX = 60;
+            const chartW = w - 130;
+            const chartY = 62;
+            const chartH = 164;
+
+            // Illustrative multiplier path over one evening, with generic causes
+            const points = [
+                { t: 0,    price: 1.0, label: '' },
+                { t: 0.1,  price: 1.0, label: '' },
+                { t: 0.2,  price: 1.2, label: '' },
+                { t: 0.3,  price: 1.0, label: '' },
+                { t: 0.4,  price: 1.1, label: '' },
+                { t: 0.48, price: 3.2, label: 'large venue empties' },
+                { t: 0.55, price: 1.5, label: '' },
+                { t: 0.6,  price: 1.0, label: '' },
+                { t: 0.7,  price: 2.5, label: 'weather turns' },
+                { t: 0.75, price: 1.8, label: '' },
+                { t: 0.8,  price: 1.2, label: '' },
+                { t: 0.85, price: 1.0, label: '' },
+                { t: 0.95, price: 4.5, label: 'annual peak night' },
+                { t: 1.0,  price: 3.8, label: '' }
+            ];
+
+            const maxPrice = 5.0;
+
+            // Axes
+            ctx.strokeStyle = P.grid;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(chartX, chartY);
+            ctx.lineTo(chartX, chartY + chartH);
+            ctx.lineTo(chartX + chartW, chartY + chartH);
+            ctx.stroke();
+
+            // Y axis: relative band labels only, no asserted multiplier values
+            ctx.fillStyle = P.mute;
+            ctx.font = '12px -apple-system, sans-serif';
+            ctx.textAlign = 'right';
+            const bands = [
+                { at: 1.0, label: 'base' },
+                { at: 2.5, label: 'raised' },
+                { at: 4.5, label: 'peak' }
+            ];
+            bands.forEach(b => {
+                const y = chartY + chartH - (b.at / maxPrice) * chartH;
+                ctx.fillText(b.label, chartX - 8, y + 3);
+                ctx.strokeStyle = P.grid;
+                ctx.beginPath();
+                ctx.moveTo(chartX, y);
+                ctx.lineTo(chartX + chartW, y);
+                ctx.stroke();
+            });
+
+            // Base line — green, the reference level the curve departs from
+            const baseY = chartY + chartH - (1.0 / maxPrice) * chartH;
+            ctx.strokeStyle = P.green;
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([4, 3]);
+            ctx.beginPath();
+            ctx.moveTo(chartX, baseY);
+            ctx.lineTo(chartX + chartW, baseY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = P.green;
+            ctx.font = '11px -apple-system, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText('reference level', chartX + 6, baseY - 6);
+
+            // Multiplier path
+            ctx.strokeStyle = P.blue;
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            points.forEach((p, i) => {
+                const x = chartX + p.t * chartW;
+                const y = chartY + chartH - (p.price / maxPrice) * chartH;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+
+            // Cause labels — conditions, not named events. Three distinct
+            // conditions, so each gets its own hue in SERIES order rather than
+            // all three reading as the same thing in blue.
+            const causeHue = [SERIES[2], SERIES[4], SERIES[5]];
+            let ci = 0;
+            ctx.font = 'bold 12px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            points.forEach(p => {
+                if (p.label) {
+                    const hue = causeHue[ci++];
+                    const x = chartX + p.t * chartW;
+                    const y = chartY + chartH - (p.price / maxPrice) * chartH;
+                    ctx.fillStyle = hue;
+                    ctx.fillText(p.label, x, y - 12);
+
+                    // Leader line down to the point it annotates
+                    ctx.strokeStyle = tint(hue, 0.6);
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(x, y - 8);
+                    ctx.lineTo(x, y - 5);
+                    ctx.stroke();
+
+                    ctx.beginPath();
+                    ctx.arc(x, y, 4.5, 0, Math.PI * 2);
+                    ctx.fillStyle = hue;
+                    ctx.fill();
+                }
+            });
+
+            ctx.fillStyle = P.mute;
+            ctx.font = '12px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('one evening →', chartX + chartW / 2, chartY + chartH + 18);
+
+            // The structural point — footer band using the space the taller
+            // canvas opened up, with the network claim and the per-account
+            // consequence in different hues.
+            rr(ctx, 60, 250, 600, 58, 8);
+            ctx.fillStyle = tint(P.blue, 0.07);
+            ctx.fill();
+            ctx.strokeStyle = P.ink;
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            ctx.fillStyle = P.blue;
+            ctx.font = 'bold 12px -apple-system, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText('The curve is a function of aggregate supply and demand — it is not per-rider.', 74, 270);
+            ctx.fillStyle = P.orange;
+            ctx.font = '12px -apple-system, sans-serif';
+            ctx.fillText('But which account accepted which point on it becomes a stored, per-account', 74, 288);
+            ctx.fillText('observation. That is the capability the schema creates.', 74, 302);
+        })();
+
+    </script>
+</body>
+</html>

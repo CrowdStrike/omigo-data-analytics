@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Android Usage Stats — Platform APIs</title>
+<style>
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        line-height: 1.6;
+        color: #2c3e50;
+        max-width: 100%;
+        margin: 0;
+        padding: 30px 40px;
+        background: #fff;
+    }
+    h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+    .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+    .verified { display: inline-block; background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-bottom: 16px; }
+    h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
+    .status { display: inline-block; background: #fef9e7; border: 1px solid #f39c12; color: #b7950b; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-left: 12px; vertical-align: middle; }
+    table.obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+    table.obj-table td { vertical-align: top; padding: 12px; }
+    table.obj-table td:first-child { width: 45%; }
+    table.obj-table td:last-child { width: 55%; }
+    pre { background: #f4f4f4; padding: 14px; border-radius: 6px; overflow-x: auto; font-size: 0.82em; text-align: left; }
+    canvas { display: block; margin: 16px auto 0; width: 100%; }
+    .key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+    .section-label { font-weight: bold; color: #1a5276; margin-top: 16px; display: block; }
+    .section-label:first-child { margin-top: 0; }
+    ul { padding-left: 20px; }
+    li { margin-bottom: 6px; font-size: 0.93em; }
+    code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-size: 0.88em; }
+    .scope-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+    .scope-tag { background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 3px 8px; border-radius: 4px; font-size: 0.78em; font-family: monospace; }
+    p { font-size: 0.93em; }
+</style>
+</head>
+<body>
+
+<h1>Android Usage Stats <span class="status">BACKLOG</span></h1>
+<p class="subtitle">UsageStatsManager — per-package foreground time and launch events, gated behind a special access grant the user must toggle by hand.</p>
+<span class="verified">Last verified: August 2026</span>
+
+<h2>Overview</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+    <span class="section-label">What It Provides</span>
+    <p><code>android.app.usage.UsageStatsManager</code> is the platform's app-usage history. Unlike iOS Screen Time, the package name is <em>readable</em> — this is a genuine per-app usage dataset. What guards it is the permission, not obfuscation.</p>
+    <ul>
+        <li><strong><code>queryUsageStats(interval, begin, end)</code></strong> → <code>List&lt;UsageStats&gt;</code>, one bucket per package: <code>totalTimeInForeground</code>, <code>lastTimeUsed</code>, <code>firstTimeStamp</code>, <code>lastTimeStamp</code>, and on newer API levels <code>totalTimeVisible</code> / <code>lastTimeVisible</code>.</li>
+        <li><strong><code>queryEvents(begin, end)</code></strong> → an event stream: <code>ACTIVITY_RESUMED</code>, <code>ACTIVITY_PAUSED</code>, <code>ACTIVITY_STOPPED</code>, <code>SCREEN_INTERACTIVE</code>, <code>SCREEN_NON_INTERACTIVE</code>, <code>KEYGUARD_SHOWN/HIDDEN</code>, <code>STANDBY_BUCKET_CHANGED</code>, plus notification and configuration events on some levels.</li>
+        <li><strong><code>queryAndAggregateUsageStats</code></strong> → convenience map of packageName → merged <code>UsageStats</code>.</li>
+        <li><strong><code>getAppStandbyBucket()</code></strong> → the caller's own App Standby bucket (active / working set / frequent / rare / restricted).</li>
+        <li><strong>Launch counts</strong> are not a first-class field. You derive them by counting <code>ACTIVITY_RESUMED</code> transitions in <code>queryEvents</code>, or use <code>UsageStats#getAppLaunchCount()</code> where available. Deriving from events is the more portable route.</li>
+    </ul>
+
+    <div class="key-point"><strong>Permission is the whole story.</strong> <code>android.permission.PACKAGE_USAGE_STATS</code> is <em>not</em> a runtime permission — it cannot be requested with a dialog. It is signature/privileged-level, and ordinary apps obtain it only through the Special App Access screen. You declare it in the manifest (with <code>tools:ignore="ProtectedPermissions"</code>), then send the user to <code>Settings.ACTION_USAGE_ACCESS_SETTINGS</code> and hope they flip the toggle. Verify with <code>AppOpsManager</code> <code>OPSTR_GET_USAGE_STATS</code>; an unauthorized call does not throw — it returns an <strong>empty list</strong>.</div>
+
+    <span class="section-label">Authentication &amp; Scopes</span>
+    <div class="scope-list">
+        <span class="scope-tag">PACKAGE_USAGE_STATS</span>
+        <span class="scope-tag">ACTION_USAGE_ACCESS_SETTINGS</span>
+        <span class="scope-tag">AppOpsManager.OPSTR_GET_USAGE_STATS</span>
+        <span class="scope-tag">QUERY_ALL_PACKAGES (labels)</span>
+    </div>
+    <p>Resolving a package name to a human-readable app label additionally runs into package visibility filtering (API 30+): without <code>QUERY_ALL_PACKAGES</code> or a <code>&lt;queries&gt;</code> manifest entry, <code>PackageManager</code> lookups for third-party packages fail even when usage rows for them are returned. Play Store policy treats <code>QUERY_ALL_PACKAGES</code> as a sensitive declaration.</p>
+
+    <span class="section-label">Granularity — aggregate vs event-level</span>
+    <p>Both, and they are not the same dataset:</p>
+    <ul>
+        <li><strong>Aggregate:</strong> <code>queryUsageStats</code> with <code>INTERVAL_DAILY</code>, <code>INTERVAL_WEEKLY</code>, <code>INTERVAL_MONTHLY</code>, <code>INTERVAL_YEARLY</code>, or <code>INTERVAL_BEST</code>. Returns pre-rolled buckets.</li>
+        <li><strong>Event-level:</strong> <code>queryEvents</code> gives ordered transitions with millisecond timestamps, from which you compute sessions yourself.</li>
+    </ul>
+    <p>Retention differs by bucket: daily rows are kept for a relatively short window (on the order of days to a couple of weeks), while coarser buckets persist longer. Raw events have the shortest retention of all. So the longest history and the finest resolution are mutually exclusive — a fact that quietly shapes any longitudinal design.</p>
+
+    <div class="key-point"><strong>Bucket boundaries do not respect your query window.</strong> <code>queryUsageStats</code> returns every bucket that <em>overlaps</em> [begin, end], not a window-clipped total. A daily bucket may also contain more than one row for the same package. Correct usage is: filter, then sum per package — never assume one row per app, and never assume the returned totals are confined to your requested range. Off-by-one-day errors here are extremely common and produce plausible-looking but inflated numbers.</div>
+
+    <span class="section-label">Rate Limits</span>
+    <p>No published request quota. The real constraints are different in kind:</p>
+    <ul>
+        <li>Background execution limits, Doze and App Standby mean a background collector does not run when you assume it does — the collector's own sampling is throttled by the same subsystem it is measuring.</li>
+        <li><code>queryEvents</code> over wide ranges allocates large result sets; iterate rather than materializing.</li>
+        <li>Foreground-service and exact-alarm restrictions on recent Android versions further constrain scheduled polling.</li>
+    </ul>
+
+    <span class="section-label">Business Scenarios</span>
+    <ul>
+        <li>Digital wellbeing / focus apps and app blockers</li>
+        <li>Parental control products (usually paired with Android Management API or a device-owner setup)</li>
+        <li>Enterprise device-usage compliance on managed hardware</li>
+        <li>Opt-in research panels — where the consent flow and the Settings toggle are the study's actual bottleneck</li>
+    </ul>
+
+    <span class="section-label">Key Restrictions &amp; Gotchas — what it does NOT give you</span>
+    <ul>
+        <li><strong>Digital Wellbeing has no public API.</strong> The numbers Google's own Digital Wellbeing screen shows are not exposed to third parties, and they will not match your <code>UsageStatsManager</code>-derived totals, because the definitions of "used" differ.</li>
+        <li><strong>No in-app content.</strong> You get "Chrome was foreground 42 min", never the URLs, screens, or actions.</li>
+        <li><strong>Silent empty results.</strong> No permission → empty list, not an exception. A collector that does not distinguish "zero usage" from "no access" will encode revoked-permission users as abstainers.</li>
+        <li><strong>Foreground time is not attention.</strong> A visible-but-idle activity accrues time; picture-in-picture, split-screen, and always-on displays make <code>totalTimeInForeground</code> and <code>totalTimeVisible</code> diverge.</li>
+        <li><strong>OEM divergence.</strong> Aggressive vendor battery managers kill collectors, and some OEM builds populate these fields inconsistently. Cross-device comparability is weaker than the API surface suggests.</li>
+        <li><strong>Reboots and clock changes</strong> introduce gaps and non-monotonic timestamps in the event stream.</li>
+        <li><strong>Play policy.</strong> Even with the toggle, using usage access for analytics unrelated to a disclosed core function is a policy problem, not just an ethical one.</li>
+    </ul>
+
+    <div class="key-point"><strong>Methodological consequence.</strong> Both mobile platforms deliberately block per-user app-usage collection, by different mechanisms: iOS makes the identity unreadable and the data untransportable; Android makes the data readable but puts a manual Settings toggle in front of it. On Android the resulting bias is the sharper problem, because the sample is self-selected at the toggle. Users who grant usage access are systematically not average — they are more engaged, more privacy-tolerant, and more likely to have sought out a screen-time product in the first place. Grant rates well under half are normal. Reporting mean daily usage from granters as if it estimated the population mean ignores a selection effect that plausibly exceeds the effect being measured. If you need a population estimate, you need a weighting scheme and a measured grant rate, not a bigger install base.</div>
+</td>
+<td>
+    <p style="font-size:0.85em; color:#555; margin-bottom:8px;"><strong>Kotlin</strong> — permission check, daily aggregate, derived launch counts</p>
+    <pre>// AndroidManifest.xml
+// &lt;uses-permission
+//     android:name="android.permission.PACKAGE_USAGE_STATS"
+//     tools:ignore="ProtectedPermissions" /&gt;
+
+fun hasUsageAccess(ctx: Context): Boolean {
+    val ops = ctx.getSystemService(AppOpsManager::class.java)
+    val mode = ops.unsafeCheckOpNoThrow(
+        AppOpsManager.OPSTR_GET_USAGE_STATS,
+        android.os.Process.myUid(),
+        ctx.packageName
+    )
+    return mode == AppOpsManager.MODE_ALLOWED
+}
+
+// No dialog exists. You can only deep-link to Settings.
+if (!hasUsageAccess(ctx)) {
+    ctx.startActivity(
+        Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+    return   // and the user may simply not do it
+}
+
+val usm = ctx.getSystemService(UsageStatsManager::class.java)
+val end   = System.currentTimeMillis()
+val begin = end - 7L * 24 * 60 * 60 * 1000
+
+// Buckets OVERLAPPING the window are returned,
+// and a package may appear more than once.
+val perPackage = usm.queryUsageStats(
+        UsageStatsManager.INTERVAL_DAILY, begin, end)
+    .groupBy { it.packageName }
+    .mapValues { (_, rows) -&gt;
+        rows.sumOf { it.totalTimeInForeground }
+    }
+
+// Launch counts: derive from the event stream.
+val launches = mutableMapOf&lt;String, Int&gt;()
+val events = usm.queryEvents(begin, end)
+val e = UsageEvents.Event()
+while (events.hasNextEvent()) {
+    events.getNextEvent(e)
+    if (e.eventType == UsageEvents.Event.ACTIVITY_RESUMED) {
+        launches.merge(e.packageName, 1, Int::plus)
+    }
+}
+
+// Empty map is ambiguous:
+//   genuinely no usage  OR  access revoked.
+// Record the permission state alongside the data.</pre>
+
+    <p style="font-size:0.85em; color:#555; margin-top:16px; margin-bottom:8px;"><strong>Shape of a normalized daily row</strong></p>
+    <pre>{
+  "collected_at": "2026-08-22T03:10:00Z",
+  "usage_access_granted": true,
+  "interval": "INTERVAL_DAILY",
+  "window": { "begin": "2026-08-21T00:00:00Z",
+              "end":   "2026-08-22T00:00:00Z" },
+  "buckets_overlapping_window": 2,
+  "packages": [
+    { "package": "com.example.social",
+      "label": "Social",                // requires pkg visibility
+      "total_time_foreground_ms": 4137000,
+      "total_time_visible_ms":    4712000,
+      "last_time_used": "2026-08-21T22:41:19Z",
+      "derived_launch_count": 63 },
+    { "package": "com.android.chrome",
+      "label": null,                    // visibility filtered
+      "total_time_foreground_ms": 1885000,
+      "total_time_visible_ms":    1885000,
+      "last_time_used": "2026-08-21T19:02:44Z",
+      "derived_launch_count": 21 }
+  ],
+  "gaps": [
+    { "reason": "device_reboot",
+      "from": "2026-08-21T04:11:00Z",
+      "to":   "2026-08-21T04:19:00Z" }
+  ]
+}</pre>
+
+    <p style="font-size:0.85em; color:#555; margin-top:20px; margin-bottom:8px;"><strong>Usage-access grant funnel: who ends up in your sample</strong></p>
+    <canvas id="grantFunnel" height="380"></canvas>
+</td>
+</tr>
+</table>
+
+<script>
+(function() {
+    const canvas = document.getElementById('grantFunnel');
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+
+    // Illustrative funnel shape, not measured figures.
+    const stages = [
+        ['Installs', 100, '#1a5276'],
+        ['Sees prompt', 78, '#2980b9'],
+        ['Opens Settings', 52, '#e67e22'],
+        ['Toggles on', 34, '#27ae60'],
+        ['Still on at d30', 23, '#8e44ad']
+    ];
+
+    function draw() {
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * dpr;
+        canvas.height = 380 * dpr;
+        canvas.style.height = '380px';
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(dpr, dpr);
+
+        const W = rect.width;
+        const H = 380;
+        const pad = { top: 58, right: 22, bottom: 74, left: 52 };
+        const plotW = W - pad.left - pad.right;
+        const plotH = H - pad.top - pad.bottom;
+
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('The Settings toggle is the sampling frame', W / 2, 20);
+        ctx.font = 'italic 10px -apple-system, sans-serif';
+        ctx.fillStyle = '#888';
+        ctx.fillText('illustrative shape — measure your own rate and report it', W / 2, 36);
+
+        // Gridlines
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.strokeStyle = '#eee';
+        for (let v = 0; v <= 100; v += 20) {
+            const y = pad.top + plotH - (v / 100) * plotH;
+            ctx.beginPath();
+            ctx.moveTo(pad.left, y);
+            ctx.lineTo(pad.left + plotW, y);
+            ctx.stroke();
+            ctx.fillStyle = '#666';
+            ctx.textAlign = 'right';
+            ctx.fillText(v + '%', pad.left - 8, y + 4);
+        }
+
+        ctx.strokeStyle = '#999';
+        ctx.beginPath();
+        ctx.moveTo(pad.left, pad.top + plotH);
+        ctx.lineTo(pad.left + plotW, pad.top + plotH);
+        ctx.stroke();
+
+        const groupW = plotW / stages.length;
+        const barW = groupW * 0.5;
+
+        for (let i = 0; i < stages.length; i++) {
+            const [label, val, color] = stages[i];
+            const cx = pad.left + groupW * (i + 0.5);
+            const barH = (val / 100) * plotH;
+            const y = pad.top + plotH - barH;
+
+            // ghost of the full population
+            ctx.fillStyle = 'rgba(26,82,118,0.08)';
+            ctx.fillRect(cx - barW / 2, pad.top, barW, plotH);
+
+            ctx.fillStyle = color;
+            ctx.fillRect(cx - barW / 2, y, barW, barH);
+
+            ctx.font = 'bold 12px -apple-system, sans-serif';
+            ctx.fillStyle = '#2c3e50';
+            ctx.textAlign = 'center';
+            ctx.fillText(val + '%', cx, y - 8);
+
+            ctx.font = '10px -apple-system, sans-serif';
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillText(label, cx, pad.top + plotH + 16);
+
+            if (i > 0) {
+                const prev = stages[i - 1][1];
+                ctx.font = 'italic 9px -apple-system, sans-serif';
+                ctx.fillStyle = '#e74c3c';
+                ctx.fillText('-' + (prev - val) + 'pp', cx, pad.top + plotH + 30);
+            }
+        }
+
+        // Annotation band over the retained sample
+        const lastCx = pad.left + groupW * (stages.length - 0.5);
+        const lastVal = stages[stages.length - 1][1];
+        const lastY = pad.top + plotH - (lastVal / 100) * plotH;
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = '#8e44ad';
+        ctx.beginPath();
+        ctx.moveTo(pad.left, lastY);
+        ctx.lineTo(lastCx + barW / 2, lastY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.font = 'italic 10px -apple-system, sans-serif';
+        ctx.fillStyle = '#8e44ad';
+        ctx.textAlign = 'left';
+        ctx.fillText('everything you measure comes from this slice', pad.left + 6, lastY - 8);
+
+        ctx.font = 'italic 10px -apple-system, sans-serif';
+        ctx.fillStyle = '#666';
+        ctx.textAlign = 'center';
+        ctx.fillText('drop-off is not random: granters are the more engaged, more permissive users', W / 2, H - 12);
+    }
+
+    draw();
+    window.addEventListener('resize', draw);
+})();
+</script>
+
+</body>
+</html>

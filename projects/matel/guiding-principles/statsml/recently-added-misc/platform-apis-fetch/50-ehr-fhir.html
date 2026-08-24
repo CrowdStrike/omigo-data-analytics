@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EHR / FHIR — Platform APIs</title>
+<style>
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        line-height: 1.6;
+        color: #2c3e50;
+        max-width: 100%;
+        margin: 0;
+        padding: 30px 40px;
+        background: #fff;
+    }
+    h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+    .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+    .verified { display: inline-block; background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-bottom: 16px; }
+    h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
+    .status { display: inline-block; background: #fef9e7; border: 1px solid #f39c12; color: #b7950b; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-left: 12px; vertical-align: middle; }
+    table.obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+    table.obj-table td { vertical-align: top; padding: 12px; }
+    table.obj-table td:first-child { width: 45%; }
+    table.obj-table td:last-child { width: 55%; }
+    pre { background: #f4f4f4; padding: 14px; border-radius: 6px; overflow-x: auto; font-size: 0.82em; text-align: left; }
+    canvas { display: block; margin: 16px auto 0; width: 100%; }
+    .key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+    .section-label { font-weight: bold; color: #1a5276; margin-top: 16px; display: block; }
+    .section-label:first-child { margin-top: 0; }
+    ul { padding-left: 20px; }
+    li { margin-bottom: 6px; font-size: 0.93em; }
+    code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-size: 0.88em; }
+    p { font-size: 0.93em; }
+</style>
+</head>
+<body>
+
+<h1>EHR / FHIR <span class="status">BACKLOG</span></h1>
+<p class="subtitle">HL7 FHIR REST resources over clinical records, authorised via SMART on FHIR, with asynchronous bulk export as the only population-level path.</p>
+<span class="verified">Last verified: August 2026</span>
+
+<h2>Overview</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+    <span class="section-label">What It Provides</span>
+    <p>FHIR R4 models clinical data as typed REST resources (JSON). Each health system runs its own server — no central endpoint. Auth is OAuth 2.0 via SMART on FHIR; population-level access requires <code>system/</code> scopes through SMART Backend Services (institutional approval, not developer sign-up).</p>
+
+    <div class="key-point"><strong>FHIR is a spec, not an endpoint.</strong> Every site has its own URL, its own enabled resources, and its own extensions. What works at one Epic site may fail at the next.</div>
+
+    <span class="section-label">Core Resources</span>
+    <ul>
+        <li><code>Patient</code> — demographics, identifiers, MRN</li>
+        <li><code>Observation</code> — labs + vitals (same resource, split by <code>category</code>/<code>code</code>)</li>
+        <li><code>Condition</code> — diagnoses (billing-influenced, stale problem lists)</li>
+        <li><code>MedicationRequest</code> — prescriptions written (not drugs taken)</li>
+        <li><code>Encounter</code>, <code>Procedure</code>, <code>DiagnosticReport</code>, <code>DocumentReference</code></li>
+    </ul>
+    <p>Terminologies: LOINC (labs/vitals), SNOMED CT (problems), RxNorm (meds), ICD-10-CM (billing dx). Bulk export (<code>$export</code>) produces NDJSON — the only realistic path to cohort-level data.</p>
+
+    <span class="section-label">Data Traps for Analytics</span>
+    <div class="key-point"><strong>An observation exists because someone ordered a test.</strong> Measurement frequency is itself a severity signal — models learn the care process, not the physiology. Missingness is never at random.</div>
+    <ul>
+        <li><strong>Time leakage.</strong> <code>effectiveDateTime</code> ≠ <code>issued</code>. A lab effective at 22:40 but issued at 03:12 next day — indexing at effective time is target leakage.</li>
+        <li><strong>Same code, different instrument.</strong> ICU continuous monitoring and annual-physical vitals share a LOINC code but are different sampling regimes.</li>
+        <li><strong>Codes drift.</strong> Same analyte appears under multiple LOINC codes across sites and over time within one site.</li>
+        <li><strong>Prescription ≠ exposure.</strong> <code>MedicationRequest</code> means it was ordered, not taken. Adherence is not in the record.</li>
+        <li><strong>Condition codes are billing artifacts.</strong> Problem lists go stale; coding follows reimbursement, not clinical truth.</li>
+        <li><strong>Status is load-bearing.</strong> <code>preliminary</code>, <code>corrected</code>, <code>entered-in-error</code> are not results. Filter to <code>final</code>.</li>
+    </ul>
+
+    <span class="section-label">Access Realities</span>
+    <ul>
+        <li>Each health system approves your app separately (BAA, security review, long onboarding)</li>
+        <li>PHI throughout — HIPAA, IRB, de-identification constraints shape pipeline design</li>
+        <li>Supported resources and search params vary by site and EHR version</li>
+        <li>No universal rate limits — vendor and site-specific</li>
+    </ul>
+
+    <span class="section-label">What's Missing</span>
+    <ul>
+        <li>No continuous waveforms (ECG, telemetry)</li>
+        <li>No medication adherence</li>
+        <li>No consistent social determinants</li>
+        <li>No complete longitudinal record (siloed per health system)</li>
+        <li>No usable clinical notes without NLP</li>
+        <li>No historical coding consistency (version breaks look like clinical trends)</li>
+    </ul>
+</td>
+<td>
+    <p style="font-size:0.85em; color:#555; margin-bottom:8px;"><strong>GET [base]/Observation?patient=eXY7q&amp;category=laboratory</strong></p>
+<pre>{
+  "resourceType": "Bundle",
+  "type": "searchset",
+  "total": 214,
+  "link": [
+    {"relation":"self", "url":"...&amp;_count=50"},
+    {"relation":"next", "url":"...?ct=eyJwYWdl…"}
+  ],
+  "entry": [{
+    "resource": {
+      "resourceType": "Observation",
+      "id": "obs-crea-88214",
+      "status": "final",
+      "code": {
+        "coding": [
+          {"system":"http://loinc.org",
+           "code":"2160-0",
+           "display":"Creatinine"},
+          {"system":"urn:oid:1.2.840…",
+           "code":"LAB4112",
+           "display":"CREATININE, SERUM"}
+        ]
+      },
+      "subject": {"reference":"Patient/eXY7q"},
+      "effectiveDateTime":"2026-05-18T22:40:00Z",
+      "issued":           "2026-05-19T03:12:00Z",
+      "valueQuantity": {
+        "value": 2.41,
+        "unit": "mg/dL",
+        "code": "mg/dL"
+      },
+      "referenceRange": [{
+        "low":  {"value":0.60,"unit":"mg/dL"},
+        "high": {"value":1.30,"unit":"mg/dL"}
+      }],
+      "interpretation": [{"coding": [{
+        "code":"H","display":"High"
+      }]}]
+    }
+  }]
+}</pre>
+    <div class="key-point"><strong>Target leakage:</strong> <code>effectiveDateTime</code> is 22:40 on the 18th but <code>issued</code> is 03:12 on the 19th. Indexing at effective time gives the model knowledge clinicians didn't have yet. <strong>Dual coding:</strong> local code works within one site, LOINC works across sites — neither is reliably present everywhere.</div>
+
+    <p style="font-size:0.85em; color:#555; margin-top:20px; margin-bottom:8px;"><strong>Bulk export</strong> — <code>Observation.ndjson</code>, one resource per line</p>
+<pre>{"resourceType":"Observation","id":"obs-crea-88214",
+ "status":"final","subject":{"reference":"Patient/eXY7q"},
+ "effectiveDateTime":"2026-05-18T22:40:00Z",
+ "valueQuantity":{"value":2.41,"code":"mg/dL"}}
+{"resourceType":"Observation","id":"obs-crea-88490",
+ "status":"final","subject":{"reference":"Patient/eXY7q"},
+ "effectiveDateTime":"2026-05-19T06:05:00Z",
+ "valueQuantity":{"value":2.62,"code":"mg/dL"}}
+{"resourceType":"Observation","id":"obs-k-88491",
+ "status":"final","subject":{"reference":"Patient/eXY7q"},
+ "effectiveDateTime":"2026-05-19T06:05:00Z",
+ "valueQuantity":{"value":5.1,"code":"mmol/L"}}</pre>
+
+    <p style="font-size:0.85em; color:#555; margin-top:20px; margin-bottom:8px;"><strong>Informative missingness</strong> — measurement density tracks illness severity, so the count of observations is itself a predictor</p>
+    <canvas id="fhirMissingnessChart" height="380"></canvas>
+</td>
+</tr>
+</table>
+
+<script>
+(function() {
+    const canvas = document.getElementById('fhirMissingnessChart');
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+
+    const DAYS = 90;
+    const ENC_FROM = 38, ENC_TO = 55;   // inpatient encounter window
+    const ULN = 1.30;                   // upper limit of normal, mg/dL
+    const Y_LO = 0.6, Y_HI = 3.5;
+
+    // Underlying (unobserved) trajectory: stable, acute rise on admission, partial recovery.
+    function trueVal(d) {
+        const base = 1.02 + 0.04 * Math.sin(d / 9);
+        const rise = 2.05 / (1 + Math.exp(-(d - 43) / 2.4));
+        const fall = -1.62 / (1 + Math.exp(-(d - 54) / 4.2));
+        return base + rise + fall;
+    }
+
+    // Deterministic pseudo-noise so the picture is identical across redraws.
+    function jitter(k) {
+        const s = Math.sin(k * 12.9898) * 43758.5453;
+        return (s - Math.floor(s)) - 0.5;
+    }
+
+    // Observation days: sparse outpatient, dense inpatient, sparse again.
+    const obsDays = [];
+    for (let d = 0; d < ENC_FROM; d += 17) obsDays.push(d);
+    for (let d = ENC_FROM; d <= ENC_TO; d++) {
+        obsDays.push(d);
+        if (d >= 41 && d <= 50) obsDays.push(d + 0.5);   // twice daily at peak acuity
+    }
+    for (let d = ENC_TO + 9; d <= DAYS; d += 15) obsDays.push(d);
+
+    const obs = obsDays.map(function(d, i) {
+        return { d: d, v: trueVal(d) + jitter(i + 3) * 0.14 };
+    });
+
+    // Observations per week, for the strip along the bottom.
+    const weeks = Math.ceil(DAYS / 7);
+    const perWeek = new Array(weeks).fill(0);
+    obs.forEach(function(o) {
+        const w = Math.min(weeks - 1, Math.floor(o.d / 7));
+        perWeek[w]++;
+    });
+    const maxPerWeek = Math.max.apply(null, perWeek) || 1;
+
+    function draw() {
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * dpr;
+        canvas.height = 380 * dpr;
+        canvas.style.height = '380px';
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(dpr, dpr);
+        const W = rect.width;
+        const H = 380;
+        ctx.clearRect(0, 0, W, H);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, W, H);
+
+        const padL = 58, padR = 20, padT = 52, padB = 98;
+        const plotW = Math.max(10, W - padL - padR);
+        const plotH = H - padT - padB;
+        const stripH = 26;
+        const stripTop = padT + plotH + 28;
+
+        const X = d => padL + (d / DAYS) * plotW;
+        const Y = v => padT + plotH - ((v - Y_LO) / (Y_HI - Y_LO)) * plotH;
+
+        // Title
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillText('Measurement frequency is a severity signal, not a nuisance', W / 2, 20);
+        ctx.fillStyle = '#888';
+        ctx.font = 'italic 10px -apple-system, sans-serif';
+        ctx.fillText('Illustrative patient timeline — serum creatinine Observations over 90 days.', W / 2, 36);
+
+        // Inpatient encounter band
+        ctx.fillStyle = 'rgba(26,82,118,0.14)';
+        ctx.fillRect(X(ENC_FROM), padT, X(ENC_TO) - X(ENC_FROM), plotH);
+        ctx.strokeStyle = 'rgba(26,82,118,0.35)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(X(ENC_FROM), padT); ctx.lineTo(X(ENC_FROM), padT + plotH);
+        ctx.moveTo(X(ENC_TO), padT);   ctx.lineTo(X(ENC_TO), padT + plotH);
+        ctx.stroke();
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 10px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('inpatient encounter', (X(ENC_FROM) + X(ENC_TO)) / 2, padT + 13);
+
+        // Gridlines + y ticks
+        ctx.font = '11px -apple-system, sans-serif';
+        for (let v = 1.0; v <= Y_HI + 1e-9; v += 0.5) {
+            const y = Y(v);
+            ctx.strokeStyle = '#e8e8e8';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(padL, y);
+            ctx.lineTo(padL + plotW, y);
+            ctx.stroke();
+            ctx.fillStyle = '#555';
+            ctx.textAlign = 'right';
+            ctx.fillText(v.toFixed(1), padL - 7, y + 4);
+        }
+
+        // True (unobserved) trajectory
+        ctx.save();
+        ctx.setLineDash([5, 4]);
+        ctx.strokeStyle = '#e67e22';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        for (let d = 0; d <= DAYS; d += 0.5) {
+            const x = X(d), y = Y(trueVal(d));
+            if (d === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        ctx.restore();
+
+        // Upper limit of normal
+        ctx.save();
+        ctx.setLineDash([7, 4]);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(padL, Y(ULN));
+        ctx.lineTo(padL + plotW, Y(ULN));
+        ctx.stroke();
+        ctx.restore();
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('upper limit of normal (1.3 mg/dL)', padL + 6, Y(ULN) - 5);
+
+        // Observed points
+        ctx.fillStyle = '#1a5276';
+        obs.forEach(function(o) {
+            ctx.beginPath();
+            ctx.arc(X(o.d), Y(o.v), 2.6, 0, Math.PI * 2);
+            ctx.fill();
+        });
+
+        // Axes
+        ctx.strokeStyle = '#2c3e50';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(padL, padT);
+        ctx.lineTo(padL, padT + plotH);
+        ctx.lineTo(padL + plotW, padT + plotH);
+        ctx.stroke();
+
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        for (let d = 0; d <= DAYS; d += 15) {
+            const x = X(d);
+            ctx.strokeStyle = '#2c3e50';
+            ctx.beginPath();
+            ctx.moveTo(x, padT + plotH);
+            ctx.lineTo(x, padT + plotH + 4);
+            ctx.stroke();
+            ctx.fillStyle = '#555';
+            ctx.fillText(String(d), x, padT + plotH + 17);
+        }
+
+        ctx.save();
+        ctx.translate(14, padT + plotH / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillText('Serum creatinine (mg/dL)', 0, 0);
+        ctx.restore();
+
+        // Observations-per-week strip
+        const slot = plotW / weeks;
+        const barW = slot * 0.68;
+        ctx.fillStyle = '#e67e22';
+        for (let w = 0; w < weeks; w++) {
+            const h = (perWeek[w] / maxPerWeek) * stripH;
+            const x = padL + (w + 0.5) * slot - barW / 2;
+            ctx.fillRect(x, stripTop + stripH - h, barW, h);
+        }
+        ctx.strokeStyle = '#2c3e50';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(padL, stripTop + stripH);
+        ctx.lineTo(padL + plotW, stripTop + stripH);
+        ctx.stroke();
+        ctx.fillStyle = '#e67e22';
+        ctx.font = 'bold 10px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('observations per week', padL + 4, stripTop - 3);
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Day of patient timeline', padL + plotW / 2, stripTop + stripH + 16);
+
+        // Legend
+        const ly = H - 6;
+        let lx = padL;
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+
+        ctx.fillStyle = '#1a5276';
+        ctx.beginPath(); ctx.arc(lx + 4, ly - 4, 2.6, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#555';
+        ctx.fillText('recorded Observation', lx + 12, ly);
+        lx += 130;
+
+        ctx.save();
+        ctx.setLineDash([5, 4]);
+        ctx.strokeStyle = '#e67e22';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath(); ctx.moveTo(lx, ly - 4); ctx.lineTo(lx + 18, ly - 4); ctx.stroke();
+        ctx.restore();
+        ctx.fillStyle = '#555';
+        ctx.fillText('underlying trajectory (unobserved)', lx + 24, ly);
+        lx += 198;
+
+        ctx.save();
+        ctx.setLineDash([7, 4]);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath(); ctx.moveTo(lx, ly - 4); ctx.lineTo(lx + 18, ly - 4); ctx.stroke();
+        ctx.restore();
+        ctx.fillStyle = '#555';
+        ctx.fillText('reference limit', lx + 24, ly);
+    }
+
+    draw();
+    window.addEventListener('resize', draw);
+})();
+</script>
+
+</body>
+</html>

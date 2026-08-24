@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>iOS Screen Time — Platform APIs</title>
+<style>
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        line-height: 1.6;
+        color: #2c3e50;
+        max-width: 100%;
+        margin: 0;
+        padding: 30px 40px;
+        background: #fff;
+    }
+    h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+    .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+    .verified { display: inline-block; background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-bottom: 16px; }
+    h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
+    .status { display: inline-block; background: #fef9e7; border: 1px solid #f39c12; color: #b7950b; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-left: 12px; vertical-align: middle; }
+    table.obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+    table.obj-table td { vertical-align: top; padding: 12px; }
+    table.obj-table td:first-child { width: 45%; }
+    table.obj-table td:last-child { width: 55%; }
+    pre { background: #f4f4f4; padding: 14px; border-radius: 6px; overflow-x: auto; font-size: 0.82em; text-align: left; }
+    canvas { display: block; margin: 16px auto 0; width: 100%; }
+    .key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+    .section-label { font-weight: bold; color: #1a5276; margin-top: 16px; display: block; }
+    .section-label:first-child { margin-top: 0; }
+    ul { padding-left: 20px; }
+    li { margin-bottom: 6px; font-size: 0.93em; }
+    code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-size: 0.88em; }
+    .scope-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+    .scope-tag { background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 3px 8px; border-radius: 4px; font-size: 0.78em; font-family: monospace; }
+    p { font-size: 0.93em; }
+</style>
+</head>
+<body>
+
+<h1>iOS Screen Time <span class="status">BACKLOG</span></h1>
+<p class="subtitle">Screen Time API — FamilyControls, DeviceActivity, and ManagedSettings. An API designed so that app-usage data cannot be collected.</p>
+<span class="verified">Last verified: August 2026</span>
+
+<h2>Overview</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+    <span class="section-label">What It Provides</span>
+    <p>Three cooperating frameworks, introduced with iOS 15 and extended in iOS 16+:</p>
+    <ul>
+        <li><strong>FamilyControls</strong> — authorization, and the <code>FamilyActivityPicker</code> UI through which the <em>user</em> selects apps, categories, and web domains.</li>
+        <li><strong>DeviceActivity</strong> — schedules and usage-threshold events (<code>DeviceActivityMonitor</code> extension), plus <code>DeviceActivityReport</code> for rendering usage summaries.</li>
+        <li><strong>ManagedSettings</strong> — enforcement: shield an app, block web content, restrict account/passcode/Siri settings via a <code>ManagedSettingsStore</code>.</li>
+    </ul>
+    <p>The intended product shape is a screen-time / focus / parental-control app that <em>acts on</em> usage locally. It is not an analytics pipeline.</p>
+
+    <div class="key-point"><strong>The central design fact:</strong> selected apps and categories are handed to your code only as <code>ApplicationToken</code>, <code>ActivityCategoryToken</code>, and <code>WebDomainToken</code> values. These are opaque. There is no API to resolve a token to a bundle identifier, an app name string, or a URL. Tokens are also scoped — they are not stable, meaningful identifiers you can ship to a server and join across users or devices.</div>
+
+    <span class="section-label">Authentication &amp; Entitlements</span>
+    <ul>
+        <li><code>AuthorizationCenter.shared.requestAuthorization(for:)</code> with <code>.individual</code> (self-managed) or <code>.child</code> (guardian-approved via Apple Account password).</li>
+        <li>Requires the <code>com.apple.developer.family-controls</code> entitlement. For App Store distribution this entitlement must be requested from Apple and justified; it is not self-serve.</li>
+        <li>Authorization is per-device and revocable by the user at any time.</li>
+    </ul>
+    <div class="scope-list">
+        <span class="scope-tag">com.apple.developer.family-controls</span>
+        <span class="scope-tag">AuthorizationCenter</span>
+        <span class="scope-tag">.individual / .child</span>
+    </div>
+
+    <span class="section-label">Granularity — aggregate vs event-level</span>
+    <p>Neither, in the usual sense. What you get is:</p>
+    <ul>
+        <li><strong>Threshold callbacks</strong> — <code>eventDidReachThreshold(_:activity:)</code> fires in your <code>DeviceActivityMonitor</code> extension when a named event's app/category set collectively passes a duration you specified. You learn <em>that the event fired</em>, not which app consumed the time.</li>
+        <li><strong>Interval callbacks</strong> — <code>intervalDidStart</code> / <code>intervalDidEnd</code> against a <code>DeviceActivitySchedule</code>.</li>
+        <li><strong>Report data</strong> — inside a <code>DeviceActivityReportExtension</code> you receive an async sequence of activity segments with <code>totalActivityDuration</code>, per-category and per-application breakdowns keyed by token, and pickers/labels for display.</li>
+    </ul>
+    <p>Durations exist. They just cannot leave the sandbox, and the identities attached to them cannot be read.</p>
+
+    <span class="section-label">Key APIs</span>
+    <ul>
+        <li><code>FamilyActivitySelection</code> → <code>applicationTokens</code>, <code>categoryTokens</code>, <code>webDomainTokens</code></li>
+        <li><code>DeviceActivityCenter.startMonitoring(_:during:events:)</code></li>
+        <li><code>DeviceActivityEvent(applications:categories:threshold:)</code></li>
+        <li><code>DeviceActivityMonitor</code> (app extension subclass)</li>
+        <li><code>DeviceActivityReport(_:filter:)</code> + <code>DeviceActivityReportExtension</code></li>
+        <li><code>ManagedSettingsStore.shield.applications</code>, <code>.shield.webDomains</code></li>
+        <li><code>Label(_ token:)</code> — renders name + icon in SwiftUI without exposing the underlying strings</li>
+    </ul>
+
+    <span class="section-label">Rate Limits</span>
+    <p>Not a request-quota API. The practical constraints are extension budgets rather than rate limits: the <code>DeviceActivityMonitor</code> extension is woken briefly for callbacks and is expected to do minimal work, and the report extension runs under a memory ceiling that large date ranges can exceed. There is a documented cap on the number of concurrently monitored activities/events per app; treat "a few dozen" as the working assumption and design so you do not need many.</p>
+
+    <span class="section-label">Business Scenarios</span>
+    <ul>
+        <li>Parental controls and guardian-side allowance enforcement</li>
+        <li>Focus / digital-wellbeing apps that shield distracting apps on a schedule</li>
+        <li>Habit and screen-time coaching where the summary is shown to the user, on-device</li>
+        <li>Employer or school device policy — but via MDM, not this API</li>
+    </ul>
+
+    <span class="section-label">Key Restrictions &amp; Gotchas</span>
+    <ul>
+        <li><strong>No exfiltration.</strong> The <code>DeviceActivityReportExtension</code> is sandboxed and has no network access. This is deliberate: the extension is allowed to see usage precisely <em>because</em> it cannot transmit it.</li>
+        <li><strong>No token resolution.</strong> There is no public API mapping a token to a bundle ID. Attempts to fingerprint tokens by rendering the label and reading it back are working against the design and against App Review.</li>
+        <li><strong>No enumeration.</strong> You cannot ask "what apps are installed" or "what did the user use". You only ever see what the user picked in the system picker.</li>
+        <li><strong>No retroactive history before authorization</strong>, and report queries are bounded by the system's own retention window.</li>
+        <li><strong>Thresholds are one-way.</strong> An event that fires at 30 minutes tells you 30 minutes elapsed; it does not tell you the total, and re-arming across intervals is fiddly.</li>
+        <li><strong>Authorization loss is silent</strong> from the server's point of view — shields and monitoring stop, and you have no server-side signal that they did.</li>
+    </ul>
+
+    <div class="key-point"><strong>Methodological consequence.</strong> A study of the form "measure how much our users use competing apps" is not blocked by a missing endpoint that Apple might add later. It is blocked by the security model: the identity of the app and the ability to transmit the measurement are separated on purpose. Any dataset that appears to contain iOS per-app usage was collected some other way — self-report, VPN/proxy interception, MDM on supervised hardware, or panel software — and each of those carries its own, usually severe, selection bias. Budget for that at study-design time rather than treating it as an integration problem.</div>
+</td>
+<td>
+    <p style="font-size:0.85em; color:#555; margin-bottom:8px;"><strong>Swift</strong> — authorization, selection, threshold monitoring</p>
+    <pre>import FamilyControls
+import DeviceActivity
+import ManagedSettings
+
+// 1. Authorization (user or guardian approves)
+try await AuthorizationCenter.shared
+        .requestAuthorization(for: .individual)
+
+// 2. The USER picks. You receive opaque tokens.
+@State var selection = FamilyActivitySelection()
+// FamilyActivityPicker(selection: $selection)
+//
+// selection.applicationTokens : Set&lt;ApplicationToken&gt;
+// selection.categoryTokens    : Set&lt;ActivityCategoryToken&gt;
+//
+// token.bundleIdentifier   -> does not exist
+// String(describing: token) -> opaque blob, not a name
+
+// 3. Threshold event: "these apps, 30 minutes, today"
+let event = DeviceActivityEvent(
+    applications: selection.applicationTokens,
+    categories:   selection.categoryTokens,
+    threshold:    DateComponents(minute: 30)
+)
+
+let schedule = DeviceActivitySchedule(
+    intervalStart: DateComponents(hour: 0,  minute: 0),
+    intervalEnd:   DateComponents(hour: 23, minute: 59),
+    repeats: true
+)
+
+try DeviceActivityCenter().startMonitoring(
+    .init("daily.social"),
+    during: schedule,
+    events: [.init("cap30"): event]
+)
+
+// 4. In the DeviceActivityMonitor extension:
+class Monitor: DeviceActivityMonitor {
+  let store = ManagedSettingsStore()
+
+  override func eventDidReachThreshold(
+      _ event: DeviceActivityEvent.Name,
+      activity: DeviceActivityName) {
+    // You know: "cap30" fired.
+    // You do NOT know which app burned the 30 min.
+    // No URLSession here that would help you anyway.
+    store.shield.applications = shieldedTokens
+  }
+}</pre>
+
+    <p style="font-size:0.85em; color:#555; margin-top:16px; margin-bottom:8px;"><strong>DeviceActivityReport extension</strong> — usage is visible, and stays put</p>
+    <pre>struct TotalsView: DeviceActivityReportScene {
+  let content: (String) -&gt; Text
+
+  func makeConfiguration(
+    representing data: DeviceActivityResults&lt;DeviceActivityData&gt;
+  ) async -&gt; String {
+    var total: TimeInterval = 0
+    for await d in data {
+      for await seg in d.activitySegments {
+        total += seg.totalActivityDuration
+        for await app in seg.categories
+                            .flatMap({ $0.applications }) {
+          // app.application.token  -> opaque
+          // app.application.localizedDisplayName -> nil
+          //   (unavailable to your code; renderable via Label)
+          _ = app.totalActivityDuration
+        }
+      }
+    }
+    // Sandboxed extension: no outbound network.
+    // This number can be DRAWN, not SENT.
+    return formatted(total)
+  }
+}</pre>
+
+    <p style="font-size:0.85em; color:#555; margin-top:20px; margin-bottom:8px;"><strong>What the API exposes, by field</strong></p>
+    <canvas id="visibilityCanvas" height="380"></canvas>
+</td>
+</tr>
+</table>
+
+<script>
+(function() {
+    const canvas = document.getElementById('visibilityCanvas');
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+
+    const rows = [
+        ['Total activity duration',        0],
+        ['Per-category duration',          1],
+        ['Per-app duration',               1],
+        ['App name / icon (for display)',  1],
+        ['App bundle identifier',          2],
+        ['List of installed apps',         2],
+        ['Usage before authorization',     2],
+        ['Send usage to your server',      2]
+    ];
+    const cols = ['Readable value', 'Token / render only', 'Not available'];
+    const colColors = ['#27ae60', '#e67e22', '#e74c3c'];
+
+    function draw() {
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * dpr;
+        canvas.height = 380 * dpr;
+        canvas.style.height = '380px';
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(dpr, dpr);
+
+        const W = rect.width;
+        const H = 380;
+        const pad = { top: 62, right: 18, bottom: 42, left: Math.min(210, W * 0.42) };
+        const plotW = W - pad.left - pad.right;
+        const plotH = H - pad.top - pad.bottom;
+
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Screen Time API: resolution available to your code', W / 2, 20);
+        ctx.font = 'italic 10px -apple-system, sans-serif';
+        ctx.fillStyle = '#888';
+        ctx.fillText('the blocked rows are design decisions, not gaps', W / 2, 36);
+
+        const colW = plotW / cols.length;
+        const rowH = plotH / rows.length;
+
+        // Column headers
+        ctx.font = '10px -apple-system, sans-serif';
+        for (let c = 0; c < cols.length; c++) {
+            const cx = pad.left + colW * (c + 0.5);
+            ctx.fillStyle = colColors[c];
+            ctx.textAlign = 'center';
+            ctx.fillText(cols[c], cx, pad.top - 10);
+        }
+
+        // Cells
+        for (let r = 0; r < rows.length; r++) {
+            const cy = pad.top + rowH * (r + 0.5);
+
+            if (r % 2 === 0) {
+                ctx.fillStyle = 'rgba(26,82,118,0.04)';
+                ctx.fillRect(pad.left, pad.top + rowH * r, plotW, rowH);
+            }
+
+            ctx.font = '11px -apple-system, sans-serif';
+            ctx.fillStyle = '#2c3e50';
+            ctx.textAlign = 'right';
+            ctx.fillText(rows[r][0], pad.left - 12, cy + 4);
+
+            for (let c = 0; c < cols.length; c++) {
+                const cx = pad.left + colW * (c + 0.5);
+                const active = rows[r][1] === c;
+                ctx.beginPath();
+                ctx.arc(cx, cy, active ? 8 : 3.5, 0, Math.PI * 2);
+                if (active) {
+                    ctx.fillStyle = colColors[c];
+                    ctx.fill();
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+                } else {
+                    ctx.fillStyle = '#e0e0e0';
+                    ctx.fill();
+                }
+            }
+        }
+
+        // Grid frame
+        ctx.strokeStyle = '#ddd';
+        ctx.lineWidth = 1;
+        for (let c = 1; c < cols.length; c++) {
+            const x = pad.left + colW * c;
+            ctx.beginPath();
+            ctx.moveTo(x, pad.top);
+            ctx.lineTo(x, pad.top + plotH);
+            ctx.stroke();
+        }
+        ctx.strokeStyle = '#999';
+        ctx.beginPath();
+        ctx.rect(pad.left, pad.top, plotW, plotH);
+        ctx.stroke();
+
+        ctx.font = 'italic 10px -apple-system, sans-serif';
+        ctx.fillStyle = '#666';
+        ctx.textAlign = 'center';
+        ctx.fillText('durations are real; identity and transport are what is withheld', W / 2, H - 12);
+    }
+
+    draw();
+    window.addEventListener('resize', draw);
+})();
+</script>
+
+</body>
+</html>

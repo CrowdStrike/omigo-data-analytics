@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dropbox API — Platform APIs</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #2c3e50;
+            max-width: 100%;
+            margin: 0;
+            padding: 30px 40px;
+            background: #fff;
+        }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 12px; }
+        .verified { display: inline-block; background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-bottom: 16px; }
+        h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
+        .status { display: inline-block; background: #fef9e7; border: 1px solid #f39c12; color: #b7950b; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-left: 12px; vertical-align: middle; }
+        table.obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+        table.obj-table td { vertical-align: top; padding: 12px; }
+        table.obj-table td:first-child { width: 45%; }
+        table.obj-table td:last-child { width: 55%; }
+        .section-head { color: #1a5276; font-weight: bold; font-size: 0.95em; margin-top: 16px; margin-bottom: 6px; }
+        .section-head:first-child { margin-top: 0; }
+        p { font-size: 0.93em; }
+        pre { background: #f4f4f4; padding: 14px; border-radius: 6px; overflow-x: auto; font-size: 0.8em; text-align: left; white-space: pre; font-family: ui-monospace, Menlo, monospace; }
+        code { font-family: ui-monospace, Menlo, monospace; font-size: 0.92em; }
+        canvas { display: block; margin: 16px auto 0; width: 100%; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        ul { padding-left: 20px; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        .scope-list { margin: 8px 0 4px 0; line-height: 2.2; }
+        .scope-tag { background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 3px 8px; border-radius: 4px; font-size: 0.78em; font-family: ui-monospace, Menlo, monospace; white-space: nowrap; }
+        .scope-tag.team { background: #fef5e7; border-color: #e67e22; color: #a04000; }
+    </style>
+</head>
+<body>
+    <h1>Dropbox <span class="status">BACKLOG</span></h1>
+    <p class="subtitle">File and folder metadata, revision chains, shared links, file requests, and the team audit log</p>
+    <span class="verified">Last verified: August 2026</span>
+
+    <h2>Overview</h2>
+    <table class="obj-table">
+        <tr>
+            <td>
+                <p class="section-head">What It Provides</p>
+                <p>Dropbox API v2 is an RPC-style HTTPS API — every call is a <code>POST</code>, arguments go in a JSON body, and there are no path parameters. Three hosts split the traffic: <code>api.dropboxapi.com</code> for metadata RPC, <code>content.dropboxapi.com</code> for upload/download (arguments move into the <code>Dropbox-API-Arg</code> header), and <code>notify.dropboxapi.com</code> for longpoll.</p>
+                <p>Surfaces available: folder listings and incremental change cursors, per-file revision chains, shared links and their settings, file requests (inbound upload forms), team member directories, and the team event (audit) log.</p>
+
+                <p class="section-head">Authentication &amp; Scopes</p>
+                <ul>
+                    <li><strong>OAuth 2.0.</strong> Requesting <code>token_access_type=offline</code> yields a short-lived access token plus a refresh token. Long-lived access tokens are no longer issued for new apps.</li>
+                    <li><strong>Granular scopes:</strong> <code>files.metadata.read</code>, <code>files.content.read</code>, <code>files.content.write</code>, <code>sharing.read</code>, <code>sharing.write</code>, <code>file_requests.read</code>, <code>account_info.read</code>.</li>
+                    <li><strong>Team scopes</strong> are separate and only issued to Dropbox Business apps: <code>events.read</code>, <code>members.read</code>, <code>team_data.member</code>.</li>
+                    <li><strong>Namespace selection:</strong> <code>Dropbox-API-Select-User</code> (act as a team member) and <code>Dropbox-API-Path-Root</code> (address team space vs member folder). Getting the path root wrong silently changes what paths resolve to.</li>
+                </ul>
+                <div class="scope-list">
+                    <span class="scope-tag">files.metadata.read</span>
+                    <span class="scope-tag">files.content.read</span>
+                    <span class="scope-tag">files.content.write</span>
+                    <span class="scope-tag">sharing.read</span>
+                    <span class="scope-tag">sharing.write</span>
+                    <span class="scope-tag">file_requests.read</span>
+                    <span class="scope-tag">account_info.read</span>
+                    <span class="scope-tag team">events.read</span>
+                    <span class="scope-tag team">members.read</span>
+                    <span class="scope-tag team">team_data.member</span>
+                </div>
+                <p style="font-size:0.82em; color:#888; font-style:italic;">Orange badges are Dropbox Business team scopes — not obtainable by an individual-account app.</p>
+
+                <p class="section-head">Granularity</p>
+                <p>Per-file metadata (<code>FileMetadata</code> / <code>FolderMetadata</code> / <code>DeletedMetadata</code>), per-revision metadata, per-shared-link settings, per-event audit records. Content is byte-range downloadable; there is no server-side diff between revisions — you download two revisions and diff them yourself.</p>
+
+                <p class="section-head">Key Endpoints</p>
+                <ul>
+                    <li><code>/2/files/list_folder</code> and <code>/list_folder/continue</code> — paged listing that returns a <code>cursor</code></li>
+                    <li><code>/2/files/list_folder/longpoll</code> — blocks until the cursor is stale</li>
+                    <li><code>/2/files/list_revisions</code> — revision chain for one path or id</li>
+                    <li><code>/2/files/download</code>, <code>/2/files/upload</code>, <code>/2/files/upload_session/start|append_v2|finish</code></li>
+                    <li><code>/2/files/search_v2</code> — indexed search</li>
+                    <li><code>/2/sharing/create_shared_link_with_settings</code>, <code>/2/sharing/list_shared_links</code></li>
+                    <li><code>/2/file_requests/list_v2</code>, <code>/2/file_requests/get</code></li>
+                    <li><code>/2/team_log/get_events</code> and <code>/get_events/continue</code></li>
+                </ul>
+
+                <p class="section-head">Rate Limits</p>
+                <p>Dropbox does not publish a fixed requests-per-second figure. It enforces per-user and per-app limits and signals overload with HTTP <code>429</code> plus a <code>Retry-After</code> header, and with typed errors <code>too_many_requests</code> and <code>too_many_write_operations</code>. Write contention on the same folder is a distinct failure mode from raw request volume: concurrent writers to one namespace can be rejected even at low request rates. Longpoll additionally returns its own <code>backoff</code> value that must be honoured before reconnecting.</p>
+                <div class="key-point"><strong>Honour the typed error, not just the status code.</strong> <code>too_many_write_operations</code> means "serialise your writes", not "slow down globally". Blind exponential backoff on a write-lock conflict wastes the whole window.</div>
+
+                <p class="section-head">Business Scenarios</p>
+                <ul>
+                    <li>Sync engines and one-way mirrors driven by <code>list_folder</code> cursors</li>
+                    <li>Compliance archival and eDiscovery from <code>team_log</code></li>
+                    <li>Inbound document collection via file requests (vendor onboarding, HR)</li>
+                    <li>Content pipelines that watch a drop folder and process new arrivals</li>
+                </ul>
+
+                <p class="section-head">Key Restrictions &amp; Gotchas</p>
+                <div class="key-point"><strong>History outlives the visible file.</strong> <code>list_revisions</code> returns prior revisions whose content is still downloadable by <code>rev</code>, and the team event log records the file name, path, and actor for content the user believes they deleted. Both retention windows are plan-tiered, and both are longer than most people assume when they "delete" something. An access-control review that only looks at current files misses the revision and log surfaces entirely.</div>
+                <ul>
+                    <li><strong>Longpoll tells you nothing about what changed.</strong> It returns <code>{"changes": true}</code> — you must then call <code>list_folder/continue</code> with the cursor to learn the delta. It is a wake-up signal, not a change feed.</li>
+                    <li><strong>Cursors can be invalidated.</strong> A <code>reset</code> flag on the continue response means "discard local state and re-enumerate". Code that assumes cursors are permanently valid drifts silently.</li>
+                    <li><strong>Paths are case-preserving but case-insensitive.</strong> Metadata carries both <code>name</code> and <code>path_lower</code>; match on <code>path_lower</code>, display <code>name</code>. Better still, use the immutable <code>id</code> (<code>id:...</code>) — paths change on move and rename.</li>
+                    <li><strong><code>content_hash</code> is not a plain SHA-256</strong> of the file. It is a block-based construction (SHA-256 of the concatenated SHA-256s of 4 MB blocks). Comparing it against a naive digest always mismatches.</li>
+                    <li><strong>Shared links do not expose analytics.</strong> The API returns link settings, expiry, and audience — not view or download counts. Link-level engagement data is not retrievable.</li>
+                    <li><strong>Paper is not a separate product surface anymore.</strong> The legacy <code>/2/paper/*</code> endpoints are deprecated; Paper documents live in the user's Dropbox as <code>.paper</code> items and are handled through the normal files endpoints, with export rather than raw download.</li>
+                    <li><strong><code>server_modified</code> ≠ <code>client_modified</code>.</strong> <code>client_modified</code> is supplied by the uploading client and is untrusted — it can be in the future or the distant past. Only <code>server_modified</code> is monotonic enough to order events.</li>
+                    <li>The team event log requires a Dropbox Business team and admin-level scopes; it is not available for individual accounts at any price.</li>
+                </ul>
+            </td>
+            <td>
+                <p class="section-head">POST /2/files/list_revisions</p>
+                <pre>{
+  "is_deleted": false,
+  "server_deleted": null,
+  "entries": [
+    {
+      ".tag": "file",
+      "name": "Vendor Contract.pdf",
+      "id": "id:a4ayc_80_OEAAAAAAAAAXw",
+      "path_lower": "/legal/vendor contract.pdf",
+      "path_display": "/Legal/Vendor Contract.pdf",
+      "rev": "a1c10ce0dd78",
+      "size": 892143,
+      "client_modified": "2026-08-19T11:02:44Z",
+      "server_modified": "2026-08-19T11:02:51Z",
+      "content_hash_masked": "EXAMPLE_HASH_redacted",  // Note: masked for illustration; real hashes are 64-char hex SHA-256
+      "is_downloadable": true,
+      "sharing_info": {
+        "read_only": false,
+        "parent_shared_folder_id": "84528192421",
+        "modified_by": "dbid:EXAMPLE_DBID_redacted"  // Note: masked for illustration
+      }
+    },
+    {
+      ".tag": "file",
+      "name": "Vendor Contract.pdf",
+      "id": "id:a4ayc_80_OEAAAAAAAAAXw",
+      "rev": "9f2b71a4c003",
+      "size": 874902,
+      "client_modified": "2026-07-30T09:14:00Z",
+      "server_modified": "2026-07-30T09:14:07Z",
+      "content_hash_masked": "EXAMPLE_HASH_redacted"  // Note: masked for illustration
+    }
+  ]
+}</pre>
+
+                <p class="section-head">POST /2/files/list_folder/longpoll</p>
+                <pre>{
+  "changes": true,
+  "backoff": 30
+}</pre>
+
+                <p class="section-head">POST /2/team_log/get_events</p>
+                <pre>{
+  "events": [
+    {
+      "timestamp": "2026-08-20T16:41:09Z",
+      "event_category": { ".tag": "file_operations" },
+      "event_type": {
+        ".tag": "file_delete",
+        "description": "Deleted files and/or folders"
+      },
+      "actor": {
+        ".tag": "user",
+        "user": {
+          ".tag": "team_member",
+          "account_id": "dbid:AAH4f99T0taONIb-OurWxbNQ6ywGRopQngc",
+          "display_name": "Priya Menon",
+          "email": "priya@company.com",
+          "team_member_id": "dbmid:AAFdgehTzw7Wl..."
+        }
+      },
+      "origin": {
+        "access_method": { ".tag": "end_user" },
+        "geo_location": { "city": "Bengaluru", "country": "IN" }
+      },
+      "assets": [
+        {
+          ".tag": "file",
+          "path": { "namespace_relative": {
+            "ns_id": "84528192421",
+            "relative_path": "/Legal/Vendor Contract.pdf" } },
+          "file_id": "id:a4ayc_80_OEAAAAAAAAAXw"
+        }
+      ]
+    }
+  ],
+  "cursor_masked": "EXAMPLE_CURSOR_redacted",  // Note: masked for illustration; real cursors are opaque base64 strings
+  "has_more": true
+}</pre>
+
+                <p class="section-head">Retention Windows — What Survives a Delete</p>
+                <canvas id="retentionChart" height="360"></canvas>
+            </td>
+        </tr>
+    </table>
+
+    <script>
+    (function() {
+        const canvas = document.getElementById('retentionChart');
+        const ctx = canvas.getContext('2d');
+        const H = 360;
+
+        const rows = [
+            { label: 'Version history — Basic / Plus',        days: 30,  color: '#e74c3c', note: '30 days' },
+            { label: 'Deleted file recovery — Basic / Plus',  days: 30,  color: '#e74c3c', note: '30 days' },
+            { label: 'Version history — Professional / Business', days: 180, color: '#1a5276', note: '180 days' },
+            { label: 'Deleted file recovery — Prof. / Business', days: 180, color: '#1a5276', note: '180 days' },
+            { label: 'Team event log (team_log)',             days: 200, color: '#e67e22', note: 'plan-tiered, longer', open: true },
+            { label: 'list_folder cursor validity',           days: 200, color: '#8e44ad', note: 'no fixed expiry', open: true }
+        ];
+
+        function resize() {
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = H * dpr;
+            canvas.style.height = H + 'px';
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            draw(rect.width, H);
+        }
+
+        function draw(W, H) {
+            ctx.clearRect(0, 0, W, H);
+            const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+
+            const padL = 250, padR = 30, padT = 44, padB = 76;
+            const plotW = Math.max(120, W - padL - padR);
+            const plotH = H - padT - padB;
+            const maxDays = 200;
+            const x = d => padL + (d / maxDays) * plotW;
+
+            ctx.fillStyle = '#1a5276';
+            ctx.font = 'bold 13px ' + font;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillText('Documented retention windows (days)', 12, 10);
+
+            // gridlines
+            ctx.font = '10px ' + font;
+            ctx.textAlign = 'center';
+            for (let d = 0; d <= 180; d += 30) {
+                const gx = x(d);
+                ctx.strokeStyle = d === 0 ? '#999' : '#eee';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(gx, padT);
+                ctx.lineTo(gx, padT + plotH);
+                ctx.stroke();
+                ctx.fillStyle = '#888';
+                ctx.textBaseline = 'top';
+                ctx.fillText(String(d), gx, padT + plotH + 6);
+            }
+
+            const band = plotH / rows.length;
+            const barH = Math.min(24, band * 0.55);
+
+            rows.forEach((r, i) => {
+                const cy = padT + band * i + band / 2;
+                const bx = x(0);
+                const bw = Math.max(2, x(r.days) - bx);
+
+                if (r.open) {
+                    ctx.save();
+                    ctx.setLineDash([4, 3]);
+                    ctx.strokeStyle = r.color;
+                    ctx.lineWidth = 1.5;
+                    ctx.strokeRect(bx, cy - barH / 2, bw - 14, barH);
+                    ctx.restore();
+                    ctx.fillStyle = r.color + '33';
+                    ctx.fillRect(bx, cy - barH / 2, bw - 14, barH);
+                    // open-ended arrow
+                    ctx.fillStyle = r.color;
+                    ctx.beginPath();
+                    ctx.moveTo(bx + bw - 12, cy - barH / 2);
+                    ctx.lineTo(bx + bw, cy);
+                    ctx.lineTo(bx + bw - 12, cy + barH / 2);
+                    ctx.closePath();
+                    ctx.fill();
+                } else {
+                    ctx.fillStyle = 'rgba(26,82,118,0.35)';
+                    ctx.fillRect(bx, cy - barH / 2, bw, barH);
+                    ctx.strokeStyle = r.color;
+                    ctx.lineWidth = 1.5;
+                    ctx.strokeRect(bx, cy - barH / 2, bw, barH);
+                }
+
+                ctx.fillStyle = '#2c3e50';
+                ctx.font = '11px ' + font;
+                ctx.textAlign = 'right';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(r.label, padL - 10, cy);
+
+                ctx.fillStyle = r.color;
+                ctx.font = 'bold 10px ' + font;
+                ctx.textAlign = 'left';
+                ctx.fillText(r.note, bx + bw + 8, cy);
+            });
+
+            // green markers: inside the bar the content is still fetchable by rev
+            rows.forEach((r, i) => {
+                const cy = padT + band * i + band / 2;
+                const bw = Math.max(2, x(r.days) - x(0));
+                const mx = x(0) + bw * 0.5;
+                ctx.beginPath();
+                ctx.arc(mx, cy, 3.5, 0, Math.PI * 2);
+                ctx.fillStyle = '#27ae60';
+                ctx.fill();
+            });
+            ctx.fillStyle = '#27ae60';
+            ctx.font = 'bold 10px ' + font;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText('Green dot = anywhere inside the bar, the bytes are still retrievable by rev.', 12, H - 36);
+
+            ctx.fillStyle = '#888';
+            ctx.font = 'italic 10px ' + font;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText('Dashed / arrowed bars are open-ended: the exact window is set by plan tier and admin policy, not by the API.', 12, H - 22);
+            ctx.fillText('A file removed from the current listing is still reachable by rev, and still named in the audit log.', 12, H - 8);
+        }
+
+        window.addEventListener('resize', resize);
+        resize();
+    })();
+    </script>
+</body>
+</html>

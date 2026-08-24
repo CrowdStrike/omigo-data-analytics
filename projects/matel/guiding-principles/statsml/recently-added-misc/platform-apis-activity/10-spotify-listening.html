@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spotify Recently Played API</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #2c3e50;
+            max-width: 100%;
+            margin: 0;
+            padding: 30px 40px;
+            background: #fff;
+        }
+        h1 {
+            color: #1a5276;
+            font-size: 1.8rem;
+            margin-bottom: 4px;
+        }
+        .subtitle {
+            color: #666;
+            font-size: 1.05em;
+            margin-bottom: 24px;
+        }
+        .obj-title {
+            font-weight: bold;
+            color: #1a5276;
+            font-size: 1.1em;
+            margin-bottom: 8px;
+        }
+        .obj-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 24px;
+        }
+        .obj-table td {
+            vertical-align: top;
+            padding: 16px;
+            border: 1px solid #2980b9;
+        }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; }
+        .payload {
+            background: #f8f9fa;
+            border-left: 3px solid #1a5276;
+            padding: 10px;
+            font-family: ui-monospace, Menlo, monospace;
+            font-size: 0.78em;
+            overflow-x: auto;
+            white-space: pre;
+            line-height: 1.45;
+            margin: 12px 0;
+        }
+        .key-point {
+            background: #f8f9fa;
+            border-left: 3px solid #1a5276;
+            padding: 10px 14px;
+            margin: 12px 0;
+            font-size: 0.93em;
+        }
+        canvas {
+            display: block;
+            margin: 0 auto;
+        }
+        .canvas-label {
+            text-align: center;
+            font-size: 0.82em;
+            color: #666;
+            margin-top: 6px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Spotify Recently Played API</h1>
+    <p class="subtitle">Last 50 tracks, top artists/tracks over time windows, audio features — listening history with relative ranking but no play counts.</p>
+
+    <table class="obj-table">
+        <tr>
+            <td>
+                <p class="obj-title">What It Provides</p>
+                <p>Recently played tracks (last 50 with timestamps), top artists (short/medium/long term), top tracks (short/medium/long term), audio features per track (danceability, energy, valence, tempo, etc.), saved library, playlists.</p>
+
+                <p class="obj-title" style="margin-top: 18px;">Authentication</p>
+                <p>OAuth 2.0 with scopes. Key scopes: <code>user-read-recently-played</code>, <code>user-top-read</code>, <code>user-read-playback-state</code>, <code>user-library-read</code>.</p>
+
+                <p class="obj-title" style="margin-top: 18px;">Granularity</p>
+                <p>Recently played gives individual track plays with millisecond timestamps. Top items are ranked (position 0-49) but without play counts — only relative ordering. Time ranges: <code>short_term</code> (~4 weeks), <code>medium_term</code> (~6 months), <code>long_term</code> (all time).</p>
+
+                <p class="obj-title" style="margin-top: 18px;">Key Limitation</p>
+                <div class="key-point">Spotify deliberately does not expose play counts. You get ranked lists but cannot know if your #1 artist has 500 plays or 50. The "recently played" endpoint caps at 50 tracks with no pagination backward.</div>
+
+                <p class="obj-title" style="margin-top: 18px;">Rate Limit</p>
+                <div class="key-point">Not officially published per-endpoint. Community consensus is approximately 180 requests/minute per app. Returns 429 with Retry-After header when exceeded.</div>
+
+                <p class="obj-title" style="margin-top: 18px;">Business Scenarios</p>
+                <p>Mood-based recommendations, productivity playlist generation, concert recommendation (top artists + location), social music sharing apps, music taste clustering for dating apps.</p>
+
+                <p class="obj-title" style="margin-top: 18px;">Restrictions</p>
+                <div class="key-point">Cannot access other users' listening history (only authenticated user's own). Audio features endpoint deprecated in late 2024 for new apps. Streaming history beyond 50 tracks requires GDPR data export (not API).</div>
+            </td>
+            <td>
+                <p class="obj-title">Payload Example</p>
+                <div class="payload">// ── illustrative payload; field names from Spotify Web API docs, values are not real ──
+// GET /v1/me/top/artists?time_range=medium_term&limit=5
+{
+  "items": [
+    {
+      "name": "Radiohead",
+      "id": "4Z8W4fKeB5YxbusRsdQVPb",
+      "genres": ["alternative rock", "art rock"],
+      "popularity": 78,
+      "followers": { "total": 7234521 }
+    },
+    {
+      "name": "Khruangbin",
+      "id": "2mVVjNmdjXZZDvhgQWiakk",
+      "genres": ["psychedelic soul", "funk"],
+      "popularity": 71,
+      "followers": { "total": 2145893 }
+    }
+  ],
+  "total": 50,
+  "limit": 5,
+  "offset": 0,
+  "href": "https://api.spotify.com/v1/me/top/artists?..."
+}
+// Note: no play_count field exists anywhere</div>
+
+                <p class="obj-title" style="margin-top: 18px;">Top Artists — Relative Ranking Without Counts</p>
+                <canvas id="chartTopArtists" width="720" height="360"></canvas>
+                <p class="canvas-label">Illustrative: Top artists — relative ranking without counts</p>
+            </td>
+        </tr>
+    </table>
+
+    <script>
+        const dpr = window.devicePixelRatio || 1;
+        function setupCanvas(id, w, h) {
+            const c = document.getElementById(id);
+            c.width = w * dpr; c.height = h * dpr;
+            c.style.width = w + 'px'; c.style.height = h + 'px';
+            const ctx = c.getContext('2d');
+            ctx.scale(dpr, dpr);
+            return { ctx, w, h };
+        }
+
+        (function() {
+            const { ctx, w, h } = setupCanvas('chartTopArtists', 720, 360);
+
+            const artists = [
+                'Artist A', 'Artist B', 'Artist C', 'Artist D',
+                'Artist E', 'Artist F', 'Artist G', 'Artist H'
+            ];
+            // Relative affinity scores — decreasing by rank, no absolute meaning
+            const scores = [1.0, 0.88, 0.76, 0.65, 0.55, 0.44, 0.34, 0.22];
+
+            const padLeft = 80, padRight = 40, padTop = 40, padBottom = 50;
+            const chartW = w - padLeft - padRight;
+            const chartH = h - padTop - padBottom;
+            const barH = chartH / artists.length * 0.7;
+            const gap = chartH / artists.length * 0.3;
+
+            // Title
+            ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.fillStyle = '#1a5276';
+            ctx.textAlign = 'center';
+            ctx.fillText('Rank position only — no numeric play counts exposed', w / 2, 20);
+
+            // Draw horizontal bars
+            for (let i = 0; i < artists.length; i++) {
+                const y = padTop + i * (barH + gap);
+                const barWidth = scores[i] * chartW;
+
+                // Bar fill
+                ctx.fillStyle = 'rgba(26,82,118,0.35)';
+                ctx.fillRect(padLeft, y, barWidth, barH);
+
+                // Bar border
+                ctx.strokeStyle = '#1a5276';
+                ctx.lineWidth = 1.5;
+                ctx.strokeRect(padLeft, y, barWidth, barH);
+
+                // Artist label
+                ctx.fillStyle = '#2c3e50';
+                ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+                ctx.textAlign = 'right';
+                ctx.fillText(artists[i], padLeft - 8, y + barH / 2 + 4);
+
+                // Rank label inside bar
+                ctx.fillStyle = '#1a5276';
+                ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, sans-serif';
+                ctx.textAlign = 'left';
+                ctx.fillText('#' + (i + 1), padLeft + 6, y + barH / 2 + 4);
+            }
+
+            // Annotation
+            ctx.fillStyle = '#e74c3c';
+            ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('No play counts available — rank only', w / 2, h - 14);
+        })();
+    </script>
+</body>
+</html>

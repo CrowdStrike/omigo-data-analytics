@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confluence API — Platform APIs</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #2c3e50;
+            max-width: 100%;
+            margin: 0;
+            padding: 30px 40px;
+            background: #fff;
+        }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 12px; }
+        .verified { display: inline-block; background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-bottom: 16px; }
+        h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
+        .status { display: inline-block; background: #fef9e7; border: 1px solid #f39c12; color: #b7950b; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-left: 12px; vertical-align: middle; }
+        table.obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+        table.obj-table td { vertical-align: top; padding: 12px; }
+        table.obj-table td:first-child { width: 45%; }
+        table.obj-table td:last-child { width: 55%; }
+        .section-head { color: #1a5276; font-weight: bold; font-size: 0.95em; margin-top: 16px; margin-bottom: 6px; }
+        .section-head:first-child { margin-top: 0; }
+        p { font-size: 0.93em; }
+        pre { background: #f4f4f4; padding: 14px; border-radius: 6px; overflow-x: auto; font-size: 0.8em; text-align: left; white-space: pre; font-family: ui-monospace, Menlo, monospace; }
+        code { font-family: ui-monospace, Menlo, monospace; font-size: 0.92em; }
+        canvas { display: block; margin: 16px auto 0; width: 100%; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        ul { padding-left: 20px; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        .scope-list { margin: 8px 0 4px 0; line-height: 2.2; }
+        .scope-tag { background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 3px 8px; border-radius: 4px; font-size: 0.78em; font-family: ui-monospace, Menlo, monospace; white-space: nowrap; }
+        .scope-tag.elev { background: #fef5e7; border-color: #e67e22; color: #a04000; }
+    </style>
+</head>
+<body>
+    <h1>Confluence <span class="status">BACKLOG</span></h1>
+    <p class="subtitle">Pages, spaces, version history, comments, labels, attachments, CQL search, and the storage-format body</p>
+    <span class="verified">Last verified: August 2026</span>
+
+    <h2>Overview</h2>
+    <table class="obj-table">
+        <tr>
+            <td>
+                <p class="section-head">What It Provides</p>
+                <p>Confluence Cloud exposes content as a hierarchy: a <strong>space</strong> (identified by a short <code>key</code> such as <code>ENG</code>) contains <strong>pages</strong> and <strong>blogposts</strong>, which can nest as parent/child and carry <strong>comments</strong> (footer and inline), <strong>labels</strong>, <strong>attachments</strong>, <strong>restrictions</strong>, <strong>properties</strong>, and a full <strong>version history</strong>. Search is via <strong>CQL</strong>, a SQL-like query language over content metadata and indexed text.</p>
+                <p>Two API generations coexist and differ in more than the URL. <code>/wiki/rest/api/*</code> (v1) is the long-standing surface with <code>expand</code>-based response shaping. <code>/wiki/api/v2/*</code> is the current surface with narrower, faster, cursor-paginated endpoints and a different id space for spaces (numeric <code>id</code> rather than <code>key</code>). CQL search remains a v1 endpoint — there is no v2 equivalent — so most real integrations end up using both.</p>
+
+                <div class="key-point"><strong>Page bodies are not HTML, and not Markdown.</strong> The canonical <code>storage</code> representation is XHTML with Confluence-specific namespaced elements — <code>&lt;ac:structured-macro&gt;</code>, <code>&lt;ac:parameter&gt;</code>, <code>&lt;ri:page&gt;</code>, <code>&lt;ac:link&gt;</code>. Feeding it to a generic HTML parser drops macro content entirely, because macro output does not exist in storage format; it is generated at render time. If you need what a reader sees, request the <code>view</code> representation (rendered HTML) — but that is lossy in the other direction and cannot be written back. Round-tripping <code>view</code> into <code>storage</code> destroys macros.</div>
+
+                <p class="section-head">Authentication &amp; Scopes</p>
+                <ul>
+                    <li><strong>Basic auth with an API token</strong> (Atlassian account email + token) — the standard choice for scripts and internal integrations.</li>
+                    <li><strong>OAuth 2.0 (3LO)</strong> for apps acting on behalf of users across sites. Granular scopes such as <code>read:page:confluence</code>, <code>write:page:confluence</code>, <code>read:comment:confluence</code>, <code>read:attachment:confluence</code>, <code>read:space:confluence</code>, plus the older classic scopes <code>read:confluence-content.all</code>, <code>write:confluence-content</code>, <code>search:confluence</code>.</li>
+                    <li><strong>Forge / Connect apps</strong> authenticate as the app with their own permission model declared in the manifest.</li>
+                    <li>Cloud requires the <code>/wiki</code> prefix and a site-scoped base URL (<code>https://{site}.atlassian.net/wiki/...</code>); OAuth apps must first resolve the <code>cloudId</code> via <code>/oauth/token/accessible-resources</code> and then call <code>/ex/confluence/{cloudId}/...</code>.</li>
+                </ul>
+                <div class="scope-list">
+                    <span class="scope-tag">read:page:confluence</span>
+                    <span class="scope-tag">write:page:confluence</span>
+                    <span class="scope-tag">read:comment:confluence</span>
+                    <span class="scope-tag">read:attachment:confluence</span>
+                    <span class="scope-tag">read:space:confluence</span>
+                    <span class="scope-tag elev">read:confluence-content.all</span>
+                    <span class="scope-tag elev">write:confluence-content</span>
+                    <span class="scope-tag elev">search:confluence</span>
+                    <span class="scope-tag">offline_access</span>
+                </div>
+                <p style="font-size:0.82em; color:#888; font-style:italic;">Orange badges are the older classic scopes; granular scopes are the current model and cannot be mixed freely with them in one app.</p>
+                <div class="key-point"><strong>Permissions are enforced silently.</strong> Content the token cannot see is omitted from list and search results rather than returning 403. A CQL query that returns 40 results for an admin and 6 for a service account is behaving correctly — which makes "is my integration seeing everything?" a question you must answer deliberately, not assume.</div>
+
+                <p class="section-head">Granularity</p>
+                <p>Per-page, per-version, per-comment, per-attachment. In v1, response shaping is via <code>expand</code> (<code>body.storage</code>, <code>version</code>, <code>history</code>, <code>ancestors</code>, <code>children.page</code>, <code>metadata.labels</code>, <code>restrictions.read.restrictions.user</code>) — and almost nothing useful is returned without it. In v2, you request <code>body-format=storage|atlas_doc_format|view</code> and follow separate endpoints for children, labels, and versions.</p>
+
+                <p class="section-head">Key Endpoints</p>
+                <ul>
+                    <li><code>GET /wiki/api/v2/pages/{id}?body-format=storage</code></li>
+                    <li><code>GET /wiki/api/v2/pages/{id}/versions</code>, <code>GET /wiki/api/v2/spaces</code></li>
+                    <li><code>GET /wiki/api/v2/pages/{id}/labels</code>, <code>/footer-comments</code>, <code>/inline-comments</code>, <code>/attachments</code></li>
+                    <li><code>PUT /wiki/api/v2/pages/{id}</code> — requires the incremented <code>version.number</code></li>
+                    <li><code>GET /wiki/rest/api/content/search?cql=...</code> — CQL over content</li>
+                    <li><code>GET /wiki/rest/api/search?cql=...</code> — CQL over content, spaces, and users</li>
+                    <li><code>GET /wiki/rest/api/content/{id}/history</code>, <code>/version/{n}</code></li>
+                    <li><code>GET /wiki/rest/api/content/{id}/child/page?expand=...</code></li>
+                    <li><code>POST /wiki/rest/api/content/{id}/child/attachment</code> — multipart</li>
+                </ul>
+
+                <p class="section-head">Rate Limits</p>
+                <p>Atlassian Cloud applies dynamic, cost-based rate limiting rather than a published fixed requests-per-second number: the budget varies by product tier, site size, and current load, and expensive operations consume more of it than cheap ones. The reliable contract is the response: HTTP <code>429</code> with <code>Retry-After</code>, and on some endpoints <code>X-RateLimit-*</code> headers indicating remaining budget. Practical cost ordering, which matters more than the number: <code>expand</code>-heavy v1 requests (especially <code>body.storage</code> across many pages) are far more expensive than v2's narrow reads; CQL with <code>text ~</code> full-text terms is more expensive than metadata-only CQL; and requesting <code>body</code> in a search result set is the classic way to get throttled. Fetch ids by search, then fetch bodies individually.</p>
+
+                <p class="section-head">Business Scenarios</p>
+                <ul>
+                    <li>Knowledge-base export into a search index or RAG corpus</li>
+                    <li>Documentation freshness audits — last-updated, orphaned pages, stale labels</li>
+                    <li>Compliance evidence collection: who approved which runbook, and when</li>
+                    <li>Bidirectional sync with an external CMS or docs-as-code repo</li>
+                    <li>Content governance — enforcing labels, templates, and space conventions</li>
+                </ul>
+
+                <p class="section-head">Key Restrictions &amp; Gotchas</p>
+                <div class="key-point"><strong>Version history is the richest surface on the platform and it outlives the current page.</strong> Every save creates a numbered version with its own author, timestamp, and optional <code>message</code>, and each version's full <code>body.storage</code> is independently retrievable via <code>/content/{id}/version/{n}</code> or the v2 versions endpoint. That means content redacted from the current page is still fully readable in version <em>n−1</em> by anyone with page access — Confluence does not scrub history when you edit a secret out. Deletion is also two-stage: a deleted page moves to the space trash with <code>status: "trashed"</code> and remains fetchable (and restorable) until purged. A secrets scan or DLP review that reads only current page bodies is structurally incomplete.</div>
+                <ul>
+                    <li><strong>Optimistic locking is mandatory on update.</strong> <code>PUT</code> must supply <code>version.number</code> equal to current + 1, or the request fails with a conflict. There is no "just save this" mode; every writer must read first.</li>
+                    <li><strong>Macros are opaque in storage format and absent from their own output.</strong> A page whose entire content is an <code>include</code>, <code>excerpt-include</code>, or <code>children</code> macro looks nearly empty in <code>storage</code>. Word counts, text extraction, and similarity analysis over storage format systematically undercount macro-heavy pages.</li>
+                    <li><strong><code>atlas_doc_format</code> is a third body format</strong> (the JSON ADF document model shared with Jira). Newer editors may produce it; a parser that only handles XHTML storage will fail on those pages.</li>
+                    <li><strong>CQL is not SQL.</strong> No joins, no aggregation, no <code>GROUP BY</code>. <code>text ~ "phrase"</code> hits the search index, which is eventually consistent — a page created seconds ago may not be findable yet, while <code>GET /pages/{id}</code> returns it immediately. Building a sync on CQL alone loses recent writes.</li>
+                    <li><strong>CQL result sets are capped and cursor-paginated.</strong> Deep pagination past a few thousand results is unreliable; partition the query by space or date range instead of paging forever.</li>
+                    <li><strong>Inline comments carry positional anchors that decay.</strong> An inline comment references the text it was attached to; editing that text can orphan the comment. The comment survives with <code>resolutionStatus</code> and its original selection text, but the anchor no longer resolves — so "unresolved comments" counts drift upward over time for reasons unrelated to review activity.</li>
+                    <li><strong>No page-view analytics in the REST API.</strong> Confluence Analytics (view counts, unique viewers) is a Premium feature surfaced in the UI and not exposed as a documented public REST endpoint. Popularity ranking must come from elsewhere.</li>
+                    <li><strong>Labels are flat, global, and unvalidated.</strong> There is no label taxonomy, no namespacing beyond the <code>prefix</code> field (<code>global</code>, <code>my</code>, <code>team</code>), and no way to prevent typo variants. Label-driven governance needs its own reconciliation pass.</li>
+                    <li><strong>Attachments are versioned content too</strong> — an attachment is itself a content object with an id and version chain, so replacing a file leaves the prior binary retrievable.</li>
+                    <li><strong>Restrictions are per-page and inherited implicitly.</strong> The API returns a page's own read/update restrictions, but effective visibility also depends on ancestor restrictions and space permissions, which are separate calls. There is no single "can user X see page Y" endpoint.</li>
+                    <li><strong>Confluence Server / Data Center is a different API.</strong> No <code>/wiki</code> prefix, no v2 endpoints, different auth, and some resources (notably v2 pages and granular OAuth scopes) simply do not exist. Code written against Cloud does not port.</li>
+                    <li><strong>Webhooks are not part of the core REST API.</strong> Event-driven integration requires a Connect or Forge app declaring event modules; there is no <code>POST /webhooks</code> for a plain API-token script.</li>
+                </ul>
+            </td>
+            <td>
+                <p class="section-head">GET /wiki/api/v2/pages/{id}?body-format=storage</p>
+                <pre>{
+  "id": "196743",
+  "status": "current",
+  "title": "Payments Service Runbook",
+  "spaceId": "65537",
+  "parentId": "131083",
+  "parentType": "page",
+  "authorId": "5f8a1c2d3e4b5a6c7d8e9f01",
+  "ownerId": "5f8a1c2d3e4b5a6c7d8e9f01",
+  "createdAt": "2025-11-04T10:22:31.417Z",
+  "version": {
+    "number": 27,
+    "message": "Rotated the on-call escalation path",
+    "createdAt": "2026-08-18T16:09:44.882Z",
+    "authorId": "6a1b2c3d4e5f6a7b8c9d0e1f",
+    "minorEdit": false
+  },
+  "body": {
+    "storage": {
+      "representation": "storage",
+      "value": "&lt;p&gt;Escalation owner: &lt;ac:link&gt;&lt;ri:user ri:account-id=\"6a1b...\"/&gt;&lt;/ac:link&gt;&lt;/p&gt;&lt;ac:structured-macro ac:name=\"info\" ac:schema-version=\"1\"&gt;&lt;ac:rich-text-body&gt;&lt;p&gt;Rotate credentials quarterly.&lt;/p&gt;&lt;/ac:rich-text-body&gt;&lt;/ac:structured-macro&gt;&lt;ac:structured-macro ac:name=\"include\" ac:schema-version=\"1\"&gt;&lt;ac:parameter ac:name=\"\"&gt;&lt;ri:page ri:content-title=\"Shared Alert Thresholds\"/&gt;&lt;/ac:parameter&gt;&lt;/ac:structured-macro&gt;"
+    }
+  },
+  "_links": {
+    "editui": "/pages/resumedraft.action?draftId=196743",
+    "webui": "/spaces/ENG/pages/196743/Payments+Service+Runbook",
+    "tinyui": "/x/BwAD"
+  }
+}</pre>
+
+                <p class="section-head">GET /wiki/api/v2/pages/{id}/versions</p>
+                <pre>{
+  "results": [
+    { "number": 27, "authorId": "6a1b2c3d4e5f6a7b8c9d0e1f",
+      "createdAt": "2026-08-18T16:09:44.882Z",
+      "message": "Rotated the on-call escalation path",
+      "minorEdit": false },
+    { "number": 26, "authorId": "5f8a1c2d3e4b5a6c7d8e9f01",
+      "createdAt": "2026-07-30T11:41:02.310Z",
+      "message": "", "minorEdit": true },
+    { "number": 25, "authorId": "7c2d3e4f5a6b7c8d9e0f1a2b",
+      "createdAt": "2026-06-12T09:03:55.771Z",
+      "message": "Added temporary DB password for migration",
+      "minorEdit": false }
+  ],
+  "_links": { "next": "/wiki/api/v2/pages/196743/versions?cursor=eyJpZCI6..." }
+}
+
+// Version 25's body is still fully retrievable, including the
+// credential that was removed in version 26.</pre>
+
+                <p class="section-head">GET /wiki/rest/api/content/search?cql=...</p>
+                <pre>Query:
+cql=space=ENG AND type=page AND label="runbook"
+    AND lastmodified > "2026-06-01"
+&expand=version,metadata.labels
+
+Response:
+{
+  "results": [
+    {
+      "id": "196743",
+      "type": "page",
+      "status": "current",
+      "title": "Payments Service Runbook",
+      "version": { "number": 27, "when": "2026-08-18T16:09:44.882Z",
+                   "by": { "accountId": "6a1b...",
+                           "displayName": "Nisha Iyer" } },
+      "metadata": { "labels": { "results": [
+        { "prefix": "global", "name": "runbook", "id": "3801089" },
+        { "prefix": "global", "name": "tier-1",  "id": "3801090" }
+      ], "size": 2 } },
+      "_links": { "webui": "/spaces/ENG/pages/196743/..." }
+    }
+  ],
+  "start": 0,
+  "limit": 25,
+  "size": 1,
+  "totalSize": 1,
+  "cqlQuery": "space=ENG AND type=page AND label=\"runbook\"",
+  "searchDuration": 84
+}</pre>
+
+                <p class="section-head">What Each Body Format Preserves</p>
+                <canvas id="formatChart" height="380"></canvas>
+            </td>
+        </tr>
+    </table>
+
+    <script>
+    (function() {
+        const canvas = document.getElementById('formatChart');
+        const ctx = canvas.getContext('2d');
+        const H = 380;
+
+        const features = [
+            'Plain prose text',
+            'Headings & lists',
+            'Macro declaration',
+            'Macro rendered output',
+            'User / page links',
+            'Writable back via PUT'
+        ];
+
+        // 2 = fully, 1 = partial / lossy, 0 = absent
+        const formats = [
+            { name: 'storage (XHTML)',   color: '#1a5276', v: [2, 2, 2, 0, 2, 2] },
+            { name: 'atlas_doc_format',  color: '#8e44ad', v: [2, 2, 2, 0, 2, 2] },
+            { name: 'view (rendered)',   color: '#e67e22', v: [2, 2, 0, 2, 1, 0] },
+            { name: 'export_view',       color: '#27ae60', v: [2, 2, 0, 2, 1, 0] }
+        ];
+
+        function resize() {
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = H * dpr;
+            canvas.style.height = H + 'px';
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            draw(rect.width, H);
+        }
+
+        function draw(W, H) {
+            ctx.clearRect(0, 0, W, H);
+            const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+
+            ctx.fillStyle = '#1a5276';
+            ctx.font = 'bold 13px ' + font;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillText('No single body format is complete', 12, 8);
+            ctx.fillStyle = '#888';
+            ctx.font = 'italic 10px ' + font;
+            ctx.fillText('Filled = present  ·  half = lossy  ·  hollow = absent', 12, 26);
+
+            const padL = Math.min(210, W * 0.30), padR = 20, padT = 66, padB = 60;
+            const plotW = Math.max(140, W - padL - padR);
+            const plotH = H - padT - padB;
+            const colW = plotW / formats.length;
+            const rowH = plotH / features.length;
+
+            // column headers
+            formats.forEach((f, j) => {
+                const cx = padL + colW * j + colW / 2;
+                ctx.save();
+                ctx.translate(cx, padT - 10);
+                ctx.fillStyle = f.color;
+                ctx.font = 'bold 10.5px ' + font;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'bottom';
+                ctx.fillText(f.name, 0, 0);
+                ctx.restore();
+            });
+
+            // rows
+            features.forEach((label, i) => {
+                const cy = padT + rowH * i + rowH / 2;
+
+                if (i % 2 === 0) {
+                    ctx.fillStyle = '#fafafa';
+                    ctx.fillRect(padL, padT + rowH * i, plotW, rowH);
+                }
+
+                ctx.fillStyle = '#2c3e50';
+                ctx.font = '10.5px ' + font;
+                ctx.textAlign = 'right';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(label, padL - 12, cy);
+
+                formats.forEach((f, j) => {
+                    const cx = padL + colW * j + colW / 2;
+                    const val = f.v[i];
+                    const r = Math.min(11, rowH * 0.3);
+
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                    ctx.strokeStyle = val === 0 ? '#ccc' : f.color;
+                    ctx.lineWidth = 1.8;
+                    ctx.stroke();
+
+                    if (val === 2) {
+                        ctx.fillStyle = f.color === '#1a5276' ? 'rgba(26,82,118,0.35)' : f.color + '66';
+                        ctx.fill();
+                        ctx.beginPath();
+                        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                        ctx.fillStyle = f.color;
+                        ctx.globalAlpha = 0.55;
+                        ctx.fill();
+                        ctx.globalAlpha = 1;
+                    } else if (val === 1) {
+                        ctx.beginPath();
+                        ctx.arc(cx, cy, r, Math.PI / 2, -Math.PI / 2);
+                        ctx.closePath();
+                        ctx.fillStyle = f.color;
+                        ctx.globalAlpha = 0.55;
+                        ctx.fill();
+                        ctx.globalAlpha = 1;
+                    } else {
+                        ctx.strokeStyle = '#e74c3c';
+                        ctx.lineWidth = 1.4;
+                        ctx.beginPath();
+                        ctx.moveTo(cx - r * 0.5, cy - r * 0.5);
+                        ctx.lineTo(cx + r * 0.5, cy + r * 0.5);
+                        ctx.moveTo(cx + r * 0.5, cy - r * 0.5);
+                        ctx.lineTo(cx - r * 0.5, cy + r * 0.5);
+                        ctx.stroke();
+                    }
+                });
+            });
+
+            // frame
+            ctx.strokeStyle = '#e5e5e5';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(padL, padT, plotW, plotH);
+
+            ctx.fillStyle = '#e74c3c';
+            ctx.font = 'italic 10px ' + font;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText('Text extraction needs view; editing needs storage. Doing both means two fetches per page.', 12, H - 20);
+            ctx.fillStyle = '#888';
+            ctx.fillText('Converting view back into storage is not supported and destroys every macro on the page.', 12, H - 6);
+        }
+
+        window.addEventListener('resize', resize);
+        resize();
+    })();
+    </script>
+</body>
+</html>

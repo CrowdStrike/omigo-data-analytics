@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tracking Data: Robotics &amp; Warehouse Tracking</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2c3e50; max-width: 100%; margin: 0; padding: 30px 40px; background: #fff; }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+        .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
+        .obj-table { width: 100%; border-collapse: collapse; }
+        .obj-table td { vertical-align: top; padding: 16px; border: 1px solid #2980b9; }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; text-align: center; }
+        ul { padding-left: 20px; margin: 8px 0; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        .obj-table td:last-child .payload,
+        .obj-table td:last-child .payload-note { text-align: left; }
+        .payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 12px 0; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        .key-point strong:first-child { color: #1a5276; }
+        .lede { font-size: 0.95em; margin: 0 0 10px 0; }
+        .lbl { display: inline-block; font-size: 0.7em; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; margin: 10px 0 2px 0; }
+        .lbl-purpose { background: #eaf2fb; color: #1a5276; }
+        .lbl-effect { background: #fdf0e6; color: #a8501c; }
+        li b { color: #1a5276; font-weight: 600; }
+        .payload-note { font-size: 0.82em; color: #666; margin: 12px 0 -6px 0; font-style: italic; }
+        canvas { display: block; margin: 0 auto; }
+    </style>
+</head>
+<body>
+    <h1>Tracking Data: Robotics &amp; Warehouse Tracking</h1>
+    <p class="subtitle">Handheld scanners and automated storage systems timestamp every task in a fulfilment centre. The measured quantity is the gap between scans — and a gap is not the same thing as idleness.</p>
+
+    <table class="obj-table">
+        <tr>
+            <td>
+                <div class="obj-title">What is it?</div>
+                <p class="lede">A timestamp per barcode scan, and arithmetic on the gaps.</p>
+                <ul>
+                    <li><b>Mechanism:</b> the warehouse system assigns tasks and stamps each scan of an item, bin, tote or station</li>
+                    <li><b>Machine scans too:</b> goods-to-person systems add their own timestamps as a robot delivers or retrieves a shelf</li>
+                    <li><b>Everything else is derived:</b> rate metrics, "time off task" and threshold flags are differences between timestamps</li>
+                </ul>
+                <div class="key-point"><strong>One primitive:</strong> the interval between two scans. It is precise, cheap and continuous, which is exactly why it ends up standing in for effort, productivity and compliance — all inferred from it rather than observed.</div>
+            </td>
+            <td><canvas id="c1" width="720" height="320"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">What does it collect?</div>
+                <ul>
+                    <li><b>Task timestamps</b> — assignment, first scan, completion</li>
+                    <li><b>Interval between scans</b> — the "time off task" primitive</li>
+                    <li><b>Station and zone ids</b>, giving position at scan time</li>
+                    <li><b>Units per interval</b>, from which a rate is computed</li>
+                    <li><b>Mis-picks and exceptions</b> against the task</li>
+                    <li><b>Rate trajectory</b> across a shift and across shifts</li>
+                    <li><b>Threshold flags</b> — derived fields, not sensor readings</li>
+                </ul>
+                <div class="key-point"><strong>Only the timestamps are measured:</strong> <code>flagged_idle</code> is arithmetic on a threshold management chose, so the same 412-second gap is a violation under one setting and normal under another. The metric encodes a policy, not an observation.</div>
+                <div class="key-point"><strong>The gap only means "not scanning":</strong> restocking a tote, helping a colleague, waiting on a jammed conveyor or a bathroom break all look identical, because <code>reason_code</code> is empty. A model trained on <code>flagged_idle</code> learns the policy, not productivity.</div>
+            </td>
+            <td><canvas id="c2" width="720" height="320"></canvas>
+<p class="payload-note">Sample payload &mdash; illustrative structure, not real captured data.</p>
+<pre class="payload">// Warehouse management systems do not publish their
+// worker-activity schema. Field names are reconstruction.
+{
+  // ── inferred / plausible ──
+  "worker_id":       "wk_4821",
+  "shift_id":        "2026-08-22-A",
+  "station":         "pick-mod-7",
+  "task_id":         "t_9f10…",
+  "assigned_ts":     "2026-08-22T09:14:02Z",
+  "first_scan_ts":   "2026-08-22T09:14:19Z",
+  "completed_ts":    "2026-08-22T09:14:47Z",
+  "units":           "seconds",
+  "gap_since_prev_scan_s": 412,
+  "idle_threshold_s":      300,   // policy setting
+  "flagged_idle":    true,        // derived from the two above
+  "reason_code":     null         // nothing recorded
+}</pre>
+</td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">Why is it collected?</div>
+                <div class="lbl lbl-purpose">Stated purpose</div>
+                <ul>
+                    <li><b>The timestamps are the control system</b> — where inventory is, which tasks are outstanding, where a queue is building</li>
+                    <li><b>Routing and capacity planning</b> — pick paths, shift sizing, same-day promises all follow from measured throughput</li>
+                </ul>
+                <div class="lbl lbl-effect">Additional consequence</div>
+                <ul>
+                    <li>The record is already <b>attributed to an individual</b>, so it supports per-worker performance management</li>
+                    <li><b>Ranking follows for free</b> — comparable across people, which is what makes it attractive as an evaluation input and what makes it a poor one</li>
+                </ul>
+                <div class="key-point"><strong>The unit is a task, not a person:</strong> a scan is written where the operation needed a task boundary marked, so the record samples checkpoints rather than working time. Read as a productivity score it answers a question it was never built to answer. Whether any employer acts on such a score is not established here.</div>
+            </td>
+            <td><canvas id="c3" width="720" height="320"></canvas></td>
+        </tr>
+    </table>
+
+    <script>
+    const dpr = window.devicePixelRatio || 1;
+    // Validated categorical palette (CVD-checked, see REVIEW-NOTES.md).
+    // Red is deliberately NOT in the rotation - it stays reserved for
+    // genuine error / alarm states so it keeps its meaning.
+    const P = {
+      blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+      aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+      ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+    };
+    const SERIES = [P.blue, P.green, P.violet, P.orange, P.aqua, P.magenta, P.yellow];
+    // Translucent fill from a palette hex, so a shape keeps its hue but stays light.
+    function tint(hex, a) {
+      const n = parseInt(hex.slice(1), 16);
+      return 'rgba(' + (n >> 16) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+    }
+    // Rounded-rect path helper (works without native ctx.roundRect).
+    function rr(ctx, x, y, w, h, r) {
+      r = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    function setupCanvas(id) {
+        const c = document.getElementById(id);
+        const w = c.getAttribute('width') ? +c.getAttribute('width') : 720;
+        const h = c.getAttribute('height') ? +c.getAttribute('height') : 240;
+        c.width = w * dpr; c.height = h * dpr;
+        c.style.width = w + 'px'; c.style.height = h + 'px';
+        const ctx = c.getContext('2d');
+        ctx.scale(dpr, dpr);
+        return { ctx, w, h };
+    }
+
+    // C1: Warehouse layout with robot and worker paths, worker being watched
+    (function() {
+        const { ctx, w, h } = setupCanvas('c1');
+        // Hue = where a timestamp comes from, or whether it is measured at all:
+        // machine-generated events (aqua), worker scan events (blue),
+        // the interval between them, which is derived rather than observed (orange).
+        const BOT = P.aqua, SCAN = P.blue, DERIVED = P.orange;
+
+        // Warehouse shelves — structural backdrop, not a data category
+        ctx.fillStyle = tint(P.ink, 0.15);
+        for (let row = 0; row < 3; row++) {
+            for (let col = 0; col < 6; col++) {
+                ctx.fillRect(60 + col * 105, 30 + row * 65, 80, 20);
+            }
+        }
+
+        // Robot (square with wheels) — its own timestamp source
+        ctx.fillStyle = BOT;
+        ctx.fillRect(150, 110, 40, 30);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('BOT', 170, 129);
+        // Robot sensor cone
+        ctx.fillStyle = tint(BOT, 0.2);
+        ctx.beginPath();
+        ctx.moveTo(170, 110);
+        ctx.lineTo(140, 60);
+        ctx.lineTo(200, 60);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = BOT;
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillText('machine timestamps', 170, 156);
+
+        // Worker (stick figure) — handheld scan timestamps
+        ctx.strokeStyle = SCAN;
+        ctx.fillStyle = SCAN;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(400, 95, 10, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(400, 105);
+        ctx.lineTo(400, 135);
+        ctx.moveTo(400, 115);
+        ctx.lineTo(385, 128);
+        ctx.moveTo(400, 115);
+        ctx.lineTo(415, 128);
+        ctx.moveTo(400, 135);
+        ctx.lineTo(388, 155);
+        ctx.moveTo(400, 135);
+        ctx.lineTo(412, 155);
+        ctx.stroke();
+
+        // Scan points, which is where all the data comes from
+        ctx.strokeStyle = tint(SCAN, 0.5);
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(190, 120);
+        ctx.lineTo(390, 100);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(190, 130);
+        ctx.lineTo(390, 135);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // The two recorded scan events on that link
+        ctx.fillStyle = SCAN;
+        [[240, 114], [340, 104]].forEach(p => {
+            ctx.beginPath(); ctx.arc(p[0], p[1], 4, 0, Math.PI * 2); ctx.fill();
+        });
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillText('scan', 240, 106);
+        ctx.fillText('scan', 340, 96);
+
+        // Label
+        ctx.textAlign = 'left';
+        ctx.fillStyle = SCAN;
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillText('The record is a sequence of scans at known stations.', 250, 195);
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = P.mute;
+        ctx.fillText('Everything else — rate, "time off task", flags — is arithmetic on the gaps between them.', 250, 212);
+
+        // Gap indicator — the derived quantity, not a measurement
+        ctx.fillStyle = DERIVED;
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillText('gap since last scan', 385, 170);
+        ctx.fillStyle = P.mute;
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillText('cause not recorded', 385, 183);
+        ctx.textAlign = 'left';
+    })();
+
+    // C2: One gap, many causes — all producing the same row
+    (function() {
+        const { ctx, w, h } = setupCanvas('c2');
+        // Four distinct things on this chart, four hues: the two measured scan
+        // events (blue), the interval inferred from them (orange), the candidate
+        // causes that are not in the record at all (violet), and the stored
+        // policy setting the flag is computed against (aqua).
+        const SCAN = P.blue, GAP = P.orange, CAUSE = P.violet, POLICY = P.aqua;
+
+        ctx.fillStyle = P.ink;
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('ONE GAP BETWEEN SCANS — SCHEMATIC', 20, 18);
+
+        // Scan timeline
+        const tlY = 56, tlX1 = 40, tlX2 = 680;
+        ctx.strokeStyle = P.ink;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(tlX1, tlY); ctx.lineTo(tlX2, tlY); ctx.stroke();
+
+        // Two scans bracketing a gap
+        const sA = 170, sB = 520;
+        [sA, sB].forEach((x, i) => {
+            ctx.fillStyle = SCAN;
+            ctx.beginPath(); ctx.arc(x, tlY, 6, 0, Math.PI * 2); ctx.fill();
+            ctx.font = 'bold 12px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(i === 0 ? 'scan' : 'next scan', x, tlY - 14);
+        });
+
+        // The gap
+        ctx.fillStyle = tint(GAP, 0.18);
+        ctx.fillRect(sA, tlY - 6, sB - sA, 12);
+        ctx.strokeStyle = GAP;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 3]);
+        ctx.strokeRect(sA, tlY - 6, sB - sA, 12);
+        ctx.setLineDash([]);
+        ctx.fillStyle = GAP;
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('the measured quantity: elapsed time', (sA + sB) / 2, tlY + 24);
+
+        // Candidate causes, all indistinguishable in the record
+        const causes = [
+            'jammed conveyor',
+            'tote needed restocking',
+            'helping a colleague',
+            'mislabelled item to resolve',
+            'scanner fault',
+            'safety stop',
+            'a break'
+        ];
+
+        ctx.textAlign = 'left';
+        causes.forEach((c, i) => {
+            const col = i < 4 ? 0 : 1;
+            const row = i < 4 ? i : i - 4;
+            const x = 60 + col * 330;
+            const y = 104 + row * 22;
+
+            ctx.fillStyle = tint(CAUSE, 0.10);
+            ctx.fillRect(x, y - 13, 300, 19);
+            ctx.strokeStyle = tint(CAUSE, 0.45);
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x, y - 13, 300, 19);
+
+            ctx.fillStyle = CAUSE;
+            ctx.font = '12px -apple-system, sans-serif';
+            ctx.fillText(c, x + 8, y);
+
+            // All map to the same stored value
+            ctx.fillStyle = GAP;
+            ctx.font = '11px -apple-system, sans-serif';
+            ctx.fillText('→ same row', x + 232, y);
+        });
+        ctx.fillStyle = CAUSE;
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillText('candidate causes — none of these is a field in the record', 60, 186);
+
+        // The derived flag
+        ctx.fillStyle = tint(POLICY, 0.07);
+        ctx.fillRect(60, 196, 600, 48);
+        ctx.strokeStyle = POLICY;
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(60, 196, 600, 48);
+        ctx.fillStyle = POLICY;
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.fillText('The stored fields are: gap length, and a threshold chosen by management.', 70, 211);
+        ctx.fillStyle = P.text;
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillText('The reason field is empty, so the flag is computed on a quantity that is genuinely', 70, 225);
+        ctx.fillText('ambiguous. Same gap, different setting, different verdict.', 70, 239);
+    })();
+
+    // C3: The flag rate moves with the threshold, not with the work — schematic
+    (function() {
+        const { ctx, w, h } = setupCanvas('c3');
+        // Three real outcome classes for the same gap sequence, so three hues:
+        // over both thresholds (orange), over only the low setting — the band the
+        // chart is about (violet), and under both (blue). Each threshold line takes
+        // the hue of the band it creates.
+        const BOTH = P.orange, ONLY_LOW = P.violet, NEITHER = P.blue;
+
+        ctx.fillStyle = P.ink;
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('SAME SHIFT, TWO THRESHOLD SETTINGS — SCHEMATIC', 20, 18);
+        ctx.fillStyle = P.mute;
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillText('Illustrative gap lengths. Nothing about the work changes between the two panels.', 20, 32);
+
+        // Axes
+        ctx.strokeStyle = P.ink;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(70, 44);
+        ctx.lineTo(70, 178);
+        ctx.lineTo(660, 178);
+        ctx.stroke();
+
+        // Y label
+        ctx.save();
+        ctx.translate(28, 112);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillStyle = P.ink;
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('gap between scans', 0, 0);
+        ctx.restore();
+
+        // X label
+        ctx.fillStyle = P.ink;
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('consecutive tasks across one shift →', 365, 198);
+
+        // Illustrative gap sequence (relative units, 0..1 of plot height)
+        const gaps = [
+            0.18, 0.22, 0.14, 0.61, 0.19, 0.25, 0.17, 0.48,
+            0.21, 0.16, 0.72, 0.20, 0.24, 0.15, 0.44, 0.19,
+            0.28, 0.55, 0.17, 0.23, 0.13, 0.66, 0.21, 0.18
+        ];
+
+        const plotTop = 44, plotBot = 178, plotH = plotBot - plotTop;
+        const barW = 17, gapW = 7, startX = 80;
+
+        // Two candidate thresholds, as fractions of the plot height
+        const tStrict = 0.40, tLoose = 0.58;
+        const yStrict = plotBot - tStrict * plotH;
+        const yLoose = plotBot - tLoose * plotH;
+
+        gaps.forEach((g, i) => {
+            const x = startX + i * (barW + gapW);
+            const barH = g * plotH;
+            // Colour: over both thresholds, over only the strict one, or under both
+            if (g >= tLoose) ctx.fillStyle = BOTH;
+            else if (g >= tStrict) ctx.fillStyle = ONLY_LOW;
+            else ctx.fillStyle = tint(NEITHER, 0.35);
+            ctx.fillRect(x, plotBot - barH, barW, barH);
+        });
+
+        // Threshold lines
+        function thr(y, label, color) {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 4]);
+            ctx.beginPath();
+            ctx.moveTo(70, y); ctx.lineTo(660, y); ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = color;
+            ctx.font = 'bold 11px -apple-system, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(label, 76, y - 5);
+        }
+        thr(yLoose, 'threshold set high — fewer flags', BOTH);
+        thr(yStrict, 'threshold set low — more flags', ONLY_LOW);
+
+        // Legend
+        const legend = [
+            { c: BOTH, label: 'flagged under either setting' },
+            { c: ONLY_LOW, label: 'flagged only under the low setting' },
+            { c: tint(NEITHER, 0.35), label: 'not flagged' }
+        ];
+        ctx.textAlign = 'left';
+        legend.forEach((l, i) => {
+            const x = 70 + i * 210;
+            ctx.fillStyle = l.c;
+            ctx.fillRect(x, 208, 11, 10);
+            ctx.strokeStyle = P.mute;
+            ctx.lineWidth = 0.8;
+            ctx.strokeRect(x, 208, 11, 10);
+            ctx.fillStyle = P.text;
+            ctx.font = '11px -apple-system, sans-serif';
+            ctx.fillText(l.label, x + 16, 217);
+        });
+
+        ctx.fillStyle = ONLY_LOW;
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.fillText('The middle band is the whole problem: the same worker, the same gaps, a different verdict.', 70, 234);
+    })();
+
+    </script>
+</body>
+</html>

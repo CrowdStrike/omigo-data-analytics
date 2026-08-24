@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Analytics API</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2c3e50; max-width: 100%; margin: 0; padding: 30px 40px; background: #fff; }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+        .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
+        .obj-table { width: 100%; border-collapse: collapse; }
+        .obj-table td { vertical-align: top; padding: 16px; border: 1px solid #2980b9; }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; text-align: center; }
+        ul { padding-left: 20px; margin: 8px 0; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        .payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 12px 0; text-align: left; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        canvas { display: block; margin: 12px auto 0; width: 100%; }
+    </style>
+</head>
+<body>
+    <h1>YouTube Analytics API</h1>
+    <p class="subtitle">Channel and video performance data — views, watch time, retention curves, traffic sources, demographics, and revenue — accessible via OAuth 2.0 for the channel owner.</p>
+
+    <table class="obj-table">
+        <tr>
+            <td>
+                <div class="obj-title">What the API Provides</div>
+                <ul>
+                    <li><strong>Channel-level:</strong> views, watch time (minutes), subscribers gained/lost, revenue (if monetized)</li>
+                    <li><strong>Video-level:</strong> views, average view duration, audience retention curve, traffic sources</li>
+                    <li><strong>Audience demographics:</strong> age group, gender, geography (country/region)</li>
+                    <li><strong>Real-time:</strong> concurrent viewers (YouTube Data API v3 liveBroadcasts), ~2 minute delay</li>
+                    <li><strong>Traffic sources:</strong> YouTube search, suggested videos, external, browse features, playlists</li>
+                    <li><strong>Engagement:</strong> likes, dislikes (hidden from UI but available in API), comments, shares</li>
+                </ul>
+                <div class="key-point">The retention curve is the most analytically useful metric YouTube exposes. It shows exactly where viewers leave, revealing structural problems (slow intros, content mismatches) that aggregate view counts cannot.</div>
+            </td>
+            <td>
+<pre class="payload">{
+  // ── illustrative payload; field names from YouTube Analytics API v2 docs, values are not real ──
+  "kind": "youtubeAnalytics#resultTable",
+  "columnHeaders": [
+    { "name": "day", "dataType": "STRING" },
+    { "name": "views", "dataType": "INTEGER" },
+    { "name": "estimatedMinutesWatched", "dataType": "INTEGER" },
+    { "name": "averageViewDuration", "dataType": "INTEGER" },
+    { "name": "subscribersGained", "dataType": "INTEGER" }
+  ],
+  "rows": [
+    ["2026-08-18", 12450, 34200, 164, 89],
+    ["2026-08-19", 14102, 38900, 165, 112],
+    ["2026-08-20", 11890, 31400, 158, 74]
+  ]
+}</pre>
+                <canvas id="c1" height="360"></canvas>
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">Access & Authentication</div>
+                <ul>
+                    <li>OAuth 2.0 — channel owner must authorize; no way to query another channel's analytics</li>
+                    <li>Scopes: <code>yt-analytics.readonly</code>, <code>yt-analytics-monetary.readonly</code> (for revenue)</li>
+                    <li>YouTube Data API v3 (public video stats) uses API key — no OAuth needed for public metrics</li>
+                    <li>Quota system: 10,000 units/day default; each request costs 1-100 units depending on endpoint</li>
+                    <li>Analytics API requests cost 1 unit; Data API list requests cost 1 unit, search costs 100 units</li>
+                    <li>Can request quota increase but approval is not guaranteed</li>
+                </ul>
+                <div class="key-point">The quota system is the primary rate limiter. A single search request burns 100 units — meaning a naive implementation polling search every minute exhausts the daily quota in under two hours.</div>
+            </td>
+            <td>
+                <canvas id="c2" height="300"></canvas>
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">Granularity & Limitations</div>
+                <ul>
+                    <li>Historical data: daily granularity, available from channel creation date</li>
+                    <li>Revenue data: delayed 2-3 days, reconciled monthly (final numbers change retroactively)</li>
+                    <li>Audience retention: relative retention curve at ~100 data points per video (percentage intervals)</li>
+                    <li>Real-time concurrent viewers: only for live streams, ~2 minute delay</li>
+                    <li>"Views" metric has a processing delay of 24-48 hours for final counts</li>
+                    <li>YouTube Studio shows "real-time" views (last 48h) but the API does not expose this directly</li>
+                    <li>Demographics suppressed if audience is too small (privacy threshold)</li>
+                </ul>
+                <div class="key-point">Revenue reconciliation means any dashboard showing daily revenue is provisional. Monthly finalization can shift individual days by 10-20%, making day-over-day revenue comparisons unreliable until the month closes.</div>
+            </td>
+            <td>
+                <canvas id="c3" height="300"></canvas>
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">Business Scenarios & Deprecation Notes</div>
+                <ul>
+                    <li>Creator dashboards, MCN (Multi-Channel Network) reporting, ad revenue optimization</li>
+                    <li>YouTube Analytics API v1 deprecated 2014, replaced by v2 (current)</li>
+                    <li>YouTube Reporting API (bulk reports) runs on a different schedule — daily dumps, not real-time</li>
+                    <li>CMS (Content Management System) API for large rights-holders — separate access tier</li>
+                    <li>Shorts metrics added 2022-2023 but retention curves differ from long-form</li>
+                    <li>"Subscribe" button change (2023) affected subscriber gain metrics interpretation</li>
+                </ul>
+                <div class="key-point">Shorts retention curves are structurally different from long-form: the looping mechanic means a viewer can "watch" 300% of a Short without any active decision to continue. Comparing retention percentages across formats is misleading.</div>
+            </td>
+            <td>
+                <canvas id="c4" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+
+    <script>
+    const dpr = window.devicePixelRatio || 1;
+    function setupCanvas(id) {
+        const c = document.getElementById(id);
+        const rect = c.getBoundingClientRect();
+        const w = rect.width;
+        const h = parseInt(c.getAttribute('height'));
+        c.width = w * dpr;
+        c.height = h * dpr;
+        c.style.height = h + 'px';
+        const ctx = c.getContext('2d');
+        ctx.scale(dpr, dpr);
+        return { ctx, w, h };
+    }
+
+    // C1: Audience Retention Curve
+    (function() {
+        const { ctx, w, h } = setupCanvas('c1');
+        const padding = { top: 40, right: 30, bottom: 40, left: 50 };
+        const chartW = w - padding.left - padding.right;
+        const chartH = h - padding.top - padding.bottom;
+
+        // Title
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Audience Retention Curve (typical drop-off pattern)', w / 2, 22);
+
+        // Data: classic YouTube retention shape
+        const data = [100, 72, 65, 60, 57, 55, 52, 50, 48, 46, 44, 43, 41, 40, 38, 37, 36, 35, 37, 34];
+
+        // Axes
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(padding.left, padding.top);
+        ctx.lineTo(padding.left, padding.top + chartH);
+        ctx.lineTo(padding.left + chartW, padding.top + chartH);
+        ctx.stroke();
+
+        // Y-axis labels
+        ctx.fillStyle = '#666';
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.textAlign = 'right';
+        for (var i = 0; i <= 4; i++) {
+            var yVal = i * 25;
+            var y = padding.top + chartH - (yVal / 100) * chartH;
+            ctx.fillText(yVal + '%', padding.left - 8, y + 4);
+            // Grid line
+            ctx.strokeStyle = '#eee';
+            ctx.beginPath();
+            ctx.moveTo(padding.left, y);
+            ctx.lineTo(padding.left + chartW, y);
+            ctx.stroke();
+        }
+
+        // X-axis labels
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#666';
+        ctx.fillText('0%', padding.left, padding.top + chartH + 20);
+        ctx.fillText('25%', padding.left + chartW * 0.25, padding.top + chartH + 20);
+        ctx.fillText('50%', padding.left + chartW * 0.5, padding.top + chartH + 20);
+        ctx.fillText('75%', padding.left + chartW * 0.75, padding.top + chartH + 20);
+        ctx.fillText('100%', padding.left + chartW, padding.top + chartH + 20);
+
+        // Axis titles
+        ctx.fillStyle = '#888';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillText('Video Progress', w / 2, h - 4);
+        ctx.save();
+        ctx.translate(12, padding.top + chartH / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillText('Retention', 0, 0);
+        ctx.restore();
+
+        // Fill area under curve
+        ctx.beginPath();
+        ctx.moveTo(padding.left, padding.top + chartH - (data[0] / 100) * chartH);
+        for (var i = 1; i < data.length; i++) {
+            var x = padding.left + (i / (data.length - 1)) * chartW;
+            var y = padding.top + chartH - (data[i] / 100) * chartH;
+            ctx.lineTo(x, y);
+        }
+        ctx.lineTo(padding.left + chartW, padding.top + chartH);
+        ctx.lineTo(padding.left, padding.top + chartH);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(26,82,118,0.35)';
+        ctx.fill();
+
+        // Draw curve line
+        ctx.beginPath();
+        ctx.moveTo(padding.left, padding.top + chartH - (data[0] / 100) * chartH);
+        for (var i = 1; i < data.length; i++) {
+            var x = padding.left + (i / (data.length - 1)) * chartW;
+            var y = padding.top + chartH - (data[i] / 100) * chartH;
+            ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        // Dashed line at 50% (Average retention)
+        var avgY = padding.top + chartH - (50 / 100) * chartH;
+        ctx.setLineDash([6, 4]);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(padding.left, avgY);
+        ctx.lineTo(padding.left + chartW, avgY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Label for average line
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('Average retention', padding.left + chartW - 100, avgY - 8);
+    })();
+
+    // C2: Quota cost breakdown
+    (function() {
+        const { ctx, w, h } = setupCanvas('c2');
+        const padding = { top: 40, right: 20, bottom: 50, left: 140 };
+        const chartW = w - padding.left - padding.right;
+        const chartH = h - padding.top - padding.bottom;
+
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('API Quota Cost per Request Type (units)', w / 2, 22);
+
+        var items = [
+            { label: 'Analytics query', cost: 1, color: '#27ae60' },
+            { label: 'Data API list', cost: 1, color: '#27ae60' },
+            { label: 'Data API videos', cost: 1, color: '#27ae60' },
+            { label: 'Data API channels', cost: 1, color: '#27ae60' },
+            { label: 'Data API search', cost: 100, color: '#e74c3c' }
+        ];
+
+        var maxCost = 100;
+        var barH = 28;
+        var gap = 14;
+
+        items.forEach(function(item, i) {
+            var y = padding.top + i * (barH + gap);
+            var barW = (item.cost / maxCost) * chartW;
+
+            // Label
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = '12px -apple-system, sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText(item.label, padding.left - 10, y + barH / 2 + 4);
+
+            // Bar
+            ctx.fillStyle = item.color;
+            ctx.globalAlpha = 0.7;
+            ctx.fillRect(padding.left, y, Math.max(barW, 4), barH);
+            ctx.globalAlpha = 1;
+
+            // Cost label
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = 'bold 12px -apple-system, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(item.cost + ' unit' + (item.cost > 1 ? 's' : ''), padding.left + barW + 8, y + barH / 2 + 4);
+        });
+
+        // Footer note
+        ctx.fillStyle = '#888';
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Daily quota: 10,000 units — one search/min exhausts it in 100 minutes', w / 2, h - 10);
+    })();
+
+    // C3: Data availability timeline
+    (function() {
+        const { ctx, w, h } = setupCanvas('c3');
+        const padding = { top: 40, right: 30, bottom: 30, left: 30 };
+        const chartW = w - padding.left - padding.right;
+
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Data Availability Delays', w / 2, 22);
+
+        var items = [
+            { label: 'Live concurrent viewers', delay: '~2 min', pct: 0.02, color: '#27ae60' },
+            { label: 'View counts (provisional)', delay: '24-48 hrs', pct: 0.25, color: '#e67e22' },
+            { label: 'Revenue (provisional)', delay: '2-3 days', pct: 0.35, color: '#e67e22' },
+            { label: 'Demographics', delay: '2-3 days', pct: 0.35, color: '#1a5276' },
+            { label: 'Revenue (final)', delay: '~30 days', pct: 1.0, color: '#e74c3c' }
+        ];
+
+        var startY = 55;
+        var rowH = 44;
+        var timelineLeft = padding.left + 160;
+        var timelineW = chartW - 170;
+
+        // Timeline axis
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(timelineLeft, startY + items.length * rowH + 5);
+        ctx.lineTo(timelineLeft + timelineW, startY + items.length * rowH + 5);
+        ctx.stroke();
+
+        // Axis labels
+        ctx.fillStyle = '#888';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Real-time', timelineLeft, startY + items.length * rowH + 20);
+        ctx.fillText('30 days', timelineLeft + timelineW, startY + items.length * rowH + 20);
+
+        items.forEach(function(item, i) {
+            var y = startY + i * rowH;
+            var dotX = timelineLeft + item.pct * timelineW;
+
+            // Label
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = '12px -apple-system, sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText(item.label, timelineLeft - 15, y + 6);
+
+            // Line from left to dot
+            ctx.strokeStyle = item.color;
+            ctx.lineWidth = 2;
+            ctx.globalAlpha = 0.4;
+            ctx.beginPath();
+            ctx.moveTo(timelineLeft, y);
+            ctx.lineTo(dotX, y);
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+
+            // Dot
+            ctx.fillStyle = item.color;
+            ctx.beginPath();
+            ctx.arc(dotX, y, 6, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Delay label
+            ctx.fillStyle = item.color;
+            ctx.font = 'bold 11px -apple-system, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(item.delay, dotX + 10, y + 4);
+        });
+    })();
+
+    // C4: API landscape / versions
+    (function() {
+        const { ctx, w, h } = setupCanvas('c4');
+        const padding = { top: 40, right: 20, bottom: 20, left: 20 };
+
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('YouTube API Landscape', w / 2, 22);
+
+        var apis = [
+            { label: 'Analytics API v2', sub: 'Channel owner metrics\nOAuth required', status: 'Active', color: '#27ae60', x: 0.17 },
+            { label: 'Data API v3', sub: 'Public video stats\nAPI key only', status: 'Active', color: '#27ae60', x: 0.42 },
+            { label: 'Reporting API', sub: 'Bulk daily dumps\nAsync jobs', status: 'Active', color: '#27ae60', x: 0.67 },
+            { label: 'CMS API', sub: 'Rights holders\nSeparate tier', status: 'Restricted', color: '#e67e22', x: 0.92 }
+        ];
+
+        var boxW = (w - 60) / 4 - 10;
+        var boxH = 130;
+        var startY = 50;
+
+        apis.forEach(function(api, i) {
+            var x = padding.left + i * (boxW + 12);
+            var y = startY;
+
+            // Box
+            ctx.fillStyle = '#f8f9fa';
+            ctx.strokeStyle = api.color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.roundRect(x, y, boxW, boxH, 6);
+            ctx.fill();
+            ctx.stroke();
+
+            // Status badge
+            ctx.fillStyle = api.color;
+            ctx.globalAlpha = 0.15;
+            ctx.beginPath();
+            ctx.roundRect(x + boxW / 2 - 30, y + 8, 60, 18, 3);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = api.color;
+            ctx.font = 'bold 10px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(api.status, x + boxW / 2, y + 21);
+
+            // Title
+            ctx.fillStyle = '#1a5276';
+            ctx.font = 'bold 11px -apple-system, sans-serif';
+            ctx.fillText(api.label, x + boxW / 2, y + 48);
+
+            // Sub lines
+            ctx.fillStyle = '#666';
+            ctx.font = '10px -apple-system, sans-serif';
+            var lines = api.sub.split('\n');
+            lines.forEach(function(line, li) {
+                ctx.fillText(line, x + boxW / 2, y + 68 + li * 15);
+            });
+        });
+
+        // Deprecated note
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Analytics API v1 — deprecated 2014', w / 2, h - 30);
+        ctx.fillStyle = '#888';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillText('Shorts metrics (2022-2023) added to v2 but retention curves differ from long-form', w / 2, h - 12);
+    })();
+    </script>
+</body>
+</html>

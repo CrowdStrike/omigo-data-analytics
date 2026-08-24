@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fitbit / Google Fit API</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2c3e50; max-width: 100%; margin: 0; padding: 30px 40px; background: #fff; }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+        .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
+        .obj-table { width: 100%; border-collapse: collapse; }
+        .obj-table td { vertical-align: top; padding: 16px; border: 1px solid #2980b9; }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; }
+        ul { padding-left: 20px; margin: 8px 0; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        .payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 12px 0; }
+        .payload-note { font-size: 0.82em; color: #666; margin: 12px 0 -6px 0; font-style: italic; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        canvas { display: block; margin: 0 auto; }
+    </style>
+</head>
+<body>
+    <h1>Fitbit / Google Fit API</h1>
+    <p class="subtitle">Steps, heart rate (1-sec intraday), sleep stages, SpO2 — personal health telemetry accessible via OAuth2 APIs.</p>
+
+    <table class="obj-table">
+        <tr>
+            <td>
+                <div class="obj-title">What it provides</div>
+                <ul>
+                    <li>Steps at 1-minute granularity</li>
+                    <li>Heart rate at 1-second resolution (intraday, personal apps only)</li>
+                    <li>Sleep stages — wake, light, deep, REM — with start/end timestamps per episode</li>
+                    <li>SpO2 nightly average (requires specific device models)</li>
+                    <li>Activity zone minutes (Out of Range, Fat Burn, Cardio, Peak)</li>
+                    <li>Calories burned, distance traveled</li>
+                </ul>
+
+                <div class="obj-title" style="margin-top: 18px;">Authentication</div>
+                <p style="font-size: 0.93em;">OAuth 2.0 with explicit user consent. Fitbit uses its own OAuth server. Google Health Connect uses an on-device API with no cloud round-trip for Android apps — data stays local unless the user grants a specific app access.</p>
+
+                <div class="obj-title" style="margin-top: 18px;">Granularity</div>
+                <ul>
+                    <li>Heart rate: 1-second resolution (intraday endpoint)</li>
+                    <li>Steps: 1-minute intervals</li>
+                    <li>Sleep stages: per-episode, variable length (typically 30–120 min blocks)</li>
+                </ul>
+
+                <div class="obj-title" style="margin-top: 18px;">Rate limit</div>
+                <p style="font-size: 0.93em;">150 requests per hour per user (Fitbit Web API).</p>
+
+                <div class="obj-title" style="margin-top: 18px;">Business scenarios</div>
+                <ul>
+                    <li>Insurance wellness programs offering premium discounts for step targets</li>
+                    <li>Corporate health challenges tracking team aggregate activity</li>
+                    <li>Clinical trial compliance monitoring (did the participant wear the device?)</li>
+                    <li>Sleep quality correlation with workplace productivity metrics</li>
+                </ul>
+
+                <div class="obj-title" style="margin-top: 18px;">Restrictions</div>
+                <div class="key-point">Intraday data (1-sec HR, 1-min steps) requires a "Personal" app type on Fitbit. Server-to-server apps get daily aggregates only. SpO2 requires Sense, Versa 3+, or Charge 5+ hardware.</div>
+
+                <div class="obj-title" style="margin-top: 18px;">Migration note</div>
+                <p style="font-size: 0.93em;">Fitbit Web API is being phased toward Google Health Connect. Existing Fitbit apps continue working, but new integrations are steered to Health Connect. Cloud-to-cloud access is narrowing — the direction is on-device first, cloud export second.</p>
+            </td>
+            <td>
+<p class="payload-note">Sample payload — documented Fitbit Web API response structure.</p>
+<pre class="payload">// ── illustrative payload; field names from Fitbit Web API docs, values are not real ──
+// GET /1/user/-/activities/heart/date/today/1d/1sec.json
+{
+  "activities-heart-intraday": {
+    "dataset": [
+      { "time": "07:14:00", "value": 62 },
+      { "time": "07:14:01", "value": 63 },
+      { "time": "07:14:02", "value": 61 },
+      { "time": "07:14:03", "value": 64 },
+      { "time": "07:14:04", "value": 68 }
+    ],
+    "datasetInterval": 1,
+    "datasetType": "second"
+  },
+  "activities-heart": [{
+    "dateTime": "2026-08-22",
+    "value": {
+      "heartRateZones": [
+        { "name": "Out of Range", "min": 30, "max": 91, "minutes": 820 },
+        { "name": "Fat Burn", "min": 91, "max": 127, "minutes": 45 },
+        { "name": "Cardio", "min": 127, "max": 154, "minutes": 22 },
+        { "name": "Peak", "min": 154, "max": 220, "minutes": 8 }
+      ],
+      "restingHeartRate": 58
+    }
+  }]
+}</pre>
+
+                <p style="font-size: 0.82em; color: #666; margin: 18px 0 8px 0; font-style: italic;">Illustrative: Heart rate intraday with zone bands</p>
+                <canvas id="hrChart" width="720" height="360"></canvas>
+            </td>
+        </tr>
+    </table>
+
+    <script>
+    const dpr = window.devicePixelRatio || 1;
+    function setupCanvas(id, w, h) {
+        const c = document.getElementById(id);
+        c.width = w * dpr; c.height = h * dpr;
+        c.style.width = w + 'px'; c.style.height = h + 'px';
+        const ctx = c.getContext('2d');
+        ctx.scale(dpr, dpr);
+        return { ctx, w, h };
+    }
+
+    (function() {
+        const { ctx, w, h } = setupCanvas('hrChart', 720, 360);
+        const pad = { top: 30, right: 20, bottom: 40, left: 50 };
+        const plotW = w - pad.left - pad.right;
+        const plotH = h - pad.top - pad.bottom;
+
+        const yMin = 40, yMax = 180;
+        const zones = [
+            { name: 'Out of Range', min: 40, max: 91, color: 'rgba(52,152,219,0.12)' },
+            { name: 'Fat Burn', min: 91, max: 127, color: 'rgba(39,174,96,0.12)' },
+            { name: 'Cardio', min: 127, max: 154, color: 'rgba(230,126,34,0.12)' },
+            { name: 'Peak', min: 154, max: 180, color: 'rgba(231,76,60,0.12)' }
+        ];
+
+        function yToPixel(bpm) {
+            return pad.top + plotH - ((bpm - yMin) / (yMax - yMin)) * plotH;
+        }
+        function xToPixel(hour) {
+            return pad.left + (hour / 24) * plotW;
+        }
+
+        // Draw zone bands
+        zones.forEach(function(z) {
+            ctx.fillStyle = z.color;
+            const top = yToPixel(z.max);
+            const bot = yToPixel(z.min);
+            ctx.fillRect(pad.left, top, plotW, bot - top);
+        });
+
+        // Zone labels on right
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        zones.forEach(function(z) {
+            var midY = yToPixel((z.min + z.max) / 2);
+            ctx.fillStyle = '#666';
+            ctx.fillText(z.name, pad.left + 4, midY + 3);
+        });
+
+        // Axes
+        ctx.strokeStyle = '#bbb';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(pad.left, pad.top);
+        ctx.lineTo(pad.left, pad.top + plotH);
+        ctx.lineTo(pad.left + plotW, pad.top + plotH);
+        ctx.stroke();
+
+        // Y-axis labels
+        ctx.fillStyle = '#555';
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.textAlign = 'right';
+        [40, 60, 80, 100, 120, 140, 160, 180].forEach(function(bpm) {
+            var y = yToPixel(bpm);
+            ctx.fillText(bpm, pad.left - 6, y + 4);
+            ctx.strokeStyle = '#eee';
+            ctx.beginPath();
+            ctx.moveTo(pad.left, y);
+            ctx.lineTo(pad.left + plotW, y);
+            ctx.stroke();
+        });
+
+        // X-axis labels
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#555';
+        for (var hr = 0; hr <= 24; hr += 3) {
+            var x = xToPixel(hr);
+            ctx.fillText(hr + ':00', x, pad.top + plotH + 18);
+            ctx.strokeStyle = '#eee';
+            ctx.beginPath();
+            ctx.moveTo(x, pad.top);
+            ctx.lineTo(x, pad.top + plotH);
+            ctx.stroke();
+        }
+
+        // Axis titles
+        ctx.fillStyle = '#333';
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Time of Day', pad.left + plotW / 2, h - 4);
+        ctx.save();
+        ctx.translate(14, pad.top + plotH / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillText('BPM', 0, 0);
+        ctx.restore();
+
+        // Hardcoded realistic HR data (one point per hour)
+        var hrData = [
+            { hour: 0, bpm: 56 },
+            { hour: 1, bpm: 54 },
+            { hour: 2, bpm: 52 },
+            { hour: 3, bpm: 51 },
+            { hour: 4, bpm: 53 },
+            { hour: 5, bpm: 55 },
+            { hour: 6, bpm: 62 },
+            { hour: 7, bpm: 145 },
+            { hour: 8, bpm: 108 },
+            { hour: 9, bpm: 78 },
+            { hour: 10, bpm: 74 },
+            { hour: 11, bpm: 72 },
+            { hour: 12, bpm: 76 },
+            { hour: 13, bpm: 73 },
+            { hour: 14, bpm: 71 },
+            { hour: 15, bpm: 74 },
+            { hour: 16, bpm: 82 },
+            { hour: 17, bpm: 158 },
+            { hour: 18, bpm: 118 },
+            { hour: 19, bpm: 79 },
+            { hour: 20, bpm: 72 },
+            { hour: 21, bpm: 68 },
+            { hour: 22, bpm: 63 },
+            { hour: 23, bpm: 58 }
+        ];
+
+        // Draw HR line
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 2.2;
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        hrData.forEach(function(pt, i) {
+            var x = xToPixel(pt.hour);
+            var y = yToPixel(pt.bpm);
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+
+        // Draw data points
+        ctx.fillStyle = '#1a5276';
+        hrData.forEach(function(pt) {
+            var x = xToPixel(pt.hour);
+            var y = yToPixel(pt.bpm);
+            ctx.beginPath();
+            ctx.arc(x, y, 3, 0, Math.PI * 2);
+            ctx.fill();
+        });
+
+        // Zone threshold lines (dashed)
+        ctx.setLineDash([4, 4]);
+        ctx.lineWidth = 0.8;
+        [91, 127, 154].forEach(function(bpm) {
+            var y = yToPixel(bpm);
+            ctx.strokeStyle = bpm === 91 ? 'rgba(39,174,96,0.5)' : bpm === 127 ? 'rgba(230,126,34,0.5)' : 'rgba(231,76,60,0.5)';
+            ctx.beginPath();
+            ctx.moveTo(pad.left, y);
+            ctx.lineTo(pad.left + plotW, y);
+            ctx.stroke();
+        });
+        ctx.setLineDash([]);
+    })();
+    </script>
+</body>
+</html>

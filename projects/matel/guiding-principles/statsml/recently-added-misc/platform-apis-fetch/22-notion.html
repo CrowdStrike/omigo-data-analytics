@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notion API — Platform APIs</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #2c3e50;
+            max-width: 100%;
+            margin: 0;
+            padding: 30px 40px;
+            background: #fff;
+        }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+        .verified { display: inline-block; background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-bottom: 16px; }
+        h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
+        .status { display: inline-block; background: #fef9e7; border: 1px solid #f39c12; color: #b7950b; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-left: 12px; vertical-align: middle; }
+        table.obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+        table.obj-table td { vertical-align: top; padding: 12px; }
+        table.obj-table td:first-child { width: 45%; }
+        table.obj-table td:last-child { width: 55%; }
+        pre { background: #f4f4f4; padding: 14px; border-radius: 6px; overflow-x: auto; font-size: 0.82em; text-align: left; }
+        canvas { display: block; margin: 16px auto 0; width: 100%; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        ul { padding-left: 20px; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+    </style>
+</head>
+<body>
+    <h1>Notion API <span class="status">BACKLOG</span></h1>
+    <p class="subtitle">Pages, databases, blocks, and comments — structured content as composable block trees</p>
+    <span class="verified">Last verified: August 2026</span>
+
+    <h2>Overview</h2>
+    <table class="obj-table">
+        <tr>
+            <td>
+                <strong>Content as Block Trees</strong>
+                <p>Every Notion page is a tree of typed blocks. Supported block types include:</p>
+                <ul>
+                    <li><strong>Text:</strong> paragraph, heading_1, heading_2, heading_3</li>
+                    <li><strong>Lists:</strong> bulleted_list_item, numbered_list_item, to_do</li>
+                    <li><strong>Rich:</strong> toggle, code, image, callout</li>
+                    <li><strong>Structure:</strong> divider, table, column_list</li>
+                </ul>
+                <p>Blocks can nest arbitrarily deep — a toggle can contain paragraphs, which can contain other toggles.</p>
+
+                <div class="key-point">
+                    <strong>Integration-scoped access:</strong> An integration can only access pages and databases explicitly shared with it. There is no global workspace access — every resource must be individually shared by a user.
+                </div>
+
+                <strong>Integration Types</strong>
+                <ul>
+                    <li><strong>Internal integrations:</strong> Created within a workspace, automatically trusted. Ideal for internal tools and automations.</li>
+                    <li><strong>Public OAuth integrations:</strong> Use OAuth 2.0 flow to request access from users across workspaces. Required for third-party apps.</li>
+                </ul>
+
+                <strong>Rate Limits &amp; Pagination</strong>
+                <ul>
+                    <li>Rate limit: <strong>3 requests/sec</strong> average per integration</li>
+                    <li>Pagination: max <strong>100 results</strong> per page (use <code>start_cursor</code> for next page)</li>
+                    <li>Block children: limited to 100 per request</li>
+                </ul>
+
+                <strong>Business Scenarios</strong>
+                <ul>
+                    <li>Knowledge base sync (CMS to Notion or vice versa)</li>
+                    <li>Project management integration (sync tasks, status updates)</li>
+                    <li>Content publishing pipelines (draft in Notion, publish externally)</li>
+                </ul>
+
+                <div class="key-point">
+                    <strong>Restrictions:</strong> No real-time updates — polling required. Block children limited to 100 per request. Nested blocks require separate API calls to retrieve children.
+                </div>
+            </td>
+            <td>
+                <strong>Response — GET /v1/blocks/{block_id}/children</strong>
+                <pre>{
+  "object": "list",
+  "results": [
+    {
+      "object": "block",
+      "id": "block-uuid-1",
+      "type": "heading_2",
+      "heading_2": {
+        "rich_text": [
+          {
+            "type": "text",
+            "text": {
+              "content": "Project Overview"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "object": "block",
+      "id": "block-uuid-2",
+      "type": "paragraph",
+      "paragraph": {
+        "rich_text": [
+          {
+            "type": "text",
+            "text": {
+              "content": "This document outlines..."
+            }
+          }
+        ]
+      },
+      "has_children": false
+    },
+    {
+      "object": "block",
+      "id": "block-uuid-3",
+      "type": "bulleted_list_item",
+      "has_children": true
+    }
+  ],
+  "has_more": false
+}</pre>
+                <canvas id="blockTreeCanvas" height="400"></canvas>
+            </td>
+        </tr>
+    </table>
+
+    <script>
+        (function() {
+            const canvas = document.getElementById('blockTreeCanvas');
+            const ctx = canvas.getContext('2d');
+            const dpr = window.devicePixelRatio || 1;
+
+            function resize() {
+                const rect = canvas.getBoundingClientRect();
+                canvas.width = rect.width * dpr;
+                canvas.height = 400 * dpr;
+                canvas.style.height = '400px';
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                ctx.clearRect(0, 0, rect.width, 400);
+            }
+            function draw() {
+            resize();
+
+            const W = canvas.width / dpr;
+            const H = 400;
+
+            // Colors by type
+            const colors = {
+                page: '#1a5276',
+                heading: '#1a5276',
+                paragraph: '#27ae60',
+                list: '#e67e22',
+                toggle: '#e67e22',
+                code: '#e74c3c',
+                image: '#27ae60'
+            };
+
+            // Node structure
+            const nodes = [
+                { id: 'page', label: 'Page', type: 'page', x: W / 2, y: 40 },
+                // Level 2
+                { id: 'heading_2', label: 'heading_2', type: 'heading', x: W * 0.1, y: 140 },
+                { id: 'paragraph', label: 'paragraph', type: 'paragraph', x: W * 0.3, y: 140 },
+                { id: 'bulleted_list', label: 'bulleted_list', type: 'list', x: W * 0.5, y: 140 },
+                { id: 'toggle', label: 'toggle', type: 'toggle', x: W * 0.7, y: 140 },
+                { id: 'code', label: 'code', type: 'code', x: W * 0.9, y: 140 },
+                // Level 3 — under bulleted_list
+                { id: 'item_1', label: 'item_1', type: 'list', x: W * 0.38, y: 260 },
+                { id: 'item_2', label: 'item_2', type: 'list', x: W * 0.5, y: 260 },
+                { id: 'item_3', label: 'item_3', type: 'list', x: W * 0.62, y: 260 },
+                // Level 3 — under toggle
+                { id: 'toggle_para', label: 'paragraph', type: 'paragraph', x: W * 0.65, y: 260 },
+                { id: 'toggle_img', label: 'image', type: 'image', x: W * 0.78, y: 260 }
+            ];
+
+            const edges = [
+                ['page', 'heading_2'],
+                ['page', 'paragraph'],
+                ['page', 'bulleted_list'],
+                ['page', 'toggle'],
+                ['page', 'code'],
+                ['bulleted_list', 'item_1'],
+                ['bulleted_list', 'item_2'],
+                ['bulleted_list', 'item_3'],
+                ['toggle', 'toggle_para'],
+                ['toggle', 'toggle_img']
+            ];
+
+            function getNode(id) {
+                return nodes.find(n => n.id === id);
+            }
+
+            function drawEdge(fromId, toId) {
+                const from = getNode(fromId);
+                const to = getNode(toId);
+                ctx.beginPath();
+                ctx.strokeStyle = '#bbb';
+                ctx.lineWidth = 1.5;
+                ctx.moveTo(from.x, from.y + 18);
+                ctx.lineTo(to.x, to.y - 18);
+                ctx.stroke();
+            }
+
+            function drawNode(node) {
+                const color = colors[node.type] || '#1a5276';
+                const textWidth = ctx.measureText(node.label).width;
+                const boxW = Math.max(textWidth + 20, 70);
+                const boxH = 32;
+                const x = node.x - boxW / 2;
+                const y = node.y - boxH / 2;
+                const r = 8;
+
+                // Rounded rectangle
+                ctx.beginPath();
+                ctx.moveTo(x + r, y);
+                ctx.lineTo(x + boxW - r, y);
+                ctx.quadraticCurveTo(x + boxW, y, x + boxW, y + r);
+                ctx.lineTo(x + boxW, y + boxH - r);
+                ctx.quadraticCurveTo(x + boxW, y + boxH, x + boxW - r, y + boxH);
+                ctx.lineTo(x + r, y + boxH);
+                ctx.quadraticCurveTo(x, y + boxH, x, y + boxH - r);
+                ctx.lineTo(x, y + r);
+                ctx.quadraticCurveTo(x, y, x + r, y);
+                ctx.closePath();
+
+                ctx.fillStyle = color + '22';
+                ctx.fill();
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Label
+                ctx.fillStyle = color;
+                ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(node.label, node.x, node.y);
+            }
+
+            // Draw legend
+            function drawLegend() {
+                const legendItems = [
+                    { label: 'Heading', color: colors.heading },
+                    { label: 'Paragraph', color: colors.paragraph },
+                    { label: 'List / Toggle', color: colors.list },
+                    { label: 'Code', color: colors.code }
+                ];
+                const startX = 10;
+                const startY = H - 40;
+                ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
+
+                legendItems.forEach((item, i) => {
+                    const x = startX + i * 120;
+                    ctx.fillStyle = item.color;
+                    ctx.fillRect(x, startY, 12, 12);
+                    ctx.fillStyle = '#2c3e50';
+                    ctx.fillText(item.label, x + 16, startY + 6);
+                });
+            }
+
+            // Draw title
+            ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.fillStyle = '#1a5276';
+            ctx.textAlign = 'center';
+            ctx.fillText('Block Tree Structure — Page Hierarchy', W / 2, 15);
+
+            // Set font for measurement before drawing
+            ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+
+            // Draw edges first
+            edges.forEach(([from, to]) => drawEdge(from, to));
+
+            // Draw nodes on top
+            nodes.forEach(n => drawNode(n));
+
+            // Draw depth labels
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.fillStyle = '#999';
+            ctx.textAlign = 'left';
+            ctx.fillText('Depth 0', 4, 40);
+            ctx.fillText('Depth 1', 4, 140);
+            ctx.fillText('Depth 2', 4, 260);
+
+            // has_children indicator
+            ctx.font = 'italic 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.fillStyle = '#e67e22';
+            ctx.textAlign = 'center';
+            ctx.fillText('has_children: true', W * 0.5, 175);
+            ctx.fillText('has_children: true', W * 0.7, 175);
+
+            drawLegend();
+            }
+            draw();
+            window.addEventListener('resize', draw);
+        })();
+    </script>
+</body>
+</html>

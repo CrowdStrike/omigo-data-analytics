@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slack API — Platform APIs</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #2c3e50;
+            max-width: 100%;
+            margin: 0;
+            padding: 30px 40px;
+            background: #fff;
+        }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 12px; }
+        .verified { display: inline-block; background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-bottom: 16px; }
+        .status { display: inline-block; background: #fef9e7; border: 1px solid #f39c12; color: #b7950b; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-left: 12px; vertical-align: middle; }
+        h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
+        table.obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+        table.obj-table td { vertical-align: top; padding: 16px; border: 1px solid #ddd; }
+        table.obj-table td:first-child { width: 45%; }
+        table.obj-table td:last-child { width: 55%; }
+        .section-label { font-weight: bold; color: #1a5276; margin-top: 16px; display: block; }
+        .section-label:first-child { margin-top: 0; }
+        ul { padding-left: 20px; margin: 6px 0 10px; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        p { font-size: 0.93em; }
+        pre {
+            background: #f8f9fa;
+            border-left: 3px solid #1a5276;
+            font-family: ui-monospace, Menlo, monospace;
+            font-size: 0.78em;
+            white-space: pre;
+            overflow-x: auto;
+            padding: 12px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        .payload-note { font-size: 0.85em; color: #555; margin: 12px 0 8px 0; }
+        code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-size: 0.88em; }
+        .scope-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+        .scope-tag { background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 3px 8px; border-radius: 4px; font-size: 0.78em; font-family: monospace; }
+        canvas { display: block; margin: 16px auto 0; width: 100%; }
+    </style>
+</head>
+<body>
+
+<h1>Slack API <span class="status">BACKLOG</span></h1>
+<p class="subtitle">Messages, threads, reactions and channel history — observable only through the channels a bot was invited to, only as far back as the plan retains, and only in their current edited state.</p>
+<span class="verified">Last verified: August 2026 — rate-limit figures deliberately not reproduced, see below</span>
+
+<h2>Overview</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+
+<span class="section-label">What It Provides</span>
+<p>Messages, thread replies, reactions, files, channel membership, user profiles and workspace metadata. Real-time delivery via the Events API (HTTP callbacks) or Socket Mode (WebSocket). The Conversations API unifies public channels, private channels, group DMs and DMs behind one resource family.</p>
+
+<span class="section-label">Authentication</span>
+<div class="scope-list">
+    <span class="scope-tag">xoxb- bot</span>
+    <span class="scope-tag">xoxp- user</span>
+    <span class="scope-tag">xapp- app-level</span>
+</div>
+<ul>
+    <li><strong>Bot tokens (<code>xoxb-</code>)</strong> — workspace-scoped, installed once, persist across users. Sees only what the bot is a member of.</li>
+    <li><strong>User tokens (<code>xoxp-</code>)</strong> — act as a specific user, inheriting that user's channel visibility. Different token, different population.</li>
+    <li><strong>App-level tokens (<code>xapp-</code>)</strong> — Socket Mode connections only.</li>
+</ul>
+<div class="key-point"><strong>The token type determines the sample, not just the permissions.</strong> A bot token and a user token pointed at the same workspace return different channel sets, so a change of token mid-study is a change of population. Record which token produced every extraction.</div>
+
+<span class="section-label">Granularity</span>
+<p>Individual messages, addressed by channel plus a <code>ts</code> timestamp that doubles as the message's primary key. Thread replies hang off a parent via <code>thread_ts</code>. Reactions arrive as an aggregated array on the message, with the reacting user IDs enumerated.</p>
+
+<span class="section-label">Key Endpoints</span>
+<ul>
+    <li><code>conversations.list</code> — channel enumeration</li>
+    <li><code>conversations.history</code> — messages in a channel</li>
+    <li><code>conversations.replies</code> — a thread</li>
+    <li><code>conversations.members</code> — membership</li>
+    <li><code>chat.postMessage</code></li>
+    <li><code>reactions.add</code> / <code>reactions.get</code></li>
+    <li><code>users.list</code></li>
+    <li><strong>File upload</strong> is now the two-step <code>files.getUploadURLExternal</code> then <code>files.completeUploadExternal</code>. The older single-call <code>files.upload</code> has been deprecated — code written against it will need replacing.</li>
+</ul>
+
+<span class="section-label">Rate Limits — Shape, Not Numbers</span>
+<p>Slack assigns each method to a tier, and the tiers span <strong>roughly two orders of magnitude</strong> in requests per minute. Consequences that hold regardless of the current figures:</p>
+<ul>
+    <li>Budgeting must be <strong>per method</strong>, not per app. One global throttle either wastes the fast tiers or violates the slow ones.</li>
+    <li>The history-reading methods sit in the <strong>restrictive</strong> tiers, which is exactly backwards from what a bulk backfill wants.</li>
+    <li>Some methods carry their own limits independent of their tier.</li>
+    <li>Short bursts above tier are tolerated, then throttled. Honour <code>Retry-After</code>; a retry loop that ignores it makes the throttle worse.</li>
+    <li><strong>Marketplace listing is a gating dimension.</strong> Slack has applied tighter limits to apps not listed in the Slack Marketplace — including, for the conversation-history methods, both a reduced request rate and a reduced <em>number of objects returned per request</em>. Two apps calling the same endpoint can therefore have throughput budgets differing by orders of magnitude.</li>
+</ul>
+<div class="key-point"><strong>Exact tier figures are not reproduced here, on purpose.</strong> They have changed, they differ by Marketplace status, and a wrong quota in a design document is worse than no quota — it produces a pipeline sized for capacity that does not exist, which fails as an endless 429 loop rather than an error. Read the current limits from Slack's docs at design time, and record the figure you designed against alongside the pipeline. The <em>per-request object count</em> is the number people forget: halving it doubles the call count for the same history, independent of the rate.</div>
+
+<span class="section-label">Business Scenarios</span>
+<ul>
+    <li>Incident-response coordination and timeline reconstruction</li>
+    <li>Internal workflow automation and bot integrations</li>
+    <li>Compliance archival — note this normally uses the export or Discovery surfaces, not the public API</li>
+    <li>Collaboration and communication-pattern analysis, subject to everything on the right</li>
+</ul>
+
+<span class="section-label">Not Provided</span>
+<ul>
+    <li>History from channels the bot never joined — no backfill, at any tier</li>
+    <li>DMs and private channels absent explicit installation into them</li>
+    <li>Message history older than the plan's retention</li>
+    <li>Prior versions of an edited message, or the content of a deleted one</li>
+    <li>Bulk workspace export (that is the admin export or Discovery API, separately gated)</li>
+    <li>Read receipts, or who saw a message without reacting</li>
+</ul>
+
+</td>
+<td>
+
+<p class="payload-note"><strong>GET conversations.history</strong> — abridged. Three things to notice: the <code>edited</code> block, the bot-authored second message, and what is <em>not</em> in the array.</p>
+<pre>{
+  "ok": true,
+  "messages": [
+    {
+      "type": "message",
+      "user": "U024BE7LH",
+      "text": "Rolled back to build 4417, prod is green",
+      "ts": "1723731000.000100",
+      "thread_ts": "1723730000.000050",
+      "reply_count": 3,
+      "reply_users_count": 2,
+      "edited": {
+        "user": "U024BE7LH",
+        "ts": "1723731420.000000"
+      },
+      "reactions": [
+        { "name": "tada",
+          "users": ["U024BE7LH", "U034AB9GL"], "count": 2 }
+      ]
+    },
+    {
+      "type": "message",
+      "subtype": "bot_message",
+      "bot_id": "B07XKJ2M1",
+      "app_id": "A07PLQ9F4",
+      "text": "Deploy pipeline #4418 failed: 2 checks",
+      "ts": "1723730500.000300"
+    }
+  ],
+  "has_more": true,
+  "response_metadata": { "next_cursor": "bmV4dF90czoxNjI..." }
+}
+
+// The `edited` block gives you the edit TIME, never the
+// original TEXT. `text` is current state.
+//
+// Deleted messages are simply absent. There is no
+// tombstone, so a gap in `ts` is indistinguishable
+// from a quiet period.</pre>
+
+<div class="key-point"><strong><code>conversations.history</code> returns current state, not the historical record.</strong> Edits are applied and deletions are omitted, so a backfill of last month and an Events API stream captured live during that month <em>will disagree</em> — and the backfill is the lossy one. Neither is wrong; they answer different questions. Anything about how communication unfolded needs the live stream captured at the time, which cannot be reconstructed later. Two clocks matter: <code>ts</code> (when posted) and <code>edited.ts</code> (when last altered).</div>
+
+<p class="payload-note"><strong>What a backfill actually observes.</strong> Two independent truncations stack. The bar outline is the message history that exists; solid fill is what the bot can reach; the red region is additionally lost to plan retention.</p>
+<canvas id="coverageChart" height="430"></canvas>
+
+<div class="key-point"><strong>Bot-membership coverage is informative missingness, not random.</strong> Bots get invited to the channels people care about — incidents, releases, active projects — and reach quiet channels late or never. So observed coverage <em>correlates with the activity being measured</em>. Every unadjusted aggregate is then biased toward high-traffic collaboration: "message volume per team" is partly a measure of how early that team adopted the bot. Store the bot's join timestamp per channel and treat the observable window as a per-channel property, not a workspace constant.</div>
+
+<div class="key-point"><strong>Retention truncation is left-censoring.</strong> On plans that cap history, older messages are unavailable rather than absent — you know activity occurred, you cannot see it. Its two failure modes: a workspace's apparent history begins at the retention boundary regardless of its real age, so <em>tenure and lifecycle analysis is meaningless</em> without accounting for it; and the boundary <strong>moves forward with wall-clock time</strong>, so re-running the same extraction later returns <em>less</em> history, making the query non-reproducible unless results are warehoused on first pull. A backfill attempted after the fact cannot recover what has aged out.</div>
+
+<p class="payload-note"><strong>Bot-authored messages inflate volume.</strong> <code>subtype: "bot_message"</code> rows are alerts and integrations, not human communication. Channels differ enormously in bot share, so counting messages without splitting on <code>bot_id</code> measures monitoring noise as collaboration — and the noisiest channels are usually the ones a bot joined first.</p>
+
+</td>
+</tr>
+</table>
+
+<script>
+(function() {
+    const canvas = document.getElementById('coverageChart');
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const H = 430;
+
+    // ILLUSTRATIVE. Channels ordered by activity, descending. Bot tenure falls
+    // with activity because that is the real adoption pattern: busy channels get
+    // the integration first. That correlation is the whole point of the chart.
+    const SPAN = 20;              // months of x-axis, oldest at left
+    const RETAIN = 3;             // months of history retained on a capped plan
+    const channels = [
+        { name: '#incidents',      created: 19.0, botJoin: 16.4, perDay: 240 },
+        { name: '#deploys',        created: 18.2, botJoin: 15.1, perDay: 181 },
+        { name: '#eng-general',    created: 19.5, botJoin: 12.8, perDay: 96  },
+        { name: '#platform-team',  created: 16.0, botJoin: 9.2,  perDay: 61  },
+        { name: '#data-pipeline',  created: 14.1, botJoin: 6.0,  perDay: 34  },
+        { name: '#design-review',  created: 12.4, botJoin: 3.7,  perDay: 18  },
+        { name: '#hiring-loop',    created: 11.0, botJoin: 1.9,  perDay: 9   },
+        { name: '#office-social',  created: 8.6,  botJoin: 0.7,  perDay: 4   },
+        { name: '#archive-2024',   created: 19.8, botJoin: null, perDay: 2   }
+    ];
+
+    function draw() {
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * dpr;
+        canvas.height = H * dpr;
+        canvas.style.height = H + 'px';
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        const W = rect.width;
+        ctx.clearRect(0, 0, W, H);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, W, H);
+
+        const padL = Math.min(126, W * 0.24);
+        const padR = 58;
+        const padT = 78;
+        const padB = 62;
+        const plotW = W - padL - padR;
+        const plotH = H - padT - padB;
+        const rowH = plotH / channels.length;
+        const barH = Math.min(rowH - 7, 17);
+
+        // months-ago -> x  (SPAN ago at left, now at right)
+        const xOf = m => padL + ((SPAN - m) / SPAN) * plotW;
+
+        // ---- title + illustrative caption ----
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText('Observable message history per channel: two truncations, stacked', 4, 17);
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'italic 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillText('ILLUSTRATIVE, not measured. Channels ordered by activity — note coverage falls with it.', 4, 32);
+
+        // ---- retention region ----
+        const cut = xOf(RETAIN);
+        ctx.fillStyle = 'rgba(231,76,60,0.07)';
+        ctx.fillRect(padL, padT, cut - padL, plotH);
+        ctx.save();
+        ctx.setLineDash([5, 4]);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(Math.round(cut) + 0.5, padT - 12);
+        ctx.lineTo(Math.round(cut) + 0.5, padT + plotH);
+        ctx.stroke();
+        ctx.restore();
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText('capped plan: history truncated here →', cut - 6, padT - 16);
+        ctx.textAlign = 'left';
+        ctx.font = 'italic 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillText('boundary moves right over time', cut + 6, padT - 16);
+
+        // ---- column heads ----
+        ctx.fillStyle = '#555';
+        ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText('msg/day', padL - 8, padT - 8);
+        ctx.textAlign = 'left';
+        ctx.fillText('reachable', padL + plotW + 8, padT - 8);
+
+        ctx.textBaseline = 'middle';
+        channels.forEach(function(c, i) {
+            const cy = padT + rowH * (i + 0.5);
+            const yTop = cy - barH / 2;
+
+            if (i % 2 === 1) {
+                ctx.fillStyle = 'rgba(26,82,118,0.035)';
+                ctx.fillRect(padL, padT + rowH * i, plotW, rowH);
+            }
+
+            // full history that exists
+            const xC = xOf(c.created);
+            ctx.save();
+            ctx.setLineDash([3, 3]);
+            ctx.strokeStyle = '#aaa';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(Math.round(xC) + 0.5, Math.round(yTop) + 0.5,
+                           Math.round(xOf(0) - xC), Math.round(barH));
+            ctx.restore();
+
+            // bot-reachable window
+            let reach = 0;
+            if (c.botJoin !== null) {
+                const xB = xOf(c.botJoin);
+                ctx.fillStyle = 'rgba(26,82,118,0.35)';
+                ctx.fillRect(xB, yTop, xOf(0) - xB, barH);
+                ctx.strokeStyle = '#1a5276';
+                ctx.lineWidth = 0.9;
+                ctx.strokeRect(Math.round(xB) + 0.5, Math.round(yTop) + 0.5,
+                               Math.round(xOf(0) - xB), Math.round(barH));
+
+                // portion additionally lost to retention
+                if (c.botJoin > RETAIN) {
+                    ctx.fillStyle = 'rgba(231,76,60,0.42)';
+                    ctx.fillRect(xB, yTop, cut - xB, barH);
+                }
+
+                // bot-join marker
+                ctx.fillStyle = '#e67e22';
+                ctx.beginPath();
+                ctx.moveTo(xB, yTop - 3);
+                ctx.lineTo(xB - 3.4, yTop - 8.5);
+                ctx.lineTo(xB + 3.4, yTop - 8.5);
+                ctx.closePath();
+                ctx.fill();
+
+                reach = (c.botJoin / c.created) * 100;
+            }
+
+            // channel label
+            ctx.font = '11px ui-monospace, Menlo, monospace';
+            ctx.fillStyle = c.botJoin === null ? '#e74c3c' : '#2c3e50';
+            ctx.textAlign = 'right';
+            ctx.fillText(c.name, padL - 52, cy);
+
+            // activity
+            ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.fillStyle = '#777';
+            ctx.fillText(String(c.perDay), padL - 8, cy);
+
+            // reachable share
+            ctx.textAlign = 'left';
+            ctx.font = 'bold 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            if (c.botJoin === null) {
+                ctx.fillStyle = '#e74c3c';
+                ctx.fillText('0%', padL + plotW + 8, cy);
+            } else {
+                ctx.fillStyle = reach > 60 ? '#1a5276' : '#e67e22';
+                ctx.fillText(Math.round(reach) + '%', padL + plotW + 8, cy);
+            }
+        });
+        ctx.textBaseline = 'alphabetic';
+
+        // ---- axes ----
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(Math.round(padL) + 0.5, padT);
+        ctx.lineTo(Math.round(padL) + 0.5, padT + plotH);
+        ctx.lineTo(Math.round(padL + plotW) + 0.5, padT + plotH);
+        ctx.stroke();
+
+        ctx.fillStyle = '#666';
+        ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'center';
+        for (let m = SPAN; m >= 0; m -= 4) {
+            ctx.fillText(m === 0 ? 'now' : m + 'mo ago', xOf(m), padT + plotH + 15);
+        }
+        ctx.fillText('time →', padL + plotW / 2, padT + plotH + 31);
+
+        // ---- legend ----
+        ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'left';
+        let lx = padL;
+        const ly = H - 16;
+
+        ctx.save();
+        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = '#aaa';
+        ctx.strokeRect(lx + 0.5, ly - 5.5, 17, 11);
+        ctx.restore();
+        ctx.fillStyle = '#666';
+        ctx.fillText('history that exists', lx + 23, ly);
+        lx += 23 + ctx.measureText('history that exists').width + 20;
+
+        ctx.fillStyle = 'rgba(26,82,118,0.35)';
+        ctx.fillRect(lx, ly - 5.5, 17, 11);
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 0.9;
+        ctx.strokeRect(lx + 0.5, ly - 5.5, 17, 11);
+        ctx.fillStyle = '#666';
+        ctx.fillText('bot can reach', lx + 23, ly);
+        lx += 23 + ctx.measureText('bot can reach').width + 20;
+
+        ctx.fillStyle = 'rgba(231,76,60,0.42)';
+        ctx.fillRect(lx, ly - 5.5, 17, 11);
+        ctx.fillStyle = '#666';
+        ctx.fillText('lost to retention', lx + 23, ly);
+        lx += 23 + ctx.measureText('lost to retention').width + 20;
+
+        ctx.fillStyle = '#e67e22';
+        ctx.beginPath();
+        ctx.moveTo(lx + 8, ly - 5);
+        ctx.lineTo(lx + 3, ly + 3);
+        ctx.lineTo(lx + 13, ly + 3);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#666';
+        ctx.fillText('bot joined', lx + 20, ly);
+        ctx.textBaseline = 'alphabetic';
+    }
+
+    draw();
+    window.addEventListener('resize', draw);
+})();
+</script>
+
+</body>
+</html>

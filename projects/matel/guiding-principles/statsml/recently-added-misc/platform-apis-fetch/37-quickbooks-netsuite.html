@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuickBooks &amp; NetSuite — Platform APIs</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2c3e50; max-width: 100%; margin: 0; padding: 30px 40px; background: #fff; }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 14px; }
+        .verified { font-size: 0.8em; color: #888; border: 1px solid #ddd; display: inline-block; padding: 2px 10px; border-radius: 4px; margin-bottom: 18px; }
+        .status { display: inline-block; background: #e67e22; color: #fff; font-size: 0.75em; font-weight: bold; padding: 2px 10px; border-radius: 4px; vertical-align: middle; margin-left: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+        h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
+        .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
+        .section-label { font-weight: bold; color: #1a5276; margin-top: 16px; display: block; }
+        .section-label:first-child { margin-top: 0; }
+        .obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+        .obj-table td { vertical-align: top; padding: 16px; border: 1px solid #2980b9; }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; }
+        ul { padding-left: 20px; margin: 6px 0 10px; }
+        li { margin-bottom: 5px; font-size: 0.93em; }
+        p { font-size: 0.93em; margin: 6px 0; }
+        pre.payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 12px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 10px 0 16px; border-radius: 4px; text-align: left; }
+        .payload-note { font-size: 0.82em; color: #666; margin: 10px 0 -4px 0; font-style: italic; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        canvas { display: block; width: 100%; margin-top: 12px; }
+        table.cmp { width: 100%; font-size: 0.85em; border-collapse: collapse; margin-top: 10px; }
+        table.cmp td, table.cmp th { padding: 7px; border-bottom: 1px solid #eee; text-align: left; vertical-align: top; }
+        table.cmp th { font-weight: bold; color: #1a5276; border-bottom: 1px solid #ddd; }
+    </style>
+</head>
+<body>
+    <h1>QuickBooks &amp; NetSuite <span class="status">BACKLOG</span></h1>
+    <p class="subtitle">The general ledger as an API — invoices, bills, journal entries, chart of accounts, and vendors in QuickBooks Online; SuiteQL, REST records, and saved searches in NetSuite.</p>
+    <span class="verified">Last verified: August 2026</span>
+
+    <h2>Overview</h2>
+    <table class="obj-table">
+        <tr>
+            <td>
+                <span class="section-label">What It Provides</span>
+                <p>Both systems expose the accounting record itself, which makes them qualitatively different from a payments or commerce API. Stripe tells you money moved; the ledger tells you how the business decided to classify that movement. The classification is the point — and it is periodically restated.</p>
+                <p><strong>QuickBooks Online (QBO)</strong> — transaction entities and name-list entities:</p>
+                <ul>
+                    <li><strong>Invoice, Bill, Payment, BillPayment, CreditMemo</strong> — AR and AP transactions with line detail.</li>
+                    <li><strong>JournalEntry</strong> — direct debit/credit lines, the manual-adjustment path.</li>
+                    <li><strong>Account</strong> — the chart of accounts, with <code>AccountType</code>, <code>AccountSubType</code>, and <code>Classification</code>.</li>
+                    <li><strong>Vendor, Customer, Item, Employee</strong> — name lists.</li>
+                    <li><strong>Reports API</strong> — pre-built P&amp;L, Balance Sheet, Trial Balance, AR/AP Aging, as QuickBooks itself computes them.</li>
+                </ul>
+                <p><strong>NetSuite</strong> — the record catalogue is far larger and configurable. Access is through:</p>
+                <ul>
+                    <li><strong>SuiteQL</strong> — SQL-92-style queries over NetSuite tables (<code>transaction</code>, <code>transactionline</code>, <code>account</code>, <code>customer</code>, <code>entity</code>), with joins. This is the analytical interface.</li>
+                    <li><strong>REST Record Service</strong> — CRUD on individual records with a metadata catalog.</li>
+                    <li><strong>Saved Searches</strong> — searches defined in the UI, invokable programmatically. Business logic lives in the saved search, not in your code.</li>
+                    <li><strong>SuiteScript / RESTlets</strong> — custom server-side endpoints when the standard surface is insufficient.</li>
+                    <li><strong>SOAP SuiteTalk</strong> — the older, still-supported interface with richer write semantics for some records.</li>
+                </ul>
+
+                <span class="section-label">Authentication &amp; Scopes</span>
+                <ul>
+                    <li><strong>QBO</strong> — OAuth 2.0 with the <code>com.intuit.quickbooks.accounting</code> scope. Access tokens are short-lived (about an hour); the refresh token is long-lived but <em>rotates on use</em> and expires after prolonged inactivity. You must persist each new refresh token, or the connection dies silently.</li>
+                    <li><strong>QBO realm</strong> — every request is scoped to a <code>realmId</code>, i.e. one company file. Multi-entity groups mean one connection per entity and no cross-entity query.</li>
+                    <li><strong>NetSuite</strong> — Token-Based Authentication (OAuth 1.0a signatures) or OAuth 2.0, scoped to a role. The <em>role's</em> permissions determine what your query can see, so the same SuiteQL run under two integration roles returns different rows without erroring.</li>
+                    <li><strong>NetSuite account IDs</strong> appear in the hostname (<code>&lt;account&gt;.suitetalk.api.netsuite.com</code>), and sandbox accounts have a distinct ID suffix.</li>
+                </ul>
+                <div class="key-point">NetSuite's row-level security is applied silently. A pipeline that returns fewer rows after a permissions change looks exactly like a pipeline reporting a genuine business decline. Reconcile row counts against a known total, and record which role produced each extract.</div>
+
+                <span class="section-label">Granularity</span>
+                <p>QBO: header plus <code>Line[]</code> array, each line carrying an account or item reference and amount. NetSuite: <code>transaction</code> header joined to <code>transactionline</code>, where the line is the ledger-posting grain — and where NetSuite adds its own system-generated lines that are not user-entered.</p>
+
+                <span class="section-label">Key Endpoints</span>
+                <ul>
+                    <li>QBO query: <code>GET /v3/company/{realmId}/query?query=SELECT * FROM Invoice WHERE ...</code> — a SQL-like dialect, deliberately limited: no JOINs, no aggregates, no subqueries.</li>
+                    <li>QBO CDC: <code>GET /v3/company/{realmId}/cdc?entities=Invoice,Bill&amp;changedSince=...</code> — returns entities changed since a timestamp, including deletions. This is the incremental-sync mechanism.</li>
+                    <li>QBO reports: <code>GET /v3/company/{realmId}/reports/ProfitAndLoss?start_date=...</code></li>
+                    <li>NetSuite SuiteQL: <code>POST /services/rest/query/v1/suiteql</code> with <code>Prefer: transient</code> header.</li>
+                    <li>NetSuite records: <code>GET /services/rest/record/v1/salesOrder/{id}</code></li>
+                </ul>
+
+                <span class="section-label">Rate Limits</span>
+                <p>QBO enforces a per-realm request rate and a lower per-app concurrency ceiling; the practical constraint is that batch and query endpoints cap returned rows (commonly 1,000 with pagination via <code>STARTPOSITION</code>/<code>MAXRESULTS</code>), so large extracts are many sequential calls against a modest rate. NetSuite governs by <em>concurrency</em>, not requests-per-second: an account has a limited number of simultaneous integration requests, determined by its service tier and any SuiteCloud Plus licences, and exceeding it returns a concurrency error rather than a rate-limit error. NetSuite also applies SuiteScript governance units to RESTlets, so an expensive script fails on units even when concurrency is fine.</p>
+                <p>Exact ceilings on both platforms are tier-dependent and revised over time, so treat them as configuration read from the response headers at runtime rather than constants compiled into a client.</p>
+                <div class="key-point">These are different failure modes and need different client designs. QBO wants a slow serial loop with backoff. NetSuite wants a bounded worker pool — adding parallelism there does not speed you up, it starts failing other integrations sharing the same concurrency budget.</div>
+
+                <span class="section-label">Business Scenarios</span>
+                <ul>
+                    <li><strong>Financial reporting automation</strong> — nightly P&amp;L and balance sheet extraction into a warehouse.</li>
+                    <li><strong>Revenue and spend reconciliation</strong> — tying commerce or payment data to what was actually booked.</li>
+                    <li><strong>AP/AR aging and DSO</strong> — collections analytics from invoice dates, due dates, and payment application.</li>
+                    <li><strong>Spend-by-vendor and category analysis</strong> — bills and expense lines rolled up by GL account.</li>
+                    <li><strong>Multi-entity consolidation</strong> — one QBO connection per entity, or NetSuite subsidiaries in one account.</li>
+                    <li><strong>Audit support</strong> — journal entries with who posted them and when.</li>
+                </ul>
+
+                <span class="section-label">Key Restrictions &amp; Gotchas</span>
+                <ul>
+                    <li><strong>The ledger is mutable and gets restated.</strong> Accountants reclassify, void, and adjust prior periods, often weeks after close. An extract of "March" taken in April and one taken in July will differ, legitimately. Version your extracts by as-of date or you will be unable to explain why last quarter's numbers changed.</li>
+                    <li><strong>Period close is a data event with no API flag.</strong> QBO has a closing date; NetSuite has period status. Neither surfaces prominently in transaction payloads. Data before the close date should be considered final; after it, provisional. Most pipelines ignore this distinction entirely.</li>
+                    <li><strong>QBO deletions are only visible through CDC.</strong> A plain query cannot tell you an invoice you ingested yesterday has been deleted — it simply is not in the result set, which is indistinguishable from a filter mismatch. Voided transactions, by contrast, persist with zeroed amounts.</li>
+                    <li><strong>QBO query has no JOIN and no aggregation.</strong> You cannot ask for revenue by account; you pull lines and aggregate yourself. This is the single biggest surprise for anyone expecting SQL.</li>
+                    <li><strong>QBO does not expose a general audit-history endpoint.</strong> The Audit Log exists in the UI. Objects carry <code>MetaData.CreateTime</code> and <code>LastUpdatedTime</code> — a last-write timestamp, not a change history. You can see that an invoice changed; you cannot see what it changed from.</li>
+                    <li><strong>NetSuite custom fields are account-specific.</strong> <code>custbody_*</code> and <code>custcol_*</code> names differ per customer implementation, so nothing built against them is portable, and the metadata catalog must be read, not assumed.</li>
+                    <li><strong>NetSuite saved searches embed logic outside your repository.</strong> Someone editing a saved search in the UI changes your pipeline's semantics with no code change and no deploy.</li>
+                    <li><strong>SuiteQL's dialect is not standard SQL.</strong> Function support is partial, and the underlying table shapes are not the documented record shapes — <code>transaction</code>/<code>transactionline</code> in SuiteQL do not map one-to-one onto the REST record model.</li>
+                    <li><strong>Currency and subsidiary.</strong> NetSuite amounts exist in both transaction and base currency; picking the wrong one in a consolidated report is a common and quiet error.</li>
+                </ul>
+                <div class="key-point">Neither system gives you field-level change history as a first-class query. This is the mirror image of Stripe's event log: you get authoritative current state and a last-modified stamp, but reconstructing how a figure evolved requires that you snapshot it yourself on a schedule. If "why did last quarter move?" is a question anyone will ask, the answer must be built into your ingestion from day one — it cannot be recovered later from the API.</div>
+            </td>
+            <td>
+                <p class="payload-note">QBO — GET /v3/company/{realmId}/query?query=SELECT * FROM Invoice</p>
+<pre class="payload">{
+  "QueryResponse": {
+    "Invoice": [
+      {
+        "Id": "1047",
+        "SyncToken": "3",
+        "DocNumber": "1047",
+        "TxnDate": "2026-07-28",
+        "DueDate": "2026-08-27",
+        "CurrencyRef": { "value": "USD", "name": "United States Dollar" },
+        "CustomerRef": { "value": "58", "name": "Northwind Retail Ltd" },
+        "TotalAmt": 4820.00,
+        "Balance": 1820.00,
+        "TxnTaxDetail": { "TotalTax": 320.00 },
+        "Line": [
+          {
+            "Id": "1",
+            "LineNum": 1,
+            "DetailType": "SalesItemLineDetail",
+            "Amount": 4500.00,
+            "Description": "Annual platform licence",
+            "SalesItemLineDetail": {
+              "ItemRef": { "value": "19", "name": "Licence:Platform" },
+              "Qty": 1,
+              "UnitPrice": 4500.00,
+              "TaxCodeRef": { "value": "TAX" }
+            }
+          },
+          {
+            "DetailType": "SubTotalLineDetail",
+            "Amount": 4500.00,
+            "SubTotalLineDetail": {}
+          }
+        ],
+        "LinkedTxn": [
+          { "TxnId": "1112", "TxnType": "Payment" }
+        ],
+        "MetaData": {
+          "CreateTime": "2026-07-28T09:14:02-07:00",
+          "LastUpdatedTime": "2026-08-11T16:40:55-07:00"
+        }
+      }
+    ],
+    "startPosition": 1,
+    "maxResults": 1,
+    "totalCount": 1
+  },
+  "time": "2026-08-22T10:02:11.482-07:00"
+}</pre>
+                <p class="payload-note"><code>SyncToken: "3"</code> means this invoice has been edited three times since creation. The API tells you it changed; it does not tell you what the earlier values were.</p>
+
+                <p class="payload-note">NetSuite — POST /services/rest/query/v1/suiteql</p>
+<pre class="payload">{
+  "q": "SELECT t.tranid, t.trandate, t.type, t.status,
+               tl.id AS line_id, tl.debitforeignamount,
+               tl.creditforeignamount, a.acctnumber, a.accountsearchdisplayname
+        FROM transaction t
+          JOIN transactionline tl ON tl.transaction = t.id
+          JOIN account a ON a.id = tl.expenseaccount
+        WHERE t.trandate BETWEEN TO_DATE('2026-07-01','YYYY-MM-DD')
+                             AND TO_DATE('2026-07-31','YYYY-MM-DD')
+          AND t.posting = 'T'
+        ORDER BY t.trandate"
+}</pre>
+<pre class="payload">{
+  "links": [ { "rel": "self",
+    "href": ".../query/v1/suiteql?limit=1000&amp;offset=0" } ],
+  "count": 1000,
+  "hasMore": true,
+  "offset": 0,
+  "totalResults": 8842,
+  "items": [
+    {
+      "tranid": "JE00021884",
+      "trandate": "2026-07-31",
+      "type": "Journal",
+      "status": null,
+      "line_id": "1",
+      "debitforeignamount": "12400.00",
+      "creditforeignamount": null,
+      "acctnumber": "6120",
+      "accountsearchdisplayname": "6120 Professional Fees"
+    }
+  ]
+}</pre>
+                <p class="payload-note"><code>t.posting = 'T'</code> matters: omit it and you pull non-posting transactions such as sales orders and estimates into a ledger extract, inflating every total.</p>
+
+                <canvas id="restateChart" height="380"></canvas>
+            </td>
+        </tr>
+    </table>
+
+    <h2>QuickBooks Online vs NetSuite — Extraction Comparison</h2>
+    <table class="obj-table">
+        <tr>
+            <td colspan="2" style="width:100%;">
+                <table class="cmp">
+                    <tr>
+                        <th style="width:22%;">Dimension</th>
+                        <th style="width:39%;">QuickBooks Online</th>
+                        <th style="width:39%;">NetSuite</th>
+                    </tr>
+                    <tr>
+                        <td>Query language</td>
+                        <td>Restricted SQL-like dialect. No JOIN, no GROUP BY, no aggregate functions.</td>
+                        <td>SuiteQL — real joins, aggregates, subqueries over relational tables.</td>
+                    </tr>
+                    <tr>
+                        <td>Where aggregation happens</td>
+                        <td>In your code, after pulling all lines.</td>
+                        <td>In NetSuite, which is far cheaper for wide extracts.</td>
+                    </tr>
+                    <tr>
+                        <td>Incremental sync</td>
+                        <td>CDC endpoint by <code>changedSince</code>; includes deletions.</td>
+                        <td>Filter on <code>lastmodifieddate</code> in SuiteQL. Hard deletes are not reported.</td>
+                    </tr>
+                    <tr>
+                        <td>Throttling model</td>
+                        <td>Request rate per realm, plus row caps per page.</td>
+                        <td>Concurrent-request budget per account, plus SuiteScript governance units.</td>
+                    </tr>
+                    <tr>
+                        <td>Right client shape</td>
+                        <td>Serial loop, exponential backoff, resumable cursor.</td>
+                        <td>Bounded worker pool sized below the concurrency budget.</td>
+                    </tr>
+                    <tr>
+                        <td>Multi-entity</td>
+                        <td>One connection and one <code>realmId</code> per company. No cross-entity query.</td>
+                        <td>Subsidiaries within one account; consolidation is queryable, currency handling is on you.</td>
+                    </tr>
+                    <tr>
+                        <td>Schema stability</td>
+                        <td>Fixed entity set. Custom fields are limited and well-bounded.</td>
+                        <td>Per-account custom records and <code>custbody_*</code> fields. Read the metadata catalog; assume nothing.</td>
+                    </tr>
+                    <tr>
+                        <td>Pre-built reports</td>
+                        <td>Reports API returns QuickBooks' own P&amp;L / Balance Sheet computation.</td>
+                        <td>Saved searches; logic is owned by whoever edits them in the UI.</td>
+                    </tr>
+                    <tr>
+                        <td>Change history</td>
+                        <td>Not exposed. <code>SyncToken</code> and <code>LastUpdatedTime</code> only.</td>
+                        <td>System notes exist in the UI; not a convenient bulk query surface.</td>
+                    </tr>
+                    <tr>
+                        <td>Non-posting records</td>
+                        <td>Estimates and sales receipts are distinct entities you must choose to include.</td>
+                        <td>Everything lives in <code>transaction</code>; you must filter <code>posting = 'T'</code> explicitly.</td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+
+    <script>
+    (function() {
+        const canvas = document.getElementById('restateChart');
+        const ctx = canvas.getContext('2d');
+        const dpr = window.devicePixelRatio || 1;
+
+        function draw() {
+            const rect = canvas.getBoundingClientRect();
+            const W = rect.width;
+            const H = 380;
+            canvas.width = W * dpr;
+            canvas.height = H * dpr;
+            canvas.style.height = H + 'px';
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.scale(dpr, dpr);
+            ctx.clearRect(0, 0, W, H);
+
+            ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+            ctx.fillStyle = '#1a5276';
+            ctx.textAlign = 'center';
+            ctx.fillText('Same accounting period, re-extracted at four as-of dates', W / 2, 22);
+            ctx.font = 'italic 10px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+            ctx.fillStyle = '#888';
+            ctx.fillText('Illustrative. July revenue as reported by the ledger, queried on four different days.', W / 2, 40);
+
+            const marginTop = 62;
+            const marginBottom = 92;
+            const marginLeft = 66;
+            const marginRight = 26;
+            const chartW = W - marginLeft - marginRight;
+            const chartH = H - marginTop - marginBottom;
+
+            const pts = [
+                { label: 'Aug 1',  v: 1.842, note: 'pre-close' },
+                { label: 'Aug 12', v: 1.918, note: 'accruals posted' },
+                { label: 'Sep 3',  v: 1.887, note: 'reclass + credit memo' },
+                { label: 'Nov 15', v: 1.891, note: 'audit adjustment' }
+            ];
+            const yMin = 1.78, yMax = 1.96;
+
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+            ctx.textAlign = 'right';
+            for (let t = 0; t <= 6; t++) {
+                const v = yMin + (yMax - yMin) * (t / 6);
+                const y = marginTop + chartH - ((v - yMin) / (yMax - yMin)) * chartH;
+                ctx.fillStyle = '#666';
+                ctx.fillText('$' + v.toFixed(2) + 'M', marginLeft - 8, y + 4);
+                ctx.beginPath();
+                ctx.strokeStyle = '#eee';
+                ctx.lineWidth = 1;
+                ctx.moveTo(marginLeft, y);
+                ctx.lineTo(W - marginRight, y);
+                ctx.stroke();
+            }
+
+            ctx.beginPath();
+            ctx.strokeStyle = '#999';
+            ctx.moveTo(marginLeft, marginTop + chartH);
+            ctx.lineTo(W - marginRight, marginTop + chartH);
+            ctx.stroke();
+
+            function X(i) { return marginLeft + (chartW / pts.length) * (i + 0.5); }
+            function Y(v) { return marginTop + chartH - ((v - yMin) / (yMax - yMin)) * chartH; }
+
+            // reference line at the first reading
+            ctx.strokeStyle = 'rgba(26,82,118,0.35)';
+            ctx.lineWidth = 1.4;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.moveTo(marginLeft, Y(pts[0].v));
+            ctx.lineTo(W - marginRight, Y(pts[0].v));
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // line
+            ctx.strokeStyle = '#1a5276';
+            ctx.lineWidth = 2.2;
+            ctx.beginPath();
+            for (let i = 0; i < pts.length; i++) {
+                if (i === 0) ctx.moveTo(X(i), Y(pts[i].v));
+                else ctx.lineTo(X(i), Y(pts[i].v));
+            }
+            ctx.stroke();
+
+            const colors = ['#1a5276', '#27ae60', '#e67e22', '#8e44ad'];
+            for (let i = 0; i < pts.length; i++) {
+                ctx.fillStyle = colors[i];
+                ctx.beginPath();
+                ctx.arc(X(i), Y(pts[i].v), 6, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+                ctx.fillStyle = '#2c3e50';
+                ctx.textAlign = 'center';
+                ctx.fillText('$' + pts[i].v.toFixed(3) + 'M', X(i), Y(pts[i].v) - 14);
+
+                ctx.font = '11px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+                ctx.fillText(pts[i].label, X(i), marginTop + chartH + 18);
+
+                ctx.font = 'italic 9.5px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+                ctx.fillStyle = '#888';
+                ctx.fillText(pts[i].note, X(i), marginTop + chartH + 33);
+            }
+
+            const spread = ((pts[1].v - pts[0].v) / pts[0].v) * 100;
+            ctx.font = 'italic 10px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+            ctx.fillStyle = '#e74c3c';
+            ctx.textAlign = 'left';
+            ctx.fillText('+' + spread.toFixed(1) + '% between the first two reads — no bug, just close', marginLeft + 4, Y(pts[0].v) - 6);
+
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+            ctx.fillStyle = '#666';
+            ctx.textAlign = 'left';
+            ctx.fillText('None of these readings is wrong. An extract without an as-of date is', marginLeft, H - 38);
+            ctx.fillText('unfalsifiable — you cannot tell restatement from an ingestion defect.', marginLeft, H - 22);
+        }
+
+        draw();
+        window.addEventListener('resize', draw);
+    })();
+    </script>
+</body>
+</html>

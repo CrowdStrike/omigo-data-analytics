@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geolocation from Photo Context Clues</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2c3e50; max-width: 100%; margin: 0; padding: 30px 40px; background: #fff; }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+        .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
+        .obj-table { width: 100%; border-collapse: collapse; }
+        .obj-table td { vertical-align: top; padding: 16px; border: 1px solid #2980b9; }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; text-align: center; }
+        ul { padding-left: 20px; margin: 8px 0; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        canvas { display: block; margin: 0 auto; }
+    </style>
+</head>
+<body>
+    <h1>Geolocation from Photo Context Clues</h1>
+    <p class="subtitle">Extracting geospatial signal from unstructured visual data — a pure inference problem where every pixel encodes location constraints.</p>
+
+    <table class="obj-table">
+        <tr>
+            <td>
+                <div class="obj-title">What is it?</div>
+                <p>Determining where a photo was taken using only what is visible in the image — no EXIF metadata, no GPS tag, no filename hints. Every element encodes geography: sun angle constrains latitude, vegetation narrows climate zone, architecture pins country, and signage identifies city.</p>
+                <p>It works by elimination. Each visual clue rules out large swathes of the globe. Stack enough of them and the candidate region shrinks from "anywhere on Earth" to a neighbourhood.</p>
+                <div class="key-point">This is also a privacy problem. Stripping EXIF from a photo removes the easy answer — it does not remove the hard answer. A trained analyst (or model) can still geolocate from what the image shows.</div>
+            </td>
+            <td><canvas id="c1" width="720" height="240"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">What signals are available?</div>
+                <ul>
+                    <li><strong>Sun & shadows:</strong> Shadow direction → compass bearing. Shadow length → sun elevation → latitude band (given date). Combined → specific latitude window.</li>
+                    <li><strong>Sky & atmosphere:</strong> Haze, cloud type, light colour temperature. Coastal, desert, and high-altitude skies look different.</li>
+                    <li><strong>Vegetation:</strong> Grass species, tree shape, leaf type, seasonal state. Brown grass = dry climate or dormant winter. Palm trees ≠ birch trees.</li>
+                    <li><strong>Architecture:</strong> Roof pitch, building material, window style, power line design, road markings, curb shape. Strong regional fingerprint.</li>
+                    <li><strong>Signage & text:</strong> Script family, font style, traffic sign convention, commercial branding. Even partial text constrains language.</li>
+                    <li><strong>Terrain:</strong> Rock colour, soil type, mountain profile, coastline shape. Red laterite soil is not gray glacial clay.</li>
+                    <li><strong>Star placement:</strong> The visible star field is a unique fingerprint for latitude + date + time. Polaris altitude = latitude. Constellation rotation encodes time of year. A clear night sky is one of the strongest single-image signals available.</li>
+                </ul>
+                <div class="key-point">No single signal is precise. Sun angle alone gives a latitude band thousands of kilometres wide. But signals are largely independent, so their intersection is much smaller than any one constraint.</div>
+            </td>
+            <td><canvas id="c2" width="720" height="240"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">How does narrowing work?</div>
+                <p>Each clue rules out places that don't match. The answer is whatever geography survives all the filters at once.</p>
+                <p><strong>Signal 1 (sun angle):</strong> Eliminates wrong hemisphere, narrows to ±15° latitude band.</p>
+                <p><strong>+ Signal 2 (vegetation):</strong> Eliminates wrong climate zones within that band. Desert vs. temperate vs. tropical.</p>
+                <p><strong>+ Signal 3 (architecture):</strong> Narrows to a country or small group of countries.</p>
+                <p><strong>+ Signal 4 (signage):</strong> Pins to a language region, often a single country.</p>
+                <p><strong>+ Signal 5 (star field):</strong> Visible constellations + their rotation angle encode latitude and date/time. Among the tightest single-image constraints.</p>
+                <p><strong>+ Signal 6 (specific landmarks):</strong> If visible, resolves to a city or street.</p>
+                <div class="key-point">This is constraint satisfaction, not pattern matching. Each signal is a filter. The answer is what survives all filters — not what matches one filter best.</div>
+            </td>
+            <td><canvas id="c3" width="720" height="240"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">Resolution limits & failure modes</div>
+                <p>Best case (rich urban scene with signage): street-level. Worst case (featureless desert or ocean): hemisphere only.</p>
+                <p><strong>Common failures:</strong></p>
+                <ul>
+                    <li>Signals conflict — vegetation says tropics, architecture says temperate (greenhouse, transplanted species)</li>
+                    <li>Globalised infrastructure — same road markings used in multiple countries</li>
+                    <li>Indoor photos — almost no geospatial signal unless window view or unique object visible</li>
+                    <li>Overconfidence — mistaking "consistent with" for "uniquely identifies"</li>
+                </ul>
+                <div class="key-point">Applications: GeoGuessr competitive play, OSINT investigations, journalism source verification, missing persons cases, wildlife photo provenance. The same skill that makes a game entertaining also makes "anonymous" photo sharing less anonymous than assumed.</div>
+            </td>
+            <td><canvas id="c4" width="720" height="240"></canvas></td>
+        </tr>
+    </table>
+
+    <script>
+    const dpr = window.devicePixelRatio || 1;
+    function setupCanvas(id) {
+        const c = document.getElementById(id);
+        const w = 720, h = 240;
+        c.width = w * dpr; c.height = h * dpr;
+        c.style.width = w + 'px'; c.style.height = h + 'px';
+        const ctx = c.getContext('2d');
+        ctx.scale(dpr, dpr);
+        return { ctx, w, h };
+    }
+
+    // C1: Photo with annotated clue regions
+    (function() {
+        const { ctx, w, h } = setupCanvas('c1');
+
+        // Draw a schematic "photo frame"
+        ctx.fillStyle = '#eee';
+        ctx.fillRect(60, 15, 600, 210);
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(60, 15, 600, 210);
+
+        // Sky region — dark gradient for night sky portion
+        ctx.fillStyle = 'rgba(135,206,235,0.4)';
+        ctx.fillRect(62, 17, 596, 70);
+        // Night sky corner for stars
+        ctx.fillStyle = 'rgba(20,30,60,0.7)';
+        ctx.fillRect(62, 17, 180, 70);
+
+        // Stars (constellation pattern)
+        ctx.fillStyle = '#fff';
+        const stars = [[85,30],[100,50],[120,35],[140,55],[110,65],[150,28],[170,45],[130,22],[95,42]];
+        stars.forEach(([sx,sy]) => {
+            ctx.beginPath();
+            ctx.arc(sx, sy, 2, 0, Math.PI * 2);
+            ctx.fill();
+        });
+        // Connect a few to suggest constellation
+        ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(85,30); ctx.lineTo(120,35); ctx.lineTo(140,55); ctx.lineTo(100,50); ctx.lineTo(85,30);
+        ctx.stroke();
+
+        // Sun
+        ctx.fillStyle = '#e67e22';
+        ctx.beginPath();
+        ctx.arc(520, 50, 20, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Shadow lines from a pole
+        ctx.strokeStyle = '#555';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(350, 200);
+        ctx.lineTo(350, 120);
+        ctx.stroke();
+        // Shadow
+        ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(350, 200);
+        ctx.lineTo(280, 210);
+        ctx.stroke();
+
+        // Vegetation zone (green area)
+        ctx.fillStyle = 'rgba(39,174,96,0.3)';
+        ctx.fillRect(62, 150, 200, 73);
+
+        // Building shapes
+        ctx.fillStyle = 'rgba(26,82,118,0.2)';
+        ctx.fillRect(420, 90, 80, 130);
+        ctx.fillRect(520, 110, 60, 110);
+
+        // Sign
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(150, 100, 60, 30);
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(150, 100, 60, 30);
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 10px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('R. 25', 180, 118);
+
+        // Annotation callouts
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+
+        // Sun callout
+        ctx.fillStyle = '#e67e22';
+        ctx.fillText('☀ Sun angle → latitude', 545, 45);
+
+        // Sky callout
+        ctx.fillStyle = '#1a5276';
+        ctx.fillText('Sky haze → altitude/coast', 250, 80);
+
+        // Star callout
+        ctx.fillStyle = '#fff';
+        ctx.fillText('★ Stars → lat + time', 65, 80);
+
+        // Vegetation callout
+        ctx.fillStyle = '#27ae60';
+        ctx.fillText('Vegetation → climate zone', 65, 147);
+
+        // Architecture callout
+        ctx.fillStyle = '#1a5276';
+        ctx.fillText('Buildings → country', 420, 85);
+
+        // Shadow callout
+        ctx.fillStyle = '#666';
+        ctx.fillText('Shadow → time + bearing', 260, 220);
+
+        // Sign callout
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillText('Sign → language/region', 135, 140);
+    })();
+
+    // C2: Signal elimination power — how much each clue narrows the search
+    (function() {
+        const { ctx, w, h } = setupCanvas('c2');
+
+        const signals = [
+            { label: 'Star field', pct: 92, color: '#2c3e50' },
+            { label: 'Signage/text', pct: 95, color: '#e74c3c' },
+            { label: 'Architecture', pct: 90, color: '#1a5276' },
+            { label: 'Vegetation', pct: 82, color: '#27ae60' },
+            { label: 'Sun position', pct: 75, color: '#e67e22' },
+            { label: 'Terrain/soil', pct: 70, color: '#8e44ad' },
+            { label: 'Sky/atmosphere', pct: 60, color: '#2980b9' }
+        ];
+
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('% of Earth\'s surface eliminated by each signal (illustrative)', w / 2, 20);
+
+        const barH = 22;
+        const gap = 6;
+        const startY = 32;
+        const maxW = 380;
+        const labelW = 130;
+
+        signals.forEach((s, i) => {
+            const y = startY + i * (barH + gap);
+            const barW = (s.pct / 100) * maxW;
+
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = '13px -apple-system, sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText(s.label, labelW, y + 16);
+
+            // Bar background
+            ctx.fillStyle = '#f0f0f0';
+            ctx.fillRect(labelW + 15, y, maxW, barH);
+
+            // Bar fill
+            ctx.fillStyle = s.color;
+            ctx.globalAlpha = 0.6;
+            ctx.fillRect(labelW + 15, y, barW, barH);
+            ctx.globalAlpha = 1;
+
+            // Border
+            ctx.strokeStyle = s.color;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(labelW + 15, y, barW, barH);
+
+            // Percentage
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = 'bold 12px -apple-system, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(s.pct + '%', labelW + barW + 20, y + 16);
+        });
+
+        // Note
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.textAlign = 'center';
+        ctx.fillText('Each signal independently eliminates most of the planet', w / 2, h - 8);
+    })();
+
+    // C3: Funnel — posterior shrinking with each signal
+    (function() {
+        const { ctx, w, h } = setupCanvas('c3');
+
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Candidate region shrinks with each signal (illustrative)', w / 2, 18);
+
+        // Funnel stages — area in km² (log scale mapped to width)
+        const stages = [
+            { label: 'Start', area: '510M km²', width: 580 },
+            { label: '+Sun angle', area: '~85M km²', width: 400 },
+            { label: '+Vegetation', area: '~15M km²', width: 260 },
+            { label: '+Architecture', area: '~2M km²', width: 140 },
+            { label: '+Star field', area: '~200K km²', width: 80 },
+            { label: '+Signage', area: '~50K km²', width: 50 },
+            { label: '+Landmarks', area: '~5 km²', width: 12 }
+        ];
+
+        const stageH = 26;
+        const startY = 32;
+        const cx = w / 2;
+
+        stages.forEach((s, i) => {
+            const y = startY + i * (stageH + 3);
+            const halfW = s.width / 2;
+
+            // Gradient fill for funnel
+            const grad = ctx.createLinearGradient(cx - halfW, y, cx + halfW, y);
+            grad.addColorStop(0, 'rgba(26,82,118,0.15)');
+            grad.addColorStop(0.5, 'rgba(26,82,118,0.35)');
+            grad.addColorStop(1, 'rgba(26,82,118,0.15)');
+            ctx.fillStyle = grad;
+
+            ctx.beginPath();
+            ctx.moveTo(cx - halfW, y);
+            ctx.lineTo(cx + halfW, y);
+            ctx.lineTo(cx + halfW, y + stageH - 2);
+            ctx.lineTo(cx - halfW, y + stageH - 2);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.strokeStyle = '#1a5276';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            // Label left
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = '12px -apple-system, sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText(s.label, cx - halfW - 10, y + 18);
+
+            // Area right
+            ctx.textAlign = 'left';
+            ctx.fillStyle = '#666';
+            ctx.fillText(s.area, cx + halfW + 10, y + 18);
+        });
+
+        // Arrow on right side
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(cx + 310, startY + 10);
+        ctx.lineTo(cx + 310, startY + stages.length * (stageH + 3) - 10);
+        ctx.stroke();
+        ctx.fillStyle = '#e74c3c';
+        ctx.beginPath();
+        ctx.moveTo(cx + 305, startY + stages.length * (stageH + 3) - 10);
+        ctx.lineTo(cx + 310, startY + stages.length * (stageH + 3));
+        ctx.lineTo(cx + 315, startY + stages.length * (stageH + 3) - 10);
+        ctx.fill();
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('narrowing', cx + 310, startY + stages.length * (stageH + 3) + 14);
+    })();
+
+    // C4: Resolution achievable vs signal richness
+    (function() {
+        const { ctx, w, h } = setupCanvas('c4');
+
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Resolution achievable by scene type (illustrative)', w / 2, 18);
+
+        // Horizontal scale
+        const scaleY = 60;
+        const scaleX = 100;
+        const scaleW = 520;
+        const levels = ['Hemisphere', 'Continent', 'Country', 'Region', 'City', 'Street'];
+
+        // Draw scale line
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(scaleX, scaleY);
+        ctx.lineTo(scaleX + scaleW, scaleY);
+        ctx.stroke();
+
+        // Scale ticks and labels
+        levels.forEach((l, i) => {
+            const x = scaleX + (i / (levels.length - 1)) * scaleW;
+            ctx.strokeStyle = '#999';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(x, scaleY - 5);
+            ctx.lineTo(x, scaleY + 5);
+            ctx.stroke();
+            ctx.fillStyle = '#666';
+            ctx.font = '10px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(l, x, scaleY + 18);
+        });
+
+        // Scene types with their resolution ranges
+        const scenes = [
+            { label: 'Open ocean/desert', min: 0, max: 1, color: '#e74c3c' },
+            { label: 'Rural landscape', min: 0.5, max: 2.5, color: '#e67e22' },
+            { label: 'Suburban scene', min: 2, max: 4, color: '#f39c12' },
+            { label: 'Urban, no text', min: 2.5, max: 4, color: '#27ae60' },
+            { label: 'Urban with signage', min: 3.5, max: 5, color: '#1a5276' }
+        ];
+
+        const rowH = 28;
+        const startRow = scaleY + 35;
+
+        scenes.forEach((s, i) => {
+            const y = startRow + i * rowH;
+            const x1 = scaleX + (s.min / (levels.length - 1)) * scaleW;
+            const x2 = scaleX + (s.max / (levels.length - 1)) * scaleW;
+
+            // Range bar
+            ctx.fillStyle = s.color;
+            ctx.globalAlpha = 0.5;
+            ctx.fillRect(x1, y, x2 - x1, 16);
+            ctx.globalAlpha = 1;
+            ctx.strokeStyle = s.color;
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(x1, y, x2 - x1, 16);
+
+            // Endpoints
+            ctx.fillStyle = s.color;
+            ctx.beginPath();
+            ctx.arc(x1, y + 8, 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(x2, y + 8, 4, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Label
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = '12px -apple-system, sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText(s.label, scaleX - 8, y + 13);
+        });
+
+        // Legend note
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.textAlign = 'center';
+        ctx.fillText('Range shows typical best to worst case for each scene type', w / 2, h - 6);
+    })();
+    </script>
+</body>
+</html>

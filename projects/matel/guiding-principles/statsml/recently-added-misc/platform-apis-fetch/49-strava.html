@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Strava — Platform APIs</title>
+<style>
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        line-height: 1.6;
+        color: #2c3e50;
+        max-width: 100%;
+        margin: 0;
+        padding: 30px 40px;
+        background: #fff;
+    }
+    h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+    .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+    .verified { display: inline-block; background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-bottom: 16px; }
+    h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
+    .status { display: inline-block; background: #fef9e7; border: 1px solid #f39c12; color: #b7950b; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-left: 12px; vertical-align: middle; }
+    table.obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+    table.obj-table td { vertical-align: top; padding: 12px; }
+    table.obj-table td:first-child { width: 45%; }
+    table.obj-table td:last-child { width: 55%; }
+    pre { background: #f4f4f4; padding: 14px; border-radius: 6px; overflow-x: auto; font-size: 0.82em; text-align: left; }
+    canvas { display: block; margin: 16px auto 0; width: 100%; }
+    .key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+    .section-label { font-weight: bold; color: #1a5276; margin-top: 16px; display: block; }
+    .section-label:first-child { margin-top: 0; }
+    .payload-note { font-size: 0.85em; color: #555; margin: 12px 0 8px 0; }
+    ul { padding-left: 20px; }
+    li { margin-bottom: 6px; font-size: 0.93em; }
+    code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-size: 0.88em; }
+    .scope-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+    .scope-tag { background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 3px 8px; border-radius: 4px; font-size: 0.78em; font-family: monospace; }
+    p { font-size: 0.93em; }
+</style>
+</head>
+<body>
+
+<h1>Strava <span class="status">BACKLOG</span></h1>
+<p class="subtitle">Per-athlete OAuth REST API over uploaded activities, index-aligned sensor streams, segments and webhooks.</p>
+<span class="verified">Last verified: August 2026</span>
+
+<h2>Overview</h2>
+
+<table class="obj-table">
+<tr>
+<td>
+    <span class="section-label">What It Provides</span>
+    <p>Strava is an aggregator, not a measuring instrument. Almost nothing the API returns was measured by Strava. Activities are uploaded from Garmin, Wahoo, Coros, Suunto, Apple Watch, phone GPS, indoor trainers and Zwift, and dozens of other sources, each with its own sensor set, its own filtering and its own recording cadence. Anything you read back is a device's output that Strava stored, plus a layer of Strava's own recomputation on top.</p>
+    <ul>
+        <li><strong>Activity summaries</strong> — <code>distance</code>, <code>moving_time</code>, <code>elapsed_time</code>, <code>total_elevation_gain</code>, average and max speed, average and max heart rate, <code>average_watts</code>, <code>device_name</code>, gear, achievements.</li>
+        <li><strong>Streams</strong> — the per-record time series behind an activity; the only layer at which you can recompute anything under your own definition.</li>
+        <li><strong>Segments and segment efforts</strong> — user-created route sections and algorithmically matched attempts.</li>
+        <li><strong>Athlete metadata</strong> — profile, heart-rate and power zones, lifetime and recent totals, gear, routes.</li>
+        <li><strong>Social objects</strong> — kudos, comments, photos.</li>
+    </ul>
+
+    <div class="key-point"><strong>A Strava dataset is a mixture of instruments.</strong> <code>device_name</code> and upload provenance are part of the measurement definition, not metadata. Pooling heart rate across chest straps and wrist optical sensors, or power across direct-force meters and trainer estimates, or GPS accuracy across a watch and a phone in a jersey pocket, gives you a mixture whose components have different bias and different variance. Condition on the source or you are estimating a blend of hardware, not a property of athletes.</div>
+
+    <span class="section-label">Authentication &amp; Scopes</span>
+    <p>OAuth 2.0 authorization-code flow per athlete. Short-lived access token plus a refresh token that must be exchanged server-side and persisted.</p>
+    <div class="scope-list">
+        <span class="scope-tag">read</span>
+        <span class="scope-tag">read_all</span>
+        <span class="scope-tag">profile:read_all</span>
+        <span class="scope-tag">profile:write</span>
+        <span class="scope-tag">activity:read</span>
+        <span class="scope-tag">activity:read_all</span>
+        <span class="scope-tag">activity:write</span>
+    </div>
+    <p>The <code>read</code> versus <code>read_all</code> distinction is the one that matters. <code>activity:read</code> does not return activities the athlete marked private or visible only to themselves, and it does not return the private portions of otherwise-visible activities. <code>activity:read_all</code> is required for both.</p>
+
+    <div class="key-point"><strong>Scope choice is a missingness mechanism, not a permission detail.</strong> Under <code>activity:read</code> your sample is filtered by each athlete's privacy decisions, and those decisions correlate with home address, route, time of day and how the session went. That is missing-not-at-random by construction. The narrower scope does not give you a smaller random sample; it gives you a differently-shaped one, and nothing in the response tells you how many records were withheld.</div>
+
+    <span class="section-label">Granularity</span>
+    <p>Two levels. The summary activity is a set of Strava-computed reductions and cannot be disaggregated after the fact. Streams are index-aligned arrays — every requested channel comes back the same length, and you join channels <em>by array index</em>. There are no absolute timestamps inside a stream: the <code>time</code> channel carries offsets in seconds relative to the activity's <code>start_date</code>, and those offsets are not evenly spaced. Server-side downsampling is controlled by <code>resolution</code> (<code>low</code> / <code>medium</code> / <code>high</code>) and <code>series_type</code>; <code>original_size</code> tells you the record count before downsampling.</p>
+
+    <span class="section-label">Key Endpoints</span>
+    <ul>
+        <li><code>GET /api/v3/athlete</code>, <code>GET /api/v3/athlete/zones</code>, <code>GET /api/v3/athletes/{id}/stats</code></li>
+        <li><code>GET /api/v3/athlete/activities</code> — paged summary list, <code>before</code> / <code>after</code> / <code>page</code> / <code>per_page</code></li>
+        <li><code>GET /api/v3/activities/{id}</code> — detailed activity: <code>segment_efforts</code>, <code>laps</code>, <code>splits_metric</code>, <code>splits_standard</code>, <code>best_efforts</code>, <code>gear</code>, <code>photos</code></li>
+        <li><code>GET /api/v3/activities/{id}/streams</code> — the time series, via <code>keys</code> and <code>key_by_type=true</code></li>
+        <li><code>GET /api/v3/activities/{id}/laps</code>, <code>GET /api/v3/activities/{id}/zones</code></li>
+        <li><code>GET /api/v3/activities/{id}/comments</code>, <code>GET /api/v3/activities/{id}/kudos</code></li>
+        <li><code>GET /api/v3/segments/{id}</code>, <code>GET /api/v3/segment_efforts</code></li>
+        <li><code>GET /api/v3/gear/{id}</code>, <code>GET /api/v3/routes/{id}</code></li>
+    </ul>
+
+    <span class="section-label">Streams — What The Channels Actually Are</span>
+    <p>Stream types: <code>time</code>, <code>distance</code>, <code>latlng</code>, <code>altitude</code>, <code>velocity_smooth</code>, <code>heartrate</code>, <code>cadence</code>, <code>watts</code>, <code>temp</code>, <code>moving</code>, <code>grade_smooth</code>. Five properties of this layer decide whether your analysis is valid.</p>
+    <ul>
+        <li><strong>Index-aligned, not time-aligned.</strong> Join by index. There is no absolute clock inside the arrays.</li>
+        <li><strong>Sampling is not uniform.</strong> The <code>time</code> stream carries irregular offsets that reflect the source device's recording behaviour — roughly 1 Hz on many devices, adaptive under "smart recording" modes, and further thinned by server-side downsampling. Any FFT, rolling window, rate-of-change or duration-weighted average that assumes constant spacing is wrong.</li>
+        <li><strong>Two channels are derived, and say so.</strong> <code>velocity_smooth</code> and <code>grade_smooth</code> are Strava-computed smoothed derivatives, not sensor readings. Treating them as measurements imports someone else's filter into your model.</li>
+        <li><strong>Power is ambiguous.</strong> <code>watts</code> may be a true power-meter reading or a Strava-side estimate inferred from speed, grade and mass. The activity-level <code>device_watts</code> boolean is what distinguishes them. Pooling estimated and measured power is a real error, not a rounding concern.</li>
+        <li><strong>Absence is undiagnosable.</strong> A channel can be missing entirely because the device never recorded it, or because a privacy or visibility setting suppressed it. The response does not disambiguate the two, and a missing channel is not the same as a channel of zeros.</li>
+    </ul>
+
+    <span class="section-label">Rate Limits</span>
+    <p>The documented default is 200 requests per 15-minute window and 2,000 per day. Two facts about it matter more than the numbers: the budget is <strong>per application</strong>, shared across every athlete you have authorised, and Strava has revised the allocations more than once. Usage and limits are returned in response headers as comma-separated short-window / daily pairs; read them and self-throttle rather than hardcoding a figure. Exceeding the budget returns HTTP 429. Higher limits are granted by request to Strava, not by configuration.</p>
+    <p>Webhooks (the push subscription API) deliver <code>create</code>, <code>update</code> and <code>delete</code> events for activities plus athlete deauthorisation. The callback carries only an object id, an <code>object_type</code> and an <code>aspect_type</code> — <em>not the data</em>. You still spend rate-limit budget on a follow-up fetch for every event.</p>
+
+    <div class="key-point"><strong>The binding constraint is per-application quota against user count.</strong> Cost scales with the number of athletes you serve while the budget stays fixed, so a historical backfill contends directly with live webhook processing. At a few thousand athletes, "fetch streams for every activity" is not a plan you can execute inside the default allocation; it is a multi-week queue. Design the ingest as resumable and prioritised from the start, because you cannot retrofit throughput.</div>
+
+    <span class="section-label">Server-Side Recomputation And Mutability</span>
+    <p>Strava recomputes derived fields: elevation gain via its own correction against a terrain model, moving time via its own moving/stopped detection, estimated power, achievements and best efforts. These can differ from what the source device reported, and they can change when Strava updates an algorithm. Separately, athletes can edit activities after upload — rename, change sport type, crop the start or end, mark private, or delete outright.</p>
+    <div class="key-point"><strong>Records are mutable, so store a fetch timestamp and treat every row as a version.</strong> A value you pulled last month may differ today for two independent reasons: the athlete edited it, or Strava recomputed it. Without a fetch time you cannot tell an algorithm change from a behaviour change, and a re-pull silently overwrites the evidence.</div>
+
+    <span class="section-label">Privacy Zones — Non-Random Measurement Error</span>
+    <p>When an athlete declares a privacy zone around a home or workplace, Strava truncates the start and end of the GPS track near it. The <code>latlng</code> and <code>distance</code> streams are therefore systematically clipped at the ends for some athletes and untouched for others, and distance recomputed from coordinates will not match the summary <code>distance</code>.</p>
+    <div class="key-point"><strong>This is a privacy feature that manufactures a specific bias.</strong> Route-origin analysis, commute detection, first-mile / last-mile infrastructure studies and total-distance comparisons are all biased by it, and biased differentially: the athletes who set zones are not a random subset. The clipping is invisible in the payload — you see a shorter track, not a flag saying it was cut.</div>
+
+    <span class="section-label">Segments And Segment Efforts</span>
+    <p>Segments are user-created route sections; efforts are attempts matched to them. Matching is a spatial algorithm with distance and direction tolerances, so effort detection has both false positives and false negatives, and leaderboards have long been known to contain efforts contaminated by GPS error, mis-set activity types and outright manipulation. Leaderboard access has been progressively restricted, and some segment endpoints — including starred-segment access — are gated or reduced for standard applications. Treat any leaderboard as a self-selected sample of self-selected attempts with a heavy-tailed error process at the fast end.</p>
+
+    <span class="section-label">Business Scenarios</span>
+    <ul>
+        <li><strong>Coaching and training-load tools</strong> — zone distributions, acute-to-chronic load, per-athlete trend, all recomputed from streams rather than trusted from summaries.</li>
+        <li><strong>Route and event planning</strong> — course profiles and expected split times from segment and altitude data.</li>
+        <li><strong>Gear lifecycle</strong> — mileage-to-replacement from gear objects, conditioned on device.</li>
+        <li><strong>Challenge and incentive verification</strong> — where <code>manual</code>, <code>trainer</code> and <code>device_watts</code> flags decide whether an entry is admissible evidence.</li>
+        <li><strong>Within-athlete longitudinal analysis</strong> — the scenario the API actually supports well, because it holds the instrument fixed.</li>
+    </ul>
+
+    <span class="section-label">Key Restrictions &amp; Gotchas</span>
+    <ul>
+        <li><strong>Manual activities have no streams.</strong> The <code>manual</code> flag marks entries typed in by hand; a stream request returns an empty result rather than an error, which is easy to misread as a fetch failure.</li>
+        <li><strong>Indoor and virtual activities are not GPS activities.</strong> <code>trainer</code> and virtual rides may have no <code>latlng</code> at all, and their speed and distance are trainer-reported.</li>
+        <li><strong>Upload is asynchronous</strong> and deauthorisation is an event — post-revocation 401s are expected behaviour.</li>
+        <li><strong>Webhook delivery is not guaranteed to be replayed.</strong> A missed callback needs reconciliation against <code>after</code>.</li>
+    </ul>
+
+    <div class="key-point"><strong>The API Agreement is a harder constraint than the rate limit, and it is where research pipelines die.</strong> Strava's developer terms have historically restricted: caching or storing data beyond what is needed to serve the athlete it belongs to; building aggregate or derived datasets; using activity data to train models; combining Strava data with other sources in unpermitted ways; displaying an athlete's data to anyone other than that athlete; and bulk extraction. Athlete deauthorisation obliges deletion. Read the current agreement — it has been revised and tightened repeatedly, and the specific wording and thresholds have changed. The methodological point is independent of the wording: technical availability and legal availability are different things, and a dataset assembled in violation of terms is not reproducible, because it can neither be re-collected nor shared for verification.</div>
+
+    <span class="section-label">What It Does Not Provide</span>
+    <ul>
+        <li><strong>No original file download.</strong> You can upload FIT / TCX / GPX; retrieving the original uploaded file for an arbitrary activity is not generally available through the API. The athlete's own bulk archive is an account feature, not an endpoint.</li>
+        <li><strong>No other athletes' detailed activities or streams.</strong> Authorisation is per athlete; there is no population read.</li>
+        <li><strong>No population aggregates or cohort statistics.</strong> Any distribution you want, you assemble yourself, one authorised athlete at a time.</li>
+        <li><strong>No unrestricted segment leaderboards.</strong></li>
+        <li><strong>No absolute timestamps inside streams</strong> — only offsets from <code>start_date</code>.</li>
+        <li><strong>No provenance flags in general.</strong> Beyond a few booleans such as <code>device_watts</code>, nothing tells you which fields were device-measured and which were Strava-computed.</li>
+    </ul>
+</td>
+<td>
+    <p class="payload-note"><strong>GET /api/v3/activities/{id}/streams?keys=time,heartrate,watts,cadence,altitude,latlng&amp;key_by_type=true</strong> — index-aligned channels, keyed by stream type</p>
+<pre>{
+  "time": {
+    "type": "time",
+    "data": [0, 1, 2, 3, 5, 8, 9, 10, 14, 22, 31, 45],
+    "series_type": "distance",
+    "original_size": 2874,
+    "resolution": "high"
+  },
+  "heartrate": {
+    "type": "heartrate",
+    "data": [96, 98, 101, 104, 109, 118, 121, 123, 130, 141, 148, 152],
+    "series_type": "distance",
+    "original_size": 2874,
+    "resolution": "high"
+  },
+  "watts": {
+    "type": "watts",
+    "data": [0, 104, 162, 188, 205, 231, 240, null, 252, 268, 275, 281],
+    "series_type": "distance",
+    "original_size": 2874,
+    "resolution": "high"
+  },
+  "cadence": {
+    "type": "cadence",
+    "data": [0, 61, 78, 84, 86, 88, 89, 89, 91, 92, 93, 92],
+    "series_type": "distance",
+    "original_size": 2874,
+    "resolution": "high"
+  },
+  "altitude": {
+    "type": "altitude",
+    "data": [104.2, 104.4, 105.1, 106.8, 108.9, 113.4,
+             114.8, 116.0, 121.7, 138.2, 155.9, 182.4],
+    "series_type": "distance",
+    "original_size": 2874,
+    "resolution": "high"
+  },
+  "latlng": {
+    "type": "latlng",
+    "data": [[37.7694, -122.4862], [37.7695, -122.4860],
+             [37.7697, -122.4857], [37.7699, -122.4853],
+             [37.7703, -122.4846], [37.7710, -122.4834]],
+    "series_type": "distance",
+    "original_size": 2874,
+    "resolution": "high"
+  }
+}</pre>
+    <div class="key-point"><strong>Three defects are visible in this payload.</strong> The <code>time</code> offsets go 3, 5, 8 and then 14, 22, 31, 45 — the spacing is not constant, so index position is not proportional to elapsed time. <code>watts</code> contains a <code>null</code>: a sensor dropout, not zero power; coercing it to zero pulls the mean down, and dropping the index without dropping the aligned <code>heartrate</code> index desynchronises every channel. And the <code>latlng</code> array is shorter than the others here only because it is truncated for display — in a real response every channel has the same length, which is exactly why an off-by-one in one channel corrupts all of them silently.</div>
+
+    <p class="payload-note"><strong>Activity-level flags that define what the streams mean</strong> — read these before interpreting any channel</p>
+<pre>{
+  "id": 10482137755,
+  "device_name": "Garmin Edge 840",
+  "device_watts": true,
+  "manual": false,
+  "trainer": false,
+  "elapsed_time": 5412,
+  "moving_time": 4988,
+  "total_elevation_gain": 612.0,
+  "elev_high": 348.2,
+  "private": false,
+  "visibility": "everyone"
+}</pre>
+    <p class="payload-note"><strong>Irregular stream sampling</strong> — the same 30-second smoothing computed on the time axis versus by array index</p>
+    <canvas id="stravaStreamChart" height="380"></canvas>
+</td>
+</tr>
+</table>
+
+<script>
+(function() {
+    const canvas = document.getElementById('stravaStreamChart');
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+
+    // ---- Build a NON-uniformly sampled heart-rate stream over 0..300 s ----
+    // Dense 1 Hz for 0-100 s, variable-rate ("smart recording") 100-200 s, dense again 200-300 s.
+    const SPARSE_FROM = 100, SPARSE_TO = 200;
+
+    function hrAt(t) {
+        // Rise through the middle of the record, then a partial recovery.
+        const rise = 46 / (1 + Math.exp(-(t - 140) / 22));
+        const dip = -14 / (1 + Math.exp(-(t - 235) / 9));
+        const wobble = 3.2 * Math.sin(t / 11) + 1.6 * Math.sin(t / 3.7);
+        return 98 + rise + dip + wobble;
+    }
+
+    const times = [];
+    for (let t = 0; t <= SPARSE_FROM; t += 1) times.push(t);
+    const gaps = [4, 7, 3, 9, 12, 5, 15, 8, 6, 11, 4, 13];
+    let t = SPARSE_FROM;
+    for (let i = 0; i < gaps.length; i++) {
+        t += gaps[i];
+        if (t < SPARSE_TO) times.push(t);
+    }
+    for (let s = SPARSE_TO; s <= 300; s += 1) times.push(s);
+
+    const hr = times.map(hrAt);
+    const N = times.length;
+
+    // Correct: mean over samples whose offsets fall inside a trailing 30-SECOND window.
+    const timeMean = [];
+    for (let i = 0; i < N; i++) {
+        let acc = 0, n = 0;
+        for (let j = i; j >= 0 && times[i] - times[j] <= 30; j--) { acc += hr[j]; n++; }
+        timeMean.push(acc / n);
+    }
+    // Wrong: mean over the trailing 30 ARRAY ELEMENTS, as if spacing were constant.
+    const idxMean = [];
+    for (let i = 0; i < N; i++) {
+        let acc = 0, n = 0;
+        for (let j = i; j >= 0 && j > i - 30; j--) { acc += hr[j]; n++; }
+        idxMean.push(acc / n);
+    }
+
+    const Y_LO = 90, Y_HI = 160;
+
+    function draw() {
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * dpr;
+        canvas.height = 380 * dpr;
+        canvas.style.height = '380px';
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(dpr, dpr);
+        const W = rect.width;
+        const H = 380;
+        ctx.clearRect(0, 0, W, H);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, W, H);
+
+        const padL = 56, padR = 18, padT = 54, padB = 74;
+        const plotW = Math.max(10, W - padL - padR);
+        const plotH = H - padT - padB;
+        const X = s => padL + (s / 300) * plotW;
+        const Y = v => padT + plotH - ((v - Y_LO) / (Y_HI - Y_LO)) * plotH;
+
+        // Title
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillText('An index-based window is not a time-based window', W / 2, 20);
+        ctx.fillStyle = '#888';
+        ctx.font = 'italic 10px -apple-system, sans-serif';
+        ctx.fillText('Illustrative stream shape. Strava streams are index-aligned with no absolute timestamps.', W / 2, 36);
+
+        // Variable-rate band
+        ctx.fillStyle = 'rgba(26,82,118,0.12)';
+        ctx.fillRect(X(SPARSE_FROM), padT, X(SPARSE_TO) - X(SPARSE_FROM), plotH);
+        ctx.strokeStyle = 'rgba(26,82,118,0.35)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(X(SPARSE_FROM), padT); ctx.lineTo(X(SPARSE_FROM), padT + plotH);
+        ctx.moveTo(X(SPARSE_TO), padT);   ctx.lineTo(X(SPARSE_TO), padT + plotH);
+        ctx.stroke();
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 10px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('variable-rate recording', (X(SPARSE_FROM) + X(SPARSE_TO)) / 2, padT + 13);
+
+        // Gridlines + y ticks
+        ctx.font = '11px -apple-system, sans-serif';
+        for (let v = Y_LO; v <= Y_HI; v += 10) {
+            const y = Y(v);
+            ctx.strokeStyle = '#e8e8e8';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(padL, y);
+            ctx.lineTo(padL + plotW, y);
+            ctx.stroke();
+            ctx.fillStyle = '#555';
+            ctx.textAlign = 'right';
+            ctx.fillText(String(v), padL - 7, y + 4);
+        }
+
+        // Raw samples as dots at their true offsets
+        ctx.fillStyle = '#1a5276';
+        for (let i = 0; i < N; i++) {
+            ctx.beginPath();
+            ctx.arc(X(times[i]), Y(hr[i]), 1.7, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function line(series, colour, dash, width) {
+            ctx.save();
+            ctx.setLineDash(dash);
+            ctx.strokeStyle = colour;
+            ctx.lineWidth = width;
+            ctx.beginPath();
+            for (let i = 0; i < N; i++) {
+                const x = X(times[i]), y = Y(series[i]);
+                if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+            ctx.restore();
+        }
+        line(timeMean, '#27ae60', [], 2.1);
+        line(idxMean, '#e74c3c', [6, 4], 2.1);
+
+        // Axes
+        ctx.strokeStyle = '#2c3e50';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(padL, padT);
+        ctx.lineTo(padL, padT + plotH);
+        ctx.lineTo(padL + plotW, padT + plotH);
+        ctx.stroke();
+
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        for (let s = 0; s <= 300; s += 50) {
+            const x = X(s);
+            ctx.strokeStyle = '#2c3e50';
+            ctx.beginPath();
+            ctx.moveTo(x, padT + plotH);
+            ctx.lineTo(x, padT + plotH + 4);
+            ctx.stroke();
+            ctx.fillStyle = '#555';
+            ctx.fillText(String(s), x, padT + plotH + 17);
+        }
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillText('Offset from start_date (seconds) — the time stream, not the array index', padL + plotW / 2, padT + plotH + 34);
+
+        ctx.save();
+        ctx.translate(14, padT + plotH / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillText('Heart rate (bpm)', 0, 0);
+        ctx.restore();
+
+        // Legend
+        const ly = H - 16;
+        let lx = padL;
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+
+        ctx.fillStyle = '#1a5276';
+        ctx.beginPath(); ctx.arc(lx + 4, ly - 4, 2.4, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#555';
+        ctx.fillText('heartrate samples (irregular offsets)', lx + 12, ly);
+        lx += 196;
+
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 2.1;
+        ctx.beginPath(); ctx.moveTo(lx, ly - 4); ctx.lineTo(lx + 18, ly - 4); ctx.stroke();
+        ctx.fillStyle = '#555';
+        ctx.fillText('30-second window (time axis)', lx + 24, ly);
+        lx += 190;
+
+        ctx.save();
+        ctx.setLineDash([6, 4]);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2.1;
+        ctx.beginPath(); ctx.moveTo(lx, ly - 4); ctx.lineTo(lx + 18, ly - 4); ctx.stroke();
+        ctx.restore();
+        ctx.fillStyle = '#555';
+        ctx.fillText('30-sample window (by index)', lx + 24, ly);
+    }
+
+    draw();
+    window.addEventListener('resize', draw);
+})();
+</script>
+
+</body>
+</html>

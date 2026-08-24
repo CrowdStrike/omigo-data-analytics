@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>11. Parquet / ORC</title>
+<style>
+body {
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    padding: 20px 10px;
+    background: #fff;
+    color: #1a1a1a;
+    font-size: 15px;
+}
+h1 { color: #1a5276; margin-bottom: 4px; }
+.subtitle { color: #333; font-size: 1.1em; margin-bottom: 20px; }
+.philosophy {
+    background: #f0f4f8;
+    border-left: 4px solid #2980b9;
+    padding: 12px 16px;
+    margin: 20px 0;
+    font-size: 0.95em;
+    color: #222;
+}
+.info-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+.info-table td {
+    border: 1px solid #2980b9;
+    padding: 14px 16px;
+    vertical-align: top;
+    font-size: 0.95em;
+}
+.info-table tr:nth-child(even) td { background: #f0f8ff; }
+.info-table td:first-child { width: 40%; font-weight: 700; color: #1a5276; }
+.info-table td:last-child { width: 60%; }
+code { background: #f0f4f8; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }
+pre { background: #f0f4f8; padding: 12px; border-radius: 4px; overflow-x: auto; font-size: 0.9em; }
+</style>
+</head>
+<body>
+
+<h1>11. Parquet / ORC</h1>
+<p class="subtitle">Columnar on-disk storage.</p>
+
+<div class="philosophy">
+<strong>Core trade-off:</strong> Analytical query speed through column pruning and predicate pushdown — at the cost of expensive row-level updates and write amplification.
+</div>
+
+<table class="info-table">
+<tbody>
+<tr>
+<td>What It Is</td>
+<td>Binary columnar file formats that store data by column rather than by row. Parquet (from the Hadoop ecosystem, now universal) and ORC (Optimized Row Columnar, from Hive) solve the same problem: make analytical queries fast by only reading the columns needed. Both include metadata statistics (min/max/count) per column chunk.</td>
+</tr>
+<tr>
+<td>Structure / Syntax</td>
+<td>Data is organized into row groups (Parquet) or stripes (ORC). Within each row group, data for each column is stored contiguously and compressed independently. Footer contains schema, row group locations, and column statistics (min, max, null count). Encoding is per-column (dictionary, RLE, delta, etc.).</td>
+</tr>
+<tr>
+<td>Strengths</td>
+<td>Column pruning — read only the columns your query touches. Predicate pushdown — skip entire row groups using min/max statistics. Excellent compression (similar values compress well together). Encoding adapts per column. Metadata enables query planning without scanning data.</td>
+</tr>
+<tr>
+<td>Weaknesses</td>
+<td>Expensive row-level updates (must rewrite entire row groups). Write amplification for frequent small inserts. Not streamable — must write complete row groups. Random row access is costly. File size overhead for very small datasets. Tooling for inspection is less intuitive than text formats.</td>
+</tr>
+<tr>
+<td>Business Use Case</td>
+<td>Data lakes (S3 + Parquet is the modern standard). Analytical data warehouses. Any query that reads few columns from wide tables. Time-series analysis. ML feature stores. The format behind most "big data" query engines (Spark, Presto, DuckDB, BigQuery export).</td>
+</tr>
+<tr>
+<td>Example</td>
+<td>
+<pre>Scenario: Table with 200 columns, 1 billion rows
+Query: SELECT avg(price) FROM sales WHERE region = 'US'
+
+What Parquet reads:
+- Column "price": only this column's data (0.5% of file)
+- Column "region": only this column's data (0.5% of file)
+- Row group stats: skip groups where region min/max
+  excludes 'US' (maybe 70% of groups skipped)
+
+Total I/O: ~1% of file size × 30% of row groups
+         = 0.3% of total data actually read
+
+What CSV would read: 100% of the file, every time.
+
+This is why a 50GB Parquet file can answer queries
+in seconds that would take minutes on the same data
+stored as CSV.</pre>
+The 200-column table reading 2 columns touches roughly 1% of the data. Combined with row group skipping via statistics, the actual I/O can be under 0.5% of file size.
+</td>
+</tr>
+</tbody>
+</table>
+
+</body>
+</html>

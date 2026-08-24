@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stripe — Platform APIs</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2c3e50; max-width: 100%; margin: 0; padding: 30px 40px; background: #fff; }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 14px; }
+        .verified { font-size: 0.8em; color: #888; border: 1px solid #ddd; display: inline-block; padding: 2px 10px; border-radius: 4px; margin-bottom: 18px; }
+        .status { display: inline-block; background: #e67e22; color: #fff; font-size: 0.75em; font-weight: bold; padding: 2px 10px; border-radius: 4px; vertical-align: middle; margin-left: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+        h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
+        .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
+        .section-label { font-weight: bold; color: #1a5276; margin-top: 16px; display: block; }
+        .section-label:first-child { margin-top: 0; }
+        .obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+        .obj-table td { vertical-align: top; padding: 16px; border: 1px solid #2980b9; }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; }
+        ul { padding-left: 20px; margin: 6px 0 10px; }
+        li { margin-bottom: 5px; font-size: 0.93em; }
+        p { font-size: 0.93em; margin: 6px 0; }
+        pre.payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 12px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 10px 0 16px; border-radius: 4px; text-align: left; }
+        .payload-note { font-size: 0.82em; color: #666; margin: 10px 0 -4px 0; font-style: italic; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        canvas { display: block; width: 100%; margin-top: 12px; }
+    </style>
+</head>
+<body>
+    <h1>Stripe <span class="status">BACKLOG</span></h1>
+    <p class="subtitle">Charges and PaymentIntents, subscriptions and schedules, invoices, disputes, payouts and balance transactions, Radar risk assessments, the Events log, and Sigma SQL over the same data.</p>
+    <span class="verified">Last verified: August 2026</span>
+
+    <h2>Overview</h2>
+    <table class="obj-table">
+        <tr>
+            <td>
+                <span class="section-label">What It Provides</span>
+                <p>Stripe is unusually complete as an analytical source because it stores the money movement and the lifecycle events that produced it. The core objects:</p>
+                <ul>
+                    <li><strong>PaymentIntent</strong> — the modern payment lifecycle object. Tracks a payment attempt through <code>requires_payment_method</code>, <code>requires_confirmation</code>, <code>requires_action</code>, <code>processing</code>, <code>succeeded</code> or <code>canceled</code>.</li>
+                    <li><strong>Charge</strong> — the older object, still created underneath a PaymentIntent. Carries <code>outcome</code>, including the Radar assessment.</li>
+                    <li><strong>Subscription</strong> and <strong>SubscriptionSchedule</strong> — recurring state; the schedule holds planned future phases (price changes, trial ends, term commitments).</li>
+                    <li><strong>Invoice</strong> and <strong>InvoiceItem</strong> — what was billed, with line items, proration entries, discounts, and tax.</li>
+                    <li><strong>Dispute</strong> — chargebacks with reason codes and an evidence submission deadline.</li>
+                    <li><strong>Payout</strong> and <strong>BalanceTransaction</strong> — the bank-reconciliation layer: gross, fee, net, and the payout each transaction settled into.</li>
+                    <li><strong>Event</strong> — an append-only log of state changes, also the payload delivered to webhooks.</li>
+                </ul>
+
+                <span class="section-label">Authentication &amp; Scopes</span>
+                <ul>
+                    <li><strong>Secret API keys</strong> (<code>sk_live_</code> / <code>sk_test_</code>) as HTTP Basic username. Test and live modes are entirely separate datasets.</li>
+                    <li><strong>Restricted keys</strong> (<code>rk_live_</code>) — per-resource read or write grants. This is what an analytics pipeline should use: read-only on the handful of resources it needs.</li>
+                    <li><strong>Stripe Connect</strong> — platforms act on connected accounts via the <code>Stripe-Account</code> header. Data is partitioned per connected account; there is no single query spanning all of them in the REST API.</li>
+                    <li><strong>OAuth</strong> for third-party apps operating on someone else's account.</li>
+                </ul>
+
+                <span class="section-label">Granularity</span>
+                <p>Individual transaction and individual state change. Amounts are integers in the currency's smallest unit — cents for USD, but <em>yen are already whole units</em>, so a blanket divide-by-100 is wrong for zero-decimal currencies. Every object has a <code>metadata</code> map you control, which is the join key back to your own domain model.</p>
+
+                <span class="section-label">Key Endpoints</span>
+                <ul>
+                    <li><code>GET /v1/payment_intents</code>, <code>GET /v1/charges</code></li>
+                    <li><code>GET /v1/subscriptions</code>, <code>GET /v1/subscription_schedules</code></li>
+                    <li><code>GET /v1/invoices</code>, <code>GET /v1/invoices/:id/lines</code></li>
+                    <li><code>GET /v1/disputes</code></li>
+                    <li><code>GET /v1/balance_transactions</code>, <code>GET /v1/payouts</code></li>
+                    <li><code>GET /v1/events</code> — the change log</li>
+                    <li>Sigma — scheduled SQL over Stripe-managed tables, no pagination required</li>
+                </ul>
+
+                <span class="section-label">Rate Limits</span>
+                <p>Stripe applies a per-account request-rate limit that is higher in live mode than in test mode, and separately throttles concurrent long-running requests. Rather than fixing a number, treat the mechanism as: read endpoints are generous for paginated backfill at moderate concurrency, list requests cap at 100 objects per page, and <code>429</code> responses are expected under burst and must be retried with exponential backoff and jitter. Deep <code>expand[]</code> chains cost more server work and are throttled sooner than flat requests.</p>
+                <div class="key-point">For any backfill beyond a few hundred thousand objects, Sigma is the right tool, not the REST API. Paginating a year of <code>balance_transactions</code> at 100 per page is a rate-limit problem you have chosen to have.</div>
+
+                <span class="section-label">Business Scenarios</span>
+                <ul>
+                    <li><strong>Revenue recognition</strong> — invoice lines with period start/end are the only sound basis for MRR; summing successful charges conflates annual prepayment with monthly revenue.</li>
+                    <li><strong>Churn and expansion analysis</strong> — reconstructed from subscription events, not from the current subscription row.</li>
+                    <li><strong>Payment failure and recovery</strong> — decline codes on failed PaymentIntents, retry outcomes via Smart Retries.</li>
+                    <li><strong>Dispute and fraud-loss modelling</strong> — dispute rate by cohort, geography, card brand.</li>
+                    <li><strong>Bank reconciliation</strong> — <code>balance_transactions</code> grouped by <code>payout</code> is the only view that ties to the bank statement.</li>
+                </ul>
+
+                <span class="section-label">Key Restrictions &amp; Gotchas</span>
+                <ul>
+                    <li><strong>Radar scores are model output.</strong> <code>outcome.risk_level</code> and <code>outcome.risk_score</code> are Stripe's fraud model's estimates, with false positives and false negatives. A high-risk label is not evidence of fraud, and a low-risk label is not evidence of legitimacy. Using them as a target variable in your own model trains you to reproduce Stripe's errors; using them as a feature is defensible if you also record that they are correlated with Stripe's blocking decision, which censors your outcome data.</li>
+                    <li><strong>Radar scores are not returned on every account or every charge.</strong> <code>risk_score</code> availability depends on the Radar plan; do not assume the field exists.</li>
+                    <li><strong>Events are retained for a limited window</strong> (on the order of a month, not forever). The Events API is a catch-up mechanism for missed webhooks, not a permanent audit log. If you need the history, persist it yourself as it arrives.</li>
+                    <li><strong>Webhooks are at-least-once and unordered.</strong> Duplicates arrive; a <code>customer.subscription.updated</code> can land before the <code>created</code> for the same object. Deduplicate on event ID and reconcile against object state rather than trusting arrival order.</li>
+                    <li><strong>No revenue report endpoint.</strong> There is no <code>GET /v1/mrr</code>. The Dashboard's revenue figures are computed, and reproducing them requires re-implementing the same accounting rules.</li>
+                    <li><strong>Deleted customers</strong> lose most fields; the charges survive but the identity attached to them degrades.</li>
+                    <li><strong>Sigma is not real-time</strong> and its schema is versioned separately from the API. Queries can break across schema revisions.</li>
+                    <li><strong>Disputes move.</strong> A dispute's status changes over weeks. A snapshot taken today will disagree with one taken next month, so dispute rate is not a stable metric until the window has fully aged.</li>
+                </ul>
+                <div class="key-point" style="border-left-color:#e74c3c;"><strong>Payment data is mutable after the fact, and this is the single most common analytics mistake with it.</strong> A charge that succeeded today can be refunded next week, disputed next month, and charged back after that — network dispute windows run to months, not days. So revenue computed from a recent window is <strong>biased upward</strong>, not noisy: the deductions have not arrived yet. Formally this is right-censoring. Every cohort's net revenue only ever moves downward as it matures, so a recent period always outperforms a settled one for purely mechanical reasons.
+                <p style="margin-top:8px;">The fix is not a better query. Either compare cohorts <em>at equal age since transaction</em> rather than at equal calendar label, or estimate the maturation curve from settled cohorts and discount young ones explicitly. Label anything inside the dispute window as provisional. A dashboard showing month-to-date net revenue beside closed months is comparing a partially observed period against fully observed ones, and will overstate the recent one every single time.</p></div>
+
+                <div class="key-point">A <code>Subscription</code> object tells you the plan a customer is on right now. It does not tell you that they downgraded in March, churned in May, and were won back in July. That story exists only in the event stream and in <code>subscription_schedule</code> phases. Any churn analysis built from the current subscription table will systematically undercount both churn and recovery, because it can only see net position.</div>
+            </td>
+            <td>
+                <p class="payload-note">GET /v1/charges/ch_3PqR2s… — Radar assessment shown inside <code>outcome</code>.</p>
+<pre class="payload">{
+  "id": "ch_3PqR2sK9LmNoP4Qr1AbCdEfG",
+  "object": "charge",
+  "amount": 4900,
+  "amount_captured": 4900,
+  "amount_refunded": 0,
+  "currency": "usd",
+  "customer": "cus_QmT8vRxL2WkYbZ",
+  "payment_intent": "pi_3PqR2sK9LmNoP4Qr1XyZ",
+  "invoice": "in_1PqR2sK9LmNoP4Qr",
+  "captured": true,
+  "paid": true,
+  "status": "succeeded",
+  "created": 1755792000,
+  "balance_transaction": "txn_3PqR2sK9LmNoP4Qr1Hj",
+  "outcome": {
+    "network_status": "approved_by_network",
+    "reason": null,
+    "risk_level": "elevated",
+    "risk_score": 62,
+    "seller_message": "Payment complete.",
+    "type": "authorized"
+  },
+  "payment_method_details": {
+    "type": "card",
+    "card": {
+      "brand": "visa",
+      "country": "US",
+      "funding": "credit",
+      "last4": "4242",
+      "network": "visa",
+      "three_d_secure": null
+    }
+  },
+  "metadata": { "internal_order_id": "ORD-88213" }
+}</pre>
+
+                <p class="payload-note">GET /v1/balance_transactions — the reconciliation layer. <code>net = amount - fee</code>.</p>
+<pre class="payload">{
+  "id": "txn_3PqR2sK9LmNoP4Qr1Hj",
+  "object": "balance_transaction",
+  "amount": 4900,
+  "fee": 172,
+  "fee_details": [
+    { "amount": 172, "type": "stripe_fee",
+      "description": "Stripe processing fees" }
+  ],
+  "net": 4728,
+  "currency": "usd",
+  "type": "charge",
+  "reporting_category": "charge",
+  "status": "available",
+  "available_on": 1756051200,
+  "created": 1755792000,
+  "source": "ch_3PqR2sK9LmNoP4Qr1AbCdEfG",
+  "exchange_rate": null
+}</pre>
+
+                <canvas id="subChart" height="380"></canvas>
+            </td>
+        </tr>
+    </table>
+
+    <script>
+    (function() {
+        const canvas = document.getElementById('subChart');
+        const ctx = canvas.getContext('2d');
+        const dpr = window.devicePixelRatio || 1;
+
+        function draw() {
+            const rect = canvas.getBoundingClientRect();
+            const W = rect.width;
+            const H = 380;
+            canvas.width = W * dpr;
+            canvas.height = H * dpr;
+            canvas.style.height = H + 'px';
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.scale(dpr, dpr);
+            ctx.clearRect(0, 0, W, H);
+
+            ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+            ctx.fillStyle = '#1a5276';
+            ctx.textAlign = 'center';
+            ctx.fillText('Subscription states — what current state shows vs what the event log shows', W / 2, 22);
+            ctx.font = 'italic 10px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+            ctx.fillStyle = '#888';
+            ctx.fillText('Solid = observable from the subscription row. Dashed = only recoverable from events.', W / 2, 40);
+
+            // node layout
+            const nodes = [
+                { id: 'trial',    label: 'trialing',           x: 0.10, y: 0.30, color: '#e67e22' },
+                { id: 'active',   label: 'active',             x: 0.38, y: 0.30, color: '#27ae60' },
+                { id: 'pastdue',  label: 'past_due',           x: 0.66, y: 0.16, color: '#e67e22' },
+                { id: 'unpaid',   label: 'unpaid',             x: 0.88, y: 0.16, color: '#e74c3c' },
+                { id: 'canceled', label: 'canceled',           x: 0.66, y: 0.62, color: '#e74c3c' },
+                { id: 'incompl',  label: 'incomplete',         x: 0.10, y: 0.62, color: '#8e44ad' },
+                { id: 'expired',  label: 'incomplete_expired', x: 0.10, y: 0.86, color: '#e74c3c' }
+            ];
+            const marginTop = 60;
+            const marginBottom = 74;
+            const plotH = H - marginTop - marginBottom;
+            const padX = 66;
+            const plotW = W - padX * 2;
+
+            function px(n) { return padX + n.x * plotW; }
+            function py(n) { return marginTop + n.y * plotH; }
+            function find(id) { for (var i = 0; i < nodes.length; i++) if (nodes[i].id === id) return nodes[i]; }
+
+            const edges = [
+                { a: 'trial',   b: 'active',   dashed: false },
+                { a: 'active',  b: 'pastdue',  dashed: false },
+                { a: 'pastdue', b: 'unpaid',   dashed: false },
+                { a: 'pastdue', b: 'active',   dashed: true, label: 'recovered' },
+                { a: 'active',  b: 'canceled', dashed: false },
+                { a: 'canceled',b: 'active',   dashed: true, label: 'win-back' },
+                { a: 'incompl', b: 'active',   dashed: false },
+                { a: 'incompl', b: 'expired',  dashed: false }
+            ];
+
+            const r = 8;
+            for (let i = 0; i < edges.length; i++) {
+                const A = find(edges[i].a), B = find(edges[i].b);
+                const x1 = px(A), y1 = py(A), x2 = px(B), y2 = py(B);
+                const dx = x2 - x1, dy = y2 - y1;
+                const len = Math.sqrt(dx * dx + dy * dy) || 1;
+                const ux = dx / len, uy = dy / len;
+                const sx = x1 + ux * (r + 3), sy = y1 + uy * (r + 3);
+                const exx = x2 - ux * (r + 9), eyy = y2 - uy * (r + 9);
+
+                ctx.strokeStyle = edges[i].dashed ? '#8e44ad' : 'rgba(26,82,118,0.55)';
+                ctx.lineWidth = edges[i].dashed ? 1.6 : 2;
+                ctx.setLineDash(edges[i].dashed ? [5, 4] : []);
+                ctx.beginPath();
+                if (edges[i].dashed) {
+                    const mx = (sx + exx) / 2 - uy * 26;
+                    const my = (sy + eyy) / 2 + ux * 26;
+                    ctx.moveTo(sx, sy);
+                    ctx.quadraticCurveTo(mx, my, exx, eyy);
+                } else {
+                    ctx.moveTo(sx, sy);
+                    ctx.lineTo(exx, eyy);
+                }
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // arrowhead
+                ctx.fillStyle = edges[i].dashed ? '#8e44ad' : 'rgba(26,82,118,0.7)';
+                ctx.beginPath();
+                ctx.moveTo(exx, eyy);
+                ctx.lineTo(exx - ux * 8 - uy * 4, eyy - uy * 8 + ux * 4);
+                ctx.lineTo(exx - ux * 8 + uy * 4, eyy - uy * 8 - ux * 4);
+                ctx.closePath();
+                ctx.fill();
+
+                if (edges[i].label) {
+                    ctx.font = 'italic 10px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+                    ctx.fillStyle = '#8e44ad';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(edges[i].label, (sx + exx) / 2 - uy * 30, (sy + eyy) / 2 + ux * 30 - 3);
+                }
+            }
+
+            for (let i = 0; i < nodes.length; i++) {
+                const n = nodes[i];
+                ctx.fillStyle = n.color;
+                ctx.beginPath();
+                ctx.arc(px(n), py(n), r, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.font = '11px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+                ctx.fillStyle = '#2c3e50';
+                ctx.textAlign = 'center';
+                ctx.fillText(n.label, px(n), py(n) - 14);
+            }
+
+            ctx.font = '11px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+            ctx.fillStyle = '#666';
+            ctx.textAlign = 'left';
+            ctx.fillText('A customer who went past_due, recovered, cancelled, and returned reads', padX, H - 44);
+            ctx.fillText('simply "active" today. Net position hides both the churn and the save.', padX, H - 28);
+        }
+
+        draw();
+        window.addEventListener('resize', draw);
+    })();
+    </script>
+</body>
+</html>

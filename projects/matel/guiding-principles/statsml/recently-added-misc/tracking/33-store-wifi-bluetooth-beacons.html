@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tracking Data: Store WiFi &amp; Bluetooth Beacons</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2c3e50; max-width: 100%; margin: 0; padding: 30px 40px; background: #fff; }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+        .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
+        .obj-table { width: 100%; border-collapse: collapse; }
+        .obj-table td { vertical-align: top; padding: 16px; border: 1px solid #2980b9; }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; text-align: center; }
+        ul { padding-left: 20px; margin: 8px 0; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        .obj-table td:last-child .payload,
+        .obj-table td:last-child .payload-note { text-align: left; }
+        .payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 12px 0; }
+        .payload-note { font-size: 0.82em; color: #666; margin: 12px 0 -6px 0; font-style: italic; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        .key-point strong:first-child { color: #1a5276; }
+        .lede { font-size: 0.95em; margin: 0 0 10px 0; }
+        .lbl { display: inline-block; font-size: 0.7em; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; margin: 10px 0 2px 0; }
+        .lbl-purpose { background: #eaf2fb; color: #1a5276; }
+        .lbl-effect { background: #fdf0e6; color: #a8501c; }
+        li b { color: #1a5276; font-weight: 600; }
+        canvas { display: block; margin: 0 auto; }
+    </style>
+</head>
+<body>
+    <h1>Tracking Data: Store WiFi &amp; Bluetooth Beacons</h1>
+    <p class="subtitle">In-store sensors that observe phone radio frames to estimate foot traffic, dwell time, and path.</p>
+
+    <table class="obj-table">
+        <!-- Row 1: What is it? -->
+        <tr>
+            <td>
+                <div class="obj-title">What is it?</div>
+                <p class="lede">Sensors around a store listen for the radio frames phones already broadcast.</p>
+                <ul>
+                    <li><b>WiFi:</b> a phone with the radio on sends probe requests periodically to discover networks</li>
+                    <li><b>Bluetooth:</b> advertises on a similar schedule</li>
+                    <li><b>Position:</b> comparing signal strength across several sensors gives a rough location</li>
+                    <li><b>Path:</b> repeating that over time gives a rough route</li>
+                </ul>
+                <div class="key-point"><strong>The sensor observes a frame, not a shopper:</strong> zone, dwell and path are all computed from signal strength by a model, and the model is where the error lives.</div>
+            </td>
+            <td>
+                <canvas id="c1" width="420" height="320"></canvas>
+            </td>
+        </tr>
+        <!-- Row 2: What does it collect? -->
+        <tr>
+            <td>
+                <div class="obj-title">What does it collect?</div>
+                <ul>
+                    <li><b>MAC address</b> in the frame, which on current phones is usually randomised</li>
+                    <li><b>Signal strength</b> in dBm, per sensor, per frame</li>
+                    <li><b>Channel and frame type</b></li>
+                    <li><b>Timestamps</b>, from which dwell and revisit are derived</li>
+                    <li><b>Derived zone and path</b> through the store</li>
+                </ul>
+                <div class="key-point"><strong>No connection needed:</strong> these frames are sent to discover networks, so any receiver in range observes them whether or not the phone ever joins one.</div>
+                <div class="key-point"><strong>RSSI is not a distance:</strong> converting dBm to metres needs a path-loss assumption, and walls, shelving and the shopper's own body attenuate the signal — which the model reads as extra distance. The dBm value is measured; the metres, the zone and therefore the dwell time are model output on top of it.</div>
+            </td>
+            <td>
+                <canvas id="c2" width="420" height="320"></canvas>
+<p class="payload-note">Sample payload — illustrative structure, not real captured data.</p>
+<pre class="payload">{
+  // ── present in the radio frame itself ──
+  "sensor_id":   "AISLE-07-N",
+  "client_mac":  "5A:3F:…",     // often randomised by the phone
+  "rssi_dbm":    -71,           // signal strength, in dBm
+  "channel":     6,
+  "frame_type":  "probe_request",
+  "ts":          "2026-08-22T16:22:09.310Z",
+
+  // ── inferred / plausible, computed downstream ──
+  "distance_m":   6.4,          // from rssi via a path-loss model
+  "zone":        "footwear",
+  "dwell_s":      212,
+  "visitor_key": "h9c2…",       // hash of the observed MAC
+  "repeat_visit": true
+}</pre>
+</td>
+        </tr>
+        <!-- Row 3: Why do they collect it? -->
+        <tr>
+            <td>
+                <div class="obj-title">Why is it collected?</div>
+                <div class="lbl lbl-purpose">Stated purpose</div>
+                <ul>
+                    <li><b>Layout and staffing</b> — sales data says what sold, not what was walked past</li>
+                    <li><b>The denominator</b> — zone-level dwell is the cheapest measurement of what a door count cannot break down</li>
+                </ul>
+                <div class="lbl lbl-effect">Additional consequence</div>
+                <ul>
+                    <li><b>Aggregated foot traffic is an openly sold category</b>, bought by landlords for lease decisions and by investors as an early indicator of retail activity</li>
+                    <li><b>Repeat-visit flags</b> allow a visit history per device, a different thing from a headcount</li>
+                </ul>
+                <div class="key-point"><strong>The comparison it supports is within one store:</strong> sensors go where that store wanted a zone measured, and the signal-to-distance assumption is fitted to that building. Both cancel out when this end is compared with that end, and neither cancels out between sites — so a level sold as foot traffic carries how densely each site was instrumented alongside how busy it was.</div>
+            </td>
+            <td>
+                <canvas id="c3" width="420" height="320"></canvas>
+            </td>
+        </tr>
+        <!-- Row 4: How much can they see? -->
+    </table>
+
+    <script>
+    const P = {
+      blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+      aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+      ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+    };
+    const SERIES = [P.blue, P.green, P.violet, P.orange, P.aqua, P.magenta, P.yellow];
+    // Translucent fill from a palette hex, so a shape keeps its hue but stays light.
+    function tint(hex, a) {
+      const n = parseInt(hex.slice(1), 16);
+      return 'rgba(' + (n >> 16) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+    }
+    // Rounded-rect path helper (works without native ctx.roundRect).
+    function rr(ctx, x, y, w, h, r) {
+      r = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+        function setupCanvas(id) {
+            const canvas = document.getElementById(id);
+            const dpr = window.devicePixelRatio || 1;
+
+            // Read the element's declared size. Using getBoundingClientRect()
+            // here made the backing store dpr x the CSS box while style.width
+            // was never set, so everything drew at 2x on a retina screen.
+            const w = canvas.getAttribute('width') ? +canvas.getAttribute('width') : 420;
+            const h = canvas.getAttribute('height') ? +canvas.getAttribute('height') : 320;
+            canvas.width = w * dpr;
+            canvas.height = h * dpr;
+            canvas.style.width = w + 'px';
+            canvas.style.height = h + 'px';
+            const ctx = canvas.getContext('2d');
+            ctx.scale(dpr, dpr);
+            return { ctx, w, h };
+        }
+
+        // C1: Top-down store floor plan with beacon dots and a dotted phone trail
+        (function() {
+            const { ctx, w, h } = setupCanvas('c1');
+
+            // Store outline
+            ctx.strokeStyle = P.blue;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(30, 30, w - 60, h - 60);
+
+            // Entrance
+            ctx.fillStyle = P.green;
+            ctx.fillRect(w/2 - 25, h - 32, 50, 4);
+            ctx.font = '12px -apple-system, sans-serif';
+            ctx.fillStyle = P.green;
+            ctx.textAlign = 'center';
+            ctx.fillText('ENTRANCE', w/2, h - 18);
+
+            // Shelf units (rectangles)
+            ctx.fillStyle = 'rgba(42,120,214,0.12)';
+            ctx.fillRect(60, 60, 70, 30);
+            ctx.fillRect(60, 120, 70, 30);
+            ctx.fillRect(60, 180, 70, 30);
+            ctx.fillRect(180, 60, 70, 30);
+            ctx.fillRect(180, 120, 70, 30);
+            ctx.fillRect(180, 180, 70, 30);
+            ctx.fillRect(300, 60, 70, 30);
+            ctx.fillRect(300, 120, 70, 30);
+            ctx.fillRect(300, 180, 70, 30);
+
+            // Labels
+            ctx.fillStyle = P.mute;
+            ctx.font = '11px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Shoes', 95, 79);
+            ctx.fillText('Bags', 95, 139);
+            ctx.fillText('Jewelry', 95, 199);
+            ctx.fillText('Shirts', 215, 79);
+            ctx.fillText('Pants', 215, 139);
+            ctx.fillText('Jackets', 215, 199);
+            ctx.fillText('Hats', 335, 79);
+            ctx.fillText('Socks', 335, 139);
+            ctx.fillText('Belts', 335, 199);
+
+            // Beacon dots (in corners and mid-walls)
+            const beacons = [
+                [40, 40], [w-40, 40], [40, h-40], [w-40, h-40],
+                [w/2, 40], [40, h/2], [w-40, h/2], [w/2, h-40]
+            ];
+            beacons.forEach(([bx, by]) => {
+                ctx.beginPath();
+                ctx.arc(bx, by, 6, 0, Math.PI * 2);
+                ctx.fillStyle = P.magenta;
+                ctx.fill();
+                // Signal rings
+                ctx.beginPath();
+                ctx.arc(bx, by, 14, 0, Math.PI * 2);
+                ctx.strokeStyle = tint(P.magenta, 0.3);
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            });
+
+            // Phone trail (dotted path)
+            const trail = [
+                [w/2, h-45], [w/2, 230], [150, 230], [150, 160],
+                [150, 100], [260, 100], [260, 160], [340, 160],
+                [340, 100], [340, 60]
+            ];
+            ctx.setLineDash([4, 4]);
+            ctx.strokeStyle = P.orange;
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            trail.forEach(([px, py], i) => {
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            });
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Phone icon at end
+            const [lx, ly] = trail[trail.length - 1];
+            ctx.fillStyle = P.orange;
+            ctx.fillRect(lx - 5, ly - 8, 10, 16);
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(lx - 3, ly - 5, 6, 10);
+
+            // Legend
+            ctx.font = '12px -apple-system, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillStyle = P.magenta;
+            ctx.fillText('● Beacon sensor', 50, h - 5);
+            ctx.fillStyle = P.orange;
+            ctx.fillText('--- Derived path', 170, h - 5);
+        })();
+
+        // C2: Heat map showing dwell time zones
+        (function() {
+            const { ctx, w, h } = setupCanvas('c2');
+
+            // Grid-based heatmap
+            const cols = 7;
+            const rows = 5;
+            const cellW = (w - 40) / cols;
+            const cellH = (h - 60) / rows;
+
+            // Dwell intensity data (0-1 scale)
+            const data = [
+                [0.2, 0.3, 0.5, 0.8, 0.9, 0.4, 0.1],
+                [0.1, 0.2, 0.6, 0.7, 0.85, 0.3, 0.1],
+                [0.3, 0.4, 0.3, 0.5, 0.6, 0.7, 0.2],
+                [0.5, 0.6, 0.2, 0.3, 0.4, 0.8, 0.9],
+                [0.1, 0.2, 0.1, 0.2, 0.3, 0.5, 0.6]
+            ];
+
+            // Zone labels
+            const zoneLabels = [
+                { x: 1, y: 0, label: 'Entry' },
+                { x: 4, y: 0, label: 'Shoes' },
+                { x: 5, y: 3, label: 'Checkout' },
+                { x: 2, y: 2, label: 'Aisle 2' },
+                { x: 6, y: 4, label: 'Exit' }
+            ];
+
+            function getColor(val) {
+                if (val > 0.75) return tint(P.magenta, 0.7);
+                if (val > 0.5) return 'rgba(217,89,38,0.6)';
+                if (val > 0.3) return 'rgba(241,196,15,0.45)';
+                return 'rgba(42,120,214,0.2)';
+            }
+
+            // Title
+            ctx.font = 'bold 13px -apple-system, sans-serif';
+            ctx.fillStyle = P.blue;
+            ctx.textAlign = 'center';
+            ctx.fillText('DERIVED DWELL HEAT MAP — ILLUSTRATIVE', w/2, 16);
+
+            // Draw cells
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const x = 20 + c * cellW;
+                    const y = 28 + r * cellH;
+                    ctx.fillStyle = getColor(data[r][c]);
+                    ctx.fillRect(x, y, cellW - 2, cellH - 2);
+                    ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+                    ctx.lineWidth = 0.5;
+                    ctx.strokeRect(x, y, cellW - 2, cellH - 2);
+                }
+            }
+
+            // Zone labels
+            ctx.font = '11px -apple-system, sans-serif';
+            ctx.fillStyle = P.text;
+            ctx.textAlign = 'center';
+            zoneLabels.forEach(({ x, y, label }) => {
+                const px = 20 + x * cellW + cellW/2;
+                const py = 28 + y * cellH + cellH/2 + 3;
+                ctx.fillText(label, px, py);
+            });
+
+            // Legend bar
+            const legendY = h - 22;
+            const gradW = 180;
+            const gradX = (w - gradW) / 2;
+            const grad = ctx.createLinearGradient(gradX, 0, gradX + gradW, 0);
+            grad.addColorStop(0, 'rgba(42,120,214,0.2)');
+            grad.addColorStop(0.35, 'rgba(241,196,15,0.45)');
+            grad.addColorStop(0.65, 'rgba(217,89,38,0.6)');
+            grad.addColorStop(1, tint(P.magenta, 0.7));
+            ctx.fillStyle = grad;
+            ctx.fillRect(gradX, legendY, gradW, 10);
+            ctx.strokeStyle = P.mute;
+            ctx.lineWidth = 0.5;
+            ctx.strokeRect(gradX, legendY, gradW, 10);
+
+            ctx.font = '11px -apple-system, sans-serif';
+            ctx.fillStyle = P.mute;
+            ctx.textAlign = 'left';
+            ctx.fillText('Low dwell', gradX, legendY - 4);
+            ctx.textAlign = 'right';
+            ctx.fillText('High dwell', gradX + gradW, legendY - 4);
+        })();
+
+        // C3: the same footfall reported differently at differently instrumented sites
+        (function() {
+            const { ctx, w, h } = setupCanvas('c3');
+
+            // Four stores with equally busy zones, instrumented at different
+            // densities. The reported level tracks the sensor count, because more
+            // sensors in range means more frames observed per phone passing.
+            // Illustrative index — 100 is the site where the model was fitted.
+            const SITES = [
+                { n: 2,  lvl: 44,  txt: '44' },
+                { n: 4,  lvl: 71,  txt: '71' },
+                { n: 8,  lvl: 100, txt: '100' },
+                { n: 16, lvl: 137, txt: '137' }
+            ];
+            const padL = 52, padR = 22, top = 62, base = 214;
+            const bw = 40, step = (w - padL - padR) / SITES.length;
+            const yOf = v => base - (v / 160) * (base - top);
+
+            ctx.textAlign = 'center';
+            ctx.fillStyle = P.ink;
+            ctx.font = 'bold 12px -apple-system, sans-serif';
+            ctx.fillText('Same footfall, different sensor density', w / 2, 20);
+            ctx.fillStyle = P.mute;
+            ctx.font = '11px -apple-system, sans-serif';
+            ctx.fillText('four stores, zones equally busy', w / 2, 36);
+
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(padL - 8, base); ctx.lineTo(w - 12, base); ctx.stroke();
+
+            SITES.forEach((s, i) => {
+                const cx = padL + i * step + step / 2 - 6;
+                const y = yOf(s.lvl);
+                ctx.fillStyle = tint(P.blue, 0.32);
+                ctx.fillRect(cx - bw / 2, y, bw, base - y);
+                ctx.strokeStyle = P.blue; ctx.lineWidth = 1;
+                ctx.strokeRect(cx - bw / 2, y, bw, base - y);
+
+                ctx.fillStyle = P.blue;
+                ctx.font = 'bold 11px -apple-system, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(s.txt, cx, y - 6);
+                ctx.fillStyle = P.text;
+                ctx.font = '11px -apple-system, sans-serif';
+                ctx.fillText(s.n + ' sensors', cx, base + 15);
+            });
+
+            // the quantity that did not change
+            const ty = yOf(100);
+            ctx.strokeStyle = P.aqua; ctx.lineWidth = 2;
+            ctx.setLineDash([5, 4]);
+            ctx.beginPath(); ctx.moveTo(padL - 8, ty); ctx.lineTo(w - 12, ty); ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.textAlign = 'left';
+            ctx.fillStyle = P.aqua;
+            ctx.font = 'bold 11px -apple-system, sans-serif';
+            ctx.fillText('actual footfall, the same at all four', padL - 6, ty - 7);
+
+            ctx.save();
+            ctx.translate(16, (top + base) / 2);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillStyle = P.mute;
+            ctx.font = '11px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('reported level', 0, 0);
+            ctx.restore();
+
+            ctx.textAlign = 'center';
+            ctx.fillStyle = P.text;
+            ctx.font = 'italic 11px -apple-system, sans-serif';
+            ctx.fillText('Within one store the density is fixed, so it cancels.', w / 2, base + 42);
+            ctx.fillText('Across stores it does not, and rides in the level.', w / 2, base + 58);
+            ctx.fillStyle = P.mute;
+            ctx.font = 'italic 10px -apple-system, sans-serif';
+            ctx.fillText('Illustrative index, not measured at any site.', w / 2, h - 8);
+        })();
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tracking Data: Clipboard Access</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2c3e50; max-width: 100%; margin: 0; padding: 30px 40px; background: #fff; }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+        .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
+        .obj-table { width: 100%; border-collapse: collapse; }
+        .obj-table td { vertical-align: top; padding: 16px; border: 1px solid #2980b9; }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; text-align: center; }
+        ul { padding-left: 20px; margin: 8px 0; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        .obj-table td:last-child .payload,
+        .obj-table td:last-child .payload-note { text-align: left; }
+        .payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 12px 0; }
+        .payload-note { font-size: 0.82em; color: #666; margin: 12px 0 -6px 0; font-style: italic; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        .key-point strong:first-child { color: #1a5276; }
+        .lede { font-size: 0.95em; margin: 0 0 10px 0; }
+        .lbl { display: inline-block; font-size: 0.7em; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; margin: 10px 0 2px 0; }
+        .lbl-purpose { background: #eaf2fb; color: #1a5276; }
+        .lbl-effect { background: #fdf0e6; color: #a8501c; }
+        li b { color: #1a5276; font-weight: 600; }
+        canvas { display: block; margin: 0 auto; }
+    </style>
+</head>
+<body>
+    <h1>Tracking Data: Clipboard Access</h1>
+    <p class="subtitle">An app can read the system clipboard when it comes to the foreground. What it receives is the current item and nothing else — no record of who put it there, or when.</p>
+
+    <table class="obj-table">
+        <tr>
+            <td>
+                <div class="obj-title">What is it?</div>
+                <p class="lede">A shared system buffer, read with an ordinary API call.</p>
+                <ul>
+                    <li><b>Shared by design</b> — copied text sits there so it can be pasted into a different app</li>
+                    <li><b>Not permission-gated</b> — reading it is a normal API call</li>
+                    <li><b>Foreground trigger:</b> an app can read whenever it becomes active, not only on a paste gesture</li>
+                    <li><b>iOS 14 banner</b> notifies when an app reads the clipboard</li>
+                </ul>
+                <div class="key-point"><strong>The reads were not new, the instrument was:</strong> before the banner there was no observable signal, so the read rate was unmeasured — not zero. Any claim about how it changed afterwards compares a period with no instrument to a period with one: a change in observation, not necessarily in behaviour.</div>
+            </td>
+            <td><canvas id="c1" width="720" height="330"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">What does it collect?</div>
+                <ul>
+                    <li><b>Whatever string</b> is currently on the clipboard</li>
+                    <li><b>Credentials</b>, if a password manager copied one and it has not expired</li>
+                    <li><b>Addresses, phone numbers, card numbers</b> copied from another app</li>
+                    <li><b>Text fragments</b> moved between apps, including message and email excerpts</li>
+                    <li><b>URLs</b> and query strings</li>
+                    <li><b>Read time</b> and which app was in the foreground</li>
+                </ul>
+                <div class="key-point"><strong>Two nulls:</strong> the clipboard hands over a string with no provenance. The reading app gets the text, not which app produced it or how long it sat there, so a value copied yesterday is indistinguishable from one copied a second ago. Origin is inference.</div>
+                <div class="key-point"><strong><code>pattern_guess</code> is a guess:</strong> a match on shape, so a tracking number of the right length lands in the same bucket as a card number — recorded as though observed.</div>
+            </td>
+            <td><canvas id="c2" width="720" height="340"></canvas>
+<p class="payload-note">Sample payload &mdash; illustrative structure, not real captured data.</p>
+<pre class="payload">// Clipboard reads leave no published record. The
+// OS-level API returns only the item; everything an
+// app stores about it is its own choice. Reconstruction.
+{
+  // ── inferred / plausible ──
+  "app_session":   "sess_3ac9…",
+  "read_ts":       "2026-08-22T08:12:44Z",
+  "trigger":       "app_foreground",
+  "types":         ["text/plain"],
+  "length_chars":  19,
+  "sample":        "…",          // content, if retained
+  "pattern_guess": "card_number", // regex on the string
+  "source_app":    null,          // OS does not say who copied it
+  "copied_at":     null           // nor when
+}</pre>
+</td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">Why is it collected?</div>
+                <div class="lbl lbl-purpose">Stated purpose</div>
+                <ul>
+                    <li><b>Paste assistance</b> — recognise a URL, coupon code, or tracking number already copied and offer to use it</li>
+                    <li><b>Why on foreground</b> — the offer has to be ready before the user asks, so the read cannot wait for a paste gesture</li>
+                </ul>
+                <div class="lbl lbl-effect">Additional consequence</div>
+                <ul>
+                    <li>The clipboard becomes a <b>join key</b> — a string synced across devices is identical on both, so an app seeing it twice has a match with no identifier supplied</li>
+                    <li>The match is <b>on the text</b>, not on the person</li>
+                </ul>
+                <div class="key-point"><strong>Wrong merges do not fix themselves:</strong> identical clipboard text usually means one account, but a code copied from a group chat lands on several clipboards at once, and a handed-over phone gives the same string for two people. Once two histories are welded together they look like one consistent history.</div>
+            </td>
+            <td><canvas id="c3" width="720" height="330"></canvas></td>
+        </tr>
+    </table>
+
+    <script>
+    const P = {
+      blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+      aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+      ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+    };
+    const SERIES = [P.blue, P.green, P.violet, P.orange, P.aqua, P.magenta, P.yellow];
+    const dpr = window.devicePixelRatio || 1;
+    // Validated categorical palette. Red is deliberately NOT in the rotation —
+    // it stays reserved for genuine error/alarm states.
+    function rr(ctx, x, y, w, h, r) {
+      r = Math.min(r, Math.abs(w)/2, Math.abs(h)/2);
+      ctx.beginPath();
+      ctx.moveTo(x+r, y); ctx.lineTo(x+w-r, y); ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+      ctx.lineTo(x+w, y+h-r); ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+      ctx.lineTo(x+r, y+h); ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+      ctx.lineTo(x, y+r); ctx.quadraticCurveTo(x, y, x+r, y);
+      ctx.closePath();
+    }
+    function setupCanvas(id) {
+        const c = document.getElementById(id);
+        const w = c.getAttribute('width') ? +c.getAttribute('width') : 720;
+        const h = c.getAttribute('height') ? +c.getAttribute('height') : 320;
+        c.width = w * dpr; c.height = h * dpr;
+        c.style.width = w + 'px'; c.style.height = h + 'px';
+        const ctx = c.getContext('2d');
+        ctx.scale(dpr, dpr);
+        return { ctx, w, h };
+    }
+    // Translucent fill derived from a palette token — never a new hex literal.
+    function tint(hex, a) {
+      const n = parseInt(hex.slice(1), 16);
+      return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+    }
+
+    // C1: One shared clipboard, readable by any foregrounded app
+    (function() {
+        const { ctx, w, h } = setupCanvas('c1');
+        const cx = w / 2, cy = h / 2 + 8;
+
+        // Title
+        ctx.fillStyle = P.ink;
+        ctx.font = 'bold 16px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('One shared clipboard — any app can read it on foreground', cx, 24);
+
+        // Apps, each its own hue: identity comes from colour, not position
+        const apps = [
+            { x: cx - 235, y: cy - 62, label: 'App A', c: P.blue },
+            { x: cx - 235, y: cy + 62, label: 'App B', c: P.green },
+            { x: cx + 235, y: cy - 62, label: 'App C', c: P.violet },
+            { x: cx + 235, y: cy + 62, label: 'App D', c: P.orange },
+        ];
+
+        // Read arrows first, so the cards sit on top
+        apps.forEach(app => {
+            const fromX = cx + (app.x < cx ? -46 : 46);
+            const toX   = app.x + (app.x < cx ? 34 : -34);
+            ctx.strokeStyle = app.c;
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 5]);
+            ctx.beginPath();
+            ctx.moveTo(fromX, cy);
+            ctx.quadraticCurveTo((fromX + toX) / 2, app.y, toX, app.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            // arrowhead pointing at the app
+            const dir = app.x < cx ? -1 : 1;
+            ctx.fillStyle = app.c;
+            ctx.beginPath();
+            ctx.moveTo(toX, app.y);
+            ctx.lineTo(toX - dir * 9, app.y - 5);
+            ctx.lineTo(toX - dir * 9, app.y + 5);
+            ctx.closePath();
+            ctx.fill();
+        });
+
+        // App cards
+        apps.forEach(app => {
+            rr(ctx, app.x - 34, app.y - 24, 68, 48, 10);
+            ctx.fillStyle = app.c;
+            ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 17px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(app.label, app.x, app.y + 5);
+            ctx.fillStyle = P.mute;
+            ctx.font = '15px -apple-system, sans-serif';
+            ctx.fillText('reads on open', app.x, app.y + 40);
+        });
+
+        // The clipboard itself — neutral, it is the shared resource
+        rr(ctx, cx - 62, cy - 58, 124, 116, 10);
+        ctx.fillStyle = '#f4f6f8';
+        ctx.fill();
+        ctx.strokeStyle = P.ink;
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+        rr(ctx, cx - 18, cy - 65, 36, 15, 4);
+        ctx.fillStyle = P.ink;
+        ctx.fill();
+
+        ctx.fillStyle = P.mute;
+        ctx.font = '15px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('current item', cx, cy - 30);
+        ctx.fillStyle = P.text;
+        ctx.font = 'bold 17px monospace';
+        ctx.fillText('4532 •••• 1234', cx, cy - 8);
+
+        // What the read does NOT return — the page's actual point
+        ctx.strokeStyle = P.grid;
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(cx - 50, cy + 6); ctx.lineTo(cx + 50, cy + 6); ctx.stroke();
+        ctx.fillStyle = P.magenta;
+        ctx.font = '15px -apple-system, sans-serif';
+        ctx.fillText('no source app', cx, cy + 26);
+        ctx.fillText('no copy time', cx, cy + 44);
+
+        ctx.fillStyle = P.mute;
+        ctx.font = '17px -apple-system, sans-serif';
+        ctx.fillText('The read returns the item, not its provenance', cx, h - 14);
+    })();
+
+    // C2: A string matches a pattern; the pattern is not the meaning
+    (function() {
+        const { ctx, w, h } = setupCanvas('c2');
+
+        ctx.font = 'bold 17px -apple-system, sans-serif';
+        ctx.fillStyle = P.ink;
+        ctx.textAlign = 'center';
+        ctx.fillText('Pattern match \u2260 what the string is', w / 2, 26);
+
+        const rows = [
+            { str: '4532 8821 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022', guess: 'card_number', alt: 'could also be an order ref', c: P.blue },
+            { str: '1Z999AA10123456784',  guess: 'tracking_id', alt: 'could also be a serial',     c: P.green },
+            { str: '742 Evergreen Terrace', guess: 'address',   alt: 'could also be a venue name', c: P.violet },
+            { str: 'https://\u2026/reset?t=\u2026', guess: 'url', alt: 'may carry a one-time token', c: P.orange },
+            { str: '+1 (555) 234-5678',   guess: 'phone',       alt: 'could also be a case number', c: P.aqua }
+        ];
+
+        // Column headers
+        ctx.font = 'bold 16px -apple-system, sans-serif';
+        ctx.fillStyle = P.mute;
+        ctx.textAlign = 'left';
+        ctx.fillText('OBSERVED STRING', 34, 54);
+        ctx.fillText('STORED LABEL', 330, 54);
+        ctx.fillText('NOT RULED OUT', 470, 54);
+        ctx.strokeStyle = P.grid;
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(30, 62); ctx.lineTo(w - 30, 62); ctx.stroke();
+
+        const startY = 74, rowH = 46;
+
+        rows.forEach((r, i) => {
+            const y = startY + i * rowH;
+
+            // Row card with a 2px surface gap between fills
+            rr(ctx, 30, y, w - 60, rowH - 8, 7);
+            ctx.fillStyle = i % 2 === 0 ? '#f7f9fc' : '#ffffff';
+            ctx.fill();
+
+            // Hue tab: identity of the row, carried on the left edge
+            rr(ctx, 30, y, 5, rowH - 8, 2.5);
+            ctx.fillStyle = r.c;
+            ctx.fill();
+
+            // The observed string — the only measured column
+            ctx.font = '16px monospace';
+            ctx.fillStyle = P.text;
+            ctx.textAlign = 'left';
+            ctx.fillText(r.str, 46, y + 25);
+
+            // Arrow: measured -> inferred
+            ctx.strokeStyle = r.c;
+            ctx.lineWidth = 2;
+            ctx.setLineDash([4, 3]);
+            ctx.beginPath();
+            ctx.moveTo(288, y + 20); ctx.lineTo(318, y + 20);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = r.c;
+            ctx.beginPath();
+            ctx.moveTo(324, y + 20); ctx.lineTo(316, y + 16); ctx.lineTo(316, y + 24);
+            ctx.closePath(); ctx.fill();
+
+            // The stored guess, in the row hue
+            ctx.font = 'bold 17px monospace';
+            ctx.fillStyle = r.c;
+            ctx.fillText(r.guess, 330, y + 25);
+
+            // The alternative it cannot rule out
+            ctx.font = '16px -apple-system, sans-serif';
+            ctx.fillStyle = P.mute;
+            ctx.fillText(r.alt, 470, y + 25);
+        });
+
+        ctx.fillStyle = P.mute;
+        ctx.font = '17px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Only the left column is measured.', w / 2, h - 26);
+        ctx.fillText('The middle column is a guess stored under a confident name.', w / 2, h - 8);
+    })();
+
+    // C3: a merge on shared clipboard text. Three people's activity lands under
+    // one identity, and the merged row looks steadier than any real person.
+    (function() {
+        const { ctx, w, h } = setupCanvas('c3');
+
+        // Illustrative session times over one week, by hour-of-week index (0-167).
+        // All three copied the same promo code out of one group chat, so the
+        // clipboard string is identical and the join treats them as one account.
+        const PEOPLE = [
+            { label: 'person 1', c: P.blue,
+              t: [9, 33, 58, 81, 106, 130] },
+            { label: 'person 2', c: P.aqua,
+              t: [14, 20, 44, 68, 92, 96, 118, 141, 160] },
+            { label: 'person 3', c: P.violet,
+              t: [4, 27, 51, 62, 74, 88, 111, 124, 137, 150, 165] }
+        ];
+        const MERGED = PEOPLE.flatMap(p => p.t).sort((a, b) => a - b);
+
+        const padL = 96, padR = 96, top = 66, rowGap = 34;
+        const xAt = t => padL + (t / 167) * (w - padL - padR);
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.ink;
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillText('One shared code, three people, one profile', w / 2, 26);
+        ctx.fillStyle = P.mute;
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillText('app sessions over one week, joined on identical clipboard text', w / 2, 45);
+
+        PEOPLE.forEach((p, i) => {
+            const y = top + i * rowGap;
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - padR, y); ctx.stroke();
+            ctx.strokeStyle = p.c; ctx.lineWidth = 2.5;
+            p.t.forEach(t => {
+                ctx.beginPath(); ctx.moveTo(xAt(t), y - 8); ctx.lineTo(xAt(t), y + 8); ctx.stroke();
+            });
+            ctx.textAlign = 'right';
+            ctx.fillStyle = p.c;
+            ctx.font = 'bold 12px -apple-system, sans-serif';
+            ctx.fillText(p.label, padL - 12, y + 4);
+            ctx.textAlign = 'left';
+            ctx.font = '12px -apple-system, sans-serif';
+            ctx.fillText(p.t.length + ' sessions', w - padR + 10, y + 4);
+        });
+
+        // the merged row: one hue, because the join lost the distinction
+        const my = top + PEOPLE.length * rowGap + 22;
+        ctx.fillStyle = tint(P.orange, 0.10);
+        ctx.fillRect(padL - 92, my - 22, w - padL - padR + 158, 46);
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(padL, my); ctx.lineTo(w - padR, my); ctx.stroke();
+        ctx.strokeStyle = P.orange; ctx.lineWidth = 2.5;
+        MERGED.forEach(t => {
+            ctx.beginPath(); ctx.moveTo(xAt(t), my - 9); ctx.lineTo(xAt(t), my + 9); ctx.stroke();
+        });
+        ctx.textAlign = 'right';
+        ctx.fillStyle = P.orange;
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.fillText('one profile', padL - 12, my);
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillText('after the join', padL - 12, my + 14);
+        ctx.textAlign = 'left';
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.fillText(MERGED.length + ' sessions', w - padR + 10, my + 4);
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.text;
+        ctx.font = 'italic 12px -apple-system, sans-serif';
+        ctx.fillText('The bottom row has no gaps, so it reads as one steady user rather than a fault.', w / 2, h - 26);
+        ctx.fillStyle = P.mute;
+        ctx.font = 'italic 11px -apple-system, sans-serif';
+        ctx.fillText('Illustrative session times — the pattern, not measured activity.', w / 2, h - 9);
+    })();
+
+    </script>
+</body>
+</html>
