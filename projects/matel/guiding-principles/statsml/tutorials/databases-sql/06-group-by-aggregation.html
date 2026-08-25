@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GROUP BY &amp; Aggregation</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+.sql {
+    background: #f8f9fa;
+    border-left: 3px solid #1a5276;
+    padding: 8px 12px;
+    margin-top: 10px;
+    font-family: ui-monospace, Menlo, monospace;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    overflow-x: auto;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>GROUP BY &amp; Aggregation</h1>
+<p class="subtitle">Collapsing many rows into one summary row per group — counts, sums, and averages instead of the raw detail</p>
+
+<div class="card-section">
+    <h2>From 8 Orders to 3 City Rows</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">running example</span></div>
+                <ul>
+                    <li><b>The question</b> &mdash; the shop asks "how much did each city buy?", not "show me every order"</li>
+                    <li><b>By hand</b> &mdash; deal the 8 orders into piles by city: Pune gets 4, Delhi 3, Mumbai 1</li>
+                    <li><b>GROUP BY city</b> &mdash; tells the database to make exactly those piles for you</li>
+                    <li><b>One row per pile</b> &mdash; 8 order rows go in, 3 city rows come out</li>
+                    <li><b>The detail is gone</b> &mdash; you can no longer see order 1004 in the output, only its pile</li>
+                </ul>
+                <p class="example">Sorting receipts into three trays labeled Pune, Delhi, Mumbai — then reporting one line per tray.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> GROUP BY collapses rows into piles. The output has one row per distinct value of the grouping column — never one row per order.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>COUNT, SUM, AVG: The Numbers on Each Pile</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">worked example</span><span class="tag blue">core idea</span></div>
+                <ul>
+                    <li><b>Pune pile</b> &mdash; orders 1001, 1003, 1006, 1007: count 4, sum $8+$5+$15+$12 = $40</li>
+                    <li><b>Delhi pile</b> &mdash; orders 1002, 1005, 1008: count 3, sum $15+$12+$6 = $33</li>
+                    <li><b>Mumbai pile</b> &mdash; only order 1004: count 1, sum $8</li>
+                    <li><b>AVG is sum &divide; count</b> &mdash; Pune $40/4 = $10, Delhi $33/3 = $11, Mumbai $8/1 = $8</li>
+                    <li><b>One number per pile</b> &mdash; each aggregate squeezes a whole pile into a single value</li>
+                </ul>
+                <pre class="sql">SELECT city, COUNT(*), SUM(amount), AVG(amount)
+FROM   orders
+GROUP  BY city;   -- 3 rows</pre>
+                <p class="example">Check Delhi yourself: 15 + 12 + 6 = 33, and 33 divided by 3 orders is 11.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> An aggregate function (COUNT, SUM, AVG, MIN, MAX) answers one question per pile — that is why it pairs with GROUP BY.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>HAVING: Filtering Piles, Not Orders</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag orange">why it matters</span></div>
+                <ul>
+                    <li><b>New question</b> &mdash; "which cities bought at least $30 in total?" filters the piles themselves</li>
+                    <li><b>WHERE can't do it</b> &mdash; WHERE sees one order at a time; a pile's total does not exist yet</li>
+                    <li><b>HAVING SUM &gt;= 30</b> &mdash; runs after the piles are built: Pune $40 and Delhi $33 pass</li>
+                    <li><b>Mumbai dropped</b> &mdash; its $8 pile fails the test, so the whole city row disappears</li>
+                    <li><b>Everywhere in practice</b> &mdash; revenue per region, events per user, error counts per server: all GROUP BY</li>
+                </ul>
+                <pre class="sql">SELECT city, SUM(amount) AS total
+FROM   orders
+GROUP  BY city
+HAVING SUM(amount) >= 30;   -- Pune, Delhi</pre>
+                <p class="example">"Users with more than 100 events" and "cities above $30" are the same shape: build piles, then test each pile.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> WHERE filters rows before the piles exist; HAVING filters the finished piles. Nearly every dashboard metric is a GROUP BY with one of these.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Average of Averages Is Not the Average</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">why it matters</span></div>
+                <ul>
+                    <li><b>The trap</b> &mdash; averaging the 3 city averages: (10 + 11 + 8) / 3 = $9.67 per order</li>
+                    <li><b>The truth</b> &mdash; the real average is total $81 over all 8 orders = $10.13</li>
+                    <li><b>Why they differ</b> &mdash; Mumbai's single $8 order counts as much as Pune's whole pile of 4</li>
+                    <li><b>Small piles shout</b> &mdash; the fewer orders a group has, the more its average distorts the mix</li>
+                    <li><b>The fix</b> &mdash; go back to the raw rows: AVG(amount) with no grouping, or SUM/SUM across groups</li>
+                </ul>
+                <p class="example">A dashboard averaged per-country averages and a 3-order country moved the global number more than a 3-million-order one.</p>
+                <div class="key-point">
+                    <strong>Rule of thumb:</strong> Never average a column that is itself an average unless every group has the same number of rows — weight by count instead.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var w = +canvas.getAttribute('width'), h = +canvas.getAttribute('height');
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+    return { ctx: ctx, w: w, h: h };
+}
+
+function drawTable(ctx, x, y, cols, widths, rows, opt) {
+    opt = opt || {};
+    var rowH = opt.rowH || 24;
+    var totalW = 0;
+    for (var i = 0; i < widths.length; i++) totalW += widths[i];
+    ctx.textAlign = 'left';
+    ctx.fillStyle = opt.headBg || P.ink;
+    ctx.fillRect(x, y, totalW, rowH);
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = '#fff';
+    var cx = x;
+    for (i = 0; i < cols.length; i++) { ctx.fillText(cols[i], cx + 6, y + rowH - 8); cx += widths[i]; }
+    for (var r = 0; r < rows.length; r++) {
+        var ry = y + rowH * (r + 1);
+        ctx.fillStyle = (opt.rowBg && opt.rowBg[r]) ? opt.rowBg[r] : (r % 2 ? '#f4f6f8' : '#fff');
+        ctx.fillRect(x, ry, totalW, rowH);
+        ctx.fillStyle = (opt.rowColor && opt.rowColor[r]) || P.text;
+        ctx.font = (opt.rowBold && opt.rowBold[r]) ? 'bold 12px system-ui' : '12px system-ui';
+        cx = x;
+        for (var c = 0; c < rows[r].length; c++) { ctx.fillText(String(rows[r][c]), cx + 6, ry + rowH - 8); cx += widths[c]; }
+    }
+    ctx.strokeStyle = '#cfd8e0'; ctx.lineWidth = 1;
+    ctx.strokeRect(x, y, totalW, rowH * (rows.length + 1));
+    return { x: x, y: y, w: totalW, rowH: rowH, rowCenter: function(r) { return y + rowH * (r + 1) + rowH / 2; } };
+}
+
+var ORDERS = [
+    [1001, 'Asha', 'Pune', '$8'], [1002, 'Ben', 'Delhi', '$15'],
+    [1003, 'Asha', 'Pune', '$5'], [1004, 'Chloe', 'Mumbai', '$8'],
+    [1005, 'Ben', 'Delhi', '$12'], [1006, 'Dev', 'Pune', '$15'],
+    [1007, 'Asha', 'Pune', '$12'], [1008, 'Ella', 'Delhi', '$6']
+];
+var CITY_COLOR = { Pune: P.blue, Delhi: P.green, Mumbai: P.magenta };
+var CITY_BG = {
+    Pune: 'rgba(42,120,214,0.10)',
+    Delhi: 'rgba(0,131,0,0.10)',
+    Mumbai: 'rgba(213,81,129,0.12)'
+};
+
+// c1: 8 order rows collapsing into 3 group rows
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w;
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('GROUP BY city: 8 Rows In, 3 Piles Out', w / 2, 24);
+
+    var bg = [], col = [];
+    for (var i = 0; i < ORDERS.length; i++) {
+        bg.push(CITY_BG[ORDERS[i][2]]);
+        col.push(CITY_COLOR[ORDERS[i][2]]);
+    }
+    var oT = drawTable(ctx, 30, 44, ['order_id', 'customer', 'city', 'amount'], [62, 72, 66, 60], ORDERS,
+        { rowH: 26, rowBg: bg, rowColor: col });
+
+    var groups = [
+        { city: 'Pune', rows: [0, 2, 5, 6], y: 90 },
+        { city: 'Delhi', rows: [1, 4, 7], y: 160 },
+        { city: 'Mumbai', rows: [3], y: 230 }
+    ];
+    for (var g = 0; g < groups.length; g++) {
+        var G = groups[g], c = CITY_COLOR[G.city];
+        for (var r = 0; r < G.rows.length; r++) {
+            ctx.strokeStyle = c; ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(oT.x + oT.w, oT.rowCenter(G.rows[r]));
+            ctx.lineTo(470, G.y);
+            ctx.stroke();
+        }
+        ctx.fillStyle = CITY_BG[G.city];
+        ctx.fillRect(474, G.y - 16, 190, 34);
+        ctx.strokeStyle = c; ctx.lineWidth = 2;
+        ctx.strokeRect(474, G.y - 16, 190, 34);
+        ctx.font = 'bold 13px system-ui'; ctx.fillStyle = c; ctx.textAlign = 'left';
+        ctx.fillText(G.city + ' pile: ' + G.rows.length + ' order' + (G.rows.length > 1 ? 's' : ''), 484, G.y + 5);
+    }
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.orange; ctx.textAlign = 'left';
+    ctx.fillText('one output row per pile', 484, 276);
+})();
+
+// c2: result table + SUM bars with count/avg labels
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w;
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The 3-Row Result — Every Number Checkable by Hand', w / 2, 24);
+
+    var rows = [
+        ['Pune', 4, '$40', '$10'],
+        ['Delhi', 3, '$33', '$11'],
+        ['Mumbai', 1, '$8', '$8']
+    ];
+    var bg = ['rgba(42,120,214,0.10)', 'rgba(0,131,0,0.10)', 'rgba(213,81,129,0.12)'];
+    drawTable(ctx, 40, 60, ['city', 'COUNT(*)', 'SUM', 'AVG'], [70, 72, 55, 55], rows,
+        { rowH: 28, rowBg: bg });
+
+    // SUM bars
+    var sums = [40, 33, 8], cities = ['Pune', 'Delhi', 'Mumbai'];
+    var colors = [P.blue, P.green, P.magenta];
+    var counts = [4, 3, 1], avgs = [10, 11, 8];
+    var px = 360, pw = 320, baseY = 232, chH = 150, maxY = 45;
+    var barW = 74, gap = (pw - 3 * barW) / 2;
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px - 10, baseY); ctx.lineTo(px + pw + 10, baseY); ctx.stroke();
+
+    for (var i = 0; i < 3; i++) {
+        var x = px + i * (barW + gap);
+        var bh = sums[i] / maxY * chH;
+        ctx.fillStyle = colors[i];
+        ctx.fillRect(x, baseY - bh, barW, bh);
+        ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('$' + sums[i], x + barW / 2, baseY - bh - 8);
+        ctx.font = '12px system-ui';
+        ctx.fillText(cities[i], x + barW / 2, baseY + 17);
+        ctx.fillStyle = P.mute;
+        ctx.fillText(counts[i] + ' orders, avg $' + avgs[i], x + barW / 2, baseY + 33);
+    }
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.blue; ctx.textAlign = 'center';
+    ctx.fillText('Pune: 8+5+15+12 = $40', px + pw / 2, 58);
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute;
+    ctx.fillText('SUM(amount) per city', px + pw / 2, 78);
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.orange; ctx.textAlign = 'left';
+    ctx.fillText('the 8 orders are gone —', 60, 210);
+    ctx.fillText('only their summaries remain', 60, 228);
+})();
+
+// c3: WHERE vs HAVING pipeline, Mumbai dropped
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w;
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('HAVING SUM(amount) >= 30: Tests Whole Piles', w / 2, 24);
+
+    var stages = [
+        { x: 40, label: '8 orders', sub: 'raw rows', c: P.mute },
+        { x: 230, label: '3 piles', sub: 'GROUP BY city', c: P.blue },
+        { x: 470, label: '2 piles', sub: 'HAVING >= $30', c: P.green }
+    ];
+    for (var i = 0; i < stages.length; i++) {
+        var st = stages[i];
+        ctx.fillStyle = '#f4f6f8';
+        ctx.fillRect(st.x, 54, 150, 44);
+        ctx.strokeStyle = st.c; ctx.lineWidth = 2;
+        ctx.strokeRect(st.x, 54, 150, 44);
+        ctx.fillStyle = st.c; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(st.label, st.x + 75, 74);
+        ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+        ctx.fillText(st.sub, st.x + 75, 92);
+        if (i < stages.length - 1) {
+            var ax1 = st.x + 150, ax2 = stages[i + 1].x - 6;
+            ctx.strokeStyle = P.mute; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(ax1, 76); ctx.lineTo(ax2, 76); ctx.stroke();
+            ctx.fillStyle = P.mute;
+            ctx.beginPath(); ctx.moveTo(ax2, 76); ctx.lineTo(ax2 - 8, 71); ctx.lineTo(ax2 - 8, 81); ctx.closePath(); ctx.fill();
+        }
+    }
+
+    // pile bars with threshold line
+    var sums = [40, 33, 8], cities = ['Pune', 'Delhi', 'Mumbai'];
+    var colors = [P.blue, P.green, P.magenta];
+    var px = 120, pw = 440, baseY = 262, chH = 118, maxY = 45;
+    var barW = 92, gap = (pw - 3 * barW) / 2;
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px - 15, baseY); ctx.lineTo(px + pw + 15, baseY); ctx.stroke();
+
+    var yTh = baseY - 30 / maxY * chH;
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(px - 15, yTh); ctx.lineTo(px + pw + 15, yTh); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'left';
+    ctx.fillText('$30 bar', px + pw + 20, yTh + 4);
+
+    for (var i = 0; i < 3; i++) {
+        var x = px + i * (barW + gap);
+        var bh = sums[i] / maxY * chH;
+        var pass = sums[i] >= 30;
+        ctx.fillStyle = pass ? colors[i] : 'rgba(213,81,129,0.30)';
+        ctx.fillRect(x, baseY - bh, barW, bh);
+        ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('$' + sums[i], x + barW / 2, baseY - bh - 8);
+        ctx.font = '12px system-ui';
+        ctx.fillText(cities[i], x + barW / 2, baseY + 17);
+        if (!pass) {
+            ctx.font = 'bold 12px system-ui'; ctx.fillStyle = '#e74c3c';
+            ctx.fillText('whole pile dropped', x + barW / 2, baseY - bh - 26);
+        }
+    }
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.green; ctx.textAlign = 'left';
+    ctx.fillText('the test compares pile totals — no single order is ever $30', 130, 130);
+})();
+
+// c4: avg of averages vs true average
+(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w;
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Two "Average Order Values" from the Same 8 Orders', w / 2, 24);
+
+    var px = 100, baseY = 226, chH = 150, maxY = 12;
+    var bars = [
+        { label: 'average of the 3 city averages', sub: '(10 + 11 + 8) / 3', v: 9.67, txt: '$9.67', c: '#e74c3c' },
+        { label: 'true average over all 8 orders', sub: '$81 / 8', v: 10.13, txt: '$10.13', c: P.green }
+    ];
+    var barW = 150, gap = 130;
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px - 20, baseY); ctx.lineTo(px + 2 * barW + gap + 20, baseY); ctx.stroke();
+
+    for (var i = 0; i < 2; i++) {
+        var x = px + i * (barW + gap);
+        var bh = bars[i].v / maxY * chH;
+        ctx.fillStyle = bars[i].c;
+        ctx.fillRect(x, baseY - bh, barW, bh);
+        ctx.fillStyle = P.text; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(bars[i].txt, x + barW / 2, baseY - bh - 8);
+        ctx.font = '12px system-ui';
+        ctx.fillText(bars[i].label, x + barW / 2, baseY + 17);
+        ctx.fillStyle = P.mute;
+        ctx.fillText(bars[i].sub, x + barW / 2, baseY + 33);
+    }
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'center';
+    ctx.fillText('Mumbai (1 order) pulls as hard as Pune (4 orders)', w / 2, 62);
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute;
+    ctx.fillText('the gap grows with how unequal the pile sizes are', w / 2, 82);
+    ctx.fillText('weight each group by its COUNT, or aggregate the raw rows directly', w / 2, 284);
+})();
+</script>
+
+</body>
+</html>

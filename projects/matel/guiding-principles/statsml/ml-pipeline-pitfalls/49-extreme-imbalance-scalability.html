@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Extreme Imbalance Scalability Problem</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.metric strong {
+    color: #1a5276;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Extreme Imbalance Scalability Problem</h1>
+<p class="subtitle">Rare positives + statistical requirements = need massive negative data, creating scalability crisis.</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">rare positives</span></div>
+                <ul>
+                    <li><b>Rare positives</b> — at 0.01% prevalence, enough positives implies billions of negatives</li>
+                    <li><b>Sampling trade-off</b> — downsampling to 1:10 or 1:100 discards negative-class diversity</li>
+                    <li><b>Distribution shift</b> — the model overfits sampled negatives, then serving looks different</li>
+                    <li><b>Statistical power</b> — ~30 positives per cell across 10,000 cells means ~3B total examples</li>
+                    <li><b>Scalability limits</b> — billions of rows exceed memory, and cross-validation takes weeks</li>
+                    <li><b>Class weights</b> — the optimal minority weight is data-dependent and shifts with the ratio</li>
+                </ul>
+                <p class="example">A fraud model at a 0.02% rate needs 50K fraud examples and 250M negatives; after 1:50 downsampling, the production false-positive rate runs 3x the test rate.</p>
+                <div class="key-point">
+                    <strong>Impact:</strong> The model either starves for positives or drowns in negatives — naive downsampling swaps the scalability problem for a distribution-shift problem.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">rare events</span></div>
+                <ul>
+                    <li><b>Colliding demands</b> — rare-event math meets methods that assume both classes are common</li>
+                    <li><b>Rare-event math</b> — each analysis bucket needs enough positives, so total data explodes</li>
+                    <li><b>Method assumptions</b> — standard profiling tests expect reasonable counts in every class</li>
+                    <li><b>Split fragility</b> — stratified splits still yield near-empty minority cells in some folds</li>
+                    <li><b>Misleading metrics</b> — predicting all-negative already scores 99.9% at extreme ratios</li>
+                </ul>
+                <p class="example">At a 0.05% fraud rate, a 100K training set holds only 50 fraud cases — just 5 per bucket across 10 profiling buckets.</p>
+                <div class="key-point">
+                    <strong>Root Cause:</strong> Statistical tests assume sufficient samples in each class, and at 1000:1 or worse ratios per-class statistics have enormous variance.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">calibration</span></div>
+                <ul>
+                    <li><b>Downsample with correction</b> — sampling stays practical only if its distortions are undone</li>
+                    <li><b>Prior correction</b> — recalibrate predicted probabilities for the known sampling rate</li>
+                    <li><b>Hard negatives</b> — keep boundary-adjacent negatives via importance weighting or mining</li>
+                    <li><b>Wider buckets</b> — merge cells until each meets a minimum minority count, e.g. 20</li>
+                    <li><b>Rank tests, with limits</b> — Mann-Whitney drops distribution assumptions, not power needs</li>
+                    <li><b>Two-tier profiling</b> — profile the majority finely, pool the minority into coarser buckets</li>
+                </ul>
+                <p class="example">With 50 total positives and a 20-per-bucket minimum, adaptive bucketing yields at most 2 minority buckets instead of 10 near-empty ones.</p>
+                <div class="key-point">
+                    <strong>Fix:</strong> Downsample only with prior correction and retained hard negatives, and widen buckets until each meets a minimum minority-count threshold.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Extreme Imbalance: 99.99% Overhead for 0.01% Signal', w/2, 22);
+
+    // Large rectangle representing total data
+    var totalW = 580, totalH = 100;
+    var ox = 70, oy = 50;
+
+    ctx.fillStyle = 'rgba(26,82,118,0.15)';
+    ctx.fillRect(ox, oy, totalW, totalH);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(ox, oy, totalW, totalH);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('6M Total Records', ox + totalW/2, oy + 30);
+    ctx.font = '11px system-ui';
+    ctx.fillText('(99.99% negatives)', ox + totalW/2, oy + 50);
+
+    // Tiny red sliver for positives
+    var posW = 6;
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(ox + totalW - posW, oy, posW, totalH);
+
+    // Arrow pointing to sliver
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(ox + totalW - 80, oy + totalH + 15);
+    ctx.lineTo(ox + totalW - 3, oy + totalH + 2);
+    ctx.stroke();
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'right';
+    ctx.fillText('600 positives', ox + totalW - 85, oy + totalH + 15);
+    ctx.font = '11px system-ui';
+    ctx.fillText('(0.01%)', ox + totalW - 85, oy + totalH + 28);
+
+    // Statistical requirements box
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(70, 180, 280, 70);
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Statistical Requirements:', 80, 198);
+    ctx.font = '11px system-ui';
+    ctx.fillText('• 20 buckets for profiling', 80, 215);
+    ctx.fillText('• 30 positives per bucket', 80, 230);
+    ctx.fillText('= 600 positives minimum', 80, 245);
+
+    // Compute overhead box
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(370, 180, 280, 70);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Compute Overhead:', 380, 198);
+    ctx.font = '11px system-ui';
+    ctx.fillText('• 6M records to process', 380, 215);
+    ctx.fillText('• 5,999,400 are negatives', 380, 230);
+    ctx.fillText('• 99.99% wasted compute', 380, 245);
+
+    // Bottom annotation
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Downsample negatives → lose diversity. Keep all → scalability crisis.', w/2, h - 10);
+})();
+
+// Canvas 2: Why It Happens - class distribution with tiny minority split into buckets
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Class Distribution: Minority Vanishes in Buckets', w/2, 22);
+
+    // Left side: class distribution bars
+    var barX = 60, barW = 80, baseY = 240;
+
+    // Majority bar (tall)
+    var majH = 180;
+    ctx.fillStyle = 'rgba(26,82,118,0.35)';
+    ctx.fillRect(barX, baseY - majH, barW, majH);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(barX, baseY - majH, barW, majH);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('99,950', barX + barW/2, baseY - majH - 8);
+    ctx.fillText('Majority', barX + barW/2, baseY + 15);
+
+    // Minority bar (tiny)
+    var minH = 4;
+    var minX = barX + 120;
+    ctx.fillStyle = 'rgba(231,76,60,0.5)';
+    ctx.fillRect(minX, baseY - minH, barW, minH);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(minX, baseY - minH, barW, minH);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('50', minX + barW/2, baseY - minH - 8);
+    ctx.fillText('Minority', minX + barW/2, baseY + 15);
+
+    // Arrow from minority to buckets
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(minX + barW + 20, baseY - minH - 20);
+    ctx.lineTo(340, baseY - minH - 20);
+    ctx.lineTo(340, 55);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Right side: 10 buckets with minority samples
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = '#e67e22';
+    ctx.textAlign = 'center';
+    ctx.fillText('Split into 10 Profiling Buckets', 530, 48);
+
+    var bucketW = 32, bucketGap = 6, bucketStartX = 360, bucketBaseY = 220;
+    var samplesPerBucket = [8, 3, 7, 4, 6, 5, 2, 9, 3, 3];
+
+    for (var i = 0; i < 10; i++) {
+        var bx = bucketStartX + i * (bucketW + bucketGap);
+        var bh = samplesPerBucket[i] * 6;
+
+        // Bucket bar
+        ctx.fillStyle = 'rgba(231,76,60,0.4)';
+        ctx.fillRect(bx, bucketBaseY - bh, bucketW, bh);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(bx, bucketBaseY - bh, bucketW, bh);
+
+        // Sample count
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = '10px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(samplesPerBucket[i], bx + bucketW/2, bucketBaseY - bh - 5);
+
+        // Error bars (enormous relative to bar)
+        var errH = 40 + Math.random() * 30;
+        ctx.strokeStyle = '#e67e22';
+        ctx.lineWidth = 1.5;
+        var cx = bx + bucketW/2;
+        var cy = bucketBaseY - bh/2;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - errH/2);
+        ctx.lineTo(cx, cy + errH/2);
+        ctx.stroke();
+        // Caps
+        ctx.beginPath();
+        ctx.moveTo(cx - 5, cy - errH/2);
+        ctx.lineTo(cx + 5, cy - errH/2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx - 5, cy + errH/2);
+        ctx.lineTo(cx + 5, cy + errH/2);
+        ctx.stroke();
+    }
+
+    // Label for error bars
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Huge error bars — no statistical power', 530, 245);
+
+    // Bottom annotation
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('5 samples per bucket = meaningless comparisons', w/2, h - 10);
+})();
+
+// Canvas 3: The Correct Approach - downsampling + wider buckets
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Correct: Downsample + Calibrate, Wider Buckets for Minority', w/2, 22);
+
+    // Left side: Downsampled distribution
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Downsample to 10:1', 130, 48);
+
+    var barX = 60, barW = 60, baseY = 200;
+
+    // Downsampled majority bar
+    var majH = 100;
+    ctx.fillStyle = 'rgba(26,82,118,0.35)';
+    ctx.fillRect(barX, baseY - majH, barW, majH);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(barX, baseY - majH, barW, majH);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('500', barX + barW/2, baseY - majH - 6);
+    ctx.fillText('Majority', barX + barW/2, baseY + 14);
+    ctx.fillText('(downsampled)', barX + barW/2, baseY + 27);
+
+    // Minority bar (now visible)
+    var minX = barX + 90;
+    var minH = 10;
+    ctx.fillStyle = 'rgba(39,174,96,0.4)';
+    ctx.fillRect(minX, baseY - minH, barW, minH);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(minX, baseY - minH, barW, minH);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '11px system-ui';
+    ctx.fillText('50', minX + barW/2, baseY - minH - 6);
+    ctx.fillText('Minority', minX + barW/2, baseY + 14);
+
+    // Green check mark
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 16px system-ui';
+    ctx.fillText('✓', 130, baseY + 50);
+    ctx.font = '11px system-ui';
+    ctx.fillText('Manageable ratio', 130, baseY + 65);
+    ctx.fillText('+ calibration correction', 130, baseY + 79);
+
+    // Divider line
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(270, 40);
+    ctx.lineTo(270, h - 20);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Right side: Wider buckets with adequate samples
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Wider Buckets (2 instead of 10)', 500, 48);
+
+    var wBucketW = 100, wBucketGap = 20, wBucketStartX = 385, wBucketBaseY = 190;
+    var wSamples = [26, 24];
+    var bucketLabels = ['Bucket 1', 'Bucket 2'];
+
+    for (var i = 0; i < 2; i++) {
+        var bx = wBucketStartX + i * (wBucketW + wBucketGap);
+        var bh = wSamples[i] * 4;
+
+        // Bucket bar
+        ctx.fillStyle = 'rgba(39,174,96,0.3)';
+        ctx.fillRect(bx, wBucketBaseY - bh, wBucketW, bh);
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(bx, wBucketBaseY - bh, wBucketW, bh);
+
+        // Sample count
+        ctx.fillStyle = '#27ae60';
+        ctx.font = 'bold 12px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText('n=' + wSamples[i], bx + wBucketW/2, wBucketBaseY - bh - 8);
+
+        // Label
+        ctx.fillStyle = '#555';
+        ctx.font = '11px system-ui';
+        ctx.fillText(bucketLabels[i], bx + wBucketW/2, wBucketBaseY + 14);
+
+        // Small error bars (reasonable)
+        var errH = 18;
+        var cx = bx + wBucketW/2;
+        var cy = wBucketBaseY - bh/2;
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - errH/2);
+        ctx.lineTo(cx, cy + errH/2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx - 6, cy - errH/2);
+        ctx.lineTo(cx + 6, cy - errH/2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx - 6, cy + errH/2);
+        ctx.lineTo(cx + 6, cy + errH/2);
+        ctx.stroke();
+
+        // Green check
+        ctx.fillStyle = '#27ae60';
+        ctx.font = 'bold 14px system-ui';
+        ctx.fillText('✓', bx + wBucketW/2, wBucketBaseY + 30);
+    }
+
+    // Minimum threshold line
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 3]);
+    ctx.beginPath();
+    var threshY = wBucketBaseY - 20 * 4; // 20 samples threshold
+    ctx.moveTo(wBucketStartX - 10, threshY);
+    ctx.lineTo(wBucketStartX + 2 * (wBucketW + wBucketGap) - wBucketGap + 10, threshY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e67e22';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('min 20 samples', wBucketStartX + 2 * (wBucketW + wBucketGap) - wBucketGap + 15, threshY + 4);
+
+    // Bottom annotation
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Statistically valid: adequate samples per bucket for reliable comparisons', w/2, h - 10);
+})();
+</script>
+
+</body>
+</html>

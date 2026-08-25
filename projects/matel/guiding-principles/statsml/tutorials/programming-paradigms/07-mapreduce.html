@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MapReduce: Split, Work, Combine</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+table.layout td.text-col3 { width: 38%; }
+table.layout td.viz-col3 { width: 31%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+li code, .example code { font-family: ui-monospace, Menlo, monospace; font-size: 0.9em; background: #f4f6f8; padding: 1px 4px; border-radius: 3px; }
+pre.code {
+    background: #f8f9fa;
+    border-left: 3px solid #1a5276;
+    padding: 10px 12px;
+    font-family: ui-monospace, Menlo, monospace;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    overflow-x: auto;
+    margin-top: 10px;
+}
+</style>
+</head>
+<body>
+
+<h1>MapReduce: Split, Work, Combine</h1>
+<p class="subtitle">Counting word frequencies across 1,000 books: give each of 10 machines a pile, let each count its own pile, then merge the counts</p>
+
+<div class="card-section">
+    <h2>1,000 Books, One Impossible Evening</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">running example</span></div>
+                <ul>
+                    <li><b>The job</b> — count how often every word appears across 1,000 books</li>
+                    <li><b>One machine</b> — reading all 1,000 books alone takes ~5 hours (illustrative)</li>
+                    <li><b>Split</b> — deal the books out: 10 machines get 100 books each</li>
+                    <li><b>Work</b> — each machine counts words in its own 100 books, ~30 minutes, all at once</li>
+                    <li><b>Combine</b> — merge the 10 count tables into one grand total</li>
+                </ul>
+                <p class="example">Ten friends each count their own bookshelf, then shout their tallies to one scorekeeper.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The trick is that counting is splittable — no machine needs to see another machine's books to do its share.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Two Machines, Three Sentences — By Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col3">
+                <div class="tags"><span class="tag green">worked example</span></div>
+                <ul>
+                    <li><b>Machine A holds</b> — "the cat sat" and "the dog ran"</li>
+                    <li><b>Machine B holds</b> — "the cat ran"</li>
+                    <li><b>Map</b> — each machine counts locally: A gets the:2, B gets the:1</li>
+                    <li><b>Shuffle</b> — all counts for the same word travel to the same place</li>
+                    <li><b>Reduce</b> — sum each word's pile: the: 2+1 = 3</li>
+                    <li><b>Check it</b> — nine words total across both machines; the five totals sum to 9</li>
+                </ul>
+                <p class="example">"the" appears twice on A and once on B — shuffle puts [2, 1] together, reduce says 3.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Map never sees other machines; reduce never sees raw text. The shuffle in the middle is the only hand-off.
+                </div>
+            </td>
+            <td class="viz-col3">
+                <canvas id="c2a" width="420" height="340"></canvas>
+            </td>
+            <td class="viz-col3">
+                <canvas id="c2b" width="400" height="340"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>You Already Use This Pattern</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span></div>
+                <ul>
+                    <li><b>GROUP BY</b> — <code>SELECT word, SUM(n) GROUP BY word</code> is map, shuffle, reduce</li>
+                    <li><b>pandas</b> — <code>df.groupby('word').sum()</code> is the same pattern on one machine</li>
+                    <li><b>Spark and Hadoop</b> — the same three steps, spread across hundreds of machines</li>
+                    <li><b>Works when combinable</b> — sum, count, max: pieces merge cleanly into a total</li>
+                    <li><b>Struggles when not</b> — an exact median needs all values in one place; no clean pieces</li>
+                </ul>
+                <p class="example">Every groupby you have ever written was a tiny MapReduce that never left your laptop.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Big-data engines are not magic — they are this split-work-combine pattern plus machinery for moving the pieces.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+<pre class="code"># the same computation, three spellings
+SELECT word, SUM(n) FROM counts GROUP BY word;   -- SQL
+
+df.groupby("word")["n"].sum()                    # pandas
+
+counts.reduceByKey(lambda a, b: a + b)           # Spark</pre>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Average-of-Averages Trap</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag green">worked example</span></div>
+                <ul>
+                    <li><b>The confusion</b> — "reduce = average the machines' averages" — it is not</li>
+                    <li><b>Machine A</b> — 10 orders, average $4.00 (sum $40)</li>
+                    <li><b>Machine B</b> — 90 orders, average $8.00 (sum $720)</li>
+                    <li><b>Average of averages</b> — (4 + 8) / 2 = $6.00 — wrong</li>
+                    <li><b>True average</b> — (40 + 720) / (10 + 90) = 760 / 100 = $7.60</li>
+                    <li><b>The fix</b> — machines send (sum, count) pairs; only the final step divides</li>
+                </ul>
+                <p class="example">B carries 9x the orders of A, but averaging averages weighs the machines equally.</p>
+                <div class="key-point">
+                    <strong>Common confusion:</strong> Reduce needs combinable pieces. Sums and counts combine; averages, medians, and percentiles do not.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var P = {
+    blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+    aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+    ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var c = document.getElementById(id);
+    var w = +c.getAttribute('width'), h = +c.getAttribute('height');
+    var dpr = window.devicePixelRatio || 1;
+    c.width = w * dpr; c.height = h * dpr;
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+    return { ctx: ctx, w: w, h: h };
+}
+
+function box(ctx, x, y, w, h, fill, stroke) {
+    ctx.fillStyle = fill;
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(x, y, w, h);
+}
+
+function arrow(ctx, x1, y1, x2, y2, color) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var a = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(a - 0.4), y2 - 8 * Math.sin(a - 0.4));
+    ctx.lineTo(x2 - 8 * Math.cos(a + 0.4), y2 - 8 * Math.sin(a + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: split 1,000 books across 10 machines, combine counts
+(function() {
+    var s = setup('c1'), ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 16px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Split the Books, Not the Job Description', w / 2, 24);
+
+    // Left: the pile of books
+    box(ctx, 30, 105, 100, 70, 'rgba(42,120,214,0.15)', P.blue);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('1,000', 80, 133);
+    ctx.fillText('books', 80, 151);
+
+    // Middle: 10 machines (draw 4 + ellipsis label)
+    var machY = [52, 105, 158, 211];
+    for (var i = 0; i < 4; i++) {
+        var label = i < 3 ? ('machine ' + (i + 1)) : 'machine 10';
+        arrow(ctx, 132, 140, 240, machY[i] + 20, P.mute);
+        box(ctx, 244, machY[i], 118, 40, 'rgba(0,131,0,0.10)', P.green);
+        ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, 303, machY[i] + 17);
+        ctx.fillStyle = P.text; ctx.font = '11px system-ui';
+        ctx.fillText('100 books', 303, machY[i] + 32);
+    }
+    ctx.fillStyle = P.mute; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('...', 303, 205);
+
+    // local count tables
+    for (var i = 0; i < 4; i++) {
+        arrow(ctx, 364, machY[i] + 20, 434, machY[i] + 20, P.mute);
+        box(ctx, 438, machY[i], 108, 40, 'rgba(74,58,167,0.10)', P.violet);
+        ctx.fillStyle = P.violet; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('local counts', 492, machY[i] + 17);
+        ctx.fillText('word : n', 492, machY[i] + 32);
+    }
+
+    // combine
+    for (var i = 0; i < 4; i++) {
+        arrow(ctx, 548, machY[i] + 20, 610, 135, P.mute);
+    }
+    box(ctx, 612, 105, 92, 62, 'rgba(217,89,38,0.12)', P.orange);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('grand', 658, 130);
+    ctx.fillText('totals', 658, 147);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('alone: ~5 h  |  10 machines at once: ~30 min (illustrative)', 380, 282);
+})();
+
+// c2a: MAP — two machines count locally
+(function() {
+    var s = setup('c2a'), ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Map: Count Your Own Pile', w / 2, 24);
+
+    // Machine A
+    box(ctx, 25, 44, 175, 130, 'rgba(0,131,0,0.08)', P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('Machine A', 112, 64);
+    ctx.fillStyle = P.text; ctx.font = 'italic 12px system-ui';
+    ctx.fillText('"the cat sat"', 112, 86);
+    ctx.fillText('"the dog ran"', 112, 103);
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('the:2  cat:1  sat:1', 112, 133);
+    ctx.fillText('dog:1  ran:1', 112, 150);
+
+    // Machine B
+    box(ctx, 220, 44, 175, 130, 'rgba(42,120,214,0.08)', P.blue);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('Machine B', 307, 64);
+    ctx.fillStyle = P.text; ctx.font = 'italic 12px system-ui';
+    ctx.fillText('"the cat ran"', 307, 86);
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('the:1  cat:1  ran:1', 307, 133);
+
+    arrow(ctx, 112, 108, 112, 120, P.mute);
+    arrow(ctx, 307, 108, 307, 120, P.mute);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('neither machine has seen', w / 2, 218);
+    ctx.fillText('the other\'s sentences', w / 2, 236);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('map output: (word, count) pairs,', w / 2, 272);
+    ctx.fillText('one small table per machine', w / 2, 290);
+})();
+
+// c2b: SHUFFLE + REDUCE — group by word, then sum
+(function() {
+    var s = setup('c2b'), ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Shuffle Groups, Reduce Sums', w / 2, 24);
+
+    var rows = [
+        { word: 'the', pile: '[2, 1]', total: '3' },
+        { word: 'cat', pile: '[1, 1]', total: '2' },
+        { word: 'ran', pile: '[1, 1]', total: '2' },
+        { word: 'sat', pile: '[1]',    total: '1' },
+        { word: 'dog', pile: '[1]',    total: '1' }
+    ];
+
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillStyle = P.aqua;   ctx.fillText('shuffle: pile per word', 165, 54);
+    ctx.fillStyle = P.orange; ctx.fillText('reduce', 330, 54);
+
+    for (var i = 0; i < 5; i++) {
+        var y = 68 + i * 36;
+        ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(rows[i].word, 90, y + 17);
+        box(ctx, 105, y, 120, 25, 'rgba(25,158,112,0.10)', P.aqua);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(rows[i].pile, 165, y + 17);
+        arrow(ctx, 232, y + 12, 292, y + 12, P.mute);
+        box(ctx, 296, y, 68, 25, 'rgba(217,89,38,0.12)', P.orange);
+        ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui';
+        ctx.fillText(rows[i].total, 330, y + 17);
+    }
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('totals: 3+2+2+1+1 = 9 words', w / 2, 278);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('matches the 9 words we started with', w / 2, 296);
+})();
+
+// c3: groupby engines all follow split / work / combine
+(function() {
+    var s = setup('c3'), ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 16px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Pattern, Many Tools', w / 2, 24);
+
+    var cols = [
+        { x: 250, label: 'split', color: P.green },
+        { x: 400, label: 'work', color: P.violet },
+        { x: 550, label: 'combine', color: P.orange }
+    ];
+    var tools = [
+        { label: 'SQL GROUP BY', note: 'one server' },
+        { label: 'pandas groupby', note: 'your laptop' },
+        { label: 'Spark / Hadoop', note: '100s of machines' }
+    ];
+
+    ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    for (var j = 0; j < 3; j++) {
+        ctx.fillStyle = cols[j].color;
+        ctx.fillText(cols[j].label, cols[j].x + 45, 58);
+    }
+
+    for (var i = 0; i < 3; i++) {
+        var y = 78 + i * 52;
+        ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(tools[i].label, 200, y + 20);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+        ctx.fillText(tools[i].note, 200, y + 35);
+        for (var j = 0; j < 3; j++) {
+            box(ctx, cols[j].x, y, 90, 32, 'rgba(42,120,214,0.06)', cols[j].color);
+            ctx.fillStyle = cols[j].color; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('✓', cols[j].x + 45, y + 21);
+            if (j < 2) arrow(ctx, cols[j].x + 90, y + 16, cols[j + 1].x - 2, y + 16, P.grid);
+        }
+    }
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('every groupby is a tiny MapReduce — the engines differ only in scale', w / 2, 262);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('shuffle is the hidden middle step: same key, same place', w / 2, 282);
+})();
+
+// c4: average-of-averages vs true average
+(function() {
+    var s = setup('c4'), ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 16px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Combining Averages Goes Wrong', w / 2, 24);
+
+    ctx.strokeStyle = P.grid; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(330, 40); ctx.lineTo(330, h - 12); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Left: the two machines
+    box(ctx, 40, 60, 240, 60, 'rgba(0,131,0,0.08)', P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Machine A', 55, 82);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('10 orders   sum $40   avg $4.00', 55, 104);
+
+    box(ctx, 40, 135, 240, 60, 'rgba(42,120,214,0.08)', P.blue);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('Machine B', 55, 157);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('90 orders   sum $720   avg $8.00', 55, 179);
+
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('B has 9x the orders of A —', 160, 232);
+    ctx.fillText('any fair total must weight it 9x', 160, 250);
+
+    // Right: two candidate answers as bars
+    var bars = [
+        { label: 'avg of avgs: (4+8)/2', v: 6.0, txt: '$6.00', color: '#e74c3c', sub: 'WRONG' },
+        { label: 'true avg: 760/100', v: 7.6, txt: '$7.60', color: P.green, sub: 'RIGHT' }
+    ];
+    var x0 = 375, maxW = 230, maxV = 8;
+    for (var i = 0; i < 2; i++) {
+        var y = 76 + i * 78;
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(bars[i].label, x0, y - 8);
+        var bwid = bars[i].v / maxV * maxW;
+        ctx.fillStyle = bars[i].color;
+        ctx.fillRect(x0, y, bwid, 30);
+        ctx.font = 'bold 13px system-ui';
+        ctx.fillText(bars[i].txt + '  ' + bars[i].sub, x0 + bwid + 10, y + 20);
+    }
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('ship (sum, count) pairs; divide once at the end', 520, 250);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('(40+720) / (10+90) = $7.60', 520, 270);
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cost, Latency, Quality</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+table.layout td.text-col3 { width: 38%; }
+table.layout td.viz-col3 { width: 31%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Cost, Latency, Quality</h1>
+<p class="subtitle">Every model choice trades three things — money, speed, and how good the answers are — and no single model wins all three</p>
+
+<div class="card-section">
+    <h2>Same Task, Two Models, Three Numbers</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col3">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">running example</span></div>
+                <ul>
+                    <li><b>The task</b> — summarize support tickets; both models get identical prompts</li>
+                    <li><b>Small model</b> — $2 per 1,000 calls, 0.8s median response, 78% quality</li>
+                    <li><b>Large model</b> — $40 per 1,000 calls, 4.5s median response, 92% quality</li>
+                    <li><b>Quality</b> — the pass rate on a 20-ticket graded golden set (illustrative numbers)</li>
+                    <li><b>No free lunch</b> — the better answers cost 20x more and take 5.6x longer</li>
+                </ul>
+                <p class="example">The large model writes the better summary of ticket #7 — 3.7 seconds after the small one already answered.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> "Which model is best?" is the wrong question. Ask "best at what price, at what speed, for this task?"
+                </div>
+            </td>
+            <td class="viz-col3">
+                <canvas id="c1a" width="420" height="340"></canvas>
+            </td>
+            <td class="viz-col3">
+                <canvas id="c1b" width="400" height="340"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>What the Gap Costs at 10,000 Calls a Day</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">worked example</span><span class="tag blue">core idea</span></div>
+                <ul>
+                    <li><b>Volume</b> — 10,000 ticket summaries per day, every day</li>
+                    <li><b>Small model</b> — 10 &times; $2 = $20/day &rarr; $20 &times; 365 = $7,300 per year</li>
+                    <li><b>Large model</b> — 10 &times; $40 = $400/day &rarr; $400 &times; 365 = $146,000 per year</li>
+                    <li><b>The gap</b> — $138,700 a year buys 14 quality points (78% &rarr; 92%)</li>
+                    <li><b>Frame it</b> — is fixing 14 extra summaries in 100 worth ~$380 a day here?</li>
+                </ul>
+                <p class="example">For internal triage notes, probably not; for summaries sent to paying customers, maybe yes.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Per-call prices look tiny until you multiply by volume. Always cost the yearly bill, then ask what each quality point is worth in your use case.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Routing: Send Easy Cases to the Cheap Model</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">rule of thumb</span></div>
+                <ul>
+                    <li><b>The insight</b> — most tickets are easy; the small model handles them well</li>
+                    <li><b>The split</b> — 70% easy tickets &rarr; small model (90% quality on the easy ones)</li>
+                    <li><b>The rest</b> — 30% hard tickets &rarr; large model (92% quality)</li>
+                    <li><b>Blended quality</b> — 0.7 &times; 90 + 0.3 &times; 92 = 90.6%, near the large model's 92%</li>
+                    <li><b>Blended cost</b> — 0.7 &times; $2 + 0.3 &times; $40 = $13.40 per 1,000 vs $40 all-large</li>
+                </ul>
+                <p class="example">A one-line router — "long ticket, multiple orders, or angry customer &rarr; large model" — is often enough to start.</p>
+                <div class="key-point">
+                    <strong>Rule of thumb:</strong> Don't pick one model — pick a policy. Routing easy cases cheap kept 98.5% of the quality for a third of the cost here.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Confusion: "Always Use the Best Model"</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">trade-off</span></div>
+                <ul>
+                    <li><b>The mistake</b> — defaulting to the biggest model for everything, "to be safe"</li>
+                    <li><b>Latency has a budget</b> — a live-chat user gives up waiting after about 2 seconds</li>
+                    <li><b>Live chat</b> — only the 0.8s small model fits; the 4.5s large one loses the user</li>
+                    <li><b>Agent assist</b> — a ~6s budget fits both; now decide on quality per dollar</li>
+                    <li><b>Overnight batch</b> — nobody is waiting; latency is irrelevant, quality per dollar rules</li>
+                </ul>
+                <p class="example">The "worse" small model wins the chat use case outright — the best answer that arrives too late is a non-answer.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Comparing models on quality alone. The use case sets the latency budget and the money budget first — quality is chosen inside those limits.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var w = +canvas.getAttribute('width');
+    var h = +canvas.getAttribute('height');
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+    return { ctx: ctx, w: w, h: h };
+}
+
+// helper: simple two-bar vertical chart
+function twoBars(id, title, vals, valLabels, maxV, yTicks, yFmt, note, noteCol) {
+    var s = setup(id);
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var pad = { top: 56, bottom: 52, left: 62, right: 20 };
+    var cw = w - pad.left - pad.right, ch = h - pad.top - pad.bottom;
+    var baseY = pad.top + ch;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText(title, w / 2, 26);
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad.left, pad.top); ctx.lineTo(pad.left, baseY); ctx.lineTo(pad.left + cw, baseY); ctx.stroke();
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'right';
+    yTicks.forEach(function(v) {
+        var y = baseY - v / maxV * ch;
+        ctx.fillText(yFmt(v), pad.left - 6, y + 4);
+        if (v > 0) {
+            ctx.strokeStyle = P.grid;
+            ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + cw, y); ctx.stroke();
+        }
+    });
+
+    var names = ['small model', 'large model'];
+    var cols = [P.aqua, P.violet];
+    var barW = 100, gap = (cw - 2 * barW) / 3;
+    for (var i = 0; i < 2; i++) {
+        var x = pad.left + gap + i * (barW + gap);
+        var bh = vals[i] / maxV * ch;
+        ctx.fillStyle = cols[i];
+        ctx.fillRect(x, baseY - bh, barW, bh);
+        ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(valLabels[i], x + barW / 2, baseY - bh - 8);
+        ctx.font = '12px system-ui';
+        ctx.fillText(names[i], x + barW / 2, baseY + 18);
+    }
+
+    ctx.fillStyle = noteCol; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(note, w / 2, h - 12);
+}
+
+// c1a: cost per 1,000 calls
+twoBars('c1a', 'Cost per 1,000 calls', [2, 40], ['$2', '$40'], 44,
+    [0, 20, 40], function(v) { return '$' + v; },
+    '20x the price', P.violet);
+
+// c1b: latency and quality combined — draw manually
+(function() {
+    var s = setup('c1b');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Response time & quality', w / 2, 26);
+
+    // top half: latency horizontal bars
+    var bx = 120, bw = w - bx - 80;
+    ctx.fillStyle = P.mute; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('median response time', bx, 54);
+    var lat = [{ n: 'small', v: 0.8, c: P.aqua }, { n: 'large', v: 4.5, c: P.violet }];
+    for (var i = 0; i < 2; i++) {
+        var y = 66 + i * 38;
+        var bl = lat[i].v / 5 * bw;
+        ctx.fillStyle = lat[i].c;
+        ctx.fillRect(bx, y, bl, 24);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(lat[i].n, bx - 8, y + 17);
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(lat[i].v + 's', bx + bl + 6, y + 17);
+    }
+
+    // bottom half: quality horizontal bars
+    ctx.fillStyle = P.mute; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('quality (golden-set pass rate)', bx, 178);
+    var q = [{ n: 'small', v: 78, c: P.aqua }, { n: 'large', v: 92, c: P.violet }];
+    for (var i = 0; i < 2; i++) {
+        var y = 190 + i * 38;
+        var bl = q[i].v / 100 * bw;
+        ctx.fillStyle = q[i].c;
+        ctx.fillRect(bx, y, bl, 24);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(q[i].n, bx - 8, y + 17);
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(q[i].v + '%', bx + bl + 6, y + 17);
+    }
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('+14 quality points, 5.6x slower', w / 2, h - 14);
+})();
+
+// c2: yearly cost at 10,000 calls/day
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var pad = { top: 56, bottom: 50, left: 80, right: 40 };
+    var cw = w - pad.left - pad.right, ch = h - pad.top - pad.bottom;
+    var baseY = pad.top + ch;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Yearly Bill at 10,000 Calls per Day', w / 2, 26);
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad.left, pad.top); ctx.lineTo(pad.left, baseY); ctx.lineTo(pad.left + cw, baseY); ctx.stroke();
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'right';
+    [0, 50, 100, 150].forEach(function(v) {
+        var y = baseY - v / 160 * ch;
+        ctx.fillText('$' + v + 'k', pad.left - 6, y + 4);
+        if (v > 0) {
+            ctx.strokeStyle = P.grid;
+            ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + cw, y); ctx.stroke();
+        }
+    });
+
+    var bars = [
+        { n: 'small model (78% quality)', v: 7.3, label: '$7,300 / yr', c: P.aqua },
+        { n: 'large model (92% quality)', v: 146, label: '$146,000 / yr', c: P.violet }
+    ];
+    var barW = 170, gap = (cw - 2 * barW) / 3;
+    for (var i = 0; i < 2; i++) {
+        var x = pad.left + gap + i * (barW + gap);
+        var bh = bars[i].v / 160 * ch;
+        ctx.fillStyle = bars[i].c;
+        ctx.fillRect(x, baseY - bh, barW, bh);
+        ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(bars[i].label, x + barW / 2, baseY - bh - 8);
+        ctx.font = '12px system-ui';
+        ctx.fillText(bars[i].n, x + barW / 2, baseY + 18);
+    }
+
+    // gap bracket
+    var x1 = pad.left + gap + barW / 2, x2 = pad.left + 2 * gap + barW + barW / 2;
+    var yTop = baseY - 146 / 160 * ch;
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(x1 + 90, baseY - 7.3 / 160 * ch); ctx.lineTo(x2 - 90, yTop + 24); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the 14 quality points cost $138,700 a year', pad.left + cw / 2, pad.top + 14);
+})();
+
+// c3: three strategies — cost vs quality scatter
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var pad = { top: 56, bottom: 52, left: 70, right: 40 };
+    var cw = w - pad.left - pad.right, ch = h - pad.top - pad.bottom;
+    var baseY = pad.top + ch;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Three Policies: Cost per 1,000 Calls vs Quality', w / 2, 26);
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad.left, pad.top); ctx.lineTo(pad.left, baseY); ctx.lineTo(pad.left + cw, baseY); ctx.stroke();
+
+    // x: $0-45, y: quality 70-95
+    function X(v) { return pad.left + v / 45 * cw; }
+    function Y(v) { return baseY - (v - 70) / 25 * ch; }
+
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'center';
+    [0, 10, 20, 30, 40].forEach(function(v) { ctx.fillText('$' + v, X(v), baseY + 18); });
+    ctx.textAlign = 'right';
+    [70, 80, 90].forEach(function(v) {
+        ctx.fillText(v + '%', pad.left - 8, Y(v) + 4);
+        ctx.strokeStyle = P.grid;
+        ctx.beginPath(); ctx.moveTo(pad.left, Y(v)); ctx.lineTo(pad.left + cw, Y(v)); ctx.stroke();
+    });
+    ctx.fillStyle = P.mute; ctx.textAlign = 'center';
+    ctx.fillText('cost per 1,000 calls', pad.left + cw / 2, h - 10);
+    ctx.save();
+    ctx.translate(20, pad.top + ch / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText('blended quality', 0, 0);
+    ctx.restore();
+
+    var pts = [
+        { n: 'all small', x: 2, y: 78, c: P.aqua, dx: 10, dy: 4 },
+        { n: 'routed 70/30', x: 13.4, y: 90.6, c: P.green, dx: 12, dy: 4 },
+        { n: 'all large', x: 40, y: 92, c: P.violet, dx: -70, dy: 4 }
+    ];
+    for (var i = 0; i < 3; i++) {
+        var p = pts[i];
+        ctx.fillStyle = p.c;
+        ctx.beginPath(); ctx.arc(X(p.x), Y(p.y), 9, 0, 2 * Math.PI); ctx.fill();
+        ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(p.n, X(p.x) + p.dx, Y(p.y) + p.dy);
+    }
+    // dollar/quality labels
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'left';
+    ctx.fillText('$2, 78%', X(2) + 10, Y(78) + 22);
+    ctx.fillText('$13.40, 90.6%', X(13.4) + 12, Y(90.6) + 22);
+    ctx.fillText('$40, 92%', X(40) - 70, Y(92) + 22);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('routing keeps 98.5% of the quality at 34% of the cost', pad.left + cw * 0.5, pad.top + 16);
+})();
+
+// c4: latency budgets by use case vs the two model speeds
+(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var pad = { top: 62, bottom: 46, left: 150, right: 30 };
+    var cw = w - pad.left - pad.right;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Latency Budget by Use Case vs Model Speed', w / 2, 26);
+
+    // x axis 0-8s
+    var maxS = 8;
+    function X(v) { return pad.left + Math.min(v, maxS) / maxS * cw; }
+    var axisY = h - pad.bottom;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad.left, pad.top - 10); ctx.lineTo(pad.left, axisY); ctx.lineTo(pad.left + cw, axisY); ctx.stroke();
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'center';
+    [0, 2, 4, 6, 8].forEach(function(v) { ctx.fillText(v + 's', X(v), axisY + 16); });
+
+    var rows = [
+        { n: 'live chat', budget: 2, note: 'only small fits' },
+        { n: 'agent assist', budget: 6, note: 'both fit — pick by quality per $' },
+        { n: 'overnight batch', budget: 99, note: 'no limit — quality per $ rules' }
+    ];
+    for (var i = 0; i < 3; i++) {
+        var y = pad.top + i * 52;
+        var r = rows[i];
+        var bl = X(r.budget) - pad.left;
+        ctx.fillStyle = 'rgba(42,120,214,0.18)';
+        ctx.fillRect(pad.left, y, bl, 32);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 1;
+        ctx.strokeRect(pad.left, y, bl, 32);
+        ctx.fillStyle = P.text; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(r.n, pad.left - 10, y + 21);
+        ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        var noteX = (r.budget > maxS) ? pad.left + 8 : X(r.budget) + 8;
+        var noteCol = (i === 0) ? P.aqua : P.text;
+        ctx.fillStyle = noteCol;
+        ctx.font = 'bold 12px system-ui';
+        ctx.fillText(r.note, noteX, y + 21);
+        if (r.budget > maxS) {
+            ctx.fillStyle = '#fff';
+            ctx.fillText(r.note, pad.left + 8, y + 21);
+        }
+    }
+
+    // model speed markers
+    var mSmall = 0.8, mLarge = 4.5;
+    ctx.strokeStyle = P.aqua; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(X(mSmall), pad.top - 10); ctx.lineTo(X(mSmall), axisY); ctx.stroke();
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 3; ctx.setLineDash([7, 4]);
+    ctx.beginPath(); ctx.moveTo(X(mLarge), pad.top - 10); ctx.lineTo(X(mLarge), axisY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.aqua; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('small: 0.8s', X(mSmall) + 4, pad.top - 16);
+    ctx.fillStyle = P.violet;
+    ctx.fillText('large: 4.5s', X(mLarge), pad.top - 16);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the large model misses the live-chat budget entirely — quality never got a vote', w / 2, axisY + 34);
+})();
+</script>
+
+</body>
+</html>

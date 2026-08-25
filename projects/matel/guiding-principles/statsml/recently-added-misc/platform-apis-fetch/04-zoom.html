@@ -18,7 +18,6 @@
         .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
         .verified { display: inline-block; background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-bottom: 16px; }
         h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
-        .status { display: inline-block; background: #fef9e7; border: 1px solid #f39c12; color: #b7950b; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-left: 12px; vertical-align: middle; }
         table.obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
         table.obj-table td { vertical-align: top; padding: 12px; }
         table.obj-table td:first-child { width: 45%; }
@@ -28,154 +27,63 @@
         .key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
         ul { padding-left: 20px; }
         li { margin-bottom: 6px; font-size: 0.93em; }
+        a { color: #1a5276; }
         .section-title { font-weight: bold; color: #1a5276; font-size: 1.05em; margin-bottom: 8px; margin-top: 16px; }
-        .scope-list { margin: 8px 0 12px; }
-        .scope-tag { display: inline-block; background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 1px 8px; border-radius: 10px; font-size: 0.78em; font-family: ui-monospace, Menlo, monospace; margin: 3px 4px 3px 0; }
     </style>
 </head>
 <body>
-    <h1>Zoom <span class="status">BACKLOG</span></h1>
-    <p class="subtitle">Meeting and webinar metadata, per-participant join/leave records, cloud recordings and audio transcripts, and the Dashboard quality-of-service surface.</p>
+    <h1>Zoom</h1>
+    <p class="subtitle">Pull who attended each Zoom meeting and for how long, plus recordings, transcripts and connection-quality stats.</p>
     <span class="verified">Last verified: August 2026</span>
 
     <h2>Overview</h2>
     <table class="obj-table">
         <tr>
             <td>
-                <p style="font-size:0.93em;">Zoom exposes conferencing data through several distinct API families that look similar but answer different questions: configuration endpoints describe meetings as scheduled, <code>/past_meetings</code> and <code>/report</code> describe meetings as they actually happened, and <code>/metrics</code> (Dashboard) describes connection quality. They disagree with each other often enough that choosing the wrong family is the most common source of wrong numbers.</p>
-
-                <div class="section-title">What It Provides</div>
+                <div class="section-title">What you can get</div>
                 <ul>
-                    <li><strong>Scheduled state</strong> — meetings and webinars as configured: topic, host, start time, duration, settings, join URL, recurrence.</li>
-                    <li><strong>Occurred state</strong> — past meeting instances keyed by <code>uuid</code>, with per-participant <code>join_time</code>, <code>leave_time</code> and <code>duration</code>.</li>
-                    <li><strong>Reports</strong> — aggregated usage per user, per meeting, per day; poll and Q&amp;A results; webinar registrant and attendee reports.</li>
-                    <li><strong>Dashboard / QoS</strong> — bitrate, latency, jitter, packet loss, CPU, resolution, per participant, per media stream (audio / video / screen share).</li>
-                    <li><strong>Cloud recordings</strong> — file inventory per recording (MP4, M4A, chat file, and <code>TRANSCRIPT</code> VTT when enabled), with download URLs.</li>
-                    <li><strong>Webinars</strong> — sessions, registrants, panelists, absentees, tracking sources.</li>
+                    <li>Meetings as scheduled, and as they actually happened</li>
+                    <li>Per-person join and leave times for each meeting</li>
+                    <li>Cloud recordings, and transcripts if they were enabled beforehand</li>
+                    <li>Connection-quality stats per participant</li>
+                    <li>Webinar registration and attendance</li>
                 </ul>
 
-                <div class="section-title">Authentication &amp; Scopes</div>
-                <div class="scope-list"><span class="scope-tag">meeting:read:admin</span><span class="scope-tag">report:read:admin</span><span class="scope-tag">dashboard_meetings:read:admin</span><span class="scope-tag">recording:read:admin</span><span class="scope-tag">webinar:read:admin</span><span class="scope-tag">user:read:admin</span></div>
+                <div class="key-point"><strong>The rejoin trap.</strong> Attendance data has one row per <em>connection</em>, not per person. Someone who dropped and rejoined appears twice, and joining from two devices double-counts. Merge each person's time intervals before counting heads or hours, or every attendance number comes out inflated.</div>
+
+                <div class="section-title">Watch out for</div>
                 <ul>
-                    <li><strong>Server-to-Server OAuth</strong> is the mechanism for unattended collectors. It replaced the old <strong>JWT app type</strong>, which Zoom deprecated and then removed — any integration still described as "JWT" is dead and must be rebuilt.</li>
-                    <li><strong>User-level OAuth</strong> for acting on behalf of an individual host; <strong>account-level</strong> for org-wide reads.</li>
-                    <li>Scopes are granular and split by actor: <code>meeting:read:admin</code>, <code>report:read:admin</code>, <code>dashboard_meetings:read:admin</code>, <code>recording:read:admin</code>, <code>webinar:read:admin</code>, plus the <code>cloud_recording</code> family. An admin-suffixed scope requires the app to be authorised at account level and, for published apps, admin consent.</li>
-                </ul>
-
-                <div class="section-title">Granularity</div>
-                <p style="font-size:0.93em;">The finest analytic grain is <em>one row per participant per join</em>, not per participant per meeting. Below that, Dashboard QoS is one row per participant per media stream per sampling interval. Above it, reports aggregate to meeting, user, and day.</p>
-
-                <div class="key-point"><strong>The rejoin trap.</strong> <code>/report/meetings/{meetingId}/participants</code> returns the <em>same person multiple times</em> if they dropped and rejoined — one row per join interval, each with its own <code>join_time</code>, <code>leave_time</code> and <code>duration</code>. Counting rows gives an inflated attendance figure, and summing <code>duration</code> gives connected time, not wall-clock presence: overlapping rows from two devices double-count, and gaps between rows are invisible. Deduplicate on <code>id</code>/<code>user_id</code> (falling back to <code>user_email</code>, which can be blank for guests) and merge intervals before you compute anything.</div>
-
-                <div class="section-title">Key Endpoints</div>
-                <ul>
-                    <li><code>GET /v2/users/{userId}/meetings</code> — scheduled/upcoming/previous meetings for a host.</li>
-                    <li><code>GET /v2/past_meetings/{meetingUUID}</code> and <code>/past_meetings/{meetingUUID}/participants</code> — what actually occurred.</li>
-                    <li><code>GET /v2/report/meetings/{meetingId}</code> and <code>/report/meetings/{meetingId}/participants</code> — the reporting view, with more fields than the past_meetings variant.</li>
-                    <li><code>GET /v2/report/users/{userId}/meetings</code>, <code>GET /v2/report/daily</code>, <code>GET /v2/report/users</code> — usage rollups.</li>
-                    <li><code>GET /v2/metrics/meetings</code>, <code>/metrics/meetings/{meetingId}/participants</code>, <code>/metrics/meetings/{meetingId}/participants/qos</code> — Dashboard; <code>type=live</code> or <code>type=past</code>.</li>
-                    <li><code>GET /v2/users/{userId}/recordings</code>, <code>GET /v2/meetings/{meetingId}/recordings</code> — recording file inventory.</li>
-                    <li><code>GET /v2/webinars/{webinarId}/registrants</code>, <code>/panelists</code>, <code>GET /v2/report/webinars/{webinarId}/participants</code>.</li>
-                    <li>Event Subscriptions (webhooks) — <code>meeting.started</code>, <code>meeting.ended</code>, <code>meeting.participant_joined</code>, <code>meeting.participant_left</code>, <code>recording.completed</code>, <code>recording.transcript_completed</code>.</li>
-                </ul>
-
-                <div class="section-title">Rate Limits</div>
-                <ul>
-                    <li>Limits are assigned <strong>per endpoint category</strong>, not per API as a whole: <em>Light</em>, <em>Medium</em>, <em>Heavy</em> and <em>Resource-intensive</em>. Each category has its own per-second request allowance, and the Heavy category additionally carries a <strong>daily request cap</strong>.</li>
-                    <li>Report and Dashboard endpoints — exactly the ones a backfill hammers — sit in the heavier categories. A naive per-meeting loop over a quarter of history will exhaust the daily budget rather than the per-second one, and the daily budget does not recover until it resets.</li>
-                    <li>Treat the published per-category numbers as account- and plan-dependent and read the <code>429</code> response plus <code>Retry-After</code> rather than hard-coding a rate. Design collectors to prefer one wide report call over many narrow ones.</li>
-                </ul>
-
-                <div class="section-title">Business Scenarios</div>
-                <ul>
-                    <li><strong>Meeting-load and licence utilisation</strong> — how many licensed hosts actually host, and concurrency peaks by hour.</li>
-                    <li><strong>Attendance measurement</strong> — genuine presence per attendee after interval merging, for training compliance or billable time.</li>
-                    <li><strong>Network quality triage</strong> — correlate packet loss and jitter from QoS with site, ISP, or device type to locate the bad segment.</li>
-                    <li><strong>Webinar funnel</strong> — registrants versus attendees versus watch-time, by tracking source.</li>
-                    <li><strong>Recording governance</strong> — what exists in cloud storage, how old it is, and whether transcripts were produced.</li>
-                </ul>
-
-                <div class="section-title">Key Restrictions &amp; Gotchas</div>
-                <ul>
-                    <li><strong>Dashboard requires a higher plan than people expect.</strong> Dashboard/<code>metrics</code> endpoints are gated to Business, Education and Enterprise-tier accounts; a Pro plan is not sufficient. Reporting endpoints have their own plan requirement. A collector that works in one tenant can return <code>4xx</code> in another purely because of plan.</li>
-                    <li><strong>Meeting UUID encoding.</strong> Past-meeting endpoints are keyed by <code>uuid</code>, not the numeric meeting id. If a UUID begins with <code>/</code> or contains <code>//</code>, it must be <strong>double URL-encoded</strong> before being placed in the path. Skipping this produces confusing 404s on a subset of meetings only, so it survives testing.</li>
-                    <li><strong>Numeric meeting id is not unique over time.</strong> Recurring meetings and Personal Meeting IDs reuse the same id across many instances. Only <code>uuid</code> identifies an instance.</li>
-                    <li><strong>Query windows are bounded.</strong> Report and Dashboard endpoints accept a <code>from</code>/<code>to</code> range limited to roughly one month per request, and their historical depth is a small number of months — not unlimited. Long history must be paged month by month and archived locally.</li>
-                    <li><strong>QoS has a much shorter horizon than the meeting record.</strong> Detailed per-stream quality data is retained for only a limited window after a meeting ends; the meeting and participant rows outlive it. If QoS is not pulled promptly it is gone while the meeting still appears in reports.</li>
-                    <li><strong>Transcripts cannot be produced retroactively.</strong> An audio transcript exists only if cloud recording was on <em>and</em> the "Create audio transcript" setting was enabled <em>before</em> the meeting started. There is no API to transcribe an existing recording. Failing to set this in advance is unrecoverable.</li>
-                    <li><strong>Webinar endpoints require the Webinar add-on licence</strong> on the host. Registrant and panelist data exists only if registration was actually enabled — otherwise those collections are legitimately empty, not broken.</li>
-                    <li><strong>Recording retention is an account setting, not an API guarantee.</strong> Admins configure auto-delete after N days; deleted recordings sit in Trash for a limited period and then vanish. Download URLs require a bearer token or download token — they are not public links.</li>
-                    <li><strong>No in-meeting content.</strong> Chat messages, reactions, and shared screens are not retrievable as structured data; in-meeting chat surfaces only as a file inside a cloud recording, if that was enabled.</li>
-                    <li><strong>Participant identity is weak for guests.</strong> External joiners often have no <code>user_id</code> and a self-typed <code>name</code>; the same human across two meetings is not reliably the same key.</li>
+                    <li>Quality stats and deleted recordings expire much faster than the meeting record itself — pull them promptly or lose them</li>
+                    <li>Transcripts exist only if the setting was on <em>before</em> the meeting started; nothing can be transcribed after the fact</li>
+                    <li>Some data needs a higher-tier Zoom plan — the same code can work in one account and fail in another</li>
+                    <li>Guests often have no reliable identity, so the same person cannot be matched across meetings</li>
                 </ul>
             </td>
             <td>
-                <div class="section-title">GET /v2/report/meetings/{meetingId}/participants</div>
-<pre>{
-  "page_count": 1,
-  "page_size": 30,
-  "total_records": 4,
-  "next_page_token": "",
-  "participants": [
-    {
-      "id": "u8Kd0Ql3TzS7pR2xVn4aBw",
-      "user_id": "16778240",
-      "name": "Amit Jaiswal",
-      "user_email": "a.jaiswal@acme.com",
-      "join_time": "2026-08-18T09:58:44Z",
-      "leave_time": "2026-08-18T10:21:07Z",
-      "duration": 1343,
-      "registrant_id": "",
-      "failover": false,
-      "status": "in_meeting",
-      "customer_key": ""
-    },
-    {
-      "id": "u8Kd0Ql3TzS7pR2xVn4aBw",
-      "user_id": "16779392",
-      "name": "Amit Jaiswal",
-      "user_email": "a.jaiswal@acme.com",
-      "join_time": "2026-08-18T10:23:15Z",
-      "leave_time": "2026-08-18T10:59:02Z",
-      "duration": 2147,
-      "registrant_id": "",
-      "failover": false,
-      "status": "in_meeting",
-      "customer_key": ""
-    },
-    {
-      "id": "pQ7vX1nR9mT4LcB0hYs2Ug",
-      "user_id": "16781056",
-      "name": "R. Menon (mobile)",
-      "user_email": "r.menon@acme.com",
-      "join_time": "2026-08-18T10:02:10Z",
-      "leave_time": "2026-08-18T10:59:04Z",
-      "duration": 3414,
-      "registrant_id": "",
-      "failover": false,
-      "status": "in_meeting",
-      "customer_key": ""
-    },
-    {
-      "id": "",
-      "user_id": "16783104",
-      "name": "iPhone",
-      "user_email": "",
-      "join_time": "2026-08-18T10:11:33Z",
-      "leave_time": "2026-08-18T10:44:58Z",
-      "duration": 2005,
-      "registrant_id": "",
-      "failover": false,
-      "status": "in_meeting",
-      "customer_key": ""
-    }
-  ]
-}</pre>
-                <p style="font-size:0.85em; color:#666; font-style:italic;">Four rows, three humans, and one row with no <code>id</code> or email at all. Note that <code>user_id</code> differs between the two rows for the same person — it identifies the <em>connection</em>, not the account. The guest row is unjoinable to any directory.</p>
+                <div class="section-title">Participant report — same person, two rows</div>
+<pre>"participants": [
+  { "id": "u8Kd0Ql3...", "name": "Amit Jaiswal",
+    "join_time": "2026-08-18T09:58:44Z",
+    "leave_time": "2026-08-18T10:21:07Z" },
+  { "id": "u8Kd0Ql3...", "name": "Amit Jaiswal",
+    "join_time": "2026-08-18T10:23:15Z",
+    "leave_time": "2026-08-18T10:59:02Z" },
+  { "id": "", "name": "iPhone", "user_email": "",
+    "join_time": "2026-08-18T10:11:33Z",
+    "leave_time": "2026-08-18T10:44:58Z" }
+]
+// rows 1-2: one person who rejoined
+// row 3: a guest with no identity at all</pre>
                 <canvas id="zoomWindows" height="380"></canvas>
             </td>
         </tr>
     </table>
+
+    <h2>Official API References</h2>
+    <ul>
+        <li><a href="https://developers.zoom.us/docs/">Zoom Developer Platform docs</a> — top-level documentation portal</li>
+        <li><a href="https://developers.zoom.us/docs/api/">Zoom API overview</a> — REST API families, references, and usage guides</li>
+    </ul>
 
     <script>
     (function() {

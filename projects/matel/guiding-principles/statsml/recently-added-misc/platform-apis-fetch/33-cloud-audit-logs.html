@@ -9,7 +9,6 @@
         h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
         .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
         .verified { font-size: 0.8em; color: #888; margin-bottom: 18px; border: 1px solid #ddd; display: inline-block; padding: 2px 10px; border-radius: 4px; }
-        .status { display: inline-block; background: #e67e22; color: #fff; font-size: 0.75em; font-weight: bold; padding: 2px 10px; border-radius: 4px; vertical-align: middle; margin-left: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
         h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
         .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
         .obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
@@ -18,6 +17,7 @@
         .obj-table td:last-child { width: 55%; text-align: center; }
         ul { padding-left: 20px; margin: 8px 0; }
         li { margin-bottom: 6px; font-size: 0.93em; }
+        a { color: #1a5276; }
         .payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 12px 0; text-align: left; }
         .payload-note { font-size: 0.82em; color: #666; margin: 12px 0 -6px 0; font-style: italic; text-align: left; }
         .key-point { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
@@ -25,147 +25,57 @@
     </style>
 </head>
 <body>
-    <h1>Cloud Audit Logs <span class="status">Backlog</span></h1>
-    <p class="subtitle">Control-plane and data-plane audit trails across AWS CloudTrail, GCP Cloud Audit Logs and Azure Activity Log — where the default configuration determines what is knowable later.</p>
+    <h1>Cloud Audit Logs</h1>
+    <p class="subtitle">The activity trails AWS, Google Cloud, and Azure keep — a record of who did what in your cloud accounts.</p>
     <span class="verified">Last verified: August 2026</span>
 
-    <h2>Overview</h2>
     <table class="obj-table">
         <tr>
             <td>
-                <div class="obj-title">What It Provides</div>
-                <p>All three hyperscalers converge on the same conceptual split, and the split is the whole story:</p>
+                <div class="obj-title">What you can get</div>
                 <ul>
-                    <li><strong>Management / admin-activity events</strong> — API calls that create, modify, or delete resources and permissions. Who created the bucket, who attached the policy, who opened the security group. These are on by default everywhere, and their volume is modest.</li>
-                    <li><strong>Data events / data-access logs</strong> — API calls against the <em>contents</em> of a resource. Every <code>GetObject</code> on S3, every read of a Cloud Storage object, every DynamoDB item operation. These are <strong>off by default</strong>, are billed by volume, and can outnumber management events by several orders of magnitude in a busy account.</li>
-                </ul>
-                <p>Per provider:</p>
-                <ul>
-                    <li><strong>AWS CloudTrail</strong> — Event history in the console covers a short rolling window of management events only. A <em>trail</em> or <em>event data store</em> must be created to persist anything, and data events require explicit event selectors per resource type. Also: <code>Insights</code> events (anomalous call-rate detection) are separately enabled.</li>
-                    <li><strong>GCP Cloud Audit Logs</strong> — four streams: <code>Admin Activity</code> (always on, cannot be disabled, retained free for a long default window), <code>Data Access</code> (off by default except BigQuery, must be enabled per service and per permission type in IAM audit config), <code>System Event</code> (always on), and <code>Policy Denied</code>.</li>
-                    <li><strong>Azure Activity Log</strong> — subscription-level control-plane events retained for a short fixed window with no charge. Everything else — resource logs, resource metrics, and export beyond that window — requires a <strong>diagnostic setting</strong> per resource routing to Log Analytics, Event Hubs, or storage. Entra ID sign-in and audit logs are exported the same way.</li>
-                </ul>
-                <div class="key-point">These logs contain <strong>no user content</strong> — only metadata about actions. A CloudTrail <code>GetObject</code> record names the bucket and key that were read; the object body is not in the log. This is the defining characteristic of the audit-log category. The corollary is that these feeds are safe to centralise broadly, but they can never answer a question about what was <em>in</em> the data.</div>
-
-                <div class="obj-title" style="margin-top: 18px;">Authentication &amp; Scopes</div>
-                <ul>
-                    <li><strong>AWS</strong> — IAM role assumed by the reader; <code>cloudtrail:LookupEvents</code> for the short-window API, or <code>s3:GetObject</code> on the trail's destination prefix for the durable copy. <code>cloudtrail:StartQuery</code> for Lake/event data stores. Cross-account collection uses a role with an external id.</li>
-                    <li><strong>GCP</strong> — service account with <code>roles/logging.viewer</code>, or <code>roles/logging.privateLogViewer</code> which is <em>additionally</em> required to read Data Access logs. Read via <code>entries.list</code> on the Logging API, or from a sink destination (BigQuery, GCS, Pub/Sub).</li>
-                    <li><strong>Azure</strong> — Entra service principal with <code>Reader</code> at the appropriate scope, plus <code>Log Analytics Reader</code> to query a workspace. Note that a subscription-scoped reader does not see other subscriptions; management-group-level collection needs its own assignment.</li>
+                    <li>Who created, changed, or deleted resources and permissions — recorded by default</li>
+                    <li>Who read or wrote the data itself — recorded only if someone switched it on first</li>
+                    <li>For every action: the actor, their IP address, the target, the time, and success or failure</li>
                 </ul>
 
-                <div class="obj-title" style="margin-top: 18px;">Granularity</div>
-                <p>One record per API call, per provider's own schema — there is no cross-cloud normalised form, and mapping them onto a common model is the bulk of the engineering work. All three carry an actor identity, a source IP, a target resource, a request timestamp, and a success/error field. AWS separates <code>requestParameters</code> and <code>responseElements</code>; GCP uses <code>protoPayload</code> of type <code>AuditLog</code> with <code>authenticationInfo</code>, <code>authorizationInfo</code> and <code>methodName</code>; Azure uses an <code>operationName</code> plus <code>authorization</code> block. Identity representation differs most: AWS <code>userIdentity</code> distinguishes root, IAM user, and assumed role with its own session context; GCP reports a principal email that may be a service account; Azure reports an object id that must be resolved against the directory.</p>
+                <div class="key-point">An event not being recorded when it happened is <strong>unrecoverable — no provider can reconstruct the period before logging was enabled</strong>. The configuration decision must be made before you know which question you will need to answer, so the safe default is to enable broadly and store cheaply.</div>
 
-                <div class="obj-title" style="margin-top: 18px;">Key Endpoints</div>
+                <div class="obj-title" style="margin-top: 18px;">Watch out for</div>
                 <ul>
-                    <li><strong>AWS:</strong> <code>cloudtrail:LookupEvents</code> (short window, management events, low throughput), <code>cloudtrail:StartQuery</code> / <code>GetQueryResults</code> against an event data store, or read gzipped JSON objects directly from the trail's S3 prefix — which is the only sane path for bulk.</li>
-                    <li><strong>GCP:</strong> <code>POST /v2/entries:list</code> with a filter on <code>logName</code> (<code>cloudaudit.googleapis.com%2Factivity</code> vs <code>%2Fdata_access</code>) and <code>timestamp</code>; or query the BigQuery dataset a log sink writes to.</li>
-                    <li><strong>Azure:</strong> <code>GET /subscriptions/{id}/providers/Microsoft.Insights/eventtypes/management/values</code> for the Activity Log, or a KQL query against the <code>AzureActivity</code> / <code>AzureDiagnostics</code> tables in Log Analytics.</li>
+                    <li>Data-read logging is off by default on all three clouds — "who read the data" is usually the post-breach question, and usually the unanswered one</li>
+                    <li>Free retention is short; anything longer needs an export you configure and pay for yourself</li>
+                    <li>Each cloud uses its own record format — lining them up into one model is most of the real work</li>
+                    <li>Logs scoped to one region or subscription silently miss activity everywhere else</li>
                 </ul>
-
-                <div class="obj-title" style="margin-top: 18px;">Rate Limits</div>
-                <ul>
-                    <li><code>LookupEvents</code> is throttled hard — it is an interactive lookup API, not a bulk extraction path. Attempting a backfill through it will take far longer than reading the S3 objects.</li>
-                    <li>GCP <code>entries.list</code> has per-project read quotas and paginates with <code>nextPageToken</code>; a broad filter over a long window will page for a long time. Sink-to-BigQuery sidesteps this entirely.</li>
-                    <li>Azure Resource Manager throttles per subscription per principal and returns the remaining budget in response headers; Log Analytics separately limits query concurrency and result size.</li>
-                    <li>Across all three, the batch/export path is the supported way to move volume, and the query API is for investigation. Choosing the wrong one is the most common reason a collector cannot keep up.</li>
-                </ul>
-
-                <div class="obj-title" style="margin-top: 18px;">Business Scenarios</div>
-                <ul>
-                    <li><strong>Blast-radius reconstruction after an incident</strong> — what did this credential touch, in what order, from which IP.</li>
-                    <li><strong>Unused-permission analysis</strong> — actions actually invoked by a role over a window, versus what its policy allows. Requires data events to be meaningful for storage services.</li>
-                    <li><strong>Cost attribution and drift detection</strong> — which principal created the resources that appeared on the bill, and whether they were created outside of infrastructure-as-code.</li>
-                    <li><strong>Cross-account and cross-region anomaly detection</strong> — first-seen region, first-seen service, first-seen principal pairs.</li>
-                    <li><strong>Compliance evidence</strong> — demonstrating that privileged changes were reviewed, which requires the log to have existed continuously, not just to exist now.</li>
-                </ul>
-
-                <div class="obj-title" style="margin-top: 18px;">Key Restrictions &amp; Gotchas</div>
-                <ul>
-                    <li><strong>Data events are off by default, everywhere.</strong> CloudTrail data events require event selectors; GCP Data Access logs require an IAM audit config per service (BigQuery being the notable exception that is on); Azure resource logs require a diagnostic setting per resource. The default posture answers "who changed the configuration" and is silent on "who read the data" — which is usually the question that actually matters after a breach.</li>
-                    <li><strong>Free retention windows are short and differ by provider and stream.</strong> CloudTrail console event history and the Azure Activity Log both retain only a short rolling window at no cost; GCP's Admin Activity default retention is considerably longer, and its Data Access default is short. Verify the current figure for your provider and stream — the values have changed over time — but treat all of them as "shorter than your audit cycle" unless you have configured export.</li>
-                    <li><strong>Delivery is near-real-time but not instant, and the lag is structural.</strong> CloudTrail batches events into S3 objects on a delivery interval measured in minutes; GCP writes are fast but sinks add their own latency; Azure diagnostic settings add ingestion delay into Log Analytics on top of Activity Log delay. Any query whose window ends at <code>now</code> systematically undercounts, and the undercount is largest for the most recent minutes. Lag your window, re-read with overlap, and deduplicate on the provider's event id (<code>eventID</code>, <code>insertId</code>, Azure correlation/event id).</li>
-                    <li><strong>Events can arrive out of order and occasionally late by more than the nominal interval.</strong> A pipeline that finalises a partition the instant the clock passes it will drop the tail.</li>
-                    <li><strong>Regional and global scoping is a real gap source.</strong> A CloudTrail trail that is not multi-region misses activity in other regions; some global service events are emitted in one region only. In GCP, organisation-level sinks are needed to catch projects created later. In Azure, per-subscription diagnostic settings do not cover subscriptions added afterwards.</li>
-                    <li><strong>Volume and cost are the reason data events stay disabled</strong> — and therefore the reason the audit trail has a hole. This is a budget decision masquerading as a technical default.</li>
-                    <li>Enabling a log does not make the enablement retroactive, and no provider offers a way to reconstruct the period before it was on.</li>
-                </ul>
-                <div class="key-point"><strong>An event not enabled at the time it occurred is unrecoverable. You cannot backfill an audit log.</strong> Every other limitation on this page has a workaround: throttling yields to batch export, schema divergence yields to a normalisation layer, cost yields to sampling or tiering. This one has none. The consequence is that the configuration decision must be made <em>before</em> you know which question you will need to answer — which is why the defensible default is "enable broadly, retain cheaply, and tier down later" rather than "enable when a need appears."</div>
             </td>
             <td>
-                <p class="payload-note">Sample payload — a CloudTrail Records entry from the trail's S3 destination (data event, abbreviated).</p>
+                <p class="payload-note">Sample AWS CloudTrail data event (abbreviated) — this record exists only because data-event logging was configured beforehand; by default, the read leaves no trace.</p>
 <pre class="payload">{
-  "Records": [
-    {
-      "eventVersion": "1.09",
-      "eventTime": "2026-08-18T13:41:07Z",
-      "eventSource": "s3.amazonaws.com",
-      "eventName": "GetObject",
-      "eventType": "AwsApiCall",
-      "eventCategory": "Data",
-      "eventID_masked": "EXAMPLE_EVENT_UUID_redacted",  // Note: masked for illustration
-      "awsRegion": "ap-south-1",
-      "sourceIPAddress": "10.42.7.19",
-      "userAgent": "aws-sdk-python/1.34.9 Python/3.12.3",
-      "readOnly": true,
-      "managementEvent": false,
-      "recipientAccountId": "111122223333",
-      "userIdentity": {
-        "type": "AssumedRole",
-        "principalId": "AROAEXAMPLEID:etl-worker-7",
-        "arn": "arn:aws:sts::111122223333:assumed-role/etl-task-role/etl-worker-7",
-        "accountId": "111122223333",
-        "sessionContext": {
-          "sessionIssuer": {
-            "type": "Role",
-            "arn": "arn:aws:iam::111122223333:role/etl-task-role",
-            "userName": "etl-task-role"
-          },
-          "attributes": {
-            "creationDate": "2026-08-18T13:38:55Z",
-            "mfaAuthenticated": "false"
-          }
-        }
-      },
-      "requestParameters": {
-        "bucketName": "acme-warehouse-raw",
-        "key": "events/dt=2026-08-18/part-00017.parquet",
-        "Host": "acme-warehouse-raw.s3.ap-south-1.amazonaws.com"
-      },
-      "responseElements": null,
-      "additionalEventData": {
-        "SignatureVersion": "SigV4",
-        "CipherSuite": "TLS_AES_128_GCM_SHA256",
-        "bytesTransferredIn": 0,
-        "bytesTransferredOut": 4194304,
-        "AuthenticationMethod": "AuthHeader"
-      },
-      "resources": [
-        {
-          "type": "AWS::S3::Object",
-          "ARN": "arn:aws:s3:::acme-warehouse-raw/events/dt=2026-08-18/part-00017.parquet"
-        },
-        {
-          "accountId": "111122223333",
-          "type": "AWS::S3::Bucket",
-          "ARN": "arn:aws:s3:::acme-warehouse-raw"
-        }
-      ],
-      "requestID": "K9QR2ZP4TXVB7C1D",
-      "tlsDetails": {
-        "tlsVersion": "TLSv1.3",
-        "clientProvidedHostHeader":
-          "acme-warehouse-raw.s3.ap-south-1.amazonaws.com"
-      }
-    }
-  ]
+  "eventTime": "2026-08-18T13:41:07Z",
+  "eventSource": "s3.amazonaws.com",
+  "eventName": "GetObject",
+  "eventCategory": "Data",
+  "sourceIPAddress": "10.42.7.19",
+  "userIdentity": {
+    "type": "AssumedRole",
+    "arn": "arn:aws:sts::111122223333:assumed-role/etl-task-role/etl-worker-7"
+  },
+  "requestParameters": {
+    "bucketName": "acme-warehouse-raw",
+    "key": "events/dt=2026-08-18/part-00017.parquet"
+  }
 }</pre>
-                <p class="payload-note">This record exists only because a data-event selector was configured for the bucket beforehand. With the default trail, the read leaves no trace at all.</p>
                 <canvas id="c1" height="380"></canvas>
             </td>
         </tr>
     </table>
+
+    <h2>Official API References</h2>
+    <ul>
+        <li><a href="https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-user-guide.html">AWS CloudTrail User Guide</a> — trails, event data stores, management vs data events</li>
+        <li><a href="https://cloud.google.com/logging/docs/audit">GCP Cloud Audit Logs</a> — Admin Activity, Data Access, System Event and Policy Denied streams</li>
+    </ul>
 
     <script>
     (function() {

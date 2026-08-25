@@ -76,6 +76,20 @@ ul {
 }
 li { margin-bottom: 4px; }
 
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
 </style>
 </head>
 <body>
@@ -88,17 +102,18 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>Text data encoded in UTF-8 but parsed as Latin-1 (or vice versa) produces mojibake. Non-ASCII characters corrupt silently. Names, addresses, and text features become unusable. Models trained on corrupted text learn garbage patterns.</p>
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">encoding</span></div>
                 <ul>
-                    <li>UTF-8 vs Latin-1 mismatches turn "José" into "JosÃ©" (mojibake)</li>
-                    <li>Locale-dependent operations (case folding, collation) produce inconsistent results</li>
-                    <li>Byte order marks (BOM) break CSV parsers and JSON decoders</li>
-                    <li>Windows-1252 vs UTF-8 creates "smart quotes" and em-dash corruption</li>
+                    <li><b>Mojibake</b> — UTF-8 read as Latin-1 turns "José" into "JosÃ©" for every non-ASCII char</li>
+                    <li><b>Silent corruption</b> — pipelines keep running while names and text features turn to garbage</li>
+                    <li><b>Locale drift</b> — case folding and collation follow the host locale, varying by machine</li>
+                    <li><b>BOM bytes</b> — a byte order mark at file start breaks CSV parsers and JSON decoders</li>
+                    <li><b>Smart quotes</b> — Windows-1252 quotes and em-dashes become multi-character junk in UTF-8</li>
                 </ul>
+                <p class="example">A table with 10% non-ASCII names is exported as UTF-8 but imported as Latin-1, so "François" becomes "FranÃ§ois" and the model sees two different customers.</p>
                 <div class="key-point">
-                    <strong>Impact:</strong> Text features are silently corrupted. String matching fails. Names and addresses become unparseable. Models see corrupted tokens and learn wrong associations. Detection is hard because corrupted text looks "almost right."
+                    <strong>Impact:</strong> Text features are silently corrupted and string matching fails, and detection is hard because corrupted text looks "almost right."
                 </div>
-                <p class="example">Example: A customer name table has 10% non-ASCII names. Data exported as UTF-8, imported as Latin-1. "François" becomes "FranÃ§ois". Matching fails. Model sees two different customers.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c1" width="720" height="300"></canvas>
@@ -108,21 +123,22 @@ li { margin-bottom: 4px; }
 </div>
 
 <div class="card-section">
-    <h2>Why It Happens / Detection / Common Sources</h2>
+    <h2>Why It Happens</h2>
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>Systems default to different encodings. Windows uses Windows-1252, Linux defaults to UTF-8, databases may use Latin-1. Excel exports CSV with BOM. Locale settings change string operations invisibly.</p>
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">byte defaults</span></div>
                 <ul>
-                    <li>Excel saves CSV with UTF-8 BOM by default (breaks many parsers)</li>
-                    <li>Database client libraries default to Latin-1 unless explicitly configured</li>
-                    <li>Python 2 treated strings as bytes; Python 3 requires explicit encoding</li>
-                    <li>Locale-dependent case folding: Turkish "i".upper() → "İ" not "I"</li>
+                    <li><b>System defaults</b> — Windows leans on Windows-1252, Linux on UTF-8, old databases on Latin-1</li>
+                    <li><b>Excel BOM</b> — CSV exports add a UTF-8 BOM that parsers read into the first column name</li>
+                    <li><b>Client defaults</b> — database drivers fall back to Latin-1 unless the charset is set explicitly</li>
+                    <li><b>Language history</b> — Python 2 treated strings as bytes, and ported code still omits encodings</li>
+                    <li><b>Locale case rules</b> — in a Turkish locale, "i".upper() yields "İ" instead of "I"</li>
                 </ul>
+                <p class="example">A pipeline reads a CSV exported from Excel and treats the BOM bytes (EF BB BF) as text, so the first column name becomes "﻿user_id" and joins fail silently.</p>
                 <div class="key-point">
-                    <strong>Detection:</strong> Check for replacement characters (U+FFFD �). Scan for mojibake patterns like "Ã©" (é as UTF-8 read as Latin-1). Validate that all text is valid UTF-8. Test with international characters in CI.
+                    <strong>Root Cause:</strong> Bytes carry no label saying how they were encoded, so every system guesses with its own default and a wrong guess yields plausible-looking garbage instead of an error.
                 </div>
-                <p class="example">Example: A pipeline reads CSV exported from Excel. BOM bytes (EF BB BF) are interpreted as text. First column name is "﻿user_id". Joins fail silently because column name doesn't match.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c2" width="720" height="300"></canvas>
@@ -132,21 +148,23 @@ li { margin-bottom: 4px; }
 </div>
 
 <div class="card-section">
-    <h2>Prevention / Correct Approach</h2>
+    <h2>The Correct Approach</h2>
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>Enforce UTF-8 everywhere. Explicitly declare encoding at every I/O boundary. Use encoding-aware libraries. Validate text on ingestion. Test with non-ASCII data in your test suite.</p>
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">UTF-8</span></div>
                 <ul>
-                    <li>Set database connection encoding to UTF-8 (MySQL: utf8mb4)</li>
-                    <li>Explicitly specify encoding in file I/O: open(file, 'r', encoding='utf-8')</li>
-                    <li>Strip BOM on CSV read: read_csv(file, encoding='utf-8-sig')</li>
-                    <li>Use locale-independent operations: casefold() instead of lower()</li>
+                    <li><b>UTF-8 connections</b> — set database connection encoding to UTF-8, utf8mb4 in MySQL</li>
+                    <li><b>Explicit I/O</b> — pass encoding='utf-8' at every file boundary instead of relying on defaults</li>
+                    <li><b>BOM-safe reads</b> — read CSV with encoding='utf-8-sig' so a leading BOM is stripped</li>
+                    <li><b>Locale-free ops</b> — compare strings with casefold() rather than locale-dependent lower()</li>
+                    <li><b>Ingestion checks</b> — scan text for U+FFFD (�), mojibake like "Ã©", and stray BOM bytes</li>
+                    <li><b>CI coverage</b> — keep test names like "José" and "北京" so regressions surface early</li>
                 </ul>
+                <p class="example">A pipeline sets UTF-8 explicitly on the database connection, file reads, and HTTP headers, and a mojibake validator on ingestion keeps production clean.</p>
                 <div class="key-point">
-                    <strong>Best practice:</strong> UTF-8 everywhere. Validate text on ingestion with try/except UnicodeDecodeError. Add test cases with names like "José", "北京", "Москва". Log warnings when non-UTF-8 detected.
+                    <strong>Fix:</strong> UTF-8 everywhere — validate text on ingestion with try/except UnicodeDecodeError and log warnings whenever non-UTF-8 data is detected.
                 </div>
-                <p class="example">Example: A pipeline explicitly sets UTF-8: database connection, file reads, HTTP headers. Validator checks for mojibake patterns on ingestion. Test suite includes international names. Zero encoding issues in production.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c3" width="720" height="300"></canvas>

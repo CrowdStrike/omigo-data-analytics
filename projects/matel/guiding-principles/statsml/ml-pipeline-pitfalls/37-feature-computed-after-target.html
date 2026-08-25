@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Feature Computed After Target Event</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Feature Computed After Target Event</h1>
+<p class="subtitle">When a feature is computed using data that was recorded or updated after the target event, creating severe temporal leakage.</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">temporal leakage</span></div>
+                <ul>
+                    <li><b>The trap</b> — a feature is built from data logged or updated after the prediction cutoff</li>
+                    <li><b>Missing in production</b> — the value exists in the historical extract but not at scoring time</li>
+                    <li><b>Causal violation</b> — Jan 15 churn prediction uses support tickets filed Jan 16-31</li>
+                    <li><b>Backfilled data</b> — an A/B variant assigned Jan 20 is backfilled to Jan 1 in the logs</li>
+                    <li><b>Derived fields</b> — "days until next purchase" is computed from future events by definition</li>
+                </ul>
+                <p class="example">A readmission model's "total_cost_of_episode" includes costs billed 60 days after discharge, so production sees $0 where training saw thousands.</p>
+                <div class="key-point">
+                    <strong>Impact:</strong> A near-perfect 98% offline AUC collapses to a random 50% in production, because the future-data feature simply does not exist at prediction time.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">flat tables</span></div>
+                <ul>
+                    <li><b>Late extracts</b> — the modeler's table is built long after the events it describes</li>
+                    <li><b>No column timestamps</b> — nothing records when each field first came into existence</li>
+                    <li><b>No temporal audit</b> — nobody compares feature generation times against the target event time</li>
+                    <li><b>Outcome by-products</b> — billing codes and similar fields are created by the outcome itself</li>
+                    <li><b>Flat tables</b> — a tabular extract collapses ordering, so every column looks simultaneous</li>
+                    <li><b>Backfilled columns</b> — retroactively computed fields quietly absorb future information</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Root Cause:</strong> Flat tabular formats destroy temporal order — nothing shows that feature_C was generated 5 days after the target event.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">temporal gate</span></div>
+                <ul>
+                    <li><b>Timestamp everything</b> — record when each feature becomes available, not just its value</li>
+                    <li><b>Hard cutoff gate</b> — a feature enters the model only if it provably precedes prediction time</li>
+                    <li><b>Strict cutoff rule</b> — exclude any feature whose timestamp is at or after the target time</li>
+                    <li><b>Point-in-time snapshots</b> — reconstruct data exactly as it existed at the prediction moment</li>
+                    <li><b>Automated assertion</b> — test that max(feature_generation_time) &lt; prediction_time</li>
+                    <li><b>Detection question</b> — ask "would I have this value at scoring time?" for every feature</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Fix:</strong> Every feature must pass a temporal gate — only data generated strictly before the prediction cutoff is allowed into the model.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Feature After Target: Temporal Leakage', w/2, 25);
+
+    // Timeline
+    var timelineY = 100;
+    var left = 80;
+    var right = 640;
+
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(left, timelineY);
+    ctx.lineTo(right, timelineY);
+    ctx.stroke();
+
+    // Prediction time marker
+    var predX = left + (right - left) * 0.4;
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.moveTo(predX, 60);
+    ctx.lineTo(predX, 240);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('PREDICTION TIME', predX, 52);
+    ctx.font = '10px system-ui';
+    ctx.fillText('(e.g., discharge date)', predX, 66);
+
+    // Before: Valid features
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'right';
+    ctx.fillText('Valid features', predX - 10, timelineY - 15);
+    ctx.fillText('(past data only)', predX - 10, timelineY - 3);
+
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(left, timelineY - 10);
+    ctx.lineTo(predX - 5, timelineY - 10);
+    ctx.stroke();
+
+    // After: Invalid features (leakage)
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('LEAKAGE', predX + 10, timelineY - 15);
+    ctx.fillText('(future data)', predX + 10, timelineY - 3);
+
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(predX + 5, timelineY - 10);
+    ctx.lineTo(right, timelineY - 10);
+    ctx.stroke();
+
+    // Target event
+    var targetX = predX + 100;
+    ctx.fillStyle = '#e67e22';
+    ctx.beginPath();
+    ctx.arc(targetX, timelineY, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Target Event', targetX, timelineY + 25);
+    ctx.font = '10px system-ui';
+    ctx.fillText('(e.g., readmitted)', targetX, timelineY + 38);
+
+    // Feature computation region
+    var featEndX = targetX + 120;
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.2)';
+    ctx.fillRect(targetX + 10, timelineY + 50, featEndX - targetX - 10, 60);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(targetX + 10, timelineY + 50, featEndX - targetX - 10, 60);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Feature uses data from here', (targetX + featEndX) / 2, timelineY + 72);
+    ctx.font = '10px system-ui';
+    ctx.fillText('(e.g., "total_cost_of_episode"', (targetX + featEndX) / 2, timelineY + 87);
+    ctx.fillText('includes costs billed 60d later)', (targetX + featEndX) / 2, timelineY + 100);
+
+    // Bottom consequence
+    ctx.fillStyle = '#444';
+    ctx.font = '12px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Training: Feature = $5000 (includes future costs) → Model learns cost predicts readmission', left, 235);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('Production: Feature = $0 (no future costs available) → Model fails', left, 255);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Fix: Only use costs billed BEFORE prediction time', left, 280);
+})();
+
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Title
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Flat Table Hides Temporal Order', w/2, 22);
+
+    // Draw flat table
+    var tableX = 60, tableY = 42, colW = 110, rowH = 28;
+    var cols = ['user_id', 'feature_A', 'feature_B', 'feature_C', 'target'];
+    var vals = ['U001', '3.2', '7.1', '9.8', '1'];
+
+    // Header
+    for (var i = 0; i < cols.length; i++) {
+        var cx = tableX + i * colW;
+        ctx.fillStyle = (i === 3) ? 'rgba(231,76,60,0.15)' : 'rgba(26,82,118,0.1)';
+        ctx.fillRect(cx, tableY, colW, rowH);
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(cx, tableY, colW, rowH);
+        ctx.fillStyle = (i === 3) ? '#e74c3c' : '#1a5276';
+        ctx.font = 'bold 11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(cols[i], cx + colW/2, tableY + 18);
+    }
+    // Data row
+    for (var i = 0; i < vals.length; i++) {
+        var cx = tableX + i * colW;
+        ctx.fillStyle = (i === 3) ? 'rgba(231,76,60,0.08)' : '#fff';
+        ctx.fillRect(cx, tableY + rowH, colW, rowH);
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(cx, tableY + rowH, colW, rowH);
+        ctx.fillStyle = '#444';
+        ctx.font = '11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(vals[i], cx + colW/2, tableY + rowH + 18);
+    }
+
+    // Annotation on table
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Looks fine in flat table!', tableX + 3 * colW + colW/2, tableY + rowH * 2 + 18);
+
+    // Timeline below
+    var tlY = 170;
+    var tlLeft = 80, tlRight = 640;
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(tlLeft, tlY);
+    ctx.lineTo(tlRight, tlY);
+    ctx.stroke();
+
+    // Timeline points
+    var events = [
+        { label: 'feature_A', day: 'Day 1', x: tlLeft + 60, color: '#27ae60' },
+        { label: 'feature_B', day: 'Day 5', x: tlLeft + 180, color: '#27ae60' },
+        { label: 'TARGET', day: 'Day 10', x: tlLeft + 320, color: '#e67e22' },
+        { label: 'feature_C', day: 'Day 15', x: tlLeft + 460, color: '#e74c3c' }
+    ];
+
+    for (var i = 0; i < events.length; i++) {
+        var ev = events[i];
+        ctx.fillStyle = ev.color;
+        ctx.beginPath();
+        ctx.arc(ev.x, tlY, 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.font = 'bold 11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(ev.label, ev.x, tlY - 15);
+        ctx.font = '10px system-ui';
+        ctx.fillText(ev.day, ev.x, tlY + 20);
+    }
+
+    // Arrow from feature_C on timeline to the table column
+    var arrStartX = events[3].x;
+    var arrStartY = tlY - 25;
+    var arrEndX = tableX + 3 * colW + colW/2;
+    var arrEndY = tableY + rowH * 2 + 5;
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(arrStartX, arrStartY);
+    ctx.lineTo(arrEndX + 60, arrEndY + 20);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Legend
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('feature_C generated AFTER target — temporal leakage!', w/2, tlY + 50);
+
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Timeline reveals what the flat table hides', w/2, tlY + 70);
+})();
+
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Title
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Temporal Gate: Only Past Data Feeds Model', w/2, 22);
+
+    // Timeline
+    var tlY = 100;
+    var tlLeft = 60, tlRight = 660;
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(tlLeft, tlY);
+    ctx.lineTo(tlRight, tlY);
+    ctx.stroke();
+
+    // Prediction cutoff line
+    var cutoffX = tlLeft + (tlRight - tlLeft) * 0.55;
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(cutoffX, 45);
+    ctx.lineTo(cutoffX, 170);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('PREDICTION CUTOFF', cutoffX, 40);
+
+    // Valid features (left of cutoff)
+    var featA_x = tlLeft + 80;
+    var featB_x = tlLeft + 220;
+    // Feature A - green checkmark
+    ctx.fillStyle = '#27ae60';
+    ctx.beginPath();
+    ctx.arc(featA_x, tlY, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Feature A', featA_x, tlY - 18);
+    ctx.font = '16px system-ui';
+    ctx.fillText('✓', featA_x, tlY + 30);
+
+    // Feature B - green checkmark
+    ctx.fillStyle = '#27ae60';
+    ctx.beginPath();
+    ctx.arc(featB_x, tlY, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Feature B', featB_x, tlY - 18);
+    ctx.font = '16px system-ui';
+    ctx.fillText('✓', featB_x, tlY + 30);
+
+    // Invalid feature (right of cutoff)
+    var featC_x = cutoffX + 120;
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath();
+    ctx.arc(featC_x, tlY, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Feature C', featC_x, tlY - 18);
+    ctx.font = 'bold 16px system-ui';
+    ctx.fillText('✗', featC_x, tlY + 30);
+    ctx.font = '10px system-ui';
+    ctx.fillText('(EXCLUDED)', featC_x, tlY + 45);
+
+    // Left zone label
+    ctx.fillStyle = 'rgba(39,174,96,0.1)';
+    ctx.fillRect(tlLeft, tlY - 35, cutoffX - tlLeft - 5, 70);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('VALID ZONE', tlLeft + 5, tlY - 25);
+
+    // Right zone label
+    ctx.fillStyle = 'rgba(231,76,60,0.08)';
+    ctx.fillRect(cutoffX + 5, tlY - 35, tlRight - cutoffX - 5, 70);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('EXCLUDED ZONE', cutoffX + 10, tlY - 25);
+
+    // Validation check box
+    var boxY = 190;
+    ctx.fillStyle = 'rgba(39,174,96,0.08)';
+    ctx.fillRect(100, boxY, 520, 50);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(100, boxY, 520, 50);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('✓  Validation: For each feature f: assert f.timestamp < cutoff', w/2, boxY + 22);
+
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Only past data feeds model', w/2, boxY + 40);
+
+    // Bottom annotation
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Enforce in tests: max(feature_generation_time) < prediction_time', w/2, 270);
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Use point-in-time snapshots to guarantee temporal correctness', w/2, 288);
+})();
+</script>
+
+</body>
+</html>

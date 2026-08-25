@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Idempotency</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Idempotency</h1>
+<p class="subtitle">Same input, same output, no matter how many times the job runs — so reruns after a crash are harmless</p>
+
+<div class="card-section">
+    <h2>The Tuesday Job That Ran Twice</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">running example</span></div>
+                <ul>
+                    <li><b>The job</b> — every night, load that day's orders into the warehouse revenue table</li>
+                    <li><b>Tuesday 2:17am</b> — it crashes halfway, after writing 1,120 of Tuesday's 1,930 rows</li>
+                    <li><b>The rerun</b> — on-call restarts it at 7:00am; it appends all 1,930 rows again</li>
+                    <li><b>The damage</b> — Tuesday now holds 3,050 rows; revenue reads $76,150, not $48,200</li>
+                    <li><b>The fix idea</b> — a rerun should leave the table exactly as if the job ran once</li>
+                </ul>
+                <p class="example">Wednesday's standup: "why did Tuesday revenue jump 58%?" — nothing sold better; the loader just ran twice.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> idempotent = running the job 1, 2, or 10 times produces the identical table. Crashes are guaranteed; idempotency is what makes them boring.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Append vs Overwrite: One Rerun, Two Endings</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">worked example</span><span class="tag blue">core idea</span></div>
+                <ul>
+                    <li><b>Truth</b> — Tuesday really had 1,930 orders worth $48,200</li>
+                    <li><b>Append, run 1</b> — writes 1,120 rows ($27,950), then crashes mid-job</li>
+                    <li><b>Append, run 2</b> — adds the full 1,930 on top: 3,050 rows, $76,150</li>
+                    <li><b>Overwrite, run 2</b> — first deletes everything tagged Tuesday, then writes 1,930 rows</li>
+                    <li><b>Overwrite, runs 3, 4, 5…</b> — always the same end state: 1,930 rows, $48,200</li>
+                </ul>
+                <p class="example">Delete-where-date='Tue' then insert: the rerun wipes its own half-finished mess before writing anything.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> "overwrite the partition" — replace all of one day's rows — is the classic idempotent pattern: the run's first act is to erase any earlier attempt at that day.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why Doubled Rows Are So Hard to Catch</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag orange">failure mode</span></div>
+                <ul>
+                    <li><b>Failures are routine</b> — networks blip, machines restart; big pipelines rerun jobs daily</li>
+                    <li><b>Silent corruption</b> — doubled rows look like good news (revenue up!), so nobody digs</li>
+                    <li><b>Models eat it too</b> — a model trained on the doubled Tuesday learns from ghost orders</li>
+                    <li><b>Auto-retries</b> — schedulers retry failed jobs by default; only safe if jobs are idempotent</li>
+                    <li><b>Cheap to test</b> — run the job twice on purpose; if the table changes, it isn't idempotent</li>
+                </ul>
+                <p class="example">The anomaly detector flagged ordinary Tuesdays for months — it had learned one doubled Tuesday as "normal growth".</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> if a job is idempotent, "just rerun it" is always a safe answer. If it isn't, every failure becomes a careful manual cleanup at 7am.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Confusion: Idempotent Does Not Mean "Never Fails"</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common confusion</span><span class="tag orange">design trap</span></div>
+                <ul>
+                    <li><b>Not crash-proof</b> — the job still crashes; idempotency only makes the rerun safe</li>
+                    <li><b>Append is the trap</b> — plain INSERT is the natural first version and is never rerun-safe</li>
+                    <li><b>Half-done runs count</b> — the design must survive a crash at any point, not just the end</li>
+                    <li><b>Scope it</b> — idempotent per day (per partition) is usually enough; no full-table wipes</li>
+                    <li><b>One test question</b> — "what does the table look like if this runs twice?"</li>
+                </ul>
+                <p class="example">A job that failed cleanly 100 times is still dangerous if run 101 appends on top of run 100.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> calling a job "reliable" because it rarely fails. Reliability is about how often it breaks; idempotency is about what a rerun does. You need both.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function arrow(ctx, x1, y1, x2, y2, color) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 9 * Math.cos(ang - 0.4), y2 - 9 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 9 * Math.cos(ang + 0.4), y2 - 9 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: Timeline of the crash and the naive rerun stacking rows
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 16px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Crash at 2:17am + Naive Rerun = 1,120 Duplicate Rows', w / 2, 26);
+
+    // timeline axis
+    var ty = 78;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(50, ty); ctx.lineTo(690, ty); ctx.stroke();
+    var events = [
+        { x: 90, label: '2:00am', sub: 'run 1 starts', c: P.blue },
+        { x: 260, label: '2:17am', sub: 'crash: 1,120 of 1,930 written', c: P.magenta },
+        { x: 470, label: '7:00am', sub: 'run 2 appends all 1,930', c: P.orange },
+        { x: 640, label: '7:09am', sub: '3,050 rows total', c: P.magenta }
+    ];
+    for (var i = 0; i < events.length; i++) {
+        var e = events[i];
+        ctx.fillStyle = e.c;
+        ctx.beginPath(); ctx.arc(e.x, ty, 6, 0, 2 * Math.PI); ctx.fill();
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(e.label, e.x, ty - 26);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+        ctx.fillText(e.sub, e.x, ty - 10);
+    }
+
+    // stacked bar of what's in the Tuesday partition
+    var bx = 140, bw2 = 440, by = 130, bh = 78;
+    var total = 3050;
+    var seg1 = 1120 / total * bw2, seg2 = 1930 / total * bw2;
+    ctx.fillStyle = 'rgba(42,120,214,0.35)'; ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.fillRect(bx, by, seg1, bh); ctx.strokeRect(bx, by, seg1, bh);
+    ctx.fillStyle = 'rgba(217,89,38,0.30)'; ctx.strokeStyle = P.orange;
+    ctx.fillRect(bx + seg1, by, seg2, bh); ctx.strokeRect(bx + seg1, by, seg2, bh);
+
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('run 1 (partial)', bx + seg1 / 2, by + 32);
+    ctx.fillText('1,120 rows', bx + seg1 / 2, by + 50);
+    ctx.fillStyle = P.orange;
+    ctx.fillText('run 2 (full append)', bx + seg1 + seg2 / 2, by + 32);
+    ctx.fillText('1,930 rows', bx + seg1 + seg2 / 2, by + 50);
+
+    ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Tuesday', bx + bw2 + 14, by + 30);
+    ctx.fillText('partition', bx + bw2 + 14, by + 48);
+
+    // duplicate bracket over the first 1,120 of run 2
+    var dupW = 1120 / total * bw2;
+    ctx.strokeStyle = P.magenta; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(bx + seg1, by + bh + 8); ctx.lineTo(bx + seg1, by + bh + 16);
+    ctx.lineTo(bx + seg1 + dupW, by + bh + 16); ctx.lineTo(bx + seg1 + dupW, by + bh + 8);
+    ctx.stroke();
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('1,120 rows now exist twice', bx + seg1 + dupW / 2, by + bh + 36);
+
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('revenue in the table: $27,950 + $48,200 = $76,150 — the true day was $48,200', w / 2, 278);
+})();
+
+// c2: Two endings — append vs overwrite-the-partition
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('After the Crash, the Rerun Takes One of Two Paths', w / 2, 26);
+
+    // start box
+    ctx.fillStyle = '#f8f9fa'; ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.fillRect(30, 118, 150, 64); ctx.strokeRect(30, 118, 150, 64);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('after the crash', 105, 142);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('1,120 rows / $27,950', 105, 162);
+
+    // path A: append
+    arrow(ctx, 182, 138, 268, 92, P.orange);
+    ctx.fillStyle = '#fdf2e9'; ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+    ctx.fillRect(272, 56, 190, 64); ctx.strokeRect(272, 56, 190, 64);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('rerun: append', 367, 80);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('INSERT all 1,930 again', 367, 100);
+
+    arrow(ctx, 464, 88, 540, 88, P.orange);
+    ctx.fillStyle = 'rgba(213,81,129,0.10)'; ctx.strokeStyle = P.magenta; ctx.lineWidth = 2;
+    ctx.fillRect(544, 52, 158, 72); ctx.strokeRect(544, 52, 158, 72);
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('3,050 rows', 623, 76);
+    ctx.fillText('$76,150', 623, 94);
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('WRONG, forever', 623, 112);
+
+    // path B: overwrite
+    arrow(ctx, 182, 162, 268, 208, P.green);
+    ctx.fillStyle = 'rgba(0,131,0,0.07)'; ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.fillRect(272, 176, 190, 80) ; ctx.strokeRect(272, 176, 190, 80);
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('rerun: overwrite', 367, 198);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText("1. delete Tuesday's rows", 367, 218);
+    ctx.fillText('2. insert all 1,930', 367, 236);
+
+    arrow(ctx, 464, 214, 540, 214, P.green);
+    ctx.fillStyle = 'rgba(0,131,0,0.07)'; ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.fillRect(544, 178, 158, 72); ctx.strokeRect(544, 178, 158, 72);
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('1,930 rows', 623, 202);
+    ctx.fillText('$48,200', 623, 220);
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('correct, every rerun', 623, 238);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the overwrite path ends the same whether it runs 2 or 10 times', w / 2, 284);
+})();
+
+// c3: The week's revenue with the doubled Tuesday hiding in plain sight
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var pad = { top: 56, bottom: 56, left: 70, right: 24 };
+    var cw = w - pad.left - pad.right, ch = h - pad.top - pad.bottom;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Doubled Tuesday Just Looks Like a Great Tuesday', w / 2, 26);
+
+    var days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    var revenue = [46300, 76150, 47800, 45900, 52300, 58100, 55400]; // Tue is corrupted
+    var trueTue = 48200;
+    var maxY = 80000;
+    function Y(v) { return pad.top + ch - v / maxY * ch; }
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad.left, pad.top); ctx.lineTo(pad.left, pad.top + ch); ctx.lineTo(pad.left + cw, pad.top + ch); ctx.stroke();
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'right';
+    [0, 40000, 80000].forEach(function(v) {
+        ctx.fillText('$' + (v / 1000) + 'k', pad.left - 8, Y(v) + 4);
+        if (v > 0) { ctx.strokeStyle = P.grid; ctx.beginPath(); ctx.moveTo(pad.left, Y(v)); ctx.lineTo(pad.left + cw, Y(v)); ctx.stroke(); }
+    });
+
+    var barW = 58, gap = (cw - 7 * barW) / 7;
+    for (var i = 0; i < 7; i++) {
+        var x = pad.left + gap / 2 + i * (barW + gap);
+        var corrupt = (i === 1);
+        ctx.fillStyle = corrupt ? 'rgba(213,81,129,0.40)' : 'rgba(42,120,214,0.35)';
+        ctx.fillRect(x, Y(revenue[i]), barW, pad.top + ch - Y(revenue[i]));
+        ctx.strokeStyle = corrupt ? P.magenta : P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(x, Y(revenue[i]), barW, pad.top + ch - Y(revenue[i]));
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(days[i], x + barW / 2, pad.top + ch + 18);
+        if (corrupt) {
+            // true value marker
+            ctx.strokeStyle = P.green; ctx.lineWidth = 2.5; ctx.setLineDash([6, 4]);
+            ctx.beginPath(); ctx.moveTo(x - 6, Y(trueTue)); ctx.lineTo(x + barW + 6, Y(trueTue)); ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = P.magenta; ctx.font = 'bold 12px system-ui';
+            ctx.fillText('$76,150', x + barW / 2, Y(revenue[i]) - 8);
+        }
+    }
+    var tueX = pad.left + gap / 2 + 1 * (barW + gap) + barW / 2;
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('true Tuesday: $48,200', tueX + 44, Y(trueTue) + 4);
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('+58% ghost revenue from one rerun — no alert fires on good news', w / 2, pad.top + ch + 42);
+})();
+
+// c4: Rows in the Tuesday partition vs number of runs — append grows, overwrite stays flat
+(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var pad = { top: 56, bottom: 56, left: 70, right: 190 };
+    var cw = w - pad.left - pad.right, ch = h - pad.top - pad.bottom;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Two-Run Test: What Does Run #2 Do to the Table?', w / 2, 26);
+
+    var runs = [1, 2, 3, 4, 5];
+    var append = [1930, 3860, 5790, 7720, 9650];
+    var overwrite = [1930, 1930, 1930, 1930, 1930];
+    var maxY = 10000;
+    function X(i) { return pad.left + i / (runs.length - 1) * cw; }
+    function Y(v) { return pad.top + ch - v / maxY * ch; }
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad.left, pad.top); ctx.lineTo(pad.left, pad.top + ch); ctx.lineTo(pad.left + cw, pad.top + ch); ctx.stroke();
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'right';
+    [0, 5000, 10000].forEach(function(v) {
+        ctx.fillText(v.toLocaleString(), pad.left - 8, Y(v) + 4);
+        if (v > 0) { ctx.strokeStyle = P.grid; ctx.beginPath(); ctx.moveTo(pad.left, Y(v)); ctx.lineTo(pad.left + cw, Y(v)); ctx.stroke(); }
+    });
+
+    // append line
+    ctx.strokeStyle = P.magenta; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < runs.length; i++) { i === 0 ? ctx.moveTo(X(i), Y(append[i])) : ctx.lineTo(X(i), Y(append[i])); }
+    ctx.stroke();
+    for (var i = 0; i < runs.length; i++) {
+        ctx.fillStyle = P.magenta; ctx.beginPath(); ctx.arc(X(i), Y(append[i]), 4, 0, 2 * Math.PI); ctx.fill();
+    }
+    // overwrite line
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < runs.length; i++) { i === 0 ? ctx.moveTo(X(i), Y(overwrite[i])) : ctx.lineTo(X(i), Y(overwrite[i])); }
+    ctx.stroke();
+    for (var i = 0; i < runs.length; i++) {
+        ctx.fillStyle = P.green; ctx.beginPath(); ctx.arc(X(i), Y(overwrite[i]), 4, 0, 2 * Math.PI); ctx.fill();
+    }
+    // x labels
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < runs.length; i++) ctx.fillText('run ' + runs[i], X(i), pad.top + ch + 18);
+    ctx.fillStyle = P.mute;
+    ctx.fillText('times the same Tuesday job ran', pad.left + cw / 2, pad.top + ch + 40);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('append: +1,930 rows', X(3) - 145, Y(append[3]) - 12);
+    ctx.fillText('every rerun', X(3) - 145, Y(append[3]) + 5);
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('overwrite: flat at 1,930', X(1) + 10, Y(1930) - 12);
+
+    // legend
+    var lx = w - 175;
+    ctx.textAlign = 'left'; ctx.font = '12px system-ui';
+    ctx.fillStyle = P.magenta; ctx.fillRect(lx, 60, 12, 12);
+    ctx.fillStyle = P.text; ctx.fillText('naive append', lx + 17, 70);
+    ctx.fillStyle = P.green; ctx.fillRect(lx, 80, 12, 12);
+    ctx.fillStyle = P.text; ctx.fillText('overwrite partition', lx + 17, 90);
+})();
+</script>
+
+</body>
+</html>

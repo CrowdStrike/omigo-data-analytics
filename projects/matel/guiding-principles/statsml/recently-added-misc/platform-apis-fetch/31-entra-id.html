@@ -9,7 +9,6 @@
         h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
         .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
         .verified { font-size: 0.8em; color: #888; margin-bottom: 18px; border: 1px solid #ddd; display: inline-block; padding: 2px 10px; border-radius: 4px; }
-        .status { display: inline-block; background: #e67e22; color: #fff; font-size: 0.75em; font-weight: bold; padding: 2px 10px; border-radius: 4px; vertical-align: middle; margin-left: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
         h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
         .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
         .obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
@@ -18,6 +17,7 @@
         .obj-table td:last-child { width: 55%; text-align: center; }
         ul { padding-left: 20px; margin: 8px 0; }
         li { margin-bottom: 6px; font-size: 0.93em; }
+        a { color: #1a5276; }
         .payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 12px 0; text-align: left; }
         .payload-note { font-size: 0.82em; color: #666; margin: 12px 0 -6px 0; font-style: italic; text-align: left; }
         .key-point { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
@@ -25,140 +25,57 @@
     </style>
 </head>
 <body>
-    <h1>Microsoft Entra ID <span class="status">Backlog</span></h1>
-    <p class="subtitle">Microsoft Graph identity telemetry — sign-ins, directory audits, risk detections, conditional access policy, and the directory objects they reference. Retention is gated by licence tier.</p>
+    <h1>Microsoft Entra ID</h1>
+    <p class="subtitle">Pull sign-in and audit records from Microsoft Entra ID (formerly Azure AD) — the login system behind Microsoft 365.</p>
     <span class="verified">Last verified: August 2026</span>
 
-    <h2>Overview</h2>
     <table class="obj-table">
         <tr>
             <td>
-                <div class="obj-title">What It Provides</div>
-                <p>Entra ID (formerly Azure AD) is the identity control plane for Microsoft 365 and Azure. Its reporting surface is exposed through Microsoft Graph and splits into four families:</p>
+                <div class="obj-title">What you can get</div>
                 <ul>
-                    <li><strong>Sign-in logs</strong> — every authentication attempt, with the conditional access policies that were evaluated and what each one decided. Distinguished by <code>signInEventType</code>: interactive user sign-in, non-interactive (token refresh), service principal, and managed identity. Non-interactive events typically dominate volume by an order of magnitude, so a naive count of "sign-ins" is usually measuring token refresh, not people.</li>
-                    <li><strong>Directory audits</strong> — configuration and lifecycle changes: user created, member added to group, role assigned, application consent granted, credential added to a service principal.</li>
-                    <li><strong>Identity Protection</strong> — <code>riskDetections</code> (individual signals such as anonymous IP, leaked credentials, impossible travel) and <code>riskyUsers</code> (the aggregated, mutable risk state of a principal).</li>
-                    <li><strong>Directory objects and policy</strong> — <code>users</code>, <code>groups</code>, <code>servicePrincipals</code>, <code>applications</code>, role assignments, and <code>conditionalAccess/policies</code>. These are current state, not history.</li>
-                </ul>
-                <div class="key-point">No user content anywhere in this surface. A sign-in event records that a principal authenticated to SharePoint; it does not record which document was opened. Content-level activity lives in a different product (Microsoft Purview / unified audit log), not here.</div>
-
-                <div class="obj-title" style="margin-top: 18px;">Authentication &amp; Scopes</div>
-                <ul>
-                    <li>App registration in the tenant, OAuth 2.0 client credentials (certificate strongly preferred over secret), token from the tenant-specific endpoint.</li>
-                    <li><strong>Application permissions</strong>, admin-consented: <code>AuditLog.Read.All</code> for signIns and directoryAudits, <code>IdentityRiskEvent.Read.All</code> and <code>IdentityRiskyUser.Read.All</code> for Identity Protection, <code>Policy.Read.All</code> for conditional access, <code>Directory.Read.All</code> or the narrower <code>User.Read.All</code> / <code>Group.Read.All</code> / <code>Application.Read.All</code> for objects.</li>
-                    <li>Reading audit logs has historically also required a directory role (Reports Reader or higher) in addition to the Graph permission — grant both rather than assuming the scope alone is sufficient.</li>
+                    <li>Every authentication attempt, with which access policies were checked and what each decided</li>
+                    <li>Directory changes: accounts created, groups changed, roles granted</li>
+                    <li>Risk signals Microsoft itself detected (leaked credentials, impossible travel)</li>
+                    <li>Current users, groups, and applications</li>
                 </ul>
 
-                <div class="obj-title" style="margin-top: 18px;">Granularity</div>
-                <p>One row per event. Sign-in records carry a nested <code>appliedConditionalAccessPolicies</code> array — one entry per evaluated policy with its own result — which makes them the only place you can reconstruct <em>why</em> access was allowed. Risk state is deliberately mutable: <code>riskyUsers</code> reflects a current verdict that Microsoft may raise, lower, or dismiss after the fact, so a snapshot taken today will not reproduce the snapshot taken last week even for the same historical sign-in.</p>
+                <div class="key-point">How much history you can query <strong>depends on the licence tier</strong> — roughly a week on the free tier, roughly a month on paid ones. Longer history exists only if an export was configured in advance, and a missing export looks exactly like "nothing happened."</div>
 
-                <div class="obj-title" style="margin-top: 18px;">Key Endpoints</div>
+                <div class="obj-title" style="margin-top: 18px;">Watch out for</div>
                 <ul>
-                    <li><code>GET /v1.0/auditLogs/signIns</code> — <code>$filter</code> on <code>createdDateTime</code>, <code>userPrincipalName</code>, <code>status/errorCode</code>, <code>signInEventType</code>.</li>
-                    <li><code>GET /v1.0/auditLogs/directoryAudits</code> — <code>$filter</code> on <code>activityDateTime</code>, <code>activityDisplayName</code>, <code>result</code>.</li>
-                    <li><code>GET /v1.0/identityProtection/riskDetections</code> and <code>/riskyUsers</code>.</li>
-                    <li><code>GET /v1.0/identity/conditionalAccess/policies</code>.</li>
-                    <li><code>GET /v1.0/users</code>, <code>/groups</code>, <code>/servicePrincipals</code>, <code>/applications</code>.</li>
-                    <li><code>GET /v1.0/auditLogs/provisioning</code> — outbound SCIM provisioning outcomes to connected apps.</li>
-                    <li>Paging is by <code>@odata.nextLink</code>. Do not construct the next URL yourself; follow the returned link verbatim.</li>
+                    <li>Most "sign-ins" are automatic token refreshes, not people — counting raw events measures machinery, by roughly an order of magnitude</li>
+                    <li>Risk verdicts are re-scored after the fact; take your own snapshots if you need what was believed at the time</li>
+                    <li>Records appear minutes late, so a window ending at "now" undercounts</li>
+                    <li>Access policies have no version history — you can read today's rule but not last quarter's</li>
                 </ul>
-
-                <div class="obj-title" style="margin-top: 18px;">Rate Limits</div>
-                <ul>
-                    <li>Graph throttles per-tenant and per-app with <code>429 Too Many Requests</code> and a <code>Retry-After</code> header. Honour that header; do not implement a fixed sleep.</li>
-                    <li>The reporting endpoints are among the more aggressively throttled in Graph, and the published thresholds change. Design for throttling as a normal condition rather than an error.</li>
-                    <li><code>$top</code> caps well below what a busy tenant produces per hour, so a full day of non-interactive sign-ins is many sequential pages. Narrow with <code>$filter</code> before reaching for parallelism.</li>
-                </ul>
-
-                <div class="obj-title" style="margin-top: 18px;">Business Scenarios</div>
-                <ul>
-                    <li><strong>Conditional access blast-radius analysis</strong> — before tightening a policy, count from historical sign-ins how many real sessions the new condition would have blocked.</li>
-                    <li><strong>Legacy authentication elimination</strong> — client app and protocol fields on sign-ins identify which principals still use protocols that cannot do MFA.</li>
-                    <li><strong>Service principal and workload identity audit</strong> — credential additions in directoryAudits joined to service principal sign-ins reveals machine identities nobody owns.</li>
-                    <li><strong>Privileged role change review</strong> — who granted which role, when, and whether it was ever used.</li>
-                    <li><strong>Guest and B2B collaboration measurement</strong> — external tenant identifiers on sign-ins.</li>
-                </ul>
-
-                <div class="obj-title" style="margin-top: 18px;">Key Restrictions &amp; Gotchas</div>
-                <ul>
-                    <li><strong>Retention is licence-gated, and this is the single most consequential fact about the product.</strong> The free tier keeps a materially shorter window of sign-in and audit history than the paid tiers; Identity Protection risk reporting has its own, separately gated window that is longer on the top tier. Treat the exact number of days as something to verify for your own tenant and current licensing rather than something to hard-code — but plan on the free tier being roughly a week and the paid tiers roughly a month, with Identity Protection extending further only on the highest tier.</li>
-                    <li><strong>Sign-in log access via the API has historically required a premium licence at all.</strong> On a free tenant the sign-in report may be unavailable through Graph even though sign-ins are obviously happening. This is a licensing gate, not a missing-data bug.</li>
-                    <li><strong>Longer history requires a diagnostic setting configured in advance</strong> — route sign-ins, audits, provisioning and risk events to Log Analytics, an Event Hub, or a storage account. Retention there is yours to choose. Until that setting exists, nothing is being archived.</li>
-                    <li><strong>Ingestion lag is real.</strong> These logs are near-real-time but not instant; records appear minutes after the event, and sign-in logs have historically been slower than audit logs. Any query whose window ends at <code>now</code> will undercount. Lag the window and re-read with overlap, deduplicating on the event <code>id</code>.</li>
-                    <li><strong><code>riskyUsers</code> is a view, not a log.</strong> Persist your own daily snapshot if you need to reconstruct what the system believed at a point in time.</li>
-                    <li>Deleted directory objects leave dangling identifiers in old events; join failures against <code>/users</code> are expected, not corruption.</li>
-                    <li>Conditional access policies are versionless in the API — you can read the current definition but not what it said last quarter. The only durable record of a change is the directoryAudits entry, which describes the modification rather than the resulting full policy.</li>
-                </ul>
-                <div class="key-point"><strong>An event not enabled and not exported at the time it occurred is unrecoverable. You cannot backfill an audit log.</strong> On Entra ID this failure has two distinct shapes: the retention window silently expiring, and a diagnostic setting that was never created. Both look identical afterwards — an empty result set that is indistinguishable from "nothing happened."</div>
             </td>
             <td>
-                <p class="payload-note">Sample payload — GET /v1.0/auditLogs/signIns (abbreviated).</p>
+                <p class="payload-note">Sample sign-in record (abbreviated) — the only place you can see why access was allowed.</p>
 <pre class="payload">{
-  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#auditLogs/signIns",
-  "value": [
-    {
-      "id_masked": "EXAMPLE_SIGNIN_UUID_redacted",  // Note: masked for illustration
-      "createdDateTime": "2026-08-18T09:14:02.4471Z",
-      "userDisplayName": "Amit Jaiswal",
-      "userPrincipalName": "a.jaiswal@acme.com",
-      "userId_masked": "EXAMPLE_USER_UUID_redacted",  // Note: masked for illustration
-      "appId_masked": "EXAMPLE_APP_UUID_redacted",  // Note: masked for illustration; well-known Microsoft app ID
-      "appDisplayName": "Office 365 SharePoint Online",
-      "ipAddress": "203.0.113.44",
-      "clientAppUsed": "Browser",
-      "signInEventType": "interactiveUser",
-      "isInteractive": true,
-      "correlationId_masked": "EXAMPLE_CORRELATION_UUID_redacted",  // Note: masked for illustration
-      "conditionalAccessStatus": "success",
-      "riskLevelDuringSignIn": "none",
-      "riskState": "none",
-      "resourceDisplayName": "Office 365 SharePoint Online",
-      "status": {
-        "errorCode": 0,
-        "failureReason": null,
-        "additionalDetails": null
-      },
-      "deviceDetail": {
-        "deviceId_masked": "EXAMPLE_DEVICE_UUID_redacted",  // Note: masked for illustration
-        "displayName": "ACME-MBP-014",
-        "operatingSystem": "MacOs",
-        "browser": "Chrome 128.0",
-        "isCompliant": true,
-        "isManaged": true,
-        "trustType": "Azure AD registered"
-      },
-      "location": {
-        "city": "Bengaluru",
-        "state": "Karnataka",
-        "countryOrRegion": "IN",
-        "geoCoordinates": { "latitude": 12.97, "longitude": 77.59 }
-      },
-      "appliedConditionalAccessPolicies": [
-        {
-          "id": "EXAMPLE_POLICY_UUID_redacted",  // Note: masked for illustration
-          "displayName": "Require MFA for all users",
-          "enforcedGrantControls": [ "Mfa" ],
-          "enforcedSessionControls": [],
-          "result": "success"
-        },
-        {
-          "id": "EXAMPLE_POLICY_UUID_redacted",  // Note: masked for illustration
-          "displayName": "Block legacy authentication",
-          "enforcedGrantControls": [ "Block" ],
-          "enforcedSessionControls": [],
-          "result": "notApplied"
-        }
-      ],
-      "authenticationRequirement": "multiFactorAuthentication"
-    }
-  ],
-  "@odata.nextLink": "https://graph.microsoft.com/v1.0/auditLogs/signIns?$skiptoken=..."
+  "createdDateTime": "2026-08-18T09:14:02Z",
+  "userPrincipalName": "a.jaiswal@acme.com",
+  "appDisplayName": "Office 365 SharePoint Online",
+  "signInEventType": "interactiveUser",
+  "conditionalAccessStatus": "success",
+  "status": { "errorCode": 0 },
+  "location": { "city": "Bengaluru",
+                "countryOrRegion": "IN" },
+  "appliedConditionalAccessPolicies": [
+    { "displayName": "Require MFA for all users",
+      "result": "success" }
+  ]
 }</pre>
                 <canvas id="c1" height="380"></canvas>
             </td>
         </tr>
     </table>
+
+    <h2>Official API References</h2>
+    <ul>
+        <li><a href="https://learn.microsoft.com/en-us/graph/api/overview">Microsoft Graph REST API Overview</a> — v1.0 and beta endpoint reference hub</li>
+        <li><a href="https://learn.microsoft.com/en-us/entra/identity/monitoring-health/">Entra Monitoring and Health</a> — log retention, diagnostic settings and Log Analytics export</li>
+    </ul>
 
     <script>
     (function() {

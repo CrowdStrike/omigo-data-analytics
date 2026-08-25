@@ -78,6 +78,20 @@ ul {
     font-size: 0.92rem;
 }
 li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
 </style>
 </head>
 <body>
@@ -90,17 +104,18 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>System reuses IDs after deletion, reset, or partition boundary, breaking the assumption that ID uniquely identifies an entity. Joins across tables or time periods match unrelated records, silently corrupting training data with mislabeled examples.</p>
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">join keys</span></div>
                 <ul>
-                    <li><strong>ID collision:</strong> Auto-increment counter resets after migration or per-partition, creating duplicate IDs across time—session_id=42 in Jan is different entity from session_id=42 in Feb</li>
-                    <li><strong>Temporal boundaries:</strong> Join uses ID alone without timestamp constraint, merging data from deleted user_id=1234 (2024) with new user_id=1234 (2025)</li>
-                    <li><strong>Foreign key integrity:</strong> Parent record deleted and ID recycled before child records cleaned up—orphaned child data now points to wrong parent</li>
-                    <li><strong>Partition-scoped IDs:</strong> ID unique within partition but not globally; cross-partition joins create many-to-many matches instead of one-to-one</li>
+                    <li><b>Recycled IDs</b> — counters reset after deletions or migrations, so one ID names two entities</li>
+                    <li><b>Cross-period collisions</b> — session_id 1234 in January and February are different sessions</li>
+                    <li><b>Bare joins</b> — joining on ID without a timestamp merges a deleted user with a new one</li>
+                    <li><b>Orphaned children</b> — a recycled parent ID leaves old child rows tied to the wrong parent</li>
+                    <li><b>Partition-scoped IDs</b> — unique per partition, not globally, so cross-partition joins fan out</li>
                 </ul>
+                <p class="example">Monthly-reset session IDs match January's mobile session 1234 to February's desktop session 1234, and accuracy drops 22% on real mobile traffic.</p>
                 <div class="key-point">
-                    <strong>Impact:</strong> Training examples contaminated with features from unrelated entities. Model learns spurious correlations from mismatched data. Silent correctness violation—looks like valid data. <strong>Fix:</strong> Use UUIDs or composite keys (ID + timestamp + partition). Add temporal constraints to all joins. Validate key uniqueness in actual data, not just schema. Log when IDs are recycled.
+                    <strong>Impact:</strong> Training rows mix features from unrelated entities, and the corruption looks exactly like valid data.
                 </div>
-                <p class="example">Example: Session IDs are 32-bit auto-increment, reset monthly. Training job joins January sessions (id=1-50K) to February events using bare session_id, matching January's session 1234 (mobile user) to February's session 1234 (desktop user). Model learns desktop features predict mobile behavior, accuracy drops 22% on real mobile traffic.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c1" width="720" height="300"></canvas>
@@ -114,17 +129,18 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>ID reuse is rarely intentional—it emerges from system design choices that assume local uniqueness implies global uniqueness.</p>
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">uniqueness</span></div>
                 <ul>
-                    <li><strong>Auto-increment resets:</strong> IDs reset when tables are recreated or databases migrated</li>
-                    <li><strong>Session recycling:</strong> Session IDs recycle after TTL expires</li>
-                    <li><strong>Shared namespaces:</strong> Test and production environments share ID namespace</li>
-                    <li><strong>Uncoordinated generation:</strong> Microservices generate IDs independently without coordination</li>
+                    <li><b>Rarely intentional</b> — reuse emerges from designs that assume local uniqueness is global</li>
+                    <li><b>Auto-increment resets</b> — counters restart when tables are recreated or databases migrated</li>
+                    <li><b>Session recycling</b> — session IDs return to the pool once their TTL (time-to-live) expires</li>
+                    <li><b>Shared namespaces</b> — test and production environments issue IDs from the same range</li>
+                    <li><b>Uncoordinated services</b> — microservices generate IDs independently with no coordination</li>
                 </ul>
+                <p class="example">After a migration user_id 1001 stops meaning Alice and starts meaning Bob, so pre/post joins silently merge two different people.</p>
                 <div class="key-point">
-                    <strong>Root cause:</strong> Assuming IDs are globally unique across time and systems when they're only locally unique within one context.
+                    <strong>Root Cause:</strong> Assuming IDs are globally unique across time and systems when they are only unique within one context.
                 </div>
-                <p class="example">Example: user_id=12345 in prod DB refers to Alice. After a migration, user_id=12345 now refers to Bob. Joins across pre/post migration data silently merge two different people.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c2" width="720" height="300"></canvas>
@@ -138,17 +154,19 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>Design join keys to be collision-proof across time, environment, and source system.</p>
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">provenance</span></div>
                 <ul>
-                    <li><strong>UUIDs:</strong> Use UUIDs or globally unique identifiers</li>
-                    <li><strong>Composite keys:</strong> Include source system + timestamp in composite keys</li>
-                    <li><strong>No bare auto-increment joins:</strong> Never join across systems on auto-increment IDs alone</li>
-                    <li><strong>Row provenance:</strong> Add source_id and ingestion_date to every row</li>
+                    <li><b>Invisible damage</b> — a corrupted join looks valid afterward, so keys must carry identity</li>
+                    <li><b>Use UUIDs</b> — globally unique keys instead of recycled counters remove collisions by design</li>
+                    <li><b>Composite keys</b> — include source system and timestamp so same-ID rows cannot collide</li>
+                    <li><b>No bare joins</b> — never join across systems or time periods on an auto-increment ID alone</li>
+                    <li><b>Row provenance</b> — stamp source_id and ingestion_date on every row to keep origins traceable</li>
+                    <li><b>Verify uniqueness</b> — test key uniqueness in the data itself and log every recycled ID</li>
                 </ul>
+                <p class="example">JOIN ON user_id AND source='prod_v2' AND created_date >= '2025-01-01' eliminates cross-migration collisions.</p>
                 <div class="key-point">
-                    <strong>Best practice:</strong> Design join keys to be collision-proof across time, environment, and source system. If you can't guarantee uniqueness, add qualifying dimensions.
+                    <strong>Fix:</strong> Design join keys to be collision-proof across time, environment, and source system — add qualifying dimensions where uniqueness can't be guaranteed.
                 </div>
-                <p class="example">Example: Instead of JOIN ON user_id, use JOIN ON user_id AND source='prod_v2' AND created_date >= '2025-01-01'. Eliminates cross-migration collisions.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c3" width="720" height="300"></canvas>

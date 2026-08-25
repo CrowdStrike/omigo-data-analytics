@@ -75,6 +75,20 @@ ul {
     font-size: 0.92rem;
 }
 li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
 </style>
 </head>
 <body>
@@ -87,16 +101,18 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>Computing features using time windows with unclear boundary semantics. "Last 7 days" could mean [t-7, t), [t-7, t], (t-7, t), or (t-7, t]. One bracket difference leaks the target event or excludes the most recent data point.</p>
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">windowing</span></div>
                 <ul>
-                    <li><strong>Leakage form:</strong> Feature computed as "activity in [label_date - 7d, label_date]" includes the day of the target event itself</li>
-                    <li><strong>Miss form:</strong> Feature computed as "activity in (label_date - 7d, label_date)" excludes both endpoints, losing signal</li>
-                    <li><strong>Language ambiguity:</strong> SQL BETWEEN is inclusive on both ends; pandas iloc is half-open; numpy is half-open by default</li>
+                    <li><b>Ambiguous boundaries</b> — "last 7 days" could mean [t-7, t), [t-7, t], (t-7, t), or (t-7, t]</li>
+                    <li><b>One bracket</b> — the difference either leaks the target event or drops the freshest data</li>
+                    <li><b>Leakage form</b> — [label_date - 7d, label_date] includes the day of the target event itself</li>
+                    <li><b>Miss form</b> — (label_date - 7d, label_date) excludes both endpoints and loses fresh signal</li>
+                    <li><b>Tool ambiguity</b> — SQL BETWEEN is inclusive on both ends; pandas iloc slicing is half-open</li>
                 </ul>
+                <p class="example">Predicting churn on day T, purchases_last_7d computed with BETWEEN T-7 AND T counts day-T purchases, leaking the label.</p>
                 <div class="key-point">
-                    <strong>Impact:</strong> 10-20% AUC inflation from leakage (feature sees outcome); or 15% AUC drop from exclusion (feature misses most recent behavior). Fix: Standardize on [t-7, t) for "up to but not including today" and document in code.
+                    <strong>Impact:</strong> Boundary leakage can inflate offline AUC by 10-20 points, while excluding both endpoints can cost around 15 points of real signal.
                 </div>
-                <p class="example">Example: Predicting churn on day T. Feature "purchases_last_7d" computed as COUNT(*) WHERE date BETWEEN T-7 AND T includes purchases on day T (post-churn), leaking the label. Correct: WHERE date >= T-7 AND date < T.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c1" width="720" height="300"></canvas>
@@ -110,14 +126,16 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">conventions</span></div>
                 <ul>
-                    <li><strong>Inclusive vs exclusive conventions differ across languages:</strong> No universal standard — each tool picks its own default</li>
-                    <li><strong>SQL BETWEEN is inclusive on both ends:</strong> <code>BETWEEN T-7 AND T</code> includes T (often unexpected by Python devs)</li>
-                    <li><strong>pandas .loc is inclusive, .iloc is exclusive on end:</strong> Same library, two different boundary conventions</li>
-                    <li><strong>No team-wide convention documented:</strong> Each engineer picks their own interpretation; code reviews miss the boundary semantics</li>
+                    <li><b>No forced choice</b> — nothing in code makes engineers state which boundary convention they mean</li>
+                    <li><b>Plausible output</b> — a window off by one day still yields feature values that look correct</li>
+                    <li><b>SQL BETWEEN</b> — inclusive on both ends, which surprises developers coming from Python</li>
+                    <li><b>pandas split brain</b> — .loc is inclusive on the end while .iloc is exclusive, so copies drift</li>
+                    <li><b>No team convention</b> — each engineer picks an interpretation; reviews miss boundary semantics</li>
                 </ul>
                 <div class="key-point">
-                    <strong>Root cause:</strong> The difference between [a, b] and [a, b) is invisible in code review. A single bracket character is the difference between leakage and correctness. Without explicit tests, it passes silently.
+                    <strong>Root Cause:</strong> The difference between [a, b] and [a, b) is a single bracket that is invisible in code review and passes silently without tests.
                 </div>
             </td>
             <td class="viz-col">
@@ -132,14 +150,16 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">windowing</span></div>
                 <ul>
-                    <li><strong>Standardize on exclusive upper bound:</strong> [start, end) everywhere — all features, all languages, all pipelines</li>
-                    <li><strong>Write boundary tests:</strong> <code>assert max(feature_timestamp) < prediction_timestamp</code></li>
-                    <li><strong>Document boundary convention:</strong> In feature engineering code, explicitly comment the bracket notation</li>
-                    <li><strong>Use helper functions that enforce the convention:</strong> <code>get_window(start, end_exclusive)</code> — the API makes it hard to get wrong</li>
+                    <li><b>One convention</b> — standardize on the half-open window [start, end) across every pipeline</li>
+                    <li><b>Machine-checked</b> — enforce the rule with helper functions and assertions, not memory</li>
+                    <li><b>Boundary tests</b> — assert max(feature_timestamp) &lt; prediction_timestamp for every row</li>
+                    <li><b>Document it</b> — comment the bracket notation used in every feature engineering window</li>
+                    <li><b>Safe API</b> — a helper like get_window(start, end_exclusive) makes wrong windows hard to write</li>
                 </ul>
                 <div class="key-point">
-                    <strong>Rule:</strong> Every feature window must have an automated test that proves max(feature_ts) < label_ts. If this test fails, you have leakage. No exceptions.
+                    <strong>Fix:</strong> Every feature window needs an automated test proving max(feature_ts) &lt; label_ts — if it fails, you have leakage.
                 </div>
             </td>
             <td class="viz-col">

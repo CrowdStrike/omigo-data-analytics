@@ -18,7 +18,6 @@
     .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
     .verified { display: inline-block; background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-bottom: 16px; }
     h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
-    .status { display: inline-block; background: #fef9e7; border: 1px solid #f39c12; color: #b7950b; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-left: 12px; vertical-align: middle; }
     table.obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
     table.obj-table td { vertical-align: top; padding: 12px; }
     table.obj-table td:first-child { width: 45%; }
@@ -31,16 +30,15 @@
     .payload-note { font-size: 0.85em; color: #555; margin: 12px 0 8px 0; }
     ul { padding-left: 20px; }
     li { margin-bottom: 6px; font-size: 0.93em; }
+    a { color: #1a5276; }
     code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-size: 0.88em; }
-    .scope-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
-    .scope-tag { background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 3px 8px; border-radius: 4px; font-size: 0.78em; font-family: monospace; }
     p { font-size: 0.93em; }
 </style>
 </head>
 <body>
 
-<h1>Apple HealthKit <span class="status">BACKLOG</span></h1>
-<p class="subtitle">On-device health datastore on iOS and watchOS. There is no server API — data is readable only by code running on the user's own device.</p>
+<h1>Apple HealthKit</h1>
+<p class="subtitle">Lets an iPhone app read a user's health and fitness data — heart rate, steps, sleep, workouts — from their own device, with their permission.</p>
 <span class="verified">Last verified: August 2026</span>
 
 <h2>Overview</h2>
@@ -48,170 +46,53 @@
 <table class="obj-table">
 <tr>
 <td>
-    <span class="section-label">What It Provides</span>
-    <p>A typed, sample-level local store, <code>HKHealthStore</code>, holding health and fitness records written by Apple's own apps, by paired devices such as Apple Watch, and by third-party apps. It is an aggregator and a permission broker, not a measurement system of its own.</p>
-
-    <div class="key-point"><strong>There is no HealthKit API to call from a server.</strong> No REST base URL, no OAuth server-to-server flow, no client credentials, no way for a backend to pull a user's health data. Reads happen only from code executing on that user's iPhone or Apple Watch, against the local store, with per-type permission granted by that user. Health data is encrypted on device; when the user enables iCloud sync it moves between their own devices under Apple's control and is not exposed to developers.
-    <br><br>
-    <strong>Pipeline consequence:</strong> any design that assumes a scheduled server-side fetch is impossible here. You must ship a mobile app. Ingestion is device-initiated, happens only when that app is launched or briefly woken in the background, and stops permanently on uninstall. Gaps are the normal case, not an incident.</div>
-
-    <span class="section-label">Authentication &amp; Permissions</span>
+    <span class="section-label">What you can get</span>
     <ul>
-        <li>Per-data-type authorization, with read and write requested independently via <code>requestAuthorization(toShare:read:)</code>. There is no "all health data" grant.</li>
-        <li>Requires the HealthKit capability/entitlement plus purpose strings in <code>Info.plist</code>.</li>
-        <li>The user can grant, deny, or later revoke any single type from the Health app, at any time, with no callback to your app.</li>
-    </ul>
-    <div class="scope-list">
-        <span class="scope-tag">com.apple.developer.healthkit</span>
-        <span class="scope-tag">NSHealthShareUsageDescription</span>
-        <span class="scope-tag">NSHealthUpdateUsageDescription</span>
-        <span class="scope-tag">HKObjectType.quantityType(.heartRate)</span>
-        <span class="scope-tag">HKObjectType.categoryType(.sleepAnalysis)</span>
-        <span class="scope-tag">HKObjectType.workoutType()</span>
-    </div>
-
-    <div class="key-point"><strong>Missingness is not identifiable.</strong> An app can query its <em>write</em> authorization status, but deliberately cannot determine read authorization. A denied read does not error — it returns an empty result set, indistinguishable from "this user has no data of that type". So an absent value means one of: permission denied, device not worn, or a true zero, and the API will not tell you which. Every imputation rule, every complete-case average, and every "engagement dropped" conclusion drawn from HealthKit data rests on an unobservable missingness mechanism. Record your own permission-request outcomes over time; it is the only way to partially recover the distinction.</div>
-
-    <span class="section-label">Granularity</span>
-    <ul>
-        <li><strong>Optical heart rate on Apple Watch</strong> is duty-cycled, not continuous. Background readings are intermittent — sparse when the wrist is still, suppressed during motion, and absent when the watch is off. During an active workout session the sampling is far denser. Two days with the same nominal "heart rate" coverage can differ by an order of magnitude in sample count.</li>
-        <li><strong><code>heartRateVariabilitySDNN</code></strong> arrives opportunistically — a handful of readings per day, taken under conditions the API does not describe. It is not a continuous series and daily means over it are means of a convenience sample.</li>
-        <li><strong><code>oxygenSaturation</code></strong> background readings are periodic and frequently absent altogether.</li>
-        <li><strong><code>stepCount</code></strong> arrives as interval samples with a start and end. These must be summed over non-overlapping windows. Averaging them, or summing overlapping ones, is wrong.</li>
-        <li>Every sample carries <code>HKSourceRevision</code> (writing app and build) and optionally <code>HKDevice</code> (hardware, model, firmware).</li>
+        <li>Heart rate, steps, distance, calories, and other body measurements</li>
+        <li>Sleep sessions, broken into stages on newer devices</li>
+        <li>Workouts, routes, and Apple Watch ECG recordings</li>
+        <li>Data written by other apps and devices, each sample tagged with its source</li>
     </ul>
 
-    <div class="key-point"><strong>Source metadata is part of the measurement definition, not bookkeeping.</strong> A heart rate from a chest strap is derived from beat-to-beat R-R intervals. One from an optical wrist sensor is a periodic, motion-sensitive, duty-cycled estimate. One typed in by hand is a single spot reading. All three land in HealthKit under <code>heartRate</code> in count/min. Sleep staging from actigraphy plus PPG is a model inference, not polysomnography. Pooling across sources without a source or device term confounds algorithm and hardware with physiology, and the resulting "effect" can be entirely an artefact of who owns which watch.</div>
+    <div class="key-point"><strong>There is no server API.</strong> No backend can pull a user's health data — reads happen only from an app running on that user's iPhone or Watch, with permission granted per data type. Ingestion happens only when your app runs, stops permanently on uninstall, and gaps are the normal case, not an incident.</div>
 
-    <span class="section-label">Key Record Types</span>
+    <span class="section-label">Watch out for</span>
     <ul>
-        <li><strong><code>HKQuantityType</code></strong> — <code>heartRate</code> (count/min), <code>heartRateVariabilitySDNN</code> (ms), <code>restingHeartRate</code>, <code>walkingHeartRateAverage</code>, <code>stepCount</code>, <code>distanceWalkingRunning</code>, <code>activeEnergyBurned</code>, <code>basalEnergyBurned</code>, <code>vo2Max</code> (mL/kg·min), <code>oxygenSaturation</code> (%), <code>respiratoryRate</code>, <code>bodyMass</code>, <code>appleExerciseTime</code>, <code>appleStandTime</code>.</li>
-        <li><strong><code>HKCategoryType</code></strong> — chiefly <code>sleepAnalysis</code>, whose <code>HKCategoryValueSleepAnalysis</code> values are <code>inBed</code>, <code>asleepUnspecified</code>, the stage values <code>asleepREM</code> / <code>asleepCore</code> / <code>asleepDeep</code>, and <code>awake</code>. Each is its own interval sample, so a night is a sequence of adjacent samples rather than one record.</li>
-        <li><strong><code>HKElectrocardiogram</code></strong> — single-lead Apple Watch ECG with voltage measurements and a classification. Separate from the irregular-rhythm and high/low heart rate notifications, which are <em>events emitted by Apple's own algorithms</em> with their own thresholds and detection latency, not raw signal.</li>
-        <li><strong><code>HKWorkout</code></strong> with <code>HKWorkoutActivityType</code>; routes via <code>HKWorkoutRoute</code> under <code>HKSeriesType</code>; dense series such as beat-to-beat data via <code>HKQuantitySeries</code>.</li>
-    </ul>
-
-    <div class="key-point"><strong>Sleep stages are not guaranteed to exist historically.</strong> The <code>asleepREM</code> / <code>asleepCore</code> / <code>asleepDeep</code> values arrived with iOS 16 and watchOS 9. Data recorded before that, and data written by third-party apps that do not stage, appears only as <code>asleepUnspecified</code> or <code>inBed</code>. A stage-level time series therefore has a hard left edge determined by OS version and by which app was writing — a discontinuity that looks exactly like a change in the user's sleep architecture if you do not check the value distribution by date.</div>
-
-    <span class="section-label">Queries</span>
-    <ul>
-        <li><code>HKSampleQuery</code> — raw samples over a predicate, with sort and limit.</li>
-        <li><code>HKStatisticsQuery</code> — one aggregate over one window. <code>HKStatisticsCollectionQuery</code> — bucketed rollups (hourly, daily) that apply HealthKit's own source handling, which is why it is the right tool for "steps per day".</li>
-        <li><code>HKAnchoredObjectQuery</code> — incremental sync. Returns additions <em>and deletions</em> since an opaque anchor. Persist the anchor rather than a timestamp; a timestamp cannot express a retraction.</li>
-        <li><code>HKObserverQuery</code> plus background delivery to wake the app when new data of a type lands.</li>
-        <li><code>HKQuery.predicateForSamples(withStart:end:options:)</code> — the standard time predicate.</li>
-    </ul>
-
-    <span class="section-label">Rate Limits &amp; Quotas</span>
-    <p>There are no request quotas, because there are no requests — reads are local storage and IPC. The real constraints are OS-side and qualitative rather than published numbers:</p>
-    <ul>
-        <li>Background delivery frequency is a <em>hint</em>. Wake-ups are coalesced and throttled by the system according to battery, thermal state, and Low Power Mode. Immediate delivery is available only for a small subset of types, blood glucose being the canonical example; for most types the effective cadence is much coarser than requested.</li>
-        <li>Large historical queries are memory-bound. Pulling years of heart-rate samples in a single query can be terminated by the OS. Page by date range and by <code>limit</code>.</li>
-        <li>Upload throughput is your own backend's problem, plus whatever connectivity the user happens to have.</li>
-    </ul>
-
-    <span class="section-label">Business Scenarios</span>
-    <ul>
-        <li>Decentralised clinical trials and remote patient monitoring, where a companion study app is the capture layer.</li>
-        <li>Insurance and workplace wellness programmes tied to activity targets — noting that the incentive to inflate the source is created by the programme itself.</li>
-        <li>Fitness and coaching apps that read workouts and heart rate, and write workouts back so the user's Health app stays coherent.</li>
-        <li>Chronic condition management: glucose, blood pressure, weight trend.</li>
-        <li>Sleep and activity cohort research, with the standing caveat that the cohort is iPhone owners who installed <em>and kept</em> an app.</li>
-    </ul>
-
-    <span class="section-label">Key Restrictions &amp; Gotchas</span>
-    <ul>
-        <li><strong>No server API and no bulk export for developers.</strong> A user can export their own Health archive from the Health app; you cannot request one. No cross-user access, no population queries, no way to read anyone else's store.</li>
-        <li><strong>No guaranteed backfill.</strong> You see what is on the device when your app first runs. History that predates the device, or that was pruned, is simply not there.</li>
-        <li><strong>Deletions require handling.</strong> Only <code>HKAnchoredObjectQuery</code> surfaces deleted objects. Ignore them and your copy silently diverges from what the user sees in Health.</li>
-        <li><strong>Multi-source double counting.</strong> The iPhone pedometer, a paired Watch, and a third-party app can all write steps for the same hour. The Health app applies a user-visible source priority ordering, and some types are de-duplicated for display, so the number the user sees is not the sum of raw samples. A pipeline that sums raw samples inflates — and inflates most for users with the most devices, which correlates with income and engagement.</li>
-        <li><strong>Composite scores are model outputs, not measurements.</strong> Third-party apps write readiness, recovery, stress, and sleep scores into the store as opaque values. Those models change with app and firmware versions, so a long series of a vendor score is a series of different definitions.</li>
-        <li><strong>Per-type revocation makes ragged panels.</strong> A user can revoke heart rate on day 40 while leaving steps on. Your panel becomes unbalanced mid-study, silently.</li>
-        <li><strong>Availability is conditional.</strong> Gate on <code>HKHealthStore.isHealthDataAvailable()</code>; support varies by device class, and some types exist only where the relevant sensor does.</li>
-        <li><strong>Policy limits, not just technical ones.</strong> App Review requires a health-related primary purpose, and HealthKit data may not be used for advertising or sold to data brokers. This constrains business models, not only code.</li>
-        <li><strong>User-entered values are unvalidated.</strong> Hand-typed weights and injected step counts are indistinguishable from sensor data except through source metadata.</li>
+        <li>A denied read permission does not error — it returns empty results, indistinguishable from "this user has no data". You cannot tell refusal from non-wear from a true zero.</li>
+        <li>The phone, a Watch, and third-party apps can all record the same walk. Summing raw samples double-counts — and inflates most for users with the most devices.</li>
+        <li>The same "heart rate" can come from a chest strap, an optical wrist sensor, or a typed-in entry. These are different measurements sharing one name — check the source metadata before pooling them.</li>
+        <li>Sleep stages only exist from iOS 16 / watchOS 9 onward and only from apps that record them. Older or third-party data shows just "asleep" — a discontinuity that looks like a change in the user's sleep.</li>
     </ul>
 </td>
 <td>
-    <p class="payload-note"><strong>App-side serialization</strong> — this is <em>not</em> an API response, because no API exists. It is how an iOS app would flatten samples it read from the local store before uploading them to its own backend. Nothing produces this JSON but code you wrote.</p>
+    <p class="payload-note"><strong>App-side serialization</strong> — no API returns this; it is how your own app would flatten a sample it read on-device before uploading it to your backend. Note the source and device metadata.</p>
     <pre>{
-  "uploadedBy": "com.example.studyapp",
-  "uploadedAt": "2026-08-21T07:42:11Z",
-  "anchorAfterUpload": "&lt;opaque HKQueryAnchor blob&gt;",
-
-  "quantitySamples": [
-    {
-      "type": "HKQuantityTypeIdentifierHeartRate",
-      "uuid": "EXAMPLE_UUID_redacted",  // Note: masked for illustration
-      "value": 58,
-      "unit": "count/min",
-      "startDate": "2026-08-21T02:14:30Z",
-      "endDate":   "2026-08-21T02:14:30Z",
-      "sourceRevision": {
-        "source": { "name": "Apple Watch",
-                    "bundleIdentifier": "com.apple.health.&lt;uuid&gt;" },
-        "productType": "Watch7,4",
-        "version": "11.2"
-      },
-      "device": { "name": "Apple Watch", "model": "Watch",
-                  "hardwareVersion": "Watch7,4",
-                  "softwareVersion": "11.2" },
-      "metadata": { "HKMetadataKeyHeartRateMotionContext": 1 }
-    },
-    {
-      "type": "HKQuantityTypeIdentifierHeartRateVariabilitySDNN",
-      "uuid": "EXAMPLE_UUID_redacted",  // Note: masked for illustration
-      "value": 41.8,
-      "unit": "ms",
-      "startDate": "2026-08-21T05:03:12Z",
-      "endDate":   "2026-08-21T05:04:12Z",
-      "sourceRevision": {
-        "source": { "name": "Apple Watch" },
-        "productType": "Watch7,4", "version": "11.2"
-      }
-    }
-  ],
-
-  "categorySamples": [
-    { "type": "HKCategoryTypeIdentifierSleepAnalysis",
-      "value": 0, "valueName": "inBed",
-      "startDate": "2026-08-20T22:58:00Z",
-      "endDate":   "2026-08-21T06:59:00Z",
-      "sourceRevision": { "source": { "name": "Apple Watch" } } },
-
-    { "value": 3, "valueName": "asleepCore",
-      "startDate": "2026-08-20T23:18:00Z",
-      "endDate":   "2026-08-20T23:45:00Z" },
-    { "value": 4, "valueName": "asleepDeep",
-      "startDate": "2026-08-20T23:45:00Z",
-      "endDate":   "2026-08-21T00:15:00Z" },
-    { "value": 3, "valueName": "asleepCore",
-      "startDate": "2026-08-21T00:15:00Z",
-      "endDate":   "2026-08-21T00:35:00Z" },
-    { "value": 5, "valueName": "asleepREM",
-      "startDate": "2026-08-21T00:35:00Z",
-      "endDate":   "2026-08-21T00:48:00Z" },
-    { "value": 2, "valueName": "awake",
-      "startDate": "2026-08-21T00:48:00Z",
-      "endDate":   "2026-08-21T00:52:00Z" }
-  ],
-
-  "deletedObjects": [
-    { "uuid": "EXAMPLE_UUID_redacted" }  // Note: masked for illustration
-  ],
-
-  "collectionCaveats": {
-    "readAuthorizationObservable": false,
-    "note": "empty arrays cannot be distinguished from denial"
-  }
+  "type": "HKQuantityTypeIdentifierHeartRate",
+  "value": 58,
+  "unit": "count/min",
+  "startDate": "2026-08-21T02:14:30Z",
+  "sourceRevision": {
+    "source": { "name": "Apple Watch" },
+    "productType": "Watch7,4",
+    "version": "11.2"
+  },
+  "device": { "model": "Watch",
+              "hardwareVersion": "Watch7,4" },
+  "metadata": { "HKMetadataKeyHeartRateMotionContext": 1 }
 }</pre>
 
-    <p class="payload-note"><strong>Single-night hypnogram from <code>sleepAnalysis</code> samples</strong> — each block is one interval sample. This is an inference from PPG plus actigraphy, not polysomnography, and the fact that stages appear at all depends on the watchOS version and on which app wrote the night. The same night recorded by a third-party writer may collapse to a single <code>asleepUnspecified</code> block.</p>
+    <p class="payload-note"><strong>Single-night hypnogram from <code>sleepAnalysis</code> samples</strong> — each block is one interval sample, inferred from wrist sensors rather than a sleep lab.</p>
 
     <canvas id="hypnogram" height="380"></canvas>
 </td>
 </tr>
 </table>
+
+<h2>Official API References</h2>
+<ul>
+    <li><a href="https://developer.apple.com/documentation/healthkit">HealthKit Framework Documentation</a> — the full API reference: sample types, queries, and authorization</li>
+    <li><a href="https://developer.apple.com/health-fitness/">Health and Fitness — Apple Developer</a> — the platform overview page for HealthKit, workouts, and related frameworks</li>
+</ul>
 
 <script>
 (function() {

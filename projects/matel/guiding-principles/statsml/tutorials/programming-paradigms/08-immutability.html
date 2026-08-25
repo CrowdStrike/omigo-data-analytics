@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Immutability</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+li code, .example code { font-family: ui-monospace, Menlo, monospace; font-size: 0.9em; background: #f4f6f8; padding: 1px 4px; border-radius: 3px; }
+pre.code {
+    background: #f8f9fa;
+    border-left: 3px solid #1a5276;
+    padding: 10px 12px;
+    font-family: ui-monospace, Menlo, monospace;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    overflow-x: auto;
+    margin-top: 10px;
+}
+</style>
+</head>
+<body>
+
+<h1>Immutability</h1>
+<p class="subtitle">The raw orders file is never edited — every cleaning step writes a NEW table, so any step can be redone and any old answer can be explained</p>
+
+<div class="card-section">
+    <h2>The Raw Orders File Nobody Touches</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">running example</span></div>
+                <ul>
+                    <li><b>The rule</b> — <code>orders_raw</code> (10,000 rows) is written once and never edited</li>
+                    <li><b>New tables instead</b> — cleaning writes <code>orders_clean</code>; enriching writes <code>orders_enriched</code></li>
+                    <li><b>Nothing overwritten</b> — after the run, all three tables sit on disk together</li>
+                    <li><b>Each table has a maker</b> — one script produced it, from one named input</li>
+                    <li><b>Immutable = unchangeable</b> — a table, once written, is a fact that stays put</li>
+                </ul>
+                <p class="example">Like photo editing that keeps the original: the edit is saved as a new file, never over the negative.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Steps produce new tables instead of changing old ones — so every intermediate answer still exists to be checked.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Tuesday's Bug, Fixed by Rerunning</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">worked example</span></div>
+                <ul>
+                    <li><b>Monday</b> — pipeline runs; the report ships</li>
+                    <li><b>Tuesday</b> — order #17 shows price $4,999 — the register logged cents, not dollars</li>
+                    <li><b>The fix</b> — edit <code>clean.py</code> to divide cents by 100: 4999 becomes $49.99</li>
+                    <li><b>The redo</b> — rerun clean, enrich, report; each writes a fresh table</li>
+                    <li><b>Raw untouched</b> — <code>orders_raw</code> still says 4999, proving what the register sent</li>
+                </ul>
+                <p class="example">Redo = rerun the makers. No hand-editing of data, no hunting for which rows were already fixed.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Because raw is intact, the fix is one code change plus a rerun — and you can prove the bug was the register's, not yours.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+<pre class="code"># never: UPDATE orders SET price = price / 100
+# instead: fix the maker, rerun it
+def clean(raw):
+    df = raw.dropna(subset=["price"])
+    df["price"] = df["price"] / 100   # the fix
+    return df
+
+orders_clean = clean(orders_raw)      # new table</pre>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Mutation Is How Pipelines Lose Their Memory</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">failure mode</span><span class="tag blue">why it matters</span></div>
+                <ul>
+                    <li><b>The mutable version</b> — an <code>UPDATE</code> fixes prices in place, in the one and only table</li>
+                    <li><b>History gone</b> — "what did raw say before the fix?" now has no answer</li>
+                    <li><b>Unexplainable reports</b> — Monday's report used values that no longer exist anywhere</li>
+                    <li><b>Double-fix risk</b> — run the UPDATE twice and $49.99 becomes $0.4999, silently</li>
+                    <li><b>Immutable debugging</b> — diff <code>orders_clean</code> against <code>orders_raw</code> and see exactly what cleaning did</li>
+                </ul>
+                <p class="example">Auditor: "why does Monday's report say $4,999?" — with mutation, the evidence was overwritten on Tuesday.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Mutation destroys the input that explains the output — an edited-in-place pipeline cannot account for its own old answers.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>"So Mistakes Are Permanent?" — No, Corrections Are Appended</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span></div>
+                <ul>
+                    <li><b>The confusion</b> — "if tables can't change, errors can never be fixed"</li>
+                    <li><b>The reality</b> — you fix by writing a corrected NEW version, keeping the old one</li>
+                    <li><b>Accountants knew first</b> — a ledger entry is never erased; a correcting entry is added</li>
+                    <li><b>Bank statements too</b> — a wrong charge gets a refund line, not a rewritten history</li>
+                    <li><b>Storage worry</b> — keeping versions costs disk, which is cheap next to an unexplainable report</li>
+                </ul>
+                <p class="example">A $50 overcharge is fixed by a &minus;$50 line below it — both lines stay visible forever.</p>
+                <div class="key-point">
+                    <strong>Common confusion:</strong> Immutability doesn't forbid fixing — it forbids fixing in a way that hides that anything was ever wrong.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var P = {
+    blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+    aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+    ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var c = document.getElementById(id);
+    var w = +c.getAttribute('width'), h = +c.getAttribute('height');
+    var dpr = window.devicePixelRatio || 1;
+    c.width = w * dpr; c.height = h * dpr;
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+    return { ctx: ctx, w: w, h: h };
+}
+
+function box(ctx, x, y, w, h, fill, stroke) {
+    ctx.fillStyle = fill;
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(x, y, w, h);
+}
+
+function arrow(ctx, x1, y1, x2, y2, color) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var a = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(a - 0.4), y2 - 8 * Math.sin(a - 0.4));
+    ctx.lineTo(x2 - 8 * Math.cos(a + 0.4), y2 - 8 * Math.sin(a + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+function padlock(ctx, x, y, color) {
+    ctx.strokeStyle = color; ctx.lineWidth = 2;
+    ctx.strokeRect(x - 7, y, 14, 10);
+    ctx.beginPath(); ctx.arc(x, y, 5, Math.PI, 2 * Math.PI); ctx.stroke();
+}
+
+// c1: chain of new tables, raw locked
+(function() {
+    var s = setup('c1'), ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 16px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Every Step Writes a NEW Table', w / 2, 24);
+
+    var tables = [
+        { x: 30,  label1: 'orders_raw',      label2: '10,000 rows', color: P.blue,   lock: true },
+        { x: 220, label1: 'orders_clean',    label2: '9,600 rows',  color: P.green,  lock: false },
+        { x: 410, label1: 'orders_enriched', label2: '9,600 rows',  color: P.violet, lock: false },
+        { x: 600, label1: 'daily_report',    label2: '12 rows',     color: P.orange, lock: false }
+    ];
+    var makers = ['clean.py', 'enrich.py', 'report.py'];
+    var by = 100, bw = 120, bh = 62;
+
+    for (var i = 0; i < 4; i++) {
+        var t = tables[i];
+        box(ctx, t.x, by, bw, bh, '#f8f9fa', t.color);
+        ctx.fillStyle = t.color; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(t.label1, t.x + bw / 2, by + 26);
+        ctx.fillStyle = P.text; ctx.font = '11px system-ui';
+        ctx.fillText(t.label2, t.x + bw / 2, by + 45);
+        if (t.lock) padlock(ctx, t.x + bw / 2, by - 22, P.blue);
+        if (i < 3) {
+            arrow(ctx, t.x + bw + 4, by + bh / 2, tables[i + 1].x - 4, by + bh / 2, P.mute);
+            ctx.fillStyle = P.ink; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(makers[i], (t.x + bw + tables[i + 1].x) / 2, by + bh / 2 - 10);
+        }
+    }
+
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('written once, never edited', 90, 200);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 14px system-ui';
+    ctx.fillText('after the run, ALL four tables still exist on disk', w / 2, 240);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('each arrow is a script; each box is a fact that stays put', w / 2, 262);
+})();
+
+// c2: the Tuesday fix — change the maker, rerun downstream
+(function() {
+    var s = setup('c2'), ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 16px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Fix the Maker, Rerun the Chain — Raw Never Moves', w / 2, 24);
+
+    ctx.strokeStyle = P.grid; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(270, 40); ctx.lineTo(270, h - 12); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Left: order #17 before/after
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('order #17', 145, 56);
+
+    box(ctx, 45, 70, 200, 44, 'rgba(42,120,214,0.10)', P.blue);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('orders_raw', 58, 88);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('price = 4999 (cents)', 58, 105);
+
+    arrow(ctx, 145, 118, 145, 142, P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('clean.py v2: / 100', 158, 134);
+
+    box(ctx, 45, 146, 200, 44, 'rgba(0,131,0,0.10)', P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('orders_clean (new)', 58, 164);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('price = $49.99', 58, 181);
+
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('raw still says 4999 —', 145, 230);
+    ctx.fillText('proof of what the register sent', 145, 248);
+
+    // Right: Monday vs Tuesday runs
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('two runs, side by side', 495, 56);
+
+    var runs = [
+        { y: 80, label: 'Mon', tag: 'v1', color: P.mute, note: 'report says $4,999 — kept as evidence' },
+        { y: 160, label: 'Tue', tag: 'v2', color: P.green, note: 'report says $49.99 — the shipped fix' }
+    ];
+    for (var r = 0; r < 2; r++) {
+        var run = runs[r];
+        ctx.fillStyle = run.color; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(run.label, 300, run.y + 20);
+        var names = ['clean ' + run.tag, 'enrich', 'report'];
+        for (var i = 0; i < 3; i++) {
+            var x = 340, bx = x + i * 120;
+            box(ctx, bx, run.y, 86, 30, r === 0 ? '#f4f6f8' : 'rgba(0,131,0,0.10)', run.color);
+            ctx.fillStyle = run.color; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(names[i], bx + 43, run.y + 19);
+            if (i < 2) arrow(ctx, bx + 88, run.y + 15, bx + 118, run.y + 15, P.grid);
+        }
+        ctx.fillStyle = run.color; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(run.note, 340, run.y + 48);
+    }
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('redo any step by rerunning it — no data was hand-edited', 495, 248);
+})();
+
+// c3: mutable timeline vs immutable versions
+(function() {
+    var s = setup('c3'), ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 16px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('What Did the Data Say on Monday?', w / 2, 24);
+
+    ctx.strokeStyle = P.grid; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(40, 152); ctx.lineTo(680, 152); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Top: mutable — one box overwritten
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('mutable: UPDATE in place', 40, 52);
+
+    var days = ['Mon', 'Tue', 'Wed'];
+    for (var i = 0; i < 3; i++) {
+        var x = 260 + i * 150;
+        box(ctx, x, 64, 100, 40, i === 2 ? 'rgba(231,76,60,0.10)' : '#f4f6f8', i === 2 ? '#e74c3c' : P.mute);
+        ctx.fillStyle = P.text; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('orders', x + 50, 81);
+        ctx.fillStyle = i === 2 ? '#e74c3c' : P.mute; ctx.font = '11px system-ui';
+        ctx.fillText(days[i] + (i === 2 ? ': only survivor' : ': overwritten'), x + 50, 96);
+        if (i < 2) arrow(ctx, x + 102, 84, x + 148, 84, '#e74c3c');
+    }
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Monday\'s values exist nowhere — the question has no answer', 260, 132);
+
+    // Bottom: immutable — all versions live
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('immutable: new table per run', 40, 182);
+
+    for (var i = 0; i < 3; i++) {
+        var x = 260 + i * 150;
+        box(ctx, x, 194, 100, 40, 'rgba(0,131,0,0.10)', P.green);
+        ctx.fillStyle = P.green; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('orders_v' + (i + 1), x + 50, 211);
+        ctx.fillStyle = P.text; ctx.font = '11px system-ui';
+        ctx.fillText(days[i] + ': still on disk', x + 50, 226);
+    }
+    // diff bracket between v1 and v2
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(310, 240); ctx.lineTo(310, 252); ctx.lineTo(460, 252); ctx.lineTo(460, 240); ctx.stroke();
+    ctx.fillStyle = P.violet; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('diff v1 vs v2 = exactly the 3 rows the fix touched', 385, 270);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('any old report can still', 40, 210);
+    ctx.fillText('be explained', 40, 226);
+})();
+
+// c4: erase-and-rewrite vs append-a-correction ledgers
+(function() {
+    var s = setup('c4'), ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 16px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Fixing a $50 Overcharge, Two Ways', w / 2, 24);
+
+    ctx.strokeStyle = P.grid; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(360, 40); ctx.lineTo(360, h - 12); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Left: erase & rewrite
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('erase and rewrite', 185, 52);
+
+    box(ctx, 70, 66, 230, 118, '#fff', '#e74c3c');
+    var l1 = [
+        { t: 'coffee beans      $12', ok: true },
+        { t: 'oven repair      $175', ok: true },
+        { t: 'flour order      $250', ok: false },
+        { t: '', ok: true }
+    ];
+    for (var i = 0; i < 3; i++) {
+        var y = 92 + i * 26;
+        ctx.fillStyle = P.text; ctx.font = '12px ui-monospace, Menlo, monospace'; ctx.textAlign = 'left';
+        ctx.fillText(l1[i].t, 88, y);
+    }
+    // the rewritten cell highlighted
+    ctx.fillStyle = 'rgba(231,76,60,0.12)';
+    ctx.fillRect(84, 130, 200, 20);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('was $300? $280? no trace', 88, 168);
+
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the error and the fix are both invisible —', 185, 226);
+    ctx.fillText('and a second "fix" can strike twice', 185, 244);
+
+    // Right: append correction
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('append a correction', 535, 52);
+
+    box(ctx, 420, 66, 230, 144, '#fff', P.green);
+    var l2 = [
+        { t: 'coffee beans      $12', c: P.text },
+        { t: 'oven repair      $175', c: P.text },
+        { t: 'flour order      $300', c: P.orange },
+        { t: 'correction        -$50', c: P.green }
+    ];
+    for (var i = 0; i < 4; i++) {
+        var y = 92 + i * 26;
+        ctx.fillStyle = l2[i].c; ctx.font = '12px ui-monospace, Menlo, monospace'; ctx.textAlign = 'left';
+        ctx.fillText(l2[i].t, 438, y);
+    }
+    ctx.fillStyle = P.green; ctx.font = 'bold 11px system-ui';
+    ctx.fillText('net $250 — and the whole story is visible', 438, 196);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('fix by adding, never by erasing', 535, 232);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('what accountants have done for centuries', 535, 252);
+})();
+</script>
+
+</body>
+</html>

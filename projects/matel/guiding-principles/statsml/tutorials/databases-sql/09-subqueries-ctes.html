@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Subqueries &amp; CTEs</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+.sql {
+    background: #f8f9fa;
+    border-left: 3px solid #1a5276;
+    padding: 8px 12px;
+    margin-top: 10px;
+    font-family: ui-monospace, Menlo, monospace;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    overflow-x: auto;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Subqueries &amp; CTEs</h1>
+<p class="subtitle">Breaking one big query into small named steps — each step is a mini-table you can read, test, and reuse</p>
+
+<div class="card-section">
+    <h2>A Question That Won't Fit in One Step</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">running example</span></div>
+                <ul>
+                    <li><b>The ask</b> &mdash; "which cities have an average order above the shop's overall average?"</li>
+                    <li><b>Two answers needed</b> &mdash; each city's average AND the overall average, then a comparison</li>
+                    <li><b>Step 1</b> &mdash; average per city from the 8 orders: Pune $10, Delhi $11, Mumbai $8</li>
+                    <li><b>Step 2</b> &mdash; overall average: $81 total / 8 orders = $10.13</li>
+                    <li><b>Step 3</b> &mdash; keep cities beating $10.13: only Delhi ($11) qualifies</li>
+                </ul>
+                <p class="example">You would naturally do this on paper as three little tables — subqueries and CTEs let SQL do the same.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A subquery or CTE is just a query whose result is used as a table by the next query — steps, not magic.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Same Numbers, Checked by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">worked example</span><span class="tag blue">core idea</span></div>
+                <ul>
+                    <li><b>Pune</b> &mdash; $8 + $5 + $15 + $12 = $40 over 4 orders: average $10</li>
+                    <li><b>Delhi</b> &mdash; $15 + $12 + $6 = $33 over 3 orders: average $11</li>
+                    <li><b>Mumbai</b> &mdash; one $8 order: average $8</li>
+                    <li><b>Overall</b> &mdash; $40 + $33 + $8 = $81 over 8 orders: average $10.13</li>
+                    <li><b>The verdict</b> &mdash; $11 &gt; $10.13 yes; $10 and $8 no &mdash; Delhi is the answer</li>
+                </ul>
+                <pre class="sql">SELECT city, AVG(amount) AS city_avg
+FROM   orders
+GROUP  BY city
+HAVING AVG(amount) >
+       (SELECT AVG(amount) FROM orders);</pre>
+                <p class="example">The bracketed query runs first and becomes a single number, $10.13, that the outer query compares against.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The inner query's answer ($10.13) is computed once and slotted into the outer query like a hand-written constant.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>WITH: Give Each Step a Name</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag orange">why it matters</span></div>
+                <ul>
+                    <li><b>Nested pain</b> &mdash; queries inside queries read inside-out; three levels deep is a puzzle</li>
+                    <li><b>WITH city_stats AS (...)</b> &mdash; names step 1; the next step uses it like a real table</li>
+                    <li><b>Reads top-down</b> &mdash; the CTE version reads in the order you would explain it aloud</li>
+                    <li><b>Debug one step</b> &mdash; run SELECT * FROM city_stats alone and eyeball the 3 rows</li>
+                    <li><b>Real pipelines</b> &mdash; production analytics queries are often 5-10 named steps chained this way</li>
+                </ul>
+                <pre class="sql">WITH city_stats AS (
+  SELECT city, AVG(amount) AS city_avg
+  FROM orders GROUP BY city
+), overall AS (
+  SELECT AVG(amount) AS all_avg FROM orders
+)
+SELECT city FROM city_stats, overall
+WHERE  city_avg > all_avg;   -- Delhi</pre>
+                <p class="example">A teammate can read city_stats, then overall, then the final SELECT — never holding more than one step in their head.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Same result as the nested version — the win is that every intermediate table now has a name you can read and test.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A CTE Is a Name, Not a Saved Table</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">why it matters</span></div>
+                <ul>
+                    <li><b>Not stored</b> &mdash; city_stats vanishes when the query finishes; nothing lands on disk</li>
+                    <li><b>Not automatically faster</b> &mdash; naming a step does not make the database do less work</li>
+                    <li><b>One query's scope</b> &mdash; the next query in your notebook cannot see city_stats</li>
+                    <li><b>Multi-row trap</b> &mdash; a subquery used where one value is expected errors if it returns 3 rows</li>
+                    <li><b>The payoff is human</b> &mdash; fewer bugs, reviewable steps, testable pieces &mdash; not speed</li>
+                </ul>
+                <p class="example">Comparing amount = (subquery returning Pune, Delhi, Mumbai) fails — use IN when the step returns a list.</p>
+                <div class="key-point">
+                    <strong>Rule of thumb:</strong> Reach for a CTE when a query stops fitting in your head; reach for a real table (CREATE TABLE AS) when other queries need the result too.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var w = +canvas.getAttribute('width'), h = +canvas.getAttribute('height');
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+    return { ctx: ctx, w: w, h: h };
+}
+
+function box(ctx, x, y, w2, h2, color, bgAlpha) {
+    ctx.fillStyle = bgAlpha || '#f4f6f8';
+    ctx.fillRect(x, y, w2, h2);
+    ctx.strokeStyle = color; ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, w2, h2);
+}
+
+function arrow(ctx, x1, y1, x2, y2, color) {
+    ctx.strokeStyle = color; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var a = Math.atan2(y2 - y1, x2 - x1);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 9 * Math.cos(a - 0.4), y2 - 9 * Math.sin(a - 0.4));
+    ctx.lineTo(x2 - 9 * Math.cos(a + 0.4), y2 - 9 * Math.sin(a + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: pipeline of named steps
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w;
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Question, Three Small Steps', w / 2, 24);
+
+    // raw orders box
+    box(ctx, 30, 100, 130, 70, P.mute);
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('orders', 95, 125);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('8 rows', 95, 145);
+
+    // step 1: city_stats
+    box(ctx, 230, 52, 175, 92, P.blue);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('step 1: city_stats', 317, 72);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Pune      $10', 262, 94);
+    ctx.fillText('Delhi     $11', 262, 112);
+    ctx.fillText('Mumbai  $8', 262, 130);
+
+    // step 2: overall
+    box(ctx, 230, 176, 175, 62, P.violet);
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('step 2: overall', 317, 198);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('all_avg = $10.13', 317, 220);
+
+    // step 3: compare
+    box(ctx, 490, 105, 190, 78, P.green, 'rgba(0,131,0,0.08)');
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('step 3: compare', 585, 128);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('city_avg > all_avg?', 585, 148);
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('→ Delhi', 585, 170);
+
+    arrow(ctx, 160, 120, 226, 95, P.blue);
+    arrow(ctx, 160, 150, 226, 200, P.violet);
+    arrow(ctx, 405, 95, 486, 125, P.blue);
+    arrow(ctx, 405, 205, 486, 160, P.violet);
+
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.orange; ctx.textAlign = 'center';
+    ctx.fillText('each box is a mini-table the next box treats as input', w / 2, 272);
+})();
+
+// c2: city averages vs overall reference line
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w;
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('City Averages vs the Overall Average ($10.13)', w / 2, 24);
+
+    var cities = ['Pune', 'Delhi', 'Mumbai'];
+    var avgs = [10, 11, 8];
+    var subs = ['$40 / 4 orders', '$33 / 3 orders', '$8 / 1 order'];
+    var colors = [P.blue, P.green, P.magenta];
+    var px = 120, pw = 460, baseY = 235, chH = 165, maxY = 13;
+    var barW = 100, gap = (pw - 3 * barW) / 2;
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px - 20, baseY); ctx.lineTo(px + pw + 20, baseY); ctx.stroke();
+
+    var yRef = baseY - 10.13 / maxY * chH;
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2.5; ctx.setLineDash([7, 5]);
+    ctx.beginPath(); ctx.moveTo(px - 20, yRef); ctx.lineTo(px + pw + 20, yRef); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.orange; ctx.textAlign = 'left';
+    ctx.fillText('overall', px + pw + 26, yRef - 2);
+    ctx.fillText('$10.13', px + pw + 26, yRef + 14);
+
+    for (var i = 0; i < 3; i++) {
+        var x = px + i * (barW + gap);
+        var bh = avgs[i] / maxY * chH;
+        var wins = avgs[i] > 10.13;
+        ctx.fillStyle = wins ? colors[i] : 'rgba(107,114,128,0.35)';
+        ctx.fillRect(x, baseY - bh, barW, bh);
+        ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('$' + avgs[i], x + barW / 2, baseY - bh - 8);
+        ctx.font = '12px system-ui';
+        ctx.fillText(cities[i], x + barW / 2, baseY + 17);
+        ctx.fillStyle = P.mute;
+        ctx.fillText(subs[i], x + barW / 2, baseY + 33);
+    }
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.green; ctx.textAlign = 'center';
+    ctx.fillText('only Delhi clears the line', px + barW + gap + barW / 2, 58);
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute;
+    ctx.fillText('the inner query computes the dashed line; the outer query keeps bars above it', w / 2, 285);
+})();
+
+// c3: nested pyramid vs flat CTE steps
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w;
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Nested Reads Inside-Out — CTEs Read Top-Down', w / 2, 24);
+
+    ctx.strokeStyle = '#bdc3c7'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(360, 35); ctx.lineTo(360, 285); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Left: nested boxes
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'center';
+    ctx.fillText('nested subqueries', 185, 52);
+    box(ctx, 45, 66, 280, 190, P.mute);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('SELECT ... FROM (', 57, 86);
+    box(ctx, 75, 96, 220, 120, P.violet);
+    ctx.fillStyle = P.violet;
+    ctx.fillText('SELECT ... FROM (', 87, 116);
+    box(ctx, 105, 126, 160, 58, P.blue);
+    ctx.fillStyle = P.blue;
+    ctx.fillText('SELECT ...', 117, 146);
+    ctx.fillText('FROM orders', 117, 164);
+    ctx.fillStyle = P.violet; ctx.fillText(')', 87, 206);
+    ctx.fillStyle = P.mute; ctx.fillText(')', 57, 246);
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'center';
+    ctx.fillText('reading starts at the innermost box', 185, 276);
+
+    // Right: flat steps
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.green;
+    ctx.fillText('CTE pipeline', 540, 52);
+    var steps = [
+        { label: 'WITH city_stats AS (...)', c: P.blue },
+        { label: 'WITH overall AS (...)', c: P.violet },
+        { label: 'SELECT ... final compare', c: P.green }
+    ];
+    for (var i = 0; i < 3; i++) {
+        var y = 70 + i * 66;
+        box(ctx, 420, y, 240, 40, steps[i].c);
+        ctx.fillStyle = steps[i].c; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(steps[i].label, 540, y + 25);
+        if (i < 2) arrow(ctx, 540, y + 40, 540, y + 62, P.mute);
+    }
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.green;
+    ctx.fillText('reads in the order you would explain it', 540, 276);
+})();
+
+// c4: CTE vs stored table comparison
+(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w;
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('What a CTE Is — and Is Not', w / 2, 24);
+
+    ctx.strokeStyle = '#bdc3c7'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(360, 35); ctx.lineTo(360, 285); ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillStyle = P.blue;
+    ctx.fillText('CTE: a name inside one query', 185, 56);
+    ctx.fillStyle = P.aqua;
+    ctx.fillText('CREATE TABLE AS: saved for everyone', 540, 56);
+
+    // left: query bubble containing cte, then gone
+    box(ctx, 60, 76, 250, 120, P.blue);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('query runs...', 185, 96);
+    box(ctx, 95, 108, 180, 40, P.violet, 'rgba(74,58,167,0.08)');
+    ctx.fillStyle = P.violet;
+    ctx.fillText('city_stats (3 rows)', 185, 132);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('...query finishes', 185, 180);
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = '#e74c3c';
+    ctx.fillText('city_stats is gone', 185, 226);
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute;
+    ctx.fillText('next query: "table not found"', 185, 248);
+
+    // right: disk cylinder + many queries
+    var cx = 540, cy = 120;
+    ctx.strokeStyle = P.aqua; ctx.lineWidth = 2;
+    ctx.fillStyle = 'rgba(25,158,112,0.10)';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy - 28, 70, 14, 0, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+    ctx.fillRect(cx - 70, cy - 28, 140, 56);
+    ctx.beginPath(); ctx.moveTo(cx - 70, cy - 28); ctx.lineTo(cx - 70, cy + 28); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx + 70, cy - 28); ctx.lineTo(cx + 70, cy + 28); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(cx, cy + 28, 70, 14, 0, 0, Math.PI); ctx.stroke();
+    ctx.fillStyle = P.aqua; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('city_stats on disk', cx, cy + 4);
+
+    var q = ['query A', 'query B', 'dashboard'];
+    for (var i = 0; i < 3; i++) {
+        var qx = 430 + i * 110;
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+        ctx.fillText(q[i], qx, 232);
+        arrow(ctx, qx, 214, cx + (qx - cx) * 0.35, cy + 48, P.mute);
+    }
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.aqua;
+    ctx.fillText('reusable — but you must refresh it yourself', 540, 262);
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.orange; ctx.textAlign = 'center';
+    ctx.fillText('choose by audience: one query → CTE, many queries → real table', w / 2, 290);
+})();
+</script>
+
+</body>
+</html>

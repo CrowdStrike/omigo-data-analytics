@@ -78,6 +78,20 @@ ul {
     font-size: 0.92rem;
 }
 li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
 </style>
 </head>
 <body>
@@ -90,17 +104,19 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>Training uses batch-computed features with one aggregation window, but serving recomputes them in real-time with different logic or time boundaries. The model learns patterns from the batch version that don't hold in production.</p>
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">serving</span></div>
                 <ul>
-                    <li><strong>Time aggregation windows:</strong> Training uses "last 30 days" computed at midnight; serving uses "last 30 days" from request timestamp, creating boundary mismatches</li>
-                    <li><strong>Feature computation logic:</strong> Training runs SQL with full table scans; serving uses cached lookups or approximate streaming aggregates that drift from exact values</li>
-                    <li><strong>Data freshness:</strong> Training features reflect complete, backfilled data; serving features use whatever arrived by request time, missing late events</li>
-                    <li><strong>Timezone and rounding:</strong> Batch jobs run in UTC with date truncation; serving uses local timezone or millisecond precision, shifting boundaries</li>
+                    <li><b>Split computation</b> — training reads batch features; serving recomputes them with new logic</li>
+                    <li><b>Window shift</b> — batch computes "last 30 days" at midnight; serving counts from request time</li>
+                    <li><b>Logic drift</b> — batch runs exact SQL scans; serving uses cached or approximate aggregates</li>
+                    <li><b>Freshness gap</b> — training sees complete backfilled data; serving misses late-arriving events</li>
+                    <li><b>Timezone rounding</b> — batch truncates to UTC dates; serving uses local time, shifting windows</li>
+                    <li><b>Learned mismatch</b> — the model learns batch patterns that never appear at serving time</li>
                 </ul>
+                <p class="example">A "7-day activity" feature computed at midnight reads 23 in training but 19 at a 3:42 PM request, and accuracy drops 8% in production.</p>
                 <div class="key-point">
-                    <strong>Impact:</strong> Model degrades in production despite good offline metrics. Features that were predictive in training are systematically different at serving time. <strong>Fix:</strong> Use identical feature computation logic in training and serving—same code, same libraries, same time boundaries. Log actual serving features and compare distributions against training features.
+                    <strong>Impact:</strong> The model degrades in production despite good offline metrics, because its features are systematically different at serving time.
                 </div>
-                <p class="example">Example: A model trained on "user activity in last 7 days" (computed at midnight) sees values like 15, 23, 8 during training. At serving time, the same feature is computed from request timestamp (e.g., 3:42 PM), producing values like 12, 19, 6—systematically lower because fewer complete days. Accuracy drops 8% in production.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c1" width="720" height="300"></canvas>
@@ -114,14 +130,17 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">two pipelines</span></div>
                 <ul>
-                    <li><strong>Different code paths:</strong> Batch training uses SQL/Spark; streaming serving uses Flink/Redis — different implementations of "the same" logic</li>
-                    <li><strong>Time boundary mismatch:</strong> Training computes features at midnight with complete data; serving computes mid-day with partial data</li>
-                    <li><strong>Library version drift:</strong> Training environment pins library v2.1; serving container upgraded to v2.3 with subtle behavioral changes</li>
-                    <li><strong>Timezone handling:</strong> Batch jobs truncate to UTC date; real-time systems use local timezone or raw timestamps</li>
+                    <li><b>Two codebases</b> — batch uses SQL or Spark while serving uses Flink or Redis lookups</li>
+                    <li><b>Separate teams</b> — training and serving are built independently, tuned for throughput vs latency</li>
+                    <li><b>Gradual drift</b> — skew is rarely one bug; the two implementations diverge slowly over time</li>
+                    <li><b>Boundary mismatch</b> — midnight batch runs see complete data; mid-day serving sees partial data</li>
+                    <li><b>Version drift</b> — training pins library v2.1 while the serving container upgrades to v2.3</li>
+                    <li><b>Timezone handling</b> — batch truncates to the UTC date; real-time uses local timestamps</li>
                 </ul>
                 <div class="key-point">
-                    <strong>Root cause:</strong> Training and serving are built by different teams, at different times, with different priorities (throughput vs latency). The "same feature" is actually two implementations that happen to share a name.
+                    <strong>Root Cause:</strong> The "same feature" is actually two implementations that happen to share a name.
                 </div>
             </td>
             <td class="viz-col">
@@ -136,14 +155,16 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">one pipeline</span></div>
                 <ul>
-                    <li><strong>Unified feature pipeline:</strong> Same code computes features for both training AND serving — one implementation, two execution modes</li>
-                    <li><strong>Log and compare:</strong> Log actual online features at serving time; compare with batch-computed versions to detect drift</li>
-                    <li><strong>Distribution monitoring:</strong> Compare training vs serving feature distributions daily; alert on KL-divergence spikes</li>
-                    <li><strong>Feature store consistency:</strong> Use a feature store that guarantees identical values across batch and online retrieval</li>
+                    <li><b>Unified pipeline</b> — one implementation computes features for both training and serving</li>
+                    <li><b>Log and compare</b> — record actual served feature values and diff them against batch versions</li>
+                    <li><b>Distribution checks</b> — compare train and serve histograms daily; alert on KL-divergence spikes</li>
+                    <li><b>Feature store</b> — a central store guarantees identical values in batch and online retrieval</li>
+                    <li><b>Shared validation</b> — if the two paths cannot share code, they must share equivalence checks</li>
                 </ul>
                 <div class="key-point">
-                    <strong>Principle:</strong> One definition, one computation, verified daily. If training and serving can't share code, they must share validation.
+                    <strong>Fix:</strong> One definition, one computation, verified daily against the serving path.
                 </div>
             </td>
             <td class="viz-col">

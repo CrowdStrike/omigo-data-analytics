@@ -19,7 +19,6 @@
         .subtitle { color: #666; font-size: 1.05em; margin-bottom: 12px; }
         .verified { display: inline-block; background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-bottom: 16px; }
         h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
-        .status { display: inline-block; background: #fef9e7; border: 1px solid #f39c12; color: #b7950b; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-left: 12px; vertical-align: middle; }
         table.obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
         table.obj-table td { vertical-align: top; padding: 12px; }
         table.obj-table td:first-child { width: 45%; }
@@ -33,166 +32,39 @@
         .key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
         ul { padding-left: 20px; }
         li { margin-bottom: 6px; font-size: 0.93em; }
-        .scope-list { margin: 8px 0 4px 0; line-height: 2.2; }
-        .scope-tag { background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 3px 8px; border-radius: 4px; font-size: 0.78em; font-family: ui-monospace, Menlo, monospace; white-space: nowrap; }
-        .scope-tag.elev { background: #fef5e7; border-color: #e67e22; color: #a04000; }
+        a { color: #1a5276; }
     </style>
 </head>
 <body>
-    <h1>Microsoft Office / Excel <span class="status">BACKLOG</span></h1>
-    <p class="subtitle">Graph Excel workbook ranges, tables, charts and worksheetFunctions — plus OOXML for files the API cannot reach</p>
+    <h1>Microsoft Office / Excel</h1>
+    <p class="subtitle">Read and write live Excel workbooks stored in the cloud — Excel itself does the recalculating on the server.</p>
     <span class="verified">Last verified: August 2026</span>
 
     <h2>Overview</h2>
     <table class="obj-table">
         <tr>
             <td>
-                <p class="section-head">What It Provides</p>
-                <p>Microsoft Graph exposes a <strong>live, calculating Excel engine</strong> over workbooks stored in OneDrive or SharePoint. This is materially different from parsing a spreadsheet file: writing a formula through the API causes the service to recalculate, and reading a range returns both what was typed and what it evaluated to.</p>
-                <p>Object model under <code>/workbook</code>: <code>worksheets</code>, <code>range</code> (by address, or via <code>usedRange</code> / <code>entireRow</code> / <code>resizedRange</code> and other derived-range functions), <code>tables</code> with <code>columns</code> and <code>rows</code>, <code>charts</code>, <code>names</code> (named items), <code>pivotTables</code> (limited), <code>comments</code>, and <code>functions</code> — a callable surface for the built-in worksheet function library.</p>
-
-                <div class="key-point"><strong>There is no Graph API for Word or PowerPoint content.</strong> Graph treats <code>.docx</code> and <code>.pptx</code> as opaque driveItems: you can list, download, upload, version, and share them, but there is no <code>/workbook</code>-equivalent object model for paragraphs or slides. Editing their content server-side means downloading the file and manipulating OOXML, or running an Office Add-in with the client-side <code>Word.run</code> / <code>PowerPoint.run</code> JavaScript API — which is a different execution model entirely, not a REST API.</div>
-
-                <p class="section-head">Authentication &amp; Scopes</p>
+                <p class="section-head">What You Can Get</p>
                 <ul>
-                    <li><strong>Entra ID (Azure AD) OAuth 2.0.</strong> The Excel API rides the <em>files</em> permissions, not a dedicated Excel scope.</li>
-                    <li><strong>Delegated:</strong> <code>Files.ReadWrite</code>, <code>Files.ReadWrite.All</code>; read-only work needs <code>Files.Read</code> / <code>Files.Read.All</code>.</li>
-                    <li><strong>SharePoint-hosted workbooks</strong> additionally need <code>Sites.Read.All</code> / <code>Sites.ReadWrite.All</code>, or the narrower <code>Sites.Selected</code>.</li>
-                    <li><strong>Application-permission support is limited.</strong> The Excel workbook API has historically been oriented at delegated flows; daemon scenarios are the ones most likely to hit unexpected <code>accessDenied</code> and are worth validating early rather than assumed.</li>
-                </ul>
-                <div class="scope-list">
-                    <span class="scope-tag">Files.Read</span>
-                    <span class="scope-tag">Files.ReadWrite</span>
-                    <span class="scope-tag">Files.Read.All</span>
-                    <span class="scope-tag">Files.ReadWrite.All</span>
-                    <span class="scope-tag">Sites.Read.All</span>
-                    <span class="scope-tag">Sites.ReadWrite.All</span>
-                    <span class="scope-tag elev">Sites.Selected</span>
-                    <span class="scope-tag">offline_access</span>
-                </div>
-                <p style="font-size:0.82em; color:#888; font-style:italic;">There is no Excel-specific scope — the workbook API is authorised entirely through file and site permissions.</p>
-
-                <p class="section-head">Granularity</p>
-                <p>Range-level read and write, keyed by A1 address (<code>/range(address='A1:D50')</code>) or by table structure. <code>usedRange</code> lets you discover extent without knowing it. Table rows are addressable by index and appendable without computing an address — the safest way to add data.</p>
-                <p>Every response distinguishes four parallel 2-D arrays for the same range: <code>values</code> (typed, computed), <code>text</code> (display strings), <code>formulas</code> (A1-style), <code>formulasLocal</code> (localised function names and separators), and <code>numberFormat</code>.</p>
-
-                <p class="section-head">Sessions — persistent vs non-persistent</p>
-                <p>The <code>workbook-session-id</code> header selects one of three behaviours, and this is the most consequential design decision in the API:</p>
-                <ul>
-                    <li><strong>Persistent session</strong> (<code>persistChanges: true</code>): changes are written back to the stored file. Required for anything that must survive.</li>
-                    <li><strong>Non-persistent session</strong> (<code>persistChanges: false</code>): the workbook is loaded into a sandbox, edits apply only inside the session, and nothing is saved. Ideal for what-if calculation, using Excel purely as a formula engine.</li>
-                    <li><strong>No session header at all:</strong> each request is handled independently; writes still persist, but there is no shared calculation state and per-call overhead is highest.</li>
-                </ul>
-                <div class="key-point"><strong>Sessions expire on idle and can be evicted.</strong> A session that has gone stale returns an error telling you the session is invalid; a robust client creates sessions lazily, caches the id, and transparently re-creates on failure. Long analytical loops that assume one session lives for hours will break. There is also no way to convert a non-persistent session into a persistent one — you choose at creation, and a non-persistent session's work is unrecoverable once it ends.</div>
-
-                <p class="section-head">Key Endpoints</p>
-                <ul>
-                    <li><code>POST /me/drive/items/{id}/workbook/createSession</code>, <code>/closeSession</code>, <code>/refreshSession</code></li>
-                    <li><code>GET /workbook/worksheets/{name}/range(address='A1:D50')</code></li>
-                    <li><code>PATCH</code> the same range with <code>{ "values": [[…]] }</code> or <code>{ "formulas": [[…]] }</code></li>
-                    <li><code>GET /workbook/worksheets/{name}/usedRange</code></li>
-                    <li><code>GET|POST /workbook/tables</code>, <code>/workbook/tables/{id}/rows/add</code></li>
-                    <li><code>GET /workbook/tables/{id}/columns</code>, <code>POST /workbook/tables/{id}/sort/apply</code></li>
-                    <li><code>GET /workbook/worksheets/{name}/charts</code>, <code>POST /charts/add</code>, <code>GET /charts/{id}/image(width=600)</code></li>
-                    <li><code>POST /workbook/functions/vlookup</code>, <code>/functions/npv</code>, … (one endpoint per worksheet function)</li>
-                    <li><code>POST /workbook/application/calculate</code> — force recalculation</li>
-                    <li><code>GET /workbook/names</code> — named items, workbook and worksheet scoped</li>
+                    <li>Read and write cell ranges, tables, and named ranges in a stored workbook</li>
+                    <li>Write a formula and read back the freshly calculated result</li>
+                    <li>Call built-in Excel functions (VLOOKUP, NPV, …) as a remote calculator</li>
+                    <li>Rendered chart images for reports and emails</li>
                 </ul>
 
-                <p class="section-head">Rate Limits</p>
-                <p>The Excel endpoints share Microsoft Graph's dynamic throttling with the rest of the SharePoint/OneDrive surface — per app, per tenant, per user, and load-sensitive rather than a fixed published number. Expect HTTP <code>429</code> with <code>Retry-After</code> and treat that header as authoritative. Two Excel-specific cost notes: reading a very large range in one call is far cheaper than the equivalent cell-by-cell traversal, and each <code>/workbook/functions/*</code> call is a full server-side calculation round trip — building a loop of them is the classic way to get throttled. <code>$batch</code> (20 sub-requests) helps with round trips but each sub-request still carries its own cost.</p>
+                <div class="key-point"><strong>Only Excel gets a live API.</strong> Word and PowerPoint files can be stored, listed, versioned, and downloaded, but their content cannot be edited in place through this API. Changing a document or slide deck server-side means downloading the file and editing it yourself.</div>
 
-                <p class="section-head">Business Scenarios</p>
+                <p class="section-head">Watch Out For</p>
                 <ul>
-                    <li>Financial models kept in Excel but driven by a service — write inputs, read outputs</li>
-                    <li>Using Excel as a calculation engine for logic already encoded in formulas nobody wants to port</li>
-                    <li>Automated report population into a formatted, branded workbook</li>
-                    <li>Server-rendered chart images for email digests and PDFs</li>
-                    <li>Bulk offline transformation of archived <code>.xlsx</code> / <code>.docx</code> via OOXML where no live service exists</li>
-                </ul>
-
-                <p class="section-head">OOXML for Offline Files</p>
-                <p>An Office file is a ZIP container of XML parts described by ECMA-376 / ISO 29500. Practical structure: <code>[Content_Types].xml</code> at the root, <code>_rels/.rels</code> and per-part <code>_rels</code> for relationships, then <code>xl/workbook.xml</code> + <code>xl/worksheets/sheet1.xml</code> + <code>xl/sharedStrings.xml</code> for a workbook, or <code>word/document.xml</code> for a document, or <code>ppt/slides/slideN.xml</code> for a deck.</p>
-                <ul>
-                    <li><strong>Cell text is usually not in the sheet.</strong> Strings are pooled in <code>sharedStrings.xml</code> and the cell holds <code>t="s"</code> with an index. A parser that reads <code>&lt;v&gt;</code> literally reports integers where text should be.</li>
-                    <li><strong>Cached values are stale by construction.</strong> A formula cell stores <code>&lt;f&gt;</code> (the formula) and <code>&lt;v&gt;</code> (the last value Excel computed). Nothing recalculates on open unless the application does it — so OOXML parsing gives you the value as of the last save by a real Excel, which may be wrong or absent.</li>
-                    <li><strong>Dates are serial numbers</strong> against either the 1900 or the 1904 epoch, selected by <code>workbookPr/@date1904</code>. Guessing the epoch produces a four-year error.</li>
-                    <li><strong>Word runs split unpredictably.</strong> A single sentence is often several <code>&lt;w:r&gt;</code> runs because of spell-check state, revision marks, or formatting; naive text extraction must concatenate runs, and search-and-replace across run boundaries is genuinely hard.</li>
-                    <li><strong>Tracked changes and comments persist in the file.</strong> <code>&lt;w:ins&gt;</code>, <code>&lt;w:del&gt;</code>, and <code>word/comments.xml</code> retain content and author names that the rendered document does not show. Same theme as the API side: the file remembers more than the page displays.</li>
-                    <li><code>.xls</code> (BIFF) and <code>.doc</code> are not OOXML — they are legacy binary formats and need entirely different tooling.</li>
-                </ul>
-
-                <p class="section-head">Key Restrictions &amp; Gotchas</p>
-                <div class="key-point"><strong>Version history sits outside the Excel API but is richer than the current workbook.</strong> Prior versions are reachable through the driveItem's <code>/versions</code> collection with per-version author and timestamp, and SharePoint libraries version by default — so a workbook's earlier inputs, formulas, and results remain retrievable after being overwritten, for a window set by library policy rather than by the API. The Excel object model itself has no concept of history at all.</div>
-                <ul>
-                    <li><strong>Not every Excel feature is exposed.</strong> Pivot table support is partial, Power Query / data model (<code>Get &amp; Transform</code>) refresh is not exposed, and macros cannot be executed — a <code>.xlsm</code> is readable but its VBA is inert through the API.</li>
-                    <li><strong>Files above the service's workbook size limits are rejected.</strong> Very large workbooks fail to open in the Excel service even though the same file downloads fine as a driveItem. The failure is an open error, not a size warning.</li>
-                    <li><strong><code>formulas</code> vs <code>formulasLocal</code>.</strong> <code>formulasLocal</code> uses the user's locale — localised function names and, critically, a semicolon argument separator in many locales. Writing <code>formulasLocal</code> built for one locale into another user's session produces parse errors.</li>
-                    <li><strong>Writing <code>values</code> over a formula destroys the formula.</strong> There is no "write value but keep formula" mode; choose the field you PATCH deliberately.</li>
-                    <li><strong>Chart images are rasterised server-side</strong> and reflect current data — but only after calculation has settled. Requesting an image immediately after a write can capture the pre-recalculation state; force <code>application/calculate</code> first.</li>
-                    <li><strong>Concurrent editing is a real hazard.</strong> A human editing the workbook in Excel Online while your persistent session writes can produce merge behaviour you did not design for. There is no optimistic-concurrency token on ranges.</li>
-                    <li><strong>Password-protected and IRM-protected files cannot be opened</strong> by either the workbook API or an OOXML parser — the ZIP itself is encrypted.</li>
+                    <li>A "session" decides whether your edits are saved to the file or thrown away in a scratch sandbox — you choose at the start, cannot change your mind later, and idle sessions expire</li>
+                    <li>Writing a plain value over a formula erases the formula permanently</li>
+                    <li>Macros never run through the API, and some features (pivot refresh, very large workbooks) are out of reach</li>
+                    <li>A person editing the same workbook at the same time can collide with your writes</li>
                 </ul>
             </td>
             <td>
-                <p class="section-head">POST /me/drive/items/{id}/workbook/createSession</p>
-                <pre>Request:
-{ "persistChanges": true }
-
-Response:
-{
-  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#microsoft.graph.workbookSessionInfo",
-  "id": "cluster=CUS3&session=15.SD71...%3d&usid=b1a0c5-...",
-  "persistChanges": true
-}
-
-Subsequent calls send:
-workbook-session-id: cluster=CUS3&session=15.SD71...</pre>
-
-                <p class="section-head">GET /workbook/worksheets('Forecast')/range(address='A1:C3')</p>
-                <pre>{
-  "@odata.context": "...$metadata#workbookRange",
-  "address": "Forecast!A1:C3",
-  "addressLocal": "Forecast!A1:C3",
-  "columnCount": 3,
-  "rowCount": 3,
-  "cellCount": 9,
-  "columnIndex": 0,
-  "rowIndex": 0,
-  "valueTypes": [
-    ["String", "String", "String"],
-    ["String", "Double", "Double"],
-    ["String", "Double", "Double"]
-  ],
-  "values": [
-    ["Quarter", "Revenue", "Margin"],
-    ["Q1", 482300, 0.31],
-    ["Q2", 511900, 0.335]
-  ],
-  "text": [
-    ["Quarter", "Revenue", "Margin"],
-    ["Q1", "$482,300", "31.0%"],
-    ["Q2", "$511,900", "33.5%"]
-  ],
-  "formulas": [
-    ["Quarter", "Revenue", "Margin"],
-    ["Q1", "=SUM(Detail!B2:B40)", "=B2/Inputs!$B$1"],
-    ["Q2", "=SUM(Detail!C2:C40)", "=B3/Inputs!$B$1"]
-  ],
-  "formulasLocal": [
-    ["Quarter", "Revenue", "Margin"],
-    ["Q1", "=SUM(Detail!B2:B40)", "=B2/Inputs!$B$1"],
-    ["Q2", "=SUM(Detail!C2:C40)", "=B3/Inputs!$B$1"]
-  ],
-  "numberFormat": [
-    ["General", "General", "General"],
-    ["General", "$#,##0", "0.0%"],
-    ["General", "$#,##0", "0.0%"]
-  ]
-}</pre>
-
-                <p class="section-head">POST /workbook/functions/vlookup</p>
-                <pre>Request:
+                <p class="section-head">Excel as a remote calculator</p>
+                <pre>POST .../workbook/functions/vlookup
 {
   "lookupValue": "Q2",
   "tableArray": { "address": "Forecast!A2:C3" },
@@ -202,7 +74,6 @@ workbook-session-id: cluster=CUS3&session=15.SD71...</pre>
 
 Response:
 {
-  "@odata.context": "...$metadata#microsoft.graph.workbookFunctionResult",
   "error": null,
   "value": 511900
 }</pre>
@@ -212,6 +83,12 @@ Response:
             </td>
         </tr>
     </table>
+
+    <h2>Official API References</h2>
+    <ul>
+        <li><a href="https://learn.microsoft.com/en-us/graph/api/resources/excel?view=graph-rest-1.0">Excel workbook API in Microsoft Graph</a> — worksheets, ranges, tables, charts, sessions, functions</li>
+        <li><a href="https://learn.microsoft.com/en-us/office/open-xml/open-xml-sdk">Open XML SDK documentation</a> — editing downloaded .docx / .xlsx / .pptx files directly</li>
+    </ul>
 
     <script>
     (function() {

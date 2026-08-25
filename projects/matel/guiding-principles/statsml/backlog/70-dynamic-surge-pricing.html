@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Surge Pricing in Ride-Hailing</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #fff;
+            color: #2c3e50;
+            padding: 40px;
+            line-height: 1.6;
+        }
+        h1 {
+            font-size: 2rem;
+            color: #1a5276;
+            margin-bottom: 8px;
+            border-bottom: 2px solid #2980b9;
+            padding-bottom: 8px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 32px;
+            font-size: 0.95rem;
+        }
+        .intro {
+            background: #f0f4f8;
+            border-left: 3px solid #2980b9;
+            padding: 8px 12px;
+            margin-bottom: 32px;
+            font-size: 0.9rem;
+        }
+        .lang-section {
+            margin-bottom: 40px;
+        }
+        .lang-section h2 {
+            font-size: 1.3rem;
+            color: #1a5276;
+            margin-bottom: 12px;
+            border-bottom: 2px solid #2980b9;
+            padding-bottom: 4px;
+        }
+        table.layout {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+        }
+        table.layout td {
+            vertical-align: top;
+            padding: 12px;
+        }
+        table.layout td.text-col {
+            width: 45%;
+        }
+        table.layout td.viz-col {
+            width: 55%;
+        }
+        canvas {
+            width: 100%;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+        }
+        .key-point {
+            background: #f8f9fa;
+            border-left: 3px solid #e74c3c;
+            padding: 8px 12px;
+            margin-top: 12px;
+            font-size: 0.9rem;
+        }
+        .example {
+            font-style: italic;
+            color: #555;
+            margin-top: 8px;
+            font-size: 0.9rem;
+        }
+        ul {
+            margin: 8px 0 8px 20px;
+            font-size: 0.92rem;
+        }
+        li { margin-bottom: 4px; }
+        pre {
+            background: #f4f4f4;
+            padding: 12px 16px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            margin-bottom: 12px;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Dynamic Surge Pricing in Ride-Hailing</h1>
+<p class="subtitle">Price as a real-time control signal to balance a two-sided marketplace across space and time</p>
+
+<div class="intro">Case study: a ride-hailing marketplace has perishable inventory and constantly mismatched demand and supply. Surge pricing treats price as a control variable — a closed-loop control system, not a static pricing formula.</div>
+
+<!-- Section 1: What Is It? -->
+<div class="lang-section">
+    <h2>1. What Is It?</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>A ride-hailing marketplace has perishable inventory: an idle driver-minute in one neighborhood cannot serve a rider two neighborhoods away. Demand and supply are constantly mismatched in space and time — concert endings, rain, rush hour, airport waves.</p>
+                <p>Surge pricing treats price as a control variable. When demand in a zone exceeds available supply, a multiplier raises the price there. This does two things at once: it reduces demand (some riders wait or choose alternatives) and it increases supply (nearby drivers reposition toward the higher-paying zone).</p>
+                <div class="key-point">The data science framing: this is a closed-loop control system, not a static pricing formula. The multiplier is the actuator; demand and supply telemetry are the sensors; market balance is the setpoint.</div>
+            </td>
+            <td class="viz-col"><canvas id="c1" width="720" height="340"></canvas></td>
+        </tr>
+    </table>
+</div>
+
+<!-- Section 2: What Data Feeds It -->
+<div class="lang-section">
+    <h2>2. What Data Feeds It — From Primitives Up</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <ul>
+                    <li><strong>App opens & searches:</strong> demand <em>intent</em> before any booking. An open that doesn't convert is still a demand signal.</li>
+                    <li><strong>Ride requests:</strong> confirmed demand events with origin, destination, timestamp, product tier.</li>
+                    <li><strong>Driver status pings:</strong> GPS location, availability state (idle / en-route / on-trip), heading — the supply side, refreshed every few seconds.</li>
+                    <li><strong>Trip telemetry:</strong> pickup ETAs, completion times, cancellations — measures how strained the market actually is.</li>
+                    <li><strong>Exogenous context:</strong> weather feeds, event calendars, historical demand curves for the same cell/hour/day-of-week.</li>
+                </ul>
+                <p>Primitives are aggregated into <strong>spatial cells</strong> (hexagonal grid) and <strong>short time windows</strong> (1–5 min). Per cell-window the derived features are: open-app count, request count, idle drivers, ETA percentiles, and a short-horizon demand forecast.</p>
+                <div class="key-point">Almost nothing here is rider-specific. Surge is a property of a <em>place and time</em>, computed from aggregate flows — every rider in the same cell sees the same multiplier.</div>
+            </td>
+            <td class="viz-col"><canvas id="c2" width="720" height="340"></canvas></td>
+        </tr>
+    </table>
+</div>
+
+<!-- Section 3: How the Multiplier Is Computed -->
+<div class="lang-section">
+    <h2>3. How the Multiplier Is Computed</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p><strong>Step 1 — imbalance:</strong> per cell, compare forecast demand vs. effective supply (idle drivers + drivers finishing trips nearby soon). A ratio well above 1 means unmet demand.</p>
+                <p><strong>Step 2 — elasticity:</strong> historical data gives two response curves: how demand falls as price rises (rider elasticity) and how supply grows as earnings rise (driver repositioning response).</p>
+                <p><strong>Step 3 — clearing:</strong> pick the multiplier where the adjusted demand and adjusted supply curves roughly intersect — the price at which requested rides ≈ serviceable rides.</p>
+                <p><strong>Step 4 — smoothing:</strong> raw multipliers would flicker. Values are smoothed across neighboring cells (spatial) and across windows (temporal), and quantized into steps so the displayed price is stable for the duration of a booking decision.</p>
+                <div class="key-point">Elasticity estimation is the statistically hard part: price changes are not random experiments — they happen exactly when demand spikes. Naive regression of demand on price is confounded by the very signal that triggered the price. Platforms rely on switchback experiments and natural boundaries (adjacent cells, multiplier quantization steps) to identify the causal response.</div>
+            </td>
+            <td class="viz-col"><canvas id="c3" width="720" height="340"></canvas></td>
+        </tr>
+    </table>
+</div>
+
+<!-- Section 4: Feedback Dynamics & Failure Modes -->
+<div class="lang-section">
+    <h2>4. Feedback Dynamics & Failure Modes</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Because the price changes behavior, and behavior changes the price, the system can oscillate:</p>
+                <ul>
+                    <li><strong>Overshoot:</strong> too many drivers converge on a surging zone, supply floods, multiplier collapses, drivers who repositioned earn nothing extra — and learn to distrust the signal.</li>
+                    <li><strong>Cobweb cycles:</strong> demand and supply react with different lags (riders in seconds, drivers in minutes), so an aggressive controller ping-pongs between shortage and glut.</li>
+                    <li><strong>Forecast leakage:</strong> if the demand forecast is trained on data that already includes surge suppression, the model learns dampened demand and under-forecasts true need.</li>
+                    <li><strong>Boundary artifacts:</strong> hard cell edges create price cliffs — riders walk a block to cross a hexagon boundary, which shifts observed demand and distorts the next window's signal.</li>
+                </ul>
+                <div class="key-point">Classic control-theory lessons apply: dampen the actuator, forecast the lag, and validate the sensor. Most production incidents in dynamic pricing are feedback problems, not model-accuracy problems.</div>
+            </td>
+            <td class="viz-col"><canvas id="c4" width="720" height="340"></canvas></td>
+        </tr>
+    </table>
+</div>
+
+    <script>
+    const dpr = window.devicePixelRatio || 1;
+    function setupCanvas(id) {
+        const c = document.getElementById(id);
+        const w = 720, h = 340;
+        c.width = w * dpr; c.height = h * dpr;
+        const ctx = c.getContext('2d');
+        ctx.scale(dpr, dpr);
+        return { ctx, w, h };
+    }
+
+    // C1: City hex-cell heatmap of surge multipliers
+    (function() {
+        const { ctx, w, h } = setupCanvas('c1');
+
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Surge multiplier by city zone (illustrative snapshot)', w / 2, 22);
+
+        // Hex grid
+        const r = 34;
+        const startX = 110, startY = 85;
+        // Multiplier values per cell (rows x cols)
+        const grid = [
+            [1.0, 1.0, 1.1, 1.0, 1.0, 1.0, 1.0],
+            [1.0, 1.2, 1.5, 1.3, 1.0, 1.0, 1.1],
+            [1.1, 1.6, 2.4, 1.8, 1.2, 1.0, 1.0],
+            [1.0, 1.3, 1.7, 1.4, 1.0, 1.0, 1.2],
+            [1.0, 1.0, 1.1, 1.0, 1.0, 1.1, 1.4]
+        ];
+
+        function colorFor(m) {
+            if (m >= 2.0) return 'rgba(231,76,60,0.85)';
+            if (m >= 1.5) return 'rgba(230,126,34,0.75)';
+            if (m >= 1.2) return 'rgba(241,196,15,0.6)';
+            return 'rgba(26,82,118,0.15)';
+        }
+
+        function hex(cx, cy, rad) {
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const a = Math.PI / 180 * (60 * i - 30);
+                const x = cx + rad * Math.cos(a);
+                const y = cy + rad * Math.sin(a);
+                i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+            }
+            ctx.closePath();
+        }
+
+        grid.forEach((row, ri) => {
+            row.forEach((m, ci) => {
+                const cx = startX + ci * (r * 1.78) + (ri % 2 ? r * 0.89 : 0);
+                const cy = startY + ri * (r * 1.54);
+                hex(cx, cy, r);
+                ctx.fillStyle = colorFor(m);
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                if (m > 1.0) {
+                    ctx.fillStyle = m >= 1.5 ? '#fff' : '#2c3e50';
+                    ctx.font = 'bold 13px -apple-system, sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(m.toFixed(1) + 'x', cx, cy + 5);
+                }
+            });
+        });
+
+        // Event marker at the hot cell
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('◀ stadium letting out', startX + 2 * (r * 1.78) + r * 1.5, startY + 2 * (r * 1.54) + 5);
+
+        // Legend
+        const legend = [
+            { label: '1.0x baseline', color: 'rgba(26,82,118,0.15)' },
+            { label: '1.2–1.4x', color: 'rgba(241,196,15,0.6)' },
+            { label: '1.5–1.9x', color: 'rgba(230,126,34,0.75)' },
+            { label: '2.0x+', color: 'rgba(231,76,60,0.85)' }
+        ];
+        legend.forEach((l, i) => {
+            const y = 75 + i * 30;
+            ctx.fillStyle = l.color;
+            ctx.fillRect(575, y, 22, 17);
+            ctx.strokeStyle = '#ccc';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(575, y, 22, 17);
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = '12px -apple-system, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(l.label, 603, y + 13);
+        });
+
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.textAlign = 'center';
+        ctx.fillText('Same multiplier for every rider in a cell — pricing the place, not the person', w / 2, h - 12);
+    })();
+
+    // C2: Primitives -> features -> multiplier pipeline
+    (function() {
+        const { ctx, w, h } = setupCanvas('c2');
+
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('From raw events to a per-cell multiplier', w / 2, 22);
+
+        function box(x, y, bw, bh, fill, stroke, lines, textColor) {
+            ctx.fillStyle = fill;
+            ctx.fillRect(x, y, bw, bh);
+            ctx.strokeStyle = stroke;
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(x, y, bw, bh);
+            ctx.fillStyle = textColor || '#2c3e50';
+            ctx.font = '12px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            lines.forEach((t, i) => ctx.fillText(t, x + bw / 2, y + 19 + i * 16));
+        }
+
+        function arrow(x1, y1, x2, y2) {
+            ctx.strokeStyle = '#888';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+            const a = Math.atan2(y2 - y1, x2 - x1);
+            ctx.fillStyle = '#888';
+            ctx.beginPath();
+            ctx.moveTo(x2, y2);
+            ctx.lineTo(x2 - 8 * Math.cos(a - 0.4), y2 - 8 * Math.sin(a - 0.4));
+            ctx.lineTo(x2 - 8 * Math.cos(a + 0.4), y2 - 8 * Math.sin(a + 0.4));
+            ctx.fill();
+        }
+
+        // Column 1: primitives
+        const prims = ['App opens', 'Ride requests', 'Driver GPS pings', 'Trip completions', 'Weather / events'];
+        prims.forEach((p, i) => {
+            box(30, 48 + i * 54, 140, 34, 'rgba(26,82,118,0.12)', '#2980b9', [p]);
+            arrow(170, 65 + i * 54, 225, 155 + (i - 2) * 12);
+        });
+
+        // Column 2: aggregation
+        box(225, 115, 155, 80, 'rgba(39,174,96,0.15)', '#27ae60',
+            ['Aggregate per', 'hex cell ×', '1–5 min window']);
+        arrow(380, 155, 430, 100);
+        arrow(380, 155, 430, 205);
+
+        // Column 3: derived features
+        box(430, 66, 160, 62, 'rgba(230,126,34,0.15)', '#e67e22',
+            ['Demand forecast', '(next 10–15 min)']);
+        box(430, 175, 160, 62, 'rgba(230,126,34,0.15)', '#e67e22',
+            ['Effective supply', '(idle + arriving)']);
+        arrow(590, 97, 630, 138);
+        arrow(590, 206, 630, 165);
+
+        // Column 4: multiplier
+        box(600, 125, 110, 58, 'rgba(231,76,60,0.15)', '#e74c3c',
+            ['Imbalance ratio', '→ multiplier'], '#c0392b');
+
+        // Smoothing note
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = '#666';
+        ctx.textAlign = 'center';
+        ctx.fillText('smoothed over neighbors & time, quantized to steps', 545, 265);
+
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.fillText('Sensors → aggregation → forecast → actuator: a control loop refreshed every few minutes', w / 2, h - 12);
+    })();
+
+    // C3: Supply/demand curves and clearing multiplier
+    (function() {
+        const { ctx, w, h } = setupCanvas('c3');
+
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Picking the multiplier where the market clears (illustrative)', w / 2, 22);
+
+        const px = 100, py = 285, pw = 520, ph = 225;
+
+        // Axes
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(px, py - ph);
+        ctx.lineTo(px, py);
+        ctx.lineTo(px + pw, py);
+        ctx.stroke();
+
+        ctx.fillStyle = '#666';
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('price multiplier →', px + pw / 2, py + 32);
+        ctx.save();
+        ctx.translate(px - 50, py - ph / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillText('rides per window', 0, 0);
+        ctx.restore();
+
+        // X-axis ticks (1.0 to 3.0)
+        [1.0, 1.5, 2.0, 2.5, 3.0].forEach((m, i) => {
+            const x = px + (i / 4) * pw;
+            ctx.strokeStyle = '#ccc';
+            ctx.beginPath();
+            ctx.moveTo(x, py);
+            ctx.lineTo(x, py + 5);
+            ctx.stroke();
+            ctx.fillStyle = '#666';
+            ctx.fillText(m.toFixed(1) + 'x', x, py + 18);
+        });
+
+        function mToX(m) { return px + ((m - 1.0) / 2.0) * pw; }
+
+        // Demand curve: high at 1.0x, falls with price
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        for (let m = 1.0; m <= 3.0; m += 0.05) {
+            const d = 210 * Math.exp(-0.75 * (m - 1.0));
+            const x = mToX(m), y = py - d;
+            m === 1.0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+
+        // Supply curve: low at 1.0x, rises with price (saturating)
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        for (let m = 1.0; m <= 3.0; m += 0.05) {
+            const s = 60 + 128 * (1 - Math.exp(-1.1 * (m - 1.0)));
+            const x = mToX(m), y = py - s;
+            m === 1.0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+
+        // Intersection near m ≈ 1.74
+        const mStar = 1.74;
+        const dStar = 210 * Math.exp(-0.75 * (mStar - 1.0));
+        const xStar = mToX(mStar), yStar = py - dStar;
+
+        ctx.setLineDash([5, 5]);
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(xStar, py);
+        ctx.lineTo(xStar, yStar);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = '#1a5276';
+        ctx.beginPath();
+        ctx.arc(xStar, yStar, 6, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#1a5276';
+        ctx.fillText('clearing multiplier', xStar + 12, yStar - 10);
+
+        // Curve labels
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillText('demand (riders willing to book)', mToX(1.05), py - 218);
+        ctx.fillStyle = '#27ae60';
+        ctx.fillText('supply (drivers responding)', mToX(2.2), py - 178);
+
+        // Shortage zone annotation
+        ctx.fillStyle = '#999';
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillText('left of the point: shortage', mToX(1.02), py - 40);
+        ctx.fillText('right: glut', mToX(2.5), py - 40);
+
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.textAlign = 'center';
+        ctx.fillText('Both curves are estimated from historical response — the confounded-elasticity problem lives here', w / 2, h - 8);
+    })();
+
+    // C4: Feedback dynamics during a demand spike
+    (function() {
+        const { ctx, w, h } = setupCanvas('c4');
+
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Event spike: demand leads, supply lags, multiplier bridges (illustrative)', w / 2, 22);
+
+        const px = 80, py = 275, pw = 580, ph = 215;
+
+        // Axes
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(px, py - ph);
+        ctx.lineTo(px, py);
+        ctx.lineTo(px + pw, py);
+        ctx.stroke();
+
+        ctx.fillStyle = '#666';
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('minutes after event ends →', px + pw / 2, py + 30);
+
+        function tToX(t) { return px + (t / 60) * pw; }
+
+        // X ticks
+        [0, 15, 30, 45, 60].forEach(t => {
+            const x = tToX(t);
+            ctx.strokeStyle = '#ccc';
+            ctx.beginPath();
+            ctx.moveTo(x, py);
+            ctx.lineTo(x, py + 5);
+            ctx.stroke();
+            ctx.fillStyle = '#666';
+            ctx.fillText(String(t), x, py + 17);
+        });
+
+        // Demand: sharp spike at t=8, decays
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        for (let t = 0; t <= 60; t += 0.5) {
+            const d = 40 + 155 * Math.exp(-Math.pow(t - 8, 2) / 180) * (t > 2 ? 1 : t / 2);
+            const x = tToX(t), y = py - d;
+            t === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+
+        // Supply: rises with lag, peaks ~t=22
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        for (let t = 0; t <= 60; t += 0.5) {
+            const s = 48 + 115 * Math.exp(-Math.pow(t - 22, 2) / 320);
+            const x = tToX(t), y = py - s;
+            t === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+
+        // Multiplier: tracks the gap, dashed
+        ctx.strokeStyle = '#e67e22';
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([7, 5]);
+        ctx.beginPath();
+        for (let t = 0; t <= 60; t += 0.5) {
+            const d = 40 + 155 * Math.exp(-Math.pow(t - 8, 2) / 180) * (t > 2 ? 1 : t / 2);
+            const s = 48 + 115 * Math.exp(-Math.pow(t - 22, 2) / 320);
+            const m = 30 + Math.max(0, (d - s)) * 0.9;
+            const x = tToX(t), y = py - m;
+            t === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Labels
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillText('demand', tToX(10), py - 200);
+        ctx.fillStyle = '#27ae60';
+        ctx.fillText('supply (drivers repositioning)', tToX(25), py - 168);
+        ctx.fillStyle = '#e67e22';
+        ctx.fillText('multiplier (tracks the gap)', tToX(2), py - 118);
+
+        // Lag annotation
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(tToX(8), py - ph + 14);
+        ctx.lineTo(tToX(8), py);
+        ctx.moveTo(tToX(22), py - ph + 14);
+        ctx.lineTo(tToX(22), py);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#1a5276';
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('~14 min supply lag', (tToX(8) + tToX(22)) / 2, py - ph + 8);
+
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.fillText('The controller must anticipate the lag — react too hard and the repositioned supply arrives into a collapsed price', w / 2, h - 8);
+    })();
+    </script>
+</body>
+</html>

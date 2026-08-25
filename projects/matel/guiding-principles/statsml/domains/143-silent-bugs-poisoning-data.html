@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>143. Silent Bugs Poisoning Data</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 20px 10px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 40%; }
+.obj-table td:last-child { width: 60%; text-align: center; }
+.obj-table tr:nth-child(even) td { background: #fafcfe; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+</style>
+</head>
+<body>
+
+<h1>Silent Bugs Poisoning Data</h1>
+<p class="subtitle">Pipeline bugs that corrupt values without triggering alerts — row counts match, schemas validate, but the numbers are wrong. Models train on poison and dashboards report fiction.</p>
+
+<div class="philosophy">
+<strong>The core problem:</strong> Most validation checks structural correctness (schema, nulls, types, counts), not semantic correctness. A bug producing wrong-but-plausible values passes every check and poisons everything downstream silently.
+</div>
+
+<h2>JOIN Fanout — Silent Row Multiplication</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">One-to-Many JOIN Silently Duplicates Revenue</div>
+<ul>
+<li><strong>The bug:</strong> JOINing orders to items repeats each order's total once per item, so SUM(order_total) counts every order N times.</li>
+<li><strong>Why it's silent:</strong> Row counts grow, no nulls appear, and inflated revenue looks like good news — no alert fires.</li>
+<li><strong>Discovery timeline:</strong> Weeks to months, usually when a human notices revenue can't be 4× last quarter or annual finance reconciliation disagrees.</li>
+<li><strong>Blast radius:</strong> Every downstream model, forecast, budget, and headcount plan built on the inflated number.</li>
+</ul>
+</td><td><canvas id="c1" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Timezone/Encoding Bugs — Correct Structure, Wrong Values</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Every Row Looks Valid. Every Value Is Shifted.</div>
+<ul>
+<li><strong>Timezone shift:</strong> A server migration flips PST to UTC, shifting every timestamp +8 hours — all values valid, all time-of-day features poisoned.</li>
+<li><strong>Encoding flip:</strong> A Latin-1 to UTF-8 change makes "José" ≠ "José" at the byte level, silently breaking string matching and dedup.</li>
+<li><strong>Null representation change:</strong> Upstream sends empty strings instead of NULL, so IS NOT NULL filters admit garbage and averages dilute toward zero.</li>
+<li><strong>Silent type coercion:</strong> An INT-to-FLOAT change makes join keys "100" ≠ "100.0", silently dropping rows — a 30% revenue shrink reads as "normal variance."</li>
+</ul>
+</td><td><canvas id="c2" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Stale Cache / Snapshot — Data Stops Updating but Looks Current</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">The Pipeline Ran Successfully. It Just Read Yesterday's Data.</div>
+<ul>
+<li><strong>The bug:</strong> A materialized view refresh fails silently, so the ETL "succeeds" on yesterday's data and the dashboard shows stale numbers.</li>
+<li><strong>The cache variant:</strong> An expired cache falls back to last-known values, freezing features like user_last_login so the model sees everyone as inactive.</li>
+<li><strong>The snapshot variant:</strong> A hardcoded path re-reads last month's export, so the model "retrains" on identical data and looks stable while actually frozen.</li>
+<li><strong>Discovery:</strong> Usually a human noticing "this number hasn't changed in 3 days" — automated checks pass because data exists with the right shape.</li>
+</ul>
+</td><td><canvas id="c3" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Upstream Schema Change — Silent Semantic Shift</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Column Name Didn't Change. Meaning Did.</div>
+<ul>
+<li><strong>The classic:</strong> A new enum value like 'add_to_cart' falls outside your event_type filter, silently dropping a funnel step and faking a conversion drop.</li>
+<li><strong>The reuse:</strong> Upstream reuses deprecated status=7 for enterprise leads, so your "exclude expired trials" filter now excludes enterprise deals.</li>
+<li><strong>The backfill:</strong> An upstream backfill leaves two formula versions in your processed history, and models learn the discontinuity as a "pattern."</li>
+<li><strong>The default change:</strong> A default change from 0 to NULL shrinks AVG's denominator — the metric "improves 40%" with nothing real happening.</li>
+</ul>
+</td><td><canvas id="c4" width="720" height="300"></canvas></td></tr>
+</table>
+
+<h2>Partial Failure — Some Rows Poisoned, Most Fine</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">99% of Data Is Correct. The 1% Corrupts Downstream.</div>
+<ul>
+<li><strong>Race condition:</strong> Reading a table mid-write leaves ~2% of rows with mixed-vintage columns — all types valid, revenue wrong for those orders.</li>
+<li><strong>Sparse corruption:</strong> A -999 sensor sentinel treated as a real reading drags averages down and teaches the model an impossible temperature.</li>
+<li><strong>Silent truncation:</strong> VARCHAR(50) silently clips longer values, mangling URLs, product names, and addresses in ~1% of rows.</li>
+</ul>
+</td><td><canvas id="c5" width="720" height="280"></canvas></td></tr>
+</table>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    return {ctx:ctx, w:w, h:h};
+}
+
+// Chart 1: JOIN fanout
+(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+
+ctx.fillStyle='#1a5276';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+ctx.fillText('JOIN Fanout: 1 order × 3 items = revenue counted 3×',w/2,22);
+
+var margin={left:40,right:40,top:50,bottom:40};
+
+// Left: orders table
+var lx=margin.left, ty=margin.top;
+ctx.fillStyle='#1a5276';ctx.font='bold 12px sans-serif';ctx.textAlign='left';
+ctx.fillText('orders (1 row)',lx,ty);
+
+ctx.strokeStyle='#1a5276';ctx.lineWidth=1.5;
+ctx.strokeRect(lx,ty+8,180,35);
+ctx.fillStyle='#333';ctx.font='11px sans-serif';
+ctx.fillText('order_id=101  total=$100',lx+8,ty+30);
+
+// Right: items table
+var rx=w/2+20;
+ctx.fillStyle='#1a5276';ctx.font='bold 12px sans-serif';ctx.textAlign='left';
+ctx.fillText('items (3 rows)',rx,ty);
+
+for(var i=0;i<3;i++){
+    ctx.strokeStyle='#e67e22';ctx.lineWidth=1.5;
+    ctx.strokeRect(rx,ty+8+i*30,200,25);
+    ctx.fillStyle='#333';ctx.font='11px sans-serif';
+    ctx.fillText('order_id=101  item='+(i+1),rx+8,ty+24+i*30);
+}
+
+// Arrow between
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=2;
+ctx.beginPath();ctx.moveTo(lx+180,ty+25);ctx.lineTo(rx-10,ty+25);ctx.stroke();
+ctx.fillStyle='#e74c3c';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
+ctx.fillText('JOIN',lx+180+(rx-10-lx-180)/2,ty+20);
+
+// Result below
+var ry=ty+110;
+ctx.fillStyle='#1a5276';ctx.font='bold 12px sans-serif';ctx.textAlign='left';
+ctx.fillText('Result after JOIN:',lx,ry);
+
+for(var i=0;i<3;i++){
+    ctx.fillStyle=i===0?'rgba(231,76,60,0.1)':'rgba(231,76,60,0.15)';
+    ctx.fillRect(lx,ry+8+i*28,500,24);
+    ctx.strokeStyle='#e74c3c';ctx.lineWidth=1;
+    ctx.strokeRect(lx,ry+8+i*28,500,24);
+    ctx.fillStyle='#333';ctx.font='11px sans-serif';ctx.textAlign='left';
+    ctx.fillText('order_id=101  total=$100  item='+(i+1)+'    ← $100 counted again',lx+8,ry+24+i*28);
+}
+
+// SUM result
+ctx.fillStyle='#e74c3c';ctx.font='bold 13px sans-serif';ctx.textAlign='left';
+ctx.fillText('SUM(total) = $300    Real revenue: $100    Inflated 3×',lx,ry+100);
+
+ctx.fillStyle='#555';ctx.font='italic 12px sans-serif';ctx.textAlign='center';
+ctx.fillText('No error. No null. Row count "grew." Revenue "up." All silent.',w/2,h-10);
+})();
+
+// Chart 2: Timezone shift
+(function(){var s=setup('c2');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+
+ctx.fillStyle='#1a5276';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+ctx.fillText('Hourly purchase pattern: before and after silent timezone bug',w/2,22);
+
+var margin={left:50,right:20,top:50,bottom:50};
+var plotW=w-margin.left-margin.right;
+var plotH=h-margin.top-margin.bottom;
+
+// Real pattern (peaks at 10am, 2pm, 8pm PST)
+var real=[];
+for(var i=0;i<24;i++){
+    var v=10+40*Math.exp(-Math.pow(i-10,2)/8)+30*Math.exp(-Math.pow(i-14,2)/6)+25*Math.exp(-Math.pow(i-20,2)/10);
+    real.push(v);
+}
+// Shifted pattern (+8 hours)
+var shifted=[];
+for(var i=0;i<24;i++){
+    shifted.push(real[(i+16)%24]);
+}
+
+var maxVal=80;
+var barW=plotW/24;
+
+// Axes
+ctx.strokeStyle='#333';ctx.lineWidth=1.5;
+ctx.beginPath();ctx.moveTo(margin.left,margin.top);ctx.lineTo(margin.left,margin.top+plotH);
+ctx.lineTo(margin.left+plotW,margin.top+plotH);ctx.stroke();
+
+// Draw lines
+function drawLine(data,color,dash){
+    ctx.strokeStyle=color;ctx.lineWidth=2.5;
+    if(dash)ctx.setLineDash(dash);
+    ctx.beginPath();
+    data.forEach(function(v,i){
+        var x=margin.left+i*barW+barW/2;
+        var y=margin.top+plotH-(v/maxVal)*plotH;
+        if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+    ctx.setLineDash([]);
+}
+
+drawLine(real,'#27ae60',null);
+drawLine(shifted,'#e74c3c',[5,5]);
+
+// Hour labels
+ctx.fillStyle='#333';ctx.font='9px sans-serif';ctx.textAlign='center';
+for(var i=0;i<24;i+=3){
+    ctx.fillText(i+'h',margin.left+i*barW+barW/2,margin.top+plotH+14);
+}
+
+// Legend
+ctx.strokeStyle='#27ae60';ctx.lineWidth=2.5;
+ctx.beginPath();ctx.moveTo(margin.left+20,h-36);ctx.lineTo(margin.left+50,h-36);ctx.stroke();
+ctx.fillStyle='#333';ctx.font='11px sans-serif';ctx.textAlign='left';
+ctx.fillText('Real pattern (PST)',margin.left+56,h-32);
+
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=2.5;ctx.setLineDash([5,5]);
+ctx.beginPath();ctx.moveTo(margin.left+20,h-18);ctx.lineTo(margin.left+50,h-18);ctx.stroke();
+ctx.setLineDash([]);
+ctx.fillStyle='#333';
+ctx.fillText('After bug: shifted +8h (UTC). No error. Features poisoned.',margin.left+56,h-14);
+})();
+
+// Chart 3: Stale cache
+(function(){var s=setup('c3');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+
+ctx.fillStyle='#1a5276';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+ctx.fillText('Dashboard value over time — stale data goes unnoticed',w/2,22);
+
+var margin={left:50,right:20,top:50,bottom:50};
+var plotW=w-margin.left-margin.right;
+var plotH=h-margin.top-margin.bottom;
+
+// Real values (growing)
+var days=30;
+var real=[],stale=[];
+for(var i=0;i<days;i++){
+    real.push(100+i*3+Math.random()*10);
+    stale.push(i<15?100+i*3+Math.random()*10:145+Math.random()*2);
+}
+
+var maxVal=200;
+var dx=plotW/days;
+
+// Axes
+ctx.strokeStyle='#333';ctx.lineWidth=1.5;
+ctx.beginPath();ctx.moveTo(margin.left,margin.top);ctx.lineTo(margin.left,margin.top+plotH);
+ctx.lineTo(margin.left+plotW,margin.top+plotH);ctx.stroke();
+
+// Real line
+ctx.strokeStyle='#27ae60';ctx.lineWidth=2;
+ctx.beginPath();
+real.forEach(function(v,i){
+    var x=margin.left+i*dx;
+    var y=margin.top+plotH-(v/maxVal)*plotH;
+    if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+});
+ctx.stroke();
+
+// Stale line
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=2;ctx.setLineDash([4,4]);
+ctx.beginPath();
+stale.forEach(function(v,i){
+    var x=margin.left+i*dx;
+    var y=margin.top+plotH-(v/maxVal)*plotH;
+    if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+});
+ctx.stroke();
+ctx.setLineDash([]);
+
+// Bug marker
+var bugX=margin.left+15*dx;
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=2;
+ctx.beginPath();ctx.moveTo(bugX,margin.top);ctx.lineTo(bugX,margin.top+plotH);ctx.stroke();
+ctx.fillStyle='#e74c3c';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
+ctx.fillText('View refresh',bugX,margin.top-8);
+ctx.fillText('fails silently',bugX,margin.top+4);
+
+// Legend
+ctx.strokeStyle='#27ae60';ctx.lineWidth=2;ctx.setLineDash([]);
+ctx.beginPath();ctx.moveTo(margin.left+20,h-36);ctx.lineTo(margin.left+50,h-36);ctx.stroke();
+ctx.fillStyle='#333';ctx.font='11px sans-serif';ctx.textAlign='left';
+ctx.fillText('Reality (growing)',margin.left+56,h-32);
+
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=2;ctx.setLineDash([4,4]);
+ctx.beginPath();ctx.moveTo(margin.left+20,h-18);ctx.lineTo(margin.left+50,h-18);ctx.stroke();
+ctx.setLineDash([]);
+ctx.fillStyle='#333';
+ctx.fillText('What dashboard shows (frozen). Pipeline "succeeded." Data is stale.',margin.left+56,h-14);
+})();
+
+// Chart 4: Schema semantic shift
+(function(){var s=setup('c4');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+
+ctx.fillStyle='#1a5276';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+ctx.fillText('Upstream adds event type — your filter silently drops it',w/2,22);
+
+var margin={left:40,right:40,top:50,bottom:30};
+
+// Your filter
+ctx.fillStyle='#333';ctx.font='12px monospace';ctx.textAlign='left';
+ctx.fillText("WHERE event_type IN ('click', 'view', 'purchase')",margin.left,margin.top+10);
+
+// Before: 3 types
+var types_before=['click','view','purchase'];
+var types_after=['click','view','purchase','add_to_cart','wishlist'];
+
+var boxW=120, boxH=35, gap=10;
+var baseY=margin.top+40;
+
+ctx.fillStyle='#1a5276';ctx.font='bold 11px sans-serif';ctx.textAlign='left';
+ctx.fillText('Before (all captured):',margin.left,baseY);
+types_before.forEach(function(t,i){
+    var x=margin.left+i*(boxW+gap);
+    ctx.fillStyle='rgba(39,174,96,0.2)';ctx.fillRect(x,baseY+8,boxW,boxH);
+    ctx.strokeStyle='#27ae60';ctx.lineWidth=1.5;ctx.strokeRect(x,baseY+8,boxW,boxH);
+    ctx.fillStyle='#333';ctx.font='11px sans-serif';ctx.textAlign='center';
+    ctx.fillText(t,x+boxW/2,baseY+30);
+});
+
+var baseY2=baseY+70;
+ctx.fillStyle='#1a5276';ctx.font='bold 11px sans-serif';ctx.textAlign='left';
+ctx.fillText('After upstream change (2 types silently lost):',margin.left,baseY2);
+types_after.forEach(function(t,i){
+    var x=margin.left+i*(boxW+gap);
+    var captured=types_before.indexOf(t)>=0;
+    ctx.fillStyle=captured?'rgba(39,174,96,0.2)':'rgba(231,76,60,0.2)';
+    ctx.fillRect(x,baseY2+8,boxW,boxH);
+    ctx.strokeStyle=captured?'#27ae60':'#e74c3c';ctx.lineWidth=1.5;
+    ctx.strokeRect(x,baseY2+8,boxW,boxH);
+    ctx.fillStyle='#333';ctx.font='11px sans-serif';ctx.textAlign='center';
+    ctx.fillText(t,x+boxW/2,baseY2+30);
+    if(!captured){
+        ctx.fillStyle='#e74c3c';ctx.font='bold 14px sans-serif';
+        ctx.fillText('DROPPED',x+boxW/2,baseY2+boxH+22);
+    }
+});
+
+ctx.fillStyle='#e74c3c';ctx.font='italic 12px sans-serif';ctx.textAlign='center';
+ctx.fillText('Funnel analysis now misses a step. Conversion rate drops. Bug looks like a product problem.',w/2,h-10);
+})();
+
+// Chart 5: Partial failure
+(function(){var s=setup('c5');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
+
+ctx.fillStyle='#1a5276';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
+ctx.fillText('99% correct, 1% poisoned — enough to corrupt downstream',w/2,22);
+
+var margin={left:40,right:40,top:50,bottom:30};
+
+// Grid of cells representing rows
+var cols=25,rows=4;
+var cellW=(w-margin.left-margin.right)/cols;
+var cellH=40;
+var poisoned=[3,27,48,61,79]; // indices of bad rows
+
+for(var r=0;r<rows;r++){
+    for(var c=0;c<cols;c++){
+        var idx=r*cols+c;
+        var x=margin.left+c*cellW;
+        var y=margin.top+r*cellH;
+        var bad=poisoned.indexOf(idx)>=0;
+
+        ctx.fillStyle=bad?'rgba(231,76,60,0.4)':'rgba(39,174,96,0.15)';
+        ctx.fillRect(x+1,y+1,cellW-2,cellH-2);
+        ctx.strokeStyle=bad?'#e74c3c':'#ddd';ctx.lineWidth=1;
+        ctx.strokeRect(x+1,y+1,cellW-2,cellH-2);
+    }
+}
+
+// Labels
+ctx.fillStyle='#27ae60';ctx.font='11px sans-serif';ctx.textAlign='left';
+ctx.fillText('■ Valid row',margin.left,margin.top+rows*cellH+20);
+ctx.fillStyle='#e74c3c';
+ctx.fillText('■ Silently corrupted (wrong value, passes all checks)',margin.left+100,margin.top+rows*cellH+20);
+
+ctx.fillStyle='#555';ctx.font='italic 12px sans-serif';ctx.textAlign='center';
+ctx.fillText('AVG pulled by outliers. Model trains on poison. Alert threshold: not breached (only 1% bad).',w/2,h-10);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Replication</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Replication</h1>
+<p class="subtitle">Keep two live copies of the database — reads spread across three machines, and a copy takes over if the original dies</p>
+
+<div class="card-section">
+    <h2>One Primary, Two Copies That Follow Along</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">running example</span></div>
+                <ul>
+                    <li><b>The setup</b> — one primary database plus two replicas, all holding the same 80 GB</li>
+                    <li><b>Writes</b> — every INSERT and UPDATE goes to the primary, and only the primary</li>
+                    <li><b>The change log</b> — the primary streams each change to both replicas, which replay it</li>
+                    <li><b>Reads</b> — 9,000 reads/sec spread out: roughly 3,000 to each of the three machines</li>
+                    <li><b>Two wins, one trick</b> — spare copies give you speed today and a backup when one dies</li>
+                </ul>
+                <p class="example">Like a teacher writing on the board while two students copy every line into their own notebooks.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Replication means the same data lives on several machines. Writes go to one place; reads can come from any copy.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>2:00 PM: The Primary Dies, a Copy Takes Over</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">worked example</span><span class="tag blue">core idea</span></div>
+                <ul>
+                    <li><b>2:00:00</b> — the primary's disk fails mid-afternoon; writes start erroring</li>
+                    <li><b>2:00:05</b> — the replicas notice the silence: no heartbeat from the primary</li>
+                    <li><b>2:00:30</b> — replica A is promoted: it is the new primary, writes resume</li>
+                    <li><b>Reads never stopped</b> — the two surviving copies served all 9,000 reads/sec throughout</li>
+                    <li><b>The cost</b> — 30 seconds without writes, and one less spare until a new copy is built</li>
+                </ul>
+                <p class="example">Customers kept browsing the whole time; only checkout paused for half a minute.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Failover is just a promotion — a replica already has the data, so it only needs the title. That is why the copies exist.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Your Dashboard Reads a Copy That Runs Behind</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag orange">trade-off</span></div>
+                <ul>
+                    <li><b>Copies lag</b> — replicas replay changes a moment later: usually ~0.5 s behind</li>
+                    <li><b>Analytics reads replicas</b> — heavy SELECTs are pointed at copies to spare the primary</li>
+                    <li><b>Lag spikes</b> — during the 3 AM batch load, the replicas fall up to 45 s behind</li>
+                    <li><b>Counts disagree</b> — primary says 1,000,042 orders; the replica still says 1,000,010</li>
+                    <li><b>Neither is wrong</b> — the replica is correct about a moment slightly in the past</li>
+                </ul>
+                <p class="example">Two analysts ran the same COUNT(*) one second apart on different replicas and got different answers.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A replica answers "what was true a moment ago." Fine for dashboards and training data; risky for anything that must be exact right now.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Surprise: You Write It, Then Can't See It</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">lag</span></div>
+                <ul>
+                    <li><b>t = 0.0 s</b> — a user saves a new address; the write lands on the primary</li>
+                    <li><b>t = 0.3 s</b> — the page reloads; that read is routed to replica B</li>
+                    <li><b>Replica B is 2 s behind</b> — it hasn't replayed the change, so the OLD address shows</li>
+                    <li><b>t = 2.1 s</b> — replica B catches up; a second refresh shows the new address</li>
+                    <li><b>The fix</b> — read your own fresh writes from the primary, or wait out the lag</li>
+                </ul>
+                <p class="example">"I saved my new address and the site showed the old one" — no data was lost, a stale copy answered.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Treating all three machines as "the database." A write and the very next read may hit different copies — and the copy can be seconds behind.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function box(ctx, x, y, w, h, fill, stroke) {
+    ctx.fillStyle = fill; ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.strokeRect(x, y, w, h);
+}
+
+function arrow(ctx, x1, y1, x2, y2, color) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var a = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(a - 0.4), y2 - 8 * Math.sin(a - 0.4));
+    ctx.lineTo(x2 - 8 * Math.cos(a + 0.4), y2 - 8 * Math.sin(a + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: Primary + two replicas — writes to one, reads spread to all
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Writes Go to One Machine — Reads Come From All Three', w / 2, 24);
+
+    // machines
+    var m = [
+        { x: 100, y: 120, label: 'PRIMARY',   sub: '80 GB', edge: P.blue,  fill: 'rgba(42,120,214,0.14)' },
+        { x: 420, y: 76,  label: 'replica A', sub: '80 GB', edge: P.aqua,  fill: 'rgba(25,158,112,0.14)' },
+        { x: 420, y: 176, label: 'replica B', sub: '80 GB', edge: P.aqua,  fill: 'rgba(25,158,112,0.14)' }
+    ];
+    var bw = 128, bh = 56;
+    for (var i = 0; i < m.length; i++) {
+        box(ctx, m[i].x, m[i].y, bw, bh, m[i].fill, m[i].edge);
+        ctx.fillStyle = m[i].edge; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(m[i].label, m[i].x + bw / 2, m[i].y + 24);
+        ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+        ctx.fillText('same ' + m[i].sub, m[i].x + bw / 2, m[i].y + 42);
+    }
+
+    // writes arrow into primary
+    arrow(ctx, 20, 148, 96, 148, P.magenta);
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('all writes', 55, 132);
+
+    // change log streams
+    arrow(ctx, 228, 134, 416, 106, P.violet);
+    arrow(ctx, 228, 162, 416, 200, P.violet);
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('change log, streamed', 322, 108);
+    ctx.fillText('every change, replayed', 322, 202);
+
+    // reads on the right
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('9,000 reads/sec', 590, 140);
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.text;
+    ctx.fillText('~3,000 each', 590, 158);
+    arrow(ctx, 586, 120, 552, 104, P.green);
+    arrow(ctx, 586, 168, 552, 200, P.green);
+    // read arrow to primary (curving left below)
+    arrow(ctx, 600, 190, 232, 186, P.green);
+
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one machine takes the writes; three machines share the reads', w / 2, 272);
+})();
+
+// c2: Failover timeline — crash, silence, promotion
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('30 Seconds From Crash to New Primary', w / 2, 24);
+
+    // timeline axis
+    var tx0 = 70, tx1 = 650, ty = 200;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(tx0, ty); ctx.lineTo(tx1, ty); ctx.stroke();
+
+    var ticks = [
+        { f: 0.0,  label: '2:00:00', note: 'primary disk fails', color: '#e74c3c' },
+        { f: 0.28, label: '2:00:05', note: 'no heartbeat — replicas notice', color: P.orange },
+        { f: 0.72, label: '2:00:30', note: 'replica A promoted', color: P.green },
+        { f: 1.0,  label: '2:00:31', note: 'writes flowing again', color: P.blue }
+    ];
+    for (var i = 0; i < ticks.length; i++) {
+        var x = tx0 + ticks[i].f * (tx1 - tx0);
+        ctx.strokeStyle = ticks[i].color; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x, ty - 8); ctx.lineTo(x, ty + 8); ctx.stroke();
+        ctx.fillStyle = ticks[i].color; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(ticks[i].label, x, ty + 26);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+        var yy = (i % 2 === 0) ? ty - 58 : ty - 90;
+        ctx.fillText(ticks[i].note, x, yy);
+        ctx.strokeStyle = P.grid;
+        ctx.beginPath(); ctx.moveTo(x, yy + 6); ctx.lineTo(x, ty - 10); ctx.stroke();
+    }
+
+    // no-writes band
+    var xA = tx0, xB = tx0 + 0.72 * (tx1 - tx0);
+    ctx.fillStyle = 'rgba(231,76,60,0.10)';
+    ctx.fillRect(xA, ty - 40, xB - xA, 32);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('writes paused: 30 seconds', (xA + xB) / 2, ty - 19);
+
+    // reads-continue band
+    ctx.fillStyle = 'rgba(0,131,0,0.10)';
+    ctx.fillRect(tx0, ty + 40, tx1 - tx0, 30);
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('reads never stopped — the 2 surviving copies served all 9,000 reads/sec', (tx0 + tx1) / 2, ty + 60);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('the copy already had the data — promotion is just a title change', w / 2, 285);
+})();
+
+// c3: Replica lag over a day — line chart with 3 AM spike
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var pad = { top: 52, bottom: 52, left: 65, right: 30 };
+    var cw = w - pad.left - pad.right, ch = h - pad.top - pad.bottom;
+    var baseY = pad.top + ch;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('How Far Behind the Replica Runs, Over One Day', w / 2, 24);
+
+    // hourly lag in seconds (illustrative): quiet ~0.5s, spike during 3 AM batch load
+    var lag = [0.5, 0.6, 0.5, 45, 30, 8, 1.5, 0.8, 0.6, 0.7, 0.9, 1.2,
+               1.0, 0.8, 0.9, 1.1, 1.3, 1.0, 0.8, 0.7, 0.6, 0.5, 0.6, 0.5];
+    var maxY = 50, n = 24;
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad.left, pad.top); ctx.lineTo(pad.left, baseY); ctx.lineTo(pad.left + cw, baseY); ctx.stroke();
+
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'right';
+    [0, 10, 20, 30, 40, 50].forEach(function(v) {
+        var y = baseY - v / maxY * ch;
+        ctx.fillText(v + 's', pad.left - 6, y + 4);
+        if (v > 0) {
+            ctx.strokeStyle = P.grid;
+            ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + cw, y); ctx.stroke();
+        }
+    });
+    ctx.textAlign = 'center';
+    [0, 6, 12, 18, 23].forEach(function(hr) {
+        var x = pad.left + hr / (n - 1) * cw;
+        ctx.fillStyle = P.mute;
+        ctx.fillText((hr === 0 ? '12am' : hr === 6 ? '6am' : hr === 12 ? 'noon' : hr === 18 ? '6pm' : '11pm'), x, baseY + 18);
+    });
+
+    function X(i) { return pad.left + i / (n - 1) * cw; }
+    function Y(v) { return baseY - v / maxY * ch; }
+
+    ctx.strokeStyle = P.aqua; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < n; i++) i === 0 ? ctx.moveTo(X(i), Y(lag[i])) : ctx.lineTo(X(i), Y(lag[i]));
+    ctx.stroke();
+
+    // annotate the spike
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('3 AM batch load: replica falls 45 s behind', X(4) + 12, Y(45) + 4);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(X(3) + 4, Y(45)); ctx.lineTo(X(4) + 8, Y(45)); ctx.stroke();
+
+    ctx.fillStyle = P.aqua; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('normal lag ~0.5 s', X(14), Y(0.5) - 12);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('primary count: 1,000,042 — replica during the spike: 1,000,010 (illustrative)', pad.left + cw / 2, h - 10);
+})();
+
+// c4: Read-your-own-write timeline
+(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Save, Reload, See the Old Value: One Write, Two Machines', w / 2, 24);
+
+    // two lanes: primary and replica B
+    var laneY = { primary: 90, replica: 190 };
+    var tx0 = 130, tx1 = 660; // t=0..3s
+    function X(t) { return tx0 + (t / 3) * (tx1 - tx0); }
+
+    ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillStyle = P.blue; ctx.fillText('PRIMARY', 118, laneY.primary + 4);
+    ctx.fillStyle = P.aqua; ctx.fillText('replica B', 118, laneY.replica + 4);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('(2 s behind)', 118, laneY.replica + 20);
+
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    [laneY.primary, laneY.replica].forEach(function(y) {
+        ctx.beginPath(); ctx.moveTo(tx0, y); ctx.lineTo(tx1, y); ctx.stroke();
+    });
+
+    // time ticks
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    [0, 1, 2, 3].forEach(function(t) {
+        ctx.fillText('t = ' + t + ' s', X(t), 248);
+        ctx.strokeStyle = P.grid;
+        ctx.beginPath(); ctx.moveTo(X(t), 60); ctx.lineTo(X(t), 236); ctx.stroke();
+    });
+
+    // event 1: write at t=0 on primary
+    ctx.fillStyle = P.blue;
+    ctx.beginPath(); ctx.arc(X(0), laneY.primary, 7, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('0.0 s: new address saved', X(0) + 10, laneY.primary - 14);
+
+    // change log arrow to replica arriving at t=2.1
+    arrow(ctx, X(0.05), laneY.primary + 8, X(2.1), laneY.replica - 8, P.violet);
+    ctx.fillStyle = P.violet; ctx.font = '12px system-ui';
+    ctx.fillText('change log travels / replays', X(0.7), 148);
+
+    // event 2: read at t=0.3 on replica -> old value
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath(); ctx.arc(X(0.3), laneY.replica, 7, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('0.3 s: page reload reads here', X(0.3) + 10, laneY.replica + 26);
+    ctx.fillText('→ OLD address', X(0.3) + 10, laneY.replica + 42);
+
+    // event 3: replica applies at t=2.1
+    ctx.fillStyle = P.green;
+    ctx.beginPath(); ctx.arc(X(2.1), laneY.replica, 7, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillText('2.1 s: change applied', X(2.1) + 10, laneY.replica + 26);
+    ctx.fillText('→ new address shows', X(2.1) + 10, laneY.replica + 42);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the read arrived 1.8 s before the write did — nothing was lost, a stale copy answered', w / 2, 282);
+})();
+</script>
+
+</body>
+</html>

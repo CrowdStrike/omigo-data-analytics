@@ -18,7 +18,6 @@
     .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
     .verified { display: inline-block; background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-bottom: 16px; }
     h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
-    .status { display: inline-block; background: #fef9e7; border: 1px solid #f39c12; color: #b7950b; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-left: 12px; vertical-align: middle; }
     table.obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
     table.obj-table td { vertical-align: top; padding: 12px; }
     table.obj-table td:first-child { width: 45%; }
@@ -31,16 +30,15 @@
     .payload-note { font-size: 0.85em; color: #555; margin: 12px 0 8px 0; }
     ul { padding-left: 20px; }
     li { margin-bottom: 6px; font-size: 0.93em; }
+    a { color: #1a5276; }
     code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-size: 0.88em; }
-    .scope-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
-    .scope-tag { background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 3px 8px; border-radius: 4px; font-size: 0.78em; font-family: monospace; }
     p { font-size: 0.93em; }
 </style>
 </head>
 <body>
 
-<h1>CGM / Continuous Glucose Monitors <span class="status">BACKLOG</span></h1>
-<p class="subtitle">Interstitial-fluid glucose from Dexcom and Abbott sensors — retrospective, gap-prone, censored at both tails, and not a blood glucose measurement.</p>
+<h1>CGM / Continuous Glucose Monitors</h1>
+<p class="subtitle">Lets you pull glucose readings, taken every few minutes, from a user's Dexcom or Abbott sensor after they consent.</p>
 <span class="verified">Last verified: August 2026</span>
 
 <h2>Overview</h2>
@@ -49,162 +47,57 @@
 <tr>
 <td>
 
-<div class="key-point">
-<strong>A CGM does not measure blood glucose.</strong> The sensor filament sits in subcutaneous <em>interstitial fluid</em>, and interstitial glucose trails blood glucose — commonly cited on the order of several minutes, with the discrepancy largest exactly when the value is changing fastest: the post-meal rise, exercise, and the treatment of a hypoglycaemic episode. Vendor algorithms apply smoothing and filtering, and in some cases predictive correction, which changes the apparent lag rather than removing the physiology. Three consequences follow. CGM values are <strong>not interchangeable</strong> with fingerstick blood glucose. A CGM-versus-fingerstick discrepancy during a rapid excursion is the <strong>expected behaviour of the instrument</strong>, not an error to be reconciled. And any model that treats a CGM reading as ground-truth blood glucose <em>during transients</em> is mis-specified — including any model whose entire subject is transients, such as meal-response or exercise-response modelling.
-</div>
-
-<span class="section-label">What It Provides</span>
-<p><strong>Dexcom API</strong> — a per-user REST API over the Dexcom cloud, built around the <em>Estimated Glucose Value</em> (EGV) series plus the context needed to interpret it: user-entered events, calibrations, device metadata, and the available data window. The word "estimated" is doing real work: an EGV is the output of the vendor's transformation of a raw sensor signal, not a direct reading.</p>
-<p><strong>Abbott LibreView / FreeStyle Libre</strong> — LibreView is Abbott's cloud platform for Libre data, oriented primarily around clinic reporting: patients share with a practice, clinicians view standardised reports and export PDF or CSV, and LibreLinkUp lets nominated followers see readings. There is no open self-serve developer API comparable to Dexcom's.</p>
-
-<span class="section-label">Authentication &amp; Access</span>
-<p><strong>Dexcom</strong> uses OAuth 2.0 authorization-code flow per end user, with <code>offline_access</code> for the refresh token — without it a server-side pull dies when the access token expires.</p>
-<div class="scope-list">
-<span class="scope-tag">offline_access</span>
-</div>
-<p>Dexcom runs a <strong>sandbox</strong> populated with synthetic users, and a separate <strong>production</strong> host that requires review and approval before your application is promoted. Hosts and credentials differ, so promotion is a configuration change as well as an approval — hard-coding the sandbox host is a routine cause of "it worked in dev". Note also that passing on sandbox data does not validate a pipeline: synthetic users have none of the structure that makes real CGM hard — no clamped tails, no warm-up gaps, no compression lows, no clock changes, no unit mismatches. Treat the sandbox as an OAuth-and-pagination harness, and never present synthetic output as evidence that a model works.</p>
-<p><strong>Abbott LibreView</strong> programmatic access is restricted and effectively partner-only. There is no public sandbox and no self-serve developer registration on the Dexcom model; integrations go through Abbott partnership or enterprise channels. The routes that actually exist without a partnership are the user- or clinic-initiated <em>CSV / report export</em> from LibreView, the <strong>LibreLinkUp</strong> follower-sharing surface, and the on-device path where the reading app writes glucose into Apple HealthKit or Android Health Connect and you read from the platform store rather than from Abbott. Community and unofficial clients for the LibreView and LibreLinkUp endpoints do circulate; they are undocumented, unsupported, of questionable standing under the terms of service, and break on the vendor's schedule rather than yours. Any plan whose critical path is "call the LibreView API" is not a plan.</p>
-<p><strong>Nightscout, xDrip+ and the open-source loop ecosystem</strong> are, in practice, the layer through which a large share of real CGM datasets arrive, since they aggregate multiple vendors behind one self-hosted API. The caveat is substantive: data that has passed through these tools may already have been smoothed, back-filled, re-calibrated, or merged from more than one source. Provenance is part of the data.</p>
-
-<span class="section-label">Granularity</span>
-<p>Dexcom G-series sensors report an EGV approximately every <strong>5 minutes</strong> — roughly 288 readings in a full day. Both hedges are load-bearing: the interval is nominal, the rate is a device property with no API parameter to change it, and readings are dropped during warm-up, signal loss and sensor changes, so a "complete" day is rarely 288 points. The regular spacing is genuinely useful — it makes CGM unusually well suited to methods that assume even sampling, unlike most wearable streams — but only across the intervals that are actually present.</p>
-<p>Events are the opposite: carbohydrates, insulin and exercise arrive when the user bothers to log them, so joining events to the EGV grid is a windowed or nearest-neighbour problem, not a key join, and the logging itself is behaviour-dependent and incomplete.</p>
-<div class="key-point">
-<strong>CGM missingness is structural and periodic, not random.</strong> After insertion there is a warm-up of a couple of hours during which the device produces <em>no data at all</em>; each sensor session has a finite wear period, so gaps recur on the replacement cycle. Signal loss also clusters — lying on the sensor at night (which additionally produces spurious compression lows), phone out of Bluetooth range, showering. Missingness is therefore <em>informative</em> and correlated with device lifecycle and time of day. Imputing it as MCAR, or interpolating across it, manufactures smooth plausible data exactly where the physiology was least observed. Time-in-range, GMI and coefficient of variation are only meaningful above a sufficient sensor-active fraction, so carry a per-window coverage fraction and a sensor-session identifier, and report coverage next to every aggregate.
-</div>
-<div class="key-point">
-<strong>The series is interval-censored at both tails.</strong> Dexcom clamps reported values at the low and high ends of its display range, so an extreme reading is a bound — "at most" or "at least" — not a point estimate. The specific bounds are documented per device generation and are not reproduced here. Treating a clamped value as observed biases the mean toward the centre and systematically <em>understates hypoglycaemia severity</em>, which is precisely the tail that matters clinically. Time-in-range survives this (a clamped low is still out of range), but any severity, area-under-curve or variability statistic does not. If the tails matter, this is a censored-data problem needing censored-data methods, not a mean over the raw column.
-</div>
-
-<span class="section-label">Key Endpoints</span>
-<p>Dexcom paths are versioned — v2 and v3 have both been published and the version segment has changed across releases — so treat the prefix as configuration. The resource set is stable in substance:</p>
+<span class="section-label">What you can get</span>
 <ul>
-<li><code>/egvs</code> — the Estimated Glucose Value series. The core resource.</li>
-<li><code>/events</code> — user-entered carbohydrates, insulin, exercise and health events.</li>
-<li><code>/calibrations</code> — user-entered calibrations, where the device family supports or requires them.</li>
-<li><code>/devices</code> — device and transmitter metadata, including generation and display settings.</li>
-<li><code>/dataRange</code> — the window of data actually available for this user. <strong>Call this first</strong>; it tells you what you can ask for and where the account really begins.</li>
-<li>Statistics endpoints exist on some versions, returning vendor-computed summaries.</li>
-</ul>
-<p>Queries are windowed with <code>startDate</code> and <code>endDate</code>, and there is a documented maximum window length per request, so long histories must be paged by date range rather than by cursor. Build the pager against <code>/dataRange</code>, not against an assumed start date.</p>
-
-<span class="section-label">Rate Limits</span>
-<ul>
-<li>Dexcom applies per-application and per-user request quotas and returns HTTP 429 on exceed. The figures are published in the developer documentation and have changed across API versions; they are not reproduced here, because a wrong quota in a design document is worse than no quota.</li>
-<li>Honour <code>Retry-After</code> and back off. A cohort backfill that retries immediately on 429 makes the situation worse.</li>
-<li>The maximum window per request is usually the binding constraint in practice, more than the request rate: a multi-year history is many windowed calls per user. Checkpoint progress so a throttled run resumes rather than restarts.</li>
-<li>Requesting one wide fixed window for every user is the most common source of avoidable quota burn — <code>/dataRange</code> exists to prevent exactly that.</li>
-<li>Abbott has no comparable published public quota, because there is no comparable public API.</li>
-</ul>
-<div class="key-point">
-<strong>The Dexcom API is not real time, and is not for treatment decisions.</strong> Data reaches the cloud only after the receiver or phone app uploads it, so there is an <em>ingestion delay stacked on top of the physiological lag</em>, and its size depends on whether the user's phone had connectivity. Dexcom's developer API has historically been positioned for retrospective and analytics use with a delay, and Dexcom's own terms exclude use for real-time treatment decisions. For a pipeline this means two distinct clocks — when the measurement occurred, and when you could have known about it. No alarming, no dosing suggestion, no "current glucose" surface a user could act on; alerting stays in the approved vendor app. Separately, glucose is protected health information in most jurisdictions, so consent, retention limits and prohibitions on advertising use are contractual requirements rather than later-sprint details.
-</div>
-
-<span class="section-label">Business Scenarios</span>
-<ul>
-<li><strong>Retrospective metabolic research</strong> — the intended fit: windowed pulls, per-participant OAuth, coverage reported beside every statistic.</li>
-<li><strong>Nutrition and metabolic-health coaching</strong> — commercially dominant for non-diabetic CGM use. Two honest caveats: the peak time you estimate is shifted later than the true blood-glucose peak, and within-person day-to-day variability for the same meal is large, so a single-meal conclusion is weak evidence.</li>
-<li><strong>Clinical trials and endpoint collection</strong> — CGM-derived time-in-range and variability are increasingly accepted endpoints, which makes the wear-fraction requirement a protocol matter rather than a cleaning afterthought.</li>
-<li><strong>Remote patient monitoring</strong> — feasible for reporting, but the retrospective posture means it cannot carry anything alert-like.</li>
-<li><strong>Athlete fuelling</strong> — the worst case for lag, since exercise is exactly when interstitial and blood glucose diverge most.</li>
+<li>A glucose estimate roughly every 5 minutes (Dexcom), with a trend arrow per reading</li>
+<li>User-logged meals, insulin doses and exercise events</li>
+<li>Sensor and device details, plus the date range of data that actually exists for each user</li>
+<li>Abbott/Libre: mainly clinic reports and CSV exports — there is no open developer API like Dexcom's</li>
 </ul>
 
-<span class="section-label">Key Restrictions &amp; Gotchas</span>
 <div class="key-point">
-<strong><code>systemTime</code> versus <code>displayTime</code> will silently corrupt time-of-day analysis.</strong> <code>systemTime</code> is the device clock (nominally UTC-referenced); <code>displayTime</code> is what the user saw on screen in their local setting. They agree until the user travels, changes timezone, or has a clock drift or reset — and then they differ by hours. Any circadian, dawn-phenomenon, meal-timing or overnight analysis must use the user-facing local clock, while device-side sequencing and deduplication must use the device clock. Store both per record and be explicit in every query about which you filtered on: a date-range filter on one field combined with a time-of-day bucket on the other is a bug that produces entirely plausible-looking output.
+<strong>A CGM does not measure blood glucose.</strong> The sensor sits in fluid under the skin, so its readings lag blood glucose by several minutes — and lag most exactly when glucose is changing fastest, like after a meal or during exercise. A CGM curve that peaks later and lower than the true blood peak is the instrument working as designed, not an error.
 </div>
-<p><strong>Nulls are a state, not an omission.</strong> <code>value</code> can be null while the sensor is warming up, out of range, or erroring, with the reason carried in <code>status</code>. Coercing null to zero invents severe lows that never happened; dropping null rows without recording that they existed destroys the only evidence of why a gap is there.</p>
-<p><strong>Units differ by region.</strong> mg/dL and mmol/L both occur, related by a factor of roughly 18. A cohort that mixes them without normalising produces values that look like extreme hypoglycaemia. Read the <code>unit</code> field on every record; never infer it from magnitude.</p>
-<p><strong>Trend fields are device-computed.</strong> <code>trend</code> and <code>rateOfChange</code> come out of the vendor's smoothing, not a derivative you can reproduce from the value series. Do not mix a recomputed slope with the supplied one in the same feature.</p>
-<p><strong>MARD does not describe accuracy during excursions.</strong> Published mean absolute relative difference figures are computed against reference blood values under specified study conditions and largely at or near steady state. They are not a bound on error during a rapid rise or fall, which is where a CGM is used most consequentially.</p>
-<p><strong>Time-in-range and HbA1c-derived estimates are different constructs.</strong> They correlate but are not substitutable: one is a proportion of a censored, gap-prone 5-minute series over a chosen window; the other reflects glycation over a much longer window with its own biases. Reporting one as if it validated the other is a category error.</p>
-<p><strong>The Libre product family contains two different data-generating processes.</strong> Older Libre generations are <em>intermittently scanned</em> CGM: the sensor stores data, but the series you receive depends on the user bringing a reader or phone to the sensor. Missingness is then driven by user behaviour — sleep, forgetfulness, work — and correlated with time of day and engagement. Later generations stream continuously. Both ship under the same product-family name, so a dataset labelled "Libre" can mix behaviour-gated and continuous series. More generally, a user moving between sensor generations can show a step change in variability metrics with no metabolic event behind it. Record the sensor generation and keep device metadata beside every reading; do not pool without it.</p>
-<p><strong>Not provided by any tier:</strong></p>
+
+<span class="section-label">Watch out for</span>
 <ul>
-<li>The raw sensor signal — current, impedance, or whatever the underlying electrochemical measurement is. You receive the vendor's estimate.</li>
-<li>The calibration, smoothing and filtering algorithm. It is proprietary, it is part of the measurement, and it can change between firmware or app releases without the historical series being re-versioned.</li>
-<li>Other users' data absent their own OAuth consent, and no population aggregates or benchmarks.</li>
-<li>Guaranteed real-time streaming.</li>
-<li>For most access tiers, any clinical-grade guarantee about the API-delivered data.</li>
+<li>Gaps are built in: sensor warm-up, replacement every couple of weeks, and lost phone connections — and they cluster at exactly the times that matter</li>
+<li>Extreme highs and lows are capped at display limits, so the worst readings are understated</li>
+<li>Each reading carries two clocks — device time and the user's local time — and mixing them corrupts any time-of-day analysis</li>
+<li>Data arrives only after upload: this is a look-back tool, not something to build alerts or treatment decisions on</li>
 </ul>
 
 </td>
 <td>
 
-<p class="payload-note"><strong>GET /v3/users/self/egvs?startDate=…&amp;endDate=…</strong> — the Estimated Glucose Value series at nominal 5-minute spacing. Note the fifth record: a null value with a status explaining why.</p>
+<p class="payload-note"><strong>Two Dexcom readings</strong> — a normal value, and a null with a status explaining why. Nulls are a state, not a mistake.</p>
 <pre>{
-  "recordType": "egv",
-  "recordVersion": "3.0",
-  "userId_masked": "EXAMPLE_USER_UUID_redacted",  // Note: masked for illustration
   "records": [
-    {
-      "recordId_masked": "EXAMPLE_RECORD_UUID_redacted",  // Note: masked for illustration
-      "systemTime": "2026-08-21T06:45:12",
+    { "systemTime":  "2026-08-21T06:45:12",
       "displayTime": "2026-08-21T08:45:12",
-      "transmitterId": "81JT4Q",
-      "transmitterTicks": 6215044,
-      "transmitterGeneration": "g7",
-      "displayDevice": "ios",
-      "value": 96,
-      "unit": "mg/dL",
-      "rateUnit": "mg/dL/min",
-      "rateOfChange": 0.3,
+      "value": 96, "unit": "mg/dL",
       "trend": "flat",
-      "status": null
-    },
-    {
-      "systemTime": "2026-08-21T06:50:12",
-      "displayTime": "2026-08-21T08:50:12",
-      "value": 118, "unit": "mg/dL",
-      "rateOfChange": 2.4, "trend": "fortyFiveUp",
-      "transmitterId": "81JT4Q", "transmitterTicks": 6215344,
-      "transmitterGeneration": "g7", "status": null
-    },
-    {
-      "systemTime": "2026-08-21T06:55:12",
-      "displayTime": "2026-08-21T08:55:12",
-      "value": 154, "unit": "mg/dL",
-      "rateOfChange": 3.1, "trend": "singleUp",
-      "transmitterId": "81JT4Q", "transmitterTicks": 6215644,
-      "transmitterGeneration": "g7", "status": null
-    },
-    {
-      "systemTime": "2026-08-21T07:00:12",
-      "displayTime": "2026-08-21T09:00:12",
-      "value": 181, "unit": "mg/dL",
-      "rateOfChange": 2.0, "trend": "fortyFiveUp",
-      "transmitterId": "81JT4Q", "transmitterTicks": 6215944,
-      "transmitterGeneration": "g7", "status": null
-    },
-    {
-      "systemTime": "2026-08-21T07:05:12",
+      "status": null },
+    { "systemTime":  "2026-08-21T07:05:12",
       "displayTime": "2026-08-21T09:05:12",
       "value": null,
-      "unit": "mg/dL",
-      "rateOfChange": null,
       "trend": "notComputable",
-      "transmitterId": "81JT4Q", "transmitterTicks": 6216244,
-      "transmitterGeneration": "g7",
-      "status": "sensorWarmup"
-    },
-    {
-      "systemTime": "2026-08-21T07:10:12",
-      "displayTime": "2026-08-21T09:10:12",
-      "value": 176, "unit": "mg/dL",
-      "rateOfChange": -1.1, "trend": "fortyFiveDown",
-      "transmitterId": "81JT4Q", "transmitterTicks": 6216544,
-      "transmitterGeneration": "g7", "status": null
-    }
+      "status": "sensorWarmup" }
   ]
 }</pre>
-<p class="payload-note"><code>trend</code> takes one of a fixed set of values — <code>doubleUp</code>, <code>singleUp</code>, <code>fortyFiveUp</code>, <code>flat</code>, <code>fortyFiveDown</code>, <code>singleDown</code>, <code>doubleDown</code>, <code>none</code>, <code>notComputable</code>, <code>rateOutOfRange</code> — and is a vendor classification of <code>rateOfChange</code>, not an independent measurement.</p>
 
-<p class="payload-note"><strong>These two lines are not the same measurement.</strong> The dashed red curve is blood glucose; the blue points are what a CGM reports. The CGM series arrives later, is attenuated at the peaks, and disappears entirely across a sensor change. A model fitted to the blue series and interpreted as if it were the red one will place every meal peak too late and every peak height too low.</p>
+<p class="payload-note"><strong>Blood glucose (dashed) vs what the CGM reports over 24 hours</strong> — later and lower peaks, and a data gap at sensor change.</p>
 <canvas id="cgmLagCanvas" height="380"></canvas>
 
 </td>
 </tr>
 </table>
+
+<h2>Official API References</h2>
+<ul>
+    <li><a href="https://developer.dexcom.com/">Dexcom Developer Portal</a> — API documentation, endpoint reference (egvs, events, calibrations, devices, dataRange), sandbox and app registration</li>
+    <li><a href="https://developer.apple.com/documentation/healthkit">Apple HealthKit</a> — the on-device store where Libre and other CGM reader apps write glucose samples on iOS</li>
+</ul>
 
 <script>
 (function() {

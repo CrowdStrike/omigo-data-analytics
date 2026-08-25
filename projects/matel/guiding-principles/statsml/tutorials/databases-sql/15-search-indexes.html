@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Search Indexes</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+li code, .example code { font-family: ui-monospace, Menlo, monospace; font-size: 0.9em; background: #f4f6f8; padding: 1px 4px; border-radius: 3px; }
+pre.payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 12px 0; }
+</style>
+</head>
+<body>
+
+<h1>Search Indexes</h1>
+<p class="subtitle">Instead of reading a million product descriptions to find "wireless headphones", flip the data: keep a list, per word, of which documents contain it</p>
+
+<div class="card-section">
+    <h2>Two Words, a Million Descriptions</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">running example</span></div>
+                <ul>
+                    <li><b>The setup</b> — a shop with 1M product descriptions; a user types "wireless headphones"</li>
+                    <li><b>The slow way</b> — open every description and look for both words: 1M reads</li>
+                    <li><b>The flip</b> — an inverted index is a lookup from word &rarr; list of documents containing it</li>
+                    <li><b>Like a book index</b> — you don't reread the book to find "regression"; you check the back</li>
+                    <li><b>Two lookups</b> — fetch the list for <code>wireless</code>, the list for <code>headphones</code>, intersect them</li>
+                </ul>
+                <p class="example">"Inverted" because the stored direction flips: not doc&rarr;words, but word&rarr;docs.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The index answers "which documents contain this word?" instantly because that exact question was precomputed at write time.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Building the Index From Four Descriptions</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">worked example</span></div>
+                <ul>
+                    <li><b>Tokenize</b> — split each description into lowercase words, drop "with", "for", "the"</li>
+                    <li><b>Doc 1</b> — "Wireless headphones with noise canceling" &rarr; wireless, headphones, noise, canceling</li>
+                    <li><b>Post</b> — add the doc's id to each of its words' lists (a "posting list")</li>
+                    <li><b>Query</b> — <code>wireless &rarr; [1, 3, 4]</code> and <code>headphones &rarr; [1, 2, 4]</code></li>
+                    <li><b>Intersect</b> — ids in both lists: {1, 4} — the two matching products</li>
+                </ul>
+                <p class="example">Doc 3 has "wireless" but no "headphones"; doc 2 the reverse — the intersection drops both.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Searching never reopens a document — the answer is assembled entirely from the little lists built when documents were added.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+<pre class="payload">// the inverted index for the 4 toy descriptions  (illustrative)
+{
+  "wireless":   [1, 3, 4],
+  "headphones": [1, 2, 4],
+  "noise":      [1],
+  "canceling":  [1],
+  "wired":      [2],  "studio":  [2],  "quality": [2],
+  "speaker":    [3],  "kitchen": [3],
+  "earbuds":    [4],  "alternative": [4]
+}
+// query "wireless headphones" = intersect two lists → {1, 4}</pre>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Ranking: Which Match Comes First</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">worked example</span></div>
+                <ul>
+                    <li><b>Matching isn't enough</b> — thousands of docs may contain both words; order matters</li>
+                    <li><b>Rare words weigh more</b> — <code>wireless</code> is in 200,000 of 1M docs; <code>headphones</code> in 40,000</li>
+                    <li><b>So a hit on "headphones"</b> says 5x more about relevance than a hit on "wireless"</li>
+                    <li><b>Repeats help a little</b> — a doc saying "headphones" 3 times outranks one saying it once</li>
+                    <li><b>Length norms</b> — one mention in a 10-word title beats one in a 500-word spec sheet</li>
+                </ul>
+                <p class="example">This weighting scheme — rare-word boost times in-document count — is the classic TF-IDF idea.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A search engine returns a scored ranking, not a row set — the score is why the best match is on top instead of buried at position 4,000.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why LIKE '%term%' Can't Compete</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">watch out</span></div>
+                <ul>
+                    <li><b>The SQL reflex</b> — <code>WHERE descr LIKE '%wireless%'</code> looks like search but isn't</li>
+                    <li><b>Full scan</b> — a leading <code>%</code> defeats normal B-tree indexes: all 1M rows get read, every time</li>
+                    <li><b>Substring, not word</b> — <code>'%wire%'</code> happily matches "wired" and "haywire"</li>
+                    <li><b>No ranking</b> — LIKE returns an unordered pile; the best match is anywhere in it</li>
+                    <li><b>No language smarts</b> — "headphone" misses "headphones"; the index stems both to one term</li>
+                </ul>
+                <p class="example">The scan repeats its 1M reads on every query; the index paid its cost once, at write time.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Shipping LIKE as the search box. It sort-of works on 10,000 rows, then collapses at scale — and it never ranked anything to begin with.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: word -> posting list arrows into shared docs
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Index Points From Words to Documents', w / 2, 24);
+
+    // query words on the left
+    var words = [
+        { txt: 'wireless',   y: 100, c: P.blue,  docs: [1, 3, 4] },
+        { txt: 'headphones', y: 190, c: P.magenta, docs: [1, 2, 4] }
+    ];
+    // doc boxes on the right
+    var docs = {
+        1: { x: 480, y: 60 },
+        2: { x: 480, y: 115 },
+        3: { x: 480, y: 170 },
+        4: { x: 480, y: 225 }
+    };
+
+    // draw arrows first
+    for (var i = 0; i < words.length; i++) {
+        var wd = words[i];
+        for (var j = 0; j < wd.docs.length; j++) {
+            var d = docs[wd.docs[j]];
+            ctx.strokeStyle = wd.c; ctx.lineWidth = 2; ctx.globalAlpha = 0.55;
+            ctx.beginPath(); ctx.moveTo(235, wd.y + 8); ctx.lineTo(d.x - 8, d.y + 16); ctx.stroke();
+            ctx.globalAlpha = 1;
+        }
+    }
+    // word boxes
+    for (var i = 0; i < words.length; i++) {
+        var wd = words[i];
+        ctx.fillStyle = wd.c;
+        ctx.fillRect(90, wd.y - 14, 145, 34);
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 13px ui-monospace, Menlo, monospace'; ctx.textAlign = 'center';
+        ctx.fillText(wd.txt, 162, wd.y + 8);
+        ctx.fillStyle = wd.c; ctx.font = 'bold 11px system-ui';
+        ctx.fillText('→ [' + wd.docs.join(', ') + ']', 162, wd.y + 36);
+    }
+    // doc boxes
+    var docLabels = {
+        1: 'doc 1  ✓✓ both words',
+        2: 'doc 2  headphones only',
+        3: 'doc 3  wireless only',
+        4: 'doc 4  ✓✓ both words'
+    };
+    for (var id in docs) {
+        var d = docs[id];
+        var both = (id === '1' || id === '4');
+        ctx.fillStyle = both ? 'rgba(0,131,0,0.14)' : '#f4f6f8';
+        ctx.fillRect(d.x, d.y, 200, 32);
+        ctx.strokeStyle = both ? P.green : '#b9c2cc'; ctx.lineWidth = both ? 2.5 : 1.2;
+        ctx.strokeRect(d.x, d.y, 200, 32);
+        ctx.fillStyle = both ? P.green : P.mute; ctx.font = (both ? 'bold ' : '') + '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(docLabels[id], d.x + 10, d.y + 20);
+    }
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('docs on BOTH lists win: {1, 4} — found without opening any description', w / 2, 290);
+})();
+
+// c2: tokenize + intersect the two posting lists
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Tokenize, Post, Intersect', w / 2, 24);
+
+    // the four descriptions
+    var docsTxt = [
+        { id: 1, txt: '"Wireless headphones with noise canceling"', hit: 3 },
+        { id: 2, txt: '"Wired headphones, studio quality"', hit: 1 },
+        { id: 3, txt: '"Wireless speaker for the kitchen"', hit: 2 },
+        { id: 4, txt: '"Wireless earbuds — headphones alternative"', hit: 3 }
+    ];
+    var y0 = 52;
+    for (var i = 0; i < docsTxt.length; i++) {
+        var d = docsTxt[i];
+        var y = y0 + i * 30;
+        var full = d.hit === 3;
+        ctx.fillStyle = full ? 'rgba(0,131,0,0.10)' : '#fff';
+        ctx.fillRect(40, y, 400, 24);
+        ctx.strokeStyle = full ? P.green : '#b9c2cc'; ctx.lineWidth = full ? 2 : 1;
+        ctx.strokeRect(40, y, 400, 24);
+        ctx.fillStyle = P.ink; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText('doc ' + d.id, 48, y + 16);
+        ctx.fillStyle = '#444'; ctx.font = '11px ui-monospace, Menlo, monospace';
+        ctx.fillText(d.txt, 92, y + 16);
+    }
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('tokenizer: lowercase, split, drop stop-words (with, for, the)', 40, y0 + 4 * 30 + 12);
+
+    // intersection diagram on the right
+    var lx = 480;
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px ui-monospace, Menlo, monospace'; ctx.textAlign = 'left';
+    ctx.fillText('wireless', lx, 70);
+    ctx.fillStyle = '#444';
+    ctx.fillText('[1, 3, 4]', lx + 105, 70);
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 12px ui-monospace, Menlo, monospace';
+    ctx.fillText('headphones', lx, 100);
+    ctx.fillStyle = '#444';
+    ctx.fillText('[1, 2, 4]', lx + 105, 100);
+
+    ctx.strokeStyle = '#b9c2cc'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(lx, 115); ctx.lineTo(lx + 190, 115); ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px ui-monospace, Menlo, monospace';
+    ctx.fillText('intersect', lx, 140);
+    ctx.font = 'bold 14px ui-monospace, Menlo, monospace';
+    ctx.fillText('{1, 4}', lx + 105, 140);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('walk two sorted lists', lx, 175);
+    ctx.fillText('once each — cheap even', lx, 193);
+    ctx.fillText('when lists hold thousands', lx, 211);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('4 docs in, 11 posting lists out — the query only ever touches 2 of them', w / 2, 285);
+})();
+
+// c3: ranking — word rarity + score bars
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Rare Words Carry the Score (illustrative weights)', w / 2, 24);
+
+    ctx.strokeStyle = '#bdc3c7'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(330, 38); ctx.lineTo(330, 262); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // left: how common each word is
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('docs containing the word (of 1M)', 40, 58);
+    var freq = [
+        { lab: 'wireless', v: 200000, c: P.blue, note: 'common → weight 1' },
+        { lab: 'headphones', v: 40000, c: P.magenta, note: 'rarer → weight 5' }
+    ];
+    for (var i = 0; i < freq.length; i++) {
+        var y = 80 + i * 64;
+        ctx.fillStyle = freq[i].c; ctx.font = 'bold 12px ui-monospace, Menlo, monospace'; ctx.textAlign = 'left';
+        ctx.fillText(freq[i].lab, 40, y - 6);
+        var bw = freq[i].v / 200000 * 220;
+        ctx.fillStyle = freq[i].c; ctx.globalAlpha = 0.6;
+        ctx.fillRect(40, y, bw, 20);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+        ctx.fillText((freq[i].v / 1000) + 'k docs', 40 + bw + 8, y + 14);
+        ctx.fillStyle = freq[i].c; ctx.font = 'bold 11px system-ui';
+        ctx.fillText(freq[i].note, 40, y + 36);
+    }
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('the fewer docs a word appears in,', 40, 232);
+    ctx.fillText('the more a match on it means', 40, 248);
+
+    // right: three docs scored
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('score = wireless hits ×1 + headphones hits ×5', 360, 58);
+    var scored = [
+        { lab: 'doc A: "headphones" ×2, "wireless" ×1', v: 11, c: P.green },
+        { lab: 'doc B: "headphones" ×1, "wireless" ×1', v: 6, c: P.aqua },
+        { lab: 'doc C: "wireless" ×4, no "headphones"', v: 4, c: P.yellow }
+    ];
+    for (var i = 0; i < scored.length; i++) {
+        var y = 86 + i * 58;
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(scored[i].lab, 360, y - 6);
+        var bw = scored[i].v / 12 * 260;
+        ctx.fillStyle = scored[i].c; ctx.globalAlpha = 0.7;
+        ctx.fillRect(360, y, bw, 20);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = scored[i].c; ctx.font = 'bold 13px system-ui';
+        ctx.fillText(scored[i].v, 360 + bw + 8, y + 15);
+    }
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('doc A tops the list: 2×5 + 1×1 = 11', 360, 262);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('four mentions of a common word still lose to two of a rare one', w / 2, 290);
+})();
+
+// c4: LIKE full scan vs index lookup
+(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Query, 1M Descriptions: work done per search (illustrative)', w / 2, 24);
+
+    var rows = [
+        { lab: "LIKE '%wireless%'", sub: 'reads all 1,000,000 rows, every query', v: 1000000, txt: '1,000,000 rows · ~30 s', c: '#e74c3c' },
+        { lab: 'inverted index', sub: 'reads 2 posting lists', v: 240000, txt: '2 lists · ~20 ms', c: P.green }
+    ];
+    var px = 60, pw = 600, top = 66, rowH = 72;
+
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        var y = top + i * rowH;
+        ctx.fillStyle = '#333'; ctx.font = 'bold 13px ui-monospace, Menlo, monospace'; ctx.textAlign = 'left';
+        ctx.fillText(r.lab, px, y - 8);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+        ctx.fillText(r.sub, px + 220, y - 8);
+        var bw = (i === 0 ? pw : 14);
+        ctx.fillStyle = r.c; ctx.globalAlpha = 0.65;
+        ctx.fillRect(px, y, bw, 26);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = r.c; ctx.lineWidth = 1.5;
+        ctx.strokeRect(px, y, bw, 26);
+        ctx.fillStyle = r.c; ctx.font = 'bold 12px system-ui';
+        if (i === 0) ctx.fillText(r.txt, px + 8, y + 44);
+        else ctx.fillText(r.txt, px + bw + 10, y + 18);
+    }
+
+    // three misses of LIKE
+    var y3 = 218;
+    var misses = ['no ranking — results in arbitrary order', "substring matches: '%wire%' hits \"haywire\"", 'no stemming: "headphone" misses "headphones"'];
+    for (var i = 0; i < misses.length; i++) {
+        ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText('✗', px, y3 + i * 20);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(misses[i], px + 20, y3 + i * 20);
+    }
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the index did its heavy work once, at write time — LIKE redoes it on every keystroke', w / 2, 292);
+})();
+</script>
+
+</body>
+</html>

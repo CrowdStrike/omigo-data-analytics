@@ -74,6 +74,20 @@ ul {
     font-size: 0.92rem;
 }
 li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
 </style>
 </head>
 <body>
@@ -86,15 +100,17 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>Impute with column mean → mean computed over train+test → test info leaks. KNN imputation: nearest neighbors may come from the test set → using test values to fill train gaps.</p>
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">imputation</span></div>
                 <ul>
-                    <li>Impute with column mean → mean computed over train+test → test info leaks</li>
-                    <li>KNN imputation: nearest neighbors may come from the test set → using test values to fill train gaps</li>
-                    <li>Imputation strategy itself can leak: "if missing → likely negative" was learned from the full dataset</li>
+                    <li><b>Full-dataset fit</b> — fill values computed on all rows let test data flow into training features</li>
+                    <li><b>Global statistics</b> — a column mean or median over train plus test rows injects test values</li>
+                    <li><b>Neighbor-based fills</b> — KNN fit on all data can pick test rows as neighbors for training gaps</li>
+                    <li><b>Informative missingness</b> — whether a value is missing can itself correlate with the target</li>
+                    <li><b>Learned leak</b> — fitting that missingness pattern on all rows leaks test-set structure too</li>
                 </ul>
-                <p class="example">Example: Income missing for 20% of records. Impute with median=$52k (computed globally). Test set median is actually $48k (different demographic). Leaked the higher train median into test imputation.</p>
+                <p class="example">With 30% of income values missing, the full-dataset median comes out at $52k while the train-only median is $48k.</p>
                 <div class="key-point">
-                    <strong>Defense:</strong> Impute using train-only statistics. Better: encode "missing" as its own signal (a feature "is_missing_income" may be predictive without needing imputation).
+                    <strong>Impact:</strong> Every imputed training cell carries test-set information, so validation scores overstate real-world performance.
                 </div>
             </td>
             <td class="viz-col">
@@ -109,17 +125,19 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>SimpleImputer (or any imputer) is fit on the full dataset before splitting. The imputation values (mean, median, mode, KNN neighbors) incorporate test data. This is the same class of error as scaling leakage but specifically for missing value handling.</p>
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">preprocessing</span></div>
                 <ul>
-                    <li>SimpleImputer.fit(X_full) computes fill values using train+test rows combined</li>
-                    <li>KNN imputation: nearest neighbors may come from test set to fill train gaps</li>
-                    <li>Iterative imputation (MICE): builds models using all data including test rows</li>
-                    <li>The imputation strategy itself (which values are missing) may encode test patterns</li>
+                    <li><b>Feels harmless</b> — imputation looks like routine cleanup, so it runs before the split</li>
+                    <li><b>Fitted estimator</b> — an imputer learns its parameters from data, exactly like a model</li>
+                    <li><b>Global fit</b> — SimpleImputer.fit on the full dataset computes fill values from every row</li>
+                    <li><b>KNN neighbors</b> — a full-data KNN imputer can copy test values verbatim into training cells</li>
+                    <li><b>Model-based imputers</b> — MICE fits regressions on all rows, so test rows shape every fill</li>
+                    <li><b>Strategy leakage</b> — choosing the strategy from full-data missingness patterns also leaks</li>
                 </ul>
+                <p class="example">A default-risk model trained on income imputed at $52k instead of the train-only $48k learns a boundary shifted $4k toward the test distribution.</p>
                 <div class="key-point">
-                    <strong>Root Cause:</strong> Imputation is a form of model fitting — it estimates a value from observed data. If the "observed data" includes test rows, the imputed values carry test information into training features. Same principle as scaling leakage, often more impactful because missing values can be 20-40% of a column.
+                    <strong>Root Cause:</strong> Imputation is a form of model fitting — when the observed data includes test rows, the imputed values carry test information into training features.
                 </div>
-                <p class="example">Example: 40% of "income" column is missing. Global median = $52k (includes test). Train-only median = $48k. Every imputed training row gets $52k instead of $48k — a $4k bias toward test. For a model predicting default, this shifts the decision boundary.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c2" width="720" height="300"></canvas>
@@ -133,18 +151,19 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>Fit imputer on training data only. Transform both train and test using train-derived fill values. Alternatively, encode missingness as a feature — a binary "is_missing" column preserves the information signal without needing imputation.</p>
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">pipeline</span></div>
                 <ul>
-                    <li>Fit imputer on TRAIN ONLY: imputer.fit(X_train), then transform both splits</li>
-                    <li>Use Pipeline to enforce: imputation step fits only on training data within CV</li>
-                    <li>Alternative: encode missingness as a feature (is_missing_income = 1/0) — often predictive</li>
-                    <li>For KNN imputation: neighbors must come from training set only</li>
-                    <li>Validate: compare imputed values between "global fit" and "train-only fit" — difference reveals leak magnitude</li>
+                    <li><b>Fit on train only</b> — the imputer learns its fill values from the training split alone</li>
+                    <li><b>Transform both</b> — the same train-derived statistics then fill train and test data</li>
+                    <li><b>Use a Pipeline</b> — sklearn refits the imputer on each training fold inside cross-validation</li>
+                    <li><b>Missingness indicator</b> — a binary is_missing column keeps the signal without leaked fills</li>
+                    <li><b>Train-only neighbors</b> — restrict KNN imputation candidates to training rows only</li>
+                    <li><b>Leak check</b> — compare global-fit vs train-only fill values to size the avoided leak</li>
                 </ul>
+                <p class="example">After the fix both splits are filled with the train-only median of $48k, and the is_missing_income flag improves recall by 2%.</p>
                 <div class="key-point">
-                    <strong>Fix:</strong> imputer = SimpleImputer(strategy='median'). imputer.fit(X_train). X_train_filled = imputer.transform(X_train). X_test_filled = imputer.transform(X_test). Or better: add a "missingness indicator" column that captures the signal of why data is missing.
+                    <strong>Fix:</strong> Call imputer.fit(X_train) once and transform both splits, adding a missingness-indicator column to keep the signal of why the value is absent.
                 </div>
-                <p class="example">Example: After fixing: train median = $48k used for all imputation. Test rows get $48k fill (not $52k). Additionally, "is_missing_income" flag added. Model uses the flag and achieves 2% better recall — missingness was informative about default risk.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c3" width="720" height="300"></canvas>
@@ -174,17 +193,17 @@ function setup(id) {
     ctx.font = 'bold 14px system-ui';
     ctx.fillStyle = '#1a5276';
     ctx.textAlign = 'center';
-    ctx.fillText('Imputation Leakage: Where Does the Mean Come From?', w/2, 20);
+    ctx.fillText('Imputation Leakage: Where Does the Median Come From?', w/2, 20);
 
     // --- Data column (center-left) ---
     var colX = 100, colY = 42, cellH = 28, cellW = 70;
-    var values = ['$45k', '$50k', '?', '$55k', '?', '$47k'];
+    var values = ['$46k', '$50k', '?', '$54k', '?', '$58k'];
     var labels = ['train', 'train', 'train', 'test', 'test', 'test'];
 
     ctx.font = '11px system-ui';
     ctx.textAlign = 'center';
     ctx.fillStyle = '#1a5276';
-    ctx.fillText('Salary Column', colX + cellW/2, colY - 6);
+    ctx.fillText('Income Column', colX + cellW/2, colY - 6);
 
     for (var i = 0; i < values.length; i++) {
         var y = colY + i * cellH;
@@ -273,13 +292,13 @@ function setup(id) {
     ctx.font = 'bold 12px system-ui';
     ctx.fillStyle = '#e74c3c';
     ctx.textAlign = 'center';
-    ctx.fillText('WRONG: Mean from ALL data', wrongX + 100, wrongY + 18);
+    ctx.fillText('WRONG: Median from ALL data', wrongX + 100, wrongY + 18);
     ctx.font = '11px system-ui';
     ctx.fillStyle = '#1a5276';
-    ctx.fillText('($45k+$50k+$55k+$47k) / 4', wrongX + 100, wrongY + 38);
+    ctx.fillText('median($46k, $50k, $54k, $58k)', wrongX + 100, wrongY + 38);
     ctx.font = 'bold 13px system-ui';
     ctx.fillStyle = '#e74c3c';
-    ctx.fillText('Fill ? with $49.25k', wrongX + 100, wrongY + 58);
+    ctx.fillText('Fill ? with $52k', wrongX + 100, wrongY + 58);
 
     // Cross mark
     ctx.font = 'bold 18px system-ui';
@@ -306,13 +325,13 @@ function setup(id) {
     ctx.font = 'bold 12px system-ui';
     ctx.fillStyle = '#27ae60';
     ctx.textAlign = 'center';
-    ctx.fillText('RIGHT: Mean from TRAIN only', rightX + 100, rightY + 18);
+    ctx.fillText('RIGHT: Median from TRAIN only', rightX + 100, rightY + 18);
     ctx.font = '11px system-ui';
     ctx.fillStyle = '#1a5276';
-    ctx.fillText('($45k + $50k) / 2', rightX + 100, rightY + 38);
+    ctx.fillText('median($46k, $50k)', rightX + 100, rightY + 38);
     ctx.font = 'bold 13px system-ui';
     ctx.fillStyle = '#27ae60';
-    ctx.fillText('Fill ? with $47.5k', rightX + 100, rightY + 58);
+    ctx.fillText('Fill ? with $48k', rightX + 100, rightY + 58);
 
     // Check mark
     ctx.font = 'bold 18px system-ui';
@@ -332,13 +351,13 @@ function setup(id) {
     ctx.textAlign = 'center';
     ctx.fillText('Leaked difference:', 645, 138);
     ctx.font = 'bold 14px system-ui';
-    ctx.fillText('$49.25k vs $47.5k', 645, 158);
+    ctx.fillText('$52k vs $48k', 645, 158);
 
     // Bottom annotation
     ctx.font = '11px system-ui';
     ctx.fillStyle = '#1a5276';
     ctx.textAlign = 'center';
-    ctx.fillText('Test data ($55k) inflates the mean → model sees artificially high imputed values during training', w/2, 280);
+    ctx.fillText('Test data ($54k, $58k) inflates the median → model sees artificially high imputed values during training', w/2, 280);
 })();
 
 (function() {
@@ -381,7 +400,7 @@ function setup(id) {
     ctx.fillText('? ? ?', dsX + dsW/2 - 20, dsY + 60);
     ctx.font = '10px system-ui';
     ctx.fillStyle = '#27ae60';
-    ctx.fillText('$45k $50k $47k', dsX + dsW/2, dsY + 80);
+    ctx.fillText('$45k $48k $50k', dsX + dsW/2, dsY + 80);
     ctx.fillStyle = '#e74c3c';
     ctx.fillText('? ? ?', dsX + dsW/2 - 20, dsY + 96);
 
@@ -404,7 +423,7 @@ function setup(id) {
     ctx.fillText('? ?', dsX + dsW/2 - 10, testTop + 34);
     ctx.font = '10px system-ui';
     ctx.fillStyle = '#e67e22';
-    ctx.fillText('$55k $60k $58k', dsX + dsW/2, testTop + 52);
+    ctx.fillText('$54k $58k $60k', dsX + dsW/2, testTop + 52);
 
     // Arrows from both sections to "Compute Median" box
     var medX = 320, medY = 110, medW = 160, medH = 50;
@@ -499,7 +518,7 @@ function setup(id) {
     ctx.font = '11px system-ui';
     ctx.fillStyle = '#1a5276';
     ctx.textAlign = 'center';
-    ctx.fillText('Test rows ($55k, $60k, $58k) inflate the median — every imputed train value is biased upward', w/2, h - 15);
+    ctx.fillText('Test rows ($54k, $58k, $60k) inflate the median — every imputed train value is biased upward', w/2, h - 15);
 })();
 
 (function() {

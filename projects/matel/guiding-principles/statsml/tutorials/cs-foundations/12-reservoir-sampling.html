@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reservoir Sampling</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+li code, .example code { font-family: ui-monospace, Menlo, monospace; font-size: 0.9em; background: #f4f6f8; padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>Reservoir Sampling</h1>
+<p class="subtitle">Keep a fair 1,000-row sample from a stream that never announces its end — one pass, fixed memory, no total needed</p>
+
+<div class="card-section">
+    <h2>A Fair 1,000 From a Stream of Unknown Length</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">running example</span></div>
+                <ul>
+                    <li><b>The problem</b> — events stream past all day; you can store 1,000, and nobody knows the final count</li>
+                    <li><b>Fill first</b> — keep the first 1,000 events as they arrive; the tank (the "reservoir") is full</li>
+                    <li><b>Event number i</b> — keep it with probability 1000/i; if kept, it evicts one random resident</li>
+                    <li><b>So</b> — event 2,000 gets in with chance 50%; event 100,000 with chance 1%</li>
+                    <li><b>The magic</b> — at every moment, all events seen so far are equally likely to be in the tank</li>
+                </ul>
+                <p class="example">After 50,000 events, each one — first or last — sits in the sample with probability exactly 2%.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> One pass, 1,000 slots, no idea how long the stream is — and the sample is a fair random draw at any stopping point.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Tank of 3, Stream of 10 — Check It by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">worked example</span></div>
+                <ul>
+                    <li><b>Shrink it</b> — a reservoir of 3 and a stream of 10 events, small enough to verify on paper</li>
+                    <li><b>Events 1-3</b> — walk straight in; the tank holds {1, 2, 3}</li>
+                    <li><b>Event 4</b> — kept with probability 3/4; if kept, it replaces one of the three at random</li>
+                    <li><b>Event 7</b> — kept with probability 3/7; event 10 with probability 3/10</li>
+                    <li><b>The result</b> — every event 1 through 10 ends in the tank with probability exactly 3/10</li>
+                    <li><b>Check event 1</b> — free entry, then must dodge 7 evictions; the odds multiply out to 3/10</li>
+                </ul>
+                <p class="example">Event 10 enters with chance 3/10 and never faces an eviction after — also exactly 3/10.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Early events enter free but risk eviction; late events enter rarely but stay safe — every path lands on 3/10.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Spot-Checking an Endless Event Feed</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag red">common mistake</span></div>
+                <ul>
+                    <li><b>The job</b> — eyeball 1,000 raw events a day from a feed logging millions, to catch bad data early</li>
+                    <li><b>"First 1,000" fails</b> — all from just after midnight: batch jobs and one time zone dominate</li>
+                    <li><b>"Last 1,000" fails</b> — only the final minutes: this morning's outage is invisible</li>
+                    <li><b>Reservoir wins</b> — 1,000 rows spread fairly over the whole day, in one pass, in fixed memory</li>
+                    <li><b>Also used for</b> — log sampling in stream processors, fair training subsets, quick profiling</li>
+                </ul>
+                <p class="example">A midnight-only sample can miss the daytime traffic mix entirely — the fair sample sees every hour.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Convenience samples (first N, last N) inherit the stream's time patterns; the reservoir gives every event the same chance.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>But Don't Late Events Get a Worse Deal?</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">watch out</span></div>
+                <ul>
+                    <li><b>The worry</b> — event 50,000 gets only a 2% entry chance while event 1 walked in free: unfair?</li>
+                    <li><b>Two forces</b> — getting IN (harder over time) and STAYING in (safer the later you arrive)</li>
+                    <li><b>Early events</b> — entered free, then risked eviction at each of the 49,000 later arrivals</li>
+                    <li><b>Late events</b> — enter with slim odds but face almost no eviction rounds afterwards</li>
+                    <li><b>Multiply</b> — the two forces cancel exactly: in-and-stayed = 1000/50,000 = 2% for everyone</li>
+                </ul>
+                <p class="example">Event 25,000: enters with 4%, survives the rest with 50% — 4% &times; 50% = 2%, same as everyone.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Judging fairness by the entry ticket. The declining entry odds are precisely what makes the final sample fair.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function arrowLine(ctx, x1, y1, x2, y2, color) {
+    ctx.strokeStyle = color; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var a = Math.atan2(y2 - y1, x2 - x1);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(a - 0.4), y2 - 8 * Math.sin(a - 0.4));
+    ctx.lineTo(x2 - 8 * Math.cos(a + 0.4), y2 - 8 * Math.sin(a + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: the mechanism — stream, coin flip, reservoir, eviction
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Decision per Arriving Event — Memory Never Grows', w / 2, 24);
+
+    // incoming stream
+    var sy = 90;
+    for (var i = 0; i < 6; i++) {
+        var x = 30 + i * 32;
+        ctx.fillStyle = 'rgba(42,120,214,' + (0.25 + i * 0.12) + ')';
+        ctx.fillRect(x, sy - 13, 26, 26);
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('stream: event i arrives', 125, sy + 36);
+    arrowLine(ctx, 228, sy, 285, sy, P.blue);
+
+    // decision diamond
+    var dx = 345, dy = sy;
+    ctx.fillStyle = 'rgba(201,133,0,0.15)';
+    ctx.strokeStyle = P.yellow; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(dx, dy - 42); ctx.lineTo(dx + 62, dy); ctx.lineTo(dx, dy + 42); ctx.lineTo(dx - 62, dy);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = P.yellow; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('keep it?', dx, dy - 4);
+    ctx.fillText('prob = 1000/i', dx, dy + 14);
+
+    // keep arrow to reservoir
+    arrowLine(ctx, dx + 64, dy, 495, dy, P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('keep', 460, dy - 10);
+    // discard arrow
+    arrowLine(ctx, dx, dy + 44, dx, dy + 92, P.mute);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('discard (most events)', dx, dy + 110);
+
+    // reservoir box with dot grid
+    var rx = 500, ry = 48, rw = 190, rh = 120;
+    ctx.fillStyle = 'rgba(25,158,112,0.10)';
+    ctx.fillRect(rx, ry, rw, rh);
+    ctx.strokeStyle = P.aqua; ctx.lineWidth = 2;
+    ctx.strokeRect(rx, ry, rw, rh);
+    for (var r = 0; r < 5; r++) {
+        for (var c = 0; c < 10; c++) {
+            ctx.fillStyle = 'rgba(25,158,112,0.65)';
+            ctx.beginPath(); ctx.arc(rx + 18 + c * 17, ry + 22 + r * 20, 4, 0, 2 * Math.PI); ctx.fill();
+        }
+    }
+    ctx.fillStyle = P.aqua; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('reservoir: exactly 1,000 rows', rx + rw / 2, ry + rh + 20);
+
+    // eviction arrow out of reservoir
+    arrowLine(ctx, rx + rw / 2, ry + rh + 30, rx + rw / 2, ry + rh + 66, P.magenta);
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('if kept: one random resident evicted', rx + rw / 2 - 45, ry + rh + 84);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('event 2,000: 50% in · event 100,000: 1% in — yet the final sample is fair', 30, 270);
+})();
+
+// c2: k=3, n=10 — final inclusion flat at 30%, entry probability declining
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var pad = { top: 52, bottom: 56, left: 70, right: 185 };
+    var cw = w - pad.left - pad.right, ch = h - pad.top - pad.bottom;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Reservoir of 3, Stream of 10: Where Each Event Ends Up', w / 2, 24);
+
+    var entry = [1, 1, 1, 0.75, 0.60, 0.50, 0.429, 0.375, 0.333, 0.30];
+    var finalP = 0.30, maxY = 1.0, n = 10;
+    var barW = 30, gap = (cw - n * barW) / (n - 1);
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, pad.top); ctx.lineTo(pad.left, pad.top + ch);
+    ctx.lineTo(pad.left + cw, pad.top + ch); ctx.stroke();
+    ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    for (var g = 0; g <= 4; g++) {
+        var v = g * 0.25, y = pad.top + ch - v / maxY * ch;
+        ctx.strokeStyle = P.grid;
+        ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + cw, y); ctx.stroke();
+        ctx.fillStyle = P.mute;
+        ctx.fillText(Math.round(v * 100) + '%', pad.left - 8, y + 4);
+    }
+
+    // bars: final inclusion probability, all 30%
+    for (var i = 0; i < n; i++) {
+        var x = pad.left + i * (barW + gap);
+        var bh = finalP / maxY * ch;
+        ctx.fillStyle = 'rgba(74,58,167,0.55)';
+        ctx.fillRect(x, pad.top + ch - bh, barW, bh);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(i + 1, x + barW / 2, pad.top + ch + 17);
+    }
+    ctx.fillStyle = '#444'; ctx.textAlign = 'center';
+    ctx.fillText('event number', pad.left + cw / 2, h - 18);
+
+    // dots + line: probability of being kept on arrival
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (var i = 0; i < n; i++) {
+        var x = pad.left + i * (barW + gap) + barW / 2;
+        var y = pad.top + ch - entry[i] / maxY * ch;
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    for (var i = 0; i < n; i++) {
+        var x = pad.left + i * (barW + gap) + barW / 2;
+        var y = pad.top + ch - entry[i] / maxY * ch;
+        ctx.fillStyle = P.orange;
+        ctx.beginPath(); ctx.arc(x, y, 4, 0, 2 * Math.PI); ctx.fill();
+    }
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('3/4', pad.left + 3 * (barW + gap) + barW / 2, pad.top + ch - 0.75 * ch - 10);
+    ctx.fillText('3/7', pad.left + 6 * (barW + gap) + barW / 2, pad.top + ch - 0.429 * ch - 10);
+    ctx.fillText('3/10', pad.left + 9 * (barW + gap) + barW / 2, pad.top + ch - 0.30 * ch - 10);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.88)';
+    ctx.fillRect(pad.left + cw / 2 - 185, pad.top + ch - 0.30 * ch + 22, 370, 17);
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('every event ends up in the tank with exactly 30%', pad.left + cw / 2, pad.top + ch - 0.30 * ch + 34);
+
+    var lx = w - 175;
+    ctx.textAlign = 'left'; ctx.font = '12px system-ui';
+    ctx.fillStyle = 'rgba(74,58,167,0.55)'; ctx.fillRect(lx, 58, 12, 12);
+    ctx.fillStyle = '#222'; ctx.fillText('P(in final sample)', lx + 17, 68);
+    ctx.fillStyle = P.orange; ctx.fillRect(lx, 78, 12, 12);
+    ctx.fillStyle = '#222'; ctx.fillText('P(kept on arrival)', lx + 17, 88);
+})();
+
+// c3: hourly traffic — where "first 1,000" lives vs the fair sample
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var pad = { top: 52, bottom: 56, left: 70, right: 30 };
+    var cw = w - pad.left - pad.right, ch = h - pad.top - pad.bottom;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Day of Events by Hour — and the Slice "First 1,000" Sees', w / 2, 24);
+
+    // illustrative hourly volumes (thousands of events)
+    var vol = [30, 20, 15, 12, 10, 12, 20, 40, 70, 90, 100, 105, 110, 108, 100, 95, 90, 85, 80, 70, 60, 50, 45, 38];
+    var n = 24, maxY = 120;
+    var barW = 20, gap = (cw - n * barW) / (n - 1);
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, pad.top); ctx.lineTo(pad.left, pad.top + ch);
+    ctx.lineTo(pad.left + cw, pad.top + ch); ctx.stroke();
+    ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    for (var g = 0; g <= 4; g++) {
+        var v = g * 30, y = pad.top + ch - v / maxY * ch;
+        ctx.strokeStyle = P.grid;
+        ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + cw, y); ctx.stroke();
+        ctx.fillStyle = P.mute;
+        ctx.fillText(v + 'k', pad.left - 8, y + 4);
+    }
+
+    for (var i = 0; i < n; i++) {
+        var x = pad.left + i * (barW + gap);
+        var bh = vol[i] / maxY * ch;
+        ctx.fillStyle = i === 0 ? 'rgba(213,81,129,0.75)' : 'rgba(42,120,214,0.40)';
+        ctx.fillRect(x, pad.top + ch - bh, barW, bh);
+        if (i % 3 === 0) {
+            ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(i, x + barW / 2, pad.top + ch + 17);
+        }
+    }
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('hour of day (illustrative volumes)', pad.left + cw / 2, h - 18);
+
+    // fair-sample dots: reservoir picks proportional to volume — same shape, spread everywhere
+    for (var i = 0; i < n; i++) {
+        var x = pad.left + i * (barW + gap) + barW / 2;
+        var y = pad.top + ch - vol[i] / maxY * ch - 10;
+        ctx.fillStyle = P.green;
+        ctx.beginPath(); ctx.arc(x, y, 3.5, 0, 2 * Math.PI); ctx.fill();
+    }
+
+    // callout for hour 0
+    var x0 = pad.left + barW / 2;
+    ctx.strokeStyle = P.magenta; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(x0 + 10, pad.top + ch - vol[0] / maxY * ch - 8); ctx.lineTo(x0 + 65, pad.top + 46); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('"first 1,000" all come from this sliver', x0 + 70, pad.top + 42);
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('reservoir sample: spread over all 24 hours,', x0 + 70, pad.top + 66);
+    ctx.fillText('in proportion to traffic (green dots)', x0 + 70, pad.top + 84);
+})();
+
+// c4: entry odds fall, survival odds rise, product flat at 2%
+(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var pad = { top: 52, bottom: 56, left: 70, right: 190 };
+    var cw = w - pad.left - pad.right, ch = h - pad.top - pad.bottom;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Two Forces That Cancel (k = 1,000, stream of 50,000)', w / 2, 24);
+
+    var iMin = 1000, iMax = 50000, maxY = 1.0;
+    function X(i) { return pad.left + (i - iMin) / (iMax - iMin) * cw; }
+    function Y(p) { return pad.top + ch - p / maxY * ch; }
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, pad.top); ctx.lineTo(pad.left, pad.top + ch);
+    ctx.lineTo(pad.left + cw, pad.top + ch); ctx.stroke();
+    ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    for (var g = 0; g <= 4; g++) {
+        var v = g * 0.25, y = Y(v);
+        ctx.strokeStyle = P.grid;
+        ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + cw, y); ctx.stroke();
+        ctx.fillStyle = P.mute;
+        ctx.fillText(Math.round(v * 100) + '%', pad.left - 8, y + 4);
+    }
+    ctx.textAlign = 'center'; ctx.fillStyle = P.mute;
+    var xt = [1000, 10000, 25000, 40000, 50000];
+    for (var t = 0; t < xt.length; t++) ctx.fillText(xt[t].toLocaleString('en-US'), X(xt[t]), pad.top + ch + 17);
+    ctx.fillStyle = '#444';
+    ctx.fillText('event number i', pad.left + cw / 2, h - 18);
+
+    // entry curve: 1000/i
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = iMin; i <= iMax; i += 490) {
+        var p = 1000 / i;
+        i === iMin ? ctx.moveTo(X(i), Y(p)) : ctx.lineTo(X(i), Y(p));
+    }
+    ctx.stroke();
+
+    // survival curve: i/50000
+    ctx.strokeStyle = P.aqua; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = iMin; i <= iMax; i += 490) {
+        var p = i / iMax;
+        i === iMin ? ctx.moveTo(X(i), Y(p)) : ctx.lineTo(X(i), Y(p));
+    }
+    ctx.stroke();
+
+    // product: flat 2%
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(X(iMin), Y(0.02)); ctx.lineTo(X(iMax), Y(0.02)); ctx.stroke();
+
+    // mark event 25,000
+    ctx.setLineDash([4, 3]); ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(X(25000), pad.top + ch); ctx.lineTo(X(25000), Y(0.5)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.orange;
+    ctx.beginPath(); ctx.arc(X(25000), Y(0.04), 5, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = P.aqua;
+    ctx.beginPath(); ctx.arc(X(25000), Y(0.5), 5, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('gets in: 4%', X(25000) + 10, Y(0.04) - 8);
+    ctx.fillStyle = P.aqua;
+    ctx.fillText('survives: 50%', X(25000) + 10, Y(0.5) + 4);
+
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('4% × 50% = 2% — the product is flat for everyone', pad.left + cw * 0.52, Y(0.02) - 14);
+
+    var lx = w - 180;
+    ctx.textAlign = 'left'; ctx.font = '12px system-ui';
+    ctx.fillStyle = P.orange; ctx.fillRect(lx, 58, 12, 12);
+    ctx.fillStyle = '#222'; ctx.fillText('P(gets in) = 1000/i', lx + 17, 68);
+    ctx.fillStyle = P.aqua; ctx.fillRect(lx, 78, 12, 12);
+    ctx.fillStyle = '#222'; ctx.fillText('P(survives) = i/50,000', lx + 17, 88);
+    ctx.fillStyle = P.violet; ctx.fillRect(lx, 98, 12, 12);
+    ctx.fillStyle = '#222'; ctx.fillText('product = 2%', lx + 17, 108);
+})();
+</script>
+
+</body>
+</html>

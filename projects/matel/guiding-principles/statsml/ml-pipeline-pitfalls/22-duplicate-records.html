@@ -76,6 +76,20 @@ ul {
 }
 li { margin-bottom: 4px; }
 
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
 </style>
 </head>
 <body>
@@ -88,17 +102,18 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>When the same record (or near-duplicates differing only in irrelevant fields) appears in both train and test sets, the model simply memorizes it. Test accuracy becomes artificially high because the model has seen these exact examples before.</p>
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">duplicates</span></div>
                 <ul>
-                    <li>ETL bugs create duplicate rows from joins or retries</li>
-                    <li>Data collection systems capture same event multiple times</li>
-                    <li>Splitting before deduplication spreads copies across train/test</li>
-                    <li>Near-duplicates (same content, different timestamp) are harder to detect</li>
+                    <li><b>Leaked copies</b> — training rows that reappear in the test set turn evaluation into recall</li>
+                    <li><b>Memorization</b> — the model recalls the training copy and scores those test rows near perfectly</li>
+                    <li><b>Inflated metrics</b> — accuracy blends memorized rows with weaker novel rows, overstating skill</li>
+                    <li><b>Near-duplicates too</b> — rows differing only in a timestamp leak just as much and hide better</li>
+                    <li><b>False generalization</b> — the test set no longer measures performance on unseen data</li>
                 </ul>
+                <p class="example">A text classifier scores 99% on the 15% duplicated test rows but 76% on novel ones, so the reported 80% masks 76% production performance.</p>
                 <div class="key-point">
-                    <strong>Impact:</strong> Test performance vastly overstates production performance. Models fail in the wild because they memorized duplicates rather than learning patterns. Fix: Deduplicate before splitting. Use entity-level splits where possible.
+                    <strong>Impact:</strong> Test performance vastly overstates production performance because the model memorized duplicates rather than learning patterns.
                 </div>
-                <p class="example">Example: A text classifier has 15% duplicate documents. Test accuracy is 94%, but production accuracy is 78%. The model memorized duplicates instead of learning features.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c1" width="720" height="300"></canvas>
@@ -108,22 +123,22 @@ li { margin-bottom: 4px; }
 </div>
 
 <div class="card-section">
-    <h2>Detection Strategies</h2>
+    <h2>Why It Happens</h2>
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>Detecting duplicates requires checking across the train/test boundary. Exact duplicates are easy; near-duplicates require content hashing or similarity measures.</p>
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">pipelines</span></div>
                 <ul>
-                    <li>Hash all rows and check for collisions across train/test</li>
-                    <li>For text: use MinHash or SimHash to find near-duplicates</li>
-                    <li>For images: perceptual hashing (pHash, dHash)</li>
-                    <li>For time-series: compare windowed subsequences</li>
-                    <li>Check for suspiciously high test accuracy on specific subsets</li>
+                    <li><b>Gradual buildup</b> — no single mistake; ordinary pipeline behaviors add copies over time</li>
+                    <li><b>ETL bugs</b> — join fan-out and retried batch loads quietly create duplicate rows</li>
+                    <li><b>Collection retries</b> — clients retrying a successful request log the same event twice</li>
+                    <li><b>Split before dedup</b> — random splitting sends each copy independently to train or test</li>
+                    <li><b>Invisible near-dupes</b> — copies differing in ID or timestamp pass exact-match checks</li>
                 </ul>
+                <p class="example">A fraud model reports 90% test accuracy but 87% in production; retry logic left exact training matches for 20% of test rows.</p>
                 <div class="key-point">
-                    <strong>Detection signal:</strong> Large gap between in-sample and out-of-sample error, or test accuracy that seems "too good" for the problem difficulty. Inspect high-confidence predictions for memorization.
+                    <strong>Root Cause:</strong> Random row-wise splitting assumes independent records, so duplicated rows put the same information on both sides of the boundary.
                 </div>
-                <p class="example">Example: A fraud model has 99.5% test accuracy but 87% production accuracy. Investigating shows 20% of test set has exact matches in training data due to retry logic creating duplicate transactions.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c2" width="720" height="300"></canvas>
@@ -133,22 +148,23 @@ li { margin-bottom: 4px; }
 </div>
 
 <div class="card-section">
-    <h2>Prevention and Mitigation</h2>
+    <h2>The Correct Approach</h2>
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>The safest approach is to deduplicate the entire dataset before any splitting. Use entity-level or temporal splits to prevent information leakage through near-duplicates.</p>
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">dedup first</span></div>
                 <ul>
-                    <li>Deduplicate globally before train/test split</li>
-                    <li>Use entity-based splitting (one user or account entirely in train or test)</li>
-                    <li>For time-series, use temporal splits with guardbands</li>
-                    <li>Monitor for duplicate creation in ETL pipelines</li>
-                    <li>Track unique IDs and flag when same ID appears in multiple sets</li>
+                    <li><b>Global dedup first</b> — deduplicate by content, not just IDs, before any splitting</li>
+                    <li><b>Entity-level splits</b> — assign each user or document wholly to train or test</li>
+                    <li><b>Temporal guardbands</b> — split time series by time and leave a gap between windows</li>
+                    <li><b>Detection</b> — hash rows across the split; use MinHash for text, pHash for images</li>
+                    <li><b>Pipeline monitoring</b> — flag any unique ID that appears in more than one split</li>
+                    <li><b>Suspicion check</b> — treat too-good test scores as a cue to inspect for memorization</li>
                 </ul>
+                <p class="example">An e-commerce recommender's test accuracy fell from 91% to 78% after switching from a random split to a user-level split.</p>
                 <div class="key-point">
-                    <strong>Best practice:</strong> Always deduplicate before splitting. Use content-based deduplication (not just ID-based) to catch near-duplicates. For high-stakes applications, implement automated checks that fail the pipeline if cross-set duplicates are detected.
+                    <strong>Fix:</strong> Always deduplicate by content before splitting, and add automated checks that fail the pipeline when cross-set duplicates appear.
                 </div>
-                <p class="example">Example: An e-commerce recommendation system switched from random split to user-level split. Test accuracy dropped from 91% to 78%, revealing that the model had been memorizing duplicate product views from the same users.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c3" width="720" height="300"></canvas>

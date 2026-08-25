@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monitoring Data: Freshness, Volume, Drift</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section { margin-bottom: 40px; }
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+table.layout { width: 100%; border-collapse: collapse; margin-top: 8px; }
+table.layout td { vertical-align: top; padding: 12px; }
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+table.layout3 { width: 100%; border-collapse: collapse; margin-top: 8px; }
+table.layout3 td { vertical-align: top; padding: 12px; }
+table.layout3 td.text-col { width: 38%; }
+table.layout3 td.viz-col { width: 31%; }
+canvas { width: 100%; border: 1px solid #e0e0e0; border-radius: 4px; }
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+.example { font-style: italic; color: #555; margin-top: 8px; font-size: 0.9rem; }
+ul { margin: 8px 0 8px 20px; font-size: 0.92rem; }
+li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Monitoring Data: Freshness, Volume, Drift</h1>
+<p class="subtitle">Three simple questions asked every morning — did the data arrive on time, in the usual amount, looking like it used to? — catch broken data before the people reading the dashboard do.</p>
+
+<div class="card-section">
+    <h2>The Morning the Dashboard Showed Yesterday</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">running example</span><span class="tag blue">freshness</span></div>
+                <ul>
+                    <li><b>The pipeline</b> — a nightly sales job loads yesterday's orders, done by about 5:10 each morning</li>
+                    <li><b>The reader</b> — the sales dashboard refreshes at 6:00 and the team checks it at 9:00</li>
+                    <li><b>The miss</b> — one Tuesday the upstream export stalls and the load finishes at 9:40</li>
+                    <li><b>The illusion</b> — at 6:00 the dashboard rendered fine — silently showing Monday's numbers</li>
+                    <li><b>The check</b> — freshness: "is the newest row's timestamp recent enough?" — one query, run at 6:00</li>
+                </ul>
+                <p class="example">The team debated a "flat Tuesday" for two days before anyone asked when the data had actually arrived.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Stale data looks exactly like calm data. Freshness is checked against the clock, not against the numbers.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Counting Rows Against the Usual Band</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">worked example</span><span class="tag blue">row counts</span></div>
+                <ul>
+                    <li><b>The habit</b> — the orders load lands about 48,000 rows a day, give or take</li>
+                    <li><b>The band</b> — last 14 days average 48,000 rows, spread (sigma) about 2,000 rows</li>
+                    <li><b>The rule</b> — alert outside mean ± 3 sigma: below 42,000 or above 54,000 rows</li>
+                    <li><b>The day</b> — Thursday delivers 12,400 rows — 35,600 under the mean, nearly 18 sigmas out</li>
+                    <li><b>The cause</b> — one of four upstream store files never arrived; the load "succeeded" without it</li>
+                </ul>
+                <p class="example">You can redo the check by hand: 48,000 − 3 × 2,000 = 42,000, and 12,400 is far below it.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A volume check needs no knowledge of what the rows mean — just that today should roughly resemble the recent past.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>On Time, Right Size — and Still Wrong: Drift</h2>
+    <table class="layout3">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">drift alerts</span><span class="tag red">what goes wrong</span></div>
+                <ul>
+                    <li><b>The change</b> — upstream renames the payment value "credit_card" to "CC" in its export</li>
+                    <li><b>The stealth</b> — data arrives at 5:08 with 48,300 rows; freshness and volume both pass</li>
+                    <li><b>The signature</b> — credit_card share drops 46% → 2% in a day; a new "CC" bucket appears at 45%</li>
+                    <li><b>The victims</b> — the fraud model treats "CC" as unknown; the payments chart shows a collapse</li>
+                    <li><b>The check</b> — drift: compare today's value shares or averages to last week's profile</li>
+                </ul>
+                <p class="example">No job failed and no row was lost — a string rename quietly gutted every credit-card metric.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Freshness and volume watch the container; drift watches the contents. Renames, unit changes, and null floods only trip the third check.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3a" width="420" height="300"></canvas>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3b" width="400" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>"The Job Succeeded" Is Not "The Data Is Fine"</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common confusion</span><span class="tag orange">rule of thumb</span></div>
+                <ul>
+                    <li><b>The confusion</b> — teams watch the scheduler: green ticks mean "nothing to see here"</li>
+                    <li><b>The gap</b> — a job can succeed at loading late, half-empty, or renamed data</li>
+                    <li><b>The week</b> — seven green job runs; the data checks caught a late Tuesday and a thin Thursday</li>
+                    <li><b>The order</b> — check freshness first, then volume, then drift — cheapest and loudest first</li>
+                    <li><b>The payoff</b> — the alert reaches the data team hours before the 9:00 dashboard crowd</li>
+                </ul>
+                <p class="example">The scheduler's job page showed a perfect week; two of those seven "successes" had shipped bad data.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Job monitoring asks "did the machinery run?" Data monitoring asks "is what it produced believable?" You need both, and they disagree often.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef',
+  red: '#e74c3c'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var w = +canvas.getAttribute('width');
+    var h = +canvas.getAttribute('height');
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+    return { ctx: ctx, w: w, h: h };
+}
+
+// c1: load-finish times across a week vs the 6:00 dashboard refresh
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 16px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('When the Nightly Load Finished vs the 6:00 Dashboard Refresh', w / 2, 26);
+
+    var days = ['Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Mon', 'Tue'];
+    var finishH = [5.15, 5.05, 5.3, 4.95, 5.2, 5.1, 9.67]; // hours after midnight; Tue = 9:40
+    var pad = { left: 70, right: 30, top: 55, bottom: 55 };
+    var cw = w - pad.left - pad.right, ch = h - pad.top - pad.bottom;
+    var yMin = 4, yMax = 10.5;
+    function Y(hr) { return pad.top + ch - (hr - yMin) / (yMax - yMin) * ch; }
+    function X(i) { return pad.left + (i + 0.5) / 7 * cw; }
+
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad.left, pad.top); ctx.lineTo(pad.left, pad.top + ch); ctx.lineTo(pad.left + cw, pad.top + ch); ctx.stroke();
+
+    // y labels
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    var yt = [4, 6, 8, 10];
+    for (var i = 0; i < yt.length; i++) ctx.fillText(('0' + yt[i]).slice(-2) + ':00', pad.left - 8, Y(yt[i]) + 4);
+
+    // 6:00 refresh line
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(pad.left, Y(6)); ctx.lineTo(pad.left + cw, Y(6)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('06:00 dashboard refresh', pad.left + 8, Y(6) - 8);
+
+    // lollipops
+    for (var i = 0; i < 7; i++) {
+        var late = finishH[i] > 6;
+        var col = late ? P.red : P.blue;
+        ctx.strokeStyle = col; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(X(i), pad.top + ch); ctx.lineTo(X(i), Y(finishH[i])); ctx.stroke();
+        ctx.fillStyle = col;
+        ctx.beginPath(); ctx.arc(X(i), Y(finishH[i]), 6, 0, 2 * Math.PI); ctx.fill();
+        ctx.font = late ? 'bold 12px system-ui' : '12px system-ui'; ctx.textAlign = 'center';
+        var hh = Math.floor(finishH[i]);
+        var mm = Math.round((finishH[i] - hh) * 60);
+        ctx.fillText(('0' + hh).slice(-2) + ':' + ('0' + mm).slice(-2), X(i), Y(finishH[i]) - 12);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+        ctx.fillText(days[i], X(i), pad.top + ch + 18);
+    }
+
+    ctx.fillStyle = P.red; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('Tue finished 3h40m after the refresh — the 06:00 dashboard silently showed Monday', w / 2, h - 12);
+})();
+
+// c2: 14 days of row counts, the ±3-sigma band, and the 12,400 day
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 16px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Daily Rows Loaded, With the 42k–54k Alert Band (mean 48k ± 3σ)', w / 2, 26);
+
+    var counts = [47.2, 49.8, 46.5, 50.1, 48.3, 45.9, 49.2, 51.0, 47.8, 46.1, 50.4, 48.9, 47.0, 49.5, 12.4]; // thousands
+    var pad = { left: 70, right: 25, top: 50, bottom: 50 };
+    var cw = w - pad.left - pad.right, ch = h - pad.top - pad.bottom;
+    var yMax = 60;
+    function Y(v) { return pad.top + ch - v / yMax * ch; }
+    var n = counts.length, bw = cw / n;
+
+    // band 42-54
+    ctx.fillStyle = 'rgba(0,131,0,0.10)';
+    ctx.fillRect(pad.left, Y(54), cw, Y(42) - Y(54));
+    ctx.strokeStyle = P.green; ctx.lineWidth = 1; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(pad.left, Y(54)); ctx.lineTo(pad.left + cw, Y(54)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pad.left, Y(42)); ctx.lineTo(pad.left + cw, Y(42)); ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad.left, pad.top); ctx.lineTo(pad.left, pad.top + ch); ctx.lineTo(pad.left + cw, pad.top + ch); ctx.stroke();
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    var yt = [0, 20, 40, 60];
+    for (var i = 0; i < yt.length; i++) ctx.fillText(yt[i] + 'k', pad.left - 8, Y(yt[i]) + 4);
+
+    for (var i = 0; i < n; i++) {
+        var x = pad.left + i * bw + 4;
+        var bad = counts[i] < 42;
+        ctx.fillStyle = bad ? P.red : 'rgba(42,120,214,0.45)';
+        ctx.fillRect(x, Y(counts[i]), bw - 8, pad.top + ch - Y(counts[i]));
+        if (bad) {
+            ctx.fillStyle = P.red; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText('12.4k', x + (bw - 8) / 2, Y(counts[i]) - 8);
+        }
+    }
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('day -14', pad.left + 0.5 * bw, pad.top + ch + 18);
+    ctx.fillText('day -7', pad.left + 7.5 * bw, pad.top + ch + 18);
+    ctx.fillText('today', pad.left + 14.5 * bw, pad.top + ch + 18);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('normal band: 42k–54k', pad.left + 8, Y(54) - 8);
+    ctx.fillStyle = P.red; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('today: 12,400 rows — one of four store files missing, job still "green"', w / 2, h - 10);
+})();
+
+// c3a: credit_card share over 10 days — the cliff
+(function() {
+    var s = setup('c3a');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Share of "credit_card" payments', w / 2, 22);
+
+    var share = [45, 46, 44, 47, 45, 46, 45, 2, 2, 2]; // %
+    var pad = { left: 55, right: 20, top: 45, bottom: 45 };
+    var cw = w - pad.left - pad.right, ch = h - pad.top - pad.bottom;
+    var yMax = 60;
+    function X(i) { return pad.left + i / 9 * cw; }
+    function Y(v) { return pad.top + ch - v / yMax * ch; }
+
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad.left, pad.top); ctx.lineTo(pad.left, pad.top + ch); ctx.lineTo(pad.left + cw, pad.top + ch); ctx.stroke();
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    var yt = [0, 20, 40, 60];
+    for (var i = 0; i < yt.length; i++) ctx.fillText(yt[i] + '%', pad.left - 6, Y(yt[i]) + 4);
+
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < 10; i++) i === 0 ? ctx.moveTo(X(i), Y(share[i])) : ctx.lineTo(X(i), Y(share[i]));
+    ctx.stroke();
+    for (var i = 0; i < 10; i++) {
+        ctx.fillStyle = share[i] < 10 ? P.red : P.blue;
+        ctx.beginPath(); ctx.arc(X(i), Y(share[i]), 4, 0, 2 * Math.PI); ctx.fill();
+    }
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('day 1', X(0), pad.top + ch + 16);
+    ctx.fillText('day 8', X(7), pad.top + ch + 16);
+    ctx.fillText('day 10', X(9), pad.top + ch + 16);
+
+    ctx.fillStyle = P.red; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('day 8: 46% → 2% overnight', X(5.4), Y(20));
+    ctx.fillStyle = P.mute; ctx.font = 'italic 11px system-ui';
+    ctx.fillText('freshness and volume both passed all 10 days', w / 2, h - 8);
+})();
+
+// c3b: where the share went — the renamed bucket
+(function() {
+    var s = setup('c3b');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Payment values: day 7 vs day 8', w / 2, 22);
+
+    var cats = ['credit_card', 'CC', 'debit', 'wallet'];
+    var before = [46, 0, 34, 20];
+    var after = [2, 45, 33, 20];
+    var pad = { left: 55, right: 15, top: 50, bottom: 60 };
+    var cw = w - pad.left - pad.right, ch = h - pad.top - pad.bottom;
+    var yMax = 60, groupW = cw / 4, bw = 26;
+    function Y(v) { return pad.top + ch - v / yMax * ch; }
+
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad.left, pad.top); ctx.lineTo(pad.left, pad.top + ch); ctx.lineTo(pad.left + cw, pad.top + ch); ctx.stroke();
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    var yt = [0, 20, 40, 60];
+    for (var i = 0; i < yt.length; i++) ctx.fillText(yt[i] + '%', pad.left - 6, Y(yt[i]) + 4);
+
+    for (var i = 0; i < 4; i++) {
+        var gx = pad.left + i * groupW + groupW / 2;
+        ctx.fillStyle = 'rgba(42,120,214,0.45)';
+        ctx.fillRect(gx - bw - 3, Y(before[i]), bw, pad.top + ch - Y(before[i]));
+        ctx.fillStyle = i === 1 ? P.red : 'rgba(25,158,112,0.6)';
+        ctx.fillRect(gx + 3, Y(after[i]), bw, pad.top + ch - Y(after[i]));
+        ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.save(); ctx.translate(gx, pad.top + ch + 14); ctx.rotate(-0.35);
+        ctx.fillText(cats[i], 0, 0); ctx.restore();
+    }
+
+    // legend
+    ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(42,120,214,0.45)'; ctx.fillRect(pad.left + 6, 32, 11, 11);
+    ctx.fillStyle = P.text; ctx.fillText('day 7', pad.left + 21, 41);
+    ctx.fillStyle = 'rgba(25,158,112,0.6)'; ctx.fillRect(pad.left + 66, 32, 11, 11);
+    ctx.fillStyle = P.text; ctx.fillText('day 8', pad.left + 81, 41);
+
+    ctx.fillStyle = P.red; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('same payments, new name: "CC" at 45%', w / 2, h - 24);
+    ctx.fillStyle = P.mute; ctx.font = 'italic 11px system-ui';
+    ctx.fillText('a share profile compared day-over-day catches it', w / 2, h - 8);
+})();
+
+// c4: job status board vs data check board for the same week
+(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 16px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Seven Runs, Two Scoreboards', w / 2, 26);
+
+    var days = ['Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Mon', 'Tue'];
+    var jobOk = [true, true, true, true, true, true, true];
+    var dataOk = [true, false, true, true, true, true, false];
+    var dataWhy = ['', 'volume: 12.4k rows', '', '', '', '', 'freshness: 09:40'];
+    var x0 = 175, cellW = 68, cellH = 40;
+    var rows = [
+        { y: 70, label: 'scheduler view', ok: jobOk },
+        { y: 150, label: 'data checks', ok: dataOk }
+    ];
+
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+    for (var i = 0; i < 7; i++) ctx.fillText(days[i], x0 + i * cellW + cellW / 2, 60);
+
+    for (var r = 0; r < 2; r++) {
+        var row = rows[r];
+        ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(row.label, x0 - 14, row.y + cellH / 2 + 4);
+        for (var i = 0; i < 7; i++) {
+            var x = x0 + i * cellW;
+            var ok = row.ok[i];
+            ctx.fillStyle = ok ? 'rgba(0,131,0,0.15)' : 'rgba(231,76,60,0.15)';
+            ctx.fillRect(x + 3, row.y, cellW - 6, cellH);
+            ctx.strokeStyle = ok ? P.green : P.red; ctx.lineWidth = 1.5;
+            ctx.strokeRect(x + 3, row.y, cellW - 6, cellH);
+            ctx.fillStyle = ok ? P.green : P.red; ctx.font = 'bold 15px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(ok ? '✓' : '✗', x + cellW / 2, row.y + cellH / 2 + 5);
+        }
+    }
+
+    // callouts for the two red cells
+    ctx.fillStyle = P.red; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < 7; i++) {
+        if (!dataOk[i]) {
+            ctx.fillText(dataWhy[i], x0 + i * cellW + cellW / 2, rows[1].y + cellH + 20);
+        }
+    }
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('seven green job runs — two of them shipped bad data anyway', w / 2, 250);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('run the checks in order: freshness → volume → drift (cheapest and loudest first)', w / 2, 275);
+})();
+</script>
+
+</body>
+</html>

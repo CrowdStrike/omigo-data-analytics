@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gaussian Mixture Models</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Gaussian Mixture Models</h1>
+<p class="subtitle">Assume your data is several bell curves blended together, then work out — for every single point — which curve it probably came from</p>
+
+<div class="card-section">
+    <h2>One Lumpy Histogram, Two Hidden Bell Curves</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">bell curves</span><span class="tag orange">running example</span></div>
+                <ul>
+                    <li><b>The data</b> — heights of 200 gym members in one unlabeled column, sex not recorded</li>
+                    <li><b>The look</b> — the histogram is one wide lump; you would never guess two groups by eye</li>
+                    <li><b>The assumption</b> — pretend it's two bells blended: women near 162 cm, men near 176 cm</li>
+                    <li><b>What GMM finds</b> — each bell's center, width, and share of the crowd (here 50/50)</li>
+                    <li><b>The payoff</b> — every member gets a probability of coming from each bell, not a hard label</li>
+                </ul>
+                <p class="example">Illustrative numbers throughout: women ~N(162, 6), men ~N(176, 7), 100 of each.</p>
+                <div class="key-point">
+                    <strong>Gaussian Mixture Model:</strong> "this data is k bell curves added together — find the bells, then say which bell each point likely came from." That sentence is the whole model.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>How Sure Is 169 cm? Soft Assignment by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">worked example</span><span class="tag blue">soft clustering</span></div>
+                <ul>
+                    <li><b>The member</b> — someone 169 cm tall, right between the two bell centers</li>
+                    <li><b>Bell 1 (162, sd 6)</b> — 169 is 1.17 sd away; the curve's height there is about 0.084</li>
+                    <li><b>Bell 2 (176, sd 7)</b> — 169 is 1.00 sd away; the curve's height there is about 0.087</li>
+                    <li><b>Split the credit</b> — 0.084 / (0.084 + 0.087) = 49% bell 1, 51% bell 2</li>
+                    <li><b>Contrast 158 cm</b> — bell heights 0.053 vs 0.002: 96% bell 1, no real doubt</li>
+                </ul>
+                <p class="example">The 49/51 answer is honest: at 169 cm the data genuinely cannot tell the groups apart.</p>
+                <div class="key-point">
+                    <strong>Soft clustering:</strong> instead of forcing "you are in cluster 2", GMM says "51% cluster 2, 49% cluster 1" — the uncertainty is part of the answer.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The EM Loop: Guess, Split the Credit, Re-Fit, Repeat</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">EM algorithm</span><span class="tag green">mechanism</span></div>
+                <ul>
+                    <li><b>Chicken and egg</b> — the bells give the memberships; the memberships give the bells</li>
+                    <li><b>Start with a guess</b> — put the two centers anywhere, say 155 and 183</li>
+                    <li><b>E-step</b> — score every member: what fraction of them belongs to each current bell?</li>
+                    <li><b>M-step</b> — recompute each bell's center as the weighted average of its members</li>
+                    <li><b>Repeat</b> — here the centers walk 155&rarr;162 and 183&rarr;176 in about four rounds</li>
+                </ul>
+                <p class="example">It's the same loop as k-means, except members split their vote instead of picking one side.</p>
+                <div class="key-point">
+                    <strong>EM caveat:</strong> the loop always settles, but only on a local best — different starting guesses can end at different answers, so real libraries restart several times.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why Soft Beats Hard at the Border</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag red">common mistake</span></div>
+                <ul>
+                    <li><b>k-means at 169 cm</b> — exactly 7 cm from both centers, yet it must pick one side</li>
+                    <li><b>GMM at 169 cm</b> — reports 49/51, so downstream code knows this member is genuinely ambiguous</li>
+                    <li><b>Different widths</b> — GMM lets one bell be wide and one narrow; k-means can't</li>
+                    <li><b>Real jobs</b> — speaker voices in audio, cell types in biology, customer segments in spend data</li>
+                    <li><b>The mistake</b> — treating clusters as real groups; GMM finds bells even in bell-free data</li>
+                </ul>
+                <p class="example">Fit a 2-bell GMM to perfectly uniform data and it will still happily report two bells.</p>
+                <div class="key-point">
+                    <strong>Rule of thumb:</strong> use the soft probabilities, not just the winning label — and check the histogram first, because the mixture story is an assumption, not a discovery.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+function gauss(x, mu, sd) {
+    var z = (x - mu) / sd;
+    return Math.exp(-0.5 * z * z) / (sd * Math.sqrt(2 * Math.PI));
+}
+
+// c1: histogram + two fitted bells
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var pad = { top: 55, bottom: 55, left: 60, right: 30 };
+    var cw = w - pad.left - pad.right, ch = h - pad.top - pad.bottom;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('200 Gym-Member Heights: One Lump Hiding Two Bells (illustrative)', w / 2, 24);
+
+    var x0 = 145, x1 = 195;
+    function X(v) { return pad.left + (v - x0) / (x1 - x0) * cw; }
+
+    // hardcoded histogram: bins of 5 cm from 145 to 195
+    var counts = [2, 10, 32, 36, 33, 33, 28, 17, 7, 2]; // sums to 200
+    var maxC = 40;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, pad.top); ctx.lineTo(pad.left, pad.top + ch);
+    ctx.lineTo(pad.left + cw, pad.top + ch); ctx.stroke();
+
+    for (var i = 0; i < counts.length; i++) {
+        var bx = X(x0 + i * 5), bw2 = X(x0 + (i + 1) * 5) - bx;
+        var bh = counts[i] / maxC * ch;
+        ctx.fillStyle = 'rgba(26,82,118,0.25)';
+        ctx.fillRect(bx + 1, pad.top + ch - bh, bw2 - 2, bh);
+    }
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#222'; ctx.textAlign = 'center';
+    for (var t = 145; t <= 195; t += 10) ctx.fillText(t, X(t), pad.top + ch + 18);
+    ctx.fillStyle = '#444';
+    ctx.fillText('height, cm', pad.left + cw / 2, h - 14);
+
+    // fitted bells (scaled: 100 members * 5cm bin => density*500)
+    function bell(mu, sd, color) {
+        ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.beginPath();
+        for (var v = x0; v <= x1; v += 0.5) {
+            var y = pad.top + ch - (gauss(v, mu, sd) * 500) / maxC * ch;
+            v === x0 ? ctx.moveTo(X(v), y) : ctx.lineTo(X(v), y);
+        }
+        ctx.stroke();
+    }
+    bell(162, 6, P.magenta);
+    bell(176, 7, P.blue);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('bell 1: 162 cm', X(157), pad.top + 18);
+    ctx.fillStyle = P.blue;
+    ctx.fillText('bell 2: 176 cm', X(183), pad.top + 30);
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('the eye sees one lump — the model recovers both bells', X(170), pad.top + ch - 12);
+})();
+
+// c2: two bells, vertical line at 169, credit split
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var pad = { top: 55, bottom: 55, left: 60, right: 30 };
+    var cw = w - pad.left - pad.right, ch = h - pad.top - pad.bottom;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('At 169 cm the Two Bells Are Almost Equally Tall', w / 2, 24);
+
+    var x0 = 140, x1 = 200, maxD = 0.075;
+    function X(v) { return pad.left + (v - x0) / (x1 - x0) * cw; }
+    function Y(d) { return pad.top + ch - d / maxD * ch; }
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, pad.top); ctx.lineTo(pad.left, pad.top + ch);
+    ctx.lineTo(pad.left + cw, pad.top + ch); ctx.stroke();
+
+    function bell(mu, sd, color) {
+        ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.beginPath();
+        for (var v = x0; v <= x1; v += 0.5) {
+            var y = Y(gauss(v, mu, sd));
+            v === x0 ? ctx.moveTo(X(v), y) : ctx.lineTo(X(v), y);
+        }
+        ctx.stroke();
+    }
+    bell(162, 6, P.magenta);
+    bell(176, 7, P.blue);
+
+    // vertical line at 169
+    var d1 = gauss(169, 162, 6), d2 = gauss(169, 176, 7);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(X(169), pad.top + 8); ctx.lineTo(X(169), pad.top + ch); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.magenta;
+    ctx.beginPath(); ctx.arc(X(169), Y(d1), 5, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = P.blue;
+    ctx.beginPath(); ctx.arc(X(169), Y(d2), 5, 0, 2 * Math.PI); ctx.fill();
+
+    // vertical line at 158
+    var e1 = gauss(158, 162, 6), e2 = gauss(158, 176, 7);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(X(158), pad.top + 40); ctx.lineTo(X(158), pad.top + ch); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.magenta;
+    ctx.beginPath(); ctx.arc(X(158), Y(e1), 5, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = P.blue;
+    ctx.beginPath(); ctx.arc(X(158), Y(e2), 5, 0, 2 * Math.PI); ctx.fill();
+
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#222'; ctx.textAlign = 'center';
+    for (var t = 140; t <= 200; t += 10) ctx.fillText(t, X(t), pad.top + ch + 18);
+    ctx.fillStyle = '#444';
+    ctx.fillText('height, cm', pad.left + cw / 2, h - 14);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('169 cm: heights 0.084 vs 0.087 → 49% / 51%', X(169), pad.top + 2);
+    ctx.fillStyle = P.mute; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('158 cm: 96% bell 1', X(153), pad.top + 34);
+})();
+
+// c3: EM convergence — centers vs iteration
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var pad = { top: 55, bottom: 55, left: 65, right: 170 };
+    var cw = w - pad.left - pad.right, ch = h - pad.top - pad.bottom;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('EM in Action: Bad Starting Guesses Walk to the Truth', w / 2, 24);
+
+    var mu1 = [155, 159.8, 161.4, 161.9, 162.0];
+    var mu2 = [183, 178.6, 176.9, 176.2, 176.0];
+    var n = 5, y0 = 150, y1 = 188;
+    function X(i) { return pad.left + i / (n - 1) * cw; }
+    function Y(v) { return pad.top + ch - (v - y0) / (y1 - y0) * ch; }
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, pad.top); ctx.lineTo(pad.left, pad.top + ch);
+    ctx.lineTo(pad.left + cw, pad.top + ch); ctx.stroke();
+
+    // true values as dashed targets
+    [[162, P.magenta], [176, P.blue]].forEach(function(t) {
+        ctx.strokeStyle = t[1]; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
+        ctx.beginPath(); ctx.moveTo(pad.left, Y(t[0])); ctx.lineTo(pad.left + cw, Y(t[0])); ctx.stroke();
+        ctx.setLineDash([]);
+    });
+
+    function line(vals, color) {
+        ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.beginPath();
+        for (var i = 0; i < n; i++) i === 0 ? ctx.moveTo(X(i), Y(vals[i])) : ctx.lineTo(X(i), Y(vals[i]));
+        ctx.stroke();
+        ctx.fillStyle = color;
+        for (var i = 0; i < n; i++) { ctx.beginPath(); ctx.arc(X(i), Y(vals[i]), 4.5, 0, 2 * Math.PI); ctx.fill(); }
+    }
+    line(mu1, P.magenta);
+    line(mu2, P.blue);
+
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#222'; ctx.textAlign = 'center';
+    for (var i = 0; i < n; i++) ctx.fillText('round ' + i, X(i), pad.top + ch + 18);
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#666'; ctx.textAlign = 'right';
+    [155, 162, 169, 176, 183].forEach(function(v) { ctx.fillText(v, pad.left - 8, Y(v) + 4); });
+    ctx.save();
+    ctx.translate(20, pad.top + ch / 2); ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center'; ctx.fillStyle = '#444';
+    ctx.fillText('estimated center, cm', 0, 0);
+    ctx.restore();
+
+    var lx = w - 158;
+    ctx.textAlign = 'left'; ctx.font = '12px system-ui';
+    ctx.fillStyle = P.magenta; ctx.fillRect(lx, 62, 12, 12);
+    ctx.fillStyle = '#222'; ctx.fillText('center of bell 1', lx + 17, 72);
+    ctx.fillStyle = P.blue; ctx.fillRect(lx, 82, 12, 12);
+    ctx.fillStyle = '#222'; ctx.fillText('center of bell 2', lx + 17, 92);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('guessed 155 & 183 —', lx, 120);
+    ctx.fillText('settled on 162 & 176', lx, 136);
+    ctx.fillText('in 4 rounds', lx, 152);
+})();
+
+// c4: soft responsibility curve vs k-means hard step
+(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var pad = { top: 55, bottom: 55, left: 65, right: 175 };
+    var cw = w - pad.left - pad.right, ch = h - pad.top - pad.bottom;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('P(bell 2) Across Heights: Soft Ramp vs Hard Cliff', w / 2, 24);
+
+    var x0 = 150, x1 = 190;
+    function X(v) { return pad.left + (v - x0) / (x1 - x0) * cw; }
+    function Y(p) { return pad.top + ch - p * ch; }
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, pad.top); ctx.lineTo(pad.left, pad.top + ch);
+    ctx.lineTo(pad.left + cw, pad.top + ch); ctx.stroke();
+
+    // GMM responsibility curve (computed from the same two bells)
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3; ctx.beginPath();
+    for (var v = x0; v <= x1; v += 0.5) {
+        var d1 = gauss(v, 162, 6), d2 = gauss(v, 176, 7);
+        var p = d2 / (d1 + d2);
+        v === x0 ? ctx.moveTo(X(v), Y(p)) : ctx.lineTo(X(v), Y(p));
+    }
+    ctx.stroke();
+
+    // k-means hard step at midpoint 169
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 3; ctx.setLineDash([7, 5]);
+    ctx.beginPath();
+    ctx.moveTo(X(x0), Y(0)); ctx.lineTo(X(169), Y(0));
+    ctx.lineTo(X(169), Y(1)); ctx.lineTo(X(x1), Y(1));
+    ctx.stroke(); ctx.setLineDash([]);
+
+    // marker at 169
+    var pm = gauss(169, 176, 7) / (gauss(169, 162, 6) + gauss(169, 176, 7));
+    ctx.fillStyle = P.green;
+    ctx.beginPath(); ctx.arc(X(169), Y(pm), 6, 0, 2 * Math.PI); ctx.fill();
+
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#222'; ctx.textAlign = 'center';
+    for (var t = 150; t <= 190; t += 10) ctx.fillText(t, X(t), pad.top + ch + 18);
+    ctx.fillStyle = '#444';
+    ctx.fillText('height, cm', pad.left + cw / 2, h - 14);
+    ctx.fillStyle = '#666'; ctx.textAlign = 'right';
+    ctx.fillText('0', pad.left - 8, Y(0) + 4);
+    ctx.fillText('0.5', pad.left - 8, Y(0.5) + 4);
+    ctx.fillText('1', pad.left - 8, Y(1) + 4);
+
+    var lx = w - 162;
+    ctx.textAlign = 'left'; ctx.font = '12px system-ui';
+    ctx.fillStyle = P.green; ctx.fillRect(lx, 62, 12, 12);
+    ctx.fillStyle = '#222'; ctx.fillText('GMM: soft', lx + 17, 72);
+    ctx.fillStyle = P.orange; ctx.fillRect(lx, 82, 12, 12);
+    ctx.fillStyle = '#222'; ctx.fillText('k-means: hard', lx + 17, 92);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('at 169 cm GMM says 51%;', lx, 120);
+    ctx.fillText('k-means fakes certainty', lx, 136);
+})();
+</script>
+
+</body>
+</html>

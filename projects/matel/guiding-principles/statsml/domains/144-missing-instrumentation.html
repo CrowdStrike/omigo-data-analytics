@@ -11,8 +11,6 @@ h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
 h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
 p { margin: 10px 0; color: #333; font-size: 0.95em; }
 .subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
-.nav { margin-bottom: 20px; }
-.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; }
 ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
 li { margin: 4px 0; }
 strong { color: #1a5276; }
@@ -29,80 +27,74 @@ canvas { display: block; margin: 0 auto; }
 <body>
 
 <h1>Missing Data Checkpoints Between Transformation Steps</h1>
-<p class="subtitle">Not persisting the actual data at each significant transformation stage. When the final output doesn't add up, you have source data and final output — nothing in between. You cannot inspect what any intermediate step actually produced. Re-running may not reproduce the problem.</p>
+<p class="subtitle">When intermediate transformation outputs aren't persisted, a wrong final result leaves you with only source and output — the steps in between are uninspectable.</p>
 
 <div class="philosophy">
-<strong>The core problem:</strong> A 5-step data pipeline saves data at step 1 (raw input) and step 5 (final output). Steps 2, 3, 4 are ephemeral — their output exists only in memory during execution. When step 5 produces wrong results, the investigation question is: "Which of steps 2-4 produced something unexpected?" Without checkpointed data at each stage, you CANNOT answer this. You must re-run, add debugging, hope the issue reproduces. Often it doesn't — the upstream data has changed, the race condition doesn't trigger again, the transient state is gone.
+<strong>The core problem:</strong> If only raw input and final output are saved, "which middle step went wrong?" is unanswerable — you must re-run and hope the issue reproduces, and often it doesn't because the upstream data or transient state is gone.
 </div>
 
-<h2>Pitfall 1: Only Source and Final Output Exist — The Gap Is Uninspectable</h2>
+<h2>Only Source and Final Output Exist — The Gap Is Uninspectable</h2>
 
 <table class="obj-table">
 <tr><td>
 <div class="obj-title">5-Step Pipeline, 2 Checkpoints. 3 Blind Spots.</div>
 <ul>
-<li><strong>The pipeline:</strong> Raw → Clean → Join → Aggregate → Enrich → Model Input. You persist raw (step 1) and model input (step 5). Steps 2-4 are transient.</li>
-<li><strong>The symptom:</strong> Model accuracy drops 8%. You check step 5 output — feature values look wrong. You check step 1 — raw data looks fine. Somewhere between 1 and 5, something went wrong.</li>
-<li><strong>Without checkpoints:</strong> Cannot inspect what step 3 (join) actually produced. Did the join create duplicates? Did step 4 (aggregate) hit a NULL and produce zeros? Did step 2 (clean) drop rows it shouldn't have? You're guessing.</li>
-<li><strong>The re-run fallacy:</strong> "Just re-run with debugging." But the upstream data may have changed since the original run. The bug may be non-deterministic (race condition during the join). The transient state that caused the problem doesn't exist anymore. Re-running shows a DIFFERENT result — which tells you nothing about what happened last time.</li>
-<li><strong>With checkpoints at every step:</strong> Inspect step 3 output directly. Row count jumped 3× (fanout from a 1:N join). Found in 5 minutes. Didn't need to re-run anything.</li>
+<li><strong>The symptom:</strong> Model accuracy drops 8%; step 5 looks wrong, step 1 looks fine — the problem is in the uninspectable middle.</li>
+<li><strong>Without checkpoints:</strong> You can only guess whether the join fanned out, the aggregate hit NULLs, or the clean step dropped rows.</li>
+<li><strong>The re-run fallacy:</strong> Re-running shows a different result — upstream data changed, transient state is gone — and tells you nothing about last time.</li>
+<li><strong>With checkpoints:</strong> Inspect step 3 output directly and spot the join fanout in minutes.</li>
 </ul>
 </td><td><canvas id="c1" width="720" height="340"></canvas></td></tr>
 </table>
 
-<h2>Pitfall 2: The Data Changed — You Can't Go Back</h2>
+<h2>The Data Changed — You Can't Go Back</h2>
 
 <table class="obj-table">
 <tr><td>
 <div class="obj-title">By the Time You Investigate, the Source Has Moved</div>
 <ul>
-<li><strong>Mutable sources:</strong> Your pipeline reads from a production database. Step 1 snapshot was taken at 3am. By 9am when you investigate, the source data has been updated — user statuses changed, rows were added, values corrected. Querying the source NOW gives you different data than the pipeline saw at 3am.</li>
-<li><strong>Without step 2 checkpoint:</strong> You can't compare "what did the clean step produce at 3am?" You only have the 3am raw snapshot and today's final output. The cleaning rules may have hit edge cases in the 3am data that don't exist in the current data.</li>
-<li><strong>Temporal debugging is impossible:</strong> The question "what did this pipeline stage produce at 3am on Tuesday?" is only answerable if you saved that output. Text logs tell you it ran. They don't tell you what the data looked like.</li>
-<li><strong>The months-later discovery:</strong> Problem detected in September. Root cause was in June. Without checkpointed intermediate data from June's runs, you can't trace what went wrong. June's source data is long overwritten. All you know: June raw → September output = bad. Three months of intermediate transformations are unrecoverable.</li>
+<li><strong>Mutable sources:</strong> The pipeline read a production database at 3am; by investigation time the source has been updated and now returns different data.</li>
+<li><strong>Temporal debugging is impossible:</strong> "What did this stage produce Tuesday?" is only answerable if you saved it — logs prove it ran, not what the data looked like.</li>
+<li><strong>The months-later discovery:</strong> A September problem with a June root cause is untraceable once June's data is overwritten.</li>
 </ul>
 </td><td><canvas id="c2" width="720" height="300"></canvas></td></tr>
 </table>
 
-<h2>Pitfall 3: Aggregation Destroys Debugging Information</h2>
+<h2>Aggregation Destroys Debugging Information</h2>
 
 <table class="obj-table">
 <tr><td>
 <div class="obj-title">After Aggregation, You Cannot Decompose the Number</div>
 <ul>
-<li><strong>The problem:</strong> Step 4 aggregates user-level data into cohort-level summary stats. Final output says "cohort A average = $450." Expected: $200. Which users drove this? What were their individual values BEFORE aggregation?</li>
-<li><strong>Without pre-aggregation checkpoint:</strong> Cannot decompose the average. Cannot identify which users had extreme values. Cannot tell if it's 1 user at $100K dragging the mean, or 100 users all inflated by a join bug. The aggregation destroyed the row-level detail you need.</li>
-<li><strong>The JOIN amplification variant:</strong> Step 3 joins users to transactions. A user with 50 transactions gets 50 rows. Step 4 averages their spend. But if the checkpoint is only at step 5 (after averaging), you can't tell whether the join was correct. Was it 50 unique transactions, or 5 transactions counted 10× each?</li>
-<li><strong>The general principle:</strong> Every aggregation step (SUM, AVG, COUNT, GROUP BY) is a lossy compression. Post-aggregation, the individual rows that produced the aggregate are gone. If you don't save them before the aggregation, you can never inspect them.</li>
+<li><strong>The problem:</strong> A cohort average comes out at $450 instead of $200, and without pre-aggregation rows you can't decompose which users drove it.</li>
+<li><strong>The JOIN amplification variant:</strong> Post-averaging, you can't tell 50 unique transactions from 5 duplicated 10&times; by a bad join.</li>
+<li><strong>The general principle:</strong> Every aggregation is lossy compression — save the rows before it, or you can never inspect them.</li>
 </ul>
 </td><td><canvas id="c3" width="720" height="300"></canvas></td></tr>
 </table>
 
-<h2>Pitfall 4: Partial Re-run Requires Checkpoints as Starting Points</h2>
+<h2>Partial Re-run Requires Checkpoints as Starting Points</h2>
 
 <table class="obj-table">
 <tr><td>
 <div class="obj-title">Fix Step 3, Re-Run Steps 3-5. But Without Step 2 Output, You Must Start From Step 1.</div>
 <ul>
-<li><strong>The scenario:</strong> You identify the bug is in step 3 (join logic). You fix it. Now you need to re-run steps 3-5 with the fix. What's the input to step 3? It's the OUTPUT of step 2.</li>
-<li><strong>Without step 2 checkpoint:</strong> Must re-run steps 1-2 first just to produce step 3's input. Step 1 is a 4-hour full data scan. Step 2 is 2 hours of cleaning. Total: 6 hours just to GET TO the step you fixed.</li>
-<li><strong>With step 2 checkpoint:</strong> Start directly from step 2 output. Re-run steps 3-5 only. Total: 1 hour. 6× faster recovery.</li>
-<li><strong>At scale:</strong> Enterprise pipeline with 10 steps, each taking 1-3 hours. Bug in step 7. Without checkpoints: re-run steps 1-6 (12 hours) just to set up step 7's input. With checkpoints: start from step 6 output (0 hours setup). This is the difference between "fixed by EOD" and "fixed in 2 days."</li>
-<li><strong>The experimentation cost:</strong> "Let me try a different join key in step 3." Without step 2 checkpoint: 6 hours per experiment. You try 2 things per day. With checkpoint: 30 minutes per experiment. You try 12 things per day. Debugging velocity is directly proportional to checkpoint density.</li>
+<li><strong>The scenario:</strong> You fix a bug in step 3, but its input is step 2's output — which was never saved.</li>
+<li><strong>The cost:</strong> Without the checkpoint you re-run steps 1-2 just to reach the fix; with it you start from step 2's output.</li>
+<li><strong>The experimentation cost:</strong> Debugging velocity is directly proportional to checkpoint density.</li>
 </ul>
 </td><td><canvas id="c4" width="720" height="300"></canvas></td></tr>
 </table>
 
-<h2>Pitfall 5: The Storage Excuse vs The Calendar Cost Reality</h2>
+<h2>The Storage Excuse vs The Calendar Cost Reality</h2>
 
 <table class="obj-table">
 <tr><td>
 <div class="obj-title">"We Don't Checkpoint Because Storage Is Expensive"</div>
 <ul>
-<li><strong>The math:</strong> 1TB of intermediate checkpoints stored for 30 days. S3 cost: ~$23/month. One engineer debugging for 2 weeks without checkpoints: ~$8,000 in salary alone. Plus the opportunity cost of not shipping. Plus the cost of downstream models training on wrong data during those 2 weeks.</li>
-<li><strong>The calendar argument:</strong> In data work, time is the constraint. A 2-week debugging delay can mean a missed market window, a late model refresh, a stakeholder who loses confidence. $23/month in storage BUYS calendar time — the one resource you cannot manufacture.</li>
-<li><strong>Retention policy:</strong> You don't need to keep checkpoints forever. Keep last 7 days at full granularity (for active debugging). Keep weekly snapshots for 3 months (for regression detection). Purge after. Cost: minimal. Value: enormous.</li>
-<li><strong>The compromise that fails:</strong> "We'll checkpoint on demand when something goes wrong." By then the data that would have been checkpointed is gone. The point of a checkpoint is that it exists BEFORE you need it. If you could predict when you'd need it, you wouldn't need it.</li>
+<li><strong>The math:</strong> Checkpoint storage costs dollars a month; two weeks of blind debugging costs orders of magnitude more, plus models training on wrong data meanwhile.</li>
+<li><strong>Retention policy:</strong> Keep 7 days at full granularity and weekly snapshots for 3 months, then purge.</li>
+<li><strong>The compromise that fails:</strong> "Checkpoint on demand when something goes wrong" is useless — a checkpoint only helps if it exists before you need it.</li>
 </ul>
 </td><td><canvas id="c5" width="720" height="280"></canvas></td></tr>
 </table>
@@ -113,52 +105,50 @@ canvas { display: block; margin: 0 auto; }
 <tr><td>
 <div class="obj-title">home-buying platform's $500M Loss (2021)</div>
 <ul>
-<li>automated home-buying platform used an ML model to price homes for automated buying. The pricing pipeline had multiple transformation steps: comparable sales selection → feature engineering → model scoring → offer generation.</li>
-<li>Intermediate data between "comps selected" and "final offer price" was not checkpointed in a way that allowed after-the-fact audit. When offers started systematically overpaying, they couldn't rapidly pinpoint which step diverged — was it the comps selection pulling stale data? The feature transforms applying wrong seasonality adjustments? The model drifting?</li>
-<li>By the time the systematic overpayment was caught, home-buying platform had already purchased thousands of homes at inflated prices. They shut down the entire division. Lost ~$500M. Wrote off 25% of inventory value.</li>
-<li><strong>With full checkpoints:</strong> Could have inspected "which comps did the model see for THIS house?" and "what features were computed?" within days of the first few bad purchases, not months later after thousands.</li>
+<li>An ML pricing pipeline (comps → features → scoring → offer) kept no auditable intermediate data.</li>
+<li>When offers systematically overpaid, no one could pinpoint which step diverged — stale comps, wrong transforms, or model drift.</li>
+<li>Thousands of homes were bought at inflated prices; the division shut down with a ~$500M loss.</li>
+<li><strong>With full checkpoints:</strong> "Which comps did the model see for this house?" was answerable within days, not months.</li>
 </ul>
 </td><td>
 <div class="obj-title">a trading firm — $440M in 45 Minutes (2012)</div>
 <ul>
-<li>a trading firm deployed new trading software. An old, dead code path was accidentally activated. This code path executed trades based on stale parameters from a retired system.</li>
-<li>The pipeline: market data → strategy signals → order generation → execution. No checkpoint of "what signals did the strategy module produce?" existed at runtime. Only input (market data) and output (executed trades) were recorded.</li>
-<li>In 45 minutes, the system executed $7B in erroneous trades. By the time humans noticed the output was wrong, $440M was lost.</li>
-<li><strong>With signal-level checkpoints:</strong> A real-time checkpoint showing "strategy module is generating 1000× normal order volume from parameters that don't match today's config" would have been visible in seconds, not 45 minutes.</li>
+<li>A deploy accidentally activated dead code trading on stale parameters from a retired system.</li>
+<li>Only market data in and executed trades out were recorded — no checkpoint of the strategy module's signals.</li>
+<li>$7B in erroneous trades and a $440M loss before humans noticed from the output alone.</li>
+<li><strong>With signal-level checkpoints:</strong> The 1000&times; abnormal order volume would have been visible in seconds.</li>
 </ul>
 </td></tr>
 <tr><td>
 <div class="obj-title">social network's 2019 Ad Metrics Bug</div>
 <ul>
-<li>social network disclosed that video view metrics had been inflated for over a year due to a calculation error in an intermediate aggregation step.</li>
-<li>The pipeline: raw view events → dedup → time-threshold filtering → aggregation → reported metric. The bug was in time-threshold filtering (counting 3-second views as 10-second views in certain cases).</li>
-<li>Because only raw events and final aggregates were retained (not the post-filter/pre-aggregation data), it took months to identify the exact step and scope of overcount. Advertisers who had shifted millions in budget based on video performance couldn't get accurate historical numbers.</li>
-<li><strong>With post-filter checkpoint:</strong> "View events after threshold filter" would have shown the inflated count immediately when compared to raw event volume ratios.</li>
+<li>Video view metrics were inflated for over a year by a bug in an intermediate time-threshold filtering step.</li>
+<li>Only raw events and final aggregates were retained, so scoping the overcount took months.</li>
+<li>Advertisers who had shifted millions in budget couldn't get accurate historical corrections.</li>
+<li><strong>With post-filter checkpoint:</strong> The inflated count would have stood out immediately against raw event ratios.</li>
 </ul>
 </td><td>
 <div class="obj-title">government enrollment portal Launch Failure (2013)</div>
 <ul>
-<li>The enrollment pipeline had steps: identity verification → plan eligibility → subsidy calculation → enrollment confirmation. Data was passed between steps but not checkpointed.</li>
-<li>When enrollments failed silently (users thought they enrolled but the downstream step never received the data), there was no intermediate checkpoint to show "identity verified successfully, handed to eligibility step" vs "identity verified, but eligibility step never received it."</li>
-<li>Debugging required replaying individual user journeys manually across multiple systems. Took weeks to understand the scope. Many users were enrolled in wrong plans or not enrolled at all.</li>
-<li><strong>With per-step checkpoints:</strong> Could have immediately identified "4,000 users passed identity verification but don't appear in eligibility queue" — a 5-minute query, not a 3-week investigation.</li>
+<li>The enrollment pipeline (identity → eligibility → subsidy → confirmation) passed data between steps without checkpointing.</li>
+<li>When enrollments failed silently, nothing showed where the hand-off between steps had dropped users.</li>
+<li>Debugging meant manually replaying user journeys across systems — weeks of investigation.</li>
+<li><strong>With per-step checkpoints:</strong> "4,000 users verified but never reached the eligibility queue" becomes a 5-minute query.</li>
 </ul>
 </td></tr>
 <tr><td>
 <div class="obj-title">music platform's "Discover Weekly" Retraining Issue (reported in engineering blog)</div>
 <ul>
-<li>music platform's recommendation pipeline: user listening history → feature computation → collaborative filtering → candidate generation → ranking → playlist. Multiple transformation steps each with their own logic.</li>
-<li>When recommendation quality degraded, the team needed to identify whether the issue was in feature computation (were features stale?), the CF model (did it train on corrupted data?), or ranking (did a config change alter the output?).</li>
-<li>Without intermediate data saved at each step, the team described spending "days" narrowing down issues that would be "immediately obvious" if they could diff the output of each stage against historical runs.</li>
-<li><strong>Lesson they shared:</strong> They moved to checkpointing each transformation stage and comparing distribution stats between current run and last-N runs. Debugging time dropped from "days" to "hours."</li>
+<li>When recommendation quality degraded, the team couldn't tell whether the cause was stale features, corrupted training data, or a ranking config change.</li>
+<li>They spent days narrowing down issues that would be "immediately obvious" from diffing stage outputs against historical runs.</li>
+<li><strong>Lesson they shared:</strong> After checkpointing each stage and comparing distribution stats across runs, debugging dropped from days to hours.</li>
 </ul>
 </td><td>
 <div class="obj-title">Every ETL Pipeline That Joins Fact + Dimension Tables</div>
 <ul>
-<li>This isn't one incident — it's the most common class of silent corruption in enterprise data. Fact table has 10M rows. Dimension table has 50K rows. JOIN produces 10M rows (correct) or 15M rows (dimension had duplicates from a bad merge).</li>
-<li>If you only save the final joined/aggregated output, you can't tell whether 15M rows means "legitimate data growth" or "dimension table duplication." The only way to know is to inspect the pre-join row counts and the dimension table state at join time.</li>
-<li><strong>Real frequency:</strong> At any company with >5 data engineers, this happens monthly. Every single time, the investigation starts with "I wish we had saved the intermediate state." Every single time, the fix includes "now we save the intermediate state."</li>
-<li>Companies learn this lesson one pipeline at a time, each incident costing 1-3 weeks. The ones who checkpoint from day one skip this entire class of incident.</li>
+<li>The most common silent corruption: a fact-dimension JOIN quietly produces 15M rows instead of 10M because the dimension table had duplicates.</li>
+<li>With only the final output saved, you can't tell legitimate growth from duplication — that needs pre-join row counts and the dimension state at join time.</li>
+<li><strong>Real frequency:</strong> This happens monthly at any sizable data team, and every incident ends with "now we save the intermediate state."</li>
 </ul>
 </td></tr>
 </table>

@@ -72,6 +72,20 @@ ul {
     font-size: 0.92rem;
 }
 li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
 </style>
 </head>
 <body>
@@ -84,17 +98,19 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>Real-time serving makes multiple feature lookups or API calls sequentially. State changes between calls—concurrent updates, cache evictions, time-based expirations—causing features to reflect inconsistent snapshots. Model trained on coherent data sees incoherent combinations at inference.</p>
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">volatile state</span></div>
                 <ul>
-                    <li><strong>Race conditions:</strong> Fetch feature A (user logged in = true), 50ms later fetch feature B (session_id = null because logout happened mid-request)—model sees impossible state</li>
-                    <li><strong>Snapshot isolation:</strong> No transactional read guarantees; each feature lookup hits current state independently, assembling features from different moments in time</li>
-                    <li><strong>Consistency violations:</strong> Feature X and Y should be correlated (X = item_price, Y = cart_total), but mid-request price update creates X ≠ sum(cart items)—model detects anomaly, misclassifies</li>
-                    <li><strong>Time-sensitive features:</strong> "events in last 5 minutes" computed at request start, "is_active_session" computed 200ms later after events arrived—counts don't match session status</li>
+                    <li><b>Sequential lookups</b> — serving fetches features one at a time while live state keeps changing</li>
+                    <li><b>Race conditions</b> — a logout between fetches yields logged_in=true with session_id=null</li>
+                    <li><b>No snapshot isolation</b> — each lookup reads current state, so the vector mixes moments in time</li>
+                    <li><b>Cross-feature drift</b> — item_price and cart_total diverge when a price update lands mid-request</li>
+                    <li><b>Clock skew</b> — a 5-minute event count and session status are computed 200ms apart and disagree</li>
+                    <li><b>Impossible states</b> — the model receives feature combinations that never coexisted in reality</li>
                 </ul>
+                <p class="example">A fraud model reads the balance, a legitimate withdrawal posts, then it reads a transaction exceeding that balance and flags fraud — a 12% false-positive rate in busy hours.</p>
                 <div class="key-point">
-                    <strong>Impact:</strong> Model encounters feature combinations never seen in training (inconsistent snapshots). Confidence calibration breaks. Edge cases trigger unexpected predictions. Debugging is hard—state is gone by the time error is logged. <strong>Fix:</strong> Fetch all features in single snapshot transaction or batch read. Cache coherent feature snapshot at request start. Add consistency checks—if features violate expected constraints, reject or recompute. Log feature timestamps to detect skew.
+                    <strong>Impact:</strong> The model sees feature combinations never present in training, and the inconsistent state is gone before the error is even logged.
                 </div>
-                <p class="example">Example: Fraud detection fetches "account_balance" (read 1), then "transaction_amount" (read 2). Between reads, legitimate withdrawal posts, balance drops. Model sees transaction_amount > account_balance, flags as fraud. False positive rate 12% during high-activity hours when balance changes are frequent.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c1" width="720" height="300"></canvas>
@@ -108,16 +124,18 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">staleness</span></div>
                 <ul>
-                    <li><strong>Feature fetches take time:</strong> State changes between calls in distributed systems</li>
-                    <li><strong>Balance drift:</strong> User's account balance changes between feature lookup and prediction serving</li>
-                    <li><strong>Async systems:</strong> Feature store returns stale cached values</li>
-                    <li><strong>Race conditions:</strong> Two requests read the same state, one updates it, other prediction is based on outdated info</li>
+                    <li><b>Live reads</b> — serving reads from systems that keep changing underneath the request</li>
+                    <li><b>No shared moment</b> — nothing in the read path guarantees two lookups observe the same instant</li>
+                    <li><b>Read-to-serve lag</b> — a balance can change between the feature lookup and the served prediction</li>
+                    <li><b>Stale caches</b> — the feature store returns precomputed values that lag behind reality</li>
+                    <li><b>Concurrent writers</b> — one request updates the state that another request just read</li>
                 </ul>
+                <p class="example">Credit scoring reads account_balance=$5000 at T=0, a $4000 withdrawal posts by T=200ms, and the model approves on the stale $5000.</p>
                 <div class="key-point">
-                    <strong>Root cause:</strong> Features are treated as static snapshots when they're actually volatile state. The time between "read feature" and "serve prediction" creates a consistency window where reality can diverge.
+                    <strong>Root Cause:</strong> Features are treated as static snapshots when they are volatile state, so the read-to-serve window lets reality diverge.
                 </div>
-                <p class="example">Example: Credit scoring reads account_balance=$5000 at T=0. By T=200ms (when prediction is served), a $4000 withdrawal processed. Model approved based on stale $5000 balance.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c2" width="720" height="300"></canvas>
@@ -131,16 +149,18 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">freshness</span></div>
                 <ul>
-                    <li><strong>Snapshot reads:</strong> Freeze feature state at a single consistent timestamp</li>
-                    <li><strong>Timestamp every feature:</strong> Each value carries its read time</li>
-                    <li><strong>Staleness-aware models:</strong> Degrade gracefully with stale features</li>
-                    <li><strong>Optimistic concurrency:</strong> Check if critical features changed before acting on prediction</li>
+                    <li><b>Freshness as a contract</b> — make feature age a first-class property of the serving path</li>
+                    <li><b>Snapshot reads</b> — fetch all features in one transaction or batch so they share a timestamp</li>
+                    <li><b>Timestamp everything</b> — attach a read time to each value so the model knows feature age</li>
+                    <li><b>Consistency checks</b> — reject or recompute when features violate expected relationships</li>
+                    <li><b>Freshness gates</b> — re-fetch key features before acting when a critical decision finds them old</li>
                 </ul>
+                <p class="example">The feature vector carries balance_read_at=T0, and if the value is older than a 500ms tolerance at approval time, the serving layer re-fetches the balance.</p>
                 <div class="key-point">
-                    <strong>Best practice:</strong> Every feature value should carry a timestamp. Model should know feature age. Critical decisions should verify feature freshness before execution, or use pessimistic bounds.
+                    <strong>Fix:</strong> Every feature value should carry a timestamp, and critical decisions should verify feature freshness before execution.
                 </div>
-                <p class="example">Example: Feature vector includes balance=$5000, balance_read_at=T0. Serving layer checks: if now - balance_read_at > 500ms AND decision=approve, re-fetch balance before finalizing. Adds latency but prevents stale-state errors.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c3" width="720" height="300"></canvas>

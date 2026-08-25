@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Timezone / Timestamp Ambiguity</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Timezone / Timestamp Ambiguity</h1>
+<p class="subtitle">Timestamps without timezone, precision, or DST handling cause silent data misalignment</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">timestamps</span></div>
+                <ul>
+                    <li><b>Naive timestamps</b> — stored without timezone info, one value can mean several instants</li>
+                    <li><b>UTC vs local mix</b> — joins shift by hours and silently match the wrong records</li>
+                    <li><b>DST transitions</b> — fall duplicates an hour and spring deletes one, twice a year</li>
+                    <li><b>Precision mismatch</b> — seconds in one system vs milliseconds in another drops join matches</li>
+                    <li><b>Ambiguous formats</b> — 03/04/2024 parses as MM/DD or DD/MM, silently swapping month and day</li>
+                </ul>
+                <p class="example">Half a training set is UTC and half is EST; during DST week, 2am events appear twice and the model overfits on the duplicates.</p>
+                <div class="key-point">
+                    <strong>Impact:</strong> Time-based joins silently drop or duplicate hours, so models learn spurious patterns and predictions misfire around DST transitions.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">naive datetimes</span></div>
+                <ul>
+                    <li><b>Naive storage</b> — legacy tables keep no timezone metadata, so the offset is unrecoverable</li>
+                    <li><b>Mixed writers</b> — servers in different timezones write local times into the same table</li>
+                    <li><b>Library defaults</b> — parsers assume local time unless a timezone is given explicitly</li>
+                    <li><b>Rare edge cases</b> — DST bugs surface only two days a year, so tests rarely cover them</li>
+                    <li><b>Deceptive simplicity</b> — timestamps look trivial, so engineers assume local time is enough</li>
+                </ul>
+                <p class="example">A log written as "2024-03-10 02:30:00" falls in the spring-forward gap; some parsers read it as 01:30, others as 03:30.</p>
+                <div class="key-point">
+                    <strong>Root Cause:</strong> A naive timestamp discards the one piece of metadata — the offset — needed to interpret it, and everything works until two systems with different implicit timezones feed the same table.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">UTC everywhere</span></div>
+                <ul>
+                    <li><b>Store UTC</b> — write every timestamp in UTC using TIMESTAMP WITH TIME ZONE columns</li>
+                    <li><b>ISO 8601</b> — serialize with an explicit offset, e.g. 2024-03-10T14:30:00Z</li>
+                    <li><b>One precision</b> — standardize on milliseconds as the common denominator across systems</li>
+                    <li><b>Test DST</b> — cover both spring-forward and fall-back transitions in unit tests</li>
+                    <li><b>Detect drift</b> — flag duplicate timestamps and volume dips around transition hours</li>
+                    <li><b>Local for display</b> — convert to user timezone only at read time, never in storage</li>
+                </ul>
+                <p class="example">A payment system stores UTC ISO 8601 and converts to the user's timezone only for hour_of_day features, losing no data at DST.</p>
+                <div class="key-point">
+                    <strong>Fix:</strong> Use timezone-aware datetime libraries, never parse dates without an explicit format string, and log a warning on any ambiguous timestamp.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// Canvas 1: DST gap visualization
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('DST Spring Forward — 2am Doesn\'t Exist (Missing Hour)', w/2, 25);
+
+    var left = 60, right = 680, top = 80, bottom = 240;
+    var hourW = (right - left) / 5;
+
+    var hours = ['12am', '1am', '2am', '3am', '4am'];
+    var exists = [true, true, false, true, true];
+    var labels = ['12am', '1am', '(gap)', '3am', '4am'];
+
+    hours.forEach(function(hour, i) {
+        var x = left + i * hourW;
+
+        if (exists[i]) {
+            // Normal hour block
+            ctx.fillStyle = 'rgba(26,82,118,0.35)';
+            ctx.fillRect(x, top, hourW - 10, bottom - top);
+            ctx.strokeStyle = '#1a5276';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x, top, hourW - 10, bottom - top);
+
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = '13px system-ui';
+            ctx.textAlign = 'center';
+            ctx.fillText(labels[i], x + hourW/2 - 5, top + 30);
+
+            // Show data points
+            for (var j = 0; j < 3; j++) {
+                ctx.beginPath();
+                ctx.arc(x + hourW/2 - 5, top + 60 + j * 30, 4, 0, Math.PI * 2);
+                ctx.fillStyle = '#27ae60';
+                ctx.fill();
+            }
+        } else {
+            // Missing hour (DST gap)
+            ctx.fillStyle = 'rgba(231,76,60,0.2)';
+            ctx.fillRect(x, top, hourW - 10, bottom - top);
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 4]);
+            ctx.strokeRect(x, top, hourW - 10, bottom - top);
+            ctx.setLineDash([]);
+
+            ctx.fillStyle = '#e74c3c';
+            ctx.font = 'bold 13px system-ui';
+            ctx.textAlign = 'center';
+            ctx.fillText('MISSING', x + hourW/2 - 5, top + 30);
+            ctx.font = '11px system-ui';
+            ctx.fillText('2am-3am', x + hourW/2 - 5, top + 50);
+            ctx.fillText('skipped', x + hourW/2 - 5, top + 65);
+
+            // X marks
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(x + 20, top + 90);
+            ctx.lineTo(x + hourW - 30, bottom - 40);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x + hourW - 30, top + 90);
+            ctx.lineTo(x + 20, bottom - 40);
+            ctx.stroke();
+        }
+    });
+
+    ctx.fillStyle = '#666';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Clock jumps from 1:59am to 3:00am — any events logged as "2:xx" are ambiguous', w/2, bottom + 25);
+})();
+
+// Canvas 2: Timezone conversion errors
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Timezone Confusion — Same Event, Different Interpretations', w/2, 25);
+
+    var systems = [
+        { label: 'Server A\n(UTC)', y: 70, time: '2024-03-10 14:30:00', color: '#27ae60' },
+        { label: 'Server B\n(EST)', y: 130, time: '2024-03-10 09:30:00', color: '#e67e22' },
+        { label: 'Database\n(naive)', y: 190, time: '2024-03-10 14:30:00', color: '#e74c3c' }
+    ];
+
+    var startX = 120;
+
+    systems.forEach(function(sys) {
+        ctx.fillStyle = '#666';
+        ctx.font = '11px system-ui';
+        ctx.textAlign = 'right';
+        var lines = sys.label.split('\n');
+        lines.forEach(function(line, i) {
+            ctx.fillText(line, startX - 10, sys.y + i * 12);
+        });
+
+        // Time display box
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = sys.color;
+        ctx.lineWidth = 2;
+        ctx.fillRect(startX, sys.y - 10, 250, 35);
+        ctx.strokeRect(startX, sys.y - 10, 250, 35);
+
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = 'bold 12px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(sys.time, startX + 10, sys.y + 10);
+    });
+
+    // Join operation
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(startX + 260, 85);
+    ctx.lineTo(450, 85);
+    ctx.lineTo(450, 145);
+    ctx.lineTo(startX + 260, 145);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(450, 85);
+    ctx.lineTo(450, 205);
+    ctx.lineTo(startX + 260, 205);
+    ctx.stroke();
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('JOIN fails!', 500, 110);
+    ctx.font = '10px system-ui';
+    ctx.fillText('A and B are same event', 500, 125);
+    ctx.fillText('(5hr timezone diff)', 500, 138);
+    ctx.fillText('DB sees as different', 500, 190);
+    ctx.fillText('Missing timezone info', 500, 203);
+
+    ctx.fillStyle = '#666';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Solution: Store as "2024-03-10T14:30:00Z" (UTC with explicit timezone)', w/2, 260);
+})();
+
+// Canvas 3: Timestamp precision comparison
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Best Practices — UTC + ISO 8601 + Explicit Timezone', w/2, 25);
+
+    var table = [
+        { label: 'BAD', example: '2024-03-10 14:30:00', issue: 'No timezone, ambiguous' },
+        { label: 'BAD', example: '03/10/2024', issue: 'MM/DD or DD/MM?' },
+        { label: 'BAD', example: '1710079800', issue: 'Seconds or ms? Timezone?' },
+        { label: 'GOOD', example: '2024-03-10T14:30:00Z', issue: 'UTC, unambiguous' },
+        { label: 'GOOD', example: '2024-03-10T14:30:00+00:00', issue: 'UTC with offset' },
+        { label: 'GOOD', example: '2024-03-10T09:30:00-05:00', issue: 'EST with offset' }
+    ];
+
+    var startY = 60;
+    var rowH = 35;
+
+    table.forEach(function(row, i) {
+        var y = startY + i * rowH;
+        var isBad = row.label === 'BAD';
+
+        // Badge
+        ctx.fillStyle = isBad ? '#e74c3c' : '#27ae60';
+        ctx.fillRect(60, y, 50, 25);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 10px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(row.label, 85, y + 16);
+
+        // Example
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '11px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(row.example, 130, y + 16);
+
+        // Issue
+        ctx.fillStyle = '#666';
+        ctx.font = '10px system-ui';
+        ctx.fillText('→ ' + row.issue, 380, y + 16);
+    });
+
+    // Best practice box
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(50, 235, 620, 40);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Best Practice:', 60, 252);
+
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Store UTC, convert to local only for display. Test DST transitions. Use TIMESTAMP WITH TIME ZONE.', 60, 266);
+})();
+</script>
+
+</body>
+</html>

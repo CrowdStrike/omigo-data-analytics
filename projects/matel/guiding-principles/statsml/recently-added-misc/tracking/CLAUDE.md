@@ -159,7 +159,7 @@ undocumented internal behaviour to a named company is not.
 
 ## Index
 
-The hub is `../61-tracking-data-collection-methods.html` — one flat grid with a TOC.
+The hub is `../03-tracking-data-collection-methods.html` — one flat grid with a TOC.
 Card numbers match each file's numeric prefix; files are numbered sequentially with
 no gaps, so adding or removing a page means renumbering the rest in both places.
 

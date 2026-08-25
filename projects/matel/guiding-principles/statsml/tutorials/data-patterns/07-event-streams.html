@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Event Streams: Everything Is a Log</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+.payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 12px 0; text-align: left; }
+.payload-note { font-size: 0.82em; color: #666; margin: 12px 0 -6px 0; font-style: italic; text-align: left; }
+</style>
+</head>
+<body>
+
+<h1>Event Streams: Everything Is a Log</h1>
+<p class="subtitle">Record what HAPPENED as an append-only list of events — every table is just a replay of that list</p>
+
+<div class="card-section">
+    <h2>One Shopper, Four Events, Never an Edit</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">running example</span></div>
+                <ul>
+                    <li><b>10:01</b> — a shopper views a $64 coffee grinder: event "product_viewed" is appended</li>
+                    <li><b>10:04</b> — she adds it to the cart: "added_to_cart" is appended after the first event</li>
+                    <li><b>10:09</b> — she buys it: "order_placed" for $64 joins the end of the list</li>
+                    <li><b>Tuesday</b> — she returns it: "refund_issued" is appended too — nothing is erased</li>
+                    <li><b>Append-only</b> — the log only ever grows at the end; old events are never edited</li>
+                </ul>
+                <p class="example">Even the refund did not delete the purchase — it became a fifth line in her story.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> An event records a fact about the past — "this happened at this time" — and facts don't get updated, only followed by newer facts.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Replaying the Log Builds the Current State</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">worked example</span><span class="tag blue">core idea</span></div>
+                <ul>
+                    <li><b>The question</b> — "what is order 7712's status and our net revenue from it right now?"</li>
+                    <li><b>The method</b> — start from empty, read the events in order, apply each one</li>
+                    <li><b>After event 3</b> — status: paid, net revenue: $64</li>
+                    <li><b>After event 4</b> — status: refunded, net revenue: $0</li>
+                    <li><b>State is derived</b> — the table row is not stored truth; it is the log's running total</li>
+                </ul>
+                <p class="example">Replay by hand: {} → viewed → in cart → paid $64 → refunded $0 — four steps, done.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Events are the facts; state is what you get by replaying them — the same log always replays to the same state.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+<p class="payload-note">The log itself — illustrative events, one line appended per happening.</p>
+<pre class="payload">{ "seq": 1, "ts": "Mon 10:01:12", "event": "product_viewed",  "user": "u42", "item": "grinder" }
+{ "seq": 2, "ts": "Mon 10:04:55", "event": "added_to_cart",   "user": "u42", "item": "grinder" }
+{ "seq": 3, "ts": "Mon 10:09:31", "event": "order_placed",    "user": "u42", "order": 7712, "amount": 64.00 }
+{ "seq": 4, "ts": "Tue 09:14:02", "event": "refund_issued",   "user": "u42", "order": 7712, "amount": 64.00 }</pre>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why Keep the Log? You Can Rebuild Any Table From It</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">best practice</span></div>
+                <ul>
+                    <li><b>Many tables, one log</b> — orders, revenue, and funnel tables are all replays of the same events</li>
+                    <li><b>New questions later</b> — "how many carts were abandoned?" — replay the old log with a new counter</li>
+                    <li><b>Bug recovery</b> — a broken revenue table is dropped and rebuilt from the log, not patched</li>
+                    <li><b>Time travel</b> — replay only events up to March 31 to see exactly what March looked like</li>
+                    <li><b>Audit trail</b> — every state a row was ever in is still in the log, with a timestamp</li>
+                </ul>
+                <p class="example">A year in, the team added an "abandoned carts" table — computed back to day one from the existing log.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Tables answer the questions you thought of; the log answers the ones you haven't thought of yet.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Confusion: Updating State vs Appending Events</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag blue">rule of thumb</span></div>
+                <ul>
+                    <li><b>The overwrite</b> — a table that sets status from "paid" to "refunded" destroys the "paid" fact</li>
+                    <li><b>Lost questions</b> — that table can no longer answer "how long between purchase and refund?"</li>
+                    <li><b>The log keeps both</b> — order_placed Mon 10:09 and refund_issued Tue 09:14: gap = 23 hours</li>
+                    <li><b>Fixing mistakes</b> — a wrong event is corrected by appending a correction, never by editing</li>
+                    <li><b>Rule of thumb</b> — if deleting a row would lose history someone might ask about, log events instead</li>
+                </ul>
+                <p class="example">Your bank statement is a log — the bank appends a reversal; it never edits last week's line.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> An UPDATE is a fact-shredder — every overwrite quietly deletes a piece of history the log would have kept for free.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var w = 720, h = 300;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+    return { ctx: ctx, w: w, h: h };
+}
+
+// c1: append-only timeline of the session
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var axisY = 160;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Shopper’s Log — Events Only Ever Get Appended', w / 2, 24);
+
+    // positions (not to scale; Tue break marked)
+    var events = [
+        { x: 100, ts: 'Mon 10:01', label: 'product_viewed', sub: 'grinder, $64', color: P.blue },
+        { x: 250, ts: 'Mon 10:04', label: 'added_to_cart', sub: 'grinder', color: P.aqua },
+        { x: 400, ts: 'Mon 10:09', label: 'order_placed', sub: 'order 7712, $64', color: P.green },
+        { x: 580, ts: 'Tue 09:14', label: 'refund_issued', sub: 'order 7712, $64', color: P.orange }
+    ];
+
+    // axis with arrow
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(50, axisY); ctx.lineTo(680, axisY); ctx.stroke();
+    ctx.fillStyle = '#999';
+    ctx.beginPath(); ctx.moveTo(690, axisY); ctx.lineTo(678, axisY - 6); ctx.lineTo(678, axisY + 6); ctx.closePath(); ctx.fill();
+
+    // day break squiggle between Mon and Tue
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 8;
+    ctx.beginPath(); ctx.moveTo(487, axisY - 8); ctx.lineTo(497, axisY + 8); ctx.stroke();
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(483, axisY - 8); ctx.lineTo(493, axisY + 8); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(491, axisY - 8); ctx.lineTo(501, axisY + 8); ctx.stroke();
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('overnight', 492, axisY + 26);
+
+    for (var i = 0; i < events.length; i++) {
+        var e = events[i];
+        var up = (i % 2 === 0);
+        ctx.fillStyle = e.color;
+        ctx.beginPath(); ctx.arc(e.x, axisY, 8, 0, 2 * Math.PI); ctx.fill();
+        ctx.strokeStyle = e.color; ctx.lineWidth = 1.5;
+        var ly = up ? axisY - 26 : axisY + 40;
+        ctx.beginPath(); ctx.moveTo(e.x, up ? axisY - 8 : axisY + 8); ctx.lineTo(e.x, up ? ly + 6 : ly - 16); ctx.stroke();
+        ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText((i + 1) + '. ' + e.label, e.x, up ? ly - 28 : ly + 16);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(e.sub, e.x, up ? ly - 12 : ly + 33);
+        ctx.fillStyle = P.mute; ctx.font = 'bold 12px system-ui';
+        ctx.fillText(e.ts, e.x, up ? ly + 2 : ly + 50);
+    }
+
+    // append cursor at the end
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('next event', 655, axisY - 40);
+    ctx.fillText('appends HERE', 655, axisY - 24);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('the refund did not erase the purchase — it was appended after it', w / 2, 278);
+})();
+
+// c2: replay — state after each event
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Replay: Start Empty, Apply Each Event in Order', w / 2, 24);
+
+    var cols = [
+        { title: 'after 1. viewed', cart: '(empty)', status: '—', rev: '$0', color: P.blue },
+        { title: 'after 2. carted', cart: 'grinder', status: '—', rev: '$0', color: P.aqua },
+        { title: 'after 3. purchased', cart: '(empty)', status: 'paid', rev: '$64', color: P.green },
+        { title: 'after 4. refunded', cart: '(empty)', status: 'refunded', rev: '$0', color: P.orange }
+    ];
+    var bw = 148, gap = 24, x0 = 32, y0 = 62, bh = 150;
+
+    for (var i = 0; i < cols.length; i++) {
+        var c = cols[i], x = x0 + i * (bw + gap);
+        ctx.fillStyle = 'rgba(42,120,214,0.05)';
+        ctx.fillRect(x, y0, bw, bh);
+        ctx.strokeStyle = c.color; ctx.lineWidth = 2; ctx.strokeRect(x, y0, bw, bh);
+        ctx.fillStyle = c.color; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(c.title, x + bw / 2, y0 + 22);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText('cart:', x + 12, y0 + 52);
+        ctx.fillText('status:', x + 12, y0 + 82);
+        ctx.fillText('net rev:', x + 12, y0 + 112);
+        ctx.fillStyle = '#222'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(c.cart, x + bw - 12, y0 + 52);
+        ctx.fillText(c.status, x + bw - 12, y0 + 82);
+        ctx.fillText(c.rev, x + bw - 12, y0 + 112);
+
+        if (i < cols.length - 1) {
+            var ax = x + bw + 2, ax2 = x + bw + gap - 2, ay = y0 + bh / 2;
+            ctx.strokeStyle = P.mute; ctx.fillStyle = P.mute; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax2, ay); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(ax2, ay); ctx.lineTo(ax2 - 8, ay - 5); ctx.lineTo(ax2 - 8, ay + 5); ctx.closePath(); ctx.fill();
+        }
+    }
+
+    // highlight the final state
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('current state = whatever the full replay ends on: refunded, $0 net', w / 2, 248);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('replay the same 4 events tomorrow, next year, on a new machine — identical state every time', w / 2, 272);
+})();
+
+// c3: one log feeds many derived tables
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Log, Many Tables — Including Ones Invented Later', w / 2, 24);
+
+    function box(x, y, bw, bh, fill, stroke, dashed) {
+        ctx.fillStyle = fill; ctx.fillRect(x, y, bw, bh);
+        ctx.strokeStyle = stroke; ctx.lineWidth = 2;
+        if (dashed) ctx.setLineDash([6, 4]);
+        ctx.strokeRect(x, y, bw, bh);
+        ctx.setLineDash([]);
+    }
+    function arrow(x1, y1, x2, y2, color, dashed) {
+        ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2;
+        if (dashed) ctx.setLineDash([6, 4]);
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        ctx.setLineDash([]);
+        var a = Math.atan2(y2 - y1, x2 - x1);
+        ctx.beginPath(); ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - 9 * Math.cos(a - 0.4), y2 - 9 * Math.sin(a - 0.4));
+        ctx.lineTo(x2 - 9 * Math.cos(a + 0.4), y2 - 9 * Math.sin(a + 0.4));
+        ctx.closePath(); ctx.fill();
+    }
+
+    // the log
+    box(40, 90, 180, 120, 'rgba(26,82,118,0.06)', P.ink);
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the event log', 130, 112);
+    ctx.fillStyle = '#444'; ctx.font = '11px ui-monospace, Menlo, monospace';
+    ctx.fillText('viewed / carted /', 130, 138);
+    ctx.fillText('purchased / refunded', 130, 154);
+    ctx.fillStyle = P.mute; ctx.font = 'italic 11px system-ui';
+    ctx.fillText('append-only, kept forever', 130, 182);
+
+    // derived tables
+    var tables = [
+        { y: 48, label: 'orders table', sub: 'status per order', color: P.green, dashed: false },
+        { y: 118, label: 'daily revenue', sub: 'net $ per day', color: P.aqua, dashed: false },
+        { y: 188, label: 'view → buy funnel', sub: 'conversion steps', color: P.violet, dashed: false },
+        { y: 252, label: 'abandoned carts', sub: 'added a year later', color: P.orange, dashed: true }
+    ];
+    for (var i = 0; i < tables.length; i++) {
+        var t = tables[i];
+        box(470, t.y - 24, 210, 48, 'rgba(0,131,0,0.04)', t.color, t.dashed);
+        ctx.fillStyle = t.color; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(t.label, 575, t.y - 4);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(t.sub, 575, t.y + 14);
+        arrow(220, 150, 466, t.y, t.color, t.dashed);
+    }
+
+    ctx.fillStyle = '#444'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('replay', 340, 88);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('new table, old answers:', 330, 238);
+    ctx.fillText('replayed back to day one', 330, 254);
+})();
+
+// c4: overwrite vs append
+(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Overwriting Destroys a Fact; Appending Keeps Both', w / 2, 24);
+
+    ctx.strokeStyle = '#bdc3c7'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(360, 40); ctx.lineTo(360, h - 15); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // left: table with UPDATE
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('table with UPDATE', 185, 54);
+
+    // before row (crossed out)
+    ctx.fillStyle = 'rgba(107,114,128,0.10)';
+    ctx.fillRect(50, 76, 270, 34);
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5; ctx.strokeRect(50, 76, 270, 34);
+    ctx.fillStyle = P.mute; ctx.font = '13px ui-monospace, Menlo, monospace';
+    ctx.fillText('order 7712 | status: paid', 185, 98);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(62, 93); ctx.lineTo(308, 93); ctx.stroke();
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('UPDATE overwrites the cell ↓', 185, 132);
+
+    ctx.fillStyle = 'rgba(213,81,129,0.08)';
+    ctx.fillRect(50, 146, 270, 34);
+    ctx.strokeStyle = P.magenta; ctx.lineWidth = 2; ctx.strokeRect(50, 146, 270, 34);
+    ctx.fillStyle = '#222'; ctx.font = '13px ui-monospace, Menlo, monospace';
+    ctx.fillText('order 7712 | status: refunded', 185, 168);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('"was it ever paid? when?"', 185, 216);
+    ctx.fillText('— the table no longer knows', 185, 236);
+
+    // right: log with append
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('log with APPEND', 540, 54);
+
+    var lines = [
+        ['Mon 10:09  order_placed   $64', P.green],
+        ['Tue 09:14  refund_issued  $64', P.orange]
+    ];
+    for (var i = 0; i < lines.length; i++) {
+        var y = 76 + i * 46;
+        ctx.fillStyle = 'rgba(0,131,0,0.05)';
+        ctx.fillRect(395, y, 290, 34);
+        ctx.strokeStyle = lines[i][1]; ctx.lineWidth = 2; ctx.strokeRect(395, y, 290, 34);
+        ctx.fillStyle = '#222'; ctx.font = '13px ui-monospace, Menlo, monospace'; ctx.textAlign = 'center';
+        ctx.fillText(lines[i][0], 540, y + 22);
+    }
+
+    // gap bracket
+    ctx.strokeStyle = P.violet; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(692, 93); ctx.lineTo(704, 93); ctx.lineTo(704, 139); ctx.lineTo(692, 139);
+    ctx.stroke();
+    ctx.save();
+    ctx.translate(712, 116); ctx.rotate(Math.PI / 2);
+    ctx.fillStyle = P.violet; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('23h', 0, 0);
+    ctx.restore();
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('both facts kept: paid Mon 10:09,', 540, 216);
+    ctx.fillText('refunded 23 hours later', 540, 236);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('same business story — only one side can still tell all of it', w / 2, 278);
+})();
+</script>
+
+</body>
+</html>

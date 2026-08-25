@@ -9,9 +9,7 @@
         h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
         .subtitle { color: #666; font-size: 1.05em; margin-bottom: 14px; }
         .verified { font-size: 0.8em; color: #888; border: 1px solid #ddd; display: inline-block; padding: 2px 10px; border-radius: 4px; margin-bottom: 18px; }
-        .status { display: inline-block; background: #e67e22; color: #fff; font-size: 0.75em; font-weight: bold; padding: 2px 10px; border-radius: 4px; vertical-align: middle; margin-left: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
         h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
-        .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
         .section-label { font-weight: bold; color: #1a5276; margin-top: 16px; display: block; }
         .section-label:first-child { margin-top: 0; }
         .obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
@@ -20,6 +18,7 @@
         .obj-table td:last-child { width: 55%; }
         ul { padding-left: 20px; margin: 6px 0 10px; }
         li { margin-bottom: 5px; font-size: 0.93em; }
+        a { color: #1a5276; }
         p { font-size: 0.93em; margin: 6px 0; }
         pre.payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 12px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 10px 0 16px; border-radius: 4px; text-align: left; }
         .payload-note { font-size: 0.82em; color: #666; margin: 10px 0 -4px 0; font-style: italic; }
@@ -28,139 +27,48 @@
     </style>
 </head>
 <body>
-    <h1>Plaid &amp; Open Banking <span class="status">BACKLOG</span></h1>
-    <p class="subtitle">Bank accounts, balances, transactions with merchant and category enrichment, income, liabilities, and investment holdings — accessed under revocable end-user consent, via aggregation in the US and a regulated standard in the UK and EU.</p>
+    <h1>Plaid &amp; Open Banking</h1>
+    <p class="subtitle">Lets you read a user's bank accounts, balances, and transactions — with that user's permission, which they can withdraw at any time.</p>
     <span class="verified">Last verified: August 2026</span>
 
     <h2>Overview</h2>
     <table class="obj-table">
         <tr>
             <td>
-                <span class="section-label">What It Provides</span>
+                <span class="section-label">What you can get</span>
                 <ul>
-                    <li><strong>Accounts &amp; Balance</strong> — account list with type, subtype, mask, and current/available balance. <code>/accounts/balance/get</code> forces a live refresh at the institution; <code>/accounts/get</code> may return cached values.</li>
-                    <li><strong>Transactions</strong> — posted and pending transactions with amount, date, description, and Plaid's enrichment: normalised merchant name, category, payment channel, and location.</li>
-                    <li><strong>Income</strong> — employment and payroll-derived income, either from transaction inference or from a direct payroll connection.</li>
-                    <li><strong>Liabilities</strong> — loan and credit-card detail: APR, minimum payment, next due date, remaining principal.</li>
-                    <li><strong>Investments</strong> — holdings, securities, and investment transactions (buys, sells, dividends, fees).</li>
-                    <li><strong>Identity</strong> — account-holder name, address, phone, email as held by the bank.</li>
+                    <li>Bank accounts and their current balances</li>
+                    <li>Transactions, with a cleaned-up merchant name and a spending category added by Plaid</li>
+                    <li>Loan and credit-card details: rates, minimum payments, remaining balance</li>
+                    <li>Investment holdings and trades</li>
+                    <li>Income and identity information as held by the bank</li>
                 </ul>
 
-                <span class="section-label">Authentication &amp; Scopes</span>
+                <div class="key-point">The bank only sends a cryptic descriptor like <code>SQ *BLUE BOTTLE 41 SAN FRANCISC</code>. The friendly merchant name and the category are Plaid's guesses from that string — model output, not bank data. The guesses carry an error rate that is not uniform across merchants, and they can change retroactively when Plaid updates its model.</div>
+
+                <span class="section-label">Watch out for</span>
                 <ul>
-                    <li><strong>Item model</strong> — one Item is one user's login at one institution. Link produces a <code>public_token</code>; you exchange it for a long-lived <code>access_token</code> scoped to that Item.</li>
-                    <li><strong>Products are declared at Link time</strong> and the consent the user granted is what constrains you. Requesting a product later can require re-authentication.</li>
-                    <li><strong>Server credentials</strong> — <code>client_id</code> and <code>secret</code> in the request body, per environment (sandbox / production).</li>
-                    <li><strong>Revocable.</strong> The user can revoke at Plaid, at the bank's own consent dashboard, or simply change their password. Your access ends without you doing anything wrong.</li>
+                    <li>Users can revoke access at any time — or just change their bank password. Your data feed simply stops, and the users who stay connected are not a random sample.</li>
+                    <li>A pending transaction gets a brand-new ID when it posts, and its amount can change or the transaction can vanish entirely. Naive upserts double-count.</li>
+                    <li>Transactions can be removed after you stored them — the sync endpoint reports these removals in a <code>removed</code> list alongside additions. Your store must handle deletes, not just inserts.</li>
+                    <li>Balance is a point-in-time reading. There is no balance history — if you want a series, you must sample it yourself going forward.</li>
                 </ul>
-                <div class="key-point">Consent expiry is a first-class data problem, not an ops problem. Items decay: <code>ITEM_LOGIN_REQUIRED</code> and <code>PENDING_EXPIRATION</code> arrive continuously, and the population that re-authenticates is not a random sample of your users. Any longitudinal metric computed over "users we still have bank data for" is conditioned on survival of consent.</div>
-
-                <span class="section-label">Granularity</span>
-                <p>Individual transaction, dated to the day. There is no reliable intraday timestamp; <code>datetime</code> and <code>authorized_datetime</code> are populated only by some institutions. Transaction history depth at initial connection varies by institution — often around two years, sometimes far less — and is not something you can request more of.</p>
-
-                <span class="section-label">Key Endpoints</span>
-                <ul>
-                    <li><code>POST /link/token/create</code>, <code>POST /item/public_token/exchange</code></li>
-                    <li><code>POST /accounts/get</code>, <code>POST /accounts/balance/get</code></li>
-                    <li><code>POST /transactions/sync</code> — cursor-based; the correct endpoint for ongoing ingestion</li>
-                    <li><code>POST /transactions/get</code> — date-window based; older pattern</li>
-                    <li><code>POST /liabilities/get</code>, <code>POST /investments/holdings/get</code>, <code>POST /investments/transactions/get</code></li>
-                    <li><code>POST /item/remove</code> — deletes the Item and stops billing; do this when a user disconnects</li>
-                </ul>
-
-                <span class="section-label">Rate Limits</span>
-                <p>Plaid rate-limits per Item per endpoint, and the binding constraint is usually a small number of calls per Item in a short window rather than a large global quota. The mechanism to plan around: do not poll. Use <code>/transactions/sync</code> driven by the <code>SYNC_UPDATES_AVAILABLE</code> webhook, which tells you when there is actually something new. Polling every Item on a fixed schedule will hit per-Item limits while wasting most calls on unchanged data.</p>
-
-                <span class="section-label">Webhooks</span>
-                <ul>
-                    <li><code>SYNC_UPDATES_AVAILABLE</code> — new or modified transactions for an Item.</li>
-                    <li><code>INITIAL_UPDATE</code> / <code>HISTORICAL_UPDATE</code> — first-pull completion; historical backfill lands after the initial window.</li>
-                    <li><code>ITEM: ERROR</code>, <code>PENDING_EXPIRATION</code>, <code>USER_PERMISSION_REVOKED</code> — consent lifecycle.</li>
-                    <li><code>TRANSACTIONS_REMOVED</code> — a transaction you already stored no longer exists.</li>
-                </ul>
-
-                <span class="section-label">Business Scenarios</span>
-                <ul>
-                    <li><strong>Underwriting and affordability</strong> — cashflow-based lending decisions from income and expense patterns.</li>
-                    <li><strong>Personal financial management</strong> — budgeting and categorised spend.</li>
-                    <li><strong>Account verification for ACH</strong> — confirm ownership and routing details before debiting.</li>
-                    <li><strong>Subscription detection</strong> — recurring-charge identification for cancellation tooling.</li>
-                    <li><strong>Net-worth aggregation</strong> — combining depository, credit, loan, and investment balances.</li>
-                </ul>
-
-                <span class="section-label">Key Restrictions &amp; Gotchas</span>
-                <ul>
-                    <li><strong>Merchant and category are model output, not bank data.</strong> The bank sends a raw descriptor string like <code>SQ *BLUE BOTTLE 41 SAN FRANCISC</code>. Plaid's <code>merchant_name</code>, <code>personal_finance_category</code>, and <code>logo_url</code> are the result of parsing and classifying that string. They carry an error rate, that error rate is not uniform across merchants, and it changes when the model is updated.</li>
-                    <li><strong>Enrichment is retroactively mutable.</strong> A model update can recategorise transactions you ingested months ago. If you snapshot categories and never re-read them, your history and Plaid's history will diverge; if you always take the latest, your historical aggregates will change under you. Both are defensible — but you must pick one and say which.</li>
-                    <li><strong>Pending transactions are replaced, not updated.</strong> A pending transaction gets a new <code>transaction_id</code> when it posts, linked by <code>pending_transaction_id</code>. Transaction IDs are therefore <em>not stable across the pending-to-posted transition</em>, and naive upserts on transaction ID double-count.</li>
-                    <li><strong>A pending transaction can change amount or vanish entirely.</strong> Authorisation holds are estimates — a restaurant pre-auth settles higher with tip, a fuel hold settles far lower, and an abandoned authorisation simply disappears without ever posting. Treating pending amounts as spend overstates some categories and invents transactions that never happened.</li>
-                    <li><strong>Transactions can be removed.</strong> Banks reverse and re-post. Your store must handle deletes, not just inserts.</li>
-                    <li><strong>Amount sign conventions differ by account type</strong> and are a common source of silently inverted spend figures. Verify against a real statement before trusting any aggregate.</li>
-                    <li><strong>No merchant identity across institutions is guaranteed</strong> to be stable enough to key on. Use it for display and grouping, not as a primary key.</li>
-                    <li><strong>Balance is a point-in-time read, not a series.</strong> There is no historical daily-balance endpoint. If you want a balance time series you must sample it yourself, going forward, and you cannot backfill it.</li>
-                    <li><strong>Investments do not give you cost basis history</strong> reliably, and institution coverage for investment products is materially thinner than for depository accounts.</li>
-                </ul>
-
-                <span class="section-label">UK / EU: Open Banking as a Standard</span>
-                <p>The regulatory model differs from US aggregation in ways that matter analytically:</p>
-                <ul>
-                    <li><strong>Mandated APIs.</strong> Under PSD2 and the UK Open Banking standard, banks must expose account information (AIS) and payment initiation (PIS) interfaces. Coverage is a legal obligation, not a scraping outcome, so field availability is more consistent.</li>
-                    <li><strong>Licensed access.</strong> You must be an authorised or registered AISP/PISP, or operate as an agent of one. This is a regulatory gate, not a signup form.</li>
-                    <li><strong>Consent has a statutory clock.</strong> Consent must be re-confirmed periodically — historically every 90 days, with later SCA rules relaxing re-authentication for pure AIS in some jurisdictions. Either way, consent is time-bounded by regulation, so attrition is structural.</li>
-                    <li><strong>No enrichment in the standard.</strong> The regulated APIs deliver the bank's own transaction data. Merchant cleaning and categorisation are added by the aggregator on top — so the model-output caveat applies identically, just from a different vendor.</li>
-                </ul>
-                <div class="key-point">The single most consequential error in this domain is writing <code>WHERE category = 'Restaurants'</code> and reading the result as a fact about the user. It is a fact about a classifier's output on a truncated bank descriptor. Any conclusion drawn from it inherits the classifier's error, and if that error correlates with anything you care about — merchant size, region, card network — the bias is not noise, it is confounding.</div>
             </td>
             <td>
-                <p class="payload-note">POST /transactions/sync — <code>added[]</code> entry. Enrichment fields marked below.</p>
+                <p class="payload-note">One synced transaction. Only the raw name, amount, and date come from the bank — the merchant name and category are Plaid's inference, and it says so with a confidence level.</p>
 <pre class="payload">{
-  "transaction_id_masked": "EXAMPLE_TXN_ID_redacted",  // Note: masked for illustration; real Plaid IDs are 35-char alphanumeric
-  "account_id_masked": "EXAMPLE_ACCOUNT_ID_redacted",  // Note: masked for illustration
   "amount": 6.33,
   "iso_currency_code": "USD",
   "date": "2026-08-14",
-  "datetime": null,
-  "authorized_date": "2026-08-13",
   "pending": false,
-  "pending_transaction_id_masked": "EXAMPLE_PENDING_TXN_ID_redacted",  // Note: masked for illustration
 
   "name": "SQ *BLUE BOTTLE 41 SAN FRANCISC",
   "merchant_name": "Blue Bottle Coffee",
-  "merchant_entity_id_masked": "EXAMPLE_MERCHANT_ID_redacted",  // Note: masked for illustration
-  "logo_url": "https://plaid-merchant-logos.plaid.com/blue_bottle_1.png",
-  "website": "bluebottlecoffee.com",
 
   "personal_finance_category": {
     "primary": "FOOD_AND_DRINK",
     "detailed": "FOOD_AND_DRINK_COFFEE",
     "confidence_level": "VERY_HIGH"
-  },
-  "category": ["Food and Drink", "Restaurants", "Coffee Shop"],
-  "category_id": "13005043",
-
-  "payment_channel": "in store",
-  "transaction_code": null,
-  "location": {
-    "address": null, "city": "San Francisco",
-    "region": "CA", "postal_code": null,
-    "country": "US", "lat": null, "lon": null
-  }
-}</pre>
-                <p class="payload-note">Only <code>name</code>, <code>amount</code>, <code>date</code>, and <code>pending</code> come from the bank. <code>merchant_name</code>, both category fields, <code>logo_url</code>, and most of <code>location</code> are derived. <code>confidence_level</code> is Plaid telling you outright that this is a prediction.</p>
-
-                <p class="payload-note">Item error — consent has lapsed. Expect this continuously, at scale.</p>
-<pre class="payload">{
-  "webhook_type": "ITEM",
-  "webhook_code": "ERROR",
-  "item_id_masked": "EXAMPLE_ITEM_ID_redacted",  // Note: masked for illustration
-  "error": {
-    "error_type": "ITEM_ERROR",
-    "error_code": "ITEM_LOGIN_REQUIRED",
-    "error_message": "the login details of this item have changed
-      (credentials, MFA, or required user action) and a user
-      login is required to update this information.",
-    "display_message": "The credentials were updated.",
-    "request_id": "m8MDnv9okwxFNBV"
   }
 }</pre>
 
@@ -168,6 +76,12 @@
             </td>
         </tr>
     </table>
+
+    <h2>Official API References</h2>
+    <ul>
+        <li><a href="https://plaid.com/docs/api/">Plaid API Reference</a> — endpoint-level reference including <code>/transactions/sync</code>, <code>/accounts/get</code>, and Item management</li>
+        <li><a href="https://plaid.com/docs/transactions/">Transactions</a> — product guide covering sync, enrichment fields, and pending-to-posted behaviour</li>
+    </ul>
 
     <script>
     (function() {

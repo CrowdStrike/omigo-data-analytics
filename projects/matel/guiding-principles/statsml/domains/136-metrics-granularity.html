@@ -11,8 +11,6 @@ h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
 h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
 p { margin: 10px 0; color: #333; font-size: 0.95em; }
 .subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
-.nav { margin-bottom: 20px; }
-.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; }
 ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
 li { margin: 4px 0; }
 strong { color: #1a5276; }
@@ -28,144 +26,140 @@ canvas { display: block; margin: 0 auto; }
 <body>
 
 <h1>Metric Granularity & Denominator Selection</h1>
-<p class="subtitle">Statistical tests require independent observations. Page-level SRP events within a session are correlated → violate independence. User-level aggregates (total purchases/month per user) are independent → valid for t-tests. Choosing the wrong granularity doesn't just give a different number — it makes the MATH invalid.</p>
+<p class="subtitle">Statistical tests require independent observations: page-level events within a session are correlated, user-level aggregates are not. The wrong granularity doesn't just give a different number — it makes the math invalid.</p>
 
-<h2>Pitfall 1: A/B Test at Session/Page Level Violates i.i.d. Assumption</h2>
+<h2>A/B Test at Session/Page Level Violates i.i.d. Assumption</h2>
 
 <table class="obj-table">
 <tr><td>
 <div class="obj-title">Page Events Are Correlated Within a Session — Not Independent Samples</div>
 <ul>
-<li><strong>The mathematical requirement:</strong> T-test, z-test, chi-squared — ALL assume each observation is an independent draw from a population. The standard error formula SE = σ/√n relies on this. If observations are correlated, this formula underestimates the true variance.</li>
-<li><strong>SRP (Search Result Page) events within a session:</strong> User searches "shoes" → sees 10 results → clicks result 3 → goes back → clicks result 7. These 10 impressions are NOT independent. They share: the same user intent, the same query, the same session state, the same mood/urgency. Click on result 3 REDUCES probability of clicking result 4 (satisfied). They form a correlated cluster.</li>
-<li><strong>Sessions within a user:</strong> User visits Mon, Tue, Wed. Monday's session outcome predicts Tuesday's (loyal users keep coming, bounced users don't return). Sessions within a user are auto-correlated. Not independent draws.</li>
-<li><strong>User-level monthly totals ARE independent:</strong> User A bought $200 this month. User B bought $50. These are independent observations — different people, no causal connection. One value per user per time period = one independent observation. n = number of users. T-test on these: VALID. The i.i.d. assumption holds.</li>
+<li><strong>The mathematical requirement:</strong> Every classic test assumes independent draws — SE = σ/√n underestimates variance when observations are correlated.</li>
+<li><strong>Events cluster within users:</strong> Page views in a session share the same intent, query, and mood, and sessions within a user are auto-correlated — none are independent draws.</li>
+<li><strong>User-level totals ARE independent:</strong> One value per user per period comes from different people with no causal link, so a t-test on them is valid.</li>
 </ul>
 </td><td><canvas id="c1" width="720" height="300"></canvas></td></tr>
 </table>
 
-<h2>Pitfall 2: Independence Violation — Why Page-Level Data Can't Use a T-Test</h2>
+<h2>Independence Violation — Why Page-Level Data Can't Use a T-Test</h2>
 
 <table class="obj-table">
 <tr><td>
 <div class="obj-title">T-Test Requires Independent Observations. Page Events Are NOT Independent.</div>
 <ul>
-<li><strong>The math requirement:</strong> A t-test assumes each data point is drawn independently. x₁, x₂, ..., xₙ are i.i.d. (independent and identically distributed). The formula SE = σ/√n ONLY works when observations are uncorrelated. If observations are correlated (ρ > 0), the true SE is larger: SE_true = σ/√n × √(1 + (m-1)ρ) where m = cluster size, ρ = intra-cluster correlation.</li>
-<li><strong>Page views within a session are CORRELATED:</strong> Same user, same intent, same browsing sequence. If user clicked result 1, they're less likely to click result 2 (satisfied). If they bounced from page 1, they're more likely to bounce from page 2 (frustrated). Each page view is NOT an independent draw — it's a dependent observation within a correlated sequence.</li>
-<li><strong>User-level totals ARE independent:</strong> User A's total purchases this month and User B's total purchases this month are independent. Different people, different decisions, no causal link. One number per user → n independent observations → t-test valid. This is pure math: user-level satisfies the i.i.d. assumption, page-level does not.</li>
-<li><strong>The inflation:</strong> 1000 users × 10 pages each = 10,000 rows. Naive t-test: SE = σ/√10000. Reality: effective n ≈ 1000 (one independent cluster per user). SE is √10 = 3.16× too small. Confidence interval 3× too narrow. p-values 10-100× too small. "Significant" results that are actually noise.</li>
+<li><strong>The math requirement:</strong> SE = σ/√n only works for uncorrelated data; with intra-cluster correlation ρ the true SE inflates by the design effect shown in the chart.</li>
+<li><strong>Page views are correlated:</strong> Same user, same intent, same browsing sequence — each page view is a dependent observation, not an independent draw.</li>
+<li><strong>The inflation:</strong> 1000 users × 10 pages = 10,000 rows but effective n ≈ 1000, so the naive SE is ~3× too small and "significant" results are often noise.</li>
 </ul>
 </td><td><canvas id="c2" width="720" height="300"></canvas></td></tr>
 </table>
 
-<h2>Pitfall 3: Denominator Manipulation (Changing What You Divide By)</h2>
+<h2>Denominator Manipulation (Changing What You Divide By)</h2>
 
 <table class="obj-table">
 <tr><td>
 <div class="obj-title">The Variant Changes the Denominator, Not the Behavior</div>
 <ul>
-<li><strong>CTR inflation:</strong> Variant B shows fewer items per page (10 vs 20). Same user clicks same 1 item. A: CTR = 1/20 = 5%. B: CTR = 1/10 = 10%. "B doubled CTR!" No — B halved impressions. User behavior unchanged. Clicks per user per day: identical.</li>
-<li><strong>Conversion rate inflation:</strong> Variant B adds a pre-filter page (bounces unqualified users before they reach the product page). Denominator shrinks → conversion rate rises. "B improved conversion!" No — B just excluded low-intent users from the denominator.</li>
-<li><strong>Revenue per session inflation:</strong> B makes the flow longer (more steps = fewer completed sessions). Only high-intent users complete. Revenue/completed session is higher. "B increased monetization!" No — B reduced completed sessions and lost revenue overall.</li>
-<li><strong>Rule:</strong> If your variant can mechanically change the DENOMINATOR (fewer impressions, fewer sessions, fewer qualified users), you MUST use a denominator the variant CANNOT affect: unique users randomized, or user-days. Otherwise you're measuring arithmetic, not behavior.</li>
+<li><strong>CTR inflation:</strong> Showing fewer items per page halves impressions, so the same one click "doubles CTR" with zero behavior change.</li>
+<li><strong>Conversion/revenue inflation:</strong> Adding a pre-filter or longer flow drops low-intent users from the denominator — the rate rises while total revenue can fall.</li>
+<li><strong>Rule:</strong> If the variant can mechanically change the denominator, use one it cannot affect (unique users randomized, or user-days) — otherwise you're measuring arithmetic, not behavior.</li>
 </ul>
 </td><td><canvas id="c3" width="720" height="300"></canvas></td></tr>
 </table>
 
-<h2>Pitfall 4: Simpson's Paradox from Mix Shift</h2>
+<h2>Simpson's Paradox from Mix Shift</h2>
 
 <table class="obj-table">
 <tr><td>
 <div class="obj-title">Aggregate Goes One Way, Every Segment Goes the Other</div>
 <ul>
-<li><strong>Classic case:</strong> Overall conversion drops 3.5% → 3.4%. Panic. Investigation: Mobile improved 2.0% → 2.2%. Desktop improved 4.0% → 4.3%. BOTH improved. But mobile traffic share grew 40% → 60%. More traffic on the lower-converting channel → aggregate declined.</li>
-<li><strong>A/B test version:</strong> Test shows "no effect" overall. But: for new users, variant B wins +8%. For returning users, B loses -3%. Aggregate: net zero. The real signal: B is great for acquisition, bad for retention. Aggregate hides BOTH insights.</li>
-<li><strong>Why it happens in metrics:</strong> Any time you have heterogeneous sub-populations with different base rates AND the proportion between them changes, the aggregate can move opposite to every sub-group. This is guaranteed when: marketing spend shifts channel mix, seasonality changes device mix, or growth brings a different user demographic.</li>
-<li><strong>Fix:</strong> Never report ONLY aggregate metrics. Always segment by: device, new/returning, geo, acquisition channel. If segments diverge from aggregate → Simpson's is active. The aggregate is lying. Act on segments, not the blended number.</li>
+<li><strong>Classic case:</strong> Mobile and desktop conversion both improve, but mobile's traffic share grows — the aggregate declines because the lower-converting channel got more weight.</li>
+<li><strong>A/B test version:</strong> "No effect" overall can hide +8% for new users and -3% for returning — the aggregate buries both insights.</li>
+<li><strong>Why it happens:</strong> Whenever sub-populations with different base rates change their mix (channel spend, seasonality, growth demographics), the aggregate can move opposite to every sub-group.</li>
+<li><strong>Fix:</strong> Always segment by device, new/returning, geo, and channel — if segments diverge from the aggregate, act on the segments.</li>
 </ul>
 </td><td><canvas id="c4" width="720" height="300"></canvas></td></tr>
 </table>
 
-<h2>Pitfall 5: Novelty Effect — Testing Too Short</h2>
+<h2>Novelty Effect — Testing Too Short</h2>
 
 <table class="obj-table">
 <tr><td>
 <div class="obj-title">Day 1-3 Results ≠ Steady-State Behavior</div>
 <ul>
-<li><strong>The pattern:</strong> ANY visible UI change shows +10-20% engagement in first 72 hours. Users explore the novelty. By day 14, effect decays to true steady-state (often +0%). If you call the test on day 3, you shipped a novelty artifact that will embarrass you in the monthly review.</li>
-<li><strong>Compounding trap (reverse):</strong> A retention improvement of +2% per day is invisible on day 3 (noise). By day 30, the B cohort is 18% larger than A. Short tests miss the most valuable effects (retention, engagement depth) while amplifying the least valuable (novelty clicks).</li>
-<li><strong>Weekend/paycheck cycles:</strong> A test that runs Mon-Fri sees different users than one including weekends. Payday cycles (1st/15th of month) create 2-week spending patterns. A 7-day test might start after payday and look great, or before payday and look terrible — same variant, different timing.</li>
-<li><strong>Fix:</strong> Minimum 2 full business cycles (14 days consumer, 2 months B2B/subscription). Plot metric by day and look for stabilization. If the effect is still GROWING at test end, it's probably real. If it was huge at start and declining, it's novelty.</li>
+<li><strong>The pattern:</strong> Any visible UI change spikes engagement for ~72 hours, then decays to steady-state (often +0%) — calling the test on day 3 ships a novelty artifact.</li>
+<li><strong>Reverse trap:</strong> Compounding effects like retention are invisible at day 3 but dominant by day 30 — short tests amplify the least valuable effects and miss the most valuable.</li>
+<li><strong>Cycle bias:</strong> Weekday-only or single-week tests catch different users and paycheck phases — same variant, different timing, different result.</li>
+<li><strong>Fix:</strong> Run at least 2 full business cycles and plot the effect by day: still growing means real, big-then-declining means novelty.</li>
 </ul>
 </td><td><canvas id="c5" width="720" height="300"></canvas></td></tr>
 </table>
 
-<h2>Pitfall 6: Wrong Level Hides the Real Problem</h2>
+<h2>Wrong Level Hides the Real Problem</h2>
 
 <table class="obj-table">
 <tr><td>
 <div class="obj-title">Aggregate "Error Rate" Hides Whether It's 1 User or 1000</div>
 <ul>
-<li><strong>Request-level error rate = 1%:</strong> Could mean 1 user hitting an error 100 times (retry loop) out of 10,000 requests from 1,000 users. Or could mean 100 different users each hitting the error once. Same "1% error rate." Completely different severity.</li>
-<li><strong>User-level error rate:</strong> 1 user affected = 0.1% of users. 100 users affected = 10% of users. The REQUEST metric hides this. An SRE alert on "1% request error rate" could be a single broken bot or a widespread outage — you can't tell without user-level decomposition.</li>
-<li><strong>Revenue version:</strong> "Average order value = $45." Is that because everyone spends ~$45? Or because 80% spend $20 and 20% spend $145 (bimodal, nobody near the "average")? The aggregate tells you NOTHING about the distribution. Acting on $45 AOV optimizes for a customer that doesn't exist.</li>
-<li><strong>Fix:</strong> Every metric needs a DISTRIBUTION, not just an average. Histogram of per-user values, or at minimum: p10, p50, p90. "Error rate" should always be reported as both: % of requests AND % of users affected. Different levels surface different problems.</li>
+<li><strong>Same rate, different severity:</strong> A "1% request error rate" can be one user in a retry loop or 100 different users each failing once — the request-level metric can't distinguish a broken bot from an outage.</li>
+<li><strong>Revenue version:</strong> "$45 average order value" may describe a bimodal distribution where nobody spends near $45 — acting on the average optimizes for a customer that doesn't exist.</li>
+<li><strong>Fix:</strong> Report a distribution (histogram or p10/p50/p90) and always give error rate as both % of requests AND % of users affected.</li>
 </ul>
 </td><td><canvas id="c6" width="720" height="300"></canvas></td></tr>
 </table>
 
-<h2>Pitfall 7: Time Window Selection Bias</h2>
+<h2>Time Window Selection Bias</h2>
 
 <table class="obj-table">
 <tr><td>
 <div class="obj-title">Monthly Churn 5% Sounds Manageable. Annual = Lost Half Your Customers.</div>
 <ul>
-<li><strong>The compounding trap:</strong> 5% monthly churn → (0.95)^12 = 54% annual retention → lost 46% per year. "Only 5% a month" feels small. Annualized it's catastrophic. Same metric, different timeframe, opposite organizational response.</li>
-<li><strong>The snapshot trap:</strong> DAU/MAU = 25% today. Looks stable. But: the 25% today is a DIFFERENT 25% than last month — you have 100% monthly churn with constant inflow replacing outflow. Ratio looks stable, underlying dynamics are terrible.</li>
-<li><strong>Reporting window cherry-pick:</strong> Q4 revenue always spikes (holiday). Report Q4 and "revenue grew 40%!" Compare Q4-to-Q4 (same-season): grew 3%. The time window you choose IS the story you tell. And everyone picks the window that makes them look best.</li>
-<li><strong>Fix:</strong> Report at MULTIPLE timeframes simultaneously: daily, weekly, monthly, same-period-last-year. If the story changes between timeframes, you've found something real. If daily says "growing" but monthly says "flat" — you have high variance within months but no trend.</li>
+<li><strong>The compounding trap:</strong> 5% monthly churn compounds to losing 46% of customers per year — same metric, different timeframe, opposite organizational response.</li>
+<li><strong>The snapshot trap:</strong> A stable DAU/MAU of 25% can hide 100% monthly churn with constant inflow replacing outflow — the ratio is stable, the dynamics are terrible.</li>
+<li><strong>Window cherry-pick:</strong> Holiday-quarter revenue "grew 40%" but same-quarter-last-year comparison shows 3% — the window you choose IS the story you tell.</li>
+<li><strong>Fix:</strong> Report multiple timeframes simultaneously (daily, weekly, monthly, same-period-last-year); if the story changes between them, that's the real finding.</li>
 </ul>
 </td><td><canvas id="c7" width="720" height="300"></canvas></td></tr>
 </table>
 
-<h2>Pitfall 8: Per-Impression vs Per-User Economics</h2>
+<h2>Per-Impression vs Per-User Economics</h2>
 
 <table class="obj-table">
 <tr><td>
 <div class="obj-title">Ad Revenue Per Impression Grows While Revenue Per User Falls</div>
 <ul>
-<li><strong>The ad trap:</strong> Revenue per impression (RPM) up 10%. Great! But: you showed 30% more ads → users engage less → daily active users dropped 20%. Net revenue: RPM × impressions × DAU = up 10% × up 30% × down 20% = up 14%. Looks fine in aggregate. But DAU decline is compounding — next quarter you lose more users, and RPM gains can't compensate.</li>
-<li><strong>Subscription version:</strong> ARPU (revenue per user) up 5% because you raised prices. But: churn increased 2% per month (new price pushed marginal subscribers out). ARPU looks great THIS month. In 6 months you have fewer users at higher ARPU, lower total revenue.</li>
-<li><strong>The metric tells a story about the WRONG timeframe:</strong> Per-impression and per-user metrics optimize for THIS moment. Lifetime value (LTV) metrics require waiting months. Companies optimize per-impression/per-user because the feedback is instant. LTV damage shows up 6 months later when it's too late.</li>
-<li><strong>Fix:</strong> Always pair "efficiency" metrics (per-impression, per-user, per-session) with "volume" metrics (total users, total sessions, total revenue). If efficiency up + volume down → you're harvesting, not growing. Pair both with leading indicators of LTV (retention, engagement depth).</li>
+<li><strong>The ad trap:</strong> More ads lift revenue per impression while driving DAU down — net revenue looks fine today, but the user loss compounds and RPM gains can't keep up.</li>
+<li><strong>Subscription version:</strong> A price hike lifts ARPU this month while pushing marginal subscribers to churn — in 6 months, fewer users at higher ARPU means lower total revenue.</li>
+<li><strong>Wrong timeframe:</strong> Per-impression and per-user metrics give instant feedback; the LTV damage they cause shows up months later when it's too late.</li>
+<li><strong>Fix:</strong> Pair efficiency metrics (per-X) with volume metrics (total-X) and LTV leading indicators — efficiency up with volume down means harvesting, not growing.</li>
 </ul>
 </td><td><canvas id="c8" width="720" height="300"></canvas></td></tr>
 </table>
 
-<h2>Pitfall 9: Geographic / Demographic Aggregation Hiding Inequity</h2>
+<h2>Geographic / Demographic Aggregation Hiding Inequity</h2>
 
 <table class="obj-table">
 <tr><td>
 <div class="obj-title">"Average Latency 200ms" When Half Your Users Get 2 Seconds</div>
 <ul>
-<li><strong>CDN coverage bias:</strong> 60% of users near edge servers (50ms latency). 40% in underserved regions (500ms+). Average: 230ms. Looks fine! P95: 1200ms. The "average" user doesn't exist — you have TWO populations with 10× different experience and you're optimizing for neither.</li>
-<li><strong>A/B test on a global product:</strong> Variant B improves speed for US users (60% of traffic): -50ms. Slightly degrades for SEA users (20%): +100ms. Aggregate: net improvement. But you just made things worse for your fastest-growing market.</li>
-<li><strong>Demographic aggregation:</strong> "Model accuracy 92%." Across demographics: majority group 95%, minority group 78%. The aggregate hides that your model actively underperforms for the people who may need it most. "92% accurate" passes legal review. "78% for minority group" does not.</li>
-<li><strong>Fix:</strong> Always report metrics split by: geography, device tier, demographic group, network quality. If any sub-group has 2× worse experience than the best group, the aggregate is hiding a real problem. Set floor constraints: "no group below X" rather than "average above Y."</li>
+<li><strong>CDN coverage bias:</strong> Two populations with 10× different latency average to a number neither experiences — the "average user" doesn't exist.</li>
+<li><strong>Global A/B test:</strong> A variant that helps the majority region and hurts a smaller one nets out positive while degrading your fastest-growing market.</li>
+<li><strong>Demographic aggregation:</strong> "92% accuracy" can hide 78% for a minority group — the aggregate passes review while the model underperforms for those who need it most.</li>
+<li><strong>Fix:</strong> Split metrics by geography, device tier, and demographic group, and set floor constraints ("no group below X") rather than average targets.</li>
 </ul>
 </td><td><canvas id="c9" width="720" height="300"></canvas></td></tr>
 </table>
 
-<h2>Pitfall 10: Survivor Bias in Denominator (Who Gets Counted)</h2>
+<h2>Survivor Bias in Denominator (Who Gets Counted)</h2>
 
 <table class="obj-table">
 <tr><td>
 <div class="obj-title">Measuring Only Users Who Didn't Leave</div>
 <ul>
-<li><strong>NPS of active users only:</strong> NPS = +45 (great!). But: 30% of users churned last quarter. If you surveyed THEM, NPS would be -60. Your NPS measures "satisfaction among people who haven't rage-quit yet" — of course it's high. The unhappy people already left.</li>
-<li><strong>Engagement among remaining users:</strong> "DAU engagement up 5% this quarter!" But DAU dropped 15%. The least-engaged users left → remaining pool is more engaged by construction. Engagement/user rose because the DENOMINATOR got filtered, not because anyone got more engaged.</li>
-<li><strong>A/B test survivor bias:</strong> Measure "revenue per user" after 30 days. But variant B had higher Day 7 churn. The users left in B at Day 30 are a HIGHER-QUALITY subset than those in A. B looks like it has better revenue/user — but only because it killed off the low-spenders early.</li>
-<li><strong>Fix:</strong> ALWAYS include churned/departed users in the denominator for any metric reported to leadership. Intent-to-treat analysis: once randomized into a group, they stay in the count forever, even if they leave. Revenue per RANDOMIZED user, not per ACTIVE user.</li>
+<li><strong>NPS of active users only:</strong> A high score among survivors just means the unhappy 30% already churned out of the denominator.</li>
+<li><strong>Engagement among remaining users:</strong> When the least-engaged users leave, per-user engagement rises by construction — the denominator got filtered, nobody got more engaged.</li>
+<li><strong>A/B test version:</strong> If variant B churns low-spenders early, its day-30 "revenue per user" compares a higher-quality surviving subset, not a better treatment.</li>
+<li><strong>Fix:</strong> Use intent-to-treat — once randomized, users stay in the denominator forever; report revenue per RANDOMIZED user, not per active user.</li>
 </ul>
 </td><td><canvas id="c10" width="720" height="300"></canvas></td></tr>
 </table>

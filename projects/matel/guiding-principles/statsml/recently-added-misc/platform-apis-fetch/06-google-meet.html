@@ -18,7 +18,6 @@
         .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
         .verified { display: inline-block; background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-bottom: 16px; }
         h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
-        .status { display: inline-block; background: #fef9e7; border: 1px solid #f39c12; color: #b7950b; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-left: 12px; vertical-align: middle; }
         table.obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
         table.obj-table td { vertical-align: top; padding: 12px; }
         table.obj-table td:first-child { width: 45%; }
@@ -28,136 +27,58 @@
         .key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
         ul { padding-left: 20px; }
         li { margin-bottom: 6px; font-size: 0.93em; }
+        a { color: #1a5276; }
         .section-title { font-weight: bold; color: #1a5276; font-size: 1.05em; margin-bottom: 8px; margin-top: 16px; }
-        .scope-list { margin: 8px 0 12px; }
-        .scope-tag { display: inline-block; background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 1px 8px; border-radius: 10px; font-size: 0.78em; font-family: ui-monospace, Menlo, monospace; margin: 3px 4px 3px 0; }
     </style>
 </head>
 <body>
-    <h1>Google Meet <span class="status">BACKLOG</span></h1>
-    <p class="subtitle">Meet REST API v2 — conference records, participants and their sessions, recording and transcript artifacts, and transcript entries.</p>
+    <h1>Google Meet</h1>
+    <p class="subtitle">After a Google Meet call ends, look up who was in it, when they joined and left, and any recording or transcript it produced.</p>
     <span class="verified">Last verified: August 2026</span>
 
     <h2>Overview</h2>
     <table class="obj-table">
         <tr>
             <td>
-                <p style="font-size:0.93em;">The Google Meet REST API v2 has two halves. <code>spaces</code> is forward-looking: create a meeting space, read or configure it, end an active conference. <code>conferenceRecords</code> is backward-looking: after a conference finishes, read who was present and what artifacts were produced. The data model is deliberately three levels deep — conference, participant, participant session — and most integration errors come from collapsing those three levels into one.</p>
-
-                <div class="section-title">What It Provides</div>
+                <div class="section-title">What you can get</div>
                 <ul>
-                    <li><strong>Spaces</strong> — <code>name</code>, <code>meetingUri</code>, <code>meetingCode</code>, and <code>config</code> (<code>accessType</code>, <code>entryPointAccess</code>). Also <code>activeConference</code> when one is in progress.</li>
-                    <li><strong>Conference records</strong> — one per actual conference held in a space, with <code>startTime</code>, <code>endTime</code>, <code>expireTime</code> and a back-reference to the <code>space</code>.</li>
-                    <li><strong>Participants</strong> — one per distinct attendee of that conference, with <code>earliestStartTime</code> and <code>latestEndTime</code>, and an identity union of <code>signedinUser</code>, <code>anonymousUser</code> or <code>phoneUser</code>.</li>
-                    <li><strong>Participant sessions</strong> — one per continuous connection by that participant, each with its own <code>startTime</code> and <code>endTime</code>.</li>
-                    <li><strong>Recordings</strong> — artifact objects with a <code>driveDestination</code> reference and <code>state</code>.</li>
-                    <li><strong>Transcripts and transcript entries</strong> — a transcript artifact plus per-utterance entries carrying <code>participant</code>, <code>text</code>, <code>languageCode</code>, <code>startTime</code>, <code>endTime</code>.</li>
+                    <li>A record of each meeting that took place</li>
+                    <li>Who attended, with every separate connection they made</li>
+                    <li>Recordings (stored in Google Drive) and transcripts</li>
+                    <li>Transcript text broken down by utterance and speaker</li>
+                    <li>Meeting links you can create and configure</li>
                 </ul>
 
-                <div class="key-point"><strong>A participant is not a session.</strong> Every participant has one or more <code>participantSessions</code>, and a reconnect — network drop, browser refresh, switching from laptop to phone — creates an additional session. The participant's own <code>earliestStartTime</code>/<code>latestEndTime</code> spans the whole range <em>including the gaps when they were absent</em>, so it overstates presence. Summing session durations understates nothing but can double-count when a person is connected twice at once (two devices). Real attended time requires listing sessions, merging overlapping intervals, and summing the union. Neither of the two obvious shortcuts is correct.</div>
+                <div class="key-point"><strong>A person is not a connection.</strong> Each attendee can have several sessions — a network drop, a browser refresh, or a second device each adds one. The attendee's overall start-to-end span overstates their presence (it includes the gaps), while adding up sessions can double-count two devices. Real attended time means merging each person's intervals — neither shortcut is right.</div>
 
-                <div class="section-title">Authentication &amp; Scopes</div>
-                <div class="scope-list"><span class="scope-tag">meetings.space.created</span><span class="scope-tag">meetings.space.readonly</span><span class="scope-tag">meetings.space.settings</span><span class="scope-tag">drive.readonly</span></div>
+                <div class="section-title">Watch out for</div>
                 <ul>
-                    <li>OAuth 2.0 only. Principal scopes: <code>https://www.googleapis.com/auth/meetings.space.created</code> (act on spaces the app itself created), <code>meetings.space.readonly</code>, and <code>meetings.space.settings</code>.</li>
-                    <li><code>meetings.space.created</code> is the narrowest and most commonly misunderstood: it grants access to conference records for spaces <em>created by your application</em>, not to every conference in the organisation. Collecting org-wide Meet data is not simply a matter of adding this scope.</li>
-                    <li>Domain-wide delegation with a service account, authorised by a Workspace super admin, is the route to impersonating users for broader collection. Recording and transcript artifacts additionally require Drive scopes to fetch the file itself.</li>
-                    <li>These are sensitive/restricted scopes — a published app faces Google's verification process, and admin consent is required in the Workspace admin console.</li>
-                </ul>
-
-                <div class="section-title">Granularity</div>
-                <p style="font-size:0.93em;">Timestamps are RFC 3339 with sub-second precision. Resource names are hierarchical paths, so a transcript entry's name embeds its conference record and transcript: <code>conferenceRecords/{record}/transcripts/{transcript}/entries/{entry}</code>. Transcript entries are the finest grain available and are utterance-level, not word-level — there are no per-word timings and no confidence scores.</p>
-
-                <div class="section-title">Key Endpoints</div>
-                <ul>
-                    <li><code>POST /v2/spaces</code>, <code>GET /v2/spaces/{space}</code>, <code>PATCH /v2/spaces/{space}</code>, <code>POST /v2/spaces/{space}:endActiveConference</code>.</li>
-                    <li><code>GET /v2/conferenceRecords</code> (filterable on <code>space.name</code> and <code>start_time</code>), <code>GET /v2/conferenceRecords/{record}</code>.</li>
-                    <li><code>GET /v2/conferenceRecords/{record}/participants</code>, <code>GET .../participants/{participant}</code>.</li>
-                    <li><code>GET /v2/conferenceRecords/{record}/participants/{participant}/participantSessions</code>.</li>
-                    <li><code>GET /v2/conferenceRecords/{record}/recordings</code>, <code>GET .../recordings/{recording}</code>.</li>
-                    <li><code>GET /v2/conferenceRecords/{record}/transcripts</code>, <code>GET .../transcripts/{transcript}/entries</code>.</li>
-                    <li>Google Workspace Events API — subscriptions on a Meet space delivering events such as conference started/ended, participant joined/left, and artifact generated, via Pub/Sub.</li>
-                </ul>
-
-                <div class="section-title">Rate Limits</div>
-                <ul>
-                    <li>Standard Google API quota model: per-project and per-user quotas measured in requests per minute, enforced by the Cloud console for the Meet API service, returning <code>429 RESOURCE_EXHAUSTED</code>.</li>
-                    <li>Quotas are visible and adjustable in the Google Cloud console for your project rather than being a fixed published constant, so read them there instead of assuming a number. Back off exponentially on <code>429</code> and <code>503</code>.</li>
-                    <li>The listing pattern is inherently fan-out heavy: conferences, then participants per conference, then sessions per participant, then transcript entries per transcript. A month of a large tenant is a large number of calls, so budget for it and cache aggressively.</li>
-                </ul>
-
-                <div class="section-title">Business Scenarios</div>
-                <ul>
-                    <li><strong>True attendance</strong> — merged-interval presence per participant, for training completion or client-billable time.</li>
-                    <li><strong>Connection-stability signal</strong> — session count per participant is a usable proxy for network trouble even though the API exposes no packet-level quality metrics.</li>
-                    <li><strong>Meeting content mining</strong> — transcript entries as the text corpus for topic extraction, action-item detection, or talk-time distribution by speaker.</li>
-                    <li><strong>Talk-time equity</strong> — seconds of speech per participant from entry <code>startTime</code>/<code>endTime</code>, a common inclusion metric.</li>
-                    <li><strong>External-participation measurement</strong> — how often conferences include participants outside the directory.</li>
-                </ul>
-
-                <div class="section-title">Key Restrictions &amp; Gotchas</div>
-                <ul>
-                    <li><strong>Conference records expire.</strong> The documented retention for a <code>conferenceRecord</code> is 30 days, surfaced as <code>expireTime</code> on the resource. After that the record and its participant and session data are no longer retrievable. Any longer history must be extracted and stored within that window — it cannot be recovered later.</li>
-                    <li><strong>Artifacts live in Drive, not in this API.</strong> A recording resource returns a <code>driveDestination</code> with a file id and export URI; the API does not stream media bytes. The file's lifetime is governed by Drive and Vault retention, which is independent of the 30-day conference-record window — so the video can outlive the metadata that explains who was in it.</li>
-                    <li><strong>Recordings and transcripts only exist if they were generated live.</strong> They must have been enabled and started during the conference. There is no endpoint to record or transcribe after the fact, and eligibility depends on the Workspace edition — several editions do not include recording or transcription at all.</li>
-                    <li><strong>Anonymous and phone participants are not resolvable.</strong> <code>anonymousUser</code> gives only a display name; <code>phoneUser</code> gives only a partially masked number. Neither maps to a directory identity, so external attendance cannot be reliably deduplicated across meetings and a "who attended" report will contain unjoinable rows. This is a hard limit, not a permissions issue.</li>
-                    <li><strong>No real-time stream in the REST API.</strong> Polling <code>conferenceRecords</code> tells you about conferences that have ended. Live signals require the Google Workspace Events API with Pub/Sub subscriptions, which is a separate integration with its own subscription lifetime and renewal requirement.</li>
-                    <li><strong>No media-quality telemetry.</strong> Unlike some competitors, this API exposes no bitrate, jitter, packet loss, resolution or CPU figures. Quality investigation has to use the Admin SDK Reports Meet audit activity, which is a different API with a different retention window.</li>
-                    <li><strong>No chat, reactions, polls, Q&amp;A, breakout rooms or hand-raises.</strong> In-meeting interaction data is largely absent from v2. Chat is not exposed as structured data.</li>
-                    <li><strong>Transcript language is per entry.</strong> <code>languageCode</code> can vary between entries in one transcript; assuming a single language per meeting will misclassify multilingual calls. Transcription accuracy is not reported, so entry text carries no confidence signal.</li>
-                    <li><strong>Speaker attribution can be missing.</strong> An entry's <code>participant</code> may reference a participant that cannot be resolved to an identity for the same anonymous/phone reasons above.</li>
-                    <li><strong>A space is reusable; a conference record is not.</strong> One space accumulates many conference records over time. Keying analytics on <code>meetingCode</code> or space name silently merges separate meetings into one.</li>
+                    <li>Meeting records expire after about 30 days — extract and store them promptly, there is no recovery later</li>
+                    <li>Recordings and transcripts exist only if switched on during the call; nothing can be generated after the fact</li>
+                    <li>Dial-in and anonymous guests have no resolvable identity, so they cannot be matched across meetings</li>
+                    <li>No live data and no connection-quality stats — this API only looks backward at finished meetings</li>
                 </ul>
             </td>
             <td>
-                <div class="section-title">GET /v2/conferenceRecords/{record}/participants/{participant}/participantSessions</div>
-<pre>{
-  "participantSessions": [
-    {
-      "name": "conferenceRecords/EXAMPLE_ID/participants/1042/participantSessions/8801",  // Note: masked for illustration
-      "startTime": "2026-08-18T09:58:44.312Z",
-      "endTime": "2026-08-18T10:21:07.884Z"
-    },
-    {
-      "name": "conferenceRecords/EXAMPLE_ID/participants/1042/participantSessions/8817",  // Note: masked for illustration
-      "startTime": "2026-08-18T10:23:15.006Z",
-      "endTime": "2026-08-18T10:59:02.771Z"
-    }
-  ],
-  "nextPageToken": ""
-}</pre>
-                <div class="section-title">GET /v2/conferenceRecords/{record}/participants</div>
-<pre>{
-  "participants": [
-    {
-      "name": "conferenceRecords/EXAMPLE_ID/participants/1042",  // Note: masked for illustration
-      "earliestStartTime": "2026-08-18T09:58:44.312Z",
-      "latestEndTime": "2026-08-18T10:59:02.771Z",
-      "signedinUser": {
-        "user": "users/109482017364512098371",
-        "displayName": "Amit Jaiswal"
-      }
-    },
-    {
-      "name": "conferenceRecords/EXAMPLE_ID/participants/1057",  // Note: masked for illustration
-      "earliestStartTime": "2026-08-18T10:04:02.115Z",
-      "latestEndTime": "2026-08-18T10:57:41.220Z",
-      "anonymousUser": { "displayName": "Guest" }
-    },
-    {
-      "name": "conferenceRecords/EXAMPLE_ID/participants/1063",  // Note: masked for illustration
-      "earliestStartTime": "2026-08-18T10:11:33.470Z",
-      "latestEndTime": "2026-08-18T10:44:58.902Z",
-      "phoneUser": { "displayName": "+1 555-***-**19" }
-    }
-  ],
-  "nextPageToken": ""
-}</pre>
-                <p style="font-size:0.85em; color:#666; font-style:italic;">Participant 1042 has a <code>latestEndTime</code> minus <code>earliestStartTime</code> of about 60 minutes but only ~58 minutes of connected time across two sessions. Participants 1057 and 1063 have no resolvable identity at all.</p>
+                <div class="section-title">One attendee, two sessions</div>
+<pre>"participantSessions": [
+  { "startTime": "2026-08-18T09:58:44Z",
+    "endTime":   "2026-08-18T10:21:07Z" },
+  { "startTime": "2026-08-18T10:23:15Z",
+    "endTime":   "2026-08-18T10:59:02Z" }
+]
+// one person, two connections — the 2-minute gap is
+// invisible if you only read the participant row</pre>
                 <canvas id="meetSessions" height="380"></canvas>
             </td>
         </tr>
     </table>
+
+    <h2>Official API References</h2>
+    <ul>
+        <li><a href="https://developers.google.com/meet/api">Google Meet REST API</a> — documentation root for the Meet API v2</li>
+        <li><a href="https://developers.google.com/meet/api/guides/overview">Meet REST API overview</a> — spaces vs conferenceRecords data model and capabilities</li>
+    </ul>
 
     <script>
     (function() {

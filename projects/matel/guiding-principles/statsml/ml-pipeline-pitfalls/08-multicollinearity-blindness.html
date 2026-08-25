@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multicollinearity Blindness</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Multicollinearity Blindness</h1>
+<p class="subtitle">Correlated features inflate importance and destabilize coefficients</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">collinearity</span></div>
+                <ul>
+                    <li><b>Shared signal</b> — two features carrying the same information leave no unique credit to assign</li>
+                    <li><b>Arbitrary tie-break</b> — scores become artifacts of tie-breaking, not measures of real signal</li>
+                    <li><b>Wild coefficients</b> — with r = 1.0 a linear model can assign +500 and -498 to the pair</li>
+                    <li><b>Net vs parts</b> — the summed effect stays sensible while each single coefficient is garbage</li>
+                    <li><b>Split importance</b> — importance algorithms divide credit, so each group member looks weak</li>
+                    <li><b>Instability signal</b> — dropping one twin makes the other suddenly look very important</li>
+                </ul>
+                <p class="example">Five blood-lipid features with r &gt; 0.8 each get about 4% Random Forest importance, but dropping four lifts the survivor to 18%.</p>
+                <div class="key-point">
+                    <strong>Impact:</strong> Coefficients and importance rankings become unstable and misleading, so genuinely predictive signals get dismissed as weak.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">redundant features</span></div>
+                <ul>
+                    <li><b>Silent arrival</b> — redundant columns come from different sources, unit conversions, derivations</li>
+                    <li><b>No complaint</b> — training APIs accept any feature matrix, so the redundancy goes unnoticed</li>
+                    <li><b>More-is-better mentality</b> — every available feature is added without a correlation check</li>
+                    <li><b>Duplicate units</b> — sources encode one concept several ways: height_cm, height_in, height_ft</li>
+                    <li><b>Derived features</b> — engineered sums like total = part1 + part2 are collinear by construction</li>
+                    <li><b>Split credit</b> — the shared signal is spread across the group, so each member appears weak</li>
+                </ul>
+                <p class="example">With height_cm and height_inches at r = 0.999, a logistic regression assigns &beta;_cm = +342 and &beta;_inches = -340.</p>
+                <div class="key-point">
+                    <strong>Root Cause:</strong> If X1 &asymp; X2, then &beta;1&middot;X1 + &beta;2&middot;X2 has infinitely many solutions along &beta;1 + &beta;2 = constant, and the optimizer picks one arbitrarily.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">feature pruning</span></div>
+                <ul>
+                    <li><b>Measure first</b> — quantify redundancy before trusting any coefficient or importance score</li>
+                    <li><b>VIF screening</b> — flag features whose variance inflation factor exceeds roughly 5-10</li>
+                    <li><b>Correlation clustering</b> — group features with pairwise |r| above ~0.8; keep one per cluster</li>
+                    <li><b>Lasso regularization</b> — L1 drives redundant coefficients to zero, selecting automatically</li>
+                    <li><b>PCA alternative</b> — orthogonal components remove collinearity at a cost to interpretability</li>
+                    <li><b>Domain knowledge</b> — keep the cluster member that is most interpretable and best measured</li>
+                </ul>
+                <p class="example">Keeping only "income" from five income features (r &gt; 0.85) drops VIF from 45 to 3.2 and consolidates five 4% scores into one 18% score.</p>
+                <div class="key-point">
+                    <strong>Fix:</strong> Cluster features above a chosen |r| level, keep one representative per cluster, and verify the survivors with a VIF check aiming below roughly 5.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var midX = w / 2;
+    var panelW = 310;
+    var leftX = 20;
+    var rightX = midX + 30;
+    var maxBarW = 200;
+    var barH = 22;
+    var labelX = 110;
+
+    // Title
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Feature Importance: Signal Cannibalization by Correlated Features', w/2, 22);
+
+    // Divider line
+    ctx.strokeStyle = '#bdc3c7';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(midX, 35);
+    ctx.lineTo(midX, h - 10);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Left panel header
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('Before Dedup', leftX + panelW/2, 48);
+
+    // Right panel header
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('After Dedup', rightX + panelW/2 - 30, 48);
+
+    // Left side: 5 correlated features each at ~4% importance
+    var beforeData = [
+        { label: 'income', value: 0.042 },
+        { label: 'salary', value: 0.039 },
+        { label: 'earnings', value: 0.041 },
+        { label: 'compensation', value: 0.038 },
+        { label: 'pay_grade', value: 0.040 }
+    ];
+
+    var startY = 65;
+    var spacing = 36;
+
+    beforeData.forEach(function(d, i) {
+        var y = startY + i * spacing;
+        var barWidth = (d.value / 0.20) * maxBarW;
+
+        // Bar
+        ctx.fillStyle = '#e74c3c';
+        ctx.globalAlpha = 0.6;
+        ctx.fillRect(labelX, y, barWidth, barH);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(labelX, y, barWidth, barH);
+
+        // Label
+        ctx.fillStyle = '#1a5276';
+        ctx.font = '11px system-ui';
+        ctx.textAlign = 'right';
+        ctx.fillText(d.label, labelX - 6, y + barH/2 + 4);
+
+        // Percentage
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 11px system-ui';
+        ctx.textAlign = 'left';
+        ctx.fillText((d.value * 100).toFixed(1) + '%', labelX + barWidth + 5, y + barH/2 + 4);
+    });
+
+    // Bracket/brace annotation on left side
+    var braceX = labelX + maxBarW * (0.042/0.20) + 45;
+    var braceTop = startY + 2;
+    var braceBot = startY + 4 * spacing + barH - 2;
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(braceX, braceTop);
+    ctx.lineTo(braceX + 8, braceTop);
+    ctx.lineTo(braceX + 8, (braceTop + braceBot)/2 - 5);
+    ctx.lineTo(braceX + 14, (braceTop + braceBot)/2);
+    ctx.lineTo(braceX + 8, (braceTop + braceBot)/2 + 5);
+    ctx.lineTo(braceX + 8, braceBot);
+    ctx.lineTo(braceX, braceBot);
+    ctx.stroke();
+
+    // Annotation text
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('same', braceX + 18, (braceTop + braceBot)/2 - 4);
+    ctx.fillText('signal', braceX + 18, (braceTop + braceBot)/2 + 8);
+
+    // Right side: 1 feature at 18% after dedup
+    var rightLabelX = rightX + 90;
+    var rightBarY = startY + 2 * spacing - barH/2;
+    var rightBarW = (0.18 / 0.20) * maxBarW;
+
+    // Bar
+    ctx.fillStyle = '#27ae60';
+    ctx.globalAlpha = 0.7;
+    ctx.fillRect(rightLabelX, rightBarY, rightBarW, barH + 6);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(rightLabelX, rightBarY, rightBarW, barH + 6);
+
+    // Label
+    ctx.fillStyle = '#1a5276';
+    ctx.font = '12px system-ui';
+    ctx.textAlign = 'right';
+    ctx.fillText('income', rightLabelX - 8, rightBarY + (barH + 6)/2 + 4);
+
+    // Percentage
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 14px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('18%', rightLabelX + rightBarW + 8, rightBarY + (barH + 6)/2 + 5);
+
+    // Arrow showing consolidation
+    ctx.strokeStyle = '#1a5276';
+    ctx.fillStyle = '#1a5276';
+    ctx.lineWidth = 1.5;
+    var arrowY = rightBarY + (barH + 6) + 20;
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('4 redundant features removed', rightLabelX + rightBarW/2, arrowY);
+    ctx.fillText('signal consolidated into 1 feature', rightLabelX + rightBarW/2, arrowY + 15);
+
+    // Bottom annotation
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('5 x ~4% = ~20% total signal cannibalized across correlated features', w/2, h - 12);
+})();
+
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Title
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Correlated Feature Clusters: Signal Cannibalization', w/2, 22);
+
+    // Draw 3 clusters
+    var clusters = [
+        { cx: 130, cy: 130, features: ['height_cm', 'height_in', 'height_ft', 'height_m'] },
+        { cx: 360, cy: 150, features: ['income', 'salary', 'earnings'] },
+        { cx: 580, cy: 130, features: ['temp_F', 'temp_C', 'temp_K', 'heat_idx'] }
+    ];
+
+    clusters.forEach(function(cluster, ci) {
+        var n = cluster.features.length;
+        var radius = 55;
+
+        // Draw connections between all features in cluster (thick lines = high correlation)
+        var positions = [];
+        for (var i = 0; i < n; i++) {
+            var angle = (2 * Math.PI * i / n) - Math.PI/2;
+            positions.push({
+                x: cluster.cx + radius * Math.cos(angle),
+                y: cluster.cy + radius * Math.sin(angle)
+            });
+        }
+
+        // Draw thick connection lines
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 3;
+        ctx.globalAlpha = 0.4;
+        for (var i = 0; i < n; i++) {
+            for (var j = i + 1; j < n; j++) {
+                ctx.beginPath();
+                ctx.moveTo(positions[i].x, positions[i].y);
+                ctx.lineTo(positions[j].x, positions[j].y);
+                ctx.stroke();
+            }
+        }
+        ctx.globalAlpha = 1;
+
+        // Draw feature nodes
+        for (var i = 0; i < n; i++) {
+            ctx.beginPath();
+            ctx.arc(positions[i].x, positions[i].y, 18, 0, 2 * Math.PI);
+            ctx.fillStyle = 'rgba(26,82,118,0.1)';
+            ctx.fill();
+            ctx.strokeStyle = '#1a5276';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            ctx.font = '8px system-ui';
+            ctx.fillStyle = '#1a5276';
+            ctx.textAlign = 'center';
+            ctx.fillText(cluster.features[i], positions[i].x, positions[i].y + 3);
+        }
+
+        // Cluster label
+        ctx.font = 'bold 10px system-ui';
+        ctx.fillStyle = '#e67e22';
+        ctx.textAlign = 'center';
+        ctx.fillText('Cluster ' + (ci + 1), cluster.cx, cluster.cy + radius + 30);
+        ctx.font = '9px system-ui';
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillText('r > 0.8', cluster.cx, cluster.cy + radius + 42);
+    });
+
+    // Importance bars below showing split credit
+    var barY = 225;
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'left';
+    ctx.fillText('Importance:', 40, barY);
+
+    var barStartX = 130;
+    var barW = 22;
+    var barGap = 3;
+    var labels = ['~4%', '~4%', '~4%', '~4%', '~4%', '~4%', '~4%', '~4%', '~4%', '~4%', '~4%'];
+    var totalBars = 11;
+
+    for (var b = 0; b < totalBars; b++) {
+        var bx = barStartX + b * (barW + barGap);
+        var barHeight = 30;
+        ctx.fillStyle = '#e74c3c';
+        ctx.globalAlpha = 0.5;
+        ctx.fillRect(bx, barY + 8, barW, barHeight);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(bx, barY + 8, barW, barHeight);
+
+        ctx.font = '7px system-ui';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('~4%', bx + barW/2, barY + barHeight + 20);
+    }
+
+    // Annotation
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = '#e67e22';
+    ctx.textAlign = 'center';
+    ctx.fillText('Same signal, split N ways → each feature looks individually weak', w/2, h - 10);
+})();
+
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Title
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Correct: VIF Check + Cluster Representative Selection', w/2, 22);
+
+    // Pipeline steps
+    var steps = [
+        { label: 'Correlation\nMatrix', sub: 'pairwise |r|' },
+        { label: 'Identify\nClusters', sub: '|r| > 0.8' },
+        { label: 'Select\nRepresentative', sub: 'best per cluster' },
+        { label: 'VIF < 5\nCheck', sub: 'verify clean' }
+    ];
+
+    var stepW = 130, stepH = 55, gap = 22;
+    var totalW = steps.length * stepW + (steps.length - 1) * gap;
+    var startX = (w - totalW) / 2;
+    var stepY = 42;
+
+    for (var i = 0; i < steps.length; i++) {
+        var sx = startX + i * (stepW + gap);
+
+        ctx.fillStyle = i < 3 ? '#ebf5fb' : '#eafaf1';
+        ctx.fillRect(sx, stepY, stepW, stepH);
+        ctx.strokeStyle = i < 3 ? '#1a5276' : '#27ae60';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(sx, stepY, stepW, stepH);
+
+        var lines = steps[i].label.split('\n');
+        ctx.font = 'bold 11px system-ui';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText(lines[0], sx + stepW/2, stepY + 18);
+        if (lines[1]) ctx.fillText(lines[1], sx + stepW/2, stepY + 32);
+
+        ctx.font = '9px system-ui';
+        ctx.fillStyle = '#555';
+        ctx.fillText(steps[i].sub, sx + stepW/2, stepY + 47);
+
+        // Arrow
+        if (i < steps.length - 1) {
+            var ax = sx + stepW;
+            var aEnd = ax + gap;
+            ctx.strokeStyle = '#1a5276';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(ax, stepY + stepH/2);
+            ctx.lineTo(aEnd, stepY + stepH/2);
+            ctx.stroke();
+            ctx.fillStyle = '#1a5276';
+            ctx.beginPath();
+            ctx.moveTo(aEnd, stepY + stepH/2);
+            ctx.lineTo(aEnd - 6, stepY + stepH/2 - 4);
+            ctx.lineTo(aEnd - 6, stepY + stepH/2 + 4);
+            ctx.closePath();
+            ctx.fill();
+        }
+    }
+
+    // Before/After comparison
+    var compY = 120;
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('Before:', 160, compY);
+
+    // Cluster of 5 features (before)
+    var feats = ['income', 'salary', 'earnings', 'comp.', 'pay_gr.'];
+    var featStartX = 70;
+    for (var f = 0; f < feats.length; f++) {
+        var fx = featStartX + f * 40;
+        var fy = compY + 10;
+        ctx.beginPath();
+        ctx.arc(fx, fy + 15, 16, 0, 2 * Math.PI);
+        ctx.fillStyle = 'rgba(231,76,60,0.15)';
+        ctx.fill();
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.font = '7px system-ui';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText(feats[f], fx, fy + 17);
+    }
+
+    // Connection lines between features
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.3;
+    for (var i = 0; i < feats.length; i++) {
+        for (var j = i + 1; j < feats.length; j++) {
+            ctx.beginPath();
+            ctx.moveTo(featStartX + i * 40, compY + 25);
+            ctx.lineTo(featStartX + j * 40, compY + 25);
+            ctx.stroke();
+        }
+    }
+    ctx.globalAlpha = 1;
+
+    // VIF label
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('VIF = 45', 160, compY + 55);
+
+    // Arrow from before to after
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(300, compY + 25);
+    ctx.lineTo(380, compY + 25);
+    ctx.stroke();
+    ctx.fillStyle = '#1a5276';
+    ctx.beginPath();
+    ctx.moveTo(380, compY + 25);
+    ctx.lineTo(374, compY + 21);
+    ctx.lineTo(374, compY + 29);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('keep best', 340, compY + 15);
+
+    // After: single representative
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText('After:', 470, compY);
+
+    ctx.beginPath();
+    ctx.arc(470, compY + 25, 24, 0, 2 * Math.PI);
+    ctx.fillStyle = 'rgba(39,174,96,0.2)';
+    ctx.fill();
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('income', 470, compY + 28);
+
+    // VIF label after
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText('VIF = 3.2', 470, compY + 55);
+
+    // Green checkmark
+    ctx.font = 'bold 20px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'left';
+    ctx.fillText('✔', 500, compY + 30);
+
+    // Importance comparison at bottom
+    var impY = 200;
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Feature Importance Comparison', w/2, impY);
+
+    // Before bars (5 x 4%)
+    var bBarX = 80;
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'left';
+    ctx.fillText('Before:', 40, impY + 28);
+    for (var b = 0; b < 5; b++) {
+        var bx = bBarX + b * 55;
+        ctx.fillStyle = '#e74c3c';
+        ctx.globalAlpha = 0.5;
+        ctx.fillRect(bx, impY + 16, 40, 20);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(bx, impY + 16, 40, 20);
+        ctx.font = '9px system-ui';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('4%', bx + 20, impY + 30);
+    }
+
+    // After bar (1 x 18%)
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'left';
+    ctx.fillText('After:', 40, impY + 65);
+    var afterBarW = 180;
+    ctx.fillStyle = '#27ae60';
+    ctx.globalAlpha = 0.6;
+    ctx.fillRect(bBarX, impY + 52, afterBarW, 22);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(bBarX, impY + 52, afterBarW, 22);
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.fillText('18% — income (representative)', bBarX + afterBarW/2, impY + 67);
+
+    // Bottom annotation
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Same predictive power, stable coefficients, interpretable importance scores', w/2, h - 10);
+})();
+</script>
+
+</body>
+</html>

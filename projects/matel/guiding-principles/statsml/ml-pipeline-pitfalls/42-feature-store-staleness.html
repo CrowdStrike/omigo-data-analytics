@@ -78,6 +78,20 @@ ul {
     font-size: 0.92rem;
 }
 li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
 </style>
 </head>
 <body>
@@ -90,17 +104,19 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>Feature store caches values for performance but fails to monitor freshness. Updates pause or lag without alerting, causing models to make decisions on hours-old or day-old features while believing they are current.</p>
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">freshness</span></div>
                 <ul>
-                    <li><strong>Cache expiry:</strong> TTL set to "reasonable" values (e.g., 1 hour) without checking actual update frequency—upstream job now runs every 6 hours, cache serves 5-hour-old data</li>
-                    <li><strong>Update frequency drift:</strong> Feature pipeline originally refreshed every 15 minutes, now runs hourly due to load or failures, but no alerts fire</li>
-                    <li><strong>Staleness detection:</strong> No timestamp comparison at read time—application assumes if value exists, it's fresh enough</li>
-                    <li><strong>Silent degradation:</strong> Model accuracy erodes gradually as features age; no single event triggers investigation</li>
+                    <li><b>Silent staleness</b> — the store caches values but never monitors how old they have become</li>
+                    <li><b>Blind TTL</b> — a 1-hour cache expiry is picked without checking the real update cadence</li>
+                    <li><b>Cadence drift</b> — a 15-minute refresh pipeline quietly slows to hourly and no alert fires</li>
+                    <li><b>No read check</b> — nothing compares timestamps at read time; existing values are assumed fresh</li>
+                    <li><b>False confidence</b> — models decide on hours-old features while believing they are current</li>
+                    <li><b>Gradual decay</b> — accuracy erodes slowly as features age, so no single event triggers review</li>
                 </ul>
+                <p class="example">A 10-minute session-count feature keeps serving 2 PM values after a silent upstream failure until 8 PM, blocking 14% of legitimate traffic.</p>
                 <div class="key-point">
-                    <strong>Impact:</strong> Models make decisions on outdated context, systematically missing recent events. Gradual accuracy drop is invisible until major incident. <strong>Fix:</strong> Store and expose feature timestamp at write time. Alert when age exceeds threshold. Monitor staleness percentiles across all features. Reject reads when staleness exceeds policy.
+                    <strong>Impact:</strong> Models systematically miss recent events, and the gradual accuracy drop stays invisible until a major incident.
                 </div>
-                <p class="example">Example: Feature store caches "user session count in last 10 minutes" with 5-minute TTL. Upstream streaming job fails silently at 2 PM, cache continues serving 2 PM values until 8 PM when manual investigation starts. Model predicts "inactive" for users with recent activity, blocking 14% of legitimate traffic.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c1" width="720" height="300"></canvas>
@@ -114,14 +130,16 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">ownership gaps</span></div>
                 <ul>
-                    <li><strong>Unmonitored pipelines:</strong> Refresh pipelines have no SLA enforcement — failures are silent and undetected for hours</li>
-                    <li><strong>No per-feature freshness SLA:</strong> No defined or tracked maximum age per feature; all features treated identically</li>
-                    <li><strong>Generic cache TTLs:</strong> Cache expiry set to "1 hour" generically without matching actual upstream update cadence</li>
-                    <li><strong>No alert propagation:</strong> Upstream pipeline failures don't propagate alerts downstream to consumers</li>
+                    <li><b>Ownership gap</b> — the pipeline owner and store owner each look healthy; nobody watches age</li>
+                    <li><b>No pipeline SLA</b> — refresh jobs have no enforced SLA, so failures stay silent for hours</li>
+                    <li><b>No freshness SLA</b> — no max age is tracked per feature; all features are treated identically</li>
+                    <li><b>Generic TTLs</b> — cache expiry defaults to one hour regardless of upstream update cadence</li>
+                    <li><b>No alert fan-out</b> — upstream pipeline failures never reach downstream feature consumers</li>
                 </ul>
                 <div class="key-point">
-                    <strong>Root cause:</strong> Feature stores are built for performance (low-latency reads) but freshness monitoring is an afterthought. The system optimizes for speed of retrieval without tracking age of data.
+                    <strong>Root Cause:</strong> Feature stores are optimized for low-latency reads while freshness monitoring remains an afterthought.
                 </div>
             </td>
             <td class="viz-col">
@@ -136,14 +154,16 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">freshness SLAs</span></div>
                 <ul>
-                    <li><strong>Per-feature timestamps:</strong> Store last_updated timestamp per feature per entity in the feature store</li>
-                    <li><strong>Defined SLAs:</strong> Define max_age SLA per feature (e.g., user_activity: 15 min, demographics: 24 hours)</li>
-                    <li><strong>Alert on breach:</strong> Alert when any feature exceeds its freshness SLA</li>
-                    <li><strong>Reject stale predictions:</strong> Return uncertainty flag instead of prediction when critical features are stale</li>
+                    <li><b>Freshness as data</b> — every read carries the value's age instead of assuming the cache is fresh</li>
+                    <li><b>Per-read timestamps</b> — store a last_updated timestamp for every feature of every entity</li>
+                    <li><b>Matched SLAs</b> — define max_age per feature: 15 min for activity, 24 hours for demographics</li>
+                    <li><b>Alert on breach</b> — page the moment a feature exceeds its SLA, not when model metrics sag</li>
+                    <li><b>Refuse stale reads</b> — serve an uncertainty flag instead of a prediction when features are stale</li>
                 </ul>
                 <div class="key-point">
-                    <strong>Principle:</strong> Every feature read should carry its age. The model serving layer must know whether it is making a decision on fresh data or stale data — and act accordingly.
+                    <strong>Fix:</strong> Every feature read should carry its age so the serving layer knows whether it is deciding on fresh or stale data.
                 </div>
             </td>
             <td class="viz-col">

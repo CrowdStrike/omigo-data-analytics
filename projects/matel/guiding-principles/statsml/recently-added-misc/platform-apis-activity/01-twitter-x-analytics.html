@@ -15,6 +15,7 @@
         .obj-table td:last-child { width: 55%; text-align: center; }
         ul { padding-left: 20px; margin: 8px 0; }
         li { margin-bottom: 6px; font-size: 0.93em; }
+        a { color: #1a5276; }
         .payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 12px 0; text-align: left; }
         .key-point { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
         canvas { display: block; margin: 12px auto 0; width: 100%; }
@@ -30,7 +31,7 @@
                 <div class="obj-title">What the API Provides</div>
                 <ul>
                     <li>Tweet-level metrics: impressions, engagements, retweets, replies, likes, profile clicks, URL clicks</li>
-                    <li>Account-level metrics: follower growth, profile visits</li>
+                    <li>Account-level: snapshot <code>public_metrics</code> via users lookup (followers_count, tweet_count) — no growth time-series</li>
                     <li>Available via <code>GET /2/tweets/:id</code> with <code>tweet.fields=public_metrics,non_public_metrics,organic_metrics</code></li>
                     <li>Non-public metrics (impressions, profile clicks) only available to tweet author</li>
                     <li>Data returned is point-in-time snapshot, not time-series</li>
@@ -72,12 +73,12 @@
                 <div class="obj-title">Access & Authentication</div>
                 <ul>
                     <li>OAuth 2.0 with PKCE or OAuth 1.0a (user context)</li>
-                    <li>Since 2023 restructuring: Free tier (write-only, no analytics), Basic ($100/mo, 10K read tweets/mo), Pro ($5000/mo, 1M read tweets/mo), Enterprise (custom)</li>
+                    <li>Since the 2023 restructuring: Free tier (essentially write-only, ~100 read posts/mo), Basic ($200/mo, 10K read tweets/mo), Pro ($5000/mo, 1M read tweets/mo), Enterprise (custom)</li>
                     <li>App-level authentication for public metrics only; user-context required for non_public_metrics</li>
                     <li>Rate limits: Basic = 10,000 tweets/month read, Pro = 1,000,000 tweets/month read</li>
-                    <li>15-minute rate limit windows: 300 requests per 15 min (app), 900 per 15 min (user) on Pro</li>
+                    <li>Per-request rate limits are per-endpoint and tier-dependent, enforced in 15-minute windows</li>
                 </ul>
-                <div class="key-point">The Free tier provides no read access at all. You cannot even retrieve your own tweet metrics without paying. This is a deliberate monetization gate introduced after the 2023 acquisition.</div>
+                <div class="key-point">The Free tier is essentially write-only (500 posts/mo at the user level) with only a token read allowance of ~100 posts/month — not enough to track your own tweet metrics. This monetization gate came with the 2023 API paywall restructuring, following the October 2022 acquisition.</div>
             </td>
             <td>
                 <canvas id="c2" height="400"></canvas>
@@ -89,11 +90,11 @@
                 <ul>
                     <li>Metrics are cumulative totals, not time-bucketed — no native "impressions per hour" endpoint</li>
                     <li>Historical data: up to 7 days for recent search, full archive search on Pro/Enterprise only</li>
-                    <li>15-minute aggregation windows for streaming endpoints (filtered stream)</li>
-                    <li>Impression counts stop updating after ~30 days for most tweets</li>
+                    <li>Filtered stream delivers matching tweets in real time; the 15-minute window applies to rate limiting, not to data aggregation</li>
+                    <li><code>non_public_metrics</code> and <code>organic_metrics</code> are only available for tweets created within the last 30 days; public <code>impression_count</code> keeps updating</li>
                     <li>No audience demographic breakdown via standard API (only via ads API)</li>
                 </ul>
-                <div class="key-point">The 30-day impression freeze means that any analysis of "viral" tweets that gain traction weeks later will systematically undercount their actual reach. The counter simply stops incrementing.</div>
+                <div class="key-point">The 30-day availability window means non-public and organic metrics for older tweets are simply gone — if you did not capture them in time, you cannot recover them. Public metrics remain retrievable, but without the click and organic breakdowns.</div>
             </td>
             <td>
                 <canvas id="c3" height="340"></canvas>
@@ -104,7 +105,7 @@
                 <div class="obj-title">Business Scenarios & Deprecation Notes</div>
                 <ul>
                     <li>Social listening dashboards, competitor benchmarking, campaign ROI measurement</li>
-                    <li>The v1.1 analytics endpoints were deprecated Nov 2022 — many third-party tools broke</li>
+                    <li>Free v1.1 API access was cut off during the 2023 paywall restructuring — many third-party tools broke</li>
                     <li>"Engagement rate" calculation differs between platform UI and API (denominator varies)</li>
                     <li>Academic Research tier ($0, 10M tweets/mo) was eliminated in 2023</li>
                     <li>Enterprise tier pricing is negotiated, reportedly $42K+/mo for full firehose equivalent</li>
@@ -116,6 +117,12 @@
             </td>
         </tr>
     </table>
+
+    <h2>Official API References</h2>
+    <ul>
+        <li><a href="https://docs.x.com/">docs.x.com</a> — official X API documentation portal</li>
+        <li><a href="https://developer.x.com/en/docs/x-api">X API v2 docs</a> — developer platform reference for the X API v2, including tweet metrics fields</li>
+    </ul>
 
     <script>
     const dpr = window.devicePixelRatio || 1;
@@ -138,8 +145,8 @@
         const { ctx, w, h } = setupCanvas('c1');
 
         const tiers = [
-            { label: 'Free', price: '$0/mo', reads: 0, displayVal: '0' },
-            { label: 'Basic', price: '$100/mo', reads: 10000, displayVal: '10K' },
+            { label: 'Free', price: '$0/mo', reads: 100, displayVal: '~100' },
+            { label: 'Basic', price: '$200/mo', reads: 10000, displayVal: '10K' },
             { label: 'Pro', price: '$5,000/mo', reads: 1000000, displayVal: '1M' },
             { label: 'Enterprise', price: '$42K+/mo', reads: 10000000, displayVal: '10M+' }
         ];
@@ -159,8 +166,8 @@
         const chartWidth = chartRight - chartLeft;
 
         // Using log-scale visual representation
-        // Map: 0->0, 10K->25%, 1M->60%, 10M->95%
-        const barHeights = [0, 0.25, 0.60, 0.95];
+        // Map: ~100->8%, 10K->25%, 1M->60%, 10M->95%
+        const barHeights = [0.08, 0.25, 0.60, 0.95];
 
         const barCount = tiers.length;
         const barGap = 20;
@@ -256,8 +263,8 @@
         ctx.fillText('API Access Tiers — What You Get', w / 2, 24);
 
         const tiers = [
-            { name: 'Free', color: '#e74c3c', features: ['Write only', 'No read access', 'No analytics', '1,500 tweets/mo post'] },
-            { name: 'Basic ($100)', color: '#e67e22', features: ['10K reads/mo', 'Public metrics', '3K tweets/mo post', '2 app IDs'] },
+            { name: 'Free', color: '#e74c3c', features: ['Mostly write-only', '~100 reads/mo', 'No analytics', '500 posts/mo (user)'] },
+            { name: 'Basic ($200)', color: '#e67e22', features: ['10K reads/mo', 'Public metrics', '3K tweets/mo post', '2 app IDs'] },
             { name: 'Pro ($5,000)', color: '#27ae60', features: ['1M reads/mo', 'Full metrics', '300K tweets/mo post', 'Full archive search'] },
             { name: 'Enterprise', color: '#1a5276', features: ['10M+ reads/mo', 'Firehose access', 'Real-time streams', 'Custom limits'] }
         ];
@@ -295,26 +302,12 @@
         ctx.fillStyle = '#1a5276';
         ctx.font = 'bold 13px -apple-system, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('15-Minute Rate Windows (Pro tier)', w / 2, rlY);
+        ctx.fillText('Per-Request Rate Limits', w / 2, rlY);
 
-        // App-level bar
-        ctx.fillStyle = 'rgba(26,82,118,0.35)';
-        const barMaxW = w - 100;
-        ctx.fillRect(50, rlY + 15, barMaxW * 0.33, 22);
-        ctx.strokeStyle = '#1a5276';
-        ctx.strokeRect(50, rlY + 15, barMaxW * 0.33, 22);
-        ctx.fillStyle = '#1a5276';
-        ctx.font = '11px -apple-system, sans-serif';
-        ctx.textAlign = 'left';
-        ctx.fillText('App: 300 req/15min', 55, rlY + 30);
-
-        // User-level bar
-        ctx.fillStyle = 'rgba(39,174,96,0.35)';
-        ctx.fillRect(50, rlY + 45, barMaxW * 1.0, 22);
-        ctx.strokeStyle = '#27ae60';
-        ctx.strokeRect(50, rlY + 45, barMaxW * 1.0, 22);
-        ctx.fillStyle = '#27ae60';
-        ctx.fillText('User: 900 req/15min', 55, rlY + 60);
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillText('Limits are per-endpoint and tier-dependent,', w / 2, rlY + 26);
+        ctx.fillText('enforced in 15-minute windows (app and user context differ)', w / 2, rlY + 46);
     })();
 
     // C3: Timeline — data availability windows
@@ -335,8 +328,8 @@
 
         const windows = [
             { label: 'Recent Search', days: 7, maxDays: 365, color: '#e67e22', note: '7 days' },
-            { label: 'Impression Updates', days: 30, maxDays: 365, color: '#e74c3c', note: '~30 days then freeze' },
-            { label: 'Streaming (filtered)', days: 0.01, maxDays: 365, color: '#27ae60', note: 'Real-time (15-min windows)' },
+            { label: 'Non-public/Organic Metrics', days: 30, maxDays: 365, color: '#e74c3c', note: 'Tweets from last 30 days only' },
+            { label: 'Streaming (filtered)', days: 0.01, maxDays: 365, color: '#27ae60', note: 'Real-time delivery' },
             { label: 'Full Archive (Pro+)', days: 365, maxDays: 365, color: '#1a5276', note: 'All historical tweets' }
         ];
 

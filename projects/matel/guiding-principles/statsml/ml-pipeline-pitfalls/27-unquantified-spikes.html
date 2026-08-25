@@ -76,6 +76,20 @@ ul {
 }
 li { margin-bottom: 4px; }
 
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
 </style>
 </head>
 <body>
@@ -88,17 +102,18 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>Pipeline lacks cardinality profiling and can't predict memory needs. One power user with 10M events crashes the reducer. Seasonal traffic spikes exceed capacity. No alerts until OOM kills the job.</p>
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">data skew</span></div>
                 <ul>
-                    <li>No profiling of key cardinality (users, sessions, events per partition)</li>
-                    <li>Groupby operations on skewed keys (one user with 100x data)</li>
-                    <li>Seasonal spikes (Black Friday, tax season) exceed baseline capacity</li>
-                    <li>Window functions over unbounded partitions exhaust memory</li>
+                    <li><b>Volume is a distribution</b> — data size has a long tail, yet pipelines treat it as a constant</li>
+                    <li><b>No cardinality profiling</b> — rows-per-key are never measured, so memory needs are guesses</li>
+                    <li><b>Skewed groupby keys</b> — one key with 100x the typical rows lands on a single worker and kills it</li>
+                    <li><b>Seasonal spikes</b> — Black Friday or tax season exceeds capacity sized on quiet months</li>
+                    <li><b>Unbounded windows</b> — window state grows with the largest partition, not the average one</li>
                 </ul>
+                <p class="example">A pipeline groups by user_id; one bot account with 10M events needs about 100GB against an 8GB executor, and the job OOMs.</p>
                 <div class="key-point">
-                    <strong>Impact:</strong> Pipelines fail unpredictably in production. No way to predict resource needs. Retries make it worse by replaying same skewed partition. Data loss or SLA breaches. Fix: Profile cardinality continuously, set memory budgets, repartition on skew detection.
+                    <strong>Impact:</strong> Pipelines fail unpredictably, retries replay the same skewed partition, and the outcome is data loss or SLA breaches.
                 </div>
-                <p class="example">Example: A recommendation pipeline groups by user_id. 99% of users have < 1000 events, but one bot account has 50M. The partition with that user exhausts 64GB RAM and crashes, failing the entire job.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c1" width="720" height="300"></canvas>
@@ -108,21 +123,23 @@ li { margin-bottom: 4px; }
 </div>
 
 <div class="card-section">
-    <h2>Why It Happens / Detection / Common Sources</h2>
+    <h2>Why It Happens</h2>
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>Pipelines are designed for average case, not tail behavior. Teams assume uniform distribution. No pre-execution profiling means surprises only surface in production.</p>
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">capacity planning</span></div>
                 <ul>
-                    <li>Assumes all partitions are similar size (rarely true)</li>
-                    <li>No cardinality checks before shuffle/groupby operations</li>
-                    <li>Memory limits set based on average, not p99 or max</li>
-                    <li>Production data has long tail (bots, scrapers, power users)</li>
+                    <li><b>Average-case design</b> — pipelines are sized for the mean while failure is driven by the maximum</li>
+                    <li><b>Uniformity assumption</b> — capacity plans treat all partitions as similar, which rarely holds</li>
+                    <li><b>No pre-shuffle checks</b> — hot keys go undetected until they land on one worker mid-job</li>
+                    <li><b>Average-based limits</b> — memory limits come from mean partition size, not the p99 or max</li>
+                    <li><b>Long-tailed reality</b> — bots and power users sit orders of magnitude above the median</li>
+                    <li><b>Crash as discovery</b> — with nothing profiling the data, the first evidence of skew is a crash</li>
                 </ul>
+                <p class="example">During Black Friday the top customer places 5,000 orders vs a typical 3, and a pipeline sized for 64 orders per customer crashes.</p>
                 <div class="key-point">
-                    <strong>Detection:</strong> Profile key cardinality before expensive operations. Track partition size distribution (min, p50, p99, max). Alert when skew ratio (max/median) > 100. Monitor memory high-water mark per task. Log cardinality stats for every groupby.
+                    <strong>Root Cause:</strong> Capacity is planned around averages while failure is triggered by the tail, which stays invisible without profiling.
                 </div>
-                <p class="example">Example: E-commerce pipeline groups orders by customer_id. During Black Friday, order volume 10x normal. Top customer has 5,000 orders (vs typical 3). Pipeline sized for 64 orders/customer crashes on 5,000-order partition.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c2" width="720" height="300"></canvas>
@@ -132,21 +149,23 @@ li { margin-bottom: 4px; }
 </div>
 
 <div class="card-section">
-    <h2>Prevention / Correct Approach</h2>
+    <h2>The Correct Approach</h2>
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>Profile cardinality before every shuffle, groupby, or window operation. Set memory budgets based on p99, not average. Detect and repartition skewed keys automatically.</p>
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">profiling</span></div>
                 <ul>
-                    <li>Profile cardinality: SELECT key, COUNT(*) GROUP BY key ORDER BY count DESC LIMIT 100</li>
-                    <li>Set memory = p99_partition_size × row_size × safety_factor</li>
-                    <li>Alert if skew ratio (max/median) > threshold (e.g., 100)</li>
-                    <li>Repartition hot keys: split large partitions into subpartitions</li>
+                    <li><b>Measure first</b> — skew becomes manageable once profiling is a first-class pipeline stage</li>
+                    <li><b>Profile keys</b> — count rows per key before every shuffle, groupby, or window operation</li>
+                    <li><b>Budget for the tail</b> — set memory to p99 partition size × row size × a safety factor</li>
+                    <li><b>Salt hot keys</b> — split a hot key by hour or hash bucket to spread its load across partitions</li>
+                    <li><b>Emit skew metrics</b> — publish min, median, p99, and max partition sizes on every run</li>
+                    <li><b>Alert on ratio</b> — flag when max/median crosses a per-workload threshold, e.g. 100</li>
                 </ul>
+                <p class="example">A profile finds user_12345 with 10M events vs a p99 of 5K, so it is repartitioned by (user_id, event_hour) into 24 slices.</p>
                 <div class="key-point">
-                    <strong>Best practice:</strong> Add cardinality profiling as a pipeline stage before expensive ops. Emit metrics: partition count, min/median/p99/max size, skew ratio. Use salting or sub-key partitioning for hot keys. Budget memory for p99, not average.
+                    <strong>Fix:</strong> Profile cardinality before expensive operations, publish skew metrics on every run, and salt hot keys — budgeting memory for p99, not the average.
                 </div>
-                <p class="example">Example: Before groupby user_id, profile cardinality. Detect user_12345 has 10M events (vs p99 of 5K). Repartition that user by (user_id, event_hour) to split load across 24 partitions. Rest of users process normally.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c3" width="720" height="300"></canvas>
@@ -202,7 +221,7 @@ function setup(id) {
     // Y-axis labels
     ctx.textAlign = 'right';
     for (var i = 0; i <= 5; i++) {
-        var val = i * 20;
+        var val = i * 4;
         var y = bottom - i * (bottom - top) / 5;
         ctx.fillText(val, left - 10, y + 4);
         ctx.strokeStyle = '#e0e0e0';
@@ -273,7 +292,7 @@ function setup(id) {
     ctx.fillStyle = '#27ae60';
     ctx.font = '10px system-ui';
     ctx.textAlign = 'left';
-    ctx.fillText('Normal partitions: 1-2 GB', left + 10, bottom - 30);
+    ctx.fillText('Normal partitions: 2-4 GB', left + 10, bottom - 30);
 
     ctx.fillStyle = '#e74c3c';
     ctx.fillText('Skewed partition (hot key): 100GB needed', left + 320, top + 50);
@@ -359,7 +378,7 @@ function setup(id) {
     ctx.fillText('Hot key', hotX, bottom - hotH - 10);
     ctx.font = '10px system-ui';
     ctx.fillText('10M rows', hotX, bottom - hotH + 5);
-    ctx.fillText('(100x p99)', hotX, bottom - hotH + 18);
+    ctx.fillText('(2,000x p99)', hotX, bottom - hotH + 18);
 
     // Skew ratio annotation
     ctx.fillStyle = '#e74c3c';

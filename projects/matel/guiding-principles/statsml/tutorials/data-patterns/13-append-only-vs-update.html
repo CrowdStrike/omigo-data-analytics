@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Append-Only vs Update-in-Place</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Append-Only vs Update-in-Place</h1>
+<p class="subtitle">Add a new row for every change and keep the old ones, or overwrite the existing row — keeping history versus keeping it simple</p>
+
+<div class="card-section">
+    <h2>A Customer Moves: Overwrite the Row or Add One?</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">running example</span></div>
+                <ul>
+                    <li><b>The row</b> — customer 42 in a customers table, with a shipping address column</li>
+                    <li><b>Update-in-place</b> — she moves, so UPDATE her one row; "12 Oak St" is gone forever</li>
+                    <li><b>Append-only</b> — she moves, so INSERT a new row; the old row stays, marked no-longer-current</li>
+                    <li><b>Two moves later</b> — overwrite still has 1 row; append-only has 3 rows, dated</li>
+                    <li><b>The trade</b> — one is small and simple; the other remembers every version</li>
+                </ul>
+                <p class="example">Customer 42's addresses: "12 Oak St" (Jan 5), "88 Pine Ave" (Mar 20), "3 Lake Rd" (Jul 2).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Update-in-place stores only the latest truth; append-only stores every truth that ever held, each with its dates.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Where Did Order 507 Ship on April 10?</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">worked example</span><span class="tag blue">core idea</span></div>
+                <ul>
+                    <li><b>The question</b> — order 507 shipped Apr 10; which address was correct back then?</li>
+                    <li><b>Read the versions</b> — row 1 valid Jan 5 – Mar 20, row 2 valid Mar 20 – Jul 2, row 3 valid Jul 2 – now</li>
+                    <li><b>Find the interval</b> — Apr 10 falls inside Mar 20 – Jul 2</li>
+                    <li><b>Answer</b> — "88 Pine Ave", read straight off row 2 of the append-only table</li>
+                    <li><b>Overwrite table</b> — can only say "3 Lake Rd", today's address — wrong for April</li>
+                </ul>
+                <p class="example">The lookup is just "which row's valid_from ≤ Apr 10 &lt; valid_to" — a date comparison you can do by eye.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Append-only lets you ask "what was true on date X?" for any X. Update-in-place can only ever answer for today.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why Overwritten History Breaks Training Data</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag red">leakage</span></div>
+                <ul>
+                    <li><b>The task</b> — train a delivery-time model on last year's orders, with "customer region" as a feature</li>
+                    <li><b>The join</b> — each old order is joined to the customers table to fetch the region</li>
+                    <li><b>The bug</b> — an overwrite table serves TODAY's region for orders shipped months ago</li>
+                    <li><b>Order 507 again</b> — shipped to Pine Ave in April, but the join labels it with Lake Rd's region</li>
+                    <li><b>Audit and debug</b> — "who changed this, when, from what?" only exists if old rows survive</li>
+                </ul>
+                <p class="example">Training saw the customer where she lives now, not where the parcel actually went — a quiet time-travel error.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Joining past events to an overwrite table leaks the future into training features. Append-only (with an as-of-date join) is the fix.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Confusion: Append-Only Rows Are Versions, Not Customers</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag blue">rule of thumb</span></div>
+                <ul>
+                    <li><b>The naive query</b> — "how many customers?" as a plain row count over the append-only table</li>
+                    <li><b>Wrong answer</b> — customer 42 counts 3 times, once per address version</li>
+                    <li><b>Right answer</b> — count distinct customer_id, or keep only rows where is_current = true</li>
+                    <li><b>Same trap in joins</b> — joining orders to all 3 versions duplicates every one of her orders</li>
+                    <li><b>Rule of thumb</b> — every query on an append-only table must say WHICH version it wants</li>
+                </ul>
+                <p class="example">The dashboard reported 5 customers when there were 3 — movers were counted once per address.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> In an append-only table a row means "a version of a thing", not "a thing" — forget the current-version filter and every count and join inflates.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var w = 720, h = 300;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+    return { ctx: ctx, w: w, h: h };
+}
+
+function boxAt(ctx, x, y, bw, bh, fill, stroke, dashed) {
+    ctx.fillStyle = fill; ctx.fillRect(x, y, bw, bh);
+    ctx.strokeStyle = stroke; ctx.lineWidth = 2;
+    if (dashed) ctx.setLineDash([6, 4]);
+    ctx.strokeRect(x, y, bw, bh);
+    ctx.setLineDash([]);
+}
+function arrowTo(ctx, x1, y1, x2, y2, color, dashed) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2;
+    if (dashed) ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.setLineDash([]);
+    var a = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath(); ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 9 * Math.cos(a - 0.4), y2 - 9 * Math.sin(a - 0.4));
+    ctx.lineTo(x2 - 9 * Math.cos(a + 0.4), y2 - 9 * Math.sin(a + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: overwrite table (1 row, ghosts of old values) vs append-only (3 rows)
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Customer 42 After Two Moves: One Row vs Three Rows', w / 2, 24);
+
+    // divider
+    ctx.strokeStyle = '#bdc3c7'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(320, 40); ctx.lineTo(320, 280); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Left: update-in-place
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('UPDATE-IN-PLACE — 1 row', 165, 54);
+    // ghost rows (overwritten values)
+    ctx.globalAlpha = 0.35;
+    boxAt(ctx, 45, 78, 240, 34, '#fff', P.mute, true);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('42 | 12 Oak St', 165, 99);
+    boxAt(ctx, 45, 120, 240, 34, '#fff', P.mute, true);
+    ctx.fillText('42 | 88 Pine Ave', 165, 141);
+    ctx.globalAlpha = 1;
+    // strikethroughs
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(80, 95); ctx.lineTo(250, 95); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(80, 137); ctx.lineTo(250, 137); ctx.stroke();
+    // current row
+    boxAt(ctx, 45, 162, 240, 38, 'rgba(42,120,214,0.08)', P.blue);
+    ctx.fillStyle = '#222'; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('42 | 3 Lake Rd', 165, 186);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('old values destroyed on write', 165, 226);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('(crossed rows no longer exist anywhere)', 165, 246);
+
+    // Right: append-only
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('APPEND-ONLY — 3 rows, all kept', 520, 54);
+    var rows = [
+        { y: 74,  txt: '42 | 12 Oak St   | Jan 5  | current: no',  cur: false },
+        { y: 122, txt: '42 | 88 Pine Ave | Mar 20 | current: no',  cur: false },
+        { y: 170, txt: '42 | 3 Lake Rd   | Jul 2  | current: YES', cur: true }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        boxAt(ctx, 355, r.y, 330, 38, r.cur ? 'rgba(0,131,0,0.10)' : 'rgba(0,131,0,0.03)', P.green);
+        ctx.fillStyle = r.cur ? '#0a5a0a' : '#555';
+        ctx.font = (r.cur ? 'bold ' : '') + '12px ui-monospace, Menlo, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(r.txt, 520, r.y + 24);
+    }
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('a move = one INSERT; nothing is ever edited', 520, 232);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('same customer, same moves — only the right side remembers them', w / 2, 285);
+})();
+
+// c2: validity timeline + as-of lookup for Apr 10
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w;
+    var pad = { left: 130, right: 40 };
+    // months Jan..Aug mapped to x
+    var m0 = 0, m1 = 8;  // Jan=0 ... Sep=8
+    function X(m) { return pad.left + (m - m0) / (m1 - m0) * (w - pad.left - pad.right); }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Each Version Owns a Slice of Time — Apr 10 Falls in the Middle One', w / 2, 24);
+
+    var bars = [
+        { from: 0.13, to: 2.63, label: '12 Oak St',   y: 78,  color: P.aqua },   // Jan 5 - Mar 20
+        { from: 2.63, to: 6.05, label: '88 Pine Ave', y: 128, color: P.violet }, // Mar 20 - Jul 2
+        { from: 6.05, to: 8,    label: '3 Lake Rd',   y: 178, color: P.magenta } // Jul 2 - now
+    ];
+    for (var i = 0; i < bars.length; i++) {
+        var b = bars[i];
+        ctx.fillStyle = b.color; ctx.globalAlpha = 0.35;
+        ctx.fillRect(X(b.from), b.y, X(b.to) - X(b.from), 30);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = b.color; ctx.lineWidth = 2;
+        ctx.strokeRect(X(b.from), b.y, X(b.to) - X(b.from), 30);
+        ctx.fillStyle = b.color; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(b.label, pad.left - 12, b.y + 20);
+    }
+    // validity captions
+    ctx.fillStyle = '#555'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('Jan 5 – Mar 20', (X(0.13) + X(2.63)) / 2, 98);
+    ctx.fillText('Mar 20 – Jul 2', (X(2.63) + X(6.05)) / 2, 148);
+    ctx.fillText('Jul 2 – now', (X(6.05) + X(8)) / 2, 198);
+
+    // month axis
+    var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'];
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad.left, 226); ctx.lineTo(w - 40, 226); ctx.stroke();
+    ctx.fillStyle = '#222'; ctx.font = '12px system-ui';
+    for (var i = 0; i < months.length; i++) ctx.fillText(months[i], X(i + 0.5), 244);
+
+    // Apr 10 lookup line (Apr 10 ~ month 3.3)
+    var qx = X(3.3);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2.5; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(qx, 48); ctx.lineTo(qx, 226); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('order 507 ships: Apr 10', qx, 44);
+    // hit marker on middle bar
+    ctx.fillStyle = P.orange;
+    ctx.beginPath(); ctx.arc(qx, 143, 6, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('→ answer: 88 Pine Ave', qx + 14, 122);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the overwrite table would answer "3 Lake Rd" — today\'s truth, not April\'s', w / 2, 272);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('as-of lookup: find the row whose valid_from ≤ date < valid_to', w / 2, 291);
+})();
+
+// c3: leakage — past order joined to current-state table
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Building Training Data: Which Table Does the Join Hit?', w / 2, 24);
+
+    // the past order (left)
+    boxAt(ctx, 30, 105, 170, 76, 'rgba(201,133,0,0.10)', P.yellow);
+    ctx.fillStyle = P.yellow; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('order 507 (April)', 115, 130);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('label: delivered in 4 days', 115, 150);
+    ctx.fillText('feature: region = ?', 115, 168);
+
+    // top path: overwrite table -> wrong
+    arrowTo(ctx, 200, 125, 300, 85, '#e74c3c');
+    boxAt(ctx, 304, 58, 200, 54, 'rgba(231,76,60,0.08)', '#e74c3c');
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('overwrite table (today)', 404, 80);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('42 | 3 Lake Rd', 404, 100);
+    arrowTo(ctx, 504, 85, 560, 85, '#e74c3c');
+    boxAt(ctx, 564, 58, 136, 54, 'rgba(231,76,60,0.10)', '#e74c3c');
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('region: Lake Rd', 632, 80);
+    ctx.fillText('LEAKED FUTURE', 632, 100);
+
+    // bottom path: append-only as-of April -> right
+    arrowTo(ctx, 200, 160, 300, 205, P.green);
+    boxAt(ctx, 304, 178, 200, 54, 'rgba(0,131,0,0.07)', P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('append-only, as of Apr 10', 404, 200);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('42 | 88 Pine Ave | Mar–Jul', 404, 220);
+    arrowTo(ctx, 504, 205, 560, 205, P.green);
+    boxAt(ctx, 564, 178, 136, 54, 'rgba(0,131,0,0.10)', P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('region: Pine Ave', 632, 200);
+    ctx.fillText('true at ship time', 632, 220);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('the model must only see what was knowable when the order shipped', w / 2, 266);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('overwrite tables make the leaky join the EASY one to write', w / 2, 286);
+})();
+
+// c4: naive count vs current-filter count on the append-only table
+(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('"How Many Customers?" — 5 Rows, 3 Customers', w / 2, 24);
+
+    // the table: 3 customers, customer 42 has 3 versions
+    var rows = [
+        { txt: '41 | 7 Elm St     | current: YES', cur: true },
+        { txt: '42 | 12 Oak St    | current: no',  cur: false },
+        { txt: '42 | 88 Pine Ave  | current: no',  cur: false },
+        { txt: '42 | 3 Lake Rd    | current: YES', cur: true },
+        { txt: '43 | 5 Mill Ln    | current: YES', cur: true }
+    ];
+    var ty = 52, rh = 30;
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i], ry = ty + i * (rh + 3);
+        boxAt(ctx, 40, ry, 320, rh, r.cur ? 'rgba(0,131,0,0.09)' : 'rgba(107,114,128,0.06)', r.cur ? P.green : P.mute);
+        ctx.fillStyle = r.cur ? '#0a5a0a' : '#777';
+        ctx.font = (r.cur ? 'bold ' : '') + '12px ui-monospace, Menlo, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(r.txt, 200, ry + 20);
+    }
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('grey rows = old versions of customer 42', 200, ty + 5 * (rh + 3) + 16);
+
+    // right: two queries, two answers
+    boxAt(ctx, 420, 62, 270, 74, 'rgba(231,76,60,0.08)', '#e74c3c');
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('naive: COUNT(*)', 555, 86);
+    ctx.font = 'bold 20px system-ui';
+    ctx.fillText('5  ✗', 555, 116);
+
+    boxAt(ctx, 420, 158, 270, 74, 'rgba(0,131,0,0.08)', P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('WHERE is_current = true', 555, 182);
+    ctx.font = 'bold 20px system-ui';
+    ctx.fillText('3  ✓', 555, 212);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('joins have the same trap: 3 versions × her orders = every order tripled', w / 2, 272);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('always state which version you want: current, or as-of a date', w / 2, 291);
+})();
+</script>
+
+</body>
+</html>

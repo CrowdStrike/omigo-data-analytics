@@ -3,96 +3,225 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>12. Arrow</title>
+<title>Arrow</title>
 <style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
 body {
-    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    padding: 20px 10px;
+    font-family: system-ui, -apple-system, sans-serif;
     background: #fff;
-    color: #1a1a1a;
-    font-size: 15px;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
 }
-h1 { color: #1a5276; margin-bottom: 4px; }
-.subtitle { color: #333; font-size: 1.1em; margin-bottom: 20px; }
-.philosophy {
-    background: #f0f4f8;
-    border-left: 4px solid #2980b9;
-    padding: 12px 16px;
-    margin: 20px 0;
-    font-size: 0.95em;
-    color: #222;
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
 }
-.info-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-.info-table td {
-    border: 1px solid #2980b9;
-    padding: 14px 16px;
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
     vertical-align: top;
-    font-size: 0.95em;
+    padding: 12px;
 }
-.info-table tr:nth-child(even) td { background: #f0f8ff; }
-.info-table td:first-child { width: 40%; font-weight: 700; color: #1a5276; }
-.info-table td:last-child { width: 60%; }
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.intro-callout {
+    background: #f8f9fa;
+    border-left: 3px solid #2980b9;
+    padding: 10px 14px;
+    margin-bottom: 32px;
+    font-size: 0.93rem;
+}
 code { background: #f0f4f8; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }
 pre { background: #f0f4f8; padding: 12px; border-radius: 4px; overflow-x: auto; font-size: 0.9em; }
 </style>
 </head>
 <body>
 
-<h1>12. Arrow</h1>
+<h1>Arrow</h1>
 <p class="subtitle">In-memory columnar format for zero-copy sharing.</p>
 
-<div class="philosophy">
-<strong>Core trade-off:</strong> Zero-copy data sharing between tools and languages eliminates serialization overhead — but the columnar memory layout has overhead for small datasets and Arrow is not a persistence format.
+<div class="intro-callout">
+    <strong>Core trade-off:</strong> Zero-copy data sharing between tools and languages eliminates serialization overhead &mdash; but the columnar memory layout has overhead for small datasets, and Arrow is not a persistence format.
 </div>
 
-<table class="info-table">
-<tbody>
-<tr>
-<td>What It Is</td>
-<td>Apache Arrow is a language-agnostic specification for columnar data in memory. It defines how arrays of typed values should be laid out in RAM so that any tool (Pandas, DuckDB, Spark, Polars, R) can read the same memory without copying or converting. It is a memory format, not a file format — though Arrow IPC and Feather provide serialization.</td>
-</tr>
-<tr>
-<td>Structure / Syntax</td>
-<td>Data is organized as record batches: a schema plus column arrays. Each column is a contiguous buffer of typed values with a separate validity bitmap for nulls. Strings use an offsets buffer + data buffer. Nested types (struct, list, map) compose these primitives. All buffers are aligned for SIMD and cache-line efficiency.</td>
-</tr>
-<tr>
-<td>Strengths</td>
-<td>Zero-copy between tools — DuckDB query result consumed by Pandas with no serialization. Language-agnostic (C, C++, Python, R, Java, Rust, JS all share the same layout). SIMD-friendly memory alignment. Eliminates the "convert to my format" tax. Enables IPC between processes via shared memory.</td>
-</tr>
-<tr>
-<td>Weaknesses</td>
-<td>Memory overhead for small datasets (columnar layout has per-column buffer costs). Not a storage/persistence format by itself. Ecosystem still maturing (some libraries have partial support). The full spec is complex. Does not compress data in memory (that's intentional for compute speed).</td>
-</tr>
-<tr>
-<td>Business Use Case</td>
-<td>Analytics engine interoperability (DuckDB ↔ Pandas ↔ Polars). IPC between Python and R processes. Query engine internals (DataFusion, Velox, Acero). DataFrame libraries (Polars is Arrow-native). Flight RPC for high-speed data transfer. Any pipeline where the serialization tax between tools is the bottleneck.</td>
-</tr>
-<tr>
-<td>Example</td>
-<td>
-<pre>Without Arrow (traditional):
-  DuckDB query → serialize to bytes → deserialize into
-  Pandas numpy arrays → copy strings → rebuild index
-  Cost: O(n) copy + O(n) type conversion + memory spike
+<div class="card-section">
+    <h2>How It Works</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>A language-agnostic specification for how columnar data is laid out in RAM, so any tool (Pandas, DuckDB, Spark, Polars, R) can read the same memory without copying or converting. A memory format, not a file format &mdash; Arrow IPC and Feather provide serialization when needed.</p>
+                <ul>
+                    <li><strong>Schema:</strong> Carried with each record batch</li>
+                    <li><strong>Layout:</strong> Contiguous typed buffers per column + validity bitmap for nulls; strings as offsets + data buffers</li>
+                    <li><strong>Alignment:</strong> SIMD- and cache-line-friendly, uncompressed by design</li>
+                    <li><strong>Best for:</strong> Pipelines where the tool-boundary tax is the bottleneck</li>
+                </ul>
+                <p style="margin-top: 10px; font-size: 0.9rem;"><strong>How sharing works:</strong> Traditionally, DuckDB handing a result to Pandas means serialize &rarr; deserialize &rarr; copy strings &rarr; rebuild &mdash; O(n) work and a memory spike at every library boundary, paid again at scikit-learn and again at Polars. With Arrow both sides agree on the memory layout itself, so the handoff is an O(1) pointer exchange: Pandas reads the <em>same</em> buffers DuckDB produced. A 10M-row handoff drops from seconds and hundreds of MB to effectively free.</p>
+                <div class="key-point">
+                    <strong>What it is not:</strong> Not storage &mdash; that&rsquo;s Parquet&rsquo;s job (compressed, on disk); Arrow is its uncompressed in-RAM counterpart. The two are designed to convert cheaply into each other.
+                </div>
+                <p class="example">Example: DuckDB &harr; Pandas &harr; Polars interop, DataFusion/Velox engine internals, Flight RPC transfers, Python &harr; R shared memory.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
 
-With Arrow (zero-copy):
-  DuckDB query → Arrow record batch (already in memory)
-  Pandas reads the SAME memory via Arrow-backed columns
-  Cost: O(1) pointer handoff, zero additional memory
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
 
-Real-world impact:
-  10M row query result, 8 columns
-  Traditional: 2.1 seconds, 800MB peak memory
-  Arrow:       0.003 seconds, 0MB additional memory
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
 
-The key insight: Arrow eliminates the tax you pay
-every time data crosses a library boundary. When your
-pipeline is DuckDB → Pandas → scikit-learn → Polars,
-that tax was being paid 3 times. Now it is zero.</pre>
-</td>
-</tr>
-</tbody>
-</table>
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Arrow — Copy at Every Boundary vs One Shared Buffer', w / 2, 25);
+
+    // Top: traditional pipeline with copies
+    var y1 = 70, boxW = 110, boxH = 40, gap = 66;
+    var tools = ['DuckDB', 'Pandas', 'sklearn', 'Polars'];
+    var x0 = (w - (tools.length * boxW + (tools.length - 1) * gap)) / 2;
+
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'left';
+    ctx.fillText('without Arrow:', 30, y1 - 24);
+
+    for (var i = 0; i < tools.length; i++) {
+        var x = x0 + i * (boxW + gap);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(x, y1 - 20, boxW, boxH);
+        ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 1.5;
+        ctx.strokeRect(x, y1 - 20, boxW, boxH);
+        ctx.fillStyle = '#1a5276'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(tools[i], x + boxW / 2, y1 + 4);
+
+        if (i < tools.length - 1) {
+            var ax = x + boxW;
+            ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(ax + 6, y1); ctx.lineTo(ax + gap - 10, y1); ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(ax + gap - 18, y1 - 5); ctx.lineTo(ax + gap - 8, y1); ctx.lineTo(ax + gap - 18, y1 + 5);
+            ctx.fillStyle = '#e74c3c'; ctx.fill();
+            ctx.font = '9px system-ui';
+            ctx.fillText('serialize +', ax + gap / 2, y1 - 12);
+            ctx.fillText('copy O(n)', ax + gap / 2, y1 + 18);
+        }
+    }
+    ctx.fillStyle = '#e74c3c'; ctx.font = '11px system-ui';
+    ctx.fillText('the tax is paid 3 times — 10M rows: ~2.1s, ~800MB peak per boundary', w / 2, y1 + 44);
+
+    // Bottom: Arrow shared buffer
+    var y2 = 200;
+    ctx.fillStyle = '#27ae60'; ctx.textAlign = 'left'; ctx.font = '11px system-ui';
+    ctx.fillText('with Arrow:', 30, y2 - 52);
+
+    // Shared memory block
+    var smX = x0, smW = tools.length * boxW + (tools.length - 1) * gap;
+    ctx.fillStyle = 'rgba(39,174,96,0.15)';
+    ctx.fillRect(smX, y2, smW, 44);
+    ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 2;
+    ctx.strokeRect(smX, y2, smW, 44);
+
+    // Column buffers inside
+    var bufLabels = ['col: id (int64 buffer)', 'col: name (offsets+data)', 'validity bitmaps'];
+    var bufW = (smW - 40) / 3;
+    for (var b = 0; b < 3; b++) {
+        var bx = smX + 12 + b * (bufW + 8);
+        ctx.fillStyle = 'rgba(39,174,96,0.35)';
+        ctx.fillRect(bx, y2 + 8, bufW, 28);
+        ctx.fillStyle = '#1a5276'; ctx.font = '10px monospace'; ctx.textAlign = 'center';
+        ctx.fillText(bufLabels[b], bx + bufW / 2, y2 + 25);
+    }
+    ctx.fillStyle = '#27ae60'; ctx.font = 'bold 11px system-ui';
+    ctx.fillText('ONE Arrow record batch in shared memory', w / 2, y2 + 60);
+
+    // Tool boxes above pointing down
+    for (var i = 0; i < tools.length; i++) {
+        var x = x0 + i * (boxW + gap);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(x, y2 - 44, boxW, 28);
+        ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 1.5;
+        ctx.strokeRect(x, y2 - 44, boxW, 28);
+        ctx.fillStyle = '#1a5276'; ctx.font = 'bold 11px system-ui';
+        ctx.fillText(tools[i], x + boxW / 2, y2 - 25);
+        // pointer arrow
+        ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(x + boxW / 2, y2 - 14); ctx.lineTo(x + boxW / 2, y2 - 4); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x + boxW / 2 - 4, y2 - 10); ctx.lineTo(x + boxW / 2, y2 - 2); ctx.lineTo(x + boxW / 2 + 4, y2 - 10);
+        ctx.fillStyle = '#27ae60'; ctx.fill();
+    }
+
+    ctx.fillStyle = '#666'; ctx.font = '11px system-ui';
+    ctx.fillText('every tool reads the SAME buffers — O(1) pointer handoff, zero additional memory', w / 2, h - 8);
+})();
+</script>
 
 </body>
 </html>

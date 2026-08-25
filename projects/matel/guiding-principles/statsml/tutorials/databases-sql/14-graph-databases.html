@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Graph Databases</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+li code, .example code { font-family: ui-monospace, Menlo, monospace; font-size: 0.9em; background: #f4f6f8; padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>Graph Databases</h1>
+<p class="subtitle">Store people and products as dots, friendships and purchases as lines between them — then "friends of friends who bought this" is a three-step walk, not a triple join</p>
+
+<div class="card-section">
+    <h2>Friends of Friends Who Bought the Lamp</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">running example</span></div>
+                <ul>
+                    <li><b>The question</b> — recommend lamp 88 to Ana if friends of her friends bought it</li>
+                    <li><b>Nodes</b> — the dots: each person and each product is one node</li>
+                    <li><b>Edges</b> — the lines: <code>FRIENDS_WITH</code> links people, <code>BOUGHT</code> links a person to a product</li>
+                    <li><b>Traversal</b> — answering = walking edges: Ana &rarr; her friends &rarr; their friends &rarr; purchases</li>
+                    <li><b>Edges are stored, not computed</b> — each node keeps direct pointers to its neighbors</li>
+                </ul>
+                <p class="example">In the drawing, the answer is just "what can I reach in 3 steps from Ana?" — Fay and Gus bought the lamp.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A graph database stores the connections themselves, so following a relationship is one pointer hop — not a search through a table.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Walking the Three Hops by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">worked example</span></div>
+                <ul>
+                    <li><b>Hop 1</b> — Ana's friends: {Ben, Cara, Dev} — 3 people</li>
+                    <li><b>Hop 2</b> — their friends: Ben&rarr;{Eli, Fay}, Cara&rarr;{Fay, Gus}, Dev&rarr;{Hana}</li>
+                    <li><b>Dedupe</b> — Fay appears twice; distinct friends-of-friends = {Eli, Fay, Gus, Hana} = 4</li>
+                    <li><b>Hop 3</b> — follow each one's <code>BOUGHT</code> edges to lamp 88: Fay yes, Gus yes</li>
+                    <li><b>Total work</b> — 1 + 3 + 4 = 8 people visited, answer = {Fay, Gus}</li>
+                </ul>
+                <p class="example">The walk never touches the other 10 million people in the network — only the 8 reachable ones.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Traversal cost depends on how many neighbors you actually visit, not on how big the whole network is.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Same Question in SQL: a Triple Self-Join</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">worked example</span><span class="tag orange">watch out</span></div>
+                <ul>
+                    <li><b>Relational shape</b> — one <code>friendships(person, friend)</code> table, one <code>purchases</code> table</li>
+                    <li><b>Hop = join</b> — each extra hop joins the friendships table to itself once more</li>
+                    <li><b>The query</b> — <code>friendships f1 JOIN friendships f2 JOIN purchases p</code></li>
+                    <li><b>Fan-out</b> — at 150 friends each: 150 rows after f1, 22,500 after f2, then filter</li>
+                    <li><b>The graph walk</b> — visited 8 people for the same answer on our toy network</li>
+                </ul>
+                <p class="example">Each join step multiplies rows by the average friend count — hop 4 in SQL means ~3.4M intermediate rows.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> SQL rebuilds every connection by matching ids at query time; the graph stored those matches as edges when the data was written.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>When Relationships ARE the Data</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag red">common mistake</span></div>
+                <ul>
+                    <li><b>Fraud rings</b> — accounts sharing a device, card, or address form telltale dense clusters</li>
+                    <li><b>Recommendations</b> — "people near you in the graph bought..." is a 2-3 hop walk</li>
+                    <li><b>Networks of things</b> — routes, supply chains, citations, org charts: paths are the question</li>
+                    <li><b>The tell</b> — your SQL is mostly self-joins and "path", "hops", "connected to" words</li>
+                    <li><b>The counter-tell</b> — filters and aggregates over attributes: plain SQL is simpler and faster</li>
+                </ul>
+                <p class="example">"Average order value by month" has no hops in it — a warehouse beats a graph there every time.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Picking a graph database because data "has relationships" — all data does. Pick it when your questions are about paths through them.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// shared node positions for the toy network
+var NET = {
+    Ana:  { x: 90,  y: 150 },
+    Ben:  { x: 230, y: 75 },
+    Cara: { x: 230, y: 150 },
+    Dev:  { x: 230, y: 228 },
+    Eli:  { x: 390, y: 55 },
+    Fay:  { x: 390, y: 125 },
+    Gus:  { x: 390, y: 190 },
+    Hana: { x: 390, y: 250 },
+    lamp: { x: 560, y: 155 }
+};
+var FRIEND_EDGES = [
+    ['Ana', 'Ben'], ['Ana', 'Cara'], ['Ana', 'Dev'],
+    ['Ben', 'Eli'], ['Ben', 'Fay'], ['Cara', 'Fay'], ['Cara', 'Gus'], ['Dev', 'Hana']
+];
+var BOUGHT_EDGES = [['Fay', 'lamp'], ['Gus', 'lamp']];
+
+function drawNode(ctx, name, color, r) {
+    var p = NET[name];
+    ctx.beginPath(); ctx.arc(p.x, p.y, r || 15, 0, 2 * Math.PI);
+    ctx.fillStyle = color; ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 10px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText(name, p.x, p.y + 4);
+}
+function drawEdge(ctx, a, b, color, width, dashed) {
+    var p1 = NET[a], p2 = NET[b];
+    ctx.strokeStyle = color; ctx.lineWidth = width || 1.5;
+    if (dashed) ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+    ctx.setLineDash([]);
+}
+function drawLamp(ctx, color) {
+    var p = NET.lamp;
+    ctx.fillStyle = color;
+    ctx.fillRect(p.x - 26, p.y - 20, 52, 40);
+    ctx.strokeStyle = P.yellow; ctx.lineWidth = 2;
+    ctx.strokeRect(p.x - 26, p.y - 20, 52, 40);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 10px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('lamp 88', p.x, p.y + 4);
+}
+
+// c1: the network — nodes, edges, the question
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Nodes and Edges: Ana\'s Corner of the Network', w / 2, 24);
+
+    var i;
+    for (i = 0; i < FRIEND_EDGES.length; i++) drawEdge(ctx, FRIEND_EDGES[i][0], FRIEND_EDGES[i][1], '#b9c2cc', 1.5);
+    for (i = 0; i < BOUGHT_EDGES.length; i++) drawEdge(ctx, BOUGHT_EDGES[i][0], BOUGHT_EDGES[i][1], P.yellow, 2.5);
+
+    drawLamp(ctx, 'rgba(201,133,0,0.85)');
+    drawNode(ctx, 'Ana', P.blue, 17);
+    drawNode(ctx, 'Ben', P.aqua); drawNode(ctx, 'Cara', P.aqua); drawNode(ctx, 'Dev', P.aqua);
+    drawNode(ctx, 'Eli', P.violet); drawNode(ctx, 'Fay', P.violet); drawNode(ctx, 'Gus', P.violet); drawNode(ctx, 'Hana', P.violet);
+
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('grey lines: FRIENDS_WITH', 160, 272);
+    ctx.fillStyle = P.yellow; ctx.font = 'bold 11px system-ui';
+    ctx.fillText('gold lines: BOUGHT', 475, 245);
+
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('start', NET.Ana.x, NET.Ana.y - 26);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('the question: which purple nodes have a gold line to the lamp?', w / 2, 293);
+})();
+
+// c2: the same network with hop rings and the walk highlighted
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Walk: 3 Friends, 4 Friends-of-Friends, 2 Buyers', w / 2, 24);
+
+    // hop bands
+    ctx.fillStyle = 'rgba(25,158,112,0.07)';
+    ctx.fillRect(185, 42, 90, 226);
+    ctx.fillStyle = 'rgba(74,58,167,0.07)';
+    ctx.fillRect(345, 42, 90, 226);
+    ctx.fillStyle = 'rgba(201,133,0,0.08)';
+    ctx.fillRect(510, 42, 105, 226);
+    ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillStyle = P.aqua; ctx.fillText('hop 1: 3', 230, 56);
+    ctx.fillStyle = P.violet; ctx.fillText('hop 2: 4 distinct', 390, 56);
+    ctx.fillStyle = P.yellow; ctx.fillText('hop 3: BOUGHT?', 562, 56);
+
+    var i;
+    for (i = 0; i < FRIEND_EDGES.length; i++) drawEdge(ctx, FRIEND_EDGES[i][0], FRIEND_EDGES[i][1], P.aqua, 2);
+    for (i = 0; i < BOUGHT_EDGES.length; i++) drawEdge(ctx, BOUGHT_EDGES[i][0], BOUGHT_EDGES[i][1], P.green, 3);
+
+    drawLamp(ctx, 'rgba(201,133,0,0.85)');
+    drawNode(ctx, 'Ana', P.blue, 17);
+    drawNode(ctx, 'Ben', P.aqua); drawNode(ctx, 'Cara', P.aqua); drawNode(ctx, 'Dev', P.aqua);
+    drawNode(ctx, 'Eli', '#8b95a1'); drawNode(ctx, 'Hana', '#8b95a1');
+    drawNode(ctx, 'Fay', P.green, 17); drawNode(ctx, 'Gus', P.green, 17);
+
+    // dedupe note near Fay
+    ctx.fillStyle = P.violet; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Fay reached twice — count once', 415, 112);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('answer: {Fay, Gus} — 8 people visited, 10M ignored', w / 2, 293);
+})();
+
+// c3: join fan-out vs traversal visits
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Rows Handled per Hop at 150 Friends Each (illustrative)', w / 2, 24);
+
+    // log-scale horizontal bars
+    var rows = [
+        { lab: 'hop 1: f1 rows', v: 150, txt: '150', c: P.violet },
+        { lab: 'hop 2: f1 JOIN f2', v: 22500, txt: '22,500', c: P.violet },
+        { lab: 'hop 3: + purchases filter', v: 3375000, txt: '3.4M scanned to filter', c: '#e74c3c' },
+        { lab: 'graph walk, all 3 hops', v: 8, txt: '8 nodes visited', c: P.green }
+    ];
+    var px = 250, pw = 380, top = 60, rowH = 48;
+    var maxLog = Math.log10(4000000);
+
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        var y = top + i * rowH;
+        ctx.fillStyle = '#333'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.lab, 30, y + 17);
+        var bw = Math.max(Math.log10(r.v) / maxLog * pw, 6);
+        ctx.fillStyle = r.c; ctx.globalAlpha = 0.7;
+        ctx.fillRect(px, y, bw, 26);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = r.c; ctx.font = 'bold 12px system-ui';
+        ctx.fillText(r.txt, px + bw + 8, y + 18);
+    }
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('bar length is log scale — each hop multiplies SQL rows by ~150', px, top + 4 * rowH + 8);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the join rebuilds edges by matching ids; the graph already stored them', w / 2, 288);
+})();
+
+// c4: fraud ring sketch + when-to-use split
+(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('A Fraud Ring Is Invisible in Rows, Obvious in a Graph', w / 2, 24);
+
+    ctx.strokeStyle = '#bdc3c7'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(360, 38); ctx.lineTo(360, 262); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // left: accounts table — nothing looks wrong
+    var tx = 45, ty = 60, tw2 = 270, rh = 26;
+    var accts = [
+        ['acct 301', 'card ...9917'],
+        ['acct 302', 'card ...9917'],
+        ['acct 303', 'card ...9917'],
+        ['acct 304', 'card ...4410'],
+        ['acct 305', 'card ...9917']
+    ];
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('accounts table — each row looks fine alone', tx, ty - 8);
+    for (var i = 0; i < accts.length; i++) {
+        var y = ty + i * rh;
+        ctx.fillStyle = i % 2 ? '#f4f6f8' : '#fff';
+        ctx.fillRect(tx, y, tw2, rh - 3);
+        ctx.strokeStyle = '#b9c2cc'; ctx.lineWidth = 1;
+        ctx.strokeRect(tx, y, tw2, rh - 3);
+        ctx.fillStyle = '#444'; ctx.font = '12px ui-monospace, Menlo, monospace';
+        ctx.fillText(accts[i][0], tx + 12, y + 16);
+        ctx.fillStyle = accts[i][1] === 'card ...9917' ? P.magenta : P.mute;
+        ctx.fillText(accts[i][1], tx + 130, y + 16);
+    }
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('the shared card hides in a value column', tx, ty + 5 * rh + 14);
+
+    // right: same data as a graph — star around the card
+    var cx = 540, cy = 150;
+    var ring = [
+        { x: 445, y: 85 }, { x: 632, y: 85 }, { x: 445, y: 218 }, { x: 632, y: 218 }
+    ];
+    for (var i = 0; i < ring.length; i++) {
+        ctx.strokeStyle = P.magenta; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(ring[i].x, ring[i].y); ctx.stroke();
+    }
+    // the odd account off to the side
+    ctx.strokeStyle = '#b9c2cc'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(660, 150); ctx.lineTo(695, 150); ctx.stroke();
+
+    function acctNode(x, y, lab, c) {
+        ctx.beginPath(); ctx.arc(x, y, 15, 0, 2 * Math.PI);
+        ctx.fillStyle = c; ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 9px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(lab, x, y + 3);
+    }
+    // card node
+    ctx.fillStyle = P.magenta;
+    ctx.fillRect(cx - 30, cy - 14, 60, 28);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 10px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('card 9917', cx, cy + 4);
+    acctNode(ring[0].x, ring[0].y, '301', P.violet);
+    acctNode(ring[1].x, ring[1].y, '302', P.violet);
+    acctNode(ring[2].x, ring[2].y, '303', P.violet);
+    acctNode(ring[3].x, ring[3].y, '305', P.violet);
+    acctNode(660, 150, '304', '#8b95a1');
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('4 accounts, 1 card: a ring', 540, 258);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('use a graph when the question is about paths and clusters — not when it\'s filters and averages', w / 2, 290);
+})();
+</script>
+
+</body>
+</html>

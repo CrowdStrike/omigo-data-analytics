@@ -74,6 +74,20 @@ ul {
     font-size: 0.92rem;
 }
 li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
 </style>
 </head>
 <body>
@@ -86,17 +100,18 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>You engineer features using information that would not be available at prediction time. The feature contains future data, outcome leakage, or information from after the prediction timestamp.</p>
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">future data</span></div>
                 <ul>
-                    <li>Predict churn using "days_since_last_login" computed from the entire dataset (includes future logins)</li>
-                    <li>Predict fraud using "total_transactions_this_month" when predicting transactions mid-month</li>
-                    <li>Predict loan default using "credit_score_6months_later"</li>
-                    <li>Predict stock movement using features normalized by future statistics (mean, std from entire time series)</li>
+                    <li><b>The trap</b> — the feature contains data that would not be available at prediction time</li>
+                    <li><b>Churn</b> — days_since_last_login over the full dataset includes post-prediction logins</li>
+                    <li><b>Fraud</b> — a mid-month score's total_transactions_this_month counts transactions not yet made</li>
+                    <li><b>Credit</b> — a default model's credit_score_6months_later is an outcome measured after prediction</li>
+                    <li><b>Time series</b> — normalizing by the full-series mean and std leaks future stats into each row</li>
                 </ul>
+                <p class="example">A churn model using "days_until_next_purchase" scores 0.97 AUC in validation but 0.58 in production.</p>
                 <div class="key-point">
-                    <strong>Impact:</strong> Model performs exceptionally well in training and validation because it has access to the future. In production, when the future information is unavailable, performance collapses. This is one of the most dangerous pitfalls because test metrics look excellent until deployment.
+                    <strong>Impact:</strong> Validation metrics look excellent because the model sees the future, then performance collapses at deployment when that information is gone.
                 </div>
-                <p class="example">Example: Churn model uses "days_until_next_purchase" as a feature. AUC = 0.97 in validation (computed after observing the full timeline). In production, this feature is unknown at prediction time. Deployed AUC = 0.61.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c1" width="720" height="300"></canvas>
@@ -110,17 +125,18 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>Look-ahead bias occurs when feature engineering happens on the full dataset before temporal splitting, or when features aggregate data across the prediction boundary.</p>
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">aggregation</span></div>
                 <ul>
-                    <li>Computing aggregates (mean, std, min, max) over the entire dataset before train/test split</li>
-                    <li>Using cumulative statistics that include future observations</li>
-                    <li>Joining tables without respecting the "as-of" timestamp (point-in-time correctness)</li>
-                    <li>Using target-derived features (e.g., target encoding) computed from the full dataset including test</li>
+                    <li><b>Order of operations</b> — features are engineered on the full dataset before the temporal split</li>
+                    <li><b>Global stats</b> — mean, std, min, max computed before the split push future data into every row</li>
+                    <li><b>Cumulative counts</b> — running totals and lifetime counts include events after each row's date</li>
+                    <li><b>Careless joins</b> — tables joined without an as-of timestamp break point-in-time correctness</li>
+                    <li><b>Target encoding</b> — encodings built from the target on the full data include the test rows</li>
                 </ul>
+                <p class="example">A fraud model learns that $5000 in future disputes signals high risk, but in production it sees only the $50 disputed so far and predicts low risk.</p>
                 <div class="key-point">
-                    <strong>Mechanism:</strong> In offline analysis, you have access to the complete timeline. You compute "customer_lifetime_transactions" by counting all transactions, including those after the prediction date. The model learns that high lifetime value predicts retention, but at prediction time (day 30), you only know transactions up to day 30.
+                    <strong>Root Cause:</strong> Offline you hold the complete timeline, so any "lifetime" aggregate quietly counts events past the prediction date that day-30 production will never see.
                 </div>
-                <p class="example">Example: Fraud detection uses "account_total_disputed_charges" computed from the entire dataset. Training sees: "account has $5000 in disputes (from future) → high fraud risk." Production sees: "account has $50 in disputes (so far) → predicts low risk." The model is blind to future disputes.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c2" width="720" height="300"></canvas>
@@ -130,22 +146,22 @@ li { margin-bottom: 4px; }
 </div>
 
 <div class="card-section">
-    <h2>Detection & Mitigation</h2>
+    <h2>The Correct Approach</h2>
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>Enforce strict temporal discipline. Simulate production by computing features using only information available before the prediction timestamp.</p>
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">point-in-time</span></div>
                 <ul>
-                    <li>Use "as-of" joins: for each prediction at time T, use only data from before T</li>
-                    <li>For time-series, use expanding window (not full dataset) for normalization</li>
-                    <li>Feature engineering pipeline: filter data by timestamp before computing aggregates</li>
-                    <li>Walk-forward validation: retrain model with expanding window, never using future data</li>
-                    <li>Production simulation: randomly sample prediction dates and compute features using only past data</li>
+                    <li><b>As-of joins</b> — for a prediction at time T, aggregate only records timestamped strictly before T</li>
+                    <li><b>Expanding windows</b> — normalize time series with past-only statistics, never the full series</li>
+                    <li><b>Pipeline discipline</b> — filter by timestamp before any aggregate so leakage cannot happen</li>
+                    <li><b>Walk-forward validation</b> — retrain on an expanding window that never contains future data</li>
+                    <li><b>Detection</b> — sample random prediction dates, hide later data; a big metric drop reveals bias</li>
                 </ul>
+                <p class="example">Recomputing the feature as "days_since_last_login_as_of_prediction_date" yields train AUC 0.84, validation 0.83, and production 0.82.</p>
                 <div class="key-point">
-                    <strong>Fix:</strong> For each row with prediction timestamp T, compute all features using only data where timestamp < T. Use point-in-time correctness in all joins and aggregations. Test by simulating production: pick a random date, hide all future data, compute features, make prediction.
+                    <strong>Fix:</strong> For each row with prediction timestamp T, compute every feature using only data where timestamp &lt; T, in every join and aggregation.
                 </div>
-                <p class="example">Example: Correct churn feature: "days_since_last_login_as_of_prediction_date" (only uses logins before prediction timestamp). Correctly implemented: train AUC = 0.84, val AUC = 0.83, prod AUC = 0.82. No collapse.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c3" width="720" height="300"></canvas>

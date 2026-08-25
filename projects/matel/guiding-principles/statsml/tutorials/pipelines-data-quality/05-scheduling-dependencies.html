@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scheduling &amp; Dependencies</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Scheduling &amp; Dependencies</h1>
+<p class="subtitle">A pipeline is a chain of jobs — run each one when its parents finish, not at a time you guessed</p>
+
+<div class="card-section">
+    <h2>Four Jobs, One Chain</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">running example</span></div>
+                <ul>
+                    <li><b>Extract</b> — 2:00am: copy yesterday's 12,480 orders out of the app database</li>
+                    <li><b>Clean</b> — needs the extract: drop test rows, fix types &rarr; 12,448 clean orders</li>
+                    <li><b>Aggregate</b> — needs clean orders: roll up to revenue per city &rarr; 214 rows</li>
+                    <li><b>Report</b> — needs the aggregates: render the morning dashboard</li>
+                    <li><b>The shape</b> — each job waits on its parents: a DAG (a chain with no loops)</li>
+                </ul>
+                <p class="example">The report doesn't care what time it is — it cares that city_revenue finished.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> a pipeline is a dependency graph. The real schedule answers "after what?", not just "at what time?".
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Night the Extract Ran Late</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">worked example</span><span class="tag red">failure mode</span></div>
+                <ul>
+                    <li><b>Normal night</b> — extract done 2:40, clean 3:10, aggregate 3:25, report ready 3:40</li>
+                    <li><b>Guess-time schedule</b> — clean is simply "run at 3:00am", trusting extract is done</li>
+                    <li><b>Bad night</b> — a slow app database pushes the extract's finish from 2:40 to 4:50</li>
+                    <li><b>The 3:00am clean</b> — runs anyway, reads the previous day's stale rows, "succeeds"</li>
+                    <li><b>Morning result</b> — the dashboard shows Monday's numbers labeled as Tuesday</li>
+                </ul>
+                <p class="example">Every job showed green in the morning — but "ran" is not "ran on the right data".</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> a fixed-time schedule encodes a guess about how long parents take. The failure isn't a crash — it's a confident report built on stale data.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Run on DONE, Not on a Clock</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">rule of thumb</span><span class="tag blue">where it's used</span></div>
+                <ul>
+                    <li><b>Trigger on completion</b> — clean starts when extract signals success, whenever that is</li>
+                    <li><b>Late, not wrong</b> — on the slow night the report lands 6:00am instead of 3:40, correct</li>
+                    <li><b>One late parent</b> — delays every descendant: the whole tree shifts by two hours</li>
+                    <li><b>Schedulers encode this</b> — workflow tools exist to express "after X, run Y"</li>
+                    <li><b>Alert on lateness</b> — since delay cascades, page someone when the chain misses 7am</li>
+                </ul>
+                <p class="example">The 2h10m extract delay became a 2h10m report delay — annoying, visible, and correct beats punctual and wrong.</p>
+                <div class="key-point">
+                    <strong>Rule of thumb:</strong> run when upstream is DONE. A late report is a nuisance; a wrong report that looks on-time is a trap.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Confusion: A Bigger Time Gap Is Still a Guess</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common confusion</span><span class="tag orange">design trap</span></div>
+                <ul>
+                    <li><b>The instinct</b> — after the incident, move clean from 3:00am to 4:00am "to be safe"</li>
+                    <li><b>Still a guess</b> — the next slow night finishes at 4:50 and blows through the margin</li>
+                    <li><b>Padding wastes mornings</b> — every normal night now finishes an hour later for nothing</li>
+                    <li><b>Facts vs hopes</b> — "clean needs extract" is a fact; "3am is enough" is a hope</li>
+                    <li><b>Backfill bonus</b> — dependency-triggered chains also rerun cleanly for past days</li>
+                </ul>
+                <p class="example">The team moved the job 3:00 &rarr; 4:00 &rarr; 5:00 over a year, chasing rare slow nights they could have simply waited for.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> you can't fix a dependency problem with a bigger time gap — encode the dependency itself and the guessing ends.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function arrow(ctx, x1, y1, x2, y2, color) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 9 * Math.cos(ang - 0.4), y2 - 9 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 9 * Math.cos(ang + 0.4), y2 - 9 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: The DAG — extract -> clean -> aggregate -> report, with counts and times
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 16px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Dependency Chain Behind One Morning Dashboard', w / 2, 26);
+
+    var midY = 130;
+    var jobs = [
+        { x: 30,  label: 'extract',   l2: '2:00–2:40am', l3: '12,480 rows', c: P.blue },
+        { x: 210, label: 'clean',     l2: 'after extract', l3: '12,448 rows', c: P.green },
+        { x: 390, label: 'aggregate', l2: 'after clean', l3: '214 city rows', c: P.orange },
+        { x: 570, label: 'report',    l2: 'after aggregate', l3: 'dashboard', c: P.violet }
+    ];
+    var bw = 140, bh = 80, by = midY - bh / 2;
+    for (var i = 0; i < 4; i++) {
+        var j = jobs[i];
+        ctx.fillStyle = '#f8f9fa'; ctx.strokeStyle = j.c; ctx.lineWidth = 2;
+        ctx.fillRect(j.x, by, bw, bh); ctx.strokeRect(j.x, by, bw, bh);
+        ctx.fillStyle = j.c; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(j.label, j.x + bw / 2, by + 24);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+        ctx.fillText(j.l2, j.x + bw / 2, by + 44);
+        ctx.fillText(j.l3, j.x + bw / 2, by + 62);
+        if (i > 0) arrow(ctx, jobs[i - 1].x + bw + 2, midY, j.x - 4, midY, P.mute);
+    }
+
+    // dependency labels under arrows
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('waits for', 190, midY + 32);
+    ctx.fillText('waits for', 370, midY + 32);
+    ctx.fillText('waits for', 550, midY + 32);
+
+    ctx.fillStyle = P.aqua; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('only the first job has a clock time — everything else has a parent', w / 2, 232);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('arrows point from parent to child: this shape is a DAG (directed, no loops)', w / 2, 258);
+})();
+
+// c2: Two Gantt timelines — normal night vs the late extract under fixed-time scheduling
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Fixed-Time Night: Clean Fires at 3:00am Whether Extract Finished or Not', w / 2, 24);
+
+    var t0 = 2.0, t1 = 5.5; // 2:00am .. 5:30am
+    var gx = 120, gw = 560;
+    function X(t) { return gx + (t - t0) / (t1 - t0) * gw; }
+
+    // hour ticks
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'center';
+    [2, 3, 4, 5].forEach(function(t) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(X(t), 44); ctx.lineTo(X(t), 262); ctx.stroke();
+        ctx.fillText(t + ':00am', X(t), 278);
+    });
+
+    function bar(y, tStart, tEnd, label, color, hollow) {
+        var xx = X(tStart), ww = X(tEnd) - X(tStart);
+        if (hollow) {
+            ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+            ctx.strokeRect(xx, y, ww, 22); ctx.setLineDash([]);
+        } else {
+            ctx.fillStyle = color; ctx.globalAlpha = 0.35; ctx.fillRect(xx, y, ww, 22); ctx.globalAlpha = 1;
+            ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.strokeRect(xx, y, ww, 22);
+        }
+        ctx.fillStyle = color; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(label, xx + ww + 6, y + 16);
+    }
+
+    // Normal night
+    ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('normal night', 10, 66);
+    bar(54, 2.0, 2.667, 'extract', P.blue);
+    bar(82, 3.0, 3.167, 'clean 3:00', P.green);
+    bar(110, 3.25, 3.42, 'report 3:40 ✓', P.violet);
+
+    // Late night
+    ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('slow night', 10, 172);
+    bar(160, 2.0, 4.833, 'extract finishes 4:50', P.blue);
+    bar(188, 3.0, 3.167, '', P.magenta);
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('clean 3:00 — reads stale rows, still "succeeds"', X(3.167) + 6, 204);
+    bar(216, 3.25, 3.42, '', P.magenta);
+    ctx.fillText('report 3:40 — yesterday\'s numbers, today\'s date', X(3.42) + 6, 232);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('no crash, all jobs green — and the dashboard is wrong', w / 2, 258);
+})();
+
+// c3: Dependency-triggered cascade — everything shifts, nothing breaks
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Trigger-on-Done Night: One Late Parent Shifts the Whole Tree', w / 2, 24);
+
+    var t0 = 2.0, t1 = 6.5;
+    var gx = 120, gw = 560;
+    function X(t) { return gx + (t - t0) / (t1 - t0) * gw; }
+
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'center';
+    [2, 3, 4, 5, 6].forEach(function(t) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(X(t), 44); ctx.lineTo(X(t), 250); ctx.stroke();
+        ctx.fillText(t + ':00am', X(t), 268);
+    });
+
+    var rows = [
+        { y: 56,  label: 'extract',   tS: 2.0,   tE: 4.833, c: P.blue,   note: 'slow: 4:50' },
+        { y: 104, label: 'clean',     tS: 4.833, tE: 5.333, c: P.green,  note: 'starts on DONE' },
+        { y: 152, label: 'aggregate', tS: 5.333, tE: 5.583, c: P.orange, note: '' },
+        { y: 200, label: 'report',    tS: 5.583, tE: 5.833, c: P.violet, note: 'ready 5:50 — correct' }
+    ];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        ctx.fillStyle = P.text; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.label, 10, r.y + 16);
+        var xx = X(r.tS), ww = X(r.tE) - X(r.tS);
+        ctx.fillStyle = r.c; ctx.globalAlpha = 0.35; ctx.fillRect(xx, r.y, ww, 22); ctx.globalAlpha = 1;
+        ctx.strokeStyle = r.c; ctx.lineWidth = 2; ctx.strokeRect(xx, r.y, ww, 22);
+        if (r.note) {
+            ctx.fillStyle = r.c; ctx.font = 'bold 12px system-ui';
+            ctx.fillText(r.note, xx + ww + 8, r.y + 16);
+        }
+        // completion handoff arrow to next row
+        if (i < rows.length - 1) {
+            arrow(ctx, X(r.tE), r.y + 22, X(rows[i + 1].tS), rows[i + 1].y, P.mute);
+        }
+    }
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('+2h10m late, 100% correct — the delay is visible instead of hidden inside a wrong report', w / 2, 290);
+})();
+
+// c4: Distribution of extract finish times vs fixed cutoffs
+(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var pad = { top: 52, bottom: 62, left: 66, right: 26 };
+    var cw = w - pad.left - pad.right, ch = h - pad.top - pad.bottom;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('365 Nights of Extract Finish Times vs the Guessed Cutoffs', w / 2, 26);
+
+    // half-hour buckets from 2:30 to 5:30 — hardcoded counts over a year
+    var buckets = ['2:30', '3:00', '3:30', '4:00', '4:30', '5:00', '5:30'];
+    var nights = [228, 96, 22, 10, 5, 3, 1]; // finish before this mark bucket
+    var maxY = 240;
+    function Y(v) { return pad.top + ch - v / maxY * ch; }
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad.left, pad.top); ctx.lineTo(pad.left, pad.top + ch); ctx.lineTo(pad.left + cw, pad.top + ch); ctx.stroke();
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'right';
+    [0, 100, 200].forEach(function(v) {
+        ctx.fillText(v + '', pad.left - 8, Y(v) + 4);
+        if (v > 0) { ctx.strokeStyle = P.grid; ctx.beginPath(); ctx.moveTo(pad.left, Y(v)); ctx.lineTo(pad.left + cw, Y(v)); ctx.stroke(); }
+    });
+
+    var barW = 66, gap = (cw - 7 * barW) / 7;
+    for (var i = 0; i < 7; i++) {
+        var x = pad.left + gap / 2 + i * (barW + gap);
+        // i < 2: finished before 3:00 (safe under the old guess)
+        // i 2-3: beat the 3:00 guess but not the 4:00 one; i >= 4: beat both
+        ctx.fillStyle = i < 2 ? 'rgba(42,120,214,0.35)' : (i < 4 ? 'rgba(201,133,0,0.35)' : 'rgba(213,81,129,0.40)');
+        ctx.fillRect(x, Y(nights[i]), barW, pad.top + ch - Y(nights[i]));
+        ctx.strokeStyle = i < 2 ? P.blue : (i < 4 ? P.yellow : P.magenta); ctx.lineWidth = 2;
+        ctx.strokeRect(x, Y(nights[i]), barW, pad.top + ch - Y(nights[i]));
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(nights[i], x + barW / 2, Y(nights[i]) - 6);
+        ctx.fillStyle = P.mute;
+        ctx.fillText('by ' + buckets[i], x + barW / 2, pad.top + ch + 18);
+    }
+
+    // cutoff lines at 3:00 and 4:00
+    function cutoff(afterIdx, label, color) {
+        var x = pad.left + gap / 2 + afterIdx * (barW + gap) - gap / 2;
+        ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+        ctx.beginPath(); ctx.moveTo(x, pad.top); ctx.lineTo(x, pad.top + ch); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = color; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, x, pad.top - 6);
+    }
+    cutoff(2, 'old guess: clean at 3:00', P.orange);
+    cutoff(4, 'new guess: 4:00', P.violet);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('41 nights beat the 3:00 guess; 9 still beat the 4:00 guess — the tail always wins', w / 2, pad.top + ch + 42);
+})();
+</script>
+
+</body>
+</html>

@@ -9,7 +9,6 @@
         h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
         .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
         .verified { font-size: 0.8em; color: #888; margin-bottom: 18px; border: 1px solid #ddd; display: inline-block; padding: 2px 10px; border-radius: 4px; }
-        .status { display: inline-block; background: #e67e22; color: #fff; font-size: 0.75em; font-weight: bold; padding: 2px 10px; border-radius: 4px; vertical-align: middle; margin-left: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
         h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
         .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
         .obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
@@ -18,166 +17,68 @@
         .obj-table td:last-child { width: 55%; text-align: center; }
         ul { padding-left: 20px; margin: 8px 0; }
         li { margin-bottom: 6px; font-size: 0.93em; }
+        a { color: #1a5276; }
         .payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 12px 0; text-align: left; }
         .payload-note { font-size: 0.82em; color: #666; margin: 12px 0 -6px 0; font-style: italic; text-align: left; }
         .key-point { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
-        .scope-tag { display: inline-block; background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 1px 8px; border-radius: 10px; font-size: 0.78em; font-family: ui-monospace, Menlo, monospace; margin: 3px 4px 3px 0; }
         canvas { display: block; margin: 16px auto 0; width: 100%; }
     </style>
 </head>
 <body>
-    <h1>Jira Cloud REST API <span class="status">Backlog</span></h1>
-    <p class="subtitle">Issues, workflow changelog and transitions, worklogs, boards and sprints — the record of what work was requested, and how long it sat in each state.</p>
+    <h1>Jira Cloud REST API</h1>
+    <p class="subtitle">Pull issues out of Jira — along with the full history of every status change, the time people logged, and sprint dates.</p>
     <span class="verified">Last verified: August 2026</span>
 
     <h2>Overview</h2>
     <table class="obj-table">
         <tr>
             <td>
-                <div class="obj-title">What It Provides</div>
-                <p>Separate APIs share one Jira Cloud site and are easy to confuse:</p>
+                <div class="obj-title">What You Can Get</div>
                 <ul>
-                    <li><strong>Platform REST API</strong> (<code>/rest/api/3/</code>) — issues, fields, comments, attachments, worklogs, projects, users, permissions, and the per-issue <strong>changelog</strong>.</li>
-                    <li><strong>Jira Software Agile API</strong> (<code>/rest/agile/1.0/</code>) — boards, sprints, backlog, epics, and rank. Sprints do not exist in the platform API; if you need sprint start/end/complete dates you must use the Agile API.</li>
-                </ul>
-                <p>The issue document itself is a <em>snapshot</em>: current status, current assignee, current story points, plus a handful of timestamps (<code>created</code>, <code>updated</code>, <code>resolutiondate</code>). It answers "where is this now", not "how did it get here".</p>
-                <div class="key-point"><strong>Workflow timing lives in the changelog, nowhere else.</strong> Cycle time, time-in-status, rework loops, and reassignment churn are all derived by replaying <code>changelog.items</code> where <code>field == "status"</code> (or <code>assignee</code>, <code>priority</code>, a custom field, …). No field on the issue holds "days in review".</div>
-
-                <div class="obj-title" style="margin-top: 18px;">Authentication &amp; Scopes</div>
-                <ul>
-                    <li><strong>Basic auth with an API token</strong> — account email plus an Atlassian API token, base64 encoded. Simplest path for a scheduled collector; carries that account's full permissions.</li>
-                    <li><strong>OAuth 2.0 (3LO)</strong> — for apps acting on behalf of a user, via <code>api.atlassian.com/ex/jira/{cloudId}/…</code>. Requires an explicit scope list.</li>
-                    <li><strong>Connect / Forge apps</strong> — JWT or Forge-managed auth, installed into the site.</li>
-                </ul>
-                <p style="margin-bottom:2px;">Classic and granular scopes worth knowing:</p>
-                <div>
-                    <span class="scope-tag">read:jira-work</span>
-                    <span class="scope-tag">read:jira-user</span>
-                    <span class="scope-tag">read:issue:jira</span>
-                    <span class="scope-tag">read:issue.changelog:jira</span>
-                    <span class="scope-tag">read:issue-worklog:jira</span>
-                    <span class="scope-tag">read:comment:jira</span>
-                    <span class="scope-tag">read:field:jira</span>
-                    <span class="scope-tag">read:sprint:jira-software</span>
-                    <span class="scope-tag">read:board-scope:jira-software</span>
-                    <span class="scope-tag">read:audit-log:jira</span>
-                </div>
-
-                <div class="obj-title" style="margin-top: 18px;">Granularity</div>
-                <ul>
-                    <li>One record per <strong>issue</strong>, with <code>fields</code> keyed by system name or <code>customfield_NNNNN</code>.</li>
-                    <li>One record per <strong>changelog entry</strong> (a single user action), each containing one or more <code>items</code> — a field-level before/after pair with both raw ids (<code>from</code>, <code>to</code>) and rendered labels (<code>fromString</code>, <code>toString</code>).</li>
-                    <li>One record per <strong>worklog</strong>: author, <code>started</code>, <code>timeSpentSeconds</code>, optional comment. This is self-reported effort, not observed effort.</li>
-                    <li>One record per <strong>sprint</strong>, with <code>state</code>, <code>startDate</code>, <code>endDate</code>, <code>completeDate</code>.</li>
+                    <li>Issues with all their fields, comments, and attachments</li>
+                    <li>The changelog — every status, assignee, and field change, with who did it and when</li>
+                    <li>Work logs — self-reported time spent on each issue</li>
+                    <li>Boards and sprints, with start, end, and completion dates</li>
+                    <li>Search across issues with a query language</li>
                 </ul>
 
-                <div class="obj-title" style="margin-top: 18px;">Key Endpoints</div>
-                <ul>
-                    <li><code>GET /rest/api/3/search/jql</code> — JQL search with <code>nextPageToken</code> cursor pagination and an explicit <code>fields</code> list. The older offset-based <code>/rest/api/3/search</code> is deprecated; new collectors should assume cursors.</li>
-                    <li><code>GET /rest/api/3/issue/{issueIdOrKey}</code> — single issue; <code>expand=changelog,renderedFields,transitions</code>.</li>
-                    <li><code>GET /rest/api/3/issue/{issueIdOrKey}/changelog</code> — the full history, paginated on its own (<code>startAt</code>, <code>maxResults</code>, <code>isLast</code>).</li>
-                    <li><code>POST /rest/api/3/changelog/bulkfetch</code> — changelogs for several issues in one call; far cheaper than one request per issue.</li>
-                    <li><code>GET /rest/api/3/issue/{issueIdOrKey}/transitions</code> — transitions <em>available now</em> to the caller, not transitions taken.</li>
-                    <li><code>GET /rest/api/3/issue/{issueIdOrKey}/worklog</code>, plus <code>/rest/api/3/worklog/updated</code> and <code>/worklog/deleted</code> for incremental sync.</li>
-                    <li><code>GET /rest/api/3/field</code> — the custom-field id to name mapping. Fetch this first; ids are site-specific.</li>
-                    <li><code>GET /rest/agile/1.0/board</code>, <code>/board/{id}/sprint</code>, <code>/sprint/{id}/issue</code>, <code>/board/{id}/backlog</code>.</li>
-                    <li><code>GET /rest/api/3/auditing/record</code> — administrative audit trail (permission and configuration changes), separate from issue changelogs.</li>
-                    <li><code>POST /rest/api/3/webhook</code> — register webhooks dynamically (OAuth apps only), each with a JQL filter and an event list such as <code>jira:issue_updated</code>, <code>jira:issue_created</code>, <code>comment_created</code>. <code>GET /rest/api/3/webhook</code> lists them; <code>PUT /rest/api/3/webhook/refresh</code> extends their life.</li>
-                </ul>
-                <p style="font-size:0.93em;">Webhooks can also be configured by an administrator in the UI, which is a different mechanism with different lifecycle rules from the API-registered kind.</p>
+                <div class="key-point"><strong>The issue only shows where things stand now.</strong> How long work sat in each state — cycle time, waiting time, rework loops — exists nowhere on the issue itself. It has to be reconstructed by replaying the change history, entry by entry.</div>
 
-                <div class="obj-title" style="margin-top: 18px;">Rate Limits</div>
+                <div class="obj-title" style="margin-top: 18px;">Watch Out For</div>
                 <ul>
-                    <li>Jira Cloud applies <strong>cost-based</strong> rate limiting: a budget consumed at different rates by different endpoints, rather than one uniform requests-per-hour figure. Published budgets differ by auth type and endpoint class and change over time — do not hard-code a number.</li>
-                    <li>Handle <code>429</code> by honouring <code>Retry-After</code>. Treat throttling as normal operation, not an error condition.</li>
-                    <li>Expensive shapes are punished: <code>fields=*all</code>, <code>expand</code> on a large page, and one-changelog-request-per-issue. Request a narrow <code>fields</code> list and use the bulk changelog endpoint.</li>
+                    <li>The change history embedded in search results is silently truncated — fetch it separately whenever completeness matters</li>
+                    <li>Issues the account cannot see are silently missing — a permissions change looks exactly like a drop in workload</li>
+                    <li>Deleted issues vanish without a trace, so a historical extract can shrink between runs</li>
+                    <li>Webhooks expire and can drop events — never make one your only data source</li>
                 </ul>
-
-                <div class="obj-title" style="margin-top: 18px;">Business Scenarios</div>
-                <ul>
-                    <li><strong>Cycle time and flow efficiency</strong> — time-in-status per issue, replayed from the changelog, split into working versus waiting states.</li>
-                    <li><strong>Rework / churn detection</strong> — count of backwards status transitions (In Review → In Progress) as a quality signal that no status field exposes.</li>
-                    <li><strong>Sprint commitment versus delivery</strong> — issues added after <code>startDate</code> (scope creep) require joining sprint dates to changelog entries on the sprint field.</li>
-                    <li><strong>SLA and ageing reports</strong> — first-response and first-transition latency.</li>
-                    <li><strong>Capacity reconciliation</strong> — worklogs against estimates, with an explicit caveat about self-reporting.</li>
-                </ul>
-
-                <div class="obj-title" style="margin-top: 18px;">Restrictions &amp; Gotchas</div>
-                <ul>
-                    <li><strong><code>expand=changelog</code> is paginated separately and truncated.</strong> The embedded changelog carries its own <code>startAt</code>/<code>maxResults</code>/<code>total</code>, independent of the search page size. Long-lived issues return a partial history with no error — the only signal is <code>total</code> exceeding what you received. Use the dedicated <code>/changelog</code> or bulk-fetch endpoint whenever completeness matters.</li>
-                    <li><strong>Results are silently filtered by permissions.</strong> An issue the collector's account cannot browse is absent from JQL results rather than returned as forbidden. A narrowed permission scheme looks identical to a drop in work volume.</li>
-                    <li><strong>Custom field ids are per-site.</strong> <code>customfield_10014</code> means different things on different sites, and a field can be renamed without changing its id. Resolve names through <code>/field</code> every run.</li>
-                    <li><strong>API v3 returns Atlassian Document Format</strong> for descriptions and comments — a nested JSON node tree, not text. Plain text requires either walking the ADF or requesting rendered fields.</li>
-                    <li><strong>Changelogs do not cover every field.</strong> Comments, attachments and worklogs are their own resources; some field types and bulk/system operations produce no changelog item. Absence of an entry is not proof nothing changed.</li>
-                    <li><strong>Timestamps carry offsets and JQL is timezone-sensitive.</strong> <code>updated &gt;= -1d</code> resolves against the caller's configured timezone, so the same query run by two accounts returns different sets.</li>
-                    <li><strong>Deletion is destructive.</strong> A deleted issue and its changelog leave no tombstone in the platform API, so a historical extract can shrink between runs.</li>
-                    <li><strong>Boards can be filter-backed.</strong> A board's issue list is defined by a saved filter that anyone can edit, so "issues on the board" is not a stable population over time.</li>
-                    <li><strong>Dynamically registered webhooks expire.</strong> Webhooks created through <code>POST /rest/api/3/webhook</code> have a limited lifetime and must be refreshed before they lapse. An unrefreshed integration stops delivering silently — there is no failure event, just an absence of events. Never use a webhook as the only source of a dataset; pair it with a periodic <code>updated</code>-window reconciliation read.</li>
-                    <li><strong>Webhook delivery is at-most-once in practice.</strong> Payloads can be dropped on delivery failure and are not replayed on demand, and events for issues the webhook's JQL filter excludes never fire at all. Bulk operations may emit one event, several, or none.</li>
-                </ul>
-                <div class="key-point">Changelog data is <strong>metadata about state, not the reasoning behind it</strong>. It tells you an issue moved to Blocked at 14:02 and by whom; the reason lives in a comment, a chat thread, or nobody's notes. Analyses that infer intent from transition patterns are inferring, not measuring.</div>
             </td>
             <td>
-                <p class="payload-note">Sample payload — GET /rest/api/3/issue/{issueIdOrKey}/changelog (abbreviated).</p>
+                <p class="payload-note">A changelog entry — one status change, with who and when. Note total: 9 against maxResults: 2 — the rest must be paged.</p>
 <pre class="payload">{
-  "self": "https://acme.atlassian.net/rest/api/3/issue/10102/changelog",
-  "nextPage": "https://acme.atlassian.net/rest/api/3/issue/10102/changelog?startAt=2",
-  "maxResults": 2,
-  "startAt": 0,
   "total": 9,
-  "isLast": false,
+  "maxResults": 2,
   "values": [
     {
-      "id": "10231",
-      "author": {
-        "accountId": "5b10a2844c20165700ede21g",
-        "emailAddress": "a.jaiswal@acme.com",
-        "displayName": "Amit Jaiswal",
-        "active": true
-      },
-      "created": "2026-08-14T09:12:41.115+0530",
+      "author": { "displayName": "Amit Jaiswal" },
+      "created": "2026-08-14T09:12:41+0530",
       "items": [
-        {
-          "field": "status",
-          "fieldtype": "jira",
-          "fieldId": "status",
-          "from": "10000",
+        { "field": "status",
           "fromString": "To Do",
-          "to": "3",
-          "toString": "In Progress"
-        },
-        {
-          "field": "assignee",
-          "fieldtype": "jira",
-          "fieldId": "assignee",
-          "from": null,
-          "fromString": null,
-          "to": "5b10a2844c20165700ede21g",
-          "toString": "Amit Jaiswal"
-        }
-      ]
-    },
-    {
-      "id": "10244",
-      "author": { "accountId": "712020:9f1c…", "displayName": "Ops Bot" },
-      "created": "2026-08-15T18:40:02.907+0530",
-      "items": [
-        {
-          "field": "Story Points",
-          "fieldtype": "custom",
-          "fieldId": "customfield_10016",
-          "from": null, "fromString": "3",
-          "to": null,   "toString": "5"
-        }
+          "toString": "In Progress" }
       ]
     }
   ]
 }</pre>
-                <p class="payload-note">Note <code>total: 9</code> against <code>maxResults: 2</code> — an embedded <code>expand=changelog</code> behaves the same way and will hand back a partial history without complaining.</p>
                 <canvas id="c1" height="380"></canvas>
             </td>
         </tr>
     </table>
+
+    <h2>Official API References</h2>
+    <ul>
+        <li><a href="https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/">Jira Cloud platform REST API (v3)</a> — issues, changelogs, worklogs, fields, and search</li>
+        <li><a href="https://developer.atlassian.com/cloud/jira/software/rest/intro/">Jira Software (Agile) REST API</a> — boards, sprints, backlog, epics, and rank</li>
+    </ul>
 
     <script>
     (function() {

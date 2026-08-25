@@ -74,6 +74,20 @@ ul {
     font-size: 0.92rem;
 }
 li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
 </style>
 </head>
 <body>
@@ -86,17 +100,18 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>You train base models (e.g., logistic regression, random forest, gradient boosting) on the training set, generate predictions on the same training set, and then train a meta-model (stacker) to combine those predictions. The meta-model sees overfitted base predictions and learns to exploit their training-specific errors.</p>
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">stacking</span></div>
                 <ul>
-                    <li>Base models train on dataset D and generate predictions P on D</li>
-                    <li>Meta-model trains on P (in-sample base predictions) to predict target Y</li>
-                    <li>Base predictions contain overfit patterns specific to training data</li>
-                    <li>Meta-model learns to combine these overfit patterns, amplifying overfitting</li>
+                    <li><b>Stacking setup</b> — a meta-model learns to combine predictions from several base models</li>
+                    <li><b>In-sample preds</b> — base models predict on the same data they trained on, inflating accuracy</li>
+                    <li><b>Contaminated features</b> — the meta-model treats those inflated outputs as genuine skill</li>
+                    <li><b>Amplified overfit</b> — the stacker learns training-only error patterns, compounding the overfit</li>
+                    <li><b>Worse than base</b> — the leaked stacker often tests below its best base model</li>
                 </ul>
+                <p class="example">Three base models predict on the same 10k samples they trained on; the stacker hits 0.95 train AUC but only 0.80 on test, below the best base model at 0.83.</p>
                 <div class="key-point">
-                    <strong>Impact:</strong> The meta-model achieves high training accuracy because it learns to correct the base models' overfit errors on training data. These errors do not replicate on new data, so the meta-model's corrections are useless or harmful in production. Validation performance is worse than expected.
+                    <strong>Impact:</strong> The meta-model learns to correct base-model errors that exist only in the training data, so its corrections are useless or harmful in production.
                 </div>
-                <p class="example">Example: Three base models (RF, GBM, LogReg) train on 10k samples. Generate predictions on the same 10k. Train meta-model on these predictions: train AUC = 0.95. But on test data, base models produce different errors, and meta-model's learned weights hurt performance. Test AUC = 0.80 (worse than best base model at 0.83).</p>
             </td>
             <td class="viz-col">
                 <canvas id="c1" width="720" height="300"></canvas>
@@ -110,17 +125,18 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>Base models overfit to some degree. In-sample predictions are systematically better than out-of-sample predictions. The meta-model learns weights based on in-sample performance, which does not transfer.</p>
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">inflated inputs</span></div>
                 <ul>
-                    <li>Base model A achieves train AUC = 0.88, test AUC = 0.82 — the 0.88 is overfit</li>
-                    <li>Meta-model sees base predictions that reflect 0.88 performance (on training data)</li>
-                    <li>Meta-model learns to weight base model A heavily because its in-sample predictions look good</li>
-                    <li>On test data, base model A delivers 0.82, not 0.88 — meta-model's weights are miscalibrated</li>
+                    <li><b>Systematic inflation</b> — every base model predicts better in-sample than out-of-sample</li>
+                    <li><b>Inflated inputs</b> — a 0.88-train, 0.82-test base feeds the stacker the inflated 0.88 level</li>
+                    <li><b>Miscalibrated weights</b> — the stacker overweights bases whose in-sample accuracy won't repeat</li>
+                    <li><b>Noise correlations</b> — error-target correlations in the training set vanish on new data</li>
+                    <li><b>Second-level overfit</b> — a stacker fed contaminated features overfits to the overfit</li>
                 </ul>
+                <p class="example">When the RF predicts 0.95 and the GBM 0.40 on the same training sample with true label 1, the stacker learns a noise rule that misfires on test data.</p>
                 <div class="key-point">
-                    <strong>Mechanism:</strong> The meta-model is a second-level learner. If its input features (base predictions) are contaminated by overfitting, the meta-model overfits to the overfit. It learns to exploit the correlation between base prediction errors and the target on training data, but those correlations vanish on new data.
+                    <strong>Root Cause:</strong> The meta-model's input features are contaminated by base-model overfitting, so it exploits error-target correlations that exist only in the training data.
                 </div>
-                <p class="example">Example: Random forest overfits on training sample #47 (predicts 0.95, true = 1). GBM underfits #47 (predicts 0.40, true = 1). Meta-model learns: "when RF high and GBM low, predict high." This pattern is noise. On test data, the pattern is absent, and the meta-model misfires.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c2" width="720" height="300"></canvas>
@@ -130,22 +146,23 @@ li { margin-bottom: 4px; }
 </div>
 
 <div class="card-section">
-    <h2>Detection & Mitigation</h2>
+    <h2>The Correct Approach</h2>
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>Use out-of-fold (cross-validated) predictions for meta-model training. Generate base predictions on held-out data so the meta-model sees realistic out-of-sample performance.</p>
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">out-of-fold</span></div>
                 <ul>
-                    <li>Use K-fold cross-validation: train base models on folds 1-4, predict on fold 5 (repeat for all folds)</li>
-                    <li>Collect out-of-fold predictions for all training samples — these are unbiased estimates of base model performance</li>
-                    <li>Train meta-model on out-of-fold predictions (not in-sample predictions)</li>
-                    <li>For test set: train base models on full training set, generate predictions, feed to meta-model</li>
-                    <li>Alternatively, use a held-out validation set: train base models on train, generate predictions on validation, train meta-model on validation predictions</li>
+                    <li><b>Out-of-fold</b> — train bases on K&minus;1 folds, predict the held-out fold; K = 5 is common, not a rule</li>
+                    <li><b>Unbiased features</b> — every sample gets a base prediction from models that never saw it</li>
+                    <li><b>Meta training</b> — fit the stacker on these out-of-fold predictions, not in-sample ones</li>
+                    <li><b>Test scoring</b> — retrain bases on the full training set; their predictions feed the stacker</li>
+                    <li><b>Holdout variant</b> — fit bases on a train split and the meta on a separate validation split</li>
+                    <li><b>Detection</b> — a stacker testing worse than its best base model signals in-sample leakage</li>
                 </ul>
+                <p class="example">With 5-fold CV stacking on 1,000 training samples, the meta-model trains on 1,000 out-of-fold predictions and reaches 0.84 test AUC, edging out the best base model at 0.83.</p>
                 <div class="key-point">
-                    <strong>Fix:</strong> Generate base model predictions using K-fold cross-validation. Each sample's base prediction comes from models that never saw that sample during training. Train the meta-model on these out-of-fold predictions. This ensures the meta-model learns to combine realistic out-of-sample base predictions.
+                    <strong>Fix:</strong> Generate base predictions with K-fold cross-validation so each sample's prediction comes from models that never saw it, then train the meta-model on those out-of-fold predictions.
                 </div>
-                <p class="example">Example: 5-fold CV stacking. Train RF on folds 1-4, predict fold 5 (200 samples). Repeat 5 times to get predictions for all 1000 training samples. Train meta-model on these 1000 out-of-fold predictions. Result: meta-model learns realistic base model weights. Test AUC = 0.84 (improves over best base model at 0.82).</p>
             </td>
             <td class="viz-col">
                 <canvas id="c3" width="720" height="300"></canvas>

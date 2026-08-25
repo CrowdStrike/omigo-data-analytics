@@ -29,7 +29,7 @@ canvas { width: 100%; height: auto; }
 <td>
     <span class="pitfall-label">SIGMOID (PHASE TRANSITION)</span>
     <h3>Grasp Success (Binary Phase Transition)</h3>
-    <p>Near-zero success below a pose threshold, then rapid S-curve to near-100% above it. Not a gradient — a cliff. Robotic grasping has a binary phase transition between graspable and ungraspable. Sigmoid steepness = gripper tolerance. Squishy gripper = gentle slope. Rigid jaw = vertical cliff.</p>
+    <p>Near-zero success below a pose threshold, then rapid S-curve to near-100% above it. Not a gradient — a cliff. Grasping behaves like a binary phase transition between graspable and ungraspable. Sigmoid steepness tracks gripper tolerance: squishy gripper = gentle slope, rigid jaw = near-vertical cliff.</p>
     <ul>
         <li>Not gradual — binary phase transition at threshold angle</li>
         <li>Sigmoid steepness = gripper mechanical tolerance</li>
@@ -51,7 +51,7 @@ canvas { width: 100%; height: auto; }
 <td>
     <span class="pitfall-label">RIGHT-SKEWED (FIDELITY METRIC)</span>
     <h3>Sim-to-Real Gap (Tail = Simulator Quality)</h3>
-    <p>Most actions transfer well (sim ≈ real), but fat right tail where reality is dramatically worse. The tail = everything simulation doesn't model (friction, cable snag, lighting). Tail thickness directly measures simulation fidelity. Companies benchmark simulators by tail shape, not average.</p>
+    <p>Most actions transfer well (sim ≈ real), but fat right tail where reality is dramatically worse. One explanation: the tail is everything simulation doesn't model (friction, cable snag, lighting). That makes tail thickness a natural fidelity read — the tail, not the average, is the informative benchmark.</p>
     <ul>
         <li>Body: sim error ≈ real error (good transfer)</li>
         <li>Right tail: reality dramatically worse than sim predicted</li>
@@ -73,12 +73,12 @@ canvas { width: 100%; height: auto; }
 <td>
     <span class="pitfall-label">BOUNDED + SATURATION SPIKES</span>
     <h3>Joint Torque (Saturation = Hardware Bottleneck)</h3>
-    <p>Gaussian body within operating range, then delta spikes at ±max torque (motor saturation). The spikes = moments the robot hit its physical limit. Spike mass / body mass ratio = how often hardware bottlenecks software. If spikes >5%, the robot is undersized — no algorithm fix helps.</p>
+    <p>Gaussian body within operating range, then delta spikes at ±max torque (motor saturation). The spikes = moments the robot hit its physical limit. Spike mass / body mass ratio = how often hardware bottlenecks software. When spike mass is heavy (this sim: over 10%), the robot looks undersized for the task — no algorithm fix helps.</p>
     <ul>
         <li>Gaussian body = normal operation range</li>
         <li>Spikes at ±max = motor saturation (physical limit)</li>
         <li>Spike ratio = hardware bottleneck frequency</li>
-        <li>>5% spike mass = robot undersized for task</li>
+        <li>Heavy spike mass (>10% here) = hardware limit, not a software problem</li>
     </ul>
 </td>
 <td>
@@ -95,12 +95,12 @@ canvas { width: 100%; height: auto; }
 <td>
     <span class="pitfall-label">BIMODAL (TWO SYSTEMS)</span>
     <h3>Path Planning Time (Familiar vs Novel)</h3>
-    <p>Spike at &lt;1ms (cached/known path, fast recall) and broad mode at 50-500ms (novel scene requiring full planning). Reveals two-system architecture: fast habitual execution vs slow deliberate planning. The ratio between modes = environment novelty. Factory (95% fast) vs home (60% slow).</p>
+    <p>Spike at &lt;1ms (cached/known path, fast recall) and broad mode at 50-500ms (novel scene requiring full planning). Consistent with a two-system architecture: fast habitual execution vs slow deliberate planning. The ratio between modes reads as environment novelty — illustrative: factory (95% fast) vs home (60% slow).</p>
     <ul>
         <li>Spike at &lt;1ms = cached path recall (System 1)</li>
         <li>Broad mode 50-500ms = full planning search (System 2)</li>
         <li>Ratio = environment novelty measure</li>
-        <li>Factory robot: 95% fast. Home robot: 60% slow</li>
+        <li>Illustrative: factory robot 95% fast, home robot 60% slow</li>
     </ul>
 </td>
 <td>
@@ -117,12 +117,12 @@ canvas { width: 100%; height: auto; }
 <td>
     <span class="pitfall-label">BIMODAL (CLIFF DYNAMICS)</span>
     <h3>Simulation Reward (Why RL Needs Millions)</h3>
-    <p>Cluster at high reward (task completed) and cluster at low/negative (catastrophic failure), thin middle. The thin middle proves cliff dynamics — you succeed completely or fail completely. RL gets almost no gradient from the middle. Bimodality explains why RL for robotics needs millions of episodes — most give binary signal.</p>
+    <p>Cluster at high reward (task completed) and cluster at low/negative (catastrophic failure), thin middle (~3% of episodes here). The thin middle suggests cliff dynamics — you succeed completely or fail completely, so RL gets almost no gradient from the middle. One explanation for why robotic RL is so sample-hungry: most episodes return a near-binary signal.</p>
     <ul>
         <li>High-reward cluster = task completed successfully</li>
         <li>Low-reward cluster = catastrophic failure</li>
         <li>Thin middle = cliff dynamics (no partial success)</li>
-        <li>Binary signal = why RL needs millions of episodes</li>
+        <li>Near-binary signal = one reason RL needs so many episodes</li>
     </ul>
 </td>
 <td>
@@ -839,26 +839,30 @@ function drawHistogram(canvasId, data, options) {
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // Draw time-series from data (use first 200 points)
+        // Draw time-series sampled across the full dataset (saturation
+        // samples are appended at the end, so first-N sampling would miss them)
         var nPts = Math.min(200, data.length);
+        var pickRng = mulberry32(7);
+        var tsData = [];
+        for (var i = 0; i < nPts; i++) tsData.push(data[Math.floor(pickRng() * data.length)]);
         var satCount = 0;
         ctx.strokeStyle = 'rgba(41,128,185,0.7)';
         ctx.lineWidth = 1.2;
         ctx.beginPath();
         for (var i = 0; i < nPts; i++) {
             var px = padL + (i / nPts) * plotW;
-            var py = padT + plotH - ((data[i] - yMin) / (yMax - yMin)) * plotH;
+            var py = padT + plotH - ((tsData[i] - yMin) / (yMax - yMin)) * plotH;
             if (i === 0) ctx.moveTo(px, py);
             else ctx.lineTo(px, py);
-            if (Math.abs(data[i]) >= 9.7) satCount++;
+            if (Math.abs(tsData[i]) >= 9.7) satCount++;
         }
         ctx.stroke();
 
         // Highlight saturation events with red dots
         for (var i = 0; i < nPts; i++) {
-            if (Math.abs(data[i]) >= 9.7) {
+            if (Math.abs(tsData[i]) >= 9.7) {
                 var px = padL + (i / nPts) * plotW;
-                var py = padT + plotH - ((data[i] - yMin) / (yMax - yMin)) * plotH;
+                var py = padT + plotH - ((tsData[i] - yMin) / (yMax - yMin)) * plotH;
                 ctx.beginPath();
                 ctx.arc(px, py, 3, 0, Math.PI * 2);
                 ctx.fillStyle = 'rgba(231,76,60,0.9)';
@@ -1198,9 +1202,9 @@ function drawHistogram(canvasId, data, options) {
         ctx.fillStyle = '#8e44ad';
         ctx.font = 'bold 9px -apple-system, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('Binary signal = why', padL + plotW - 67, padT + plotH - 37);
-        ctx.fillText('RL needs MILLIONS', padL + plotW - 67, padT + plotH - 25);
-        ctx.fillText('of episodes', padL + plotW - 67, padT + plotH - 13);
+        ctx.fillText('Near-binary signal =', padL + plotW - 67, padT + plotH - 37);
+        ctx.fillText('almost no gradient', padL + plotW - 67, padT + plotH - 25);
+        ctx.fillText('per episode', padL + plotW - 67, padT + plotH - 13);
 
         // Y-axis labels
         ctx.fillStyle = '#666';

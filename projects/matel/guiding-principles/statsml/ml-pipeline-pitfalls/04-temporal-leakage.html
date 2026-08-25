@@ -74,6 +74,20 @@ ul {
     font-size: 0.92rem;
 }
 li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
 </style>
 </head>
 <body>
@@ -86,15 +100,18 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>Stock data: random split puts 2024 data in train, 2023 in test. Model "predicts" the past using future knowledge. Customer behavior: Tuesday's data trains, Monday's data tests.</p>
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">time series</span></div>
                 <ul>
-                    <li>Stock data: random split puts 2024 data in train, 2023 in test. Model "predicts" the past using future knowledge</li>
-                    <li>Customer behavior: Tuesday's data trains, Monday's data tests. Features from Tuesday leak Tuesday-knowledge into "predicting" Monday</li>
-                    <li>Symptom: 90% accuracy on random split, 60% on proper temporal split</li>
+                    <li><b>Shuffled time</b> — a random split on time-ordered data scatters future rows into training</li>
+                    <li><b>Predicting the past</b> — the model is scored on a past it has effectively already seen</li>
+                    <li><b>Future in training</b> — 2024 stock rows land in train while 2023 rows land in test</li>
+                    <li><b>Cross-day leakage</b> — training on Tuesday to predict Monday imports not-yet-known outcomes</li>
+                    <li><b>The symptom</b> — accuracy looks strong on a random split but drops under a temporal split</li>
+                    <li><b>Production collapse</b> — the inflated score evaporates once the model faces a real future</li>
                 </ul>
-                <p class="example">Example: Fraud detection model achieves 95% on random split. Deploy with temporal split (train on past, predict future): 72%. The 23% gap was temporal leakage.</p>
+                <p class="example">A fraud detection model scoring 95% on a random split drops to 72% under a temporal split — the 23-point gap was temporal leakage.</p>
                 <div class="key-point">
-                    <strong>Defense:</strong> Always use temporal splits for time-ordered data. Train on [t₀, t₁], test on [t₁, t₂]. Never shuffle across time.
+                    <strong>Impact:</strong> Offline metrics overstate real performance, so models are deployed on accuracy they can never reproduce in production.
                 </div>
             </td>
             <td class="viz-col">
@@ -109,16 +126,17 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>sklearn's default cross-validation uses random shuffling, treating time series data as i.i.d. This violates the fundamental assumption that future data should not inform predictions about the past. Many tutorials and examples use random splits without warning about temporal structure.</p>
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">shuffling</span></div>
                 <ul>
-                    <li>sklearn's default KFold uses random shuffle &mdash; treats time series as i.i.d. samples</li>
-                    <li>Tutorials show train_test_split without temporal awareness, creating bad habits</li>
-                    <li>Teams copy-paste cross-validation code that works for i.i.d. data but fails for time series</li>
-                    <li>Auto-correlation in time series means nearby points are similar &mdash; random split exploits this</li>
+                    <li><b>Silent i.i.d. assumption</b> — standard tools assume independent rows; time series violates that</li>
+                    <li><b>No warning</b> — nothing in the pipeline flags that the rows carry a time dimension</li>
+                    <li><b>Library defaults</b> — KFold and train_test_split shuffle rows, destroying chronological order</li>
+                    <li><b>Learned habits</b> — tutorials teach random splits, and teams copy them into forecasting work</li>
+                    <li><b>Auto-correlation</b> — nearby time points are similar, so test rows have near-twins in train</li>
                 </ul>
-                <p class="example">Example: Daily stock returns. Random 5-fold CV: each fold mixes days from all years. Fold 3 trains on 2024 data to "predict" 2022 prices. Model learns patterns from the future. CV accuracy: 68%. Temporal split (train 2020-2023, test 2024): 52%. The model has no real edge.</p>
+                <p class="example">On daily stock returns, random 5-fold CV scores 68% while training on 2020-2023 and testing on 2024 scores 52%.</p>
                 <div class="key-point">
-                    <strong>Root Cause:</strong> Time series data violates the i.i.d. assumption. Adjacent time points are correlated. Random shuffling places correlated future points in training, giving the model access to patterns it cannot have in production (where it must predict the unknown future).
+                    <strong>Root Cause:</strong> Adjacent time points are correlated, so shuffling gives the model access to future patterns it cannot have in production.
                 </div>
             </td>
             <td class="viz-col">
@@ -133,17 +151,17 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>Use temporal splits: train on [t0, t1], test on [t1, t2]. For cross-validation, use TimeSeriesSplit (walk-forward validation). Never shuffle time-ordered data. Each fold trains on past and tests on the immediate future.</p>
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">walk-forward</span></div>
                 <ul>
-                    <li>Temporal split: train on past [t0, t1], test on future [t1, t2]</li>
-                    <li>Walk-forward validation (TimeSeriesSplit): expanding or sliding window training</li>
-                    <li>Never shuffle time-ordered data &mdash; preserve chronological order</li>
-                    <li>Gap between train and test periods to avoid label leakage from adjacent days</li>
-                    <li>Validate: if random split >> temporal split performance, you have temporal leakage</li>
+                    <li><b>Mirror deployment</b> — always train on data that existed before the period being predicted</li>
+                    <li><b>Temporal split</b> — train on the past interval and test on the future, never mixing rows</li>
+                    <li><b>Walk-forward validation</b> — TimeSeriesSplit folds test on the period right after training</li>
+                    <li><b>Gap period</b> — a buffer between train and test stops correlated adjacent days from leaking</li>
+                    <li><b>Leakage check</b> — a much higher random-split score than temporal-split score signals leakage</li>
                 </ul>
-                <p class="example">Example: Walk-forward with 6-month train window, 1-month test. Fold 1: train Jan-Jun, test Jul. Fold 2: train Feb-Jul, test Aug. Average accuracy across folds: 54%. This is real &mdash; the model must predict unseen future patterns.</p>
+                <p class="example">Walk-forward validation with a 6-month training window and 1-month test window averages an honest 54%.</p>
                 <div class="key-point">
-                    <strong>Fix:</strong> Replace KFold with TimeSeriesSplit. Train on months 1-6, test on month 7. Train on months 1-7, test on month 8. Each fold only ever predicts the future from the past. The performance estimate is honest.
+                    <strong>Fix:</strong> Replace KFold with TimeSeriesSplit so each fold trains on months 1 to N and tests on month N+1, always predicting the future from the past.
                 </div>
             </td>
             <td class="viz-col">
@@ -219,7 +237,7 @@ function setup(id) {
     ctx.font = '10px system-ui';
     ctx.textAlign = 'center';
     ctx.fillText('2024 data in TRAIN, 2023 data in TEST', w/2, timelineY + 35);
-    ctx.fillText('Model learns from the future! Accuracy: 90% (inflated)', w/2, timelineY + 47);
+    ctx.fillText('Model learns from the future! Accuracy: 95% (inflated)', w/2, timelineY + 47);
 
     // Bottom: RIGHT (temporal split)
     var bottomY = 180;
@@ -316,7 +334,7 @@ function setup(id) {
     ctx.fillStyle = '#e74c3c';
     ctx.font = 'bold 11px system-ui';
     ctx.textAlign = 'center';
-    ctx.fillText('18% accuracy gap reveals temporal leakage. Always split time-ordered data chronologically.', w/2, 275);
+    ctx.fillText('23-point accuracy gap reveals temporal leakage. Always split time-ordered data chronologically.', w/2, 275);
 })();
 
 (function() {

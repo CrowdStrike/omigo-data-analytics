@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OLTP vs OLAP</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+.sql {
+    background: #f8f9fa;
+    border-left: 3px solid #1a5276;
+    padding: 8px 12px;
+    margin-top: 10px;
+    font-family: ui-monospace, Menlo, monospace;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    overflow-x: auto;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>OLTP vs OLAP</h1>
+<p class="subtitle">Running the shop touches one row at a time; studying the shop scans everything — two jobs so different they get two databases</p>
+
+<div class="card-section">
+    <h2>Running the Shop vs Studying the Shop</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">running example</span></div>
+                <ul>
+                    <li><b>Running it (OLTP)</b> &mdash; insert order 1009, look up customer 3: one row per query</li>
+                    <li><b>Studying it (OLAP)</b> &mdash; "average order value by month, all history": every row per query</li>
+                    <li><b>OLTP traffic</b> &mdash; thousands of tiny queries a day, each needing milliseconds</li>
+                    <li><b>OLAP traffic</b> &mdash; a handful of huge queries a day, each allowed seconds or minutes</li>
+                    <li><b>Same data</b> &mdash; the same 8 orders serve both; only the access pattern differs</li>
+                </ul>
+                <p class="example">The checkout writes one order row; the quarterly review reads all of them — the till and the telescope.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> OLTP = many tiny touches (transactions). OLAP = few giant scans (analysis). The workload, not the data, is what differs.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Report, Every Row: Average Order by Month</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">worked example</span></div>
+                <ul>
+                    <li><b>The question</b> &mdash; is the average order getting bigger or smaller month by month?</li>
+                    <li><b>January</b> &mdash; orders of $8, $15, $5: average $9.33</li>
+                    <li><b>February</b> &mdash; orders of $8, $12, $15: average $11.67</li>
+                    <li><b>March</b> &mdash; orders of $12, $5: average $8.50</li>
+                    <li><b>The cost</b> &mdash; all 8 rows were read to produce 3 numbers; at scale, all 80 million</li>
+                </ul>
+                <pre class="sql">SELECT month, AVG(amount)
+FROM   orders
+GROUP  BY month;   -- reads every row, returns 3</pre>
+                <p class="example">No index saves you here — an average needs every amount, so the scan is the work, not a failure to avoid it.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Analytics compresses many rows into few numbers. Reading "everything" is the job description, so OLAP engines are built to scan fast.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Rows on Disk vs Columns on Disk</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag orange">where it's used</span></div>
+                <ul>
+                    <li><b>Row store (OLTP)</b> &mdash; each order's five values sit together: perfect for "fetch order 1004"</li>
+                    <li><b>Column store (OLAP)</b> &mdash; all amounts sit together, all dates together</li>
+                    <li><b>The report needs</b> &mdash; amount and month: 2 of the 5 columns</li>
+                    <li><b>Row store cost</b> &mdash; reads whole rows anyway; 3 columns of waste per row</li>
+                    <li><b>Column store cost</b> &mdash; rebuilding one full order means visiting 5 separate places</li>
+                </ul>
+                <p class="example">Warehouses like the column layout so much that "columnar" is practically a synonym for "analytics database".</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Storage layout is a bet on the workload: rows bet on "one whole thing at a time", columns bet on "one attribute across everything".
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Database Doing Both Jobs Does Both Badly</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">why it matters</span></div>
+                <ul>
+                    <li><b>The setup</b> &mdash; analysts run their big scans on the same database as the checkout</li>
+                    <li><b>The symptom</b> &mdash; every Monday 9am, checkout slows just as the weekly report runs</li>
+                    <li><b>Why</b> &mdash; one giant scan hogs disk and memory that a thousand tiny queries needed</li>
+                    <li><b>The fix</b> &mdash; copy data out on a schedule; shop on OLTP, reports on the warehouse</li>
+                    <li><b>The price</b> &mdash; the warehouse lags the shop by minutes or hours; know your copy's age</li>
+                </ul>
+                <p class="example">A data scientist's innocent SELECT over all history once made real customers wait at a real checkout.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Pointing analytics at the production database. It works until the first big query — separate the till from the telescope.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var w = +canvas.getAttribute('width'), h = +canvas.getAttribute('height');
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+    return { ctx: ctx, w: w, h: h };
+}
+
+function drawTable(ctx, x, y, cols, widths, rows, opt) {
+    opt = opt || {};
+    var rowH = opt.rowH || 24;
+    var totalW = 0;
+    for (var i = 0; i < widths.length; i++) totalW += widths[i];
+    ctx.textAlign = 'left';
+    ctx.fillStyle = opt.headBg || P.ink;
+    ctx.fillRect(x, y, totalW, rowH);
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = '#fff';
+    var cx = x;
+    for (i = 0; i < cols.length; i++) { ctx.fillText(cols[i], cx + 6, y + rowH - 8); cx += widths[i]; }
+    for (var r = 0; r < rows.length; r++) {
+        var ry = y + rowH * (r + 1);
+        ctx.fillStyle = (opt.rowBg && opt.rowBg[r]) ? opt.rowBg[r] : (r % 2 ? '#f4f6f8' : '#fff');
+        ctx.fillRect(x, ry, totalW, rowH);
+        ctx.fillStyle = (opt.rowColor && opt.rowColor[r]) || P.text;
+        ctx.font = (opt.rowBold && opt.rowBold[r]) ? 'bold 12px system-ui' : '12px system-ui';
+        cx = x;
+        for (var c = 0; c < rows[r].length; c++) { ctx.fillText(String(rows[r][c]), cx + 6, ry + rowH - 8); cx += widths[c]; }
+    }
+    ctx.strokeStyle = '#cfd8e0'; ctx.lineWidth = 1;
+    ctx.strokeRect(x, y, totalW, rowH * (rows.length + 1));
+    return { x: x, y: y, w: totalW, rowH: rowH };
+}
+
+var ORDERS = [
+    [1001, 1, '$8', 'Jan'], [1002, 2, '$15', 'Jan'], [1003, 1, '$5', 'Jan'],
+    [1004, 3, '$8', 'Feb'], [1005, 2, '$12', 'Feb'], [1006, 4, '$15', 'Feb'],
+    [1007, 1, '$12', 'Mar'], [1008, 9, '$5', 'Mar']
+];
+
+// c1: OLTP touches one row; OLAP scans all
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same 8 Orders, Two Very Different Queries', w / 2, 24);
+
+    ctx.strokeStyle = '#bdc3c7'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(360, 38); ctx.lineTo(360, h - 14); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Left: OLTP — one row highlighted
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+    ctx.fillText('OLTP: fetch order 1004', 180, 52);
+    var bg1 = [null, null, null, 'rgba(39,174,96,0.25)', null, null, null, null];
+    var bold1 = [false, false, false, true, false, false, false, false];
+    drawTable(ctx, 75, 62, ['order_id', 'cust', 'amount'], [70, 50, 66], ORDERS.map(function(r) { return [r[0], r[1], r[2]]; }),
+        { rowH: 20, rowBg: bg1, rowBold: bold1 });
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.green; ctx.textAlign = 'center';
+    ctx.fillText('1 row touched', 180, 262);
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute;
+    ctx.fillText('milliseconds; thousands of these a day', 180, 280);
+
+    // Right: OLAP — all rows highlighted
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+    ctx.fillText('OLAP: AVG(amount) by month', 540, 52);
+    var bg2 = [], bold2 = [];
+    for (var i = 0; i < 8; i++) { bg2.push('rgba(42,120,214,0.15)'); bold2.push(false); }
+    drawTable(ctx, 435, 62, ['order_id', 'cust', 'amount'], [70, 50, 66], ORDERS.map(function(r) { return [r[0], r[1], r[2]]; }),
+        { rowH: 20, rowBg: bg2, rowBold: bold2 });
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.blue; ctx.textAlign = 'center';
+    ctx.fillText('all 8 rows touched', 540, 262);
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute;
+    ctx.fillText('seconds at scale; a few of these a day', 540, 280);
+})();
+
+// c2: month-colored table + monthly average bars
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w;
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('8 Rows In, 3 Numbers Out', w / 2, 24);
+
+    var mcol = { Jan: 'rgba(42,120,214,0.15)', Feb: 'rgba(25,158,112,0.18)', Mar: 'rgba(201,133,0,0.18)' };
+    var bg = ORDERS.map(function(r) { return mcol[r[3]]; });
+    drawTable(ctx, 50, 48, ['order_id', 'amount', 'month'], [70, 66, 60], ORDERS.map(function(r) { return [r[0], r[2], r[3]]; }),
+        { rowH: 24, rowBg: bg });
+
+    arrowRight(ctx, 270, 160, 330, 160, P.ink);
+    function arrowRight(c2, x1, y1, x2, y2, col) {
+        c2.strokeStyle = col; c2.lineWidth = 2.5;
+        c2.beginPath(); c2.moveTo(x1, y1); c2.lineTo(x2, y2); c2.stroke();
+        c2.fillStyle = col;
+        c2.beginPath(); c2.moveTo(x2 + 2, y2); c2.lineTo(x2 - 8, y2 - 5); c2.lineTo(x2 - 8, y2 + 5); c2.closePath(); c2.fill();
+    }
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('GROUP BY', 300, 144);
+
+    // bars
+    var bars = [
+        { m: 'Jan', v: 9.33, c: P.blue, calc: '(8+15+5)/3' },
+        { m: 'Feb', v: 11.67, c: P.aqua, calc: '(8+12+15)/3' },
+        { m: 'Mar', v: 8.50, c: P.yellow, calc: '(12+5)/2' }
+    ];
+    var px = 370, pw = 300, baseY = 224, chH = 140, maxY = 14;
+    var barW = 64, gap = (pw - 3 * barW) / 2;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px - 10, baseY); ctx.lineTo(px + pw + 10, baseY); ctx.stroke();
+    for (var i = 0; i < 3; i++) {
+        var x = px + i * (barW + gap);
+        var bh = bars[i].v / maxY * chH;
+        ctx.fillStyle = bars[i].c;
+        ctx.fillRect(x, baseY - bh, barW, bh);
+        ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('$' + bars[i].v.toFixed(2), x + barW / 2, baseY - bh - 8);
+        ctx.font = '12px system-ui';
+        ctx.fillText(bars[i].m, x + barW / 2, baseY + 17);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+        ctx.fillText(bars[i].calc, x + barW / 2, baseY + 33);
+    }
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.orange; ctx.textAlign = 'center';
+    ctx.fillText('average order value by month', px + pw / 2, 60);
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'center';
+    ctx.fillText('every row was read to build these three bars', px + pw / 2, 282);
+})();
+
+// c3: row store vs column store
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('What the AVG-by-Month Report Actually Reads', w / 2, 24);
+
+    ctx.strokeStyle = '#bdc3c7'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(360, 38); ctx.lineTo(360, h - 14); ctx.stroke();
+    ctx.setLineDash([]);
+
+    var cols = ['id', 'cust', 'prod', 'amt', 'date'];
+    var need = { 3: true, 4: true }; // amt, date
+
+    // Left: row store — horizontal strips, all cells read
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+    ctx.fillText('row store: whole rows come off disk', 180, 52);
+    var bx = 60, by = 66, cw = 48, chh = 20;
+    for (var r = 0; r < 8; r++) {
+        for (var c = 0; c < 5; c++) {
+            var x = bx + c * cw, y = by + r * (chh + 2);
+            ctx.fillStyle = need[c] ? 'rgba(42,120,214,0.30)' : 'rgba(231,76,60,0.10)';
+            ctx.fillRect(x, y, cw - 2, chh);
+        }
+    }
+    for (var c = 0; c < 5; c++) {
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(cols[c], bx + c * cw + cw / 2 - 1, by + 8 * (chh + 2) + 14);
+    }
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'center';
+    ctx.fillText('reads 40 cells to use 16', 180, 272);
+    ctx.font = '11px system-ui'; ctx.fillStyle = P.mute;
+    ctx.fillText('(pink cells: hauled off disk, then ignored)', 180, 288);
+
+    // Right: column store — vertical strips, only 2 columns read
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+    ctx.fillText('column store: only the needed columns', 540, 52);
+    var bx2 = 420, by2 = 66;
+    for (var c = 0; c < 5; c++) {
+        for (var r = 0; r < 8; r++) {
+            var x = bx2 + c * cw, y = by2 + r * (chh + 2);
+            ctx.fillStyle = need[c] ? 'rgba(39,174,96,0.35)' : '#f0f2f5';
+            ctx.fillRect(x, y, cw - 2, chh);
+        }
+        ctx.fillStyle = need[c] ? P.green : P.mute;
+        ctx.font = need[c] ? 'bold 11px system-ui' : '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(cols[c], bx2 + c * cw + cw / 2 - 1, by2 + 8 * (chh + 2) + 14);
+    }
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.green; ctx.textAlign = 'center';
+    ctx.fillText('reads 16 cells, uses 16', 540, 272);
+    ctx.font = '11px system-ui'; ctx.fillStyle = P.mute;
+    ctx.fillText('(grey columns never leave the disk)', 540, 288);
+})();
+
+// c4: checkout latency spikes when the big report runs (illustrative)
+(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w;
+    var pad = { top: 52, bottom: 52, left: 70, right: 30 };
+    var cw = w - pad.left - pad.right, ch = 300 - pad.top - pad.bottom;
+    var baseY = pad.top + ch;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Checkout Response Time on Report Day (illustrative)', w / 2, 24);
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad.left, pad.top); ctx.lineTo(pad.left, baseY); ctx.lineTo(pad.left + cw, baseY); ctx.stroke();
+
+    var hours = ['6am', '7', '8', '9', '10', '11', '12pm', '1', '2'];
+    var ms = [22, 20, 24, 380, 410, 30, 22, 25, 21];
+    var maxY = 450;
+
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'right';
+    [0, 100, 200, 300, 400].forEach(function(v) {
+        var y = baseY - v / maxY * ch;
+        ctx.fillText(v + ' ms', pad.left - 8, y + 4);
+        if (v > 0) {
+            ctx.strokeStyle = P.grid;
+            ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + cw, y); ctx.stroke();
+        }
+    });
+
+    function X(i) { return pad.left + i / (ms.length - 1) * cw; }
+    function Y(v) { return baseY - v / maxY * ch; }
+
+    // report window band 9-11
+    ctx.fillStyle = 'rgba(231,76,60,0.08)';
+    ctx.fillRect(X(3), pad.top, X(5) - X(3), ch);
+
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < ms.length; i++) i === 0 ? ctx.moveTo(X(i), Y(ms[i])) : ctx.lineTo(X(i), Y(ms[i]));
+    ctx.stroke();
+    for (var i = 0; i < ms.length; i++) {
+        ctx.fillStyle = (ms[i] > 100) ? '#e74c3c' : P.blue;
+        ctx.beginPath(); ctx.arc(X(i), Y(ms[i]), 4, 0, 2 * Math.PI); ctx.fill();
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(hours[i], X(i), baseY + 17);
+    }
+
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'center';
+    ctx.fillText('9–11am: the weekly all-history report runs', X(4), pad.top + 14);
+    ctx.fillText('here — checkout waits 20x longer', X(4), pad.top + 32);
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.blue; ctx.textAlign = 'left';
+    ctx.fillText('~22 ms all day otherwise', X(5) + 20, Y(25) - 12);
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'center';
+    ctx.fillText('one scan-everything query competing with thousands of one-row queries', w / 2, 292);
+})();
+</script>
+
+</body>
+</html>

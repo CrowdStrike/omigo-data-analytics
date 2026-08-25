@@ -74,6 +74,20 @@ ul {
     font-size: 0.92rem;
 }
 li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
 </style>
 </head>
 <body>
@@ -86,15 +100,17 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>Your model achieves near-perfect accuracy in training and testing but collapses in production. The gap reveals that training data included information that would not be available at prediction time.</p>
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">future info</span></div>
                 <ul>
-                    <li>Feature computed from future events leaks into training (e.g., "total_purchases_lifetime" when predicting churn at day 30)</li>
-                    <li>Model gets 99% accuracy in training, 55% in production — the gap IS the leakage</li>
-                    <li>Subtle forms: aggregates computed over full time range, features derived from other rows (global mean), join keys that shouldn't exist yet</li>
+                    <li><b>The trap</b> — training data contains information that will not exist at prediction time</li>
+                    <li><b>Future-derived features</b> — "total_purchases_lifetime" leaks the answer into a churn model</li>
+                    <li><b>Impossible task</b> — the leaked feature encodes the answer, so offline metrics look excellent</li>
+                    <li><b>Production collapse</b> — with only genuinely available inputs, accuracy drops from 99% to 55%</li>
+                    <li><b>Subtle variants</b> — full-range aggregates, cross-row features, and unfiltered joins leak too</li>
                 </ul>
-                <p class="example">Example: Predicting hospital readmission using "discharge diagnosis code" — but that code was assigned AFTER the outcome was known. At prediction time (admission), you don't have it.</p>
+                <p class="example">Predicting hospital readmission from the discharge diagnosis code fails — that code is assigned only after the outcome is known.</p>
                 <div class="key-point">
-                    <strong>Defense:</strong> For every feature, ask: "would I have this value at the moment I need to make the prediction?" If no → remove it.
+                    <strong>Impact:</strong> Offline metrics become meaningless, and the failure only surfaces after deployment, when it is most expensive.
                 </div>
             </td>
             <td class="viz-col">
@@ -109,16 +125,17 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>Features are computed without timestamp discipline. Aggregates are calculated over the full time range instead of being restricted to data available before the prediction point. Join operations pull in records from the future because no temporal filter is applied.</p>
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">tooling defaults</span></div>
                 <ul>
-                    <li>Features computed without timestamp discipline — aggregates span full time range</li>
-                    <li>No "available at prediction time?" audit during feature engineering</li>
-                    <li>Join keys pull future records because no temporal filter is applied</li>
-                    <li>Convenient but deadly: computing rolling stats using pandas without explicit cutoff dates</li>
+                    <li><b>Not deliberate</b> — leakage is the default behavior of standard data tooling, not a rare bug</li>
+                    <li><b>No timestamp discipline</b> — a "past" aggregate silently includes events after the cutoff</li>
+                    <li><b>Missing audit</b> — no "available at prediction time?" review, so leaky features pass unchallenged</li>
+                    <li><b>Unfiltered joins</b> — joins pull in future records because no temporal filter is applied</li>
+                    <li><b>Convenient defaults</b> — rolling stats without cutoff dates run correctly and look reasonable</li>
                 </ul>
-                <p class="example">Example: "avg_spending_30d" computed as average over the entire dataset including future months. At prediction time (Jan 1), the feature includes spending from Feb-Dec. Nobody noticed because the code runs correctly — it just answers the wrong question.</p>
+                <p class="example">An "avg_spending_30d" feature averaged over the whole dataset lets a Jan 1 prediction quietly include Feb–Dec spending.</p>
                 <div class="key-point">
-                    <strong>Root Cause:</strong> The feature engineering pipeline treats all data as a single static snapshot. There is no concept of "when this row was created" baked into the computation graph.
+                    <strong>Root Cause:</strong> The pipeline treats all data as one static snapshot, with no concept of when each row was created.
                 </div>
             </td>
             <td class="viz-col">
@@ -133,17 +150,18 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>For every feature, apply the "available at prediction time?" test. Implement temporal feature auditing: each feature computation must take a cutoff timestamp parameter. No feature should access any row with timestamp > cutoff.</p>
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">time cutoffs</span></div>
                 <ul>
-                    <li>Temporal feature audit: every feature computation takes a cutoff timestamp parameter</li>
-                    <li>"Available at prediction time?" test applied to every single feature before model training</li>
-                    <li>Use point-in-time joins: filter all joined tables to records existing before the prediction timestamp</li>
-                    <li>Automate: build a feature registry that enforces temporal constraints at computation time</li>
-                    <li>Validate: compare feature distributions at different time cutoffs — sudden jumps indicate leakage</li>
+                    <li><b>Structural cure</b> — make time a parameter of every feature, so touching the future is impossible</li>
+                    <li><b>Temporal audit</b> — ask "available at prediction time?" for every feature; remove any that fail</li>
+                    <li><b>Cutoff parameter</b> — each computation takes a cutoff timestamp and reads nothing after it</li>
+                    <li><b>Point-in-time joins</b> — joined tables reflect exactly what was known at the prediction moment</li>
+                    <li><b>Feature registry</b> — enforce the temporal constraint in code instead of reviewer memory</li>
+                    <li><b>Cutoff validation</b> — a distribution jump when the cutoff moves is a strong hint of leakage</li>
                 </ul>
-                <p class="example">Example: Correct "avg_spending_30d" for a Jan 1 prediction uses only Dec data (30 days back from prediction point). The feature store query: SELECT AVG(amount) FROM transactions WHERE user_id=X AND txn_date BETWEEN '2023-12-01' AND '2023-12-31'.</p>
+                <p class="example">The correct "avg_spending_30d" for a Jan 1 prediction queries only Dec 1–31 transactions from the feature store.</p>
                 <div class="key-point">
-                    <strong>Fix:</strong> Build a point-in-time feature store. Each feature is computed with an explicit timestamp boundary. The system physically cannot access future data because the query enforces WHERE event_time < prediction_time.
+                    <strong>Fix:</strong> Build a point-in-time feature store whose queries enforce WHERE event_time &lt; prediction_time, so future data is physically inaccessible.
                 </div>
             </td>
             <td class="viz-col">

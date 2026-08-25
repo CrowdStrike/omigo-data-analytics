@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Backfills</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Backfills</h1>
+<p class="subtitle">Running the pipeline for the past — recomputing old days after a fix, one date at a time</p>
+
+<div class="card-section">
+    <h2>A Bug Fixed Today, 90 Days of Wrong History</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">running example</span></div>
+                <ul>
+                    <li><b>The bug</b> — since May 26, the pipeline counted discounts twice, understating revenue ~6%</li>
+                    <li><b>Fixed today</b> — Aug 24's code is right, but the fix only helps days that run from now on</li>
+                    <li><b>90 dirty days</b> — May 26 to Aug 23 sit in the warehouse, computed by the buggy code</li>
+                    <li><b>The backfill</b> — rerun the fixed pipeline once per old day, overwriting each day's rows</li>
+                    <li><b>Nothing exotic</b> — a backfill is the normal nightly job, just pointed at past dates</li>
+                </ul>
+                <p class="example">for each day from May 26 to Aug 23: run the pipeline with date = d — that loop is the entire backfill.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> a backfill is running the pipeline for the past. The code fix repairs tomorrow; only the backfill repairs history.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The 90-Day Loop, by the Numbers</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">worked example</span><span class="tag blue">core idea</span></div>
+                <ul>
+                    <li><b>Scope</b> — 90 daily partitions of roughly 12,000 rows each: about 1.08M rows to redo</li>
+                    <li><b>One day at a time</b> — the job overwrites June 3's partition, then June 4's, independently</li>
+                    <li><b>Spot check</b> — June 3 revenue: $41,300 buggy &rarr; $44,050 corrected (+$2,750)</li>
+                    <li><b>Progress is visible</b> — after 30 days done, 60 partitions still show the old numbers</li>
+                    <li><b>Restart-safe</b> — if the loop dies at day 41, rerun it; days just get overwritten again</li>
+                </ul>
+                <p class="example">The whole backfill ran as 90 small jobs over one weekend; Monday's dashboard quietly showed the corrected quarter.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> because each day is recomputed independently, a backfill is 90 small checkable jobs — not one giant terrifying one.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Idempotency Is What Makes Backfills Boring</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">rule of thumb</span><span class="tag orange">design</span></div>
+                <ul>
+                    <li><b>Overwrite pattern</b> — each run replaces one day's partition, so old rows can't linger</li>
+                    <li><b>Mutation pattern</b> — jobs that UPDATE rows in place or append deltas can't just rerun</li>
+                    <li><b>Terrifying version</b> — appending 90 days onto existing history doubles the quarter</li>
+                    <li><b>Order doesn't matter</b> — independent days can backfill in parallel or in any order</li>
+                    <li><b>Everyday uses</b> — new metric for history, late-arriving data, recovered outage days</li>
+                </ul>
+                <p class="example">Team A backfilled with one command; team B's UPDATE-in-place pipeline needed a week of hand-written repair SQL.</p>
+                <div class="key-point">
+                    <strong>Rule of thumb:</strong> the property that makes reruns safe — same input, same output, any number of runs — is exactly what turns "recompute 90 days" into a for-loop.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Confusion: Today's Code, Yesterday's World</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common confusion</span><span class="tag orange">leakage risk</span></div>
+                <ul>
+                    <li><b>Time travel risk</b> — the backfill runs today's code and today's lookup tables on old dates</li>
+                    <li><b>Changed lookups</b> — a customer who moved in July gets the new city stamped on May orders</li>
+                    <li><b>Feature leakage</b> — backfilled ML features can quietly use data unavailable at the time</li>
+                    <li><b>As-of joins</b> — careful backfills join to reference data as it was on that date</li>
+                    <li><b>Label it</b> — record which days were backfilled and when, so drift has an explanation</li>
+                </ul>
+                <p class="example">A churn model's backfilled "days since last order" used today's order table — it saw the future and looked brilliant until launch.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> a backfill rewrites the past with the present. Ask of every input: "is this what we knew then, or what we know now?"
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function arrow(ctx, x1, y1, x2, y2, color) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 9 * Math.cos(ang - 0.4), y2 - 9 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 9 * Math.cos(ang + 0.4), y2 - 9 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: Strip of daily partitions — clean, buggy 90 days, fix point, backfill loop
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 16px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Warehouse as Daily Partitions: 90 of Them Are Wrong', w / 2, 26);
+
+    // strip of day cells: 30 cells shown, representing ~4.5 months
+    var n = 30, cellW = 20, cellH = 40, sx = 50, sy = 100;
+    // cells 0-8 clean (before May 26), 9-28 buggy (90 days compressed), 29 today fixed
+    for (var i = 0; i < n; i++) {
+        var x = sx + i * (cellW + 1);
+        var buggy = (i >= 9 && i <= 28);
+        var today = (i === 29);
+        ctx.fillStyle = today ? 'rgba(0,131,0,0.35)' : (buggy ? 'rgba(213,81,129,0.35)' : 'rgba(42,120,214,0.30)');
+        ctx.fillRect(x, sy, cellW, cellH);
+        ctx.strokeStyle = today ? P.green : (buggy ? P.magenta : P.blue); ctx.lineWidth = 1;
+        ctx.strokeRect(x, sy, cellW, cellH);
+    }
+    // labels
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('correct', sx + 4.5 * 21, sy - 30);
+    ctx.font = '12px system-ui';
+    ctx.fillText('before May 26', sx + 4.5 * 21, sy - 14);
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('90 days computed by the buggy code', sx + 19 * 21, sy - 30);
+    ctx.font = '12px system-ui';
+    ctx.fillText('May 26 — Aug 23', sx + 19 * 21, sy - 14);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('today', sx + 29.5 * 21, sy + cellH + 18);
+    ctx.font = '12px system-ui';
+    ctx.fillText('fixed code', sx + 29.5 * 21, sy + cellH + 34);
+
+    // backfill loop arrow from today back over the buggy region
+    var fromX = sx + 29 * 21 + 10, toX = sx + 9 * 21 + 10, loopY = sy + cellH + 44;
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(fromX, sy + cellH + 2);
+    ctx.lineTo(fromX, loopY + 22);
+    ctx.lineTo(toX, loopY + 22);
+    ctx.stroke();
+    arrow(ctx, toX, loopY + 22, toX, sy + cellH + 6, P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('backfill: run the fixed pipeline for each of the 90 old dates, overwriting each day', w / 2, loopY + 46);
+
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('each cell = one daily partition of ~12,000 rows (strip compressed for display)', w / 2, 280);
+})();
+
+// c2: Buggy vs corrected daily revenue across the 90-day window
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var pad = { top: 56, bottom: 56, left: 70, right: 175 };
+    var cw = w - pad.left - pad.right, ch = h - pad.top - pad.bottom;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Daily Revenue: Buggy Numbers vs the Backfilled Correction', w / 2, 26);
+
+    // weekly points across the 90-day window (13 points), hardcoded
+    var labels = ['May 26', 'Jun 9', 'Jun 23', 'Jul 7', 'Jul 21', 'Aug 4', 'Aug 18'];
+    var buggy =     [40800, 41300, 42100, 40200, 43000, 41700, 42600];
+    var corrected = [43400, 44050, 44800, 42800, 45700, 44400, 45300];
+    var yMin = 38000, yMax = 47000, n = buggy.length;
+    function X(i) { return pad.left + i / (n - 1) * cw; }
+    function Y(v) { return pad.top + ch - (v - yMin) / (yMax - yMin) * ch; }
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad.left, pad.top); ctx.lineTo(pad.left, pad.top + ch); ctx.lineTo(pad.left + cw, pad.top + ch); ctx.stroke();
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'right';
+    [38000, 42000, 46000].forEach(function(v) {
+        ctx.fillText('$' + (v / 1000) + 'k', pad.left - 8, Y(v) + 4);
+        ctx.strokeStyle = P.grid;
+        ctx.beginPath(); ctx.moveTo(pad.left, Y(v)); ctx.lineTo(pad.left + cw, Y(v)); ctx.stroke();
+    });
+
+    // shaded recovered gap
+    ctx.fillStyle = 'rgba(0,131,0,0.12)';
+    ctx.beginPath();
+    for (var i = 0; i < n; i++) i === 0 ? ctx.moveTo(X(i), Y(corrected[i])) : ctx.lineTo(X(i), Y(corrected[i]));
+    for (var i = n - 1; i >= 0; i--) ctx.lineTo(X(i), Y(buggy[i]));
+    ctx.closePath(); ctx.fill();
+
+    ctx.strokeStyle = P.magenta; ctx.lineWidth = 3; ctx.setLineDash([7, 4]); ctx.beginPath();
+    for (var i = 0; i < n; i++) i === 0 ? ctx.moveTo(X(i), Y(buggy[i])) : ctx.lineTo(X(i), Y(buggy[i]));
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < n; i++) i === 0 ? ctx.moveTo(X(i), Y(corrected[i])) : ctx.lineTo(X(i), Y(corrected[i]));
+    ctx.stroke();
+
+    for (var i = 0; i < n; i++) {
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(labels[i], X(i), pad.top + ch + 18);
+    }
+
+    // June 3 spot check callout
+    var sx2 = X(0) + (X(1) - X(0)) * 0.55; // between May 26 and Jun 9
+    ctx.fillStyle = P.aqua; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('Jun 3: $41,300 → $44,050', pad.left + 8, pad.top + 16);
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('~6% recovered on every one of the 90 days', pad.left + cw / 2, pad.top + ch + 40);
+
+    // legend
+    var lx = w - 162;
+    ctx.textAlign = 'left'; ctx.font = '12px system-ui';
+    ctx.fillStyle = P.magenta; ctx.fillRect(lx, 60, 12, 12);
+    ctx.fillStyle = P.text; ctx.fillText('buggy (before)', lx + 17, 70);
+    ctx.fillStyle = P.green; ctx.fillRect(lx, 80, 12, 12);
+    ctx.fillStyle = P.text; ctx.fillText('backfilled (after)', lx + 17, 90);
+})();
+
+// c3: Rerun the backfill on overwrite vs append pipelines
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Backfilling 90 Days: Overwrite Stays 12,000/day, Append Doubles', w / 2, 26);
+
+    // divider
+    ctx.strokeStyle = '#bdc3c7'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(360, 42); ctx.lineTo(360, h - 16); ctx.stroke();
+    ctx.setLineDash([]);
+
+    function panel(x0, title, counts, color, note, noteColor) {
+        ctx.fillStyle = color; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(title, x0 + 150, 56);
+        var days = ['Jun 1', 'Jun 2', 'Jun 3', 'Jun 4', 'Jun 5'];
+        var maxV = 26000, baseY = 220, chH = 130;
+        var barW = 42, gap2 = 14, startX = x0 + 24;
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(startX - 6, baseY); ctx.lineTo(startX + 5 * (barW + gap2), baseY); ctx.stroke();
+        // dashed reference at 12,000
+        var refY = baseY - 12000 / maxV * chH;
+        ctx.strokeStyle = P.mute; ctx.setLineDash([4, 3]);
+        ctx.beginPath(); ctx.moveTo(startX - 6, refY); ctx.lineTo(startX + 5 * (barW + gap2), refY); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText('true 12,000', startX + 5 * (barW + gap2) - 68, refY - 6);
+        for (var i = 0; i < 5; i++) {
+            var x = startX + i * (barW + gap2);
+            var bh = counts[i] / maxV * chH;
+            ctx.fillStyle = color; ctx.globalAlpha = 0.35;
+            ctx.fillRect(x, baseY - bh, barW, bh); ctx.globalAlpha = 1;
+            ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.strokeRect(x, baseY - bh, barW, bh);
+            ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText((counts[i] / 1000) + 'k', x + barW / 2, baseY - bh - 6);
+            ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+            ctx.fillText(days[i], x + barW / 2, baseY + 15);
+        }
+        ctx.fillStyle = noteColor; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(note, x0 + 150, 258);
+    }
+
+    panel(20, 'idempotent: overwrite each partition', [12000, 12000, 12000, 12000, 12000], P.green,
+          'rerun it twice by accident — still 12,000', P.green);
+    panel(390, 'non-idempotent: append onto history', [24000, 24000, 24000, 12000, 12000], P.magenta,
+          'backfill re-ran days 1-3: quarter doubled', P.magenta);
+
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('rows per daily partition after the backfill touches the first three days twice', w / 2, 284);
+})();
+
+// c4: As-of join — May order stamped with July's customer city
+(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Backfilling May 30 with Today\'s Lookup Table Rewrites History', w / 2, 26);
+
+    // order box
+    ctx.fillStyle = '#f8f9fa'; ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.fillRect(40, 100, 180, 84); ctx.strokeRect(40, 100, 180, 84);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('order 71204', 130, 124);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('placed May 30', 130, 144);
+    ctx.fillText('customer_id 5521', 130, 164);
+
+    // two lookup versions
+    ctx.fillStyle = 'rgba(0,131,0,0.07)'; ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.fillRect(320, 62, 200, 74); ctx.strokeRect(320, 62, 200, 74);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('customers as of May 30', 420, 84);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('5521 → city: Austin', 420, 104);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('what we knew then', 420, 124);
+
+    ctx.fillStyle = 'rgba(213,81,129,0.08)'; ctx.strokeStyle = P.magenta; ctx.lineWidth = 2;
+    ctx.fillRect(320, 158, 200, 74); ctx.strokeRect(320, 158, 200, 74);
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('customers today (Aug 24)', 420, 180);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('5521 → city: Denver', 420, 200);
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('moved in July', 420, 220);
+
+    arrow(ctx, 222, 126, 316, 99, P.green);
+    arrow(ctx, 222, 158, 316, 195, P.magenta);
+
+    // outcomes
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('as-of join: May order → Austin ✓', 545, 96);
+    ctx.fillStyle = P.magenta;
+    ctx.fillText('naive join: May order', 545, 188);
+    ctx.fillText('→ Denver ✗', 545, 206);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('same trap in ML features: a backfilled feature that reads today\'s tables sees the future', w / 2, 262);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('ask of every backfill input: what we knew then, or what we know now?', w / 2, 284);
+})();
+</script>
+
+</body>
+</html>

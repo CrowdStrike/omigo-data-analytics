@@ -18,7 +18,6 @@
     .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
     .verified { display: inline-block; background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-bottom: 16px; }
     h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
-    .status { display: inline-block; background: #fef9e7; border: 1px solid #f39c12; color: #b7950b; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-left: 12px; vertical-align: middle; }
     table.obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
     table.obj-table td { vertical-align: top; padding: 12px; }
     table.obj-table td:first-child { width: 45%; }
@@ -30,16 +29,15 @@
     .section-label:first-child { margin-top: 0; }
     ul { padding-left: 20px; }
     li { margin-bottom: 6px; font-size: 0.93em; }
+    a { color: #1a5276; }
     code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-size: 0.88em; }
-    .scope-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
-    .scope-tag { background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 3px 8px; border-radius: 4px; font-size: 0.78em; font-family: monospace; }
     p { font-size: 0.93em; }
 </style>
 </head>
 <body>
 
-<h1>Smart Scales &amp; Blood Pressure Cuffs <span class="status">BACKLOG</span></h1>
-<p class="subtitle">Episodic body-composition and blood-pressure records from connected household devices, retrieved through the Withings cloud API.</p>
+<h1>Smart Scales &amp; Blood Pressure Cuffs</h1>
+<p class="subtitle">Lets you read weight, body-composition and blood-pressure readings from connected home devices, mainly through the Withings cloud API.</p>
 <span class="verified">Last verified: August 2026</span>
 
 <h2>Overview</h2>
@@ -48,176 +46,59 @@
 <tr>
 <td>
 
-<span class="section-label">What It Provides</span>
-<p>Withings (formerly Nokia Health) operates the one widely-used public cloud API in this device class. It returns <em>measure groups</em>: one weighing session or one cuff inflation, timestamped, attributed to a user profile, and carrying a set of typed numeric measures. Depending on the device model this covers weight, height, fat ratio, fat-free mass, fat mass, muscle mass, bone mass, hydration, systolic and diastolic blood pressure, pulse, SpO2, temperature and pulse wave velocity, plus activity and sleep series for the vendor's watches and sleep mats.</p>
-
-<div class="key-point">
-<strong>Most consumer scale and cuff vendors have no public API at all.</strong> Omron Connect and Garmin Index are the usual comparison points: Omron's programmatic access has historically run through partner and healthcare-platform arrangements rather than a self-serve public REST surface, and Garmin Index scales publish into Garmin Connect rather than exposing a scale-specific API of their own. For a large fraction of devices on the market the only data path is HealthKit, Health Connect, or the vendor's own app on the user's handset — which means <strong>there is no server-to-server pull</strong>. You need code running on the user's device, and you inherit that platform's write-provenance and de-duplication problems instead of the vendor's.
-</div>
-
-<span class="section-label">Authentication &amp; Scopes</span>
-<p>OAuth 2.0 authorization-code flow, per end user, with refresh tokens, against an application registered under a developer or partner account. Scopes are coarse — there is no per-measure-type or per-device consent:</p>
-<div class="scope-list">
-<span class="scope-tag">user.info</span>
-<span class="scope-tag">user.metrics</span>
-<span class="scope-tag">user.activity</span>
-<span class="scope-tag">user.sleepevents</span>
-</div>
-<p><code>user.metrics</code> is the scope that carries body measures and blood pressure. Granting it grants the whole measure history the account holds, for every device on the account, for every type those devices produce. An analysis that only needs weight still receives body-composition estimates it probably should not use.</p>
-<p>The API uses an unusual convention for a modern HTTP interface: requests are <strong>POSTs to a service endpoint with an <code>action</code> parameter</strong> rather than REST verbs against resource paths. The path names the service; <code>action</code> names the operation.</p>
-
-<span class="section-label">Granularity</span>
-<p>Episodic, not continuous. A measure group exists only because someone stood on the scale or inflated the cuff. There is no interpolation, no fixed cadence, and no guarantee of one observation per day — the observation process is entirely user-driven, which is the most consequential single fact about this data.</p>
+<span class="section-label">What you can get</span>
 <ul>
-<li>Group level: <code>date</code> (when measured), <code>created</code> and <code>modified</code> (when the record was written and last changed), <code>attrib</code>, <code>category</code>, <code>deviceid</code>, <code>grpid</code>.</li>
-<li>Measure level: <code>value</code>, <code>type</code>, <code>unit</code>.</li>
-<li><code>category</code> separates real measurements from user-set objectives. A target weight is not a measurement and must be filtered out before anything else happens.</li>
-</ul>
-
-<span class="section-label">Key Endpoints</span>
-<ul>
-<li><code>POST /measure?action=getmeas</code> — body measures and blood pressure, filtered by measure type, <code>category</code>, a date window, or <code>lastupdate</code>.</li>
-<li><code>POST /v2/measure?action=getactivity</code> — daily activity aggregates.</li>
-<li><code>POST /v2/measure?action=getintradayactivity</code> — finer-grained activity series. Access is gated: it is not automatically available to every registered application, and eligibility is decided by the vendor per partner.</li>
-<li><code>POST /v2/sleep?action=get</code> and <code>action=getsummary</code> — sleep series and per-night summaries.</li>
-<li><code>POST /v2/heart?action=list</code> and <code>action=get</code> — heart and ECG records on ECG-capable devices, including blood-pressure recordings with signal data.</li>
-<li><code>POST /v2/user?action=getdevice</code> — the device inventory on the account. Required to interpret anything else, because which measure types can exist is a property of the hardware.</li>
-<li><code>POST /notify?action=subscribe</code> — webhook notification subscriptions per data-type code, with matching <code>list</code> and <code>revoke</code> actions.</li>
-</ul>
-
-<span class="section-label">The getmeas type-code model</span>
-<p>This is the technical heart of the API and the single biggest source of parsing bugs. The response contains <code>body.measuregrps</code>, an array of groups; each group holds a <code>measures</code> array; each measure is <code>{ value, type, unit }</code>. The actual quantity is:</p>
-<pre>quantity = value &times; 10^unit</pre>
-<p>So <code>{"value": 72500, "unit": -3}</code> on type 1 is <strong>72.5 kg</strong>, not 72500. <code>unit</code> is a signed base-10 exponent, not a unit name, and it varies between records for the same type. Ignoring it produces values off by orders of magnitude that still parse as numbers, still load into a table, and still plot — just wrongly. Type codes worth listing:</p>
-<ul>
-<li><strong>1</strong> weight (kg) &nbsp;·&nbsp; <strong>4</strong> height (m) &nbsp;·&nbsp; <strong>12</strong> temperature</li>
-<li><strong>5</strong> fat free mass (kg) &nbsp;·&nbsp; <strong>6</strong> fat ratio (%) &nbsp;·&nbsp; <strong>8</strong> fat mass weight (kg)</li>
-<li><strong>76</strong> muscle mass &nbsp;·&nbsp; <strong>77</strong> hydration &nbsp;·&nbsp; <strong>88</strong> bone mass</li>
-<li><strong>9</strong> diastolic blood pressure (mmHg) &nbsp;·&nbsp; <strong>10</strong> systolic blood pressure (mmHg) &nbsp;·&nbsp; <strong>11</strong> heart pulse (bpm)</li>
-<li><strong>91</strong> pulse wave velocity &nbsp;·&nbsp; <strong>54</strong> SpO2</li>
-<li><strong>71</strong> body temperature &nbsp;·&nbsp; <strong>73</strong> skin temperature</li>
-</ul>
-<p>Which of these you actually receive depends entirely on the device model on the account. A missing type is usually not a missing measurement — it means the hardware does not produce it. Treat absence as "not instrumented" until <code>getdevice</code> says otherwise.</p>
-
-<div class="key-point">
-<strong><code>attrib</code> is the provenance flag, and filtering on it is mandatory.</strong> It distinguishes a value the device measured from a value the user typed in by hand, and — critically — from a value the system could not confidently attribute to a specific profile, or that was later reassigned by the user. The enumeration includes device-measured, manually-entered and ambiguous/unattributed states; read the current docs for the exact integer codes rather than hardcoding a guess. The statistical point does not depend on the codes: a column that mixes typed-in numbers with device readings contains <strong>two different measurement processes with different error distributions and different missingness mechanisms</strong>, and the mixture is not random — people type values in precisely when the device was unavailable or disagreed with them.
-</div>
-
-<div class="key-point">
-<strong>Records are mutable, so a <code>date</code>-keyed incremental sync silently loses corrections.</strong> A user can reassign a measurement to a different profile, or delete it, months later. That changes <code>modified</code> but not <code>date</code>. An incremental pull that asks for "everything since the latest <code>date</code> I have" will never observe the correction, and your copy of history diverges permanently from the vendor's. This is exactly what the <code>lastupdate</code> parameter exists for: key the sync on <code>lastupdate</code> / <code>modified</code>, and treat every already-stored group as revisable rather than final.
-</div>
-
-<div class="key-point">
-<strong>Multi-user attribution on a shared scale is a classifier, and its error rate is correlated with the quantity being studied.</strong> A household scale decides who stepped on it by matching the observed weight — sometimes plus impedance — to the nearest stored profile. When two members' weights are close, that assignment has a real and substantial error rate, and it is worst exactly when the profiles converge. Three consequences follow, none cosmetic. (1) Mislabelled observations appear as implausible day-over-day jumps in one series with compensating jumps in another. (2) The label noise is <em>not independent of the outcome</em>: if the analysis is about weight change, convergence of the two users' weights both raises the misassignment probability and <em>is</em> the signal, so the noise is endogenous and will bias any estimate of the effect rather than merely inflating its variance. (3) Retroactive reassignment means the historical series is not immutable. Before modelling: screen for physiologically implausible deltas, apply per-profile plausibility bounds, and treat a shared-scale series as <strong>label-noisy data, not clean data</strong>. A single-user device, or one with a per-user confirmation step, is a materially different instrument from a shared four-profile scale, and pooling them is unjustified.
-</div>
-
-<div class="key-point">
-<strong>Bio-impedance body composition is a model output, not a measurement.</strong> What the scale physically measures is <em>electrical impedance</em> across a foot-to-foot current path. Fat ratio, fat-free mass, muscle mass, bone mass and hydration are all produced by a proprietary regression applied to that impedance together with the profile's height, age and sex. Four things follow. First, the foot-to-foot path travels mainly through the lower body and under-samples the trunk and arms, so the estimates are biased, and the bias differs systematically by body shape and composition — it is not a constant offset you can subtract out. Second, impedance is strongly hydration-dependent, so time of day, fluid intake, a meal, or a recent workout move the reported "fat ratio" with no change in adipose tissue whatsoever; within-day variation can exceed weeks of real change, which means any comparison requires the measurement conditions to be fixed and the payload does not tell you whether they were. Third, the regression coefficients are proprietary and can change with a firmware or app update, so a multi-year fat-ratio series can step for purely software reasons with no marker in the data. Fourth, "bone mass" from a foot-to-foot impedance scale is not a densitometric measurement in any meaningful sense. Operational conclusion: <strong>weight is a direct measurement on a well-characterised instrument and is usable as an outcome; the body-composition fields are uncalibrated proprietary model output and are not, absent external validation.</strong> Do not carry them in the same table at the same status.
-</div>
-
-<span class="section-label">Blood pressure specifics</span>
-<p>Cuff readings are episodic spot measurements, taken when the user chooses, in conditions the user chooses. That makes the sampling process non-random with respect to the value: people measure more when they feel unwell, after an alarming reading, or when they suspect a problem — so the observed distribution is not the distribution of their blood pressure, and a sample mean estimates the average of the occasions they selected.</p>
-<ul>
-<li>Each reading typically carries systolic, diastolic and pulse. Consumer cuffs commonly perform several sequential inflations and may report an average, so one API record can already be an aggregate — and whether it is may not be visible in the payload at all.</li>
-<li>White-coat and masked hypertension effects mean home and clinic readings are not interchangeable measurements of one construct. Pooling them, or validating one against the other as ground truth, is a category error.</li>
-<li>Posture, cuff placement, cuff size, arm choice, talking during inflation, and time since caffeine or exercise all move the reading materially and are <strong>absent from the payload entirely</strong>.</li>
-<li>Position and range context is likewise absent. The API gives you a number without the conditions that make it interpretable.</li>
+<li>Weight readings, timestamped, from smart scales</li>
+<li>Body-composition estimates: fat, muscle, water and bone</li>
+<li>Blood pressure and pulse from connected cuffs</li>
+<li>Which device took each reading, and whether it was measured or typed in by hand</li>
+<li>Webhook notifications when new readings arrive</li>
 </ul>
 
 <div class="key-point">
-<strong>Sampling interval and derivation are not comparable across devices under a shared label.</strong> Two rows labelled "weight" are comparable. Two rows labelled "fat ratio" from different vendors are outputs of different undisclosed regressions over different electrode geometries. Two rows labelled "systolic" may be a single inflation on one device and a three-inflation average on another. The column name is not the measurement definition, and nothing in the response tells you which of the three you have.
+<strong>A shared household scale guesses who stepped on it.</strong> It matches each reading to the nearest stored profile by weight, and the guess fails most exactly when two people's weights converge — which may be the very change you are studying. Readings can also be reassigned or deleted by users later, so history is not fixed.
 </div>
 
-<span class="section-label">Rate Limits</span>
-<p>Described qualitatively on purpose. The API applies per-client throttling and returns error codes when a caller exceeds it, and the vendor positions <strong>webhook notifications as the intended alternative to polling</strong> rather than as an optimisation — which is the right architecture anyway, since measurement events are sparse and irregular and a polling loop spends nearly all its budget on empty responses. Do not design against a specific published requests-per-second figure; treat the limit as a runtime signal to back off.</p>
-
-<span class="section-label">Business Scenarios</span>
+<span class="section-label">Watch out for</span>
 <ul>
-<li>Remote patient monitoring and hypertension management, where the cuff series is the clinical object and its self-selected sampling is the central methodological problem.</li>
-<li>Weight-management and coaching products, which need trend estimation robust both to shared-scale label noise and to hydration-driven composition swings.</li>
-<li>Employer wellness and insurance programmes — technically feasible, but a self-measured, self-timed metric on a shared device is gameable and identity-ambiguous. An impedance-derived figure has no business in a contract.</li>
-<li>Clinical trial supplementary endpoints, where weight is defensible, provenance filtering is mandatory, and impedance-derived composition generally is not defensible.</li>
-</ul>
-
-<span class="section-label">Key Restrictions &amp; Gotchas</span>
-<ul>
-<li>No <strong>raw impedance</strong> — only the derived composition estimates. You cannot re-fit the model or substitute a published equation of your own.</li>
-<li>No <strong>raw pressure waveform</strong> from the cuff, and no per-inflation breakdown when an average is reported.</li>
-<li>No access to the <strong>composition regression</strong> itself, its validation population, or any notification when it changes.</li>
-<li>No other users' data without their own OAuth grant, even inside one household; and no population aggregates or benchmark distributions.</li>
-<li>No <strong>measurement conditions</strong> — posture, time since eating, hydration state, arm used, clothing. The covariates that explain most of the short-run variance are precisely the ones the API omits.</li>
-<li>Available types vary by device, so one account can change instrument mid-series when hardware is replaced, with no discontinuity marker beyond a changed <code>deviceid</code>.</li>
+<li>Every value comes with a power-of-ten exponent (quantity = value &times; 10^unit) — ignore it and 72.5 kg reads as 72500, and the exponent can differ between records of the same type</li>
+<li>Hand-typed entries sit in the same column as device readings; a flag (<code>attrib</code>) separates the two measurement processes</li>
+<li>Body-fat and muscle numbers are estimates from an electrical signal — they swing with hydration and firmware updates; only weight is a direct measurement</li>
+<li>Readings happen when the user chooses, so the data reflects the moments people decided to measure — not their typical state</li>
 </ul>
 
 </td>
 <td>
 
-<p style="font-size:0.85em; color:#555; margin-bottom:8px;"><strong>POST /measure?action=getmeas</strong> — measure groups from a shared household scale and a blood-pressure cuff. Comments added; note the exponent encoding on every field.</p>
+<p style="font-size:0.85em; color:#555; margin-bottom:8px;"><strong>Two "weight" records</strong> — one measured by the scale, one typed in by the user, with different exponents</p>
+<pre>{ "measuregrps": [
+    { "attrib": 0,      // measured by the device
+      "measures": [
+        {"value": 72500, "type": 1, "unit": -3},
+                        // 72.500 kg  weight
+        {"value": 18740, "type": 6, "unit": -3}
+                        // 18.740 %   fat ratio
+      ] },
+    { "attrib": 2,      // typed in by the user
+      "measures": [
+        {"value": 730, "type": 1, "unit": -1}
+                        // 73.0 kg    weight
+      ] }
+] }</pre>
 
-<pre>{
-  "status": 0,
-  "body": {
-    "updatetime": 1755840120,
-    "timezone": "Europe/Paris",
-    "measuregrps": [
-      {
-        "grpid": 3391827461,
-        "attrib": 0,        // device-measured, attributed
-        "date": 1755756042,
-        "created": 1755756051,
-        "modified": 1755756051,
-        "category": 1,      // real measure, not an objective
-        "deviceid": "b8f2a19c...c41d",
-        "measures": [
-          {"value": 72500, "type":  1, "unit": -3},  // 72.500 kg  weight
-          {"value": 18740, "type":  6, "unit": -3},  // 18.740 %   fat ratio
-          {"value": 58900, "type":  5, "unit": -3},  // 58.900 kg  fat free mass
-          {"value": 13600, "type":  8, "unit": -3},  // 13.600 kg  fat mass
-          {"value": 55850, "type": 76, "unit": -3},  // 55.850     muscle mass
-          {"value":  3050, "type": 88, "unit": -3},  //  3.050     bone mass
-          {"value": 41300, "type": 77, "unit": -3}   // 41.300     hydration
-        ]
-      },
-      {
-        "grpid": 3391904772,
-        "attrib": 0,
-        "date": 1755779411,
-        "created": 1755779418,
-        "modified": 1755779418,
-        "category": 1,
-        "deviceid": "7c04de55...9a08",
-        "measures": [
-          {"value": 128, "type": 10, "unit": 0},     // 128 mmHg   systolic
-          {"value":  81, "type":  9, "unit": 0},     //  81 mmHg   diastolic
-          {"value":  64, "type": 11, "unit": 0}      //  64 bpm    pulse
-        ]
-      },
-      {
-        "grpid": 3392011038,
-        "attrib": 2,        // manually entered by the user
-        "date": 1755835900,
-        "created": 1755836004,
-        "modified": 1755838871,  // modified &gt; created: edited later
-        "category": 1,
-        "measures": [
-          {"value": 730, "type": 1, "unit": -1}      // 73.0 kg   typed in
-        ]
-      }
-    ],
-    "more": 0,
-    "offset": 0
-  }
-}</pre>
-
-<p style="font-size:0.85em; color:#555; margin-bottom:8px;">Two traps are visible above. The last group carries <code>unit: -1</code> where the first carries <code>unit: -3</code> for the same <code>type: 1</code> — the exponent is per measure, not per type, so a hardcoded divisor breaks on real data. And that group has a manual-entry <code>attrib</code> with <code>modified &gt; created</code>: a hand-typed value, subsequently edited. A pipeline that reads <code>value</code> directly and ignores <code>attrib</code> yields a "weight" column containing 72500, 128 and 730.</p>
-
-<p style="font-size:0.85em; color:#555; margin-bottom:8px; margin-top:20px;"><strong>Shared-scale misattribution</strong> — two household members, one scale, 60 days. The scale files each reading under the nearest stored profile. Inside the shaded window the two weights differ by less than the discrimination margin and the assignment starts failing; hollow red markers sit on the profile a reading was filed under, dashed to the profile it belongs to. The misassignment rate is a function of how close the two users' weights are, so the label noise is correlated with the quantity being studied.</p>
+<p style="font-size:0.85em; color:#555; margin-bottom:8px; margin-top:20px;"><strong>Two people, one scale, 60 days.</strong> Readings get filed under the wrong profile exactly where the two weights converge — hollow red markers sit on the profile a reading was filed under.</p>
 
 <canvas id="misattributionChart" height="380"></canvas>
 
 </td>
 </tr>
 </table>
+
+<h2>Official API References</h2>
+<ul>
+    <li><a href="https://developer.withings.com/">Withings Developer Portal</a> — app registration, OAuth 2.0 setup and developer guides</li>
+    <li><a href="https://developer.withings.com/api-reference">Withings API Reference</a> — measure (getmeas), sleep, heart, user/getdevice and notify endpoints with type codes</li>
+</ul>
 
 <script>
 (function() {

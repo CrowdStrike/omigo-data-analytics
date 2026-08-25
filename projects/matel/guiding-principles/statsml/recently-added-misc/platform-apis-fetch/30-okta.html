@@ -9,7 +9,6 @@
         h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
         .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
         .verified { font-size: 0.8em; color: #888; margin-bottom: 18px; border: 1px solid #ddd; display: inline-block; padding: 2px 10px; border-radius: 4px; }
-        .status { display: inline-block; background: #e67e22; color: #fff; font-size: 0.75em; font-weight: bold; padding: 2px 10px; border-radius: 4px; vertical-align: middle; margin-left: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
         h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
         .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
         .obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
@@ -18,6 +17,7 @@
         .obj-table td:last-child { width: 55%; text-align: center; }
         ul { padding-left: 20px; margin: 8px 0; }
         li { margin-bottom: 6px; font-size: 0.93em; }
+        a { color: #1a5276; }
         .payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 12px 0; text-align: left; }
         .payload-note { font-size: 0.82em; color: #666; margin: 12px 0 -6px 0; font-style: italic; text-align: left; }
         .key-point { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
@@ -25,135 +25,60 @@
     </style>
 </head>
 <body>
-    <h1>Okta <span class="status">Backlog</span></h1>
-    <p class="subtitle">Identity provider telemetry — System Log events, users, groups, app assignments, MFA factor enrolment, sessions and provisioning outcomes.</p>
+    <h1>Okta</h1>
+    <p class="subtitle">Pull sign-in records, user accounts, and access changes from Okta — the service many companies use for workplace logins.</p>
     <span class="verified">Last verified: August 2026</span>
 
-    <h2>Overview</h2>
     <table class="obj-table">
         <tr>
             <td>
-                <div class="obj-title">What It Provides</div>
-                <p>Okta sits in front of the applications an organisation uses, so its logs record <em>who attempted to reach what, from where, and whether it succeeded</em>. Two distinct kinds of surface:</p>
+                <div class="obj-title">What you can get</div>
                 <ul>
-                    <li><strong>System Log</strong> (<code>/api/v1/logs</code>) — an append-only event stream: authentication attempts, MFA challenges, session start/end, admin configuration changes, group membership changes, app assignment changes, provisioning results, policy evaluations.</li>
-                    <li><strong>Current-state resources</strong> (<code>/api/v1/users</code>, <code>/groups</code>, <code>/apps</code>, factors) — the directory as it is <em>right now</em>. These have no history: reading a user tells you their present status and profile, not the sequence of states that produced it.</li>
-                </ul>
-                <div class="key-point">These APIs carry <strong>no user content</strong> — no mail, no files, no messages. Only metadata about actions: actor, target, client, outcome, timestamp. That is the defining characteristic of the audit-log category and it is what makes these feeds legally and analytically easier to work with than content APIs.</div>
-
-                <div class="obj-title" style="margin-top: 18px;">Authentication &amp; Scopes</div>
-                <ul>
-                    <li><strong>API token (SSWS)</strong> — a static token bound to the permissions of the admin who created it. Simple, but inherits that admin's full privilege and dies if the account is deactivated.</li>
-                    <li><strong>OAuth 2.0 for Okta</strong> — a service app authenticating with a private-key JWT (client credentials), granted narrow scopes. Preferred for scheduled collectors.</li>
-                    <li>Relevant scopes: <code>okta.logs.read</code>, <code>okta.users.read</code>, <code>okta.groups.read</code>, <code>okta.apps.read</code>, <code>okta.sessions.read</code>, <code>okta.eventHooks.read</code>.</li>
+                    <li>Every login attempt: who, from where, on what device, success or failure</li>
+                    <li>Admin and configuration changes — accounts created, access granted or removed</li>
+                    <li>Users, groups, and app assignments as they stand right now</li>
+                    <li>Which extra-verification (MFA) methods each person has set up</li>
                 </ul>
 
-                <div class="obj-title" style="margin-top: 18px;">Granularity</div>
-                <p>One record per event, typed by a dotted <code>eventType</code> (for example <code>user.session.start</code>, <code>user.authentication.auth_via_mfa</code>, <code>application.user_membership.add</code>, <code>system.api_token.create</code>). Every record carries an <code>outcome.result</code>, an <code>actor</code>, zero or more <code>target</code> objects, a client/geo block, and an <code>authenticationContext.externalSessionId</code> that lets separate events be stitched into one login session.</p>
+                <div class="key-point">An event that was not captured when it happened is <strong>gone for good — an audit log cannot be backfilled</strong>. Every retention and export decision is a bet on which questions will still be answerable in six months, made before you know what the questions are.</div>
 
-                <div class="obj-title" style="margin-top: 18px;">Key Endpoints</div>
+                <div class="obj-title" style="margin-top: 18px;">Watch out for</div>
                 <ul>
-                    <li><code>GET /api/v1/logs</code> — <code>since</code>, <code>until</code>, <code>filter</code> (SCIM-style expression), <code>q</code> (free text), <code>sortOrder</code>, cursor pagination via the <code>Link: rel="next"</code> header.</li>
-                    <li><code>GET /api/v1/users</code>, <code>GET /api/v1/users/{id}</code> — profile, status, lifecycle timestamps.</li>
-                    <li><code>GET /api/v1/groups</code>, <code>/groups/{id}/users</code> — membership snapshots.</li>
-                    <li><code>GET /api/v1/apps</code>, <code>/apps/{id}/users</code>, <code>/apps/{id}/groups</code> — assignment graph.</li>
-                    <li><code>GET /api/v1/users/{id}/factors</code> — enrolled MFA factors and their status.</li>
-                    <li><code>GET /api/v1/sessions/{sessionId}</code> — a single session by id.</li>
-                    <li>Event Hooks / Log Streaming — push delivery to an HTTPS endpoint or to AWS EventBridge / Splunk, as an alternative to polling.</li>
+                    <li>The log keeps roughly 90 days; longer history exists only if you were continuously exporting it all along</li>
+                    <li>User, group, and app data is a snapshot of now — yesterday's memberships needed yesterday's snapshot</li>
+                    <li>Records land slightly late, so counting "the last few minutes" always undercounts</li>
+                    <li>Deleted users vanish from the directory but still appear in old events, breaking joins</li>
                 </ul>
-
-                <div class="obj-title" style="margin-top: 18px;">Rate Limits</div>
-                <ul>
-                    <li>Limits are <strong>per endpoint, per minute, per org</strong>, and the budget depends on the org's plan and size. There is no single global number worth memorising.</li>
-                    <li>Read the response headers rather than hard-coding: <code>X-Rate-Limit-Limit</code>, <code>X-Rate-Limit-Remaining</code>, <code>X-Rate-Limit-Reset</code>. Exceeding the budget returns <code>429</code>.</li>
-                    <li>The System Log endpoint is one of the tighter budgets, and it is the one a collector hits most often — a backfill that pages aggressively will throttle itself.</li>
-                    <li>Concurrent-request limits apply independently of the per-minute limit, so parallelising a backfill can fail while still under the rate budget.</li>
-                </ul>
-
-                <div class="obj-title" style="margin-top: 18px;">Business Scenarios</div>
-                <ul>
-                    <li><strong>Access review / joiner-mover-leaver</strong> — reconstruct when entitlements were granted and by whom, rather than trusting the current snapshot.</li>
-                    <li><strong>MFA coverage measurement</strong> — enrolled factors per user, and the rate at which challenges are satisfied versus abandoned.</li>
-                    <li><strong>Impossible-travel and credential-stuffing detection</strong> — geo/ASN fields plus outcome on authentication events.</li>
-                    <li><strong>Application rationalisation</strong> — which SSO apps are actually being authenticated into, versus merely assigned.</li>
-                    <li><strong>Dormant-account and orphan-token hygiene</strong> — last successful authentication per user; API token creation and use.</li>
-                </ul>
-
-                <div class="obj-title" style="margin-top: 18px;">Key Restrictions &amp; Gotchas</div>
-                <ul>
-                    <li><strong>Retention is bounded and plan-dependent.</strong> The System Log API serves a rolling window (commonly documented as 90 days; confirm for your own org and plan). Anything older is gone from the API — the only way to have a longer history is to have been streaming or exporting it continuously all along.</li>
-                    <li><strong>Ingestion is near-real-time, not instant, and not strictly ordered.</strong> Records can land slightly after the event time they carry. A query for "the last few minutes" will systematically undercount. Poll with a deliberate lag behind <code>now</code> and re-read an overlapping window, keyed on the event <code>uuid</code> for idempotency.</li>
-                    <li><strong>There is no "list all active sessions" endpoint.</strong> Sessions can be fetched by id or revoked, but the population of live sessions has to be inferred from session start/end events in the System Log.</li>
-                    <li><strong>Current-state APIs cannot be backfilled.</strong> If you want yesterday's group membership, you needed yesterday's snapshot; the API only answers "now."</li>
-                    <li><strong>Outbound SCIM provisioning has no separate history API.</strong> Okta acts as the SCIM client to downstream apps, and the evidence of what it pushed is only in System Log <code>application.provision.*</code> events.</li>
-                    <li><strong><code>debugContext.debugData</code> is not a stable contract.</strong> It is genuinely useful (policy names, request ids, threat signals) but its keys vary by event type and change over time. Do not build a schema that requires a given key to exist.</li>
-                    <li>Deleting a user removes the current-state record but not the historical events that reference them, so joins from log to directory will produce misses.</li>
-                </ul>
-                <div class="key-point">The sharpest constraint in this whole category: <strong>an event that was not captured at the time it occurred is unrecoverable.</strong> You cannot backfill an audit log. Every retention or export decision is therefore a decision about which questions will still be answerable in six months — made before you know what the questions are.</div>
             </td>
             <td>
-                <p class="payload-note">Sample payload — GET /api/v1/logs (System Log event, abbreviated).</p>
+                <p class="payload-note">Sample log event (abbreviated) — metadata only, never content: it says a Salesforce session began, not what was done inside Salesforce.</p>
 <pre class="payload">{
-  "uuid": "EXAMPLE_UUID_redacted",  // Note: masked for illustration
   "published": "2026-08-18T14:22:31.812Z",
   "eventType": "user.session.start",
-  "version": "0",
-  "severity": "INFO",
-  "displayMessage": "User login to Okta",
-  "legacyEventType": "core.user_auth.login_success",
   "actor": {
-    "id": "00u1a2b3c4D5E6F7G8h9",
-    "type": "User",
     "alternateId": "a.jaiswal@acme.com",
     "displayName": "Amit Jaiswal"
   },
   "client": {
-    "userAgent": {
-      "rawUserAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
-      "os": "Mac OS X",
-      "browser": "CHROME"
-    },
     "device": "Computer",
     "ipAddress": "203.0.113.44",
-    "zone": "null",
-    "geographicalContext": {
-      "city": "Bengaluru",
-      "state": "Karnataka",
-      "country": "India",
-      "postalCode": "560001",
-      "geolocation": { "lat": 12.9716, "lon": 77.5946 }
-    }
+    "geographicalContext": { "city": "Bengaluru",
+                             "country": "India" }
   },
-  "outcome": { "result": "SUCCESS", "reason": null },
-  "target": [
-    {
-      "id": "0oa9z8y7x6W5V4U3T2s1",
-      "type": "AppInstance",
-      "alternateId": "Salesforce",
-      "displayName": "Salesforce"
-    }
-  ],
-  "authenticationContext": {
-    "authenticationStep": 0,
-    "externalSessionId": "102qR7yTnUvW0xYzAbCdEf",
-    "credentialType": "PASSWORD"
-  },
-  "securityContext": {
-    "asNumber": 64512,
-    "asOrg": "example telecom",
-    "isp": "example telecom",
-    "domain": "example.net",
-    "isProxy": false
-  },
-  "transaction": { "type": "WEB", "id": "Zr8kQ1a2b3c4d5e6", "detail": {} },
-  "debugContext": { "debugData": { "requestUri": "/api/v1/authn" } },
-  "request": { "ipChain": [ { "ip": "203.0.113.44", "version": "V4" } ] }
+  "outcome": { "result": "SUCCESS" },
+  "target": [ { "type": "AppInstance",
+                "displayName": "Salesforce" } ]
 }</pre>
-                <p class="payload-note">Note the absence of any content field — the event says a Salesforce session began, never what was done inside Salesforce.</p>
                 <canvas id="c1" height="360"></canvas>
             </td>
         </tr>
     </table>
+
+    <h2>Official API References</h2>
+    <ul>
+        <li><a href="https://developer.okta.com/docs/reference/">Okta API Reference</a> — management API reference hub</li>
+        <li><a href="https://developer.okta.com/docs/reference/api/system-log/">System Log API</a> — event types, filter expressions and cursor pagination</li>
+    </ul>
 
     <script>
     (function() {

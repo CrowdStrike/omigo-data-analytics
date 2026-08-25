@@ -75,6 +75,20 @@ ul {
     font-size: 0.92rem;
 }
 li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
 </style>
 </head>
 <body>
@@ -87,16 +101,18 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>A column called "amount" or "duration" exists in multiple tables or data sources, but one stores dollars while another stores cents; one stores seconds while another stores milliseconds. No schema enforcement, no unit metadata, no validation.</p>
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">units</span></div>
                 <ul>
-                    <li><strong>Currency:</strong> Payment API returns cents (2500), internal DB stores dollars (25.00), join mixes both</li>
-                    <li><strong>Time:</strong> Unix timestamps in seconds (1609459200) vs milliseconds (1609459200000); "duration" in seconds vs minutes</li>
-                    <li><strong>Distance:</strong> Meters vs kilometers; inches vs centimeters; longitude in degrees vs radians</li>
+                    <li><b>Same name, two units</b> — "amount" stores dollars in one table and cents in another</li>
+                    <li><b>No enforcement</b> — no schema metadata or validation exists to catch the mismatch at merge time</li>
+                    <li><b>Currency</b> — a payment API returns cents (2500) while the internal DB stores dollars (25.00)</li>
+                    <li><b>Time</b> — Unix timestamps arrive in seconds from one source and milliseconds from another</li>
+                    <li><b>Distance</b> — meters vs kilometers and degrees vs radians hide behind identical column names</li>
                 </ul>
+                <p class="example">Merging Stripe amounts in cents (4500) with internal dollars (45.00) inflates revenue 100x, so the model sees an average purchase of $2,272.50 instead of $45.</p>
                 <div class="key-point">
-                    <strong>Impact:</strong> Revenue calculations off by 100x, latency metrics off by 1000x, models train on garbage features. Detection: Statistical outlier checks (revenue spike from $50 to $5000), unit tests on representative samples, schema-level unit annotations.
+                    <strong>Impact:</strong> Revenue comes out off by 100x and latency by 1000x, and every downstream aggregate silently inherits the error.
                 </div>
-                <p class="example">Example: Merging transaction data from Stripe (amounts in cents: 4500) with internal analytics table (amounts in dollars: 45.00). A naive join treats 4500 as $4500, inflating revenue by 100x. Model sees nonsensical features: "average purchase $2000" when true value is $20.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c1" width="720" height="300"></canvas>
@@ -110,14 +126,16 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">conventions</span></div>
                 <ul>
-                    <li><strong>Undocumented conventions:</strong> Different teams choose different unit conventions independently, with no central registry</li>
-                    <li><strong>System migrations:</strong> A platform migration changes units (e.g., cents to dollars) without updating column names or documentation</li>
-                    <li><strong>API vs DB mismatch:</strong> External APIs return amounts in cents while internal databases store dollars — both land in the same column</li>
-                    <li><strong>No schema-level metadata:</strong> Column definitions lack unit annotations, validation ranges, or semantic types</li>
+                    <li><b>Social convention</b> — each system's unit choice is sensible alone; mismatch appears at seams</li>
+                    <li><b>No central registry</b> — teams pick unit conventions independently and never document them</li>
+                    <li><b>Migrations</b> — a platform change from cents to dollars keeps the old column name and docs</li>
+                    <li><b>API vs DB</b> — external APIs return cents while internal tables store dollars in one column</li>
+                    <li><b>Bare schemas</b> — column definitions lack unit annotations, valid ranges, or semantic types</li>
                 </ul>
                 <div class="key-point">
-                    <strong>Root cause:</strong> The column name "amount" carries no unit semantics. Without explicit unit metadata, every consumer must guess — and guesses diverge across teams and time.
+                    <strong>Root Cause:</strong> The name "amount" carries no unit semantics, so every consumer must guess — and guesses diverge across teams and time.
                 </div>
             </td>
             <td class="viz-col">
@@ -132,14 +150,16 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">units</span></div>
                 <ul>
-                    <li><strong>Units in column names:</strong> amount_cents, latency_ms, distance_km — self-documenting and prevents mix-ups</li>
-                    <li><strong>Range validation rules:</strong> amount_cents &gt; 0 AND &lt; 10000000 catches 100x errors immediately</li>
-                    <li><strong>Schema-level unit annotations:</strong> Data catalog entries include unit, valid range, and source system</li>
-                    <li><strong>Conversion at ingestion boundary:</strong> Normalize units at the point of entry, not downstream in queries or models</li>
+                    <li><b>Units in names</b> — amount_cents, latency_ms, and distance_km are self-documenting columns</li>
+                    <li><b>Range checks</b> — a rule like amount_cents &gt; 0 AND &lt; 10,000,000 catches 100x errors at once</li>
+                    <li><b>Catalog metadata</b> — record the unit, valid range, and source system for every column</li>
+                    <li><b>Convert at ingestion</b> — normalize units at the point of entry, never downstream in queries</li>
+                    <li><b>Outlier checks</b> — an average revenue jump from $50 to $5,000 exposes a mismatch early</li>
                 </ul>
                 <div class="key-point">
-                    <strong>Principle:</strong> Make the unit impossible to ignore. If the column name forces you to acknowledge the unit, you cannot accidentally mix dollars with cents.
+                    <strong>Fix:</strong> Make the unit impossible to ignore — a column name that states the unit cannot mix dollars with cents by accident.
                 </div>
             </td>
             <td class="viz-col">

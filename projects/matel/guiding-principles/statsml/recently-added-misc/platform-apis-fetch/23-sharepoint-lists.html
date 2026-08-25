@@ -19,7 +19,6 @@
         .subtitle { color: #666; font-size: 1.05em; margin-bottom: 12px; }
         .verified { display: inline-block; background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-bottom: 16px; }
         h2 { color: #1a5276; font-size: 1.3em; border-bottom: 2px solid #2980b9; padding-bottom: 6px; margin-top: 32px; }
-        .status { display: inline-block; background: #fef9e7; border: 1px solid #f39c12; color: #b7950b; padding: 2px 10px; border-radius: 4px; font-size: 0.8em; margin-left: 12px; vertical-align: middle; }
         table.obj-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
         table.obj-table td { vertical-align: top; padding: 12px; }
         table.obj-table td:first-child { width: 45%; }
@@ -33,179 +32,48 @@
         .key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
         ul { padding-left: 20px; }
         li { margin-bottom: 6px; font-size: 0.93em; }
-        .scope-list { margin: 8px 0; line-height: 2.2; }
-        .scope-tag { background: #eaf2f8; border: 1px solid #2980b9; color: #1a5276; padding: 3px 8px; border-radius: 4px; font-size: 0.78em; font-family: ui-monospace, Menlo, monospace; white-space: nowrap; }
+        a { color: #1a5276; }
     </style>
 </head>
 <body>
-    <h1>SharePoint Lists via Microsoft Graph <span class="status">BACKLOG</span></h1>
-    <p class="subtitle">Lists as typed tables — column definitions, list items with field values, per-item version snapshots, and delta sync</p>
+    <h1>SharePoint Lists via Microsoft Graph</h1>
+    <p class="subtitle">Read and write SharePoint lists — the tables behind many internal trackers — including each row's edit history.</p>
     <span class="verified">Last verified: August 2026</span>
 
     <h2>Overview</h2>
     <table class="obj-table">
         <tr>
             <td>
-                <p class="section-head">What It Provides</p>
-                <p>A SharePoint <strong>list</strong> is a schema-bearing table: <code>columnDefinition</code> objects describe the typed columns, and <code>listItem</code> objects carry the row values inside an open <code>fields</code> bag. Every document library is also a list, which is why a library can be read either as a <code>drive</code> (file-centric) or as a <code>list</code> (metadata-centric) — the same underlying rows, two projections.</p>
+                <p class="section-head">What You Can Get</p>
                 <ul>
-                    <li><strong>Schema</strong> — <code>columnDefinition</code> per column: text, number, boolean, dateTime, choice, currency, lookup, personOrGroup, hyperlinkOrPicture, calculated, geolocation, term (managed metadata), thumbnail, contentApprovalStatus.</li>
-                    <li><strong>Rows</strong> — <code>listItem</code> with <code>fields</code>, <code>contentType</code>, <code>createdBy</code>/<code>lastModifiedBy</code>, and a <code>sharepointIds</code> facet linking back to classic SharePoint identifiers.</li>
-                    <li><strong>History</strong> — <code>listItemVersion</code> gives a full snapshot of <code>fields</code> at each version, not a diff.</li>
-                    <li><strong>Sync</strong> — <code>items/delta</code> for incremental change tracking with a durable-ish token.</li>
+                    <li>A list's schema — its columns, types, and choice values</li>
+                    <li>Rows with all their field values</li>
+                    <li>Every prior version of a row — who changed which field, and when</li>
+                    <li>An incremental change feed for keeping a copy in sync</li>
+                    <li>Add and update rows from a program</li>
                 </ul>
 
-                <p class="section-head">Authentication &amp; Scopes</p>
+                <div class="key-point"><strong>Big lists hit a hidden ceiling.</strong> Filtering or sorting on a column without an index starts failing once a list grows past roughly 5,000 items — the limit is on how many rows the engine may scan, not on how many you get back. The fix is adding an index to that column; retrying will never work.</div>
+
+                <p class="section-head">Watch Out For</p>
                 <ul>
-                    <li><strong>Delegated</strong> — the app is bounded by the signed-in user's effective list permissions, including item-level security trimming.</li>
-                    <li><strong>Application (app-only)</strong> — <code>Sites.Read.All</code> / <code>Sites.ReadWrite.All</code> are tenant-wide and see every list in every site. <code>Sites.Selected</code> grants nothing until an admin authorises the app on named site collections, and is the only sane choice for a daemon.</li>
-                    <li><strong>Site id resolution</strong> — you almost always start from a URL, so <code>GET /sites/{hostname}:/sites/{path}</code> is the first call in any script.</li>
-                </ul>
-                <div class="scope-list">
-                    <span class="scope-tag">Sites.Read.All</span>
-                    <span class="scope-tag">Sites.ReadWrite.All</span>
-                    <span class="scope-tag">Sites.Manage.All</span>
-                    <span class="scope-tag">Sites.Selected</span>
-                    <span class="scope-tag">offline_access</span>
-                </div>
-
-                <p class="section-head">Graph vs SharePoint REST</p>
-                <p>These are two different surfaces over one engine, not two spellings of the same call. Choose deliberately:</p>
-                <ul>
-                    <li><strong>Graph</strong> (<code>/sites/{id}/lists/{id}/items</code>) — Entra ID auth, consistent OData v4, <code>@odata.nextLink</code> paging, <code>delta</code> support, <code>Sites.Selected</code> least-privilege scoping, and one token that also reaches Mail, Teams, and Drive. The recommended surface for new work. But it exposes a <em>subset</em> of SharePoint.</li>
-                    <li><strong>SharePoint REST</strong> (<code>/_api/web/lists/getByTitle('X')/items</code>, and the newer <code>/_api/v2.1/</code>) — the full surface. CAML queries via <code>POST .../GetItems</code>, list <em>views</em> and their filters, <code>RenderListDataAsStream</code> for view-shaped output with lookup expansion, field schema XML, and item attachments. Costs: an older OData dialect, <code>Accept: application/json;odata=nometadata</code> ceremony, form digests for writes on some auth paths, and no cross-service token.</li>
-                    <li><strong>Only in REST:</strong> CAML, view definitions as executable queries, <code>AttachmentFiles</code>, field schema XML, <code>ItemCount</code> as a cheap property.</li>
-                    <li><strong>Only in Graph:</strong> <code>delta</code>, <code>Sites.Selected</code>, subscriptions in the standard Graph webhook model.</li>
-                    <li><strong>Practical rule:</strong> Graph for reading and writing item data; REST when you need CAML, views, or attachments. Many production integrations run both against the same list, which means two auth paths and two throttling stories to reason about.</li>
-                </ul>
-
-                <p class="section-head">Granularity</p>
-                <p>Per list, per column, per item, per item-version. Field values are <em>not</em> returned by default on a list-items query — you must ask for them: <code>GET /sites/{id}/lists/{lid}/items?$expand=fields</code>, optionally narrowed with <code>$expand=fields($select=Title,Status)</code>. Field keys are the column's <strong>internal name</strong>, not its display name, and internal names encode illegal characters — a column shown as "Due Date" is keyed <code>Due_x0020_Date</code>. Reading <code>columns</code> first and building a display-to-internal map is the only reliable approach.</p>
-
-                <p class="section-head">Key Endpoints</p>
-                <ul>
-                    <li><code>GET /sites/{site-id}/lists</code>, <code>GET /sites/{site-id}/lists/{list-id}</code></li>
-                    <li><code>GET /sites/{site-id}/lists/{list-id}/columns</code></li>
-                    <li><code>GET /sites/{site-id}/lists/{list-id}/contentTypes</code></li>
-                    <li><code>GET /sites/{site-id}/lists/{list-id}/items?$expand=fields</code></li>
-                    <li><code>GET /sites/{site-id}/lists/{list-id}/items/{item-id}?$expand=fields</code></li>
-                    <li><code>PATCH /sites/{site-id}/lists/{list-id}/items/{item-id}/fields</code></li>
-                    <li><code>POST /sites/{site-id}/lists/{list-id}/items</code></li>
-                    <li><code>GET /sites/{site-id}/lists/{list-id}/items/{item-id}/versions</code></li>
-                    <li><code>GET /sites/{site-id}/lists/{list-id}/items/delta</code></li>
-                    <li><code>POST /subscriptions</code> — change notifications on <code>/sites/{id}/lists/{lid}</code></li>
-                </ul>
-
-                <p class="section-head">Rate Limits</p>
-                <p>Two throttling layers stack here. Graph throttles per app and per tenant; the SharePoint Online backend applies its own per-app, per-site-collection budget underneath, and list queries are charged against it. Both answer with HTTP <code>429</code> plus <code>Retry-After</code>; SharePoint-backed responses additionally carry <code>RateLimit-Limit</code>, <code>RateLimit-Remaining</code> and <code>RateLimit-Reset</code>, which let a client self-throttle before it is throttled. Microsoft documents that traffic sent with an identifiable <code>User-Agent</code> is treated more favourably than anonymous traffic. Rather than a fixed rate, budget by cost: an <code>$expand=fields</code> page is meaningfully more expensive than a bare item listing, and a <code>$filter</code> on an unindexed column can be dramatically more expensive still.</p>
-                <div class="key-point"><strong>Concurrency does not buy throughput here.</strong> The SharePoint per-site budget is shared across every thread you run, so eight parallel workers against one site simply reach <code>429</code> eight times faster. Serial with <code>Retry-After</code> and jitter finishes sooner in wall-clock time than an aggressive fan-out that keeps getting rejected.</div>
-
-                <p class="section-head">Business Scenarios</p>
-                <ul>
-                    <li>Lists as lightweight operational databases — request trackers, asset registers, approval queues — read into a warehouse via <code>delta</code></li>
-                    <li>Reverse ETL: push reference data from a system of record into a list users can browse</li>
-                    <li>Governance reporting on document libraries by reading them as lists (retention labels, classification columns) instead of walking drives</li>
-                    <li>Change auditing at the field level using <code>listItemVersion</code> snapshots to reconstruct who changed which column</li>
-                    <li>Migration off legacy list workflows, where the schema must be read before the rows</li>
-                </ul>
-
-                <p class="section-head">Key Restrictions &amp; Gotchas</p>
-                <div class="key-point"><strong>Item version history holds field values the current item no longer shows.</strong> Where versioning is on — the default for libraries, and common for lists — <code>/items/{id}/versions</code> returns each prior version with its own full <code>fields</code> snapshot, author, and timestamp. Overwriting a field does not remove the previous value; it stays retrievable by anyone who can read the item. How many versions survive is a per-list setting rather than an API constant, and deletion is separately buffered through the site Recycle Bin and then a second-stage admin Recycle Bin on a tenant-configured schedule. A data-minimisation review that inspects only current items understates retention on both axes.</div>
-                <div class="key-point"><strong>Internal names are frozen at creation.</strong> A column created as "Due Date" is keyed <code>Due_x0020_Date</code> forever. Renaming it in the UI changes only <code>displayName</code>. Every filter, select, and write uses the internal name — building requests from what the UI shows is the most common source of "field not recognised".</div>
-                <div class="key-point"><strong>The list view threshold is the defining constraint.</strong> SharePoint Online caps how many items a single query may evaluate — the long-documented figure is 5,000 items, and it is a limit on the <em>scan</em>, not on the result set. A list with a hundred thousand rows paginates fine, but a <code>$filter</code> or <code>$orderby</code> on a column that is not indexed fails once the list crosses the threshold, because the engine would have to inspect more rows than it is allowed to. Adding an index to the filtered column is the fix; retrying is not. The exact figure is a service limit and may change.</div>
-                <ul>
-                    <li><strong>Query support is narrower than OData implies.</strong> Only some column types are filterable and sortable through Graph, and <code>$filter</code> on a field inside the <code>fields</code> bag has documented restrictions. Discover what works against a realistic list; do not assume full OData because the URL accepts it.</li>
-                    <li><strong>Attachments are not exposed.</strong> Classic list-item attachments have no Graph representation. Reaching them means dropping to the SharePoint REST endpoint (<code>/_api/web/lists(...)/items(n)/AttachmentFiles</code>) with a separate permission story. This surprises almost every list-migration project.</li>
-                    <li><strong>Item-level permissions are not exposed.</strong> Graph will not tell you that row 47 has unique permissions or who they are broken to. Security-trimmed delegated reads simply omit the row, which looks identical to the row not existing.</li>
-                    <li><strong>Lookup and person columns return references, not objects.</strong> You get a <code>LookupId</code> plus a display value, and person fields return a <code>LookupId</code> into the site user information list — resolving to a real Entra ID identity requires a second call, and the display value can be stale.</li>
-                    <li><strong>Calculated and read-only columns cannot be written.</strong> A <code>PATCH</code> that includes them fails the whole request rather than ignoring them, so update payloads must be filtered against the schema.</li>
-                    <li><strong>Version history depth is a list setting.</strong> Versioning can be off entirely, in which case <code>versions</code> returns only the current state. Where it is on, the retained count is bounded by the library or list configuration, and trimmed versions are gone — the API never had a copy.</li>
-                    <li><strong>Delta can require a full resync.</strong> An invalidated token returns <code>410 Gone</code> with <code>resyncRequired</code>. Delta is also eventually consistent and may repeat an item, so apply changes idempotently keyed on item id.</li>
-                    <li><strong>The <code>systemFacet</code> marks non-user edits.</strong> Items touched by system processes carry it, and treating those as human activity inflates every "who is active" metric built on list history.</li>
-                    <li><strong>Recycle bin is invisible.</strong> A deleted item disappears from Graph while remaining recoverable in SharePoint's two-stage recycle bin, which Graph does not expose. "Permanently deleted" from the API's point of view is not permanent.</li>
-                    <li><strong>Not retrievable:</strong> list-item attachments, unique per-item permissions, view definitions and their filters as executable queries, workflow/Power Automate run history attached to items, and any field value from a version already trimmed by the list's versioning settings.</li>
+                    <li>Columns are addressed by a frozen internal name, not the label you see — a column created as "Due Date" is keyed <code>Due_x0020_Date</code> forever, even after renaming</li>
+                    <li>Overwritten field values stay readable in version history for anyone who can read the item</li>
+                    <li>Classic item attachments and per-row permissions are simply not exposed here</li>
+                    <li>Rows a user cannot see are silently omitted — indistinguishable from not existing</li>
                 </ul>
             </td>
             <td>
-                <p class="section-head">GET /sites/{site-id}/lists/{list-id}/items?$expand=fields</p>
-                <pre>{
-  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#items",
-  "value": [
-    {
-      "id": "2",
-      "eTag": "\"7b4dfc1a-...,4\"",
-      "createdDateTime": "2026-05-04T11:02:19Z",
-      "lastModifiedDateTime": "2026-08-19T08:41:07Z",
-      "webUrl": "https://contoso.sharepoint.com/sites/ops/Lists/Requests/2_.000",
-      "createdBy": {
-        "user": { "displayName": "Ana Duarte", "email": "ana@contoso.com" }
-      },
-      "contentType": { "id": "0x0100...", "name": "Item" },
-      "sharepointIds": {
-        "listId": "EXAMPLE_LIST_UUID_redacted",  // Note: masked for illustration
-        "listItemId": "2",
-        "listItemUniqueId": "9a1c0d3e-...",
-        "siteId": "8f2a1c44-..."
-      },
-      "fields@odata.context": "...$entity",
-      "fields": {
-        "id": "2",
-        "Title": "Replace rack switch — DC2",
-        "Status": "In progress",
-        "Priority": "High",
-        "Due_x0020_Date": "2026-08-29T00:00:00Z",
-        "EstimatedCost": 4200,
-        "AssignedToLookupId": "17",
-        "Approved": false,
-        "Modified": "2026-08-19T08:41:07Z",
-        "Editor": "Ravi Kulkarni"
-      }
-    }
-  ],
-  "@odata.nextLink": "https://graph.microsoft.com/v1.0/sites/.../items?$expand=fields&$skiptoken=..."
-}</pre>
-
-                <p class="section-head">GET /sites/{site-id}/lists/{list-id}/columns</p>
-                <pre>{
-  "value": [
-    { "id": "c4b2...", "name": "Title", "displayName": "Title",
-      "required": true, "indexed": true,
-      "text": { "allowMultipleLines": false, "maxLength": 255 } },
-    { "id": "9f01...", "name": "Status", "displayName": "Status",
-      "indexed": true,
-      "choice": { "allowTextEntry": false, "displayAs": "dropDownMenu",
-                  "choices": ["New", "In progress", "Blocked", "Done"] } },
-    { "id": "3ac7...", "name": "Due_x0020_Date", "displayName": "Due Date",
-      "indexed": false,
-      "dateTime": { "displayAs": "default", "format": "dateOnly" } },
-    { "id": "aa50...", "name": "AssignedTo", "displayName": "Assigned To",
-      "indexed": false,
-      "personOrGroup": { "allowMultipleSelection": false,
-                         "chooseFromType": "peopleOnly" } },
-    { "id": "77de...", "name": "SLAWindow", "displayName": "SLA Window",
-      "readOnly": true,
-      "calculated": { "formula": "=[Due_x0020_Date]-[Created]",
-                      "outputType": "number" } }
-  ]
-}</pre>
-
-                <p class="section-head">GET /sites/{site-id}/lists/{list-id}/items/2/versions</p>
-                <pre>{
+                <p class="section-head">A cleared field, still readable in version history</p>
+                <pre>GET .../items/2/versions
+{
   "value": [
     { "id": "4.0",
-      "lastModifiedDateTime": "2026-08-19T08:41:07Z",
-      "lastModifiedBy": { "user": { "displayName": "Ravi Kulkarni" } },
-      "fields": { "Title": "Replace rack switch — DC2",
-                  "Status": "In progress",
-                  "ApprovalNotes": null,
-                  "EstimatedCost": 4200 } },
+      "fields": { "Status": "In progress",
+                  "ApprovalNotes": null } },
     { "id": "3.0",
-      "lastModifiedDateTime": "2026-08-02T14:18:55Z",
-      "lastModifiedBy": { "user": { "displayName": "Ana Duarte" } },
-      "fields": { "Title": "Replace rack switch — DC2",
-                  "Status": "New",
-                  "ApprovalNotes": "Temp console cred in ticket OPS-8812",
-                  "EstimatedCost": 3100 } }
+      "fields": { "Status": "New",
+                  "ApprovalNotes": "Temp console cred in ticket OPS-8812" } }
   ]
 }
 
@@ -217,6 +85,12 @@
             </td>
         </tr>
     </table>
+
+    <h2>Official API References</h2>
+    <ul>
+        <li><a href="https://learn.microsoft.com/en-us/graph/api/resources/sharepoint?view=graph-rest-1.0">SharePoint sites and lists in Microsoft Graph</a> — site, list, listItem, and column resources</li>
+        <li><a href="https://learn.microsoft.com/en-us/graph/api/resources/listitem?view=graph-rest-1.0">listItem resource type</a> — the fields bag, versions, and delta support</li>
+    </ul>
 
     <script>
     (function () {

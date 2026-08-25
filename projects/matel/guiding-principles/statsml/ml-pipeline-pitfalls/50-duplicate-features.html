@@ -72,6 +72,20 @@ ul {
     font-size: 0.92rem;
 }
 li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
 </style>
 </head>
 <body>
@@ -84,17 +98,19 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>Features are semantically identical or nearly so (correlation > 0.95), often due to multiple derivations of same concept or renamed columns from different sources. Tree models split importance arbitrarily, linear models have unstable coefficients, interpretation becomes meaningless.</p>
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">redundancy</span></div>
                 <ul>
-                    <li><strong>Feature correlation:</strong> "revenue_usd" and "revenue_dollars" are same data, different names; model treats as two features, splits importance 50/50 randomly</li>
-                    <li><strong>Importance splitting:</strong> True signal strength is 0.4, but split across 3 correlated features (0.15, 0.12, 0.13); all rank below threshold, erroneously dropped in feature selection</li>
-                    <li><strong>Semantic duplication:</strong> "age" and "birth_year" (perfectly correlated given constant reference year); "price" and "log_price" (monotonic transform, nearly redundant for tree models)</li>
-                    <li><strong>Multicollinearity:</strong> Linear models: coefficients unstable, change dramatically with small data perturbations; regularization arbitrarily zeros one of the pair</li>
+                    <li><b>Near-identical features</b> — correlation above 0.95 from renamed columns or re-derivations</li>
+                    <li><b>Renamed duplicates</b> — "revenue_usd" and "revenue_dollars" carry the same data twice</li>
+                    <li><b>Importance splitting</b> — a 0.4 signal fractured into 0.15, 0.12, 0.13 falls below threshold</li>
+                    <li><b>Semantic duplicates</b> — "age" vs "birth_year", or "price" vs "log_price" for tree models</li>
+                    <li><b>Multicollinearity</b> — coefficients turn unstable, and regularization zeros one arbitrarily</li>
+                    <li><b>Broken interpretation</b> — importance rankings stop reflecting the true signal structure</li>
                 </ul>
+                <p class="example">Three sources contribute "total_clicks," "click_count," and "num_clicks" — a 0.42-importance signal splits into 0.16, 0.14, and 0.12, selection drops all three, and the retrained model loses 18% AUC.</p>
                 <div class="key-point">
-                    <strong>Impact:</strong> Feature importance uninterpretable—can't determine which features matter because importance is fractured. Model explanation contradictory. Feature selection drops important predictors because importance diluted below threshold. Coefficients unstable across retraining. <strong>Fix:</strong> Compute pairwise correlation matrix, drop features with r > 0.95. Use variance inflation factor (VIF) to detect multicollinearity. Deduplicate at feature engineering stage—one canonical feature per concept.
+                    <strong>Impact:</strong> Fractured importance makes the model uninterpretable, and feature selection can drop a genuinely important predictor whose diluted score falls below threshold.
                 </div>
-                <p class="example">Example: User engagement model has "total_clicks," "click_count," and "num_clicks" from three different logging sources—all identical. True importance: 0.42. Measured importance split: 0.16, 0.14, 0.12. Feature selection drops all three because each individually below 0.20 threshold. Retrained model without click features loses 18% AUC. Post-mortem discovers they were duplicates of critical signal.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c1" width="720" height="300"></canvas>
@@ -108,16 +124,18 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">feature sprawl</span></div>
                 <ul>
-                    <li>Collecting all available features without deduplication</li>
-                    <li>Same signal appears under different names from different source systems</li>
-                    <li>Feature engineering creates correlated variants (amount, log_amount, amount_zscore)</li>
-                    <li>Teams independently create similar features without cross-team visibility</li>
+                    <li><b>Accretion growth</b> — every team and source adds its own view, and nothing forces convergence</li>
+                    <li><b>Collect-everything habit</b> — teams pull in all available features because more feels safer</li>
+                    <li><b>Cross-system renaming</b> — the same signal appears under different names per source system</li>
+                    <li><b>Derived variants</b> — engineering yields amount, log_amount, and amount_zscore from one base</li>
+                    <li><b>Siloed development</b> — teams build similar features with no visibility into what exists</li>
                 </ul>
+                <p class="example">Three teams contribute "revenue_30d", "monthly_revenue", and "rev_last_month" — 0.98 correlated — so the tree model really uses one signal three times.</p>
                 <div class="key-point">
-                    <strong>Root cause:</strong> The "more features = better" assumption combined with siloed feature development. Without a central registry, the same information enters the model through multiple correlated paths.
+                    <strong>Root Cause:</strong> The "more features = better" assumption plus siloed development lets the same information enter the model through multiple correlated paths.
                 </div>
-                <p class="example">Example: Three teams contribute features: "revenue_30d", "monthly_revenue", "rev_last_month" — all computed slightly differently but 0.98 correlated. Tree model splits on all three, appearing to use diverse signals when it's one signal three times.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c2" width="720" height="300"></canvas>
@@ -131,16 +149,19 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">deduplication</span></div>
                 <ul>
-                    <li>Correlation clustering: group features with correlation > 0.95</li>
-                    <li>Keep one representative per cluster (most interpretable or most stable)</li>
-                    <li>Post-hoc path audit in tree models: check if multiple splits use the same underlying signal</li>
-                    <li>Central feature registry with lineage tracking</li>
+                    <li><b>One per concept</b> — deduplicate before training so each idea enters the model once</li>
+                    <li><b>Correlation clustering</b> — group features whose pairwise correlation exceeds ~0.95</li>
+                    <li><b>One representative</b> — keep the most interpretable or stable feature, drop the rest</li>
+                    <li><b>VIF check</b> — variance inflation catches linear combinations that pairwise checks miss</li>
+                    <li><b>Path audit</b> — after training, check whether multiple splits reuse one underlying signal</li>
+                    <li><b>Feature registry</b> — lineage tracking lets teams discover features before creating new ones</li>
                 </ul>
+                <p class="example">200 features cluster into 85 groups, and keeping one representative per group changes AUC by about 0.1% while making importance stable and interpretable.</p>
                 <div class="key-point">
-                    <strong>Best practice:</strong> Before training, compute pairwise correlation matrix. Cluster features above threshold. Select one per cluster. After training, audit feature importance — if removed "duplicates" would change predictions, the dedup threshold was too aggressive.
+                    <strong>Fix:</strong> Cluster correlated features, keep one per cluster, and audit after training — if removing the "duplicates" would change predictions, the dedup threshold was too aggressive.
                 </div>
-                <p class="example">Example: 200 features clustered into 85 groups. Keep 85 representatives. Model performance unchanged (0.1% AUC difference) but interpretability and stability improve dramatically.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c3" width="720" height="300"></canvas>
@@ -219,9 +240,9 @@ function setup(id) {
     ctx.fillText('Feature Importance:', 30, 165);
 
     var fragBars = [
-        {label: 'income', val: 4},
-        {label: 'annual_salary', val: 4},
-        {label: 'yearly_earnings', val: 4}
+        {label: 'income', val: 6},
+        {label: 'annual_salary', val: 6},
+        {label: 'yearly_earnings', val: 6}
     ];
     var barY = 175;
     fragBars.forEach(function(b) {
@@ -248,14 +269,14 @@ function setup(id) {
     ctx.lineWidth = 1.5;
     ctx.setLineDash([4, 3]);
     ctx.beginPath();
-    ctx.moveTo(180, 173);
-    ctx.lineTo(180, 228);
+    ctx.moveTo(204, 173);
+    ctx.lineTo(204, 228);
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.fillStyle = '#e67e22';
     ctx.font = '9px system-ui';
     ctx.textAlign = 'left';
-    ctx.fillText('drop threshold (5%)', 184, 228);
+    ctx.fillText('drop threshold (8%)', 208, 228);
 
     // Divider
     ctx.strokeStyle = '#ccc';
@@ -350,7 +371,7 @@ function setup(id) {
     ctx.fillStyle = '#e74c3c';
     ctx.font = 'bold 11px system-ui';
     ctx.textAlign = 'center';
-    ctx.fillText('3 duplicates x 4% each = below threshold. After dedup: 18% = top feature.', w/2, h - 8);
+    ctx.fillText('3 duplicates x 6% each = below 8% threshold. After dedup: 18% = top feature.', w/2, h - 8);
 })();
 
 // Canvas 2: Why It Happens - multiple names converging to same signal, correlation heatmap, redundant tree paths

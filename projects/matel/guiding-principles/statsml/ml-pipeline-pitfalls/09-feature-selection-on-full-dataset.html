@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Feature Selection on Full Dataset</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Feature Selection on Full Dataset</h1>
+<p class="subtitle">Selecting features using test data → optimistic performance</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">selection</span></div>
+                <ul>
+                    <li><b>The setup</b> — feature importance is computed on all rows before the train/test split</li>
+                    <li><b>Hidden leak</b> — the test rows helped decide which features survived the cut</li>
+                    <li><b>Broken independence</b> — the test set no longer gives an independent check on the model</li>
+                    <li><b>Lucky features</b> — the "top" list includes features only coincidentally good on this fold</li>
+                    <li><b>False rigor</b> — the split looks proper, but the damage happened before it</li>
+                </ul>
+                <p class="example">Selecting the top 20 of 500 features on full data scores 88% on the split; selection inside CV scores 79%.</p>
+                <div class="key-point">
+                    <strong>Impact:</strong> Reported accuracy is optimistically biased — 88% reported vs 79% honest — so the model cannot keep that promise on genuinely unseen data.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">leakage</span></div>
+                <ul>
+                    <li><b>Feels like preprocessing</b> — selection is run before the split as if it were cleaning</li>
+                    <li><b>Uses the target</b> — any step that consults labels is model fitting, not preprocessing</li>
+                    <li><b>Full-data statistics</b> — chi-squared or mutual-information scores include test labels</li>
+                    <li><b>Overfitted criterion</b> — the choice fits this train+test sample, not the population</li>
+                    <li><b>Chance correlations</b> — with 500+ candidates, some correlate with test labels by luck</li>
+                </ul>
+                <p class="example">Of 1000 pure-noise features, ~50 pass p&lt;0.05 on full data and inflate accuracy; inside CV none pass consistently.</p>
+                <div class="key-point">
+                    <strong>Root Cause:</strong> Feature selection uses the target to decide which features to keep, so letting test labels into that decision leaks test information through the selection criterion.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">pipeline</span></div>
+                <ul>
+                    <li><b>Selection is modeling</b> — treat the selector as part of the model, not preprocessing</li>
+                    <li><b>Inside CV</b> — re-run selection on each training fold so held-out rows never influence it</li>
+                    <li><b>Pipeline wrapper</b> — chain selector and estimator so they travel through CV together</li>
+                    <li><b>Fold variation</b> — features may differ per fold; that is correct and reveals instability</li>
+                    <li><b>Weak-signal honesty</b> — wildly varying selections mean weak signal; accept that finding</li>
+                    <li><b>Final model</b> — select on the full training set only, keep the test set untouched</li>
+                </ul>
+                <p class="example">SelectKBest(k=20) inside a 5-fold pipeline averages an honest 79%; selection on full data reports an inflated 88%.</p>
+                <div class="key-point">
+                    <strong>Fix:</strong> cross_val_score(Pipeline([selector, model]), X, y, cv=5) fits the selector on each train fold only, so no test data ever touches it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var leftX = 15, rightX = 370;
+    var boxW = 340, boxH = 260, boxY = 30;
+
+    // --- LEFT SIDE: WRONG approach ---
+    // Red border box
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(leftX, boxY, boxW, boxH);
+
+    // Title
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('WRONG: Feature Selection Outside CV', leftX + boxW/2, boxY + 18);
+
+    // Full Dataset outer box
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(leftX + 20, boxY + 28, boxW - 40, boxH - 60);
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'left';
+    ctx.fillText('Full Dataset', leftX + 25, boxY + 40);
+
+    // Feature selection arrow spanning full dataset (wrong)
+    ctx.fillStyle = '#e67e22';
+    ctx.globalAlpha = 0.15;
+    ctx.fillRect(leftX + 30, boxY + 45, boxW - 60, 22);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(leftX + 30, boxY + 45, boxW - 60, 22);
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillStyle = '#e67e22';
+    ctx.textAlign = 'center';
+    ctx.fillText('Feature Selection (ALL data)', leftX + boxW/2, boxY + 60);
+
+    // Arrow down
+    ctx.beginPath();
+    ctx.moveTo(leftX + boxW/2, boxY + 67);
+    ctx.lineTo(leftX + boxW/2, boxY + 78);
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(leftX + boxW/2 - 4, boxY + 74);
+    ctx.lineTo(leftX + boxW/2, boxY + 80);
+    ctx.lineTo(leftX + boxW/2 + 4, boxY + 74);
+    ctx.fillStyle = '#e67e22';
+    ctx.fill();
+
+    // CV loop box
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(leftX + 40, boxY + 82, boxW - 80, 120);
+    ctx.setLineDash([]);
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'left';
+    ctx.fillText('CV Loop', leftX + 45, boxY + 94);
+
+    // CV folds inside left
+    var foldColors = ['#1a5276', '#1a5276', '#1a5276', '#1a5276', '#e74c3c'];
+    var foldLabels = ['Train', 'Train', 'Train', 'Train', 'Test'];
+    for (var i = 0; i < 5; i++) {
+        var foldX = leftX + 55 + i * 48;
+        var foldY = boxY + 105;
+        ctx.fillStyle = i < 4 ? 'rgba(26,82,118,0.2)' : 'rgba(231,76,60,0.2)';
+        ctx.fillRect(foldX, foldY, 40, 55);
+        ctx.strokeStyle = foldColors[i];
+        ctx.lineWidth = 1;
+        ctx.strokeRect(foldX, foldY, 40, 55);
+        ctx.font = '9px system-ui';
+        ctx.fillStyle = foldColors[i];
+        ctx.textAlign = 'center';
+        ctx.fillText(foldLabels[i], foldX + 20, foldY + 70);
+    }
+
+    // "Leaked info" label with red
+    ctx.font = '9px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('Test fold already seen by selector!', leftX + boxW/2, boxY + 195);
+
+    // Accuracy result
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('Reported: 88% (inflated)', leftX + boxW/2, boxY + 245);
+
+    // --- RIGHT SIDE: CORRECT approach ---
+    // Green border box
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(rightX, boxY, boxW, boxH);
+
+    // Title
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText('CORRECT: Feature Selection Inside CV', rightX + boxW/2, boxY + 18);
+
+    // Full Dataset outer box
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(rightX + 20, boxY + 28, boxW - 40, boxH - 60);
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'left';
+    ctx.fillText('Full Dataset', rightX + 25, boxY + 40);
+
+    // CV loop box (larger, contains feature selection)
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(rightX + 40, boxY + 48, boxW - 80, 155);
+    ctx.setLineDash([]);
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'left';
+    ctx.fillText('CV Loop', rightX + 45, boxY + 60);
+
+    // CV folds inside right
+    for (var i = 0; i < 5; i++) {
+        var foldX = rightX + 55 + i * 48;
+        var foldY = boxY + 68;
+        ctx.fillStyle = i < 4 ? 'rgba(26,82,118,0.2)' : 'rgba(39,174,96,0.15)';
+        ctx.fillRect(foldX, foldY, 40, 45);
+        ctx.strokeStyle = i < 4 ? '#1a5276' : '#27ae60';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(foldX, foldY, 40, 45);
+        ctx.font = '9px system-ui';
+        ctx.fillStyle = i < 4 ? '#1a5276' : '#27ae60';
+        ctx.textAlign = 'center';
+        ctx.fillText(foldLabels[i], foldX + 20, foldY + 58);
+    }
+
+    // Feature selection on train folds only (correct)
+    ctx.fillStyle = '#27ae60';
+    ctx.globalAlpha = 0.15;
+    ctx.fillRect(rightX + 50, boxY + 125, 198, 22);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(rightX + 50, boxY + 125, 198, 22);
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText('Feature Selection (train folds only)', rightX + 50 + 99, boxY + 140);
+
+    // Arrow from train folds to feature selection
+    ctx.beginPath();
+    ctx.moveTo(rightX + 55 + 2*48 + 20, boxY + 113);
+    ctx.lineTo(rightX + 55 + 2*48 + 20, boxY + 123);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(rightX + 55 + 2*48 + 16, boxY + 120);
+    ctx.lineTo(rightX + 55 + 2*48 + 20, boxY + 125);
+    ctx.lineTo(rightX + 55 + 2*48 + 24, boxY + 120);
+    ctx.fillStyle = '#27ae60';
+    ctx.fill();
+
+    // Arrow down to evaluate
+    ctx.beginPath();
+    ctx.moveTo(rightX + boxW/2, boxY + 147);
+    ctx.lineTo(rightX + boxW/2, boxY + 160);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Evaluate label
+    ctx.font = '9px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Evaluate on held-out fold (no leakage)', rightX + boxW/2, boxY + 172);
+
+    // Test fold untouched label
+    ctx.font = '9px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText('Test fold never seen by selector', rightX + boxW/2, boxY + 195);
+
+    // Accuracy result
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText('Reported: 79% (honest)', rightX + boxW/2, boxY + 245);
+
+    // Top label
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Feature Selection Leak: Outside vs Inside Cross-Validation', w/2, 18);
+})();
+
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Title
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Selection Sees Test Labels: Biased Feature Choice', w/2, 20);
+
+    // Full dataset box
+    var dsX = 40, dsY = 40, dsW = 640, dsH = 100;
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(dsX, dsY, dsW, dsH);
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'left';
+    ctx.fillText('Full Dataset (with labels visible)', dsX + 10, dsY + 16);
+
+    // Draw rows of data points with labels
+    var trainW = dsW * 0.7;
+    var testW = dsW * 0.3;
+
+    // Train portion
+    ctx.fillStyle = 'rgba(26,82,118,0.15)';
+    ctx.fillRect(dsX + 5, dsY + 25, trainW - 10, dsH - 35);
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Train rows', dsX + trainW/2, dsY + 38);
+
+    // Draw train labels
+    for (var i = 0; i < 12; i++) {
+        var lx = dsX + 20 + i * 36;
+        var ly = dsY + 50;
+        ctx.fillStyle = i % 3 === 0 ? '#27ae60' : '#1a5276';
+        ctx.font = '9px system-ui';
+        ctx.fillText(i % 3 === 0 ? 'y=1' : 'y=0', lx, ly);
+        ctx.fillStyle = i % 3 === 0 ? 'rgba(39,174,96,0.4)' : 'rgba(26,82,118,0.3)';
+        ctx.fillRect(lx - 10, ly + 4, 20, 35);
+    }
+
+    // Test portion with RED highlight
+    ctx.fillStyle = 'rgba(231,76,60,0.15)';
+    ctx.fillRect(dsX + trainW + 5, dsY + 25, testW - 15, dsH - 35);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(dsX + trainW + 5, dsY + 25, testW - 15, dsH - 35);
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('Test rows (LEAKED!)', dsX + trainW + testW/2, dsY + 38);
+
+    // Draw test labels in red
+    for (var i = 0; i < 5; i++) {
+        var lx = dsX + trainW + 20 + i * 34;
+        var ly = dsY + 50;
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 9px system-ui';
+        ctx.fillText(i % 2 === 0 ? 'y=1' : 'y=0', lx, ly);
+        ctx.fillStyle = 'rgba(231,76,60,0.3)';
+        ctx.fillRect(lx - 10, ly + 4, 20, 35);
+    }
+
+    // Arrow from full dataset to selection algorithm
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(w/2, dsY + dsH);
+    ctx.lineTo(w/2, dsY + dsH + 20);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(w/2 - 5, dsY + dsH + 15);
+    ctx.lineTo(w/2, dsY + dsH + 22);
+    ctx.lineTo(w/2 + 5, dsY + dsH + 15);
+    ctx.fillStyle = '#e67e22';
+    ctx.fill();
+
+    // Selection algorithm box
+    var selY = dsY + dsH + 25;
+    ctx.fillStyle = 'rgba(230,126,34,0.15)';
+    ctx.fillRect(w/2 - 140, selY, 280, 30);
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(w/2 - 140, selY, 280, 30);
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#e67e22';
+    ctx.textAlign = 'center';
+    ctx.fillText('Selection Algorithm (scans ALL labels incl. test)', w/2, selY + 19);
+
+    // Arrow down to selected features
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(w/2, selY + 30);
+    ctx.lineTo(w/2, selY + 50);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(w/2 - 5, selY + 45);
+    ctx.lineTo(w/2, selY + 52);
+    ctx.lineTo(w/2 + 5, selY + 45);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fill();
+
+    // Selected features box
+    var sfY = selY + 55;
+    ctx.fillStyle = 'rgba(231,76,60,0.1)';
+    ctx.fillRect(w/2 - 180, sfY, 360, 28);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(w/2 - 180, sfY, 360, 28);
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('Selected Features: coincidentally good on test fold (BIASED)', w/2, sfY + 18);
+
+    // Red warning annotation
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'right';
+    ctx.fillText('Test labels used in', w - 30, dsY + dsH + 10);
+    ctx.fillText('selection criterion!', w - 30, dsY + dsH + 23);
+
+    // Red arrow from test to selection
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(dsX + trainW + testW/2, dsY + dsH);
+    ctx.lineTo(w/2 + 80, selY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+})();
+
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Title
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Correct: Feature Selection Inside CV Pipeline', w/2, 20);
+
+    // cross_val_score wrapper
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 3]);
+    ctx.strokeRect(20, 35, w - 40, h - 55);
+    ctx.setLineDash([]);
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'left';
+    ctx.fillText('cross_val_score(pipeline, X, y, cv=5)', 30, 50);
+
+    // Draw 3 fold lanes to show the pipeline inside each fold
+    var foldStartY = 62;
+    var foldH = 65;
+    var foldLabels = ['Fold 1', 'Fold 2', 'Fold 3'];
+
+    for (var f = 0; f < 3; f++) {
+        var fy = foldStartY + f * (foldH + 8);
+
+        // Fold label
+        ctx.font = 'bold 10px system-ui';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'left';
+        ctx.fillText(foldLabels[f], 35, fy + 12);
+
+        // Train data box
+        var trainX = 90, trainW = 130;
+        ctx.fillStyle = 'rgba(26,82,118,0.15)';
+        ctx.fillRect(trainX, fy, trainW, foldH - 10);
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(trainX, fy, trainW, foldH - 10);
+        ctx.font = '9px system-ui';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Train Data', trainX + trainW/2, fy + 14);
+        ctx.fillText('(4 folds)', trainX + trainW/2, fy + 26);
+
+        // Arrow to SelectKBest
+        var arrowX1 = trainX + trainW + 5;
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(arrowX1, fy + foldH/2 - 5);
+        ctx.lineTo(arrowX1 + 20, fy + foldH/2 - 5);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(arrowX1 + 15, fy + foldH/2 - 10);
+        ctx.lineTo(arrowX1 + 22, fy + foldH/2 - 5);
+        ctx.lineTo(arrowX1 + 15, fy + foldH/2);
+        ctx.fillStyle = '#27ae60';
+        ctx.fill();
+
+        // SelectKBest box
+        var selX = arrowX1 + 25, selW = 110;
+        ctx.fillStyle = 'rgba(39,174,96,0.15)';
+        ctx.fillRect(selX, fy + 5, selW, foldH - 20);
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(selX, fy + 5, selW, foldH - 20);
+        ctx.font = 'bold 9px system-ui';
+        ctx.fillStyle = '#27ae60';
+        ctx.textAlign = 'center';
+        ctx.fillText('SelectKBest', selX + selW/2, fy + 22);
+        ctx.font = '9px system-ui';
+        ctx.fillText('(k=20, train only)', selX + selW/2, fy + 36);
+
+        // Arrow to Model
+        var arrowX2 = selX + selW + 5;
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(arrowX2, fy + foldH/2 - 5);
+        ctx.lineTo(arrowX2 + 20, fy + foldH/2 - 5);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(arrowX2 + 15, fy + foldH/2 - 10);
+        ctx.lineTo(arrowX2 + 22, fy + foldH/2 - 5);
+        ctx.lineTo(arrowX2 + 15, fy + foldH/2);
+        ctx.fillStyle = '#1a5276';
+        ctx.fill();
+
+        // Model box
+        var modX = arrowX2 + 25, modW = 100;
+        ctx.fillStyle = 'rgba(26,82,118,0.15)';
+        ctx.fillRect(modX, fy + 5, modW, foldH - 20);
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(modX, fy + 5, modW, foldH - 20);
+        ctx.font = 'bold 9px system-ui';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Model', modX + modW/2, fy + 22);
+        ctx.font = '9px system-ui';
+        ctx.fillText('LogisticRegression', modX + modW/2, fy + 36);
+
+        // Arrow to Evaluate
+        var arrowX3 = modX + modW + 5;
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(arrowX3, fy + foldH/2 - 5);
+        ctx.lineTo(arrowX3 + 20, fy + foldH/2 - 5);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(arrowX3 + 15, fy + foldH/2 - 10);
+        ctx.lineTo(arrowX3 + 22, fy + foldH/2 - 5);
+        ctx.lineTo(arrowX3 + 15, fy + foldH/2);
+        ctx.fillStyle = '#27ae60';
+        ctx.fill();
+
+        // Evaluate box
+        var evX = arrowX3 + 25, evW = 90;
+        ctx.fillStyle = 'rgba(39,174,96,0.1)';
+        ctx.fillRect(evX, fy + 5, evW, foldH - 20);
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(evX, fy + 5, evW, foldH - 20);
+        ctx.font = 'bold 9px system-ui';
+        ctx.fillStyle = '#27ae60';
+        ctx.textAlign = 'center';
+        ctx.fillText('Evaluate', evX + evW/2, fy + 22);
+        ctx.font = '9px system-ui';
+        ctx.fillText('(test fold)', evX + evW/2, fy + 36);
+
+        // Green checkmark
+        ctx.font = 'bold 12px system-ui';
+        ctx.fillStyle = '#27ae60';
+        ctx.fillText('✓', evX + evW + 10, fy + foldH/2);
+    }
+
+    // Pipeline label at bottom
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText('Pipeline([SelectKBest → LogisticRegression])  —  No test data touches selector', w/2, h - 15);
+})();
+</script>
+
+</body>
+</html>

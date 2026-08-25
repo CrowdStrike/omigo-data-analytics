@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Threshold Selection on Test Set</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Threshold Selection on Test Set</h1>
+<p class="subtitle">Choosing classification threshold that maximizes test set performance leads to overly optimistic evaluation</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">threshold</span></div>
+                <ul>
+                    <li><b>The habit</b> — sweep many thresholds on the test set and keep whichever scores best</li>
+                    <li><b>Hidden training</b> — picking the best threshold fits that parameter to the test data</li>
+                    <li><b>Broken holdout</b> — once the test set guides a choice, its metrics stop being unbiased</li>
+                    <li><b>Noise exploitation</b> — the winning threshold exploits quirks of that one test sample</li>
+                    <li><b>Optimistic reporting</b> — production performance lands below the reported test metrics</li>
+                </ul>
+                <p class="example">A fraud model reports 92% F1 on test after trying 50 thresholds, but production F1 is 87%.</p>
+                <div class="key-point">
+                    <strong>Impact:</strong> Test metrics become optimistically biased, widening the gap between reported and production performance.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">threshold</span></div>
+                <ul>
+                    <li><b>Feels harmless</b> — a threshold looks like post-processing, not a learned parameter</li>
+                    <li><b>No caution trigger</b> — tuning it skips the discipline applied to model hyperparameters</li>
+                    <li><b>Bad examples</b> — many tutorials grid-search thresholds directly on the test set</li>
+                    <li><b>Missing validation set</b> — plain train/test splits leave no data for threshold tuning</li>
+                    <li><b>Small data pressure</b> — holding out a validation set feels wasteful, so teams skip it</li>
+                </ul>
+                <p class="example">A team with 10,000 samples splits 8,000/2,000 and tunes the threshold on the 2,000-row test set.</p>
+                <div class="key-point">
+                    <strong>Root Cause:</strong> Any tuning based on test set performance invalidates the test set as an unbiased estimator — the threshold is a hyperparameter like any other.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">validation split</span></div>
+                <ul>
+                    <li><b>Tune before test</b> — pick the threshold on data that plays no part in final evaluation</li>
+                    <li><b>Train</b> — fit the model on the training set only</li>
+                    <li><b>Tune</b> — sweep thresholds on the validation set or inner CV folds; commit to the winner</li>
+                    <li><b>Evaluate once</b> — score the committed threshold on the test set exactly once</li>
+                    <li><b>Report honestly</b> — present those test metrics as the unbiased production estimate</li>
+                </ul>
+                <p class="example">With 10k samples, a 70/15/15 split tunes the threshold on 1,500 validation rows and evaluates once on 1,500 test rows.</p>
+                <div class="key-point">
+                    <strong>Fix:</strong> Treat the threshold as a hyperparameter inside cross-validation; if you tuned it on the test set, report your numbers as upper bounds.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// Canvas 1: Test performance vs threshold with overfitting peak
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('F1 Score vs Threshold — Test Set Appears Better Than It Is', w/2, 25);
+
+    var left = 60, right = 680, top = 60, bottom = 260;
+
+    // Axes
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(left, top); ctx.lineTo(left, bottom); ctx.lineTo(right, bottom);
+    ctx.stroke();
+
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    ctx.fillText('Threshold →', (left + right)/2, bottom + 25);
+    ctx.save();
+    ctx.translate(25, (top + bottom)/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillText('F1 Score', 0, 0);
+    ctx.restore();
+
+    // True validation curve (smoother)
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    var pts = 100;
+    for (var i = 0; i <= pts; i++) {
+        var t = i / pts;
+        var thresh = 0.1 + t * 0.8;
+        var f1 = 0.3 + 0.5 * Math.exp(-Math.pow((thresh - 0.45), 2) / 0.04);
+        var x = left + t * (right - left);
+        var y = bottom - (f1 * (bottom - top));
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('True performance (unknown)', right - 180, top + 15);
+
+    // Test set curve (noisy, with overfitting peak)
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (var i = 0; i <= pts; i++) {
+        var t = i / pts;
+        var thresh = 0.1 + t * 0.8;
+        var f1 = 0.3 + 0.5 * Math.exp(-Math.pow((thresh - 0.45), 2) / 0.04);
+        var noise = 0.05 * Math.sin(t * 20) + (t > 0.65 && t < 0.75 ? 0.08 : 0);
+        var x = left + t * (right - left);
+        var y = bottom - ((f1 + noise) * (bottom - top));
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'left';
+    ctx.fillText('Test set (tuned on it)', right - 180, top + 30);
+
+    // Mark the overfitting peak
+    var peakX = left + 0.7 * (right - left);
+    var peakY = bottom - 0.75 * (bottom - top);
+    ctx.beginPath();
+    ctx.arc(peakX, peakY, 6, 0, Math.PI * 2);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fill();
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('← Chosen threshold', peakX, peakY - 12);
+    ctx.fillText('(optimistic)', peakX, peakY - 1);
+})();
+
+// Canvas 2: Workflow comparison — wrong vs right
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Workflow Comparison', w/2, 25);
+
+    // Wrong path
+    var topY = 90;
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('WRONG: Tune on Test', w/2, 55);
+
+    var boxes = [
+        {x: 80, label: 'Train\nModel'},
+        {x: 240, label: 'Try 50\nThresholds'},
+        {x: 400, label: 'Pick Best\non Test'},
+        {x: 560, label: 'Report\n(Biased)'}
+    ];
+
+    boxes.forEach(function(box, i) {
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.fillRect(box.x - 50, topY - 20, 100, 50);
+        ctx.strokeRect(box.x - 50, topY - 20, 100, 50);
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '11px system-ui';
+        var lines = box.label.split('\n');
+        lines.forEach(function(line, j) {
+            ctx.fillText(line, box.x, topY + (j - lines.length/2 + 1) * 12);
+        });
+
+        if (i < boxes.length - 1) {
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(box.x + 50, topY + 5);
+            ctx.lineTo(boxes[i+1].x - 50, topY + 5);
+            ctx.stroke();
+        }
+    });
+
+    // Correct path
+    var botY = 210;
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('CORRECT: Use Validation Set', w/2, 165);
+
+    var boxes2 = [
+        {x: 80, label: 'Train\nModel'},
+        {x: 240, label: 'Tune on\nValidation'},
+        {x: 400, label: 'Commit\nThreshold'},
+        {x: 560, label: 'Test Once\n(Unbiased)'}
+    ];
+
+    boxes2.forEach(function(box, i) {
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 2;
+        ctx.fillRect(box.x - 50, botY - 20, 100, 50);
+        ctx.strokeRect(box.x - 50, botY - 20, 100, 50);
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '11px system-ui';
+        var lines = box.label.split('\n');
+        lines.forEach(function(line, j) {
+            ctx.fillText(line, box.x, botY + (j - lines.length/2 + 1) * 12);
+        });
+
+        if (i < boxes2.length - 1) {
+            ctx.strokeStyle = '#27ae60';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(box.x + 50, botY + 5);
+            ctx.lineTo(boxes2[i+1].x - 50, botY + 5);
+            ctx.stroke();
+        }
+    });
+})();
+
+// Canvas 3: Data split visualization
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Proper Data Split — Threshold Tuning Needs Its Own Set', w/2, 25);
+
+    var startY = 80;
+    var barH = 60;
+    var startX = 60;
+    var totalW = 600;
+
+    // Wrong split (2-way)
+    ctx.fillStyle = '#666';
+    ctx.font = '12px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('2-way split (WRONG for threshold tuning):', startX, startY - 10);
+
+    var train1W = totalW * 0.8;
+    var test1W = totalW * 0.2;
+
+    ctx.fillStyle = 'rgba(26,82,118,0.7)';
+    ctx.fillRect(startX, startY, train1W, barH);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(startX, startY, train1W, barH);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('TRAIN (80%)', startX + train1W/2, startY + barH/2 + 5);
+
+    ctx.fillStyle = 'rgba(231,76,60,0.7)';
+    ctx.fillRect(startX + train1W, startY, test1W, barH);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(startX + train1W, startY, test1W, barH);
+    ctx.fillStyle = '#fff';
+    ctx.fillText('TEST (20%)', startX + train1W + test1W/2, startY + barH/2 + 5);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Tuned on this = biased', startX + train1W + test1W/2, startY + barH + 16);
+
+    // Correct split (3-way)
+    var startY2 = startY + 130;
+    ctx.fillStyle = '#666';
+    ctx.font = '12px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('3-way split (CORRECT):', startX, startY2 - 10);
+
+    var train2W = totalW * 0.7;
+    var val2W = totalW * 0.15;
+    var test2W = totalW * 0.15;
+
+    ctx.fillStyle = 'rgba(26,82,118,0.7)';
+    ctx.fillRect(startX, startY2, train2W, barH);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(startX, startY2, train2W, barH);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('TRAIN (70%)', startX + train2W/2, startY2 + barH/2 + 5);
+
+    ctx.fillStyle = 'rgba(230,126,34,0.7)';
+    ctx.fillRect(startX + train2W, startY2, val2W, barH);
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(startX + train2W, startY2, val2W, barH);
+    ctx.fillStyle = '#fff';
+    ctx.fillText('VAL (15%)', startX + train2W + val2W/2, startY2 + barH/2 + 5);
+
+    ctx.fillStyle = 'rgba(39,174,96,0.7)';
+    ctx.fillRect(startX + train2W + val2W, startY2, test2W, barH);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(startX + train2W + val2W, startY2, test2W, barH);
+    ctx.fillStyle = '#fff';
+    ctx.fillText('TEST (15%)', startX + train2W + val2W + test2W/2, startY2 + barH/2 + 5);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Tune threshold here', startX + train2W + val2W/2, startY2 + barH + 16);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('Evaluate once here', startX + train2W + val2W + test2W/2, startY2 + barH + 16);
+})();
+</script>
+
+</body>
+</html>

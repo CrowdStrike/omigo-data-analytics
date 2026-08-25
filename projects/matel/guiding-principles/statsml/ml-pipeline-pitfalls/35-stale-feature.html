@@ -75,6 +75,20 @@ ul {
     font-size: 0.92rem;
 }
 li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
 </style>
 </head>
 <body>
@@ -87,16 +101,18 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>Features are precomputed and cached (in a feature store, Redis, or materialized view) for fast serving. The refresh job fails or lags, but the serving system continues using the stale cached values without alerting.</p>
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">staleness</span></div>
                 <ul>
-                    <li><strong>Silent staleness:</strong> Feature says "user logged in 2 days ago" when they actually logged in 5 minutes ago</li>
-                    <li><strong>Drift:</strong> Model trained on fresh features (computed at training time) but served with 24-hour-old features; performance degrades</li>
-                    <li><strong>Detection gap:</strong> Monitoring tracks model performance (which decays slowly), not feature freshness (which breaks instantly)</li>
+                    <li><b>Cached serving</b> — features are precomputed into a store (Redis, views) for fast lookup</li>
+                    <li><b>Silent failure</b> — the refresh job fails or lags, yet serving continues without any alert</li>
+                    <li><b>Stale values</b> — the cache says "logged in 2 days ago" when the user logged in 5 min ago</li>
+                    <li><b>Train-serve drift</b> — trained on fresh features, scored on day-old values, accuracy drops</li>
+                    <li><b>Detection gap</b> — monitoring tracks slowly decaying accuracy, not instantly broken freshness</li>
                 </ul>
+                <p class="example">A fraud model's batch job fails at 2pm with no alert, so predictions until midnight miss 10 hours of new transactions.</p>
                 <div class="key-point">
-                    <strong>Impact:</strong> 10-30% AUC drop when features lag by 1 day in a real-time prediction task; churn models fail because "last_activity" is 24 hours stale. Solution: TTL on cached features, freshness monitoring (last_updated timestamp), fallback to recompute on cache miss.
+                    <strong>Impact:</strong> A real-time prediction task can lose 10-30 points of AUC when its features lag by a day.
                 </div>
-                <p class="example">Example: A fraud detection model uses "transactions_last_hour" computed every 5 minutes. The batch job fails at 2pm but no alert fires. Predictions from 2pm to midnight use 2pm data, missing 10 hours of new transactions. A fraudster exploits this window.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c1" width="720" height="300"></canvas>
@@ -110,14 +126,17 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">caching</span></div>
                 <ul>
-                    <li><strong>Silent pipeline failures:</strong> ETL jobs fail without alerting — no one notices until model performance degrades days later</li>
-                    <li><strong>Cache TTL misconfiguration:</strong> TTLs set arbitrarily (24h) without considering how frequently the underlying data actually changes</li>
-                    <li><strong>No freshness monitoring:</strong> Teams monitor model output metrics (AUC, precision) but not feature freshness — a leading indicator of failure</li>
-                    <li><strong>Upstream schedule changes:</strong> The source system changes its update cadence without notifying downstream feature pipelines</li>
+                    <li><b>Decoupled moments</b> — caching separates when a feature is computed from when it is used</li>
+                    <li><b>Diffuse ownership</b> — every layer assumes another layer is watching for the freshness gap</li>
+                    <li><b>Silent ETL failures</b> — jobs die without alerts; nobody notices until accuracy drops later</li>
+                    <li><b>Arbitrary TTLs</b> — a 24h expiry gets set without checking how often the data really changes</li>
+                    <li><b>No freshness metric</b> — teams track AUC and precision but never feature age, the leading signal</li>
+                    <li><b>Upstream drift</b> — source systems change update cadence without telling feature pipelines</li>
                 </ul>
                 <div class="key-point">
-                    <strong>Core issue:</strong> The serving layer has no concept of "too old." It serves whatever is cached, regardless of age, because freshness was never made a first-class concern.
+                    <strong>Root Cause:</strong> The serving layer has no concept of "too old" — it serves whatever is cached, regardless of age.
                 </div>
             </td>
             <td class="viz-col">
@@ -132,14 +151,16 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">freshness</span></div>
                 <ul>
-                    <li><strong>Track last_updated per feature:</strong> Every cached feature carries a timestamp of when it was last computed</li>
-                    <li><strong>Alert on age threshold:</strong> If feature_age exceeds configured SLA (e.g., 30 min for real-time features), fire alert immediately</li>
-                    <li><strong>Feature age as input signal:</strong> Pass feature_age_minutes to the model — let it learn to discount stale signals</li>
-                    <li><strong>TTL with fallback:</strong> If stale, either recompute on-demand or return an uncertainty flag so the serving layer can fall back to a safe default</li>
+                    <li><b>Freshness as property</b> — give every feature an owner, an age threshold, and an alarm</li>
+                    <li><b>Timestamp everything</b> — every cached value carries a last_updated marking its compute time</li>
+                    <li><b>Age SLA alerts</b> — fire immediately when feature age exceeds its SLA, e.g. 30 min for real-time</li>
+                    <li><b>Age as input</b> — feed feature_age_minutes to the model so it learns to discount stale signals</li>
+                    <li><b>TTL with fallback</b> — recompute stale values on demand or fall back to a flagged safe default</li>
                 </ul>
                 <div class="key-point">
-                    <strong>Principle:</strong> Freshness is a feature property, not an operational afterthought. Monitor it like you monitor latency — with SLAs, alerts, and fallbacks.
+                    <strong>Fix:</strong> Freshness is a feature property, not an operational afterthought — monitor it like latency, with SLAs, alerts, and fallbacks.
                 </div>
             </td>
             <td class="viz-col">

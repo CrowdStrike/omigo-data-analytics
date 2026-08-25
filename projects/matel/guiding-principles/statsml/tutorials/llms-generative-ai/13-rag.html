@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAG: Giving the Model a Reference Book</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+li code, .example code { font-family: ui-monospace, Menlo, monospace; font-size: 0.9em; background: #f4f6f8; padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>RAG: Giving the Model a Reference Book</h1>
+<p class="subtitle">Search your documents first, paste the best paragraph into the prompt, and the model answers from that page instead of from memory</p>
+
+<div class="card-section">
+    <h2>"What's Our Refund Policy?" — A Question the Model Cannot Know</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">running example</span></div>
+                <ul>
+                    <li><b>The question</b> — a customer asks your company chatbot "What's our refund policy?"</li>
+                    <li><b>The problem</b> — the model never saw your handbook; it was trained on the public internet</li>
+                    <li><b>Without help</b> — it answers a plausible generic policy, stated with full confidence</li>
+                    <li><b>RAG step 1: retrieve</b> — search your documents for the paragraph that matches the question</li>
+                    <li><b>RAG step 2: generate</b> — paste that paragraph into the prompt, right above the question</li>
+                    <li><b>The answer</b> — now quotes your real rule: 30 days refund, store credit to day 90</li>
+                </ul>
+                <p class="example">Asked cold, the model said "most companies offer 14 days" — plausible, confident, and wrong.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> RAG = retrieve, then generate. The model answers from a page you hand it, not from memory.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Retrieval You Can Check by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">worked example</span></div>
+                <ul>
+                    <li><b>The library</b> — the handbook is split into 40 paragraph-sized chunks ahead of time</li>
+                    <li><b>The search</b> — the question is compared to every chunk by meaning, not exact words</li>
+                    <li><b>The scores</b> — Refunds &amp; returns 0.82, Shipping times 0.41, Warranty claims 0.28</li>
+                    <li><b>The paste</b> — the winning chunk goes into the prompt right above the question</li>
+                    <li><b>The answer</b> — "Full refund within 30 days; store credit to day 90" citing that chunk</li>
+                </ul>
+                <p class="example">"Can I get my money back?" lands on the same 0.82 chunk — the match is by meaning, not by the word "refund".</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The model never searched anything — your code found the paragraph; the model just read it and answered.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Whole Class of Hallucinations It Kills</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">best practice</span></div>
+                <ul>
+                    <li><b>Private data</b> — the model knows nothing behind your firewall; retrieval brings it in</li>
+                    <li><b>Fresh answers</b> — policy changed last month? update the document, not the model</li>
+                    <li><b>Checkable</b> — a cited chunk lets a human verify the answer in ten seconds</li>
+                    <li><b>Measured</b> — on 50 policy questions: plain model 31 correct, with retrieval 47</li>
+                    <li><b>The 3 misses</b> — all three were retrieval misses: the right chunk never reached the prompt</li>
+                </ul>
+                <p class="example">Confident invented policies simply disappear once the real text sits inside the prompt.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Most RAG failures are search failures — when the right chunk is retrieved, the model rarely fumbles it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>RAG Is Not Retraining</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">watch out</span></div>
+                <ul>
+                    <li><b>No learning</b> — the model is unchanged; the paragraph rides along in the prompt each time</li>
+                    <li><b>Garbage in</b> — retrieve the shipping chunk and the model answers refunds with shipping rules</li>
+                    <li><b>Stale library</b> — RAG answers from your documents; if they are outdated, so is the answer</li>
+                    <li><b>Context limit</b> — you paste the few best chunks, not the whole handbook</li>
+                    <li><b>Debug the search</b> — when the answer is wrong, look at what was retrieved before blaming the model</li>
+                </ul>
+                <p class="example">When an old 2024 policy chunk outranked the new one, the model politely cited the wrong year.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> The model faithfully answers from whatever you paste — retrieval quality, not model smarts, sets the ceiling.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function box(ctx, x, y, w, h, stroke, fill) {
+    ctx.fillStyle = fill;
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(x, y, w, h);
+}
+
+function arrow(ctx, x1, y1, x2, y2, color) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var a = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(a - 0.4), y2 - 8 * Math.sin(a - 0.4));
+    ctx.lineTo(x2 - 8 * Math.cos(a + 0.4), y2 - 8 * Math.sin(a + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: two flows — memory-only vs retrieve-then-generate
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Same Question, With and Without the Reference Page', w / 2, 22);
+
+    // Top flow: no RAG
+    ctx.fillStyle = P.mute; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('from memory:', 40, 52);
+    box(ctx, 40, 60, 150, 40, P.mute, '#f4f6f8');
+    ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('"What\'s our', 115, 77);
+    ctx.fillText('refund policy?"', 115, 91);
+    arrow(ctx, 190, 80, 260, 80, P.mute);
+    box(ctx, 262, 60, 90, 40, P.mute, '#f4f6f8');
+    ctx.fillStyle = P.text; ctx.fillText('model', 307, 84);
+    arrow(ctx, 352, 80, 422, 80, P.mute);
+    box(ctx, 424, 60, 256, 40, '#e74c3c', 'rgba(231,76,60,0.05)');
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 11px system-ui';
+    ctx.fillText('"Most companies offer 14 days."', 552, 78);
+    ctx.font = '11px system-ui';
+    ctx.fillText('confident, generic, wrong', 552, 92);
+
+    // Bottom flow: RAG
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('retrieve, then generate:', 40, 138);
+    box(ctx, 40, 146, 110, 44, P.blue, 'rgba(42,120,214,0.06)');
+    ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('same', 95, 164);
+    ctx.fillText('question', 95, 178);
+    arrow(ctx, 150, 168, 196, 168, P.blue);
+    box(ctx, 198, 146, 100, 44, P.violet, 'rgba(74,58,167,0.06)');
+    ctx.fillStyle = P.violet; ctx.font = 'bold 11px system-ui';
+    ctx.fillText('search the', 248, 164);
+    ctx.fillText('handbook', 248, 178);
+    arrow(ctx, 298, 168, 344, 168, P.violet);
+    box(ctx, 346, 140, 150, 56, P.aqua, 'rgba(25,158,112,0.06)');
+    ctx.fillStyle = P.aqua; ctx.font = '10px ui-monospace, Menlo, monospace'; ctx.textAlign = 'left';
+    ctx.fillText('"Full refund within', 354, 156);
+    ctx.fillText(' 30 days; store credit', 354, 169);
+    ctx.fillText(' day 31–90."', 354, 182);
+    ctx.fillStyle = P.aqua; ctx.font = 'bold 10px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('chunk pasted into prompt', 421, 208);
+    arrow(ctx, 496, 168, 540, 168, P.aqua);
+    box(ctx, 542, 146, 70, 44, P.mute, '#f4f6f8');
+    ctx.fillStyle = P.text; ctx.font = '11px system-ui';
+    ctx.fillText('model', 577, 172);
+    arrow(ctx, 577, 190, 577, 218, P.green);
+    box(ctx, 424, 222, 256, 44, P.green, 'rgba(0,131,0,0.05)');
+    ctx.fillStyle = P.green; ctx.font = 'bold 11px system-ui';
+    ctx.fillText('"Full refund within 30 days, store credit', 552, 240);
+    ctx.fillText('to day 90 — per Returns policy §2." ✓', 552, 255);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('same model — the pasted paragraph is the whole difference', 232, 250);
+})();
+
+// c2: retrieval scores + the assembled prompt
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Search Scores Over the Handbook Chunks — Top One Gets Pasted', w / 2, 22);
+
+    ctx.strokeStyle = '#bdc3c7'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(400, 32); ctx.lineTo(400, h - 34); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Left: similarity score bars
+    var rows = [
+        { lab: 'Refunds & returns', v: 0.82, c: P.green },
+        { lab: 'Shipping times',    v: 0.41, c: P.mute },
+        { lab: 'Warranty claims',   v: 0.28, c: P.mute }
+    ];
+    var px = 190, pw = 180, top = 62, rowH = 52;
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('match score vs the question (0–1)', 45, 52);
+    for (var i = 0; i < 3; i++) {
+        var r = rows[i];
+        var y = top + i * rowH;
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(r.lab, px - 10, y + 16);
+        ctx.fillStyle = r.c; ctx.globalAlpha = 0.75;
+        ctx.fillRect(px, y, r.v * pw, 24);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = r.c; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(r.v.toFixed(2), px + r.v * pw + 8, y + 17);
+    }
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('winner — pasted into the prompt', 45, 240);
+    arrow(ctx, 300, 235, 340, 100, P.green);
+
+    // Right: assembled prompt
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the assembled prompt:', 425, 52);
+    box(ctx, 425, 62, 265, 150, P.blue, 'rgba(42,120,214,0.05)');
+    ctx.font = '10px ui-monospace, Menlo, monospace';
+    ctx.fillStyle = P.mute;
+    ctx.fillText('Answer using this excerpt:', 437, 82);
+    ctx.fillStyle = P.aqua;
+    ctx.fillText('[Returns policy §2]', 437, 102);
+    ctx.fillText('"Full refund within 30 days', 437, 117);
+    ctx.fillText(' of purchase; store credit', 437, 132);
+    ctx.fillText(' from day 31 to day 90."', 437, 147);
+    ctx.fillStyle = P.text;
+    ctx.fillText('Question: What\'s our', 437, 172);
+    ctx.fillText('refund policy?', 437, 187);
+    arrow(ctx, 557, 212, 557, 234, P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 11px system-ui';
+    ctx.fillText('→ answer quotes 30 / 90 days, cites §2', 425, 252);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('scores are illustrative — the ranking is the point', 210, 288);
+})();
+
+// c3: 50 policy questions — plain vs RAG
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('50 Policy Questions: Correct Answers (illustrative)', w / 2, 22);
+
+    var px = 140, pw = 440, baseY = 230, chH = 160, maxY = 55;
+    var bars = [
+        { lab: 'plain model (memory only)', v: 31, c: P.mute, note: '19 wrong — mostly invented policies' },
+        { lab: 'with retrieval (RAG)', v: 47, c: P.green, note: '3 wrong — all retrieval misses' }
+    ];
+    var barW = 140, gap = (pw - 2 * barW);
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px - 30, baseY); ctx.lineTo(px + pw + 30, baseY); ctx.stroke();
+
+    var y50 = baseY - 50 / maxY * chH;
+    ctx.strokeStyle = P.mute; ctx.setLineDash([6, 4]); ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(px - 30, y50); ctx.lineTo(px + pw + 30, y50); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('all 50', px + pw + 38, y50 + 4);
+
+    for (var i = 0; i < 2; i++) {
+        var b = bars[i];
+        var x = px + i * (barW + gap);
+        var bh = b.v / maxY * chH;
+        ctx.fillStyle = b.c; ctx.globalAlpha = 0.75;
+        ctx.fillRect(x, baseY - bh, barW, bh);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = b.c; ctx.font = 'bold 16px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(b.v + ' / 50', x + barW / 2, baseY - bh - 10);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+        ctx.fillText(b.lab, x + barW / 2, baseY + 18);
+        ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+        ctx.fillText(b.note, x + barW / 2, baseY + 34);
+    }
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the surviving errors are search errors, not model errors', w / 2, 288);
+})();
+
+// c4: garbage in — wrong chunk retrieved, confident wrong answer out
+(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('When Retrieval Fails, the Model Cites the Wrong Page Faithfully', w / 2, 22);
+
+    // question
+    box(ctx, 40, 60, 150, 44, P.blue, 'rgba(42,120,214,0.06)');
+    ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('"What\'s our', 115, 78);
+    ctx.fillText('refund policy?"', 115, 93);
+
+    arrow(ctx, 190, 82, 240, 82, P.violet);
+
+    // retrieval picks the wrong chunk
+    box(ctx, 242, 48, 190, 68, '#e74c3c', 'rgba(231,76,60,0.05)');
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 11px system-ui';
+    ctx.fillText('retrieved: Shipping times', 337, 66);
+    ctx.fillStyle = P.text; ctx.font = '10px ui-monospace, Menlo, monospace';
+    ctx.fillText('"Orders ship within', 337, 84);
+    ctx.fillText(' 5 business days..."', 337, 98);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 10px system-ui';
+    ctx.fillText('(the refunds chunk was never fetched)', 337, 132);
+
+    arrow(ctx, 432, 82, 482, 82, P.mute);
+
+    box(ctx, 484, 60, 90, 44, P.mute, '#f4f6f8');
+    ctx.fillStyle = P.text; ctx.font = '11px system-ui';
+    ctx.fillText('model', 529, 86);
+
+    arrow(ctx, 529, 104, 529, 152, '#e74c3c');
+
+    box(ctx, 370, 156, 310, 52, '#e74c3c', 'rgba(231,76,60,0.05)');
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 11px system-ui';
+    ctx.fillText('"Refunds are handled within 5 business days,', 525, 176);
+    ctx.fillText('per our shipping policy." — fluent and wrong', 525, 192);
+
+    // fix note
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('debug order:', 45, 176);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('1. look at what was retrieved', 45, 196);
+    ctx.fillText('2. fix chunking / search', 45, 214);
+    ctx.fillText('3. only then blame the model', 45, 232);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the model answers from whatever you paste — retrieval sets the ceiling', w / 2, 264);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('and nothing was learned: the next request starts from the same blank memory', w / 2, 286);
+})();
+</script>
+
+</body>
+</html>

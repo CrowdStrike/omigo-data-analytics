@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dataflow &amp; Pipelines</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+li code, .example code { font-family: ui-monospace, Menlo, monospace; font-size: 0.9em; background: #f4f6f8; padding: 1px 4px; border-radius: 3px; }
+pre.code {
+    background: #f8f9fa;
+    border-left: 3px solid #1a5276;
+    padding: 10px 12px;
+    font-family: ui-monospace, Menlo, monospace;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    overflow-x: auto;
+    margin-top: 10px;
+}
+</style>
+</head>
+<body>
+
+<h1>Dataflow &amp; Pipelines</h1>
+<p class="subtitle">An orders report drawn as boxes and arrows — the data moves through fixed stages, and the row count on each arrow tells you the pipe is healthy</p>
+
+<div class="card-section">
+    <h2>An Orders Report, Drawn as Boxes and Arrows</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">running example</span></div>
+                <ul>
+                    <li><b>The job</b> — turn 10,000 raw orders into a 12-city sales report</li>
+                    <li><b>The boxes</b> — four stages: clean, join customers, aggregate, report</li>
+                    <li><b>The arrows</b> — data flows left to right; each arrow carries a row count</li>
+                    <li><b>Data moves</b> — orders pass through the stages like water through pipes</li>
+                    <li><b>Code stands still</b> — each box is a small function that never changes mid-run</li>
+                </ul>
+                <p class="example">10,000 raw orders enter on the left; a 12-row city report comes out on the right.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A pipeline is a drawing you can point at — each box does one thing, and every arrow is a place you can count rows.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Follow 10,000 Rows Through the Pipe</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">worked example</span></div>
+                <ul>
+                    <li><b>Enter</b> — 10,000 raw order rows from the orders file</li>
+                    <li><b>Clean drops 400</b> — 250 rows missing a price, 150 with negative quantity</li>
+                    <li><b>Join keeps 9,600</b> — each order looks up its customer's city in a 500-row table</li>
+                    <li><b>Unmatched flagged</b> — 300 of the 9,600 orders find no customer; city becomes "unknown"</li>
+                    <li><b>Aggregate collapses</b> — 9,600 order rows group into 12 city totals</li>
+                </ul>
+                <p class="example">Sanity check by hand: 10,000 &minus; 250 &minus; 150 = 9,600 rows into the join.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Every count is predictable before the run — 10,000 in, 9,600 after clean, 12 out. Surprises live in the gaps.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+<pre class="code">report = (
+    load("orders.csv")        # 10,000 rows
+    .pipe(clean)              #  9,600 rows (400 dropped)
+    .pipe(join_customers)     #  9,600 rows (300 unmatched)
+    .pipe(aggregate_by_city)  #     12 rows
+)</pre>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Each Stage Is Testable Alone</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">best practice</span></div>
+                <ul>
+                    <li><b>Small tests</b> — feed <code>clean()</code> five handmade rows and check what survives</li>
+                    <li><b>Counts as alarms</b> — yesterday the join emitted 9,600 rows; today it emits 19,200</li>
+                    <li><b>Localized bug</b> — a doubled count after the join points at exactly one box</li>
+                    <li><b>The usual culprit</b> — duplicate customer rows make the join produce two rows per order</li>
+                    <li><b>Rerun one box</b> — fix the customers table, rerun from the join, not from scratch</li>
+                </ul>
+                <p class="example">19,200 = 9,600 &times; 2 — the count itself says "something matched twice".</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Row counts on arrows are free assertions — check them every run and a broken stage names itself.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>One Big Script Is Not a Pipeline</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span></div>
+                <ul>
+                    <li><b>The confusion</b> — "my script already runs top to bottom, so it's a pipeline"</li>
+                    <li><b>Tangled state</b> — a 400-line script where any line can touch any variable</li>
+                    <li><b>No seams</b> — you cannot test the middle of it without running all of it</li>
+                    <li><b>Pipeline seams</b> — named inputs and outputs between stages are the testing points</li>
+                    <li><b>Same work</b> — both produce the report; only one can be checked box by box</li>
+                </ul>
+                <p class="example">In the script, a typo at line 60 shows up as a wrong number at line 390 — with no arrow to count in between.</p>
+                <div class="key-point">
+                    <strong>Common confusion:</strong> Running in order is not the point — the point is that each stage has a named input and output you can inspect.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var P = {
+    blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+    aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+    ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var c = document.getElementById(id);
+    var w = +c.getAttribute('width'), h = +c.getAttribute('height');
+    var dpr = window.devicePixelRatio || 1;
+    c.width = w * dpr; c.height = h * dpr;
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+    return { ctx: ctx, w: w, h: h };
+}
+
+function box(ctx, x, y, w, h, fill, stroke) {
+    ctx.fillStyle = fill;
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(x, y, w, h);
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, lw) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw || 2;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var a = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(a - 0.4), y2 - 8 * Math.sin(a - 0.4));
+    ctx.lineTo(x2 - 8 * Math.cos(a + 0.4), y2 - 8 * Math.sin(a + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: the pipeline as boxes and arrows with row counts on edges
+(function() {
+    var s = setup('c1'), ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 16px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Orders Pipeline — Row Counts Ride on the Arrows', w / 2, 24);
+
+    var stages = [
+        { x: 30,  label1: 'raw',       label2: 'orders',    fill: 'rgba(42,120,214,0.15)', stroke: P.blue },
+        { x: 190, label1: 'clean',     label2: '',          fill: 'rgba(0,131,0,0.12)',    stroke: P.green },
+        { x: 350, label1: 'join',      label2: 'customers', fill: 'rgba(74,58,167,0.12)',  stroke: P.violet },
+        { x: 510, label1: 'aggregate', label2: 'by city',   fill: 'rgba(217,89,38,0.12)',  stroke: P.orange },
+        { x: 640, label1: 'report',    label2: '',          fill: 'rgba(213,81,129,0.12)', stroke: P.magenta }
+    ];
+    var by = 110, bw = 96, bh = 56;
+    stages[4].bw = 66;
+
+    for (var i = 0; i < stages.length; i++) {
+        var st = stages[i];
+        var thisW = st.bw || bw;
+        box(ctx, st.x, by, thisW, bh, st.fill, st.stroke);
+        ctx.fillStyle = st.stroke; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        if (st.label2) {
+            ctx.fillText(st.label1, st.x + thisW / 2, by + 24);
+            ctx.fillText(st.label2, st.x + thisW / 2, by + 42);
+        } else {
+            ctx.fillText(st.label1, st.x + thisW / 2, by + 34);
+        }
+    }
+
+    // edges with row counts
+    var edges = [
+        { x1: 126, x2: 190, count: '10,000 rows' },
+        { x1: 286, x2: 350, count: '9,600 rows' },
+        { x1: 446, x2: 510, count: '9,600 rows' },
+        { x1: 606, x2: 640, count: '12' }
+    ];
+    for (var i = 0; i < edges.length; i++) {
+        arrow(ctx, edges[i].x1, by + bh / 2, edges[i].x2 - 2, by + bh / 2, P.mute);
+        ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(edges[i].count, (edges[i].x1 + edges[i].x2) / 2, by - 8);
+    }
+
+    // customers side table feeding the join
+    box(ctx, 350, 214, 96, 44, 'rgba(201,133,0,0.12)', P.yellow);
+    ctx.fillStyle = P.yellow; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('customers', 398, 232);
+    ctx.fillText('500 rows', 398, 248);
+    arrow(ctx, 398, 214, 398, by + bh + 4, P.yellow);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('data moves left to right — the code never moves', 190, 250);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('each box: one small function', 190, 270);
+})();
+
+// c2: funnel of row counts + where the 400 went
+(function() {
+    var s = setup('c2'), ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 16px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Row Counts at Every Stage', w / 2, 24);
+
+    ctx.strokeStyle = P.grid; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(460, 40); ctx.lineTo(460, h - 12); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Left: funnel bars
+    var stages = [
+        { label: 'raw orders', v: 10000, txt: '10,000', color: P.blue },
+        { label: 'after clean', v: 9600, txt: '9,600', color: P.green },
+        { label: 'after join', v: 9600, txt: '9,600', color: P.violet },
+        { label: 'after aggregate', v: 12, txt: '12', color: P.orange }
+    ];
+    var x0 = 145, maxW = 240, maxV = 10000;
+    for (var i = 0; i < 4; i++) {
+        var y = 56 + i * 52;
+        var bwid = Math.max(stages[i].v / maxV * maxW, 5);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(stages[i].label, x0 - 10, y + 18);
+        ctx.fillStyle = stages[i].color;
+        ctx.fillRect(x0, y, bwid, 26);
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(stages[i].txt, x0 + bwid + 8, y + 18);
+    }
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('join changes no counts here — it adds columns', 265, 272);
+
+    // Right: where the 400 dropped rows went
+    ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('The 400 rows clean removed', 590, 56);
+
+    var drops = [
+        { label: 'missing price', v: 250, color: P.orange },
+        { label: 'negative qty', v: 150, color: P.magenta }
+    ];
+    var dx = 520, dw = 60;
+    for (var i = 0; i < 2; i++) {
+        var x = dx + i * 110;
+        var bh2 = drops[i].v / 250 * 120;
+        var yb = 210 - bh2;
+        ctx.fillStyle = drops[i].color;
+        ctx.fillRect(x, yb, dw, bh2);
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center'; ctx.fillStyle = drops[i].color;
+        ctx.fillText(drops[i].v, x + dw / 2, yb - 8);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+        ctx.fillText(drops[i].label, x + dw / 2, 228);
+    }
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(505, 210); ctx.lineTo(695, 210); ctx.stroke();
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('250 + 150 = 400 — the drop is explained', 590, 258);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('10,000 - 400 = 9,600', 590, 276);
+})();
+
+// c3: expected vs today's edge counts, join fan-out alarm
+(function() {
+    var s = setup('c3'), ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 16px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Day the Join Doubled — Counts Catch It', w / 2, 24);
+
+    var labels = ['raw orders', 'after clean', 'after join', 'after aggregate'];
+    var expected = [10000, 9600, 9600, 12];
+    var expTxt = ['10,000', '9,600', '9,600', '12'];
+    var today = [10000, 9600, 19200, 12];
+    var todTxt = ['10,000', '9,600', '19,200', '12'];
+    var x0 = 150, maxW = 380, maxV = 19200;
+
+    for (var i = 0; i < 4; i++) {
+        var y = 52 + i * 52;
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(labels[i], x0 - 10, y + 20);
+
+        var w1 = Math.max(expected[i] / maxV * maxW, 4);
+        ctx.fillStyle = 'rgba(42,120,214,0.45)';
+        ctx.fillRect(x0, y, w1, 12);
+        ctx.fillStyle = P.blue; ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(expTxt[i], x0 + w1 + 6, y + 10);
+
+        var w2 = Math.max(today[i] / maxV * maxW, 4);
+        var bad = today[i] !== expected[i];
+        ctx.fillStyle = bad ? '#e74c3c' : 'rgba(0,131,0,0.5)';
+        ctx.fillRect(x0, y + 15, w2, 12);
+        ctx.fillStyle = bad ? '#e74c3c' : P.green;
+        ctx.font = bad ? 'bold 11px system-ui' : '11px system-ui';
+        ctx.fillText(todTxt[i], x0 + w2 + 6, y + 25);
+    }
+
+    // legend
+    ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(42,120,214,0.45)'; ctx.fillRect(560, 52, 12, 12);
+    ctx.fillStyle = P.text; ctx.fillText('yesterday', 578, 62);
+    ctx.fillStyle = 'rgba(0,131,0,0.5)'; ctx.fillRect(560, 72, 12, 12);
+    ctx.fillStyle = P.text; ctx.fillText('today', 578, 82);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('19,200 = 9,600 x 2: duplicate customer rows fanned out the join', w / 2, 268);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('the broken box names itself — fix customers, rerun from the join', w / 2, 286);
+})();
+
+// c4: spaghetti script vs pipeline seams
+(function() {
+    var s = setup('c4'), ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 16px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One 400-Line Script vs Four Boxes', w / 2, 24);
+
+    ctx.strokeStyle = P.grid; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(360, 40); ctx.lineTo(360, h - 12); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Left: tangled variables inside one big box
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the script: everything touches everything', 180, 52);
+
+    box(ctx, 60, 64, 240, 160, '#fdf6f0', P.orange);
+    var pts = [
+        { x: 105, y: 95, l: 'df' }, { x: 235, y: 90, l: 'tmp' },
+        { x: 150, y: 145, l: 'df2' }, { x: 260, y: 150, l: 'x' },
+        { x: 100, y: 195, l: 'out' }, { x: 210, y: 200, l: 'df' }
+    ];
+    var links = [[0,1],[0,2],[1,2],[1,3],[2,3],[2,4],[3,5],[0,5],[4,5],[1,4]];
+    ctx.strokeStyle = 'rgba(217,89,38,0.5)'; ctx.lineWidth = 1.2;
+    for (var i = 0; i < links.length; i++) {
+        var a = pts[links[i][0]], b = pts[links[i][1]];
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+    for (var i = 0; i < pts.length; i++) {
+        ctx.beginPath(); ctx.arc(pts[i].x, pts[i].y, 14, 0, 2 * Math.PI);
+        ctx.fillStyle = '#fff'; ctx.fill();
+        ctx.strokeStyle = P.orange; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(pts[i].l, pts[i].x, pts[i].y + 4);
+    }
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('no seam to test at — run all 400 lines or nothing', 180, 250);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('variable "df" means 3 different things', 180, 268);
+
+    // Right: clean chain with named seams
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the pipeline: named seams between boxes', 545, 52);
+
+    var chain = ['clean', 'join', 'aggregate'];
+    var colors = [P.green, P.violet, P.orange];
+    var cy = 100;
+    var cx = 395;
+    for (var i = 0; i < 3; i++) {
+        var x = cx + i * 108;
+        box(ctx, x, cy, 76, 40, '#f8f9fa', colors[i]);
+        ctx.fillStyle = colors[i]; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(chain[i], x + 38, cy + 25);
+        if (i < 2) arrow(ctx, x + 76, cy + 20, x + 106, cy + 20, P.mute);
+    }
+    // seam markers
+    var seams = ['orders_clean', 'orders_joined'];
+    for (var i = 0; i < 2; i++) {
+        var sx = cx + 76 + i * 108 + 15;
+        ctx.strokeStyle = P.aqua; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+        ctx.beginPath(); ctx.moveTo(sx, cy + 34); ctx.lineTo(sx, cy + 78); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = P.aqua; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(seams[i], sx, cy + 92);
+        ctx.fillText('inspect here', sx, cy + 106);
+    }
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('test any box alone with 5 handmade rows', 545, 250);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('same work as the script — but checkable box by box', 545, 268);
+})();
+</script>
+
+</body>
+</html>

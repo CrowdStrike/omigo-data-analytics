@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Change Data Capture</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+.payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 12px 0; text-align: left; }
+.payload-note { font-size: 0.82em; color: #666; margin: 12px 0 -6px 0; font-style: italic; text-align: left; }
+</style>
+</head>
+<body>
+
+<h1>Change Data Capture</h1>
+<p class="subtitle">Instead of re-copying the whole database every night, tail its change log — every insert, update, and delete becomes an event you can stream anywhere</p>
+
+<div class="card-section">
+    <h2>Stop Re-Copying Five Million Rows Every Night</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">running example</span></div>
+                <ul>
+                    <li><b>The task</b> — keep the analytics warehouse in sync with the orders database</li>
+                    <li><b>Old way</b> — every night, SELECT all 5,000,000 rows and reload the warehouse copy</li>
+                    <li><b>The waste</b> — only 40,000 rows actually changed today; 99.2% of the copy was unchanged</li>
+                    <li><b>The observation</b> — the database already writes every change to an internal log before applying it</li>
+                    <li><b>CDC</b> — read that change log and ship only the 40,000 changes, as they happen</li>
+                </ul>
+                <p class="example">Like syncing a phrasebook by sending the 3 edited pages, not re-printing the whole book nightly.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Change Data Capture ships the diffs — the database's own change log already contains exactly what changed, in order.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Three Database Operations, Three Events</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">worked example</span><span class="tag blue">core idea</span></div>
+                <ul>
+                    <li><b>09:14 INSERT</b> — order 1001 is created ($64, status "placed") → an insert event, with the new row</li>
+                    <li><b>11:02 UPDATE</b> — order 1001 ships → an update event carrying BOTH the before and after row</li>
+                    <li><b>15:40 DELETE</b> — test order 998 is removed → a delete event, with the row that vanished</li>
+                    <li><b>Seconds later</b> — each event is applied to the warehouse; it now mirrors the database</li>
+                    <li><b>In order</b> — the log preserves the sequence, so the warehouse never sees "shipped" before "placed"</li>
+                </ul>
+                <p class="example">The warehouse learned about the 11:02 shipment at 11:02:04 — not at 2am the next day.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> One row operation becomes one event — insert carries the new row, update carries before AND after, delete carries what was removed.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+<p class="payload-note">The 11:02 update as a change event — illustrative structure.</p>
+<pre class="payload">{ "op": "update",
+  "table": "orders",
+  "ts": "2026-08-24T11:02:00Z",
+  "log_position": 88213472,
+  "before": { "order_id": 1001, "status": "placed",  "amount": 64.00 },
+  "after":  { "order_id": 1001, "status": "shipped", "amount": 64.00 } }
+// insert events have "before": null
+// delete events have "after": null</pre>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Bridge From Database-World to Stream-World</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">best practice</span></div>
+                <ul>
+                    <li><b>Two worlds</b> — the app speaks "rows in a database"; analytics tooling speaks "events on a stream"</li>
+                    <li><b>The bridge</b> — CDC turns every row change into a stream event with zero app-code changes</li>
+                    <li><b>One log, many readers</b> — the same change stream feeds the warehouse, the search index, and the cache</li>
+                    <li><b>Fresh warehouse</b> — tables lag the database by seconds, not by a nightly truck</li>
+                    <li><b>Data science angle</b> — features computed on the change stream instead of on yesterday's snapshot</li>
+                </ul>
+                <p class="example">The team added a search index as a second reader of the same change stream — the orders app never knew.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> CDC is how an ordinary database joins the streaming world — its change log, published, IS an event stream.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Confusion: Tailing the Log Is Not Polling the Table</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag blue">rule of thumb</span></div>
+                <ul>
+                    <li><b>The lookalike</b> — "SELECT * WHERE updated_at &gt; last check" every hour feels like CDC, but is not</li>
+                    <li><b>Misses deletes</b> — a deleted row does not appear in any SELECT; polling never learns it is gone</li>
+                    <li><b>Misses hops</b> — placed → shipped → delivered within one hour: polling sees only "delivered"</li>
+                    <li><b>Hammers the DB</b> — each poll re-scans the table; the log is read once, sequentially</li>
+                    <li><b>The log has it all</b> — every change, including deletes and intermediate states, in exact order</li>
+                </ul>
+                <p class="example">The hourly poll at 12:00 saw order 1001 as "delivered" — the "shipped" step and deleted order 998 never showed up.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Polling samples the table's current state; CDC replays its full history — deletes and in-between states only exist in the log.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var w = 720, h = 300;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+    return { ctx: ctx, w: w, h: h };
+}
+
+function boxAt(ctx, x, y, bw, bh, fill, stroke, dashed) {
+    ctx.fillStyle = fill; ctx.fillRect(x, y, bw, bh);
+    ctx.strokeStyle = stroke; ctx.lineWidth = 2;
+    if (dashed) ctx.setLineDash([6, 4]);
+    ctx.strokeRect(x, y, bw, bh);
+    ctx.setLineDash([]);
+}
+function arrowTo(ctx, x1, y1, x2, y2, color, dashed) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2;
+    if (dashed) ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.setLineDash([]);
+    var a = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath(); ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 9 * Math.cos(a - 0.4), y2 - 9 * Math.sin(a - 0.4));
+    ctx.lineTo(x2 - 9 * Math.cos(a + 0.4), y2 - 9 * Math.sin(a + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: full copy vs changes only (log-scale bars)
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var pad = { top: 60, bottom: 60, left: 200, right: 130 };
+    var cw = w - pad.left - pad.right;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Rows Shipped per Day to Keep the Warehouse in Sync (log scale)', w / 2, 24);
+
+    var minL = Math.log10(1000), maxL = Math.log10(10000000);
+    function len(v) { return (Math.log10(v) - minL) / (maxL - minL) * cw; }
+
+    var bars = [
+        { label: 'nightly full re-copy', v: 5000000, txt: '5,000,000 rows', color: P.magenta, y: 90 },
+        { label: 'CDC: changes only', v: 40000, txt: '40,000 events', color: P.green, y: 170 }
+    ];
+    for (var i = 0; i < bars.length; i++) {
+        var b = bars[i];
+        ctx.fillStyle = b.color; ctx.globalAlpha = 0.55;
+        ctx.fillRect(pad.left, b.y, len(b.v), 40);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = b.color; ctx.lineWidth = 2;
+        ctx.strokeRect(pad.left, b.y, len(b.v), 40);
+        ctx.fillStyle = '#222'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(b.label, pad.left - 12, b.y + 25);
+        ctx.fillStyle = b.color; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(b.txt, pad.left + len(b.v) + 10, b.y + 25);
+    }
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad.left, 70); ctx.lineTo(pad.left, 230); ctx.stroke();
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('99.2% of the nightly copy was rows that had not changed', w / 2, 252);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('and the copy arrives hours late — the change events arrive in seconds', w / 2, 274);
+})();
+
+// c2: three ops -> three events -> warehouse
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Each Row Operation Becomes One Change Event', w / 2, 24);
+
+    // column headers
+    ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillStyle = P.blue; ctx.fillText('orders database', 130, 52);
+    ctx.fillStyle = P.ink; ctx.fillText('change log (events)', 380, 52);
+    ctx.fillStyle = P.green; ctx.fillText('warehouse applies', 622, 52);
+
+    var rows = [
+        { y: 90, op: 'INSERT 09:14', db: 'order 1001 created', ev: 'insert: {1001, placed, $64}', wh: 'row added 09:14:03', color: P.aqua },
+        { y: 160, op: 'UPDATE 11:02', db: '1001 placed → shipped', ev: 'update: before + after', wh: 'row updated 11:02:04', color: P.violet },
+        { y: 230, op: 'DELETE 15:40', db: 'test order 998 removed', ev: 'delete: {998, ...}', wh: 'row removed 15:40:02', color: P.magenta }
+    ];
+
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        boxAt(ctx, 35, r.y - 24, 190, 52, 'rgba(42,120,214,0.06)', r.color);
+        ctx.fillStyle = r.color; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(r.op, 130, r.y - 4);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(r.db, 130, r.y + 15);
+
+        arrowTo(ctx, 225, r.y, 273, r.y, r.color);
+
+        boxAt(ctx, 277, r.y - 24, 206, 52, 'rgba(26,82,118,0.05)', P.ink);
+        ctx.fillStyle = '#222'; ctx.font = '11px ui-monospace, Menlo, monospace'; ctx.textAlign = 'center';
+        ctx.fillText(r.ev, 380, r.y + 4);
+
+        arrowTo(ctx, 483, r.y, 531, r.y, r.color);
+
+        boxAt(ctx, 535, r.y - 24, 174, 52, 'rgba(0,131,0,0.05)', P.green);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(r.wh, 622, r.y + 4);
+    }
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('applied in log order, seconds behind the database — never "shipped" before "placed"', w / 2, 285);
+})();
+
+// c3: the bridge — one DB log feeding many stream readers
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Bridge: Row Changes In, Stream Events Out', w / 2, 24);
+
+    // app -> DB
+    boxAt(ctx, 25, 120, 100, 60, 'rgba(107,114,128,0.08)', P.mute);
+    ctx.fillStyle = P.mute; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('orders app', 75, 146);
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+    ctx.fillText('untouched', 75, 164);
+
+    arrowTo(ctx, 125, 150, 165, 150, P.mute);
+
+    // database with its log
+    boxAt(ctx, 169, 105, 150, 90, 'rgba(42,120,214,0.08)', P.blue);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('orders database', 244, 130);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('writes every change', 244, 152);
+    ctx.fillText('to its internal log', 244, 170);
+
+    arrowTo(ctx, 319, 150, 359, 150, P.blue);
+
+    // CDC reader
+    boxAt(ctx, 363, 118, 110, 64, 'rgba(217,89,38,0.10)', P.orange);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('CDC reader', 418, 144);
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+    ctx.fillText('tails the log', 418, 164);
+
+    // fan out to stream consumers
+    var outs = [
+        { y: 70, label: 'warehouse', sub: 'seconds fresh', color: P.green },
+        { y: 150, label: 'search index', sub: 'added later', color: P.aqua },
+        { y: 230, label: 'cache', sub: 'invalidated per change', color: P.violet }
+    ];
+    for (var i = 0; i < outs.length; i++) {
+        var o = outs[i];
+        arrowTo(ctx, 473, 150, 535, o.y, o.color);
+        boxAt(ctx, 539, o.y - 26, 156, 52, 'rgba(0,131,0,0.04)', o.color);
+        ctx.fillStyle = o.color; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(o.label, 617, o.y - 4);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(o.sub, 617, o.y + 14);
+    }
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one change stream,', 505, 92);
+    ctx.fillText('many readers', 505, 108);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('database-world on the left, stream-world on the right — CDC is the bridge, app code untouched', w / 2, 282);
+})();
+
+// c4: hourly polling vs the log, same hour of changes
+(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var pad = { left: 170, right: 40 };
+    // time axis 11:00 -> 12:10
+    var t0 = 0, t1 = 70; // minutes after 11:00
+    function X(min) { return pad.left + (min - t0) / (t1 - t0) * (w - pad.left - pad.right); }
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Busy Hour: What the Log Sees vs What the Poll Sees', w / 2, 24);
+
+    // events in the hour
+    var changes = [
+        { min: 2, label: '1001 shipped', color: P.aqua },
+        { min: 24, label: '1001 delivered', color: P.violet },
+        { min: 41, label: '998 DELETED', color: P.magenta }
+    ];
+
+    // lane 1: the change log
+    var y1 = 90;
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad.left, y1); ctx.lineTo(w - 40, y1); ctx.stroke();
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('change log sees', pad.left - 12, y1 - 4);
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+    ctx.fillText('(CDC)', pad.left - 12, y1 + 12);
+    for (var i = 0; i < changes.length; i++) {
+        var c = changes[i];
+        ctx.fillStyle = c.color;
+        ctx.beginPath(); ctx.arc(X(c.min), y1, 7, 0, 2 * Math.PI); ctx.fill();
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(c.label, X(c.min), y1 - 16);
+    }
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('all 3 changes, in order', X(50), y1 + 24);
+
+    // lane 2: hourly poll
+    var y2 = 190;
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad.left, y2); ctx.lineTo(w - 40, y2); ctx.stroke();
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('hourly poll sees', pad.left - 12, y2 - 4);
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+    ctx.fillText('(updated_at > 11:00)', pad.left - 12, y2 + 12);
+
+    // poll moment at 12:00 (min 60)
+    ctx.strokeStyle = P.magenta; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(X(60), 60); ctx.lineTo(X(60), y2 + 30); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('poll runs at 12:00', X(60), 52);
+
+    // what the poll captures: only the final state of 1001
+    ctx.fillStyle = P.violet;
+    ctx.beginPath(); ctx.arc(X(60), y2, 7, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('1001: "delivered"', X(60), y2 - 16);
+
+    // misses
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('✖ "shipped" step invisible', X(13), y2 + 24);
+    ctx.fillText('✖ delete of 998 invisible', X(41), y2 + 44);
+
+    // time ticks
+    var ticks = [[0, '11:00'], [20, '11:20'], [40, '11:40'], [60, '12:00']];
+    ctx.fillStyle = '#222'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    for (var i = 0; i < ticks.length; i++) ctx.fillText(ticks[i][1], X(ticks[i][0]), 262);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('polling samples the end state; the log kept the whole story', w / 2, 288);
+})();
+</script>
+
+</body>
+</html>

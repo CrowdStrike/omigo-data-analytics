@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Personalized Up-Front Pricing — The Quote as a Prediction</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 40px 20px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+.math-box { background: #f8fafb; border: 1px solid #e0e0e0; border-radius: 6px; padding: 16px 20px; margin: 12px 0; font-size: 0.9em; }
+.math-box code { background: #eef2f7; padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
+.summary-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 0.9em; }
+.summary-table th { background: #f0f4f8; padding: 10px 14px; text-align: left; border: 1px solid #e0e0e0; color: #1a5276; }
+.summary-table td { padding: 10px 14px; border: 1px solid #e0e0e0; }
+</style>
+</head>
+<body>
+
+<h1>Personalized Up-Front Pricing — The Quote as a Prediction</h1>
+<p class="subtitle">Two phones on the same corner request the same ride and may receive different quotes. The interesting part is the data science: what the phone emits, what gets derived from it, and what gets inferred by linking it over time.</p>
+
+<div class="philosophy">
+<strong>The question:</strong> A ride quote used to be a formula over the trip. Up-front pricing turned it into a model output. What data feeds that model — and how does a raw phone signal become a pricing feature?<br><br>
+<strong>The answer:</strong> Signals are used at three levels: read <em>directly</em> from the device (location, timestamps, taps), <em>enriched</em> within a session (speed from GPS deltas, dwell time on the fare screen), and <em>linked</em> across sessions into behavioral estimates (trip regularity, price sensitivity). The model predicts two numbers per trip — the rider's likely acceptance ceiling and the driver's likely acceptance floor — and the platform's margin is the spread.<br><br>
+<strong>An important caveat up front:</strong> this is a best-guess reconstruction, in two senses. The models themselves output probabilistic estimates that are wrong on many individual trips. And the description of how they work is assembled from patents, paired-price experiments, and reporting — platforms dispute parts of it, and the practice (sometimes labeled "surveillance pricing" in policy debates) is not a settled, universally accepted industry standard.
+</div>
+
+<!-- Aspect 1 -->
+<h2>1. From Formula to Prediction</h2>
+<table class="obj-table">
+    <tr>
+        <td>
+            <div class="obj-title">The Rate Card Becomes a Model</div>
+            <p>The original taxi model was a formula anyone could verify: price was a function of the trip. Up-front pricing replaces the formula with a single quoted number, fixed before booking, produced by a model from the trip <em>and its context</em>.</p>
+
+            <div class="math-box">
+            <strong>Rate card:</strong><br>
+            <code>price = $2.50 + $0.30/min + $1.75/km × zone multiplier</code><br>
+            Same trip → same price, verifiable with a stopwatch.<br><br>
+            <strong>Up-front quote:</strong><br>
+            <code>price = f(route, traffic, supply/demand, behavioral history, session context…)</code><br>
+            Same trip → a per-instance prediction.
+            </div>
+
+            <ul>
+                <li><strong>The defining shift:</strong> rider price and driver pay are decoupled — under a rate card they were the same number minus a fixed cut; here each is estimated independently</li>
+                <li><strong>What changed for measurement:</strong> a formula is auditable from a single receipt; a model output can only be studied statistically, across many quotes</li>
+            </ul>
+        </td>
+        <td>
+            <canvas id="canvas1" width="720" height="360"></canvas>
+        </td>
+    </tr>
+</table>
+
+<!-- Aspect 2 -->
+<h2>2. One Signal, Three Uses: Direct, Enriched, Linked</h2>
+<table class="obj-table">
+    <tr>
+        <td>
+            <div class="obj-title">The Feature-Engineering Ladder</div>
+            <p>Follow a single GPS point up the ladder. Read directly, it is a position — which zone the request comes from. Enriched within the session, consecutive points yield speed, heading, and route geometry. Linked across sessions, the same origin five mornings a week becomes an inferred commute.</p>
+
+            <ul>
+                <li><strong>Direct:</strong> fields consumed as-is — pickup location, destination entered, timestamps, product-tier taps, device state (OS, app version)</li>
+                <li><strong>Enriched:</strong> derived within one session — speed and heading from GPS deltas, route time estimates from map-matched traces, pickup difficulty, dwell time on the fare screen from tap timestamps</li>
+                <li><strong>Linked (indirect):</strong> inferred across sessions — origin–destination regularity → trip purpose; accept/abandon outcomes at past quotes → price-sensitivity estimate; tier-comparison behavior → urgency estimate</li>
+            </ul>
+
+            <div class="math-box">
+            <strong>One GPS point ≈ (lat, lon, t):</strong><br>
+            Direct: <code>pickup zone</code> — joins to live supply/demand<br>
+            Enriched: <code>Δposition/Δt = speed</code> — walking vs driving → pickup difficulty<br>
+            Linked: <code>same origin, 8:45am, 5 days/week</code> → commute → schedule-constrained trip
+            </div>
+
+            <ul>
+                <li><strong>Why the ladder exists:</strong> raw primitives are compressed offline into compact features so the online model evaluates a small vector in milliseconds, at every fare-screen open</li>
+                <li><strong>Confidence drops as you climb:</strong> a position is a measurement; a speed is a derivation; a "commute" or an "urgency score" is an inference that can simply be wrong for this person today</li>
+            </ul>
+        </td>
+        <td>
+            <canvas id="canvas2" width="720" height="380"></canvas>
+        </td>
+    </tr>
+</table>
+
+<!-- Aspect 3 -->
+<h2>3. Two Predictions and a Spread</h2>
+<table class="obj-table">
+    <tr>
+        <td>
+            <div class="obj-title">Ceiling, Floor, and the Gap</div>
+            <p>The features feed two estimation problems. Every displayed quote is a labeled data point — accepted or abandoned — that updates the rider's acceptance-ceiling estimate. Every driver accept/decline on a take-it-or-leave-it offer trains the acceptance-floor estimate. The two are modeled independently.</p>
+
+            <div class="math-box">
+            <strong>Trip A (illustrative):</strong> rider quoted <code>$31</code> (ceiling est. $33), driver offered <code>$17</code> (floor est. $16) → spread <code>$14 = 45% take</code><br>
+            <strong>Trip B, same route next day:</strong> rider quoted <code>$24</code>, driver offered <code>$19</code> → spread <code>$5 = 21% take</code><br><br>
+            Wide per-trip dispersion in the take rate is the statistical signature of independently estimated ceilings and floors.
+            </div>
+
+            <ul>
+                <li><strong>Estimates, not facts:</strong> both bands carry uncertainty — quote too close to the true ceiling and the booking is lost; offer too close to the true floor and the driver declines. The model prices that risk on every trip.</li>
+                <li><strong>Strategic training data:</strong> a driver who habitually declines low offers teaches the model their floor is high — the data is generated by agents responding to the model, not drawn from a fixed distribution</li>
+            </ul>
+        </td>
+        <td>
+            <canvas id="canvas3" width="720" height="360"></canvas>
+        </td>
+    </tr>
+</table>
+
+<!-- Aspect 4 -->
+<h2>4. Measuring the System From Outside</h2>
+<table class="obj-table">
+    <tr>
+        <td>
+            <div class="obj-title">One Draw per Observer</div>
+            <p>The platform computes a quote for every fare-screen open, so it observes the full distribution, including quotes shown but never booked. An outside observer — a rider, a researcher, a regulator — sees one realization per request. Estimating a per-instance pricing function from single draws is a genuinely hard inference problem.</p>
+
+            <div class="math-box">
+            <strong>The standard outside instrument:</strong> paired testing — identical requests from different accounts and devices at the same moment, then compare quotes.<br><br>
+            Experiments with this design have measured different quotes for the same route at the same time, consistent with per-instance rather than per-route pricing.
+            </div>
+
+            <ul>
+                <li><strong>Why conclusions stay tentative:</strong> paired tests can show that quotes differ, but not <em>which</em> features drove the difference — route model noise, live market state, and personalization are confounded in a single number</li>
+                <li><strong>The open debate:</strong> platforms acknowledge route- and market-based variation but dispute person-level willingness-to-pay pricing; regulators are actively studying it. The honest summary is: dispersion is measured, its decomposition is contested.</li>
+            </ul>
+        </td>
+        <td>
+            <canvas id="canvas4" width="720" height="360"></canvas>
+        </td>
+    </tr>
+</table>
+
+<!-- Summary -->
+<h2>5. The Complete Picture</h2>
+<table class="summary-table">
+    <tr><th>Phone signal</th><th>Direct use</th><th>Enriched into</th><th>Linked across sessions</th></tr>
+    <tr><td><strong>GPS point stream</strong></td><td>Pickup zone, live supply/demand join</td><td>Speed, heading, route time, pickup difficulty</td><td>Origin–destination regularity → trip purpose</td></tr>
+    <tr><td><strong>Tap & screen timestamps</strong></td><td>Product tier selected</td><td>Fare-screen dwell time, tiers compared</td><td>Booking-vs-abandon history → price sensitivity</td></tr>
+    <tr><td><strong>Quotes shown & outcomes</strong></td><td>Conversion event</td><td>Quote-to-book latency</td><td>Acceptance-ceiling estimate</td></tr>
+    <tr><td><strong>Device state</strong></td><td>OS, app version</td><td>Session stability</td><td>Patents describe device-interaction signals as candidate features — public evidence of use is limited</td></tr>
+</table>
+
+<div class="philosophy">
+<strong>One sentence:</strong> An up-front quote is a layered estimation problem — signals read directly from the phone, enriched into derived features, and linked into behavioral inferences — and every layer up the ladder trades measurement for best guess, which is exactly why both the individual estimates and the external accounts of the system remain contested.
+</div>
+
+<script>
+function setupCanvas(id, w, h) {
+    var c = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    var ctx = c.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return ctx;
+}
+
+function mulberry32(a) {
+    return function() {
+        var t = a += 0x6D2B79F5; t = Math.imul(t ^ t >>> 15, t | 1);
+        t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+}
+
+// Canvas 1: Rate-card era (all quotes identical) vs up-front era (quotes disperse)
+(function() {
+    var ctx = setupCanvas('canvas1', 720, 360);
+    var ox = 70, oy = 300, gw = 600, gh = 240;
+    var priceMin = 14, priceMax = 38;
+
+    function pToY(p) { return oy - ((p - priceMin) / (priceMax - priceMin)) * gh; }
+
+    // Axes
+    ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ox, oy); ctx.lineTo(ox + gw, oy);
+    ctx.moveTo(ox, oy); ctx.lineTo(ox, oy - gh);
+    ctx.stroke();
+
+    ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('Same route, same moment — 24 request instances', ox + gw / 2, oy + 28);
+    ctx.save(); ctx.translate(20, oy - gh / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Quoted price ($)', 0, 0); ctx.restore();
+
+    ctx.textAlign = 'right'; ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif'; ctx.fillStyle = '#666';
+    [15, 20, 25, 30, 35].forEach(function(p) {
+        var y = pToY(p);
+        ctx.fillText('$' + p, ox - 8, y + 4);
+        ctx.strokeStyle = '#eee'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + gw, y); ctx.stroke();
+    });
+
+    // Divider between eras
+    var midX = ox + gw / 2;
+    ctx.setLineDash([4, 4]); ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(midX, oy); ctx.lineTo(midX, oy - gh); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Rate card line (left half only)
+    var ratePrice = 24;
+    ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox + 10, pToY(ratePrice)); ctx.lineTo(midX - 10, pToY(ratePrice)); ctx.stroke();
+
+    // Left half: 12 dots exactly on the line
+    for (var i = 0; i < 12; i++) {
+        var x = ox + 25 + i * ((gw / 2 - 50) / 11);
+        ctx.fillStyle = 'rgba(39,174,96,0.8)';
+        ctx.beginPath(); ctx.arc(x, pToY(ratePrice), 5, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // Right half: 12 dispersed dots
+    var rand = mulberry32(11);
+    for (var i = 0; i < 12; i++) {
+        var x = midX + 25 + i * ((gw / 2 - 50) / 11);
+        var p = 24 + (rand() - 0.42) * 16;
+        ctx.fillStyle = 'rgba(26,82,118,0.7)';
+        ctx.beginPath(); ctx.arc(x, pToY(p), 5, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // Era labels
+    ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('rate-card era: every quote identical', ox + gw / 4, oy - gh + 16);
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('up-front era: one prediction per request', ox + 3 * gw / 4, oy - gh + 16);
+
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('From One Price per Trip to One Prediction per Request', ox + gw / 2, 18);
+})();
+
+// Canvas 2: Signal ladder — direct, enriched, linked columns
+(function() {
+    var ctx = setupCanvas('canvas2', 720, 380);
+
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('One Signal, Three Uses: Direct Reading → Session Enrichment → Cross-Session Inference', 360, 20);
+
+    var col1 = 118, col2 = 360, col3 = 602;
+    var direct = ['GPS point stream', 'tap & screen timestamps', 'destination entered', 'device state (OS, version)'];
+    var enriched = ['speed & heading', 'route time estimate', 'fare-screen dwell time', 'pickup difficulty'];
+    var linked = ['trip-purpose regularity', 'price-sensitivity estimate', 'urgency estimate'];
+
+    function box(x, y, wd, text, color) {
+        var bw = wd, bh = 32;
+        ctx.fillStyle = color + '16';
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.3;
+        ctx.fillRect(x - bw / 2, y - bh / 2, bw, bh);
+        ctx.strokeRect(x - bw / 2, y - bh / 2, bw, bh);
+        ctx.fillStyle = '#2a2a2a';
+        ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(text, x, y + 4);
+    }
+
+    var top = 66, rowGap = 54;
+    direct.forEach(function(t, i) { box(col1, top + i * rowGap, 190, t, '#8e44ad'); });
+    enriched.forEach(function(t, i) { box(col2, top + i * rowGap, 190, t, '#e67e22'); });
+    linked.forEach(function(t, i) { box(col3, top + 27 + i * rowGap, 200, t, '#1a5276'); });
+
+    // Connections direct -> enriched (row to row)
+    ctx.strokeStyle = '#bbb'; ctx.lineWidth = 1;
+    for (var i = 0; i < 4; i++) {
+        ctx.beginPath();
+        ctx.moveTo(col1 + 97, top + i * rowGap);
+        ctx.lineTo(col2 - 97, top + i * rowGap);
+        ctx.stroke();
+    }
+    // Connections enriched -> linked (selective)
+    var pairs = [[0, 0], [1, 0], [2, 1], [2, 2], [3, 2]];
+    pairs.forEach(function(pr) {
+        ctx.beginPath();
+        ctx.moveTo(col2 + 97, top + pr[0] * rowGap);
+        ctx.lineTo(col3 - 102, top + 27 + pr[1] * rowGap);
+        ctx.stroke();
+    });
+
+    // Column headers
+    ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#8e44ad';
+    ctx.fillText('DIRECT — measured', col1, 322);
+    ctx.fillStyle = '#e67e22';
+    ctx.fillText('ENRICHED — derived in session', col2, 322);
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('LINKED — inferred over sessions', col3, 322);
+
+    // Confidence gradient note
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#999'; ctx.textAlign = 'center';
+    ctx.fillText('Confidence falls left to right: a measurement → a derivation → a best guess about a person', 360, 352);
+})();
+
+// Canvas 3: Ceiling / floor bands with quote and offer
+(function() {
+    var ctx = setupCanvas('canvas3', 720, 360);
+    var px = 170, pw = 430;
+    var yCeil = 100, yFloor = 250;
+
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('Per-Trip Estimation: Quote Near the Ceiling, Offer Near the Floor', 360, 18);
+
+    // Ceiling band
+    ctx.fillStyle = 'rgba(231,76,60,0.12)';
+    ctx.fillRect(px, yCeil - 14, pw, 28);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(px, yCeil); ctx.lineTo(px + pw, yCeil); ctx.stroke();
+
+    // Floor band
+    ctx.fillStyle = 'rgba(39,174,96,0.12)';
+    ctx.fillRect(px, yFloor - 14, pw, 28);
+    ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(px, yFloor); ctx.lineTo(px + pw, yFloor); ctx.stroke();
+
+    // Band labels
+    ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, sans-serif'; ctx.textAlign = 'right';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('rider ceiling', px - 14, yCeil + 4);
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('driver floor', px - 14, yFloor + 4);
+    ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif'; ctx.fillStyle = '#999';
+    ctx.fillText('(est. max accept ± uncertainty)', px - 14, yCeil + 20);
+    ctx.fillText('(est. min accept ± uncertainty)', px - 14, yFloor + 20);
+
+    // Spread arrow in the middle
+    var mx = px + pw / 2;
+    ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(mx, yCeil + 18); ctx.lineTo(mx, yFloor - 18); ctx.stroke();
+    ctx.fillStyle = '#1a5276';
+    ctx.beginPath(); ctx.moveTo(mx - 6, yCeil + 24); ctx.lineTo(mx, yCeil + 12); ctx.lineTo(mx + 6, yCeil + 24); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(mx - 6, yFloor - 24); ctx.lineTo(mx, yFloor - 12); ctx.lineTo(mx + 6, yFloor - 24); ctx.fill();
+    ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('spread = platform take', mx + 14, (yCeil + yFloor) / 2 + 4);
+
+    // Quote dot near ceiling
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath(); ctx.arc(px + pw * 0.8, yCeil + 8, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('quote set just under the ceiling', px + pw * 0.55, yCeil + 38);
+
+    // Offer dot near floor
+    ctx.fillStyle = '#27ae60';
+    ctx.beginPath(); ctx.arc(px + pw * 0.8, yFloor - 8, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillText('offer set just over the floor', px + pw * 0.55, yFloor - 26);
+
+    // Risk note
+    ctx.fillStyle = '#666'; ctx.textAlign = 'center';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('Both bands are best-guess estimates: quote too close to the true ceiling and the booking is lost;', 360, 310);
+    ctx.fillText('offer too close to the true floor and the driver declines. The model prices that risk on every trip.', 360, 328);
+})();
+
+// Canvas 4: Distribution the platform sees vs the single draw an observer sees
+(function() {
+    var ctx = setupCanvas('canvas4', 720, 360);
+    var ox = 80, oy = 290, gw = 580, gh = 220;
+
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('One Request Observes One Draw From the Quote Distribution', ox + gw / 2, 18);
+
+    // Axes
+    ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ox, oy); ctx.lineTo(ox + gw, oy);
+    ctx.moveTo(ox, oy); ctx.lineTo(ox, oy - gh);
+    ctx.stroke();
+
+    ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.font = '13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('Quoted price for the identical trip ($)', ox + gw / 2, oy + 38);
+    ctx.save(); ctx.translate(28, oy - gh / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Share of quotes computed', 0, 0); ctx.restore();
+
+    // Histogram: distribution of computed quotes, $18-$36
+    var bars = [
+        [18, 0.03], [20, 0.08], [22, 0.16], [24, 0.24], [26, 0.20],
+        [28, 0.13], [30, 0.08], [32, 0.05], [34, 0.02], [36, 0.01]
+    ];
+    var barW = gw / 11;
+    bars.forEach(function(b, i) {
+        var x = ox + 10 + i * barW;
+        var bh = b[1] * gh * 3.2;
+        var highlight = (b[0] === 30);
+        ctx.fillStyle = highlight ? 'rgba(231,76,60,0.75)' : 'rgba(26,82,118,0.35)';
+        ctx.fillRect(x, oy - bh, barW - 8, bh);
+        ctx.strokeStyle = highlight ? '#e74c3c' : '#1a5276';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x, oy - bh, barW - 8, bh);
+        ctx.fillStyle = '#666'; ctx.textAlign = 'center';
+        ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.fillText('$' + b[0], x + (barW - 8) / 2, oy + 16);
+    });
+
+    // Highlight annotation
+    var hx = ox + 10 + 6 * barW + (barW - 8) / 2;
+    var hTop = oy - bars[6][1] * gh * 3.2;
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(hx, hTop - 8); ctx.lineTo(hx, hTop - 46); ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'center';
+    ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('the one quote this request saw', hx, hTop - 56);
+    ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('one draw cannot separate route noise, market state, and personalization', hx - 40, hTop - 42);
+
+    ctx.fillStyle = '#999'; ctx.textAlign = 'center';
+    ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillText('Paired testing — identical requests from different accounts at the same moment — is the standard outside probe', ox + gw / 2, oy + 58);
+})();
+</script>
+</body>
+</html>

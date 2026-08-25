@@ -3,95 +3,193 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>11. Parquet / ORC</title>
+<title>Parquet / ORC</title>
 <style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
 body {
-    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    padding: 20px 10px;
+    font-family: system-ui, -apple-system, sans-serif;
     background: #fff;
-    color: #1a1a1a;
-    font-size: 15px;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
 }
-h1 { color: #1a5276; margin-bottom: 4px; }
-.subtitle { color: #333; font-size: 1.1em; margin-bottom: 20px; }
-.philosophy {
-    background: #f0f4f8;
-    border-left: 4px solid #2980b9;
-    padding: 12px 16px;
-    margin: 20px 0;
-    font-size: 0.95em;
-    color: #222;
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
 }
-.info-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-.info-table td {
-    border: 1px solid #2980b9;
-    padding: 14px 16px;
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
     vertical-align: top;
-    font-size: 0.95em;
+    padding: 12px;
 }
-.info-table tr:nth-child(even) td { background: #f0f8ff; }
-.info-table td:first-child { width: 40%; font-weight: 700; color: #1a5276; }
-.info-table td:last-child { width: 60%; }
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.intro-callout {
+    background: #f8f9fa;
+    border-left: 3px solid #2980b9;
+    padding: 10px 14px;
+    margin-bottom: 32px;
+    font-size: 0.93rem;
+}
 code { background: #f0f4f8; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }
 pre { background: #f0f4f8; padding: 12px; border-radius: 4px; overflow-x: auto; font-size: 0.9em; }
 </style>
 </head>
 <body>
 
-<h1>11. Parquet / ORC</h1>
+<h1>Parquet / ORC</h1>
 <p class="subtitle">Columnar on-disk storage.</p>
 
-<div class="philosophy">
-<strong>Core trade-off:</strong> Analytical query speed through column pruning and predicate pushdown — at the cost of expensive row-level updates and write amplification.
+<div class="intro-callout">
+    <strong>Core trade-off:</strong> Analytical query speed through column pruning and predicate pushdown &mdash; at the cost of expensive row-level updates and write amplification.
 </div>
 
-<table class="info-table">
-<tbody>
-<tr>
-<td>What It Is</td>
-<td>Binary columnar file formats that store data by column rather than by row. Parquet (from the Hadoop ecosystem, now universal) and ORC (Optimized Row Columnar, from Hive) solve the same problem: make analytical queries fast by only reading the columns needed. Both include metadata statistics (min/max/count) per column chunk.</td>
-</tr>
-<tr>
-<td>Structure / Syntax</td>
-<td>Data is organized into row groups (Parquet) or stripes (ORC). Within each row group, data for each column is stored contiguously and compressed independently. Footer contains schema, row group locations, and column statistics (min, max, null count). Encoding is per-column (dictionary, RLE, delta, etc.).</td>
-</tr>
-<tr>
-<td>Strengths</td>
-<td>Column pruning — read only the columns your query touches. Predicate pushdown — skip entire row groups using min/max statistics. Excellent compression (similar values compress well together). Encoding adapts per column. Metadata enables query planning without scanning data.</td>
-</tr>
-<tr>
-<td>Weaknesses</td>
-<td>Expensive row-level updates (must rewrite entire row groups). Write amplification for frequent small inserts. Not streamable — must write complete row groups. Random row access is costly. File size overhead for very small datasets. Tooling for inspection is less intuitive than text formats.</td>
-</tr>
-<tr>
-<td>Business Use Case</td>
-<td>Data lakes (S3 + Parquet is the modern standard). Analytical data warehouses. Any query that reads few columns from wide tables. Time-series analysis. ML feature stores. The format behind most "big data" query engines (Spark, Presto, DuckDB, BigQuery export).</td>
-</tr>
-<tr>
-<td>Example</td>
-<td>
-<pre>Scenario: Table with 200 columns, 1 billion rows
-Query: SELECT avg(price) FROM sales WHERE region = 'US'
+<div class="card-section">
+    <h2>How It Works</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Binary columnar formats that store data by column, not by row. Parquet (Hadoop ecosystem, now universal) and ORC (from Hive) solve the same problem: read only what the query touches.</p>
+                <ul>
+                    <li><strong>Schema:</strong> In the file footer, with per-column statistics</li>
+                    <li><strong>Layout:</strong> Row groups (stripes) &rarr; contiguous compressed column chunks</li>
+                    <li><strong>Encoding:</strong> Per column &mdash; dictionary, RLE, delta</li>
+                    <li><strong>Best for:</strong> Wide tables, few-column analytical queries</li>
+                </ul>
+                <p style="margin-top: 10px; font-size: 0.9rem;"><strong>How it&rsquo;s read:</strong> The reader starts at the footer: schema, row group locations, and min/max/null-count statistics per column chunk. For <code>SELECT avg(price) WHERE region = 'US'</code> on a 200-column table, it reads only the <code>price</code> and <code>region</code> chunks (~1% of the file), and the statistics let it skip entire row groups whose region range excludes 'US' entirely &mdash; predicate pushdown. Similar values stored together also compress far better than interleaved rows. Total I/O can land under 0.5% of what a CSV scan reads.</p>
+                <div class="key-point">
+                    <strong>Failure mode:</strong> Treating it like a database. Updating one row means rewriting its whole row group; streaming small appends amplifies writes. It&rsquo;s a scan-optimized archive format, not a mutable store.
+                </div>
+                <p class="example">Example: S3 + Parquet data lakes, Spark/Presto/DuckDB engines, ML feature stores, BigQuery exports.</p>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
 
-What Parquet reads:
-- Column "price": only this column's data (0.5% of file)
-- Column "region": only this column's data (0.5% of file)
-- Row group stats: skip groups where region min/max
-  excludes 'US' (maybe 70% of groups skipped)
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
 
-Total I/O: ~1% of file size × 30% of row groups
-         = 0.3% of total data actually read
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
 
-What CSV would read: 100% of the file, every time.
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Parquet — Read Only the Columns and Row Groups the Query Touches', w / 2, 25);
 
-This is why a 50GB Parquet file can answer queries
-in seconds that would take minutes on the same data
-stored as CSV.</pre>
-The 200-column table reading 2 columns touches roughly 1% of the data. Combined with row group skipping via statistics, the actual I/O can be under 0.5% of file size.
-</td>
-</tr>
-</tbody>
-</table>
+    ctx.font = '12px monospace';
+    ctx.fillStyle = '#333';
+    ctx.fillText("SELECT avg(price) WHERE region = 'US'", w / 2, 48);
+
+    var cols = ['price', 'region', 'user_id', 'ts', '… 196 more'];
+    var needed = [true, true, false, false, false];
+    var colW = 92, rgH = 52, x0 = 70, y0 = 66;
+
+    // Three row groups
+    for (var rg = 0; rg < 3; rg++) {
+        var y = y0 + rg * (rgH + 10);
+        var skipped = rg === 1; // stats exclude 'US'
+
+        // Row group label
+        ctx.font = '10px system-ui'; ctx.textAlign = 'right';
+        ctx.fillStyle = '#666';
+        ctx.fillText('row group ' + (rg + 1), x0 - 8, y + rgH / 2);
+        ctx.fillStyle = skipped ? '#e74c3c' : '#27ae60';
+        ctx.fillText(skipped ? 'stats: region A–M → skip' : 'stats: region A–Z → scan', x0 - 8, y + rgH / 2 + 14);
+
+        for (var c = 0; c < cols.length; c++) {
+            var x = x0 + c * (colW + 6);
+            var read = needed[c] && !skipped;
+            ctx.fillStyle = read ? 'rgba(39,174,96,0.5)' : (skipped ? 'rgba(231,76,60,0.08)' : 'rgba(200,200,200,0.25)');
+            ctx.fillRect(x, y, colW, rgH);
+            ctx.strokeStyle = read ? '#27ae60' : '#ccc';
+            ctx.lineWidth = read ? 2 : 1;
+            ctx.strokeRect(x, y, colW, rgH);
+            ctx.fillStyle = read ? '#1a5276' : '#999';
+            ctx.font = read ? 'bold 11px monospace' : '11px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(cols[c], x + colW / 2, y + rgH / 2 + 4);
+        }
+    }
+
+    // Footer strip
+    var fy = y0 + 3 * (rgH + 10) + 2;
+    ctx.fillStyle = '#1a5276';
+    ctx.fillRect(x0, fy, 5 * (colW + 6) - 6, 22);
+    ctx.fillStyle = '#fff'; ctx.font = '10px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('footer: schema + row group offsets + min/max/null-count stats per column chunk — read FIRST', x0 + (5 * (colW + 6) - 6) / 2, fy + 15);
+
+    // Bottom note
+    ctx.fillStyle = '#666'; ctx.font = '11px system-ui';
+    ctx.fillText('green = actually read (~2 of 200 columns, 2 of 3 row groups) · everything else never leaves disk · CSV reads 100% every time', w / 2, h - 10);
+})();
+</script>
 
 </body>
 </html>

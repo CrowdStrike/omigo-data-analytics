@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Next-Token Prediction</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Next-Token Prediction</h1>
+<p class="subtitle">Everything a language model does is one trick, repeated: given the text so far, put a probability on every possible next piece — then add one and go again</p>
+
+<div class="card-section">
+    <h2>"The capital of France is ___" — a Score for Every Candidate</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">running example</span></div>
+                <ul>
+                    <li><b>The setup</b> — the model reads "The capital of France is" and must propose what comes next</li>
+                    <li><b>It scores everything</b> — every token in its vocabulary gets a probability, even silly ones</li>
+                    <li><b>The table</b> — Paris 0.92, Lyon 0.03, "the" 0.02, Marseille 0.01, everything else 0.02</li>
+                    <li><b>Sums to 1</b> — 0.92 + 0.03 + 0.02 + 0.01 + 0.02 = 1.00: one unit of belief, shared out</li>
+                    <li><b>One is chosen</b> — usually the most likely, sometimes a random draw from the table</li>
+                </ul>
+                <p class="example">Autocomplete on your phone plays exactly this game — with a much smaller brain.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> An LLM's one and only skill is producing this table: a probability for every possible next token.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Generating a Sentence, One Table at a Time</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">worked example</span><span class="tag blue">core idea</span></div>
+                <ul>
+                    <li><b>Step 1</b> — "The capital of France is" &rarr; Paris wins at 0.92; append it</li>
+                    <li><b>Step 2</b> — "&hellip;is Paris" &rarr; "." 0.71, "," 0.11, "and" 0.05, rest 0.13; append "."</li>
+                    <li><b>Step 3</b> — "&hellip;is Paris." &rarr; end-of-text 0.62, "It" 0.14, "The" 0.09, rest 0.15; stop</li>
+                    <li><b>Check step 2 by hand</b> — 0.71 + 0.11 + 0.05 + 0.13 = 1.00, like every step</li>
+                    <li><b>The loop</b> — predict, append, repeat: a 500-word answer is ~650 of these tables</li>
+                </ul>
+                <p class="example">The model never plans the sentence — it rebuilds the whole table after every single token.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Generation = next-token prediction in a loop. There is no other machinery behind the curtain.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Matters: The Blank Always Gets Filled</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag red">hallucination</span></div>
+                <ul>
+                    <li><b>Everything is this</b> — chat, code, summaries, translation: the same loop, different prompts</li>
+                    <li><b>No "I don't know" row</b> — some token must receive the probability, so one always does</li>
+                    <li><b>Made-up country</b> — "The capital of Zenovia is" still returns confident-sounding names</li>
+                    <li><b>Fluent &ne; true</b> — high probability means "plausible continuation", not "verified fact"</li>
+                    <li><b>Hallucination</b> — is this loop working perfectly on a question it has no facts for</li>
+                </ul>
+                <p class="example">Ask about fictional Zenovia and "Zenograd" arrives in the same confident tone as Paris.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Treat every output as a prediction of plausible text — never as a database lookup that either hits or honestly misses.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Confusion: It Doesn't Always Pick the Top Token</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag orange">temperature</span></div>
+                <ul>
+                    <li><b>Sampling</b> — systems usually draw randomly from the table instead of taking the max</li>
+                    <li><b>Temperature</b> — a dial that reshapes the table before the draw is made</li>
+                    <li><b>Low (0.2)</b> — Paris soaks up ~0.995 of the mass: same answer nearly every run</li>
+                    <li><b>High (1.5)</b> — Paris drops to ~0.58; Lyon, "the", Marseille get real chances</li>
+                    <li><b>Why answers vary</b> — same model, same prompt, different draws from the same table</li>
+                    <li><b>For pipelines</b> — set temperature near 0 when you need reproducible outputs</li>
+                </ul>
+                <p class="example">The "creative" setting literally means: give unlikely tokens a bigger slice of the wheel.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Reading run-to-run variation as the model "changing its mind" — it is a sampling choice you control, not indecision.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var w = +canvas.getAttribute('width');
+    var h = +canvas.getAttribute('height');
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+    return { ctx: ctx, w: w, h: h };
+}
+
+// c1: horizontal probability bars for the France blank
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('"The capital of France is ___" — the Probability Table', w / 2, 24);
+
+    var cands = ['Paris', 'Lyon', '"the"', 'Marseille', 'all others'];
+    var probs = [0.92, 0.03, 0.02, 0.01, 0.02];
+    var cols = [P.green, P.blue, P.violet, P.aqua, P.mute];
+    var left = 120, right = 80, top = 52, rowH = 42;
+    var barMax = w - left - right;
+
+    for (var i = 0; i < cands.length; i++) {
+        var y = top + i * rowH;
+        ctx.fillStyle = P.text; ctx.font = (i === 0 ? 'bold ' : '') + '13px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(cands[i], left - 10, y + 17);
+        var bw = probs[i] * barMax;
+        if (bw < 3) bw = 3;
+        ctx.fillStyle = cols[i];
+        ctx.fillRect(left, y, bw, 24);
+        ctx.fillStyle = P.text; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(probs[i].toFixed(2), left + bw + 8, y + 17);
+    }
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(left, top - 6); ctx.lineTo(left, top + 5 * rowH - 12); ctx.stroke();
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('0.92 + 0.03 + 0.02 + 0.01 + 0.02 = 1.00 — one unit of belief, shared out', w / 2, h - 16);
+})();
+
+// c2: three generation steps, each with top candidates and the pick
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Predict → Append → Repeat', w / 2, 24);
+
+    var steps = [
+        { ctxt: 'The capital of France is', cands: ['Paris', 'Lyon', 'rest'], probs: [0.92, 0.03, 0.05], pick: 0 },
+        { ctxt: 'The capital of France is Paris', cands: ['.', ',', 'rest'], probs: [0.71, 0.11, 0.18], pick: 0 },
+        { ctxt: 'The capital of France is Paris.', cands: ['<end>', 'It', 'rest'], probs: [0.62, 0.14, 0.24], pick: 0 }
+    ];
+
+    var rowY = [66, 142, 218];
+    var barX = 420, barMax = 200, barH = 14;
+
+    for (var r = 0; r < 3; r++) {
+        var st = steps[r], y = rowY[r];
+
+        ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText('step ' + (r + 1), 20, y + 6);
+        ctx.fillStyle = P.text; ctx.font = '13px ui-monospace, Menlo, monospace';
+        ctx.fillText(st.ctxt + ' _', 78, y + 6);
+
+        for (var i = 0; i < 3; i++) {
+            var by = y - 12 + i * (barH + 5);
+            var bw = st.probs[i] * barMax;
+            if (bw < 3) bw = 3;
+            ctx.fillStyle = (i === st.pick) ? P.green : '#c9d2dc';
+            ctx.fillRect(barX, by, bw, barH);
+            ctx.fillStyle = (i === st.pick) ? P.green : P.mute;
+            ctx.font = (i === st.pick ? 'bold ' : '') + '12px system-ui';
+            ctx.fillText(st.cands[i] + '  ' + st.probs[i].toFixed(2), barX + bw + 6, by + 11);
+        }
+
+        if (r < 2) {
+            ctx.strokeStyle = P.orange; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(48, y + 16); ctx.lineTo(48, y + 48); ctx.stroke();
+            ctx.fillStyle = P.orange;
+            ctx.beginPath(); ctx.moveTo(48, y + 54); ctx.lineTo(43, y + 46); ctx.lineTo(53, y + 46); ctx.closePath(); ctx.fill();
+            ctx.font = '11px system-ui'; ctx.textAlign = 'left';
+            ctx.fillText('append the winner', 58, y + 42);
+        }
+    }
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('each step is a fresh table that sums to 1.00 — a long answer is just this, hundreds of times', w / 2, h - 16);
+})();
+
+// c3: France vs Zenovia — the blank always gets filled
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Real Question vs Made-Up Question: Both Get an Answer', w / 2, 24);
+
+    ctx.strokeStyle = '#bdc3c7'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(360, 38); ctx.lineTo(360, h - 40); ctx.stroke();
+    ctx.setLineDash([]);
+
+    function panel(x0, title, cands, probs, cols, note, noteColor) {
+        ctx.fillStyle = P.ink; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(title, x0 + 160, 52);
+        var left = x0 + 96, barMax = 190, rowH = 36, top = 70;
+        for (var i = 0; i < cands.length; i++) {
+            var y = top + i * rowH;
+            ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+            ctx.fillText(cands[i], left - 8, y + 15);
+            var bw = probs[i] * barMax;
+            if (bw < 3) bw = 3;
+            ctx.fillStyle = cols[i];
+            ctx.fillRect(left, y, bw, 20);
+            ctx.fillStyle = P.text; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+            ctx.fillText(probs[i].toFixed(2), left + bw + 6, y + 15);
+        }
+        ctx.fillStyle = noteColor; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(note, x0 + 160, top + cands.length * rowH + 14);
+    }
+
+    panel(20, '"The capital of France is ___"',
+        ['Paris', 'Lyon', 'all others'], [0.92, 0.03, 0.05],
+        [P.green, P.blue, P.mute],
+        'one candidate dominates — the model has the fact', P.green);
+
+    panel(390, '"The capital of Zenovia is ___"  (fictional)',
+        ['Zen City', 'Zenograd', 'Port Zen', 'all others'], [0.31, 0.24, 0.18, 0.27],
+        [P.magenta, P.violet, P.aqua, P.mute],
+        'mass spreads over inventions (illustrative)', P.magenta);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('neither table has an "I don\'t know" row — the blank must be filled either way', w / 2, h - 14);
+})();
+
+// c4: temperature reshapes the same table
+(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var pad = { top: 56, bottom: 60, left: 60, right: 170 };
+    var cw = w - pad.left - pad.right, ch = h - pad.top - pad.bottom;
+    var baseY = pad.top + ch;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Model, Same Prompt — Temperature Reshapes the Table', w / 2, 24);
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute;
+    ctx.fillText('P(next token) for "The capital of France is ___" (illustrative)', w / 2, 42);
+
+    var cands = ['Paris', 'Lyon', '"the"', 'Marseille', 'others'];
+    var t02 = [0.995, 0.002, 0.001, 0.001, 0.001];
+    var t15 = [0.58, 0.13, 0.10, 0.08, 0.11];
+    var maxY = 1.0;
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad.left, pad.top); ctx.lineTo(pad.left, baseY); ctx.lineTo(pad.left + cw, baseY); ctx.stroke();
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'right';
+    [0, 0.5, 1.0].forEach(function(v) {
+        var y = baseY - v / maxY * ch;
+        ctx.fillText(v.toFixed(1), pad.left - 6, y + 4);
+        if (v > 0) {
+            ctx.strokeStyle = P.grid;
+            ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + cw, y); ctx.stroke();
+        }
+    });
+
+    var n = cands.length, groupW = cw / n, barW = 30;
+    for (var i = 0; i < n; i++) {
+        var gx = pad.left + i * groupW + groupW / 2;
+        var h1 = t02[i] / maxY * ch, h2 = t15[i] / maxY * ch;
+        if (h1 < 2) h1 = 2;
+        if (h2 < 2) h2 = 2;
+        ctx.fillStyle = P.blue;
+        ctx.fillRect(gx - barW - 3, baseY - h1, barW, h1);
+        ctx.fillStyle = P.orange;
+        ctx.fillRect(gx + 3, baseY - h2, barW, h2);
+        ctx.fillStyle = P.text; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(t02[i] >= 0.01 ? t02[i].toFixed(2) : '~0', gx - barW / 2 - 3, baseY - h1 - 5);
+        ctx.fillText(t15[i].toFixed(2), gx + 3 + barW / 2, baseY - h2 - 5);
+        ctx.font = '12px system-ui';
+        ctx.fillText(cands[i], gx, baseY + 17);
+    }
+
+    var lx = w - 155;
+    ctx.textAlign = 'left'; ctx.font = '12px system-ui';
+    ctx.fillStyle = P.blue; ctx.fillRect(lx, 62, 12, 12);
+    ctx.fillStyle = P.text; ctx.fillText('temperature 0.2', lx + 17, 72);
+    ctx.fillStyle = P.orange; ctx.fillRect(lx, 82, 12, 12);
+    ctx.fillStyle = P.text; ctx.fillText('temperature 1.5', lx + 17, 92);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('at 1.5, Paris still leads — but 42% of draws now land somewhere else', w / 2, h - 14);
+})();
+</script>
+
+</body>
+</html>

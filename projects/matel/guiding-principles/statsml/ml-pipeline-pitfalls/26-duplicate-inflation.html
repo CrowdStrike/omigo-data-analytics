@@ -76,29 +76,45 @@ ul {
 }
 li { margin-bottom: 4px; }
 
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
 </style>
 </head>
 <body>
 
 <h1>Pitfall: Duplicate Inflation in ETL</h1>
-<p class="subtitle">ETL joins or retry logic create duplicate rows that inflate counts and skew statistical analysis</p>
+<p class="subtitle">Event retries, at-least-once delivery, and overlapping incremental loads write the same event multiple times, inflating counts and skewing analysis</p>
 
 <div class="card-section">
     <h2>The Problem</h2>
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>Many-to-many joins create fanout, retry logic generates multiple records for the same event, or window functions duplicate rows. Aggregations count duplicates multiple times, making metrics like conversion rate or average value incorrect.</p>
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">duplicate events</span></div>
                 <ul>
-                    <li>User joins session joins event creates M × N × P fanout</li>
-                    <li>Kafka retry logic writes duplicate messages with same event_id</li>
-                    <li>Window function over partitions duplicates base rows</li>
-                    <li>Incremental append without deduplication accumulates duplicates</li>
+                    <li><b>Silent re-writes</b> — pipelines store one event twice via retries, redelivery, or overlap</li>
+                    <li><b>Client retries</b> — a timed-out request often succeeded, so the resend creates a second row</li>
+                    <li><b>At-least-once delivery</b> — brokers like Kafka guarantee delivery, not uniqueness</li>
+                    <li><b>Missing idempotency key</b> — without a unique event_id at write time, repeats are stored</li>
+                    <li><b>Overlapping windows</b> — incremental jobs reprocessing a safety window re-insert old rows</li>
+                    <li><b>Biased statistics</b> — every duplicate inflates counts and skews stats over raw rows</li>
                 </ul>
+                <p class="example">A nightly job appends a 3-day overlap without dedup, so the conversion rate reads 28% instead of the true 2.8%.</p>
                 <div class="key-point">
-                    <strong>Impact:</strong> Counts are inflated by 2x-10x. Averages are biased if duplicates aren't random. Downstream models trained on inflated counts learn wrong distributions. Fix: Add explicit deduplication step after joins and before aggregation.
+                    <strong>Impact:</strong> Counts inflate silently, rates are biased whenever duplicates cluster in segments, and models learn distorted distributions.
                 </div>
-                <p class="example">Example: A conversion funnel joins users × sessions × events. For 100 users with 3 sessions and 10 events each, naive join produces 3,000 rows instead of 100 users. Conversion rate appears 30x higher than reality.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c1" width="720" height="300"></canvas>
@@ -108,21 +124,23 @@ li { margin-bottom: 4px; }
 </div>
 
 <div class="card-section">
-    <h2>Why It Happens / Detection / Common Sources</h2>
+    <h2>Why It Happens</h2>
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>SQL joins default to Cartesian product behavior. Retry logic prioritizes delivery over idempotency. Teams forget that join fanout requires explicit deduplication before counting.</p>
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">at-least-once</span></div>
                 <ul>
-                    <li>Many-to-many joins without awareness of fanout consequences</li>
-                    <li>At-least-once delivery semantics in event streams (Kafka, SQS)</li>
-                    <li>Multiple systems writing to same table without unique constraints</li>
-                    <li>Window functions used before understanding their duplication behavior</li>
+                    <li><b>Reliability first</b> — delivering twice is far cheaper than exactly-once across systems</li>
+                    <li><b>At-least-once semantics</b> — brokers redeliver whenever an ack fails; dupes are expected</li>
+                    <li><b>Retry-first SDKs</b> — clients retry on timeout even though the request may have succeeded</li>
+                    <li><b>No uniqueness constraint</b> — many producers share one table with nothing rejecting repeats</li>
+                    <li><b>Overlap-by-design backfills</b> — trailing windows catch late data but re-ingest old rows</li>
+                    <li><b>Consumer's job</b> — dedup falls to the pipeline, and many pipelines never implement it</li>
                 </ul>
+                <p class="example">A payment webhook fires up to 3 times, so about 4% of events land twice and raw-row revenue sums over-report by that share.</p>
                 <div class="key-point">
-                    <strong>Detection:</strong> Compare count(*) vs count(distinct primary_key). If ratio > 1.0, you have duplicates. Profile join cardinality: for A JOIN B, check if |A × B| > |A| + |B| by orders of magnitude. Track row count deltas across pipeline stages.
+                    <strong>Root Cause:</strong> Exactly-once delivery is expensive to guarantee, so infrastructure settles for at-least-once and relies on downstream deduplication that many pipelines skip.
                 </div>
-                <p class="example">Example: An ad pipeline joins impressions × clicks × conversions. Impressions table has 1M rows, clicks 10K, conversions 500. Naive join yields 5B rows (fanout of 5000x). Correct result should be 500 attributed conversions.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c2" width="720" height="300"></canvas>
@@ -132,21 +150,23 @@ li { margin-bottom: 4px; }
 </div>
 
 <div class="card-section">
-    <h2>Prevention / Correct Approach</h2>
+    <h2>The Correct Approach</h2>
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>Add explicit deduplication after every join and before every aggregation. Use distinct or group by on primary key. Profile join cardinality to catch unexpected fanout.</p>
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">idempotent writes</span></div>
                 <ul>
-                    <li>After every join: SELECT DISTINCT ON (primary_key) to collapse fanout</li>
-                    <li>Before aggregation: GROUP BY primary_key, then aggregate</li>
-                    <li>Use LEFT JOIN instead of INNER JOIN when possible to avoid fanout</li>
-                    <li>Add unique constraints or row_number() = 1 filters in window functions</li>
+                    <li><b>Accept duplicates</b> — they are inevitable at ingestion; correctness comes from dedup</li>
+                    <li><b>Idempotency keys</b> — assign a stable event_id at the producer and enforce it via upsert</li>
+                    <li><b>Dedup on ingest</b> — keep ROW_NUMBER() OVER (PARTITION BY event_id) = 1 before counting</li>
+                    <li><b>Watermark backfills</b> — merge or delete-and-insert so overlap replaces rows, not appends</li>
+                    <li><b>Detect</b> — track COUNT(*) vs COUNT(DISTINCT event_id) per stage; ratio &gt; 1.0 means dupes</li>
+                    <li><b>Locate the source</b> — stage-over-stage row deltas show where duplicates enter</li>
                 </ul>
+                <p class="example">One team added an upsert keyed on event_id and the duplicate ratio dropped from 1.2 to 1.0 overnight.</p>
                 <div class="key-point">
-                    <strong>Best practice:</strong> Profile every join: log input cardinality |A|, |B| and output |A JOIN B|. Alert if output > max(|A|, |B|) × expected_multiplier. Always include count(*) vs count(distinct id) in pipeline metrics dashboard.
+                    <strong>Fix:</strong> Make every write idempotent, deduplicate before the first aggregation, and monitor the COUNT(*) / COUNT(DISTINCT id) ratio per stage.
                 </div>
-                <p class="example">Example: Instead of SELECT COUNT(*) FROM users JOIN sessions JOIN events, use SELECT COUNT(DISTINCT user_id) FROM (deduplicated result). Or pre-aggregate: count events per session, then sessions per user.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c3" width="720" height="300"></canvas>
@@ -168,7 +188,7 @@ function setup(id) {
     return { ctx: ctx, w: rect.width, h: rect.height };
 }
 
-// Canvas 1: Join fanout visualization
+// Canvas 1: One real event stored multiple times (retries + redelivery)
 (function() {
     var s = setup('c1');
     var ctx = s.ctx, w = s.w, h = s.h;
@@ -176,93 +196,104 @@ function setup(id) {
     ctx.font = 'bold 14px system-ui';
     ctx.fillStyle = '#1a5276';
     ctx.textAlign = 'center';
-    ctx.fillText('Join Fanout: 2 Users × 3 Sessions × 5 Events = 30 Rows', w/2, 25);
+    ctx.fillText('One Real Event, Three Stored Rows', w/2, 25);
 
-    var leftX = 80;
-    var midX = 280;
-    var rightX = 480;
-    var centerY = 150;
+    var sendX = 90, brokerX = 320, tableX = 560;
 
-    // Users (2)
-    ctx.fillStyle = '#1a5276';
-    ctx.font = 'bold 12px system-ui';
-    ctx.textAlign = 'center';
-    ctx.fillText('USERS (2)', leftX, 60);
+    // Producer box
+    ctx.fillStyle = 'rgba(26,82,118,0.7)';
+    ctx.fillRect(sendX - 55, 120, 110, 40);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(sendX - 55, 120, 110, 40);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('PRODUCER', sendX, 138);
+    ctx.font = '10px system-ui';
+    ctx.fillText('event e-42', sendX, 152);
 
-    for (var i = 0; i < 2; i++) {
-        var y = centerY - 30 + i * 60;
-        ctx.fillStyle = 'rgba(26,82,118,0.7)';
-        ctx.fillRect(leftX - 30, y - 15, 60, 30);
-        ctx.strokeStyle = '#1a5276';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(leftX - 30, y - 15, 60, 30);
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 10px system-ui';
-        ctx.fillText('U' + (i + 1), leftX, y + 4);
-    }
+    // Broker box
+    ctx.fillStyle = 'rgba(230,126,34,0.7)';
+    ctx.fillRect(brokerX - 55, 120, 110, 40);
+    ctx.strokeStyle = '#e67e22';
+    ctx.strokeRect(brokerX - 55, 120, 110, 40);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('BROKER', brokerX, 138);
+    ctx.font = '10px system-ui';
+    ctx.fillText('at-least-once', brokerX, 152);
 
-    // Sessions (3)
-    ctx.fillStyle = '#e67e22';
-    ctx.font = 'bold 12px system-ui';
-    ctx.fillText('SESSIONS (3)', midX, 60);
-
-    for (var i = 0; i < 3; i++) {
-        var y = centerY - 50 + i * 50;
-        ctx.fillStyle = 'rgba(230,126,34,0.7)';
-        ctx.fillRect(midX - 30, y - 15, 60, 30);
-        ctx.strokeStyle = '#e67e22';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(midX - 30, y - 15, 60, 30);
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 10px system-ui';
-        ctx.fillText('S' + (i + 1), midX, y + 4);
-    }
-
-    // Events (5)
-    ctx.fillStyle = '#27ae60';
-    ctx.font = 'bold 12px system-ui';
-    ctx.fillText('EVENTS (5)', rightX, 60);
-
-    for (var i = 0; i < 5; i++) {
-        var y = 90 + i * 35;
-        ctx.fillStyle = 'rgba(39,174,96,0.7)';
-        ctx.fillRect(rightX - 30, y - 15, 60, 30);
-        ctx.strokeStyle = '#27ae60';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(rightX - 30, y - 15, 60, 30);
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 10px system-ui';
-        ctx.fillText('E' + (i + 1), rightX, y + 4);
-    }
-
-    // Arrows showing explosion
-    ctx.strokeStyle = '#e74c3c';
+    // Arrows producer -> broker: send + retry
+    ctx.strokeStyle = '#1a5276';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(leftX + 30, centerY);
-    ctx.lineTo(midX - 30, centerY);
+    ctx.moveTo(sendX + 55, 128);
+    ctx.lineTo(brokerX - 55, 128);
     ctx.stroke();
-
+    ctx.strokeStyle = '#e74c3c';
+    ctx.setLineDash([5, 3]);
     ctx.beginPath();
-    ctx.moveTo(midX + 30, centerY);
-    ctx.lineTo(rightX - 30, centerY);
+    ctx.moveTo(sendX + 55, 152);
+    ctx.lineTo(brokerX - 55, 152);
     ctx.stroke();
+    ctx.setLineDash([]);
 
-    // Result fanout
+    ctx.fillStyle = '#1a5276';
+    ctx.font = '9px system-ui';
+    ctx.fillText('send', (sendX + brokerX)/2, 122);
     ctx.fillStyle = '#e74c3c';
+    ctx.fillText('retry after timeout', (sendX + brokerX)/2, 166);
+
+    // Arrows broker -> table: deliver + redeliver
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(brokerX + 55, 128);
+    ctx.lineTo(tableX - 70, 105);
+    ctx.stroke();
+    ctx.strokeStyle = '#e74c3c';
+    ctx.setLineDash([5, 3]);
+    ctx.beginPath();
+    ctx.moveTo(brokerX + 55, 152);
+    ctx.lineTo(tableX - 70, 175);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.fillText('deliver', brokerX + 95, 110);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('redeliver (ack lost)', brokerX + 105, 178);
+
+    // Events table with 3 identical rows
+    ctx.fillStyle = '#1a5276';
     ctx.font = 'bold 12px system-ui';
-    ctx.textAlign = 'center';
-    ctx.fillText('RESULT: 30 rows', 630, centerY - 30);
-    ctx.font = '10px system-ui';
-    ctx.fillText('(2 × 3 × 5)', 630, centerY - 15);
-    ctx.fillText('Each user', 630, centerY + 5);
-    ctx.fillText('appears 15x', 630, centerY + 18);
+    ctx.fillText('EVENTS TABLE', tableX, 70);
+
+    for (var i = 0; i < 3; i++) {
+        var y = 85 + i * 40;
+        ctx.fillStyle = i === 0 ? 'rgba(39,174,96,0.5)' : 'rgba(231,76,60,0.4)';
+        ctx.fillRect(tableX - 65, y, 130, 30);
+        ctx.strokeStyle = i === 0 ? '#27ae60' : '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(tableX - 65, y, 130, 30);
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = 'bold 10px monospace';
+        ctx.fillText('event_id = e-42', tableX, y + 19);
+    }
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '9px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('real', tableX + 72, 104);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('duplicate', tableX + 72, 144);
+    ctx.fillText('duplicate', tableX + 72, 184);
 
     // Warning
     ctx.fillStyle = '#e74c3c';
     ctx.font = 'bold 11px system-ui';
     ctx.textAlign = 'center';
-    ctx.fillText('COUNT(*) = 30, but only 2 actual users!', w/2, 270);
+    ctx.fillText('COUNT(*) = 3, but only 1 real event — no idempotency key enforced', w/2, 270);
 })();
 
 // Canvas 2: Count inflation from retries
@@ -312,9 +343,9 @@ function setup(id) {
     // Data
     var stages = [
         {label: 'Source', total: 1000, distinct: 1000},
-        {label: 'After\nKafka', total: 1200, distinct: 1000},
-        {label: 'After\nJoin', total: 2400, distinct: 1000},
-        {label: 'After\nWindow', total: 2400, distinct: 1000}
+        {label: 'After Client\nRetries', total: 1100, distinct: 1000},
+        {label: 'After Broker\nRedelivery', total: 1200, distinct: 1000},
+        {label: 'After Backfill\nOverlap', total: 1500, distinct: 1000}
     ];
 
     var barW = 50;
@@ -405,8 +436,8 @@ function setup(id) {
     ctx.fillText('WRONG (with duplicates)', leftCol + colW/2, startY - 10);
 
     var wrongMetrics = [
-        {label: 'Total Users', value: '3,000', color: '#e74c3c'},
-        {label: 'Avg Sessions/User', value: '9.2', color: '#e74c3c'},
+        {label: 'Total Events', value: '10,000', color: '#e74c3c'},
+        {label: 'Conversions', value: '280', color: '#e74c3c'},
         {label: 'Conversion Rate', value: '28%', color: '#e74c3c'}
     ];
 
@@ -433,7 +464,7 @@ function setup(id) {
     ctx.fillStyle = '#e74c3c';
     ctx.font = '10px system-ui';
     ctx.textAlign = 'center';
-    ctx.fillText('Inflated by join fanout', leftCol + colW/2, startY + 3*rowH + 15);
+    ctx.fillText('Inflated by duplicate events', leftCol + colW/2, startY + 3*rowH + 15);
 
     // Right column: Correct (deduplicated)
     ctx.fillStyle = '#27ae60';
@@ -441,8 +472,8 @@ function setup(id) {
     ctx.fillText('CORRECT (deduplicated)', rightCol + colW/2, startY - 10);
 
     var correctMetrics = [
-        {label: 'Total Users', value: '100', color: '#27ae60'},
-        {label: 'Avg Sessions/User', value: '3.0', color: '#27ae60'},
+        {label: 'Total Events', value: '1,000', color: '#27ae60'},
+        {label: 'Conversions', value: '28', color: '#27ae60'},
         {label: 'Conversion Rate', value: '2.8%', color: '#27ae60'}
     ];
 
@@ -469,7 +500,7 @@ function setup(id) {
     ctx.fillStyle = '#27ae60';
     ctx.font = '10px system-ui';
     ctx.textAlign = 'center';
-    ctx.fillText('After SELECT DISTINCT user_id', rightCol + colW/2, startY + 3*rowH + 15);
+    ctx.fillText('After dedup on event_id', rightCol + colW/2, startY + 3*rowH + 15);
 
     // SQL examples
     var sqlY = startY + 3*rowH + 45;
@@ -477,10 +508,10 @@ function setup(id) {
     ctx.fillStyle = '#e74c3c';
     ctx.font = 'bold 11px monospace';
     ctx.textAlign = 'left';
-    ctx.fillText('SELECT COUNT(*) FROM users JOIN sessions', leftCol, sqlY);
+    ctx.fillText('SELECT COUNT(*) FROM events', leftCol, sqlY);
 
     ctx.fillStyle = '#27ae60';
-    ctx.fillText('SELECT COUNT(DISTINCT user_id) FROM ...', rightCol, sqlY);
+    ctx.fillText('SELECT COUNT(DISTINCT event_id) FROM events', rightCol, sqlY);
 
     // Delta annotation
     ctx.strokeStyle = '#e74c3c';
@@ -495,7 +526,7 @@ function setup(id) {
     ctx.fillStyle = '#e74c3c';
     ctx.font = 'bold 11px system-ui';
     ctx.textAlign = 'center';
-    ctx.fillText('30x inflation!', (leftCol + rightCol + colW)/2, startY + 3*rowH + 27);
+    ctx.fillText('10x inflation!', (leftCol + rightCol + colW)/2, startY + 3*rowH + 27);
 
     // Best practice callout
     ctx.fillStyle = '#f8f9fa';
@@ -507,10 +538,10 @@ function setup(id) {
     ctx.fillStyle = '#1a5276';
     ctx.font = 'bold 11px system-ui';
     ctx.textAlign = 'left';
-    ctx.fillText('Best Practice: Profile every join', 75, sqlY + 38);
+    ctx.fillText('Best Practice: Enforce idempotency keys', 75, sqlY + 38);
 
     ctx.font = '10px system-ui';
-    ctx.fillText('Alert if |output| > max(|A|, |B|) × expected_multiplier. Add COUNT(*) vs COUNT(DISTINCT id) to dashboards.', 75, sqlY + 54);
+    ctx.fillText('Unique event_id + upsert at write time. Add COUNT(*) vs COUNT(DISTINCT id) per stage to dashboards.', 75, sqlY + 54);
 })();
 </script>
 

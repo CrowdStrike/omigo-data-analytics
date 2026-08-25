@@ -11,8 +11,6 @@ h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
 h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
 p { margin: 10px 0; color: #333; font-size: 0.95em; }
 .subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
-.nav { margin-bottom: 20px; }
-.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; }
 ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
 li { margin: 4px 0; }
 strong { color: #1a5276; }
@@ -29,82 +27,82 @@ canvas { display: block; margin: 0 auto; }
 <body>
 
 <h1>Elastic Computing / Auto-Scaling</h1>
-<p class="subtitle">Systems that grow and shrink with demand — but the growing takes minutes while the demand spike takes seconds. The data you collect during scale-up events is non-representative: elevated latency, dropped requests, timeout errors, and degraded feature computation all contaminate your pipeline.</p>
+<p class="subtitle">Auto-scaling reacts in minutes while demand spikes in seconds. The non-representative data collected during scaling events — latency spikes, timeouts, degraded features — silently contaminates your pipeline.</p>
 
-<h2>Pitfall 1: Scale-Up Lag — Traffic Arrives Before Capacity</h2>
+<h2>Scale-Up Lag — Traffic Arrives Before Capacity</h2>
 
 <table class="obj-table">
 <tr><td>
 <div class="obj-title">3-5 Minutes to Scale. Spike Lasts 30 Seconds.</div>
 <ul>
-<li><strong>The sequence:</strong> Traffic spike arrives → auto-scaler detects (30s) → provisions VM (60s) → boots OS (30s) → deploys app (60s) → warm-up (30s). Total: 3-5 minutes. The spike was 30 seconds.</li>
-<li><strong>The data impact:</strong> During those 3 minutes: requests queue, timeouts increase, latency spikes 10×. Models that use "response_time" as a feature see corrupted values. Features computed server-side return defaults/nulls because the computation timed out.</li>
-<li><strong>The false signal:</strong> ML model sees: "users who experience high latency have lower conversion." Correct, but the CAUSE is infrastructure, not user behavior. Model learns to use latency as a predictor — which works during normal operation but fails during scaling events (latency is high but conversion should be normal once capacity catches up).</li>
+<li><strong>The sequence:</strong> Detect, provision, boot, deploy, warm up — scaling takes 3-5 minutes while the spike lasts 30 seconds.</li>
+<li><strong>The data impact:</strong> During the lag, latency spikes 10× and timed-out feature computations return defaults/nulls — latency-derived features carry corrupted values.</li>
+<li><strong>The false signal:</strong> The model learns "high latency → low conversion," a correlation caused by infrastructure rather than user behavior, so it misfires during every scaling event.</li>
 </ul>
 </td><td><canvas id="c1" width="720" height="240"></canvas></td></tr>
 </table>
 
-<h2>Pitfall 2: Scale-Down Oscillation — Hysteresis as Noise Generator</h2>
+<h2>Scale-Down Oscillation — Hysteresis as Noise Generator</h2>
 
 <table class="obj-table">
 <tr><td>
 <div class="obj-title">Scale Down → Latency Rises → Scale Up → Latency Drops → Scale Down → Repeat</div>
 <ul>
-<li><strong>The cycle:</strong> Load drops → scale down → reduced capacity → latency rises → health check fails → scale up → load handled → latency drops → scale down → repeat. Oscillating between states.</li>
-<li><strong>The data impact:</strong> Metrics oscillate: latency is 50ms then 500ms then 50ms then 500ms. Time-series models see this as a "pattern" and try to predict it. It's not a pattern — it's a control system artifact. Training on oscillation data teaches the model to expect periodic degradation that shouldn't exist.</li>
-<li><strong>The false seasonality:</strong> Oscillation period happens to align with a time window (e.g., 10-minute cycles). Model learns "every 10 minutes, latency spikes." Deploys. Hysteresis settings change. Pattern disappears. Model predictions wrong.</li>
+<li><strong>The cycle:</strong> Scale down raises latency, which triggers scale up, which lowers latency, which triggers scale down — the system oscillates between states.</li>
+<li><strong>The data impact:</strong> Time-series models read the 50ms/500ms oscillation as a real pattern when it is a control-system artifact.</li>
+<li><strong>The false seasonality:</strong> The model learns "latency spikes every 10 minutes" — then hysteresis settings change, the pattern disappears, and predictions are wrong.</li>
 </ul>
 </td><td><canvas id="c2" width="720" height="240"></canvas></td></tr>
 </table>
 
-<h2>Pitfall 3: Cold Start Penalty — First Request Data Is Garbage</h2>
+<h2>Cold Start Penalty — First Request Data Is Garbage</h2>
 
 <table class="obj-table">
 <tr><td>
 <div class="obj-title">New Instance: First Request Takes 2-10 Seconds. Subsequent: 50ms.</div>
 <ul>
-<li><strong>The problem:</strong> Serverless/container cold start: first request loads code, initializes connections, warms caches. Response time: 2-10 seconds. All subsequent requests: 50ms. User who hits a cold instance has a completely different experience.</li>
-<li><strong>The data contamination:</strong> Your latency distribution is bimodal: 95% at 50ms, 5% at 3000ms. Average: 195ms (meaningless). If you use average latency in features or A/B test metrics, cold starts pollute the signal. A "winning" variant might just have fewer cold starts due to different traffic routing.</li>
-<li><strong>The model serving problem:</strong> ML model runs in a container. Cold start: model weights load from S3 (4 seconds). First prediction: 4.2 seconds. User already left. Feature "model_score" returns NULL for cold-start users → downstream model sees NULL → treats as missing → fallback logic activates. 5% of users always get the fallback experience.</li>
+<li><strong>The problem:</strong> A cold instance serves its first request in 2-10 seconds versus 50ms warm — a completely different user experience.</li>
+<li><strong>The data contamination:</strong> The bimodal latency distribution makes averages meaningless, and a "winning" A/B variant may simply have fewer cold starts.</li>
+<li><strong>The model serving problem:</strong> Cold-start weight loading makes the first prediction arrive after the user left, so ~5% of users always get NULL scores and the fallback experience.</li>
 </ul>
 </td><td><canvas id="c3" width="720" height="240"></canvas></td></tr>
 </table>
 
-<h2>Pitfall 4: Spot Eviction — Computation Interrupted Mid-Pipeline</h2>
+<h2>Spot Eviction — Computation Interrupted Mid-Pipeline</h2>
 
 <table class="obj-table">
 <tr><td>
 <div class="obj-title">2-Minute Warning → Checkpoint → Lose 5 Min of Work → Reschedule</div>
 <ul>
-<li><strong>The scenario:</strong> Training job running on spot instances (70% cheaper). Provider reclaims instance: 2-minute warning. Must checkpoint current state. State is 50GB. Can't transfer 50GB in 2 minutes. Partial checkpoint. Reschedule. Reload from last FULL checkpoint (30 minutes ago). Lost 30 minutes of compute.</li>
-<li><strong>The data pipeline impact:</strong> ETL job running on spot. Evicted mid-JOIN. Partial results written to output table (rows 1-50K of 100K). Downstream job reads the partial table. Aggregates computed on 50% of data. No error — just wrong numbers. Row count check: "expected ~100K, got 50K" — is that an eviction artifact or real data loss? Hard to distinguish.</li>
-<li><strong>The non-reproducibility:</strong> Pipeline ran on spot, got evicted, retried, produced slightly different result (non-deterministic operations like sampling, hash partitioning). Model trained on run A vs run B has different weights. Which one is "correct"? Neither — both are artifacts of infrastructure instability.</li>
+<li><strong>The scenario:</strong> A 2-minute eviction warning can't checkpoint 50GB, so the job restarts from the last full checkpoint and loses 30 minutes of compute.</li>
+<li><strong>The data pipeline impact:</strong> An ETL job evicted mid-JOIN writes partial output that downstream jobs read as complete — wrong aggregates, no error.</li>
+<li><strong>The non-reproducibility:</strong> Eviction-retry runs differ through non-deterministic operations (sampling, hash partitioning), so two "identical" training runs yield different weights.</li>
 </ul>
 </td><td><canvas id="c4" width="720" height="240"></canvas></td></tr>
 </table>
 
-<h2>Pitfall 5: Cost ≠ Utilization — Competing Objectives in Data Collection</h2>
+<h2>Cost ≠ Utilization — Competing Objectives in Data Collection</h2>
 
 <table class="obj-table">
 <tr><td>
 <div class="obj-title">10 Instances at 20% CPU: Expensive but Safe. 2 Instances at 90%: Cheap but Fragile.</div>
 <ul>
-<li><strong>The tradeoff:</strong> High utilization = cost efficient but no headroom. Sudden feature computation request takes 3 seconds instead of 0.3 seconds because CPU is saturated. Data arrives late. Real-time features computed from stale data.</li>
-<li><strong>The data quality issue:</strong> Feature pipeline configured for "real-time" computation. Under high utilization: features computed with 30-second lag instead of 1-second lag. Model trained on 1-second-fresh features, serving gets 30-second-stale features. Training-serving skew from infrastructure pressure.</li>
-<li><strong>The cost-driven data loss:</strong> "Reduce costs by 40%." How: sample incoming events (keep 60%). Or: reduce retention (delete after 7 days instead of 30). Or: reduce compute (run feature pipeline every hour instead of every minute). Each "cost optimization" is a data quality degradation in disguise.</li>
+<li><strong>The tradeoff:</strong> High utilization is cheap but leaves no headroom, so saturated CPUs compute "real-time" features from stale data.</li>
+<li><strong>The data quality issue:</strong> Features computed with 30-second lag under load but 1-second lag in training create training-serving skew from infrastructure pressure alone.</li>
+<li><strong>The cost-driven data loss:</strong> Event sampling, shorter retention, and less frequent pipelines each cut cost — and each is a data quality degradation in disguise.</li>
 </ul>
 </td><td><canvas id="c5" width="720" height="240"></canvas></td></tr>
 </table>
 
-<h2>Pitfall 6: Capacity Planning From Non-Stationary Demand</h2>
+<h2>Capacity Planning From Non-Stationary Demand</h2>
 
 <table class="obj-table">
 <tr><td>
 <div class="obj-title">Last Year's Pattern ≠ This Year's. Until It Suddenly Is Again.</div>
 <ul>
-<li><strong>The problem:</strong> Demand prediction for capacity planning uses historical patterns. Product launch → unprecedented traffic. Viral event → 10× normal. Competitor outage → 3× refugee traffic. None of these were in training data.</li>
-<li><strong>Under-provisioning:</strong> Data collection system overwhelmed → drops events → training data has gaps during high-traffic periods. Model never sees peak-load behavior. Deployed model fails precisely during peak load (when it matters most).</li>
-<li><strong>Over-provisioning:</strong> Idle capacity costs money. Pressure to reduce → right-sizing → barely enough for normal → fails at first unexpected spike. Cycle repeats every quarter.</li>
+<li><strong>The problem:</strong> Capacity planning extrapolates history, but product launches, viral events, and competitor outages were never in the training data.</li>
+<li><strong>Under-provisioning:</strong> An overwhelmed collection system drops events, so training data has gaps exactly during peak load — where the model matters most.</li>
+<li><strong>Over-provisioning:</strong> Idle capacity invites right-sizing down to "barely enough," which fails at the first unexpected spike — the cycle repeats every quarter.</li>
 </ul>
 </td><td><canvas id="c6" width="720" height="240"></canvas></td></tr>
 </table>

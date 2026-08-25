@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ETL Basics</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>ETL Basics</h1>
+<p class="subtitle">Extract, Transform, Load — copy raw data out, clean it up, store it where analysts work</p>
+
+<div class="card-section">
+    <h2>One Night with the Orders Table</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">running example</span></div>
+                <ul>
+                    <li><b>The setup</b> — the app writes orders all day; analysts want them in the warehouse by morning</li>
+                    <li><b>Extract</b> — at 2:00am a job copies yesterday's 12,480 order rows out of the app database</li>
+                    <li><b>Transform</b> — the copy is cleaned (test orders dropped) and joined with the customers table</li>
+                    <li><b>Load</b> — the finished 12,448 rows are written into the warehouse table <b>orders_daily</b></li>
+                    <li><b>Same recipe nightly</b> — E, then T, then L: one day of data, once per day</li>
+                </ul>
+                <p class="example">Monday 9am: an analyst queries the warehouse and sees Sunday's 12,448 cleaned orders — the app database never felt a thing.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> ETL is just move, clean, store. Extract copies raw data out, Transform reshapes it, Load writes the result where analysis happens.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Where 32 Rows Went: The Transform by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">worked example</span><span class="tag blue">core idea</span></div>
+                <ul>
+                    <li><b>Start</b> — the extract lands 12,480 raw rows at 2:14am</li>
+                    <li><b>Drop test orders</b> — 30 rows from QA's fake accounts are removed: 12,450 left</li>
+                    <li><b>Join customers</b> — each order looks up its customer's name and city</li>
+                    <li><b>Quarantine</b> — 2 orders point to customer ids that don't exist; they go to a review table</li>
+                    <li><b>Load</b> — the remaining 12,448 rows are written to the warehouse at 2:31am</li>
+                </ul>
+                <p class="example">Order 88412 carried customer_id 99340 — no such customer — so it waits in quarantine instead of polluting the morning report.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> every transform is countable — rows in, rows dropped, rows out — and the counts must add up: 12,480 &minus; 30 &minus; 2 = 12,448.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why the Warehouse Copy Exists at All</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag green">rule of thumb</span></div>
+                <ul>
+                    <li><b>Heavy queries</b> — a year-of-revenue scan would slow the live database customers use</li>
+                    <li><b>Cleaned once</b> — every analyst gets the same de-tested, customer-joined rows</li>
+                    <li><b>History kept</b> — the app updates and deletes rows; the warehouse keeps each night's record</li>
+                    <li><b>Joined ahead of time</b> — orders already carry customer city, so reports skip the join</li>
+                    <li><b>One place to fix</b> — a cleaning bug is fixed in the pipeline once, not in fifty notebooks</li>
+                </ul>
+                <p class="example">The "revenue by city" dashboard is a one-table query because the T step already joined city on.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> a data scientist rarely touches the raw source — the warehouse table IS the dataset, so knowing how E, T, L built it tells you what you can trust.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>ETL or ELT? Same Letters, Different Order</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common confusion</span><span class="tag orange">variant</span></div>
+                <ul>
+                    <li><b>ELT in one line</b> — load the raw rows into the warehouse first, then clean them there with SQL</li>
+                    <li><b>Same three steps</b> — only the location of the cleaning changes, not the work</li>
+                    <li><b>Modern default</b> — cheap warehouse storage made "load raw, clean inside" common</li>
+                    <li><b>Raw layer bonus</b> — ELT keeps the untouched 12,480 rows, so a bad transform can be redone</li>
+                    <li><b>The confusion</b> — people debate ETL vs ELT like rival tools; it's just where T runs</li>
+                </ul>
+                <p class="example">In ELT, the same 30 test orders are dropped by a SQL job inside the warehouse instead of a script outside it.</p>
+                <div class="key-point">
+                    <strong>Rule of thumb:</strong> don't memorize the acronym — ask "where does the cleaning happen?" Before the load: ETL. After: ELT.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+function arrow(ctx, x1, y1, x2, y2, color) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var ang = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 9 * Math.cos(ang - 0.4), y2 - 9 * Math.sin(ang - 0.4));
+    ctx.lineTo(x2 - 9 * Math.cos(ang + 0.4), y2 - 9 * Math.sin(ang + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+function cylinder(ctx, x, y, w, h, fill, stroke) {
+    var ry = 10;
+    ctx.fillStyle = fill; ctx.strokeStyle = stroke; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(x + w / 2, y + ry, w / 2, ry, 0, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x, y + ry); ctx.lineTo(x, y + h - ry);
+    ctx.ellipse(x + w / 2, y + h - ry, w / 2, ry, 0, Math.PI, 0, true);
+    ctx.lineTo(x + w, y + ry);
+    ctx.fill(); ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(x + w / 2, y + ry, w / 2, ry, 0, 0, Math.PI); ctx.stroke();
+}
+
+// c1: The nightly E -> T -> L pipeline with row counts and timestamps
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 16px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Night: 12,480 Raw Rows In, 12,448 Clean Rows Out', w / 2, 26);
+
+    var midY = 140;
+
+    // source cylinder
+    cylinder(ctx, 20, 95, 90, 90, 'rgba(42,120,214,0.12)', P.blue);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('app database', 65, 138);
+    ctx.font = '12px system-ui';
+    ctx.fillText('orders', 65, 154);
+
+    // stage boxes
+    var stages = [
+        { x: 150, label: 'EXTRACT', l2: '2:00am', l3: 'copy 12,480 rows', c: P.green },
+        { x: 315, label: 'TRANSFORM', l2: 'drop 30 test rows', l3: 'join customers', c: P.orange },
+        { x: 480, label: 'LOAD', l2: '2:31am', l3: 'write 12,448 rows', c: P.violet }
+    ];
+    var bw = 130, bh = 76, by = midY - bh / 2;
+    for (var i = 0; i < 3; i++) {
+        var st = stages[i];
+        ctx.fillStyle = '#f8f9fa'; ctx.strokeStyle = st.c; ctx.lineWidth = 2;
+        ctx.fillRect(st.x, by, bw, bh); ctx.strokeRect(st.x, by, bw, bh);
+        ctx.fillStyle = st.c; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(st.label, st.x + bw / 2, by + 22);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+        ctx.fillText(st.l2, st.x + bw / 2, by + 42);
+        ctx.fillText(st.l3, st.x + bw / 2, by + 60);
+    }
+    arrow(ctx, 112, midY, 148, midY, P.mute);
+    arrow(ctx, 282, midY, 313, midY, P.mute);
+    arrow(ctx, 447, midY, 478, midY, P.mute);
+    arrow(ctx, 612, midY, 632, midY, P.mute);
+
+    // destination cylinder
+    cylinder(ctx, 634, 95, 76, 90, 'rgba(0,131,0,0.10)', P.green);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('warehouse', 672, 136);
+    ctx.font = '12px system-ui';
+    ctx.fillText('orders_daily', 672, 152);
+
+    // row counts along the flow
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'center';
+    ctx.fillText('12,480 raw', 130, midY - 48);
+    ctx.fillText('12,448 clean', 630, midY - 48);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('32 rows removed on the way: 30 test orders + 2 sent to quarantine', w / 2, 260);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('the same three steps run every night at 2:00am (illustrative counts)', w / 2, 282);
+})();
+
+// c2: Row-count waterfall through the transform
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var pad = { top: 56, bottom: 62, left: 78, right: 24 };
+    var cw = w - pad.left - pad.right, ch = h - pad.top - pad.bottom;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Row Counts Must Add Up: 12,480 − 30 − 2 = 12,448', w / 2, 26);
+
+    var yMin = 12400, yMax = 12500;
+    function Y(v) { return pad.top + ch - (v - yMin) / (yMax - yMin) * ch; }
+
+    // axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad.left, pad.top); ctx.lineTo(pad.left, pad.top + ch); ctx.lineTo(pad.left + cw, pad.top + ch); ctx.stroke();
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'right';
+    [12400, 12440, 12480].forEach(function(v) {
+        ctx.fillText(v.toLocaleString(), pad.left - 8, Y(v) + 4);
+        ctx.strokeStyle = P.grid;
+        ctx.beginPath(); ctx.moveTo(pad.left, Y(v)); ctx.lineTo(pad.left + cw, Y(v)); ctx.stroke();
+    });
+
+    var steps = [
+        { label: 'extracted 2:14am', v: 12480, c: P.blue },
+        { label: 'drop 30 test rows', v: 12450, c: P.orange },
+        { label: 'quarantine 2 rows', v: 12448, c: P.orange },
+        { label: 'loaded 2:31am', v: 12448, c: P.green }
+    ];
+    var barW = 108, gap = (cw - 4 * barW) / 4;
+    for (var i = 0; i < 4; i++) {
+        var x = pad.left + gap / 2 + i * (barW + gap);
+        var st = steps[i];
+        ctx.fillStyle = st.c;
+        ctx.globalAlpha = 0.35; ctx.fillRect(x, Y(st.v), barW, pad.top + ch - Y(st.v)); ctx.globalAlpha = 1;
+        ctx.strokeStyle = st.c; ctx.lineWidth = 2; ctx.strokeRect(x, Y(st.v), barW, pad.top + ch - Y(st.v));
+        ctx.fillStyle = P.text; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(st.v.toLocaleString(), x + barW / 2, Y(st.v) - 8);
+        ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+        ctx.fillText(st.label, x + barW / 2, pad.top + ch + 18);
+        // step connector with drop label
+        if (i > 0) {
+            var prev = steps[i - 1];
+            var px = pad.left + gap / 2 + (i - 1) * (barW + gap) + barW;
+            ctx.strokeStyle = P.magenta; ctx.setLineDash([4, 3]); ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(px, Y(prev.v)); ctx.lineTo(x, Y(prev.v)); ctx.lineTo(x, Y(st.v)); ctx.stroke();
+            ctx.setLineDash([]);
+            if (st.v < prev.v) {
+                ctx.fillStyle = P.magenta; ctx.font = 'bold 12px system-ui';
+                ctx.fillText('−' + (prev.v - st.v), (px + x) / 2, Y(prev.v) - 8);
+            }
+        }
+    }
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('if the counts don’t reconcile, the transform is losing rows silently', w / 2, pad.top + ch + 42);
+})();
+
+// c3: Clean once in the pipeline, use everywhere downstream
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Clean Once, Use Everywhere — and Keep Heavy Queries Off the App', w / 2, 26);
+
+    // divider
+    ctx.strokeStyle = '#bdc3c7'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(300, 42); ctx.lineTo(300, h - 14); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Left: app db with heavy query crossed out
+    cylinder(ctx, 90, 70, 110, 92, 'rgba(42,120,214,0.12)', P.blue);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('app database', 145, 112);
+    ctx.font = '12px system-ui';
+    ctx.fillText('serving customers', 145, 130);
+
+    ctx.strokeStyle = P.magenta; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(145, 190); ctx.lineTo(145, 235); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.strokeStyle = P.magenta; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(133, 200); ctx.lineTo(157, 224); ctx.moveTo(157, 200); ctx.lineTo(133, 224); ctx.stroke();
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('"scan a year of revenue"', 145, 256);
+    ctx.fillText('not here — it slows checkouts', 145, 274);
+
+    // Right: warehouse feeding three consumers
+    ctx.fillStyle = '#f8f9fa'; ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.fillRect(330, 110, 150, 62); ctx.strokeRect(330, 110, 150, 62);
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('orders_daily', 405, 136);
+    ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+    ctx.fillText('12,448 rows/night', 405, 156);
+
+    var consumers = [
+        { y: 70, label: 'city dashboard', c: P.violet },
+        { y: 141, label: 'analyst notebook', c: P.aqua },
+        { y: 212, label: 'churn model', c: P.yellow }
+    ];
+    for (var i = 0; i < 3; i++) {
+        var cns = consumers[i];
+        ctx.fillStyle = '#f8f9fa'; ctx.strokeStyle = cns.c; ctx.lineWidth = 2;
+        ctx.fillRect(560, cns.y - 20, 140, 40); ctx.strokeRect(560, cns.y - 20, 140, 40);
+        ctx.fillStyle = cns.c; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(cns.label, 630, cns.y + 4);
+        arrow(ctx, 482, 141, 556, cns.y, P.mute);
+    }
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one cleaned table, three consumers — all seeing the same rows', 505, 274);
+})();
+
+// c4: ETL vs ELT — where the transform runs
+(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Work, Different Place: Where Does T Happen?', w / 2, 26);
+
+    function box(x, y, bw, bh, label, sub, color) {
+        ctx.fillStyle = '#f8f9fa'; ctx.strokeStyle = color; ctx.lineWidth = 2;
+        ctx.fillRect(x, y, bw, bh); ctx.strokeRect(x, y, bw, bh);
+        ctx.fillStyle = color; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, x + bw / 2, y + (sub ? 20 : bh / 2 + 4));
+        if (sub) { ctx.fillStyle = P.text; ctx.font = '12px system-ui'; ctx.fillText(sub, x + bw / 2, y + 38); }
+    }
+
+    // ETL row
+    var y1 = 62;
+    ctx.fillStyle = P.blue; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('ETL', 24, y1 + 30);
+    box(80, y1, 110, 48, 'E: extract', '12,480 rows', P.green);
+    arrow(ctx, 192, y1 + 24, 218, y1 + 24, P.mute);
+    box(220, y1, 130, 48, 'T: clean outside', '− 32 rows', P.orange);
+    arrow(ctx, 352, y1 + 24, 378, y1 + 24, P.mute);
+    box(380, y1, 110, 48, 'L: load', '12,448 rows', P.violet);
+    // warehouse holds only clean
+    ctx.strokeStyle = P.mute; ctx.setLineDash([5, 4]);
+    ctx.strokeRect(520, y1 - 8, 180, 64); ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('warehouse holds', 610, y1 + 16);
+    ctx.fillText('clean 12,448 only', 610, y1 + 36);
+
+    // ELT row
+    var y2 = 168;
+    ctx.fillStyle = P.blue; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('ELT', 24, y2 + 30);
+    box(80, y2, 110, 48, 'E: extract', '12,480 rows', P.green);
+    arrow(ctx, 192, y2 + 24, 218, y2 + 24, P.mute);
+    box(220, y2, 130, 48, 'L: load raw', '12,480 rows', P.violet);
+    arrow(ctx, 352, y2 + 24, 378, y2 + 24, P.mute);
+    box(380, y2, 130, 48, 'T: SQL inside', '− 32 rows', P.orange);
+    ctx.strokeStyle = P.mute; ctx.setLineDash([5, 4]);
+    ctx.strokeRect(540, y2 - 8, 168, 64); ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('warehouse holds raw', 624, y2 + 16);
+    ctx.fillText('12,480 + clean 12,448', 624, y2 + 36);
+
+    ctx.fillStyle = P.aqua; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('ELT keeps the raw 12,480 rows — a bad transform can simply be rerun', w / 2, 262);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('the cleaning work is identical in both; only its address changes', w / 2, 284);
+})();
+</script>
+
+</body>
+</html>

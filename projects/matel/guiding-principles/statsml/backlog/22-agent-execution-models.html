@@ -1,135 +1,225 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Continuous Monitoring Agent Execution Models — Discussion Backlog</title>
-<style>
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #fff; color: #2c3e50; line-height: 1.6; }
-h1 { color: #1a5276; border-bottom: 3px solid #2980b9; padding-bottom: 10px; }
-h2 { color: #1a5276; margin-top: 0; }
-.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-.obj-table td { padding: 20px; vertical-align: top; border: 1px solid #2980b9; }
-.obj-table td:first-child { width: 45%; }
-.obj-table td:last-child { width: 55%; text-align: center; }
-.obj-title { color: #1a5276; font-size: 1.2em; font-weight: bold; margin-bottom: 10px; }
-ul { margin: 10px 0; padding-left: 20px; }
-li { margin-bottom: 6px; }
-strong { color: #1a5276; }
-code { background: #e8f0f8; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; color: #1a5276; }
-.questions { background: #fff8e1; border-left: 3px solid #f39c12; padding: 10px 15px; margin: 10px 0; font-size: 0.9em; }
-canvas { display: block; margin: 8px auto; max-width: 100%; }
-.nav-link { display: inline-block; margin: 20px 0; color: #2980b9; text-decoration: none; font-weight: bold; }
-.nav-link:hover { text-decoration: underline; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Continuous Monitoring Agent Execution Models &mdash; Discussion Backlog</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #fff;
+            color: #2c3e50;
+            padding: 40px;
+            line-height: 1.6;
+        }
+        h1 {
+            font-size: 2rem;
+            color: #1a5276;
+            margin-bottom: 8px;
+            border-bottom: 2px solid #2980b9;
+            padding-bottom: 8px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 32px;
+            font-size: 0.95rem;
+        }
+        .intro {
+            background: #f0f4f8;
+            border-left: 3px solid #2980b9;
+            padding: 8px 12px;
+            margin-bottom: 32px;
+            font-size: 0.9rem;
+        }
+        .lang-section {
+            margin-bottom: 40px;
+        }
+        .lang-section h2 {
+            font-size: 1.3rem;
+            color: #1a5276;
+            margin-bottom: 12px;
+            border-bottom: 2px solid #2980b9;
+            padding-bottom: 4px;
+        }
+        table.layout {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+        }
+        table.layout td {
+            vertical-align: top;
+            padding: 12px;
+        }
+        table.layout td.text-col {
+            width: 45%;
+        }
+        table.layout td.viz-col {
+            width: 55%;
+        }
+        canvas {
+            width: 100%;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+        }
+        .key-point {
+            background: #f8f9fa;
+            border-left: 3px solid #e74c3c;
+            padding: 8px 12px;
+            margin-top: 12px;
+            font-size: 0.9rem;
+        }
+        .example {
+            font-style: italic;
+            color: #555;
+            margin-top: 8px;
+            font-size: 0.9rem;
+        }
+        ul {
+            margin: 8px 0 8px 20px;
+            font-size: 0.92rem;
+        }
+        li { margin-bottom: 4px; }
+        pre {
+            background: #f4f4f4;
+            padding: 12px 16px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            margin-bottom: 12px;
+        }
+        code {
+            background: #e8f0f8;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.85em;
+            color: #1a5276;
+        }
+    </style>
 </head>
 <body>
+
 <h1>Continuous Monitoring Agent Execution Models</h1>
-<p>Statistical profiling isn't a one-shot batch job — it's a continuous monitoring process. Data arrives, distributions shift, models degrade, alerts fire. The execution model determines how work gets distributed across agents that watch for changes, re-profile features, and trigger downstream actions.</p>
+<p class="subtitle">How work gets distributed across agents that watch, re-profile, and trigger</p>
 
-<table class="obj-table">
-<tr>
-<td>
-<div class="obj-title">Execution Model A: File-Polling Agents</div>
-<p>Each agent independently polls the same input directory/file for new work. Simplest model — zero coordination infrastructure.</p>
-<ul>
-<li><strong>How it works:</strong> Agents watch a shared filesystem path (S3 prefix, directory). When new data files appear, each agent picks one up, processes it, writes results</li>
-<li><strong>Coordination:</strong> File-level locking or rename-on-claim (<code>input.csv</code> → <code>input.csv.processing</code>). No central coordinator</li>
-<li><strong>Advantages:</strong> Dead simple. No message broker. No scheduler. Works with any filesystem. Easy to debug — just look at the files</li>
-<li><strong>Disadvantages:</strong> Race conditions on claim. No priority ordering. No backpressure — if agents are slow, files pile up with no visibility. No retry semantics without extra logic</li>
-<li><strong>Failure mode:</strong> Agent dies mid-processing → file stuck in "processing" state forever. Need TTL-based recovery or heartbeat files</li>
-<li><strong>Best for:</strong> Small scale (< 10 agents), simple pipelines, batch-oriented work where latency doesn't matter</li>
-</ul>
-</td>
-<td>
-<canvas id="c1" width="720" height="280"></canvas>
-</td>
-</tr>
-</table>
+<div class="intro">Statistical profiling isn't a one-shot batch job &mdash; it's a continuous monitoring process. Data arrives, distributions shift, models degrade, alerts fire. The execution model determines how work gets distributed across agents that watch for changes, re-profile features, and trigger downstream actions.</div>
 
-<table class="obj-table">
-<tr>
-<td>
-<div class="obj-title">Execution Model B: Database Task Queue + Scheduler</div>
-<p>A central database holds all pending tasks. A scheduler assigns tasks to agents based on availability, priority, and affinity.</p>
-<ul>
-<li><strong>How it works:</strong> Tasks inserted into DB table with status (pending/assigned/running/done/failed). Scheduler queries for pending tasks, assigns to free agents via row lock + status update</li>
-<li><strong>Coordination:</strong> Centralized — scheduler has global view. Can implement priority queues, fair scheduling, affinity (agent A always handles feature X)</li>
-<li><strong>Advantages:</strong> Full visibility (query DB for status). Priority ordering. Retry logic built-in (failed → pending after N attempts). Exactly-once semantics via DB transactions. Rich scheduling policies</li>
-<li><strong>Disadvantages:</strong> Scheduler is single point of failure. DB becomes bottleneck at high throughput. More infrastructure (DB + scheduler service). Polling from scheduler adds latency</li>
-<li><strong>Failure mode:</strong> Scheduler dies → no new assignments (but running tasks complete). DB locks contention at scale. Need lease/heartbeat to detect dead agents holding tasks</li>
-<li><strong>Scaling:</strong> Works well to ~100 agents. Beyond that, DB write contention becomes real. Can shard by feature/dataset</li>
-<li><strong>Best for:</strong> Medium scale, need for visibility/debugging, complex scheduling policies, regulated environments needing audit trail</li>
-</ul>
-</td>
-<td>
-<canvas id="c2" width="720" height="280"></canvas>
-</td>
-</tr>
-</table>
+<!-- Section 1: File-Polling Agents -->
+<div class="lang-section">
+    <h2>1. Execution Model A: File-Polling Agents</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Each agent independently polls the same input directory/file for new work. Simplest model &mdash; zero coordination infrastructure.</p>
+                <ul>
+                    <li><strong>How it works:</strong> Agents watch a shared filesystem path (S3 prefix, directory). When new data files appear, each agent picks one up, processes it, writes results</li>
+                    <li><strong>Coordination:</strong> File-level locking or rename-on-claim (<code>input.csv</code> &rarr; <code>input.csv.processing</code>). No central coordinator</li>
+                    <li><strong>Advantages:</strong> Dead simple. No message broker. No scheduler. Works with any filesystem. Easy to debug &mdash; just look at the files</li>
+                    <li><strong>Disadvantages:</strong> Race conditions on claim. No priority ordering. No backpressure &mdash; if agents are slow, files pile up with no visibility. No retry semantics without extra logic</li>
+                    <li><strong>Failure mode:</strong> Agent dies mid-processing &rarr; file stuck in "processing" state forever. Need TTL-based recovery or heartbeat files</li>
+                    <li><strong>Best for:</strong> Small scale (&lt; 10 agents), simple pipelines, batch-oriented work where latency doesn't matter</li>
+                </ul>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
 
-<table class="obj-table">
-<tr>
-<td>
-<div class="obj-title">Execution Model C: Message Bus (Competing Consumers)</div>
-<p>Tasks published to a message queue. Agents subscribe as competing consumers — when free, pull next message, process it, acknowledge (deletes from queue).</p>
-<ul>
-<li><strong>How it works:</strong> Producer pushes profiling tasks to queue (Kafka, RabbitMQ, SQS, Redis Streams). Agents pull when ready. Ack on completion removes message. No-ack after timeout → message redelivered</li>
-<li><strong>Coordination:</strong> Queue handles distribution. No scheduler needed. Agents are self-scheduling — pull only when capacity exists (natural backpressure)</li>
-<li><strong>Advantages:</strong> Scales horizontally — add agents, they auto-join. Built-in retry (visibility timeout). Backpressure native. Decoupled producers/consumers. High throughput. No single point of failure (clustered brokers)</li>
-<li><strong>Disadvantages:</strong> At-least-once delivery (must handle duplicates). Message ordering not guaranteed across consumers. No global priority without multiple queues. Harder to get "status of task X" (message is gone once consumed)</li>
-<li><strong>Failure mode:</strong> Agent dies before ack → message redelivered (good). Poison messages that always fail → dead letter queue. Broker overload if consumers too slow</li>
-<li><strong>Variants:</strong>
-    <ul>
-        <li><strong>Single queue:</strong> FIFO, all agents equal. Simple but no priority</li>
-        <li><strong>Priority queues:</strong> Multiple queues (high/medium/low). Agents drain high first</li>
-        <li><strong>Topic-based:</strong> Route by feature type or dataset. Specialized agents per topic</li>
-        <li><strong>Stream with consumer groups:</strong> Kafka-style — messages persist, replayable, exactly-once with transactions</li>
-    </ul>
-</li>
-<li><strong>Best for:</strong> Large scale (100+ agents), high throughput, event-driven architectures, cloud-native environments</li>
-</ul>
-</td>
-<td>
-<canvas id="c3" width="720" height="280"></canvas>
-</td>
-</tr>
-</table>
+<!-- Section 2: Database Task Queue + Scheduler -->
+<div class="lang-section">
+    <h2>2. Execution Model B: Database Task Queue + Scheduler</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>A central database holds all pending tasks. A scheduler assigns tasks to agents based on availability, priority, and affinity.</p>
+                <ul>
+                    <li><strong>How it works:</strong> Tasks inserted into DB table with status (pending/assigned/running/done/failed). Scheduler queries for pending tasks, assigns to free agents via row lock + status update</li>
+                    <li><strong>Coordination:</strong> Centralized &mdash; scheduler has global view. Can implement priority queues, fair scheduling, affinity (agent A always handles feature X)</li>
+                    <li><strong>Advantages:</strong> Full visibility (query DB for status). Priority ordering. Retry logic built-in (failed &rarr; pending after N attempts). Exactly-once semantics via DB transactions. Rich scheduling policies</li>
+                    <li><strong>Disadvantages:</strong> Scheduler is single point of failure. DB becomes bottleneck at high throughput. More infrastructure (DB + scheduler service). Polling from scheduler adds latency</li>
+                    <li><strong>Failure mode:</strong> Scheduler dies &rarr; no new assignments (but running tasks complete). DB locks contention at scale. Need lease/heartbeat to detect dead agents holding tasks</li>
+                    <li><strong>Scaling:</strong> Works well to ~100 agents. Beyond that, DB write contention becomes real. Can shard by feature/dataset</li>
+                    <li><strong>Best for:</strong> Medium scale, need for visibility/debugging, complex scheduling policies, regulated environments needing audit trail</li>
+                </ul>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
 
-<table class="obj-table">
-<tr>
-<td>
-<div class="obj-title">Comparison &amp; Hybrid Approaches</div>
-<p>No single model fits all scenarios. The right choice depends on scale, latency requirements, failure tolerance, and operational complexity budget.</p>
-<ul>
-<li><strong>Hybrid: DB + Message Bus:</strong> DB for task metadata and status tracking. Message bus for work distribution. Best of both — visibility of DB, throughput of queue. Tasks created in DB, events pushed to queue, agents update DB on completion</li>
-<li><strong>Hybrid: File + Message:</strong> Large data stays on filesystem (S3/GCS). Queue carries lightweight task descriptors (pointers to files). Agents pull descriptor, fetch data, process, write results back to FS</li>
-<li><strong>Scale transitions:</strong> Start with file-polling (prototype). Graduate to DB+scheduler (production). Evolve to message bus (scale). Each transition preserves the task semantics, changes only the distribution mechanism</li>
-</ul>
-<p><strong>Key dimensions for choosing:</strong></p>
-<ul>
-<li><strong>Throughput:</strong> File < DB < Message Bus</li>
-<li><strong>Visibility:</strong> DB > File > Message Bus</li>
-<li><strong>Complexity:</strong> File < DB < Message Bus</li>
-<li><strong>Fault tolerance:</strong> Message Bus > DB > File</li>
-<li><strong>Latency:</strong> Message Bus (push) < DB (poll interval) < File (scan interval)</li>
-</ul>
-<p><strong>For our pipeline specifically:</strong></p>
-<ul>
-<li>Monitoring agents watch for distribution drift (KS test between windows)</li>
-<li>Shape reclassification triggered when drift exceeds threshold</li>
-<li>Enrichment recalculation after shape change or new data window</li>
-<li>Cascade of dependent re-computations (shape change → bucket change → enrichment change → verdict change)</li>
-<li>Need: idempotent re-profiling, dependency-aware ordering, stale-result eviction</li>
-</ul>
-<div class="questions"><strong>Key questions:</strong> (1) What's the expected throughput — features per minute? (2) Do agents specialize (one per feature) or generalize (any agent handles any feature)? (3) How to handle cascading invalidation — one shape change triggers 5 downstream re-computations? (4) Should monitoring be continuous (streaming) or periodic (cron-like)? (5) What's the acceptable staleness — can a profile be 5 minutes old? 1 hour? (6) How does this interact with the lineage system (idea 18) — does each agent execution create a lineage record? (7) For the DB model — Postgres, Redis, or something domain-specific? (8) Cost model — always-on agents vs scale-to-zero serverless?</div>
-</td>
-<td>
-<canvas id="c4" width="720" height="300"></canvas>
-<canvas id="c5" width="720" height="280"></canvas>
-</td>
-</tr>
-</table>
+<!-- Section 3: Message Bus -->
+<div class="lang-section">
+    <h2>3. Execution Model C: Message Bus (Competing Consumers)</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Tasks published to a message queue. Agents subscribe as competing consumers &mdash; when free, pull next message, process it, acknowledge (deletes from queue).</p>
+                <ul>
+                    <li><strong>How it works:</strong> Producer pushes profiling tasks to queue (Kafka, RabbitMQ, SQS, Redis Streams). Agents pull when ready. Ack on completion removes message. No-ack after timeout &rarr; message redelivered</li>
+                    <li><strong>Coordination:</strong> Queue handles distribution. No scheduler needed. Agents are self-scheduling &mdash; pull only when capacity exists (natural backpressure)</li>
+                    <li><strong>Advantages:</strong> Scales horizontally &mdash; add agents, they auto-join. Built-in retry (visibility timeout). Backpressure native. Decoupled producers/consumers. High throughput. No single point of failure (clustered brokers)</li>
+                    <li><strong>Disadvantages:</strong> At-least-once delivery (must handle duplicates). Message ordering not guaranteed across consumers. No global priority without multiple queues. Harder to get "status of task X" (message is gone once consumed)</li>
+                    <li><strong>Failure mode:</strong> Agent dies before ack &rarr; message redelivered (good). Poison messages that always fail &rarr; dead letter queue. Broker overload if consumers too slow</li>
+                    <li><strong>Variants:</strong>
+                        <ul>
+                            <li><strong>Single queue:</strong> FIFO, all agents equal. Simple but no priority</li>
+                            <li><strong>Priority queues:</strong> Multiple queues (high/medium/low). Agents drain high first</li>
+                            <li><strong>Topic-based:</strong> Route by feature type or dataset. Specialized agents per topic</li>
+                            <li><strong>Stream with consumer groups:</strong> Kafka-style &mdash; messages persist, replayable, exactly-once with transactions</li>
+                        </ul>
+                    </li>
+                    <li><strong>Best for:</strong> Large scale (100+ agents), high throughput, event-driven architectures, cloud-native environments</li>
+                </ul>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<!-- Section 4: Comparison & Hybrid Approaches -->
+<div class="lang-section">
+    <h2>4. Comparison &amp; Hybrid Approaches</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>No single model fits all scenarios. The right choice depends on scale, latency requirements, failure tolerance, and operational complexity budget.</p>
+                <ul>
+                    <li><strong>Hybrid: DB + Message Bus:</strong> DB for task metadata and status tracking. Message bus for work distribution. Best of both &mdash; visibility of DB, throughput of queue. Tasks created in DB, events pushed to queue, agents update DB on completion</li>
+                    <li><strong>Hybrid: File + Message:</strong> Large data stays on filesystem (S3/GCS). Queue carries lightweight task descriptors (pointers to files). Agents pull descriptor, fetch data, process, write results back to FS</li>
+                    <li><strong>Scale transitions:</strong> Start with file-polling (prototype). Graduate to DB+scheduler (production). Evolve to message bus (scale). Each transition preserves the task semantics, changes only the distribution mechanism</li>
+                </ul>
+                <p><strong>Key dimensions for choosing:</strong></p>
+                <ul>
+                    <li><strong>Throughput:</strong> File &lt; DB &lt; Message Bus</li>
+                    <li><strong>Visibility:</strong> DB &gt; File &gt; Message Bus</li>
+                    <li><strong>Complexity:</strong> File &lt; DB &lt; Message Bus</li>
+                    <li><strong>Fault tolerance:</strong> Message Bus &gt; DB &gt; File</li>
+                    <li><strong>Latency:</strong> Message Bus (push) &lt; DB (poll interval) &lt; File (scan interval)</li>
+                </ul>
+                <p><strong>For our pipeline specifically:</strong></p>
+                <ul>
+                    <li>Monitoring agents watch for distribution drift (KS test between windows)</li>
+                    <li>Shape reclassification triggered when drift exceeds threshold</li>
+                    <li>Enrichment recalculation after shape change or new data window</li>
+                    <li>Cascade of dependent re-computations (shape change &rarr; bucket change &rarr; enrichment change &rarr; verdict change)</li>
+                    <li>Need: idempotent re-profiling, dependency-aware ordering, stale-result eviction</li>
+                </ul>
+                <div class="key-point"><strong>Key questions:</strong> (1) What's the expected throughput &mdash; features per minute? (2) Do agents specialize (one per feature) or generalize (any agent handles any feature)? (3) How to handle cascading invalidation &mdash; one shape change triggers 5 downstream re-computations? (4) Should monitoring be continuous (streaming) or periodic (cron-like)? (5) What's the acceptable staleness &mdash; can a profile be 5 minutes old? 1 hour? (6) How does this interact with the lineage system (idea 18) &mdash; does each agent execution create a lineage record? (7) For the DB model &mdash; Postgres, Redis, or something domain-specific? (8) Cost model &mdash; always-on agents vs scale-to-zero serverless?</div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+                <canvas id="c5" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
 
 <script>
 var dpr = window.devicePixelRatio || 1;
@@ -137,7 +227,6 @@ function setupCanvas(id) {
     var c = document.getElementById(id);
     var w = c.width, h = c.height;
     c.width = w * dpr; c.height = h * dpr;
-    c.style.width = w + 'px'; c.style.height = h + 'px';
     var ctx = c.getContext('2d');
     ctx.scale(dpr, dpr);
     return {ctx: ctx, w: w, h: h};

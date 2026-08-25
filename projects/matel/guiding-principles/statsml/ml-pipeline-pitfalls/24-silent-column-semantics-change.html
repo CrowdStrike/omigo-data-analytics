@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Silent Column Semantics Change</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Silent Column Semantics Change</h1>
+<p class="subtitle">Column name stays the same but meaning or encoding changes over time</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">semantics</span></div>
+                <ul>
+                    <li><b>Same name, new meaning</b> — upstream changes redefine a column without renaming it</li>
+                    <li><b>Definition change</b> — a revenue column switches from gross to net, measuring a new quantity</li>
+                    <li><b>Encoding change</b> — country codes move from ISO-2 to ISO-3, making every category unseen</li>
+                    <li><b>Type change</b> — a boolean flips from 1/0 integers to true/false strings, breaking numerics</li>
+                    <li><b>Timezone change</b> — timestamps shift from UTC to local, moving every time-derived feature</li>
+                </ul>
+                <p class="example">Upstream switches "days_active" from calendar to business days, and the churn model underestimates activity by roughly 28%.</p>
+                <div class="key-point">
+                    <strong>Impact:</strong> The column still exists and holds plausible values, so predictions go wrong without any error being raised.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">contracts</span></div>
+                <ul>
+                    <li><b>Definitions drift</b> — teams rename columns rarely but change their meanings frequently</li>
+                    <li><b>Unversioned improvement</b> — an upstream team improves a metric without versioning it</li>
+                    <li><b>No contracts</b> — no schema registry or data contract blocks the change from shipping</li>
+                    <li><b>Name as contract</b> — the name is treated as the interface, but the real contract is the meaning</li>
+                    <li><b>Buried changes</b> — the change hides in ETL code and is never communicated to the ML team</li>
+                </ul>
+                <p class="example">An e-commerce site changes "price" from pre-tax to post-tax, shifting values about 10% higher, and the model underpredicts demand.</p>
+                <div class="key-point">
+                    <strong>Root Cause:</strong> Definitions evolve faster than names, so without explicit data contracts semantic changes propagate silently.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">versioning</span></div>
+                <ul>
+                    <li><b>Treat as breaking</b> — semantic changes require explicit versioning, like any API break</li>
+                    <li><b>Schema registry</b> — keep semantic descriptions and version history for every column</li>
+                    <li><b>Distribution checks</b> — track mean, variance, percentiles, cardinality, and null rates</li>
+                    <li><b>Alerting</b> — flag shifts beyond expected bounds; two sigma is a starting point, not a rule</li>
+                    <li><b>Versioned columns</b> — introduce a new named column when the meaning must change</li>
+                </ul>
+                <p class="example">The team creates "revenue_net", deprecates "revenue_gross" with a 6-month sunset, and the ML team retrains before cutover.</p>
+                <div class="key-point">
+                    <strong>Fix:</strong> Version columns when semantics change and run distribution checks on every pipeline run, treating semantic drift as an incident that requires a retrain.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// Canvas 1: Timeline showing semantic drift
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Timeline: Same Column Name, Different Meanings', w/2, 25);
+
+    var left = 60, right = 660, top = 80, bottom = 260;
+    var mid = (top + bottom) / 2;
+
+    // Timeline axis
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(left, mid);
+    ctx.lineTo(right, mid);
+    ctx.stroke();
+
+    // Training period
+    ctx.fillStyle = 'rgba(26,82,118,0.3)';
+    ctx.fillRect(left, top, 250, bottom - top);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(left, top, 250, bottom - top);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('TRAINING', left + 125, top + 20);
+    ctx.font = '11px system-ui';
+    ctx.fillText('revenue = gross', left + 125, top + 40);
+
+    // Change point
+    var changeX = left + 250;
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([8, 4]);
+    ctx.beginPath();
+    ctx.moveTo(changeX, top - 10);
+    ctx.lineTo(changeX, bottom + 10);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('SEMANTIC', changeX, top - 20);
+    ctx.fillText('CHANGE', changeX, top - 8);
+
+    // Production period (wrong semantics)
+    ctx.fillStyle = 'rgba(231,76,60,0.3)';
+    ctx.fillRect(changeX, top, right - changeX, bottom - top);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(changeX, top, right - changeX, bottom - top);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('PRODUCTION', changeX + (right - changeX)/2, top + 20);
+    ctx.font = '11px system-ui';
+    ctx.fillText('revenue = net (changed!)', changeX + (right - changeX)/2, top + 40);
+    ctx.fillText('Model still expects gross', changeX + (right - changeX)/2, top + 55);
+
+    // Timeline labels
+    ctx.fillStyle = '#666';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Jan 2025', left + 60, mid + 20);
+    ctx.fillText('Jun 2025', changeX, mid + 20);
+    ctx.fillText('Dec 2025', right - 60, mid + 20);
+
+    // Impact annotation
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillText('Silent failure: column exists, values plausible, predictions wrong', w/2, bottom + 30);
+})();
+
+// Canvas 2: Before/after encoding comparison
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Encoding Change Example: Country Code Format', w/2, 25);
+
+    var colW = 280;
+    var leftCol = 60;
+    var rightCol = 380;
+    var startY = 70;
+    var rowH = 28;
+
+    // Left column: Before
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('BEFORE (ISO-2)', leftCol + colW/2, startY - 10);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.fillRect(leftCol, startY, colW, rowH);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('country_code', leftCol + colW/2, startY + rowH/2 + 4);
+
+    var beforeData = [
+        {code: 'US', count: 1200},
+        {code: 'GB', count: 450},
+        {code: 'DE', count: 380},
+        {code: 'CA', count: 290}
+    ];
+
+    beforeData.forEach(function(row, i) {
+        var y = startY + (i + 1) * rowH;
+        ctx.fillStyle = i % 2 === 0 ? '#f8f9fa' : '#fff';
+        ctx.fillRect(leftCol, y, colW, rowH);
+        ctx.strokeStyle = '#e0e0e0';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(leftCol, y, colW, rowH);
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '11px system-ui';
+        ctx.textAlign = 'left';
+        ctx.fillText(row.code, leftCol + 10, y + rowH/2 + 4);
+        ctx.textAlign = 'right';
+        ctx.fillText(row.count + ' rows', leftCol + colW - 10, y + rowH/2 + 4);
+    });
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Model trained on this', leftCol + colW/2, startY + 5.5*rowH + 15);
+
+    // Right column: After
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('AFTER (ISO-3)', rightCol + colW/2, startY - 10);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.fillRect(rightCol, startY, colW, rowH);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('country_code', rightCol + colW/2, startY + rowH/2 + 4);
+
+    var afterData = [
+        {code: 'USA', count: 1200},
+        {code: 'GBR', count: 450},
+        {code: 'DEU', count: 380},
+        {code: 'CAN', count: 290}
+    ];
+
+    afterData.forEach(function(row, i) {
+        var y = startY + (i + 1) * rowH;
+        ctx.fillStyle = i % 2 === 0 ? '#ffe5e5' : '#fff';
+        ctx.fillRect(rightCol, y, colW, rowH);
+        ctx.strokeStyle = '#e0e0e0';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(rightCol, y, colW, rowH);
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '11px system-ui';
+        ctx.textAlign = 'left';
+        ctx.fillText(row.code, rightCol + 10, y + rowH/2 + 4);
+        ctx.textAlign = 'right';
+        ctx.fillText(row.count + ' rows', rightCol + colW - 10, y + rowH/2 + 4);
+    });
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Production sees this (all unknown!)', rightCol + colW/2, startY + 5.5*rowH + 15);
+
+    // Arrow and annotation
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(leftCol + colW + 10, startY + 2.5*rowH);
+    ctx.lineTo(rightCol - 10, startY + 2.5*rowH);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(rightCol - 10, startY + 2.5*rowH);
+    ctx.lineTo(rightCol - 18, startY + 2.5*rowH - 5);
+    ctx.lineTo(rightCol - 18, startY + 2.5*rowH + 5);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Model treats all as UNKNOWN', (leftCol + colW + rightCol)/2, startY + 2.5*rowH - 10);
+})();
+
+// Canvas 3: Distribution monitoring workflow
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Detection via Distribution Monitoring', w/2, 25);
+
+    // Distribution chart
+    var left = 60, right = 340, top = 70, bottom = 240;
+
+    // Axes
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(left, top);
+    ctx.lineTo(left, bottom);
+    ctx.lineTo(right, bottom);
+    ctx.stroke();
+
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    ctx.fillText('Time →', (left + right)/2, bottom + 25);
+    ctx.save();
+    ctx.translate(25, (top + bottom)/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillText('Mean Value', 0, 0);
+    ctx.restore();
+
+    // Before: stable baseline
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (var i = 0; i <= 50; i++) {
+        var t = i / 100;
+        var x = left + t * (right - left);
+        var y = bottom - 80 - 5 * Math.sin(i * 0.5);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // After: shifted distribution
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (var i = 50; i <= 100; i++) {
+        var t = i / 100;
+        var x = left + t * (right - left);
+        var y = bottom - 130 - 5 * Math.sin(i * 0.5);
+        i === 50 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Alert zone
+    ctx.fillStyle = 'rgba(231,76,60,0.1)';
+    ctx.fillRect(left + (right - left)/2, top, (right - left)/2, bottom - top);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 3]);
+    ctx.strokeRect(left + (right - left)/2, top, (right - left)/2, bottom - top);
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('ALERT: Distribution shift', left + 0.75 * (right - left), top + 20);
+
+    // Labels
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '10px system-ui';
+    ctx.fillText('Baseline', left + 0.25 * (right - left), bottom - 100);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Semantic change', left + 0.75 * (right - left), bottom - 150);
+
+    // Monitoring checklist
+    var checkY = 70;
+    var checkX = 400;
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Monitor These Stats:', checkX, checkY);
+
+    var checks = [
+        'Mean / Median',
+        'Std deviation',
+        'Percentiles (p5, p95)',
+        'Unique value count',
+        'Null percentage',
+        'Value range (min/max)'
+    ];
+
+    checks.forEach(function(check, i) {
+        var y = checkY + 25 + i * 22;
+
+        // Checkbox
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(checkX, y - 12, 14, 14);
+
+        // Checkmark
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(checkX + 3, y - 5);
+        ctx.lineTo(checkX + 6, y - 2);
+        ctx.lineTo(checkX + 11, y - 10);
+        ctx.stroke();
+
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '11px system-ui';
+        ctx.fillText(check, checkX + 20, y);
+    });
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillText('Alert on shift (e.g. 2 sigma — tune per feature)', checkX, checkY + 25 + checks.length * 22 + 10);
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Transactions &amp; ACID</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+.sql {
+    background: #f8f9fa;
+    border-left: 3px solid #1a5276;
+    padding: 8px 12px;
+    margin-top: 10px;
+    font-family: ui-monospace, Menlo, monospace;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    overflow-x: auto;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Transactions &amp; ACID</h1>
+<p class="subtitle">Moving $100 between two accounts takes two writes — a transaction guarantees both happen or neither does</p>
+
+<div class="card-section">
+    <h2>Paying the Shop Is Two Writes, Not One</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">running example</span></div>
+                <ul>
+                    <li><b>The payment</b> &mdash; Asha pays the shop $100 from her account balance</li>
+                    <li><b>Before</b> &mdash; Asha has $500, the shop has $200; together $700</li>
+                    <li><b>Write 1</b> &mdash; take $100 out of Asha's row: 500 &rarr; 400</li>
+                    <li><b>Write 2</b> &mdash; put $100 into the shop's row: 200 &rarr; 300</li>
+                    <li><b>The invariant</b> &mdash; the $700 total must survive: money moves, it never appears or vanishes</li>
+                </ul>
+                <p class="example">One "payment" in real life is two separate row updates inside the database — and anything can happen between them.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Real-world actions rarely map to one write. A transaction is how you tell the database "these writes are one action."
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Crash Between the Writes: $100 Vanishes</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">worked example</span><span class="tag red">failure mode</span></div>
+                <ul>
+                    <li><b>No transaction</b> &mdash; the two updates run as independent statements</li>
+                    <li><b>Write 1 lands</b> &mdash; Asha's row now says $400</li>
+                    <li><b>The crash</b> &mdash; power cut, process kill, network drop &mdash; before write 2 runs</li>
+                    <li><b>After restart</b> &mdash; Asha $400, shop $200: the books total $600</li>
+                    <li><b>Nobody has it</b> &mdash; the $100 isn't in either row; it simply no longer exists</li>
+                </ul>
+                <p class="example">Follow it by hand: 500 + 200 = 700 before; 400 + 200 = 600 after the crash — $100 gone without any error in a log.</p>
+                <div class="key-point">
+                    <strong>Failure mode:</strong> A half-finished multi-write action leaves the data in a state that was never true in the real world.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>BEGIN &hellip; COMMIT: Both or Neither</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">worked example</span><span class="tag blue">core idea</span></div>
+                <ul>
+                    <li><b>Wrap the writes</b> &mdash; BEGIN, the two UPDATEs, COMMIT</li>
+                    <li><b>Until COMMIT</b> &mdash; the changes are provisional; other readers still see 500/200</li>
+                    <li><b>Crash mid-way?</b> &mdash; on restart the database rolls back: 500/200, as if nothing ran</li>
+                    <li><b>COMMIT succeeds?</b> &mdash; both rows flip together: 400/300, total still $700</li>
+                    <li><b>Only two exits</b> &mdash; fully done or fully undone; the half-state can't be seen</li>
+                </ul>
+                <pre class="sql">BEGIN;
+UPDATE accounts SET balance = balance - 100
+  WHERE owner = 'Asha';
+UPDATE accounts SET balance = balance + 100
+  WHERE owner = 'Shop';
+COMMIT;</pre>
+                <div class="key-point">
+                    <strong>Key point:</strong> A transaction turns "two writes and a prayer" into one all-or-nothing step. The $600 state becomes impossible.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>A, C, I, D &mdash; One Plain Line Each</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag orange">why it matters</span></div>
+                <ul>
+                    <li><b>Atomic</b> &mdash; all the writes happen, or none do; no halfway</li>
+                    <li><b>Consistent</b> &mdash; the rules hold before and after: totals add up, keys point somewhere</li>
+                    <li><b>Isolated</b> &mdash; a query running mid-transfer never sees the $600 moment</li>
+                    <li><b>Durable</b> &mdash; once COMMIT returns, a crash one second later loses nothing</li>
+                    <li><b>For analysts</b> &mdash; a warehouse loaded without transactions can hold half-finished actions</li>
+                </ul>
+                <p class="example">A revenue dashboard that reads mid-transfer would report $600 — a number that was never true for anyone.</p>
+                <div class="key-point">
+                    <strong>Why it matters:</strong> When a metric looks impossible, ask whether the pipeline read half of someone's transaction — or wrote half of its own.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var w = +canvas.getAttribute('width'), h = +canvas.getAttribute('height');
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+    return { ctx: ctx, w: w, h: h };
+}
+
+// Draws a two-row accounts box; returns nothing fancy
+function accounts(ctx, x, y, asha, shop, opts) {
+    opts = opts || {};
+    var w = 150, rh = 26;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = P.ink;
+    ctx.fillRect(x, y, w, rh);
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = '#fff';
+    ctx.fillText('owner', x + 8, y + 18);
+    ctx.fillText('balance', x + 78, y + 18);
+    var rows = [['Asha', asha, opts.hlAsha], ['Shop', shop, opts.hlShop]];
+    for (var i = 0; i < 2; i++) {
+        var ry = y + rh * (i + 1);
+        ctx.fillStyle = rows[i][2] ? (opts.bad ? 'rgba(231,76,60,0.15)' : 'rgba(39,174,96,0.18)') : (i % 2 ? '#f4f6f8' : '#fff');
+        ctx.fillRect(x, ry, w, rh);
+        ctx.fillStyle = P.text;
+        ctx.font = rows[i][2] ? 'bold 12px system-ui' : '12px system-ui';
+        ctx.fillText(rows[i][0], x + 8, ry + 18);
+        ctx.fillText('$' + rows[i][1], x + 78, ry + 18);
+    }
+    ctx.strokeStyle = '#cfd8e0'; ctx.lineWidth = 1;
+    ctx.strokeRect(x, y, w, rh * 3);
+    // total
+    var tot = asha + shop;
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillStyle = (tot === 700) ? P.green : '#e74c3c';
+    ctx.fillText('total $' + tot, x + w / 2, y + rh * 3 + 18);
+}
+
+function arrow(ctx, x1, y1, x2, y2, color, dash) {
+    ctx.strokeStyle = color; ctx.lineWidth = 2;
+    if (dash) ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.setLineDash([]);
+    var a = Math.atan2(y2 - y1, x2 - x1);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 9 * Math.cos(a - 0.4), y2 - 9 * Math.sin(a - 0.4));
+    ctx.lineTo(x2 - 9 * Math.cos(a + 0.4), y2 - 9 * Math.sin(a + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// c1: the two writes, before and after
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w;
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('One Payment = Two Row Updates', w / 2, 24);
+
+    accounts(ctx, 55, 70, 500, 200, {});
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+    ctx.fillText('before', 130, 60);
+
+    accounts(ctx, 515, 70, 400, 300, { hlAsha: true, hlShop: true });
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+    ctx.fillText('after', 590, 60);
+
+    // two write steps in the middle
+    var bx = 265, bw = 190;
+    ctx.fillStyle = 'rgba(42,120,214,0.08)'; ctx.fillRect(bx, 78, bw, 36);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2; ctx.strokeRect(bx, 78, bw, 36);
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.blue; ctx.textAlign = 'center';
+    ctx.fillText('write 1: Asha  500 → 400', bx + bw / 2, 100);
+
+    ctx.fillStyle = 'rgba(25,158,112,0.08)'; ctx.fillRect(bx, 132, bw, 36);
+    ctx.strokeStyle = P.aqua; ctx.lineWidth = 2; ctx.strokeRect(bx, 132, bw, 36);
+    ctx.fillStyle = P.aqua;
+    ctx.fillText('write 2: Shop  200 → 300', bx + bw / 2, 154);
+
+    arrow(ctx, 210, 122, 262, 96, P.blue);
+    arrow(ctx, 458, 96, 510, 110, P.blue);
+    arrow(ctx, 210, 135, 262, 150, P.aqua);
+    arrow(ctx, 458, 150, 510, 135, P.aqua);
+
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.orange; ctx.textAlign = 'center';
+    ctx.fillText('the gap between write 1 and write 2 is where trouble lives', w / 2, 232);
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute;
+    ctx.fillText('$700 before, $700 after — money moved, none was created or destroyed', w / 2, 258);
+})();
+
+// c2: crash between the writes
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w;
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('No Transaction + Crash After Write 1', w / 2, 24);
+
+    // timeline
+    var ty = 60;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(60, ty); ctx.lineTo(660, ty); ctx.stroke();
+    var stops = [
+        { x: 110, label: 'write 1 runs', c: P.blue },
+        { x: 330, label: 'CRASH', c: '#e74c3c' },
+        { x: 560, label: 'write 2 never runs', c: P.mute }
+    ];
+    for (var i = 0; i < 3; i++) {
+        ctx.fillStyle = stops[i].c;
+        ctx.beginPath(); ctx.arc(stops[i].x, ty, 6, 0, 2 * Math.PI); ctx.fill();
+        ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(stops[i].label, stops[i].x, ty - 14);
+    }
+    // lightning bolt at crash
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(330, ty - 44); ctx.lineTo(322, ty - 28); ctx.lineTo(332, ty - 28); ctx.lineTo(324, ty - 10);
+    ctx.stroke();
+
+    accounts(ctx, 80, 110, 500, 200, {});
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.text; ctx.textAlign = 'center';
+    ctx.fillText('before', 155, 226);
+
+    accounts(ctx, 300, 110, 400, 200, { hlAsha: true, bad: true });
+    ctx.fillStyle = P.text; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('after restart', 375, 226);
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'left';
+    ctx.fillText('$100 is in neither row', 510, 150);
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute;
+    ctx.fillText('not an error anyone saw —', 510, 174);
+    ctx.fillText('just books that no longer balance', 510, 192);
+
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'center';
+    ctx.fillText('500 + 200 = 700 became 400 + 200 = 600', w / 2, 278);
+})();
+
+// c3: with a transaction — two exits only
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w;
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Inside a Transaction: Two Possible Endings, Both Balanced', w / 2, 24);
+
+    // central pipeline
+    var steps = ['BEGIN', 'write 1', 'write 2', 'COMMIT'];
+    var sx = 70, sw = 92, gap = 24, sy = 52, sh = 32;
+    for (var i = 0; i < 4; i++) {
+        var x = sx + i * (sw + gap);
+        ctx.fillStyle = 'rgba(42,120,214,0.08)';
+        ctx.fillRect(x, sy, sw, sh);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5; ctx.strokeRect(x, sy, sw, sh);
+        ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.blue; ctx.textAlign = 'center';
+        ctx.fillText(steps[i], x + sw / 2, sy + 20);
+        if (i < 3) arrow(ctx, x + sw, sy + sh / 2, x + sw + gap - 2, sy + sh / 2, P.blue);
+    }
+    ctx.font = '12px system-ui'; ctx.fillStyle = P.mute; ctx.textAlign = 'left';
+    ctx.fillText('changes stay provisional in here', sx + 100, sy + 52);
+
+    // exit 1: crash before commit -> rollback
+    var e1y = 150;
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(sx + 2 * (sw + gap) + sw / 2 + 4, sy + sh + 26);
+    ctx.lineTo(sx + 2 * (sw + gap) + sw / 2 - 4, sy + sh + 40);
+    ctx.lineTo(sx + 2 * (sw + gap) + sw / 2 + 4, sy + sh + 40);
+    ctx.lineTo(sx + 2 * (sw + gap) + sw / 2 - 4, sy + sh + 56);
+    ctx.stroke();
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'center';
+    ctx.fillText('crash before COMMIT', sx + 2 * (sw + gap) + sw / 2, sy + sh + 74);
+
+    accounts(ctx, 120, e1y + 62, 500, 200, {});
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.green; ctx.textAlign = 'center';
+    ctx.fillText('ROLLBACK: as if nothing ran', 195, e1y + 52);
+
+    accounts(ctx, 460, e1y + 62, 400, 300, { hlAsha: true, hlShop: true });
+    ctx.font = 'bold 12px system-ui'; ctx.fillStyle = P.green; ctx.textAlign = 'center';
+    ctx.fillText('COMMIT: both writes land', 535, e1y + 52);
+
+    arrow(ctx, 300, e1y + 40, 220, e1y + 60, '#e74c3c', true);
+    arrow(ctx, 470, sy + sh + 10, 535, e1y + 55, P.green);
+
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.orange; ctx.textAlign = 'center';
+    ctx.fillText('the $600 half-state is no longer a possible ending', w / 2, 292);
+})();
+
+// c4: ACID four boxes
+(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w;
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Four Promises, One Payment', w / 2, 24);
+
+    var boxes = [
+        { t: 'A — Atomic', c: P.blue, l1: 'both writes or neither;', l2: 'no half-payment exists' },
+        { t: 'C — Consistent', c: P.green, l1: 'rules survive: the books', l2: 'total $700 before and after' },
+        { t: 'I — Isolated', c: P.violet, l1: 'a report running mid-transfer', l2: 'never sees $600' },
+        { t: 'D — Durable', c: P.orange, l1: 'after COMMIT, a crash', l2: 'cannot undo the payment' }
+    ];
+    var bw = 300, bh = 92, gx = 40, gy = 48, gapx = 40, gapy = 26;
+    for (var i = 0; i < 4; i++) {
+        var x = gx + (i % 2) * (bw + gapx);
+        var y = gy + Math.floor(i / 2) * (bh + gapy);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(x, y, bw, bh);
+        ctx.strokeStyle = boxes[i].c; ctx.lineWidth = 2.5;
+        ctx.strokeRect(x, y, bw, bh);
+        ctx.fillStyle = boxes[i].c; ctx.font = 'bold 15px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(boxes[i].t, x + 14, y + 26);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+        ctx.fillText(boxes[i].l1, x + 14, y + 50);
+        ctx.fillText(boxes[i].l2, x + 14, y + 68);
+    }
+    ctx.font = 'bold 13px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('every serious database keeps all four — pipelines you write by hand often keep none', w / 2, 290);
+})();
+</script>
+
+</body>
+</html>

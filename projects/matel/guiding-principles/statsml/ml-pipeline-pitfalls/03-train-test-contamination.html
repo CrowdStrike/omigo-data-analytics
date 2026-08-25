@@ -74,6 +74,20 @@ ul {
     font-size: 0.92rem;
 }
 li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
 </style>
 </head>
 <body>
@@ -86,15 +100,17 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>Same patient appears in both train and test (different visits) — model memorizes patient, not pattern. Feature engineering uses statistics from full dataset (including test) — mean/std include test rows.</p>
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">contamination</span></div>
                 <ul>
-                    <li>Same patient appears in both train and test (different visits) → model memorizes patient, not pattern</li>
-                    <li>Feature engineering uses statistics from full dataset (including test) → mean/std include test rows</li>
-                    <li>Oversampling/SMOTE applied before train/test split → synthetic points in test set resemble training points</li>
+                    <li><b>The boundary</b> — the test set must simulate unseen data, but information sneaks across it</li>
+                    <li><b>Shared entities</b> — the same patient appears in train and test, so the model memorizes them</li>
+                    <li><b>Shared statistics</b> — feature means computed on the full dataset let test rows shape training</li>
+                    <li><b>Premature SMOTE</b> — oversampling before the split puts synthetic near-copies of train in test</li>
+                    <li><b>Graded on seen data</b> — the evaluation scores the model on material it already trained on</li>
                 </ul>
-                <p class="example">Example: Patient has 5 hospital visits. 3 in train, 2 in test. Model learns "patient_id_12345 → positive" — it's memorizing, not generalizing. On new patients: accuracy drops 20%.</p>
+                <p class="example">A patient with 5 hospital visits lands 3 in train and 2 in test, and the model learns "patient_id_12345 &rarr; positive".</p>
                 <div class="key-point">
-                    <strong>Defense:</strong> Split by ENTITY (patient, user, household), not by row. All rows from one entity must be in the same split.
+                    <strong>Impact:</strong> Reported accuracy is inflated — 92% on the contaminated split versus 74% on truly unseen entities.
                 </div>
             </td>
             <td class="viz-col">
@@ -109,16 +125,17 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>Random row-level splits ignore entity grouping. When the same patient/user/household appears in both train and test, the model memorizes entities rather than learning generalizable patterns. Applying SMOTE or oversampling before splitting creates synthetic test points that are near-copies of training data.</p>
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">row splits</span></div>
                 <ul>
-                    <li>Random row-level splits ignore entity grouping (patient, user, household, device)</li>
-                    <li>Same entity in both splits &rarr; model memorizes entity-specific patterns, not generalizable signal</li>
-                    <li>SMOTE/oversampling applied before split &rarr; synthetic minority samples leak into test set</li>
-                    <li>Feature engineering on full data &rarr; statistics (mean, count) include test entity information</li>
+                    <li><b>Tooling defaults</b> — sklearn's train_test_split splits rows, not entities such as patients</li>
+                    <li><b>Scattered entities</b> — random row splits spread one entity's records across both sides</li>
+                    <li><b>Entity memorization</b> — entity-specific patterns transfer to that entity's test rows only</li>
+                    <li><b>SMOTE before split</b> — synthetic minority samples leak into test as near-copies of train</li>
+                    <li><b>Full-data features</b> — means and counts over all rows carry test information into training</li>
                 </ul>
-                <p class="example">Example: 1000 patients, 5 visits each = 5000 rows. Random 80/20 split: each patient has ~4 train rows and ~1 test row. Model achieves 92% accuracy. Entity-level split (800 patients train, 200 test): accuracy drops to 74%. The 18% gap was memorization.</p>
+                <p class="example">With 1000 patients and 5 visits each, a random 80/20 row split yields 92% accuracy while an entity-level split yields 74%.</p>
                 <div class="key-point">
-                    <strong>Root Cause:</strong> sklearn's train_test_split operates on rows, not entities. If a patient has 10 visits and 7 go to train, the model learns "patient X &rarr; outcome Y" which trivially generalizes to the 3 test visits of the same patient. This is memorization, not learning.
+                    <strong>Root Cause:</strong> Row-level splitting lets the model answer a patient's test visits by recalling that patient's train visits — memorization, not learning.
                 </div>
             </td>
             <td class="viz-col">
@@ -133,17 +150,18 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>Use entity-level splitting with GroupKFold or GroupShuffleSplit. All records from one entity must be in the same split. Apply oversampling only after splitting, on the training set only.</p>
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">group split</span></div>
                 <ul>
-                    <li>Use GroupKFold or GroupShuffleSplit: split by entity (patient_id, user_id, household_id)</li>
-                    <li>All records from one entity go to the SAME split &mdash; no entity spans train and test</li>
-                    <li>Apply SMOTE/oversampling AFTER splitting, on training set only</li>
-                    <li>Feature engineering: compute statistics only from training entities</li>
-                    <li>Validate: check that no entity ID appears in both train and test sets</li>
+                    <li><b>Match the unit</b> — split at the level the model must generalize to, e.g. new patients</li>
+                    <li><b>Group-aware splitters</b> — use GroupKFold or GroupShuffleSplit keyed on the entity ID</li>
+                    <li><b>Entity atomicity</b> — all of one entity's records go to the same side of the split</li>
+                    <li><b>Oversample after split</b> — apply SMOTE only after splitting, and only to the train partition</li>
+                    <li><b>Train-only statistics</b> — fit feature statistics on train entities, then reuse them on test</li>
+                    <li><b>Overlap check</b> — programmatically verify no entity ID appears in both train and test</li>
                 </ul>
-                <p class="example">Example: GroupKFold with groups=patient_id. 1000 patients &rarr; 800 in train (all their visits), 200 in test (all their visits). No patient appears in both. Model accuracy: 74% &mdash; honest and reproducible in production.</p>
+                <p class="example">GroupKFold with groups=patient_id sends 800 patients with all their visits to train and 200 to test, and the resulting 74% accuracy holds in production.</p>
                 <div class="key-point">
-                    <strong>Fix:</strong> Replace train_test_split(X, y) with GroupShuffleSplit(groups=patient_id). This guarantees zero overlap. For SMOTE: split first, then oversample only the training partition. Test set must reflect real-world entity distribution.
+                    <strong>Fix:</strong> Replace train_test_split(X, y) with GroupShuffleSplit(groups=patient_id) to guarantee zero entity overlap.
                 </div>
             </td>
             <td class="viz-col">

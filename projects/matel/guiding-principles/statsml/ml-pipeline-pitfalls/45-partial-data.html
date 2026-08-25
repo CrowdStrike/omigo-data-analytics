@@ -78,6 +78,20 @@ ul {
     font-size: 0.92rem;
 }
 li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
 </style>
 </head>
 <body>
@@ -90,17 +104,19 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>Training job queries data for day D but runs before all day D data has arrived. The incomplete snapshot is systematically biased—missing late events, missing certain sources, or truncated at arbitrary cutoff. Model learns patterns from partial view, fails on complete data.</p>
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">completeness</span></div>
                 <ul>
-                    <li><strong>Completeness checks:</strong> No validation that all expected sources delivered data; job proceeds with whoever arrived by deadline, silently omitting stragglers</li>
-                    <li><strong>Late-arriving data:</strong> Events timestamped for day D arrive hours later due to processing lag, timezone conversion, or batch delay—training snapshots miss them every time</li>
-                    <li><strong>ETL timing:</strong> Training job scheduled for 2 AM UTC to process "yesterday," but some sources don't finish loading until 4 AM—training sees only 60% of data</li>
-                    <li><strong>Backfill vs real-time:</strong> Historical data is complete (backfilled); recent data is partial (streaming with lag)—model trained on heterogeneous completeness</li>
+                    <li><b>Early run</b> — the training job queries day D before all of day D's data has arrived</li>
+                    <li><b>No completeness check</b> — the job proceeds with whatever arrived and silently drops stragglers</li>
+                    <li><b>Late events</b> — processing lag and timezone batching delay day-D events by hours every day</li>
+                    <li><b>Systematic bias</b> — the same sources are missing every run, not a random sample of rows</li>
+                    <li><b>Mixed completeness</b> — backfilled history is complete while recent days are partial</li>
+                    <li><b>Serving mismatch</b> — the model trains on ~60% snapshots but scores complete data</li>
                 </ul>
+                <p class="example">A fraud model trained at 3 AM misses 35% of EU transactions arriving on a 4-hour lag, and its EU false negative rate runs 2.8x higher.</p>
                 <div class="key-point">
-                    <strong>Impact:</strong> Training data systematically underrepresents certain events, regions, or sources. Model learns skewed distributions. Serving data is complete, triggering distributional shift. <strong>Fix:</strong> Add explicit completeness checks—count records per source, compare to historical baseline. Delay training until all sources confirm delivery. Use watermarks or heartbeat signals. Separate complete historical data from incomplete recent data.
+                    <strong>Impact:</strong> Training data systematically underrepresents certain sources, so complete serving data arrives as a distribution shift.
                 </div>
-                <p class="example">Example: Daily training job for fraud model runs at 3 AM, processing previous day. International transactions arrive with 4-hour lag due to timezone batch windows. Model trained on data missing 35% of EU transactions. At serving time, full data arrives; model predicts "legitimate" for fraud patterns it never saw, false negative rate 2.8x higher on EU traffic.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c1" width="720" height="300"></canvas>
@@ -114,16 +130,18 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">scheduling</span></div>
                 <ul>
-                    <li>Queries run before all data for a time window has arrived</li>
-                    <li>Timezone differences cause late-arriving events</li>
-                    <li>Batch pipelines trigger on schedule, not on data completeness</li>
-                    <li>Upstream systems have variable latency (some events arrive hours late)</li>
+                    <li><b>Clock triggers</b> — batch pipelines fire at a fixed wall-clock time, not on data readiness</li>
+                    <li><b>Silent gaps</b> — a query over a partial window returns rows with no signal that some are missing</li>
+                    <li><b>Timezone lag</b> — events from western regions land hours after their calendar day has closed</li>
+                    <li><b>Variable latency</b> — upstream feeds deliver with unpredictable delay, so stragglers are routine</li>
+                    <li><b>False confidence</b> — "query returned rows" is mistaken for "all data for this period is present"</li>
                 </ul>
+                <p class="example">A 2am UTC pipeline consumes "yesterday" before US West Coast events from 11pm local arrive at 7am UTC, losing them from training for good.</p>
                 <div class="key-point">
-                    <strong>Root cause:</strong> Conflating "query returned results" with "all data for this period is present." Schedule-based triggers don't verify completeness.
+                    <strong>Root Cause:</strong> Schedule-based triggers conflate "query returned results" with "all data for this period is present."
                 </div>
-                <p class="example">Example: Daily pipeline runs at 2am UTC. Events from US West Coast (UTC-8) for 11pm local time arrive at 7am UTC — 5 hours after pipeline already consumed "yesterday's" data. Those events are permanently lost from training.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c2" width="720" height="300"></canvas>
@@ -137,16 +155,19 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">gating</span></div>
                 <ul>
-                    <li>Implement completeness SLA checks before processing</li>
-                    <li>Don't process until event count matches expected (watermarks)</li>
-                    <li>Use event-time windowing, not processing-time</li>
-                    <li>Add late-arrival buffers (grace periods)</li>
+                    <li><b>Completeness gate</b> — verify an explicit completeness SLA before any processing begins</li>
+                    <li><b>Watermarks</b> — hold the run until event counts confirm all sources have flushed the window</li>
+                    <li><b>Event-time windows</b> — window on event time, not processing time, so late rows land correctly</li>
+                    <li><b>Grace periods</b> — keep the window open long enough for routine stragglers to arrive</li>
+                    <li><b>Completeness tiers</b> — never mix complete backfilled history with still-arriving recent data</li>
+                    <li><b>Timeout alerts</b> — if the gate never opens, alert loudly instead of proceeding silently</li>
                 </ul>
+                <p class="example">The pipeline waits until observed events reach 95% of the trailing 7-day average for that hour, and late data is reprocessed in the next window.</p>
                 <div class="key-point">
-                    <strong>Best practice:</strong> Gate pipeline execution on data completeness signals, not wall-clock time. Use high-watermarks and expected row counts to verify all sources have flushed.
+                    <strong>Fix:</strong> Gate pipeline execution on completeness signals — high-watermarks and expected row counts — not wall-clock time.
                 </div>
-                <p class="example">Example: Pipeline checks: expected_events >= 95% of trailing 7-day average for this hour. If not met, pipeline waits (with timeout alert). Late data is reprocessed in next window.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c3" width="720" height="300"></canvas>
@@ -286,7 +307,7 @@ function setup(id) {
     ctx.textAlign = 'left';
     ctx.fillText('RESULT:', left + 10, 265);
     ctx.font = '11px system-ui';
-    ctx.fillText('Training sees 2 complete sources, 1 partial (55%), 1 missing (0%). Model learns from biased 63% snapshot.', left + 60, 265);
+    ctx.fillText('Training sees 2 complete sources, 1 partial (40%), 1 missing (0%). Model learns from biased 60% snapshot.', left + 60, 265);
     ctx.fillText('At serving time, all 4 sources present → distribution shift → accuracy degrades.', left + 60, 280);
 })();
 

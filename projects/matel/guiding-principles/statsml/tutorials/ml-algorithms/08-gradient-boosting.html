@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gradient Boosting</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Gradient Boosting</h1>
+<p class="subtitle">Predict house prices with one tree, then train the next tree on the leftover errors, then the next on what is still left — each tree is a small correction added to the total</p>
+
+<div class="card-section">
+    <h2>Predict the Price, Then Fit the Miss</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">running example</span></div>
+                <ul>
+                    <li><b>Four houses</b> — true prices $200k, $240k, $300k, $360k</li>
+                    <li><b>First guess</b> — predict the average, $275k, for every house</li>
+                    <li><b>Measure the miss</b> — house A is over-priced by 75, house D under-priced by 85</li>
+                    <li><b>Tree 2's target</b> — it is trained on the misses, not on the prices</li>
+                    <li><b>Add, don't replace</b> — prediction = first guess + correction 1 + correction 2</li>
+                </ul>
+                <p class="example">For house A the answer builds up as 275 &minus; 55 &minus; 25 = 195 — three small pieces, one price.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Gradient boosting is a running total: each new tree predicts the error left by everything before it, and its output is added on top.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Four Houses, Two Small Trees, by Hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">worked example</span><span class="tag blue">core idea</span></div>
+                <ul>
+                    <li><b>Stage 0</b> — predict 275 everywhere; misses: A &minus;75, B &minus;35, C +25, D +85</li>
+                    <li><b>Tree 1</b> — one split on size: small houses {A,B} get &minus;55, large {C,D} get +55</li>
+                    <li><b>After tree 1</b> — predictions 220, 220, 330, 330; misses shrink to &plusmn;20 and &plusmn;30</li>
+                    <li><b>Tree 2</b> — one split on location: {A,C} get &minus;25, {B,D} get +25</li>
+                    <li><b>After tree 2</b> — predictions 195, 245, 305, 355; every miss is now just $5k</li>
+                </ul>
+                <p class="example">The total absolute miss falls 220 &rarr; 100 &rarr; 20 ($k) — each tree eats most of what is left.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A tree's leaf value is the average miss of the houses in that leaf — tree 1's "small houses" leaf averages &minus;75 and &minus;35 into &minus;55.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The XGBoost / LightGBM Family in Practice</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag orange">watch out</span></div>
+                <ul>
+                    <li><b>Same recipe</b> — XGBoost, LightGBM, CatBoost are this idea plus speed and regularization engineering</li>
+                    <li><b>Learning rate</b> — real setups add only a fraction (say 0.1) of each correction: many tiny steps</li>
+                    <li><b>Tabular default</b> — for spreadsheet-style data it is usually the first serious model to try</li>
+                    <li><b>Hundreds of trees</b> — small steps mean 100&ndash;1000 trees is normal, not a red flag</li>
+                    <li><b>Stop by validation</b> — training error always falls; add trees until held-out error stops falling</li>
+                </ul>
+                <p class="example">In the chart, held-out error bottoms out near 200 trees at about $27k — more trees only polish the training set.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The learning rate trades speed for safety — smaller steps need more trees but are far less likely to overshoot into noise.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Mix-Up: It Is Not a Random Forest</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag blue">rule of thumb</span></div>
+                <ul>
+                    <li><b>Forest</b> — every tree predicts the full price on its own; the answers are averaged</li>
+                    <li><b>Boosting</b> — every tree after the first predicts leftover error; the answers are added</li>
+                    <li><b>Alone test</b> — one forest tree is a rough but usable model; tree 2 alone outputs &minus;25, useless by itself</li>
+                    <li><b>Tree size</b> — forest trees grow deep and independent; boosted trees stay small and ordered</li>
+                    <li><b>Failure mode</b> — forests rarely overfit with more trees; boosting eventually will</li>
+                </ul>
+                <p class="example">Both are "300 trees on tabular data" — but one averages 300 prices, the other sums 300 corrections.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Reading a boosted tree's leaf as a price — it is a correction to a running total, meaningless outside the sequence.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: staged predictions per house closing in on the true price
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Each Added Tree Pulls the Prediction Toward the True Price', w / 2, 24);
+
+    var houses = ['A', 'B', 'C', 'D'];
+    var truth =  [200, 240, 300, 360];
+    var stage0 = [275, 275, 275, 275];
+    var stage1 = [220, 220, 330, 330];
+    var stage2 = [195, 245, 305, 355];
+    var cols = [P.mute, P.aqua, P.green];
+
+    var baseY = 240, chH = 170, maxY = 400;
+    var groupX = [95, 250, 405, 560], groupW = 110, barW = 30;
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(55, baseY); ctx.lineTo(695, baseY); ctx.stroke();
+    // y axis labels
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    var ticks = [0, 100, 200, 300, 400];
+    for (var t = 0; t < ticks.length; t++) {
+        ctx.fillText('$' + ticks[t] + 'k', 50, baseY - ticks[t] / maxY * chH + 4);
+    }
+
+    for (var i = 0; i < 4; i++) {
+        var gx = groupX[i];
+        var vals = [stage0[i], stage1[i], stage2[i]];
+        for (var j = 0; j < 3; j++) {
+            var bh = vals[j] / maxY * chH;
+            ctx.fillStyle = cols[j]; ctx.globalAlpha = 0.7;
+            ctx.fillRect(gx + j * (barW + 5), baseY - bh, barW, bh);
+            ctx.globalAlpha = 1;
+        }
+        // true price dashed line across the group
+        var ty = baseY - truth[i] / maxY * chH;
+        ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 2; ctx.setLineDash([5, 3]);
+        ctx.beginPath(); ctx.moveTo(gx - 8, ty); ctx.lineTo(gx + groupW + 3, ty); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#c0392b'; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('true ' + truth[i], gx + groupW / 2, ty - 6);
+        ctx.fillStyle = '#222'; ctx.font = 'bold 12px system-ui';
+        ctx.fillText('house ' + houses[i], gx + groupW / 2, baseY + 18);
+    }
+
+    // legend
+    var lx = 70;
+    ctx.textAlign = 'left'; ctx.font = '12px system-ui';
+    var legend = ['guess: mean 275', '+ tree 1', '+ tree 2'];
+    for (var j = 0; j < 3; j++) {
+        ctx.fillStyle = cols[j]; ctx.globalAlpha = 0.7;
+        ctx.fillRect(lx + j * 150, 268, 12, 12);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#222';
+        ctx.fillText(legend[j], lx + j * 150 + 17, 278);
+    }
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('all within $5k', 545, 278);
+})();
+
+// c2: residual bars shrinking per stage
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Misses Each Tree Was Trained On — Shrinking Every Stage', w / 2, 24);
+
+    var stages = [
+        { lab: 'stage 0: guess 275', res: [-75, -35, 25, 85], x: 70,  total: 220 },
+        { lab: 'after tree 1',       res: [-20, 20, -30, 30], x: 290, total: 100 },
+        { lab: 'after tree 2',       res: [-5, -5, -5, 5],    x: 510, total: 20 }
+    ];
+    var houses = ['A', 'B', 'C', 'D'];
+    var zeroY = 155, scale = 1.05, barW = 34, gap = 10;
+    var cols = [P.blue, P.violet, P.aqua, P.orange];
+
+    for (var sIdx = 0; sIdx < 3; sIdx++) {
+        var st = stages[sIdx];
+        // zero line
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(st.x - 10, zeroY); ctx.lineTo(st.x + 4 * (barW + gap) + 2, zeroY); ctx.stroke();
+        for (var i = 0; i < 4; i++) {
+            var v = st.res[i];
+            var x = st.x + i * (barW + gap);
+            var bh = Math.abs(v) * scale;
+            ctx.fillStyle = cols[i]; ctx.globalAlpha = 0.7;
+            if (v >= 0) ctx.fillRect(x, zeroY - bh, barW, bh);
+            else ctx.fillRect(x, zeroY, barW, bh);
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = '#333'; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText((v > 0 ? '+' : '') + v, x + barW / 2, v >= 0 ? zeroY - bh - 5 : zeroY + bh + 13);
+            ctx.fillStyle = '#666'; ctx.font = '11px system-ui';
+            ctx.fillText(houses[i], x + barW / 2, v >= 0 ? zeroY + 14 : zeroY - 6);
+        }
+        ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(st.lab, st.x + 2 * (barW + gap) - gap / 2, 258);
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText('total miss $' + st.total + 'k', st.x + 2 * (barW + gap) - gap / 2, 276);
+    }
+
+    // arrows between stages
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    var arrows = [[255, 275], [475, 495]];
+    for (var a = 0; a < 2; a++) {
+        ctx.beginPath(); ctx.moveTo(arrows[a][0], zeroY); ctx.lineTo(arrows[a][1], zeroY); ctx.stroke();
+        ctx.fillStyle = P.green;
+        ctx.beginPath();
+        ctx.moveTo(arrows[a][1] + 5, zeroY);
+        ctx.lineTo(arrows[a][1] - 4, zeroY - 5); ctx.lineTo(arrows[a][1] - 4, zeroY + 5);
+        ctx.closePath(); ctx.fill();
+    }
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('220 → 100 → 20: each tree fits what is left, so the leftovers keep shrinking', w / 2, 52);
+})();
+
+// c3: error vs number of trees, train vs validation
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var pad = { top: 52, bottom: 52, left: 62, right: 170 };
+    var cw = w - pad.left - pad.right, ch = h - pad.top - pad.bottom;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Average Price Error vs Number of Trees (learning rate 0.1)', w / 2, 24);
+
+    var trees = [0, 25, 50, 100, 200, 400];
+    var train = [90, 40, 25, 14, 7, 3];
+    var valid = [90, 45, 33, 28, 27, 31];
+    var n = trees.length, maxY = 100;
+
+    function X(i) { return pad.left + i / (n - 1) * cw; }
+    function Y(v) { return pad.top + ch - v / maxY * ch; }
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, pad.top); ctx.lineTo(pad.left, pad.top + ch);
+    ctx.lineTo(pad.left + cw, pad.top + ch); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    var ticks = [0, 25, 50, 75, 100];
+    for (var t = 0; t < ticks.length; t++) {
+        ctx.fillText('$' + ticks[t] + 'k', pad.left - 8, Y(ticks[t]) + 4);
+        ctx.strokeStyle = P.grid;
+        ctx.beginPath(); ctx.moveTo(pad.left, Y(ticks[t])); ctx.lineTo(pad.left + cw, Y(ticks[t])); ctx.stroke();
+    }
+
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < n; i++) i === 0 ? ctx.moveTo(X(i), Y(train[i])) : ctx.lineTo(X(i), Y(train[i]));
+    ctx.stroke();
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 3; ctx.beginPath();
+    for (var i = 0; i < n; i++) i === 0 ? ctx.moveTo(X(i), Y(valid[i])) : ctx.lineTo(X(i), Y(valid[i]));
+    ctx.stroke();
+    for (var i = 0; i < n; i++) {
+        ctx.fillStyle = P.blue;
+        ctx.beginPath(); ctx.arc(X(i), Y(train[i]), 4, 0, 2 * Math.PI); ctx.fill();
+        ctx.fillStyle = P.orange;
+        ctx.beginPath(); ctx.arc(X(i), Y(valid[i]), 4, 0, 2 * Math.PI); ctx.fill();
+        ctx.fillStyle = '#222'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(trees[i], X(i), pad.top + ch + 18);
+    }
+
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(X(4), pad.top); ctx.lineTo(X(4), pad.top + ch); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('held-out floor: ~$27k at 200 trees — stop adding here', X(3) + 20, pad.top - 8);
+    ctx.fillStyle = '#c0392b'; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('train → $3k: memorized', X(5) - 40, Y(train[5]) - 10);
+
+    var lx = w - 158;
+    ctx.textAlign = 'left'; ctx.font = '12px system-ui';
+    ctx.fillStyle = P.blue; ctx.fillRect(lx, 60, 12, 12);
+    ctx.fillStyle = '#222'; ctx.fillText('training error', lx + 17, 70);
+    ctx.fillStyle = P.orange; ctx.fillRect(lx, 80, 12, 12);
+    ctx.fillStyle = '#222'; ctx.fillText('held-out error', lx + 17, 90);
+    ctx.fillStyle = '#666'; ctx.font = '11px system-ui';
+    ctx.fillText('illustrative numbers', lx, 110);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('number of trees', pad.left + cw / 2, h - 14);
+})();
+
+// c4: forest averages prices vs boosting sums corrections
+(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('House A: a Forest Averages Prices, Boosting Sums Corrections', w / 2, 24);
+
+    ctx.strokeStyle = '#bdc3c7'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(360, 38); ctx.lineTo(360, h - 15); ctx.stroke();
+    ctx.setLineDash([]);
+
+    function box(x, y, bw, bh, color, label, sub) {
+        ctx.fillStyle = 'rgba(0,0,0,0.02)';
+        ctx.fillRect(x, y, bw, bh);
+        ctx.strokeStyle = color; ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, bw, bh);
+        ctx.fillStyle = color; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(label, x + bw / 2, y + (sub ? 18 : bh / 2 + 4));
+        if (sub) {
+            ctx.fillStyle = '#333'; ctx.font = '12px system-ui';
+            ctx.fillText(sub, x + bw / 2, y + 36);
+        }
+    }
+    function arrow(x1, y1, x2, y2, color) {
+        ctx.strokeStyle = color; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        var ang = Math.atan2(y2 - y1, x2 - x1);
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - 9 * Math.cos(ang - 0.4), y2 - 9 * Math.sin(ang - 0.4));
+        ctx.lineTo(x2 - 9 * Math.cos(ang + 0.4), y2 - 9 * Math.sin(ang + 0.4));
+        ctx.closePath(); ctx.fill();
+    }
+
+    // Left: forest
+    ctx.fillStyle = P.blue; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('RANDOM FOREST', 180, 52);
+    box(40, 70, 120, 44, P.blue, 'tree 1', 'says 210');
+    box(40, 126, 120, 44, P.blue, 'tree 2', 'says 190');
+    box(40, 182, 120, 44, P.blue, 'tree 3', 'says 205');
+    box(225, 126, 110, 44, P.green, 'average', '= 202');
+    arrow(160, 92, 221, 138, P.mute);
+    arrow(160, 148, 221, 148, P.mute);
+    arrow(160, 204, 221, 158, P.mute);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('every tree answers the full question:', 180, 252);
+    ctx.fillText('"what is the price?" — then vote', 180, 270);
+
+    // Right: boosting running total
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('GRADIENT BOOSTING', 540, 52);
+    box(390, 80, 92, 44, P.mute, 'guess', '275');
+    box(510, 80, 92, 44, P.violet, 'tree 1', '−55');
+    box(630, 80, 80, 44, P.violet, 'tree 2', '−25');
+    // plus signs
+    ctx.fillStyle = P.orange; ctx.font = 'bold 18px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('+', 496, 108);
+    ctx.fillText('+', 616, 108);
+    box(475, 165, 150, 44, P.green, 'running total', '275 − 55 − 25 = 195');
+    arrow(436, 124, 500, 162, P.mute);
+    arrow(556, 124, 556, 161, P.mute);
+    arrow(670, 124, 606, 162, P.mute);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('trees 1 and 2 answer a different question:', 540, 252);
+    ctx.fillText('"how wrong is the total so far?"', 540, 270);
+    ctx.fillStyle = '#c0392b'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('−25 alone is not a price', 712, 148);
+    ctx.textAlign = 'center';
+})();
+</script>
+
+</body>
+</html>

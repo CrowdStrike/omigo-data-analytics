@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slowly Changing Data</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section { margin-bottom: 40px; }
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+table.layout { width: 100%; border-collapse: collapse; margin-top: 8px; }
+table.layout td { vertical-align: top; padding: 12px; }
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+table.layout3 { width: 100%; border-collapse: collapse; margin-top: 8px; }
+table.layout3 td { vertical-align: top; padding: 12px; }
+table.layout3 td.text-col { width: 38%; }
+table.layout3 td.viz-col { width: 31%; }
+canvas { width: 100%; border: 1px solid #e0e0e0; border-radius: 4px; }
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+.example { font-style: italic; color: #555; margin-top: 8px; font-size: 0.9rem; }
+ul { margin: 8px 0 8px 20px; font-size: 0.92rem; }
+li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Slowly Changing Data</h1>
+<p class="subtitle">Customers move, prices change, categories get renamed — if you overwrite the old value, every old report quietly changes with it. Keeping dated history lets each report show what was true back then.</p>
+
+<div class="card-section">
+    <h2>Maya Moves to Denver — and Her Spring Orders Move With Her</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">running example</span><span class="tag red">common mistake</span></div>
+                <ul>
+                    <li><b>The customer</b> — Maya lives in Austin and places two orders there: $40 in March, $60 in May</li>
+                    <li><b>The move</b> — on July 1 she relocates to Denver, then orders $50 in August and $30 in November</li>
+                    <li><b>The overwrite</b> — the customer table has one row per person; city is updated to "Denver"</li>
+                    <li><b>The rewrite</b> — every report joining orders to that row now puts all four orders in Denver</li>
+                    <li><b>The name</b> — attributes that change occasionally like this are "slowly changing" data</li>
+                </ul>
+                <p class="example">The Austin store manager's spring numbers dropped $100 overnight — months after spring ended.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Overwriting an attribute doesn't just change the future — it silently rewrites the past of every report that joins to it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Two Rows, Two Date Ranges: Joining Each Order to Its Own Era</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">worked example</span><span class="tag blue">effective dates</span><span class="tag orange">history table</span></div>
+                <ul>
+                    <li><b>The fix</b> — instead of updating the row, close it and add a new one (this is "SCD Type 2")</li>
+                    <li><b>Row 1</b> — city Austin, effective 2023-01-10 to 2025-06-30, current = N</li>
+                    <li><b>Row 2</b> — city Denver, effective 2025-07-01 to 9999-12-31, current = Y</li>
+                    <li><b>The join</b> — match each order where order_date falls BETWEEN effective_from AND effective_to</li>
+                    <li><b>Check it</b> — Mar 15 and May 20 land in row 1 (Austin $100); Aug 9 and Nov 2 in row 2 (Denver $80)</li>
+                </ul>
+                <p class="example">Four orders, two dim rows, one BETWEEN condition — you can redo the whole join on paper.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The date range on each row is what lets one customer be two different facts at two different times.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why the June Report No Longer Matches the December Re-Run</h2>
+    <table class="layout3">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag red">what goes wrong</span></div>
+                <ul>
+                    <li><b>June</b> — the H1 report is run: Austin shows Maya's $100, and it is correct</li>
+                    <li><b>December</b> — finance re-runs the same query for an audit; Austin now shows $0 for her</li>
+                    <li><b>No bug</b> — the query is identical; the overwritten city row changed underneath it</li>
+                    <li><b>Everywhere</b> — sales regions, price lists, product categories, plan tiers all change this way</li>
+                    <li><b>With history</b> — a Type 2 table gives the same $100 answer in June, December, or 2030</li>
+                </ul>
+                <p class="example">The auditor asked why two runs of one query disagreed; the answer was a customer's moving van.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> If a re-run of an old report can change, you don't have history — you have only the present, retroactively applied.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3a" width="420" height="300"></canvas>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3b" width="400" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Type 1, 2, 3 — and Which Changes Deserve History</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag orange">SCD types</span><span class="tag orange">rule of thumb</span><span class="tag red">common confusion</span></div>
+                <ul>
+                    <li><b>Type 1</b> — overwrite in place; the past is repainted; keeps the table small and simple</li>
+                    <li><b>Type 2</b> — add a dated row per change; full history; the join picks the row by date</li>
+                    <li><b>Type 3</b> — one "previous value" column; remembers exactly one change, then forgets</li>
+                    <li><b>The confusion</b> — Type 1 is not "wrong": fixing a typo SHOULD rewrite the past</li>
+                    <li><b>The rule</b> — corrections get Type 1; real-world changes you may report on get Type 2</li>
+                </ul>
+                <p class="example">"Austn" → "Austin" is a correction; Austin → Denver is an event — same UPDATE, opposite handling.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Ask one question per attribute: "would an old report ever need the old value?" Yes means Type 2; no means Type 1 is fine.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef',
+  red: '#e74c3c'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var w = +canvas.getAttribute('width');
+    var h = +canvas.getAttribute('height');
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+    return { ctx: ctx, w: w, h: h };
+}
+
+// c1: Maya's 2025 timeline — true cities vs after the overwrite
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 16px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText("Maya's 2025 Orders: What Happened vs What the Overwrite Says", w / 2, 26);
+
+    var x0 = 90, x1 = 655;
+    function X(m) { return x0 + ((m - 1) / 11) * (x1 - x0); } // month 1..12
+    var orders = [
+        { m: 3.5, amt: '$40', city: 'Austin' },
+        { m: 5.6, amt: '$60', city: 'Austin' },
+        { m: 8.3, amt: '$50', city: 'Denver' },
+        { m: 11.1, amt: '$30', city: 'Denver' }
+    ];
+
+    function row(y, label, colorFor) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 8;
+        ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+        ctx.fillStyle = P.text; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(label, x0 - 12, y - 6);
+        for (var i = 0; i < orders.length; i++) {
+            var o = orders[i];
+            ctx.fillStyle = colorFor(o);
+            ctx.beginPath(); ctx.arc(X(o.m), y, 8, 0, 2 * Math.PI); ctx.fill();
+            ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+            ctx.fillText(o.amt, X(o.m), y - 14);
+        }
+    }
+
+    row(105, 'reality', function(o) { return o.city === 'Austin' ? P.blue : P.aqua; });
+    row(195, 'after Type 1', function(o) { return P.aqua; });
+
+    // move marker at Jul 1
+    var mx = X(7);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(mx, 60); ctx.lineTo(mx, 215); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('Jul 1: moves to Denver', mx, 52);
+
+    // month ticks
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    var ms = ['Jan', 'Apr', 'Jul', 'Oct', 'Dec'];
+    var mv = [1, 4, 7, 10, 12];
+    for (var i = 0; i < ms.length; i++) ctx.fillText(ms[i], X(mv[i]), 232);
+
+    // legend
+    ctx.textAlign = 'left'; ctx.font = '12px system-ui';
+    ctx.fillStyle = P.blue; ctx.beginPath(); ctx.arc(x0 + 6, 256, 6, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = P.text; ctx.fillText('counted as Austin', x0 + 18, 260);
+    ctx.fillStyle = P.aqua; ctx.beginPath(); ctx.arc(x0 + 166, 256, 6, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = P.text; ctx.fillText('counted as Denver', x0 + 178, 260);
+
+    ctx.fillStyle = P.red; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('overwrite repaints March and May: Austin $100 → $0, Denver $80 → $180', w / 2, 286);
+})();
+
+// c2: the Type 2 history table with the as-of join
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 16px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('dim_customer, SCD Type 2: One Person, Two Dated Rows', w / 2, 26);
+
+    // header + two rows of the dimension table
+    var tx = 175, tw = 480, rh = 34, ty = 52;
+    var cols = [
+        { name: 'city', x: 0, w: 100 },
+        { name: 'effective_from', x: 100, w: 135 },
+        { name: 'effective_to', x: 235, w: 135 },
+        { name: 'current', x: 370, w: 110 }
+    ];
+    var rows = [
+        { vals: ['Austin', '2023-01-10', '2025-06-30', 'N'], color: P.blue },
+        { vals: ['Denver', '2025-07-01', '9999-12-31', 'Y'], color: P.aqua }
+    ];
+
+    ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    for (var c = 0; c < cols.length; c++) {
+        ctx.fillStyle = '#eef3f8';
+        ctx.fillRect(tx + cols[c].x, ty, cols[c].w, rh);
+        ctx.strokeStyle = P.ink; ctx.lineWidth = 1;
+        ctx.strokeRect(tx + cols[c].x, ty, cols[c].w, rh);
+        ctx.fillStyle = P.ink;
+        ctx.fillText(cols[c].name, tx + cols[c].x + cols[c].w / 2, ty + 22);
+    }
+    for (var r = 0; r < rows.length; r++) {
+        var y = ty + rh * (r + 1);
+        for (var c = 0; c < cols.length; c++) {
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(tx + cols[c].x, y, cols[c].w, rh);
+            ctx.strokeStyle = rows[r].color; ctx.lineWidth = 1.5;
+            ctx.strokeRect(tx + cols[c].x, y, cols[c].w, rh);
+            ctx.fillStyle = c === 0 ? rows[r].color : P.text;
+            ctx.font = c === 0 ? 'bold 12px system-ui' : '12px system-ui';
+            ctx.fillText(rows[r].vals[c], tx + cols[c].x + cols[c].w / 2, y + 22);
+        }
+    }
+
+    // two orders on the left, arrows to the matching row
+    var ords = [
+        { label: 'order  Mar 15  $40', row: 0, y: 200 },
+        { label: 'order  Aug 9   $50', row: 1, y: 250 }
+    ];
+    for (var i = 0; i < ords.length; i++) {
+        var o = ords[i];
+        var rowColor = rows[o.row].color;
+        ctx.fillStyle = '#f8f9fa';
+        ctx.fillRect(40, o.y - 18, 180, 30);
+        ctx.strokeStyle = rowColor; ctx.lineWidth = 1.5;
+        ctx.strokeRect(40, o.y - 18, 180, 30);
+        ctx.fillStyle = P.text; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(o.label, 130, o.y + 2);
+        // arrow to row r
+        var ry = ty + rh * (o.row + 1) + rh / 2;
+        ctx.strokeStyle = rowColor; ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(222, o.y - 3);
+        ctx.quadraticCurveTo(300, o.y - 3, tx - 4, ry);
+        ctx.stroke();
+        ctx.fillStyle = rowColor;
+        ctx.beginPath(); ctx.moveTo(tx - 2, ry); ctx.lineTo(tx - 12, ry - 5); ctx.lineTo(tx - 12, ry + 5); ctx.closePath(); ctx.fill();
+    }
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('join: order_date BETWEEN effective_from AND effective_to', w / 2, 216);
+    ctx.fillStyle = P.ink; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('result: Austin gets $40 + $60 = $100, Denver gets $50 + $30 = $80 — forever', w / 2, 286);
+})();
+
+// c3a: Type 1 store — same query, two different answers
+(function() {
+    var s = setup('c3a');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Type 1 store: the report drifts', w / 2, 22);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText("Maya's H1 spend attributed to Austin", w / 2, 42);
+
+    var runs = ['run in June', 're-run in Dec'];
+    var vals = [100, 0];
+    var colors = [P.blue, P.red];
+    var baseY = 230, chH = 150, maxY = 120;
+    var bx = [95, 245], bw = 90;
+
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(60, baseY - chH - 10); ctx.lineTo(60, baseY); ctx.lineTo(380, baseY); ctx.stroke();
+
+    for (var i = 0; i < 2; i++) {
+        var bh = vals[i] / maxY * chH;
+        ctx.fillStyle = colors[i]; ctx.globalAlpha = 0.55;
+        ctx.fillRect(bx[i], baseY - bh, bw, bh);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = colors[i]; ctx.lineWidth = 2;
+        ctx.strokeRect(bx[i], baseY - Math.max(bh, 2), bw, Math.max(bh, 2));
+        ctx.fillStyle = colors[i]; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('$' + vals[i], bx[i] + bw / 2, baseY - bh - 8);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+        ctx.fillText(runs[i], bx[i] + bw / 2, baseY + 18);
+    }
+
+    ctx.fillStyle = P.red; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('same query, $100 vanished', w / 2, 272);
+    ctx.fillStyle = P.mute; ctx.font = 'italic 11px system-ui';
+    ctx.fillText('illustrative amounts from the running example', w / 2, 290);
+})();
+
+// c3b: Type 2 store — same query, same answer forever
+(function() {
+    var s = setup('c3b');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Type 2 store: the report holds', w / 2, 22);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText("Maya's H1 spend attributed to Austin", w / 2, 42);
+
+    var runs = ['run in June', 're-run in Dec'];
+    var vals = [100, 100];
+    var baseY = 230, chH = 150, maxY = 120;
+    var bx = [85, 230], bw = 90;
+
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(55, baseY - chH - 10); ctx.lineTo(55, baseY); ctx.lineTo(365, baseY); ctx.stroke();
+
+    for (var i = 0; i < 2; i++) {
+        var bh = vals[i] / maxY * chH;
+        ctx.fillStyle = P.green; ctx.globalAlpha = 0.5;
+        ctx.fillRect(bx[i], baseY - bh, bw, bh);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+        ctx.strokeRect(bx[i], baseY - bh, bw, bh);
+        ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText('$' + vals[i], bx[i] + bw / 2, baseY - bh - 8);
+        ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+        ctx.fillText(runs[i], bx[i] + bw / 2, baseY + 18);
+    }
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('history rows make old answers stable', w / 2, 272);
+    ctx.fillStyle = P.mute; ctx.font = 'italic 11px system-ui';
+    ctx.fillText('the December run reads the closed Austin row', w / 2, 290);
+})();
+
+// c4: the three SCD types side by side
+(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 16px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Three Ways to Store "Austin → Denver"', w / 2, 26);
+
+    var panels = [
+        { x: 30,  title: 'Type 1: overwrite', color: P.red,
+          rows: [['city: Denver']], note1: 'past repainted', note2: 'use for typo fixes' },
+        { x: 262, title: 'Type 2: add a row', color: P.green,
+          rows: [['Austin · to 2025-06-30'], ['Denver · from 2025-07-01']], note1: 'full history', note2: 'use for real changes' },
+        { x: 494, title: 'Type 3: extra column', color: P.yellow,
+          rows: [['city: Denver · prev: Austin']], note1: 'one step of memory', note2: 'forgets the 2nd move' }
+    ];
+    var pw = 196;
+
+    for (var p = 0; p < panels.length; p++) {
+        var pn = panels[p];
+        ctx.fillStyle = pn.color; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(pn.title, pn.x + pw / 2, 62);
+        var y = 80;
+        for (var r = 0; r < pn.rows.length; r++) {
+            ctx.fillStyle = '#f8f9fa';
+            ctx.fillRect(pn.x, y, pw, 36);
+            ctx.strokeStyle = pn.color; ctx.lineWidth = 2;
+            ctx.strokeRect(pn.x, y, pw, 36);
+            ctx.fillStyle = P.text; ctx.font = '12px system-ui';
+            ctx.fillText(pn.rows[r][0], pn.x + pw / 2, y + 23);
+            y += 44;
+        }
+        ctx.fillStyle = pn.color; ctx.font = 'bold 12px system-ui';
+        ctx.fillText(pn.note1, pn.x + pw / 2, 208);
+        ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+        ctx.fillText(pn.note2, pn.x + pw / 2, 228);
+    }
+
+    // dividers
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(247, 46); ctx.lineTo(247, 240); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(479, 46); ctx.lineTo(479, 240); ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one question decides: would an old report ever need the old value?', w / 2, 270);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    ctx.fillText('yes → Type 2 · no → Type 1 · "just the last one" → Type 3', w / 2, 290);
+})();
+</script>
+
+</body>
+</html>

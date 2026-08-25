@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Why Some Code Dies at a Million Rows</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+li code, .example code { font-family: ui-monospace, Menlo, monospace; font-size: 0.9em; background: #f4f6f8; padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>Why Some Code Dies at a Million Rows</h1>
+<p class="subtitle">The same dedup written two ways: a nested loop that needs a trillion comparisons, and a set that needs a million — testing never showed the difference</p>
+
+<div class="card-section">
+    <h2>One Dedup, Written Two Ways</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">running example</span></div>
+                <ul>
+                    <li><b>The task</b> — a file of 1,000,000 emails; drop the duplicates</li>
+                    <li><b>Nested loop</b> — compare each email against every other: 10&sup6; &times; 10&sup6; = 10&sup1;&sup2; comparisons</li>
+                    <li><b>Set</b> — walk the list once, ask "seen before?": 10&sup6; checks, each ~1 step</li>
+                    <li><b>Same output</b> — both produce the identical deduped list</li>
+                    <li><b>Million-fold gap</b> — 10&sup1;&sup2; vs 10&sup6;: one runs for days, the other in a blink</li>
+                </ul>
+                <p class="example">Two loops nested = every row meets every row — a trillion meetings for a million rows.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> The nested loop isn't "slower code" — it does a million times more work for the same answer.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Watching It Grow: 1k, 10k, 100k, 1M Rows</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">worked example</span></div>
+                <ul>
+                    <li><b>The machine</b> — assume ~2 million pair-comparisons per second in plain Python</li>
+                    <li><b>1,000 rows</b> — loop: ~500k pairs, 0.25 s; set: 0.0002 s — both feel instant</li>
+                    <li><b>10,000 rows</b> — loop: 25 s (annoying); set: 0.002 s</li>
+                    <li><b>100,000 rows</b> — loop: ~42 minutes; set: 0.02 s</li>
+                    <li><b>1,000,000 rows</b> — loop: ~3 days; set: ~0.2 s</li>
+                </ul>
+                <p class="example">10× more rows made the set 10× slower — and made the loop 100× slower, every time.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Redo the math yourself: pairs &asymp; n²/2. At n = 10&sup6; that is 5&times;10&sup1;&sup1; — no hardware upgrade covers a factor of a million.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>"But It Worked Fine in Testing"</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag orange">watch out</span></div>
+                <ul>
+                    <li><b>The trap</b> — tests run on a 1,000-row sample: the loop takes 0.25 s and ships</li>
+                    <li><b>Production</b> — real data is 1M rows: 1,000&times; more rows, 1,000,000&times; more work</li>
+                    <li><b>The symptom</b> — "it's been running for six hours" on a job that tested in seconds</li>
+                    <li><b>No warning</b> — n² code is silent: no error, no crash, just a clock that never stops</li>
+                    <li><b>The fix is cheap</b> — a set, a dict, or a keyed merge usually removes the inner scan</li>
+                </ul>
+                <p class="example">At test size both bars are invisible; at production size one bar is 3 days tall.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> A fast test proves nothing about scale — estimate steps at real n before shipping, not after.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Finding the Hidden n² Before It Finds You</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag blue">rule of thumb</span></div>
+                <ul>
+                    <li><b>Loop in a loop</b> — the obvious form: <code>for a in rows: for b in rows:</code></li>
+                    <li><b>Disguised form</b> — <code>if x in big_list</code> inside a loop: the <code>in</code> is itself a full scan</li>
+                    <li><b>Pandas form</b> — <code>df.apply</code> that searches another dataframe per row</li>
+                    <li><b>Join form</b> — matching rows by looping instead of <code>merge</code> on a key</li>
+                    <li><b>The tell</b> — "for each row, look through all the rows" said in plain English</li>
+                </ul>
+                <p class="example"><code>x in my_list</code> and <code>x in my_set</code> read identically — one hides a 500,000-step scan.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Trusting how the code reads. Describe what it does per row — if the answer mentions "all the rows", it's n².
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: n×n comparison grid vs single pass through n boxes
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Every Row Meets Every Row vs One Pass With a Set', w / 2, 24);
+
+    ctx.strokeStyle = '#bdc3c7'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(360, 38); ctx.lineTo(360, h - 15); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // left: 10x10 grid of comparisons
+    var gx = 90, gy = 58, cell = 16, n = 10;
+    for (var i = 0; i < n; i++) {
+        for (var j = 0; j < n; j++) {
+            ctx.fillStyle = (i === j) ? P.grid : 'rgba(213,81,129,0.35)';
+            ctx.fillRect(gx + j * cell, gy + i * cell, cell - 1, cell - 1);
+        }
+    }
+    ctx.strokeStyle = P.magenta; ctx.lineWidth = 1.5;
+    ctx.strokeRect(gx - 1, gy - 1, n * cell + 1, n * cell + 1);
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('nested loop: n × n cells of work', 185, 242);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('10 rows → 100 cells shown here', 185, 262);
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('1M rows → 10^12 cells', 185, 282);
+
+    // right: single pass, one row of boxes into a set
+    var bx = 400, by = 105, bw2 = 26;
+    for (var i = 0; i < 10; i++) {
+        ctx.fillStyle = 'rgba(0,131,0,0.30)';
+        ctx.fillRect(bx + i * (bw2 + 4), by, bw2, 26);
+        ctx.strokeStyle = P.green; ctx.lineWidth = 1;
+        ctx.strokeRect(bx + i * (bw2 + 4), by, bw2, 26);
+    }
+    // arrow to set
+    var ax = bx + 10 * (bw2 + 4) / 2;
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, by + 34); ctx.lineTo(ax, by + 62); ctx.stroke();
+    ctx.fillStyle = P.green;
+    ctx.beginPath(); ctx.moveTo(ax, by + 68); ctx.lineTo(ax - 5, by + 59); ctx.lineTo(ax + 5, by + 59); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.strokeRect(ax - 70, by + 70, 140, 32);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('set: "seen before?"', ax, by + 90);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('one pass: n boxes of work', 540, 242);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('each check ~1 step (a dictionary lookup)', 540, 262);
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('1M rows → 10^6 checks', 540, 282);
+})();
+
+// c2: runtime vs rows, log-log, two lines
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var pad = { top: 46, bottom: 48, left: 78, right: 165 };
+    var cw = w - pad.left - pad.right, ch = h - pad.top - pad.bottom;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Dedup Runtime vs Rows (both axes log scale)', (pad.left + w - pad.right) / 2, 24);
+
+    // x: log10(n) 3..6 ; y: log10(seconds) -4..6
+    function X(ln) { return pad.left + (ln - 3) / 3 * cw; }
+    function Y(ls) { return pad.top + ch - (ls + 4) / 10 * ch; }
+
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+    var yt = [[-3, '1 ms'], [0, '1 s'], [2, '~2 min'], [Math.log10(250000), '3 days']];
+    for (var i = 0; i < yt.length; i++) {
+        ctx.beginPath(); ctx.moveTo(pad.left, Y(yt[i][0])); ctx.lineTo(pad.left + cw, Y(yt[i][0])); ctx.stroke();
+        ctx.textAlign = 'right';
+        ctx.fillText(yt[i][1], pad.left - 8, Y(yt[i][0]) + 4);
+    }
+    var xt = [[3, '1k'], [4, '10k'], [5, '100k'], [6, '1M']];
+    ctx.textAlign = 'center';
+    for (var i = 0; i < xt.length; i++) ctx.fillText(xt[i][1], X(xt[i][0]), pad.top + ch + 18);
+    ctx.strokeStyle = '#999';
+    ctx.beginPath(); ctx.moveTo(pad.left, pad.top); ctx.lineTo(pad.left, pad.top + ch);
+    ctx.lineTo(pad.left + cw, pad.top + ch); ctx.stroke();
+    ctx.fillStyle = '#444';
+    ctx.fillText('rows', pad.left + cw / 2, h - 12);
+
+    // loop: seconds = n^2/2 / 2e6 → log10 = 2ln - log10(4e6)
+    var loop = [[3, Math.log10(0.25)], [4, Math.log10(25)], [5, Math.log10(2500)], [6, Math.log10(250000)]];
+    // set: seconds = n / 5e6
+    var st = [[3, Math.log10(0.0002)], [4, Math.log10(0.002)], [5, Math.log10(0.02)], [6, Math.log10(0.2)]];
+
+    function line(pts, color) {
+        ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.beginPath();
+        for (var i = 0; i < pts.length; i++)
+            i === 0 ? ctx.moveTo(X(pts[i][0]), Y(pts[i][1])) : ctx.lineTo(X(pts[i][0]), Y(pts[i][1]));
+        ctx.stroke();
+        ctx.fillStyle = color;
+        for (var i = 0; i < pts.length; i++) {
+            ctx.beginPath(); ctx.arc(X(pts[i][0]), Y(pts[i][1]), 4, 0, 2 * Math.PI); ctx.fill();
+        }
+    }
+    line(loop, P.magenta);
+    line(st, P.green);
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('nested loop: ~3 days at 1M', X(6) + 10, Y(loop[3][1]) + 4);
+    ctx.fillStyle = P.green;
+    ctx.fillText('set: ~0.2 s at 1M', X(6) + 10, Y(st[3][1]) + 4);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('every 10× in rows: set ×10, loop ×100', pad.left + 12, pad.top + 16);
+})();
+
+// c3: test size vs production size, grouped bars (log scale)
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same Code, Two Worlds: Test Sample vs Production (log scale)', w / 2, 24);
+
+    // log10 seconds mapped to bar height; floor at -4
+    var minL = -4, maxL = 6;
+    var baseY = 230, chH = 160;
+    function BH(logS) { return (logS - minL) / (maxL - minL) * chH; }
+
+    var groups = [
+        { lab: 'testing: 1,000 rows', loop: Math.log10(0.25), set: Math.log10(0.0002),
+          loopTxt: '0.25 s', setTxt: '0.2 ms', x: 150 },
+        { lab: 'production: 1,000,000 rows', loop: Math.log10(250000), set: Math.log10(0.2),
+          loopTxt: '~3 days', setTxt: '0.2 s', x: 450 }
+    ];
+    var barW = 70;
+
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(60, baseY); ctx.lineTo(660, baseY); ctx.stroke();
+
+    for (var g = 0; g < 2; g++) {
+        var gr = groups[g];
+        var bhL = BH(gr.loop), bhS = Math.max(6, BH(gr.set));
+        ctx.fillStyle = P.magenta; ctx.globalAlpha = 0.75;
+        ctx.fillRect(gr.x, baseY - bhL, barW, bhL);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(gr.loopTxt, gr.x + barW / 2, baseY - bhL - 8);
+
+        ctx.fillStyle = P.green; ctx.globalAlpha = 0.75;
+        ctx.fillRect(gr.x + barW + 20, baseY - bhS, barW, bhS);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui';
+        ctx.fillText(gr.setTxt, gr.x + barW + 20 + barW / 2, baseY - bhS - 8);
+
+        ctx.fillStyle = '#333'; ctx.font = 'bold 12px system-ui';
+        ctx.fillText(gr.lab, gr.x + barW + 10, baseY + 20);
+    }
+
+    var lx = w - 130;
+    ctx.textAlign = 'left'; ctx.font = '12px system-ui';
+    ctx.fillStyle = P.magenta; ctx.fillRect(lx, 50, 12, 12);
+    ctx.fillStyle = '#222'; ctx.fillText('nested loop', lx + 17, 60);
+    ctx.fillStyle = P.green; ctx.fillRect(lx, 70, 12, 12);
+    ctx.fillStyle = '#222'; ctx.fillText('set', lx + 17, 80);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('1,000× more rows → 1,000,000× more loop work: the test never saw it coming', w / 2, 285);
+})();
+
+// c4: 'x in list' vs 'x in set' — cost of 1M membership checks
+(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('The Same "in" Keyword: 1M Checks Against 1M Items', w / 2, 24);
+
+    var rows = [
+        { code: 'for x in emails:  if x in seen_list', steps: 'avg 500,000 steps per check → 5×10^11 total',
+          time: '~3 days', frac: 1.0, c: P.magenta },
+        { code: 'for x in emails:  if x in seen_set', steps: '~1 step per check → 10^6 total',
+          time: '~0.2 s', frac: 0.004, c: P.green }
+    ];
+    var px = 60, pw = 540, top = 66, rowH = 92;
+
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        var y = top + i * rowH;
+        ctx.fillStyle = '#333'; ctx.font = 'bold 13px ui-monospace, Menlo, monospace'; ctx.textAlign = 'left';
+        ctx.fillText(r.code, px, y);
+        ctx.fillStyle = P.mute; ctx.font = '12px system-ui';
+        ctx.fillText(r.steps, px, y + 18);
+        ctx.fillStyle = r.c; ctx.globalAlpha = 0.75;
+        ctx.fillRect(px, y + 28, Math.max(6, r.frac * pw), 22);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = r.c; ctx.font = 'bold 13px system-ui';
+        ctx.fillText(r.time, px + Math.max(6, r.frac * pw) + 10, y + 44);
+    }
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('one word of difference in the code — a factor of a million in the work', w / 2, 275);
+})();
+</script>
+
+</body>
+</html>

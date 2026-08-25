@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multi-Source Schema Inconsistency</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.metric strong {
+    color: #1a5276;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Multi-Source Schema Inconsistency</h1>
+<p class="subtitle">Multiple sources fit same schema but encode values differently, creating semantic confusion.</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">schema</span></div>
+                <ul>
+                    <li><b>Same schema, different meaning</b> — sources share column names but encode values differently</li>
+                    <li><b>Semantic drift</b> — "status=active" means logged-in in source A, not-suspended in source B</li>
+                    <li><b>Encoding chaos</b> — dates arrive as ISO strings, Unix timestamps, and plain text in one column</li>
+                    <li><b>Unit mismatch</b> — source A logs revenue in cents (4500) while source B logs dollars (45.00)</li>
+                    <li><b>Ambiguous NULLs</b> — NULL means not-applicable, unknown, or still-processing depending on source</li>
+                    <li><b>Blind union</b> — the pipeline merges rows without normalizing, so the model learns source noise</li>
+                </ul>
+                <p class="example">An engagement score arrives as 0-100 from web but as 0-5 stars times 20 from mobile, so mobile retention predictions come out 35% off.</p>
+                <div class="key-point">
+                    <strong>Impact:</strong> Predictions become biased by which source a row came from, and the corruption is silent because data types still match.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">validation</span></div>
+                <ul>
+                    <li><b>Syntax-only checks</b> — schema validation confirms names and types, never units or meaning</li>
+                    <li><b>False confidence</b> — structural compatibility gets mistaken for semantic compatibility</li>
+                    <li><b>Unit mismatch</b> — "amount" is cents in system A and dollars in system B; both pass as numeric</li>
+                    <li><b>Timezone mismatch</b> — UTC in one source, local time in another; both are valid TIMESTAMP values</li>
+                    <li><b>Code mismatch</b> — status=1 means "active" for vendor A but "pending" for vendor B</li>
+                </ul>
+                <p class="example">Merging web clickstream in UTC with mobile clickstream in device-local time passes the schema check but silently computes wrong session durations.</p>
+                <div class="key-point">
+                    <strong>Root Cause:</strong> Schema validation checks syntax only, so two sources can be schema-compatible yet semantically incompatible.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">data contracts</span></div>
+                <ul>
+                    <li><b>Separate until normalized</b> — treat each source as its own entity until explicitly converted</li>
+                    <li><b>Tag provenance</b> — add a source_id column to every row so distributions stay traceable</li>
+                    <li><b>Profile per source</b> — compare each source's distributions before merge to expose unit gaps</li>
+                    <li><b>Semantic contracts</b> — specify units, timezone, encoding, and null meaning, not just types</li>
+                    <li><b>Split when divergent</b> — genuinely different meanings get separate features or models</li>
+                </ul>
+                <p class="example">A contract states web sends cents in UTC and mobile sends dollars in local time, so ETL normalizes both to dollars/UTC before the merge.</p>
+                <div class="key-point">
+                    <strong>Fix:</strong> Validate a per-source data contract covering units, timezone, value ranges, and null meaning before any union.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Multi-Source Schema Inconsistency', w/2, 22);
+
+    // Three source boxes
+    var sources = [
+        {name: 'Source A', y: 55, encoding: 'cents (4500)', color: '#27ae60'},
+        {name: 'Source B', y: 110, encoding: 'dollars (45.00)', color: '#2980b9'},
+        {name: 'Source C', y: 165, encoding: 'EUR (38.50)', color: '#e67e22'}
+    ];
+
+    sources.forEach(function(src) {
+        ctx.strokeStyle = src.color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(40, src.y, 140, 35);
+        ctx.fillStyle = src.color;
+        ctx.font = 'bold 12px system-ui';
+        ctx.textAlign = 'left';
+        ctx.fillText(src.name, 50, src.y + 16);
+        ctx.font = '10px system-ui';
+        ctx.fillText('revenue: ' + src.encoding, 50, src.y + 28);
+    });
+
+    // Arrows pointing to unified table
+    sources.forEach(function(src) {
+        ctx.strokeStyle = '#666';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(180, src.y + 17);
+        ctx.lineTo(270, 130);
+        ctx.stroke();
+    });
+
+    // Unified table (column)
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(280, 70, 160, 120);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Unified Table', 360, 90);
+    ctx.fillText('revenue column', 360, 105);
+
+    // Mixed values showing chaos
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '11px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('4500', 300, 125);
+    ctx.fillText('45.00', 300, 140);
+    ctx.fillText('38.50', 300, 155);
+    ctx.fillText('5200', 300, 170);
+
+    // Annotation
+    ctx.fillStyle = '#666';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('same field,', 360, 130);
+    ctx.fillText('different units', 360, 142);
+    ctx.fillText('& semantics', 360, 154);
+
+    // Chaos indicator
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(500, 130, 50, 0, 2 * Math.PI);
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 16px system-ui';
+    ctx.fillText('CHAOS', 500, 135);
+    ctx.font = '10px system-ui';
+    ctx.fillText('Model sees', 500, 150);
+    ctx.fillText('incoherent data', 500, 162);
+
+    // Bottom annotation
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Same schema, incompatible encodings → Model learns noise, not signal', w/2, h - 10);
+})();
+
+// Canvas 2: Why It Happens - schema passes but semantics differ
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Schema Passes, Semantics Diverge', w/2, 22);
+
+    // Source A box
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(40, 50, 150, 80);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Source A', 115, 68);
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('column: "amount"', 115, 86);
+    ctx.fillText('type: INTEGER', 115, 101);
+    ctx.font = 'bold 13px monospace';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('1500', 115, 120);
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.fillText('(cents)', 115, 132);
+
+    // Source B box
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(40, 160, 150, 80);
+    ctx.fillStyle = '#2980b9';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Source B', 115, 178);
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('column: "amount"', 115, 196);
+    ctx.fillText('type: FLOAT', 115, 211);
+    ctx.font = 'bold 13px monospace';
+    ctx.fillStyle = '#2980b9';
+    ctx.fillText('15.00', 115, 230);
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.fillText('(dollars)', 115, 242);
+
+    // Schema check box (green checkmark - passes)
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(240, 100, 130, 50);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Schema Check', 305, 118);
+    ctx.font = '18px system-ui';
+    ctx.fillText('✓ PASS', 305, 140);
+
+    // Arrows from sources to schema check
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(190, 90);
+    ctx.lineTo(240, 115);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(190, 200);
+    ctx.lineTo(240, 135);
+    ctx.stroke();
+
+    // Arrow from schema check to merged table
+    ctx.beginPath();
+    ctx.moveTo(370, 125);
+    ctx.lineTo(420, 125);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(415, 120);
+    ctx.lineTo(420, 125);
+    ctx.lineTo(415, 130);
+    ctx.stroke();
+
+    // Merged table with inconsistent values
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(430, 70, 160, 110);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Merged Table', 510, 88);
+
+    // Table rows
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('amount', 445, 108);
+    ctx.fillText('------', 445, 118);
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('1500    (cents!)', 445, 132);
+    ctx.fillStyle = '#2980b9';
+    ctx.fillText('15.00   (dollars!)', 445, 146);
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('2300    (cents!)', 445, 160);
+    ctx.fillStyle = '#2980b9';
+    ctx.fillText('42.50   (dollars!)', 445, 174);
+
+    // Red warning triangle
+    ctx.fillStyle = '#e74c3c';
+    ctx.beginPath();
+    ctx.moveTo(620, 90);
+    ctx.lineTo(640, 120);
+    ctx.lineTo(600, 120);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('!', 620, 116);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '10px system-ui';
+    ctx.fillText('100x', 620, 138);
+    ctx.fillText('error', 620, 150);
+
+    // Bottom annotation
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Schema validates syntax (name, type) — not semantics (units, meaning)', w/2, h - 10);
+})();
+
+// Canvas 3: The Correct Approach - semantic validation and normalization
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Semantic Validation + Normalization', w/2, 22);
+
+    // Source A box
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(20, 50, 110, 55);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Source A', 75, 67);
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('amount: cents', 75, 82);
+    ctx.fillText('tz: UTC', 75, 95);
+
+    // Source B box
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(20, 125, 110, 55);
+    ctx.fillStyle = '#2980b9';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Source B', 75, 142);
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('amount: dollars', 75, 157);
+    ctx.fillText('tz: local', 75, 170);
+
+    // Arrows from sources to semantic validation
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(130, 77);
+    ctx.lineTo(170, 100);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(130, 152);
+    ctx.lineTo(170, 130);
+    ctx.stroke();
+
+    // Semantic Validation layer
+    ctx.fillStyle = '#f0f4f8';
+    ctx.fillRect(170, 60, 130, 100);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(170, 60, 130, 100);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Semantic', 235, 78);
+    ctx.fillText('Validation', 235, 92);
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('Check contracts:', 235, 110);
+    ctx.fillText('units, tz, ranges', 235, 123);
+    ctx.fillText('encoding, nulls', 235, 136);
+
+    // Arrow to normalization
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(300, 110);
+    ctx.lineTo(340, 110);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(335, 105);
+    ctx.lineTo(340, 110);
+    ctx.lineTo(335, 115);
+    ctx.stroke();
+
+    // Normalization step
+    ctx.fillStyle = '#fef9e7';
+    ctx.fillRect(340, 70, 130, 80);
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(340, 70, 130, 80);
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Normalization', 405, 88);
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('cents → dollars', 405, 105);
+    ctx.fillText('local → UTC', 405, 118);
+    ctx.fillText('+ add source_id', 405, 131);
+
+    // Arrow to merged output
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(470, 110);
+    ctx.lineTo(510, 110);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(505, 105);
+    ctx.lineTo(510, 110);
+    ctx.lineTo(505, 115);
+    ctx.stroke();
+
+    // Clean merged output
+    ctx.fillStyle = '#eafaf1';
+    ctx.fillRect(510, 55, 180, 120);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(510, 55, 180, 120);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Clean Merged Output', 600, 72);
+
+    // Table header
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('amount  tz   source_id', 520, 90);
+    ctx.fillText('------  ---  ---------', 520, 100);
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('15.00   UTC  web', 520, 114);
+    ctx.fillText('15.00   UTC  mobile', 520, 128);
+    ctx.fillText('23.00   UTC  web', 520, 142);
+    ctx.fillText('42.50   UTC  mobile', 520, 156);
+
+    // Green checkmark
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 24px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('✓', 670, 170);
+
+    // Data contract note at bottom
+    ctx.fillStyle = '#1a5276';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Data Contract: units=dollars, tz=UTC, source_id required', w/2, 205);
+
+    // Bottom annotation
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Semantic contracts + normalization + source_id = consistent, auditable data', w/2, h - 10);
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Columnar Stores</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+li code, .example code { font-family: ui-monospace, Menlo, monospace; font-size: 0.9em; background: #f4f6f8; padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>Columnar Stores</h1>
+<p class="subtitle">"Average order value over 100 million orders" only needs the amount column — so store each column together and read one column, not every row</p>
+
+<div class="card-section">
+    <h2>A Question That Needs One Column of a Hundred Million Rows</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">running example</span></div>
+                <ul>
+                    <li><b>The setup</b> — an orders table: 100M rows, 10 columns, about 8 GB on disk</li>
+                    <li><b>The question</b> — <code>SELECT AVG(amount) FROM orders</code>: it touches ONE column</li>
+                    <li><b>Row storage</b> — rows sit whole on disk, so reading amount drags 9 other columns along</li>
+                    <li><b>Column storage</b> — all 100M amounts sit together: read just that strip, 0.8 GB</li>
+                    <li><b>10x less disk read</b> — 0.8 GB instead of 8 GB, before compression helps further</li>
+                </ul>
+                <p class="example">Disks hand back data in blocks — you can't grab one field out of a row block without reading the block.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Analytics questions touch few columns of many rows, so laying data out column-by-column means reading only what the question asks about.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Four Orders, Byte by Byte, Both Ways</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">worked example</span></div>
+                <ul>
+                    <li><b>The orders</b> — ids 501-504, amounts 12, 40, 12, 95, statuses shipped ×3, returned ×1</li>
+                    <li><b>Row layout</b> — disk reads left to right: id, user, amount, status, id, user, amount, status...</li>
+                    <li><b>Column layout</b> — same bytes regrouped: all ids, then all users, then all amounts...</li>
+                    <li><b>AVG(amount), row layout</b> — touch all 16 cells to use 4 of them</li>
+                    <li><b>AVG(amount), column layout</b> — jump to the amount strip, read 4 cells, done</li>
+                </ul>
+                <p class="example">Same 16 values in both drawings — only the order they sit on disk changes.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> With 4 columns the saving is 4x; with the real table's 10 columns it's 10x — the win grows with table width, not table length.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Compression Loves Columns</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag green">worked example</span></div>
+                <ul>
+                    <li><b>Columns are same-typed</b> — a strip of only statuses, or only dates, repeats heavily</li>
+                    <li><b>Run-length</b> — "shipped, shipped, shipped, returned" becomes "shipped ×3, returned ×1"</li>
+                    <li><b>Dictionary</b> — 5 distinct statuses across 100M rows: store each as a number 0-4</li>
+                    <li><b>Rows mix types</b> — id next to text next to a date: no pattern for the compressor</li>
+                    <li><b>Compound win</b> — read 1 of 10 columns, then ~5x compression: ~0.16 GB, not 8 GB</li>
+                </ul>
+                <p class="example">The status column has 100M values but only 5 distinct ones — a compressor's dream.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Columnar wins twice — skip the columns you don't need, then compress the ones you do far better than mixed-type rows ever compress.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why Warehouses Are Columnar — and App Databases Aren't</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag red">common mistake</span></div>
+                <ul>
+                    <li><b>Warehouse queries</b> — averages, group-bys, trends: few columns, all the rows</li>
+                    <li><b>App queries</b> — "show order 501": all columns, one row — row layout is perfect there</li>
+                    <li><b>That's the split</b> — BigQuery, Redshift, Snowflake, Parquet files: columnar; the checkout database: rows</li>
+                    <li><b>The classic mistake</b> — <code>SELECT *</code> in a warehouse reads all 10 column strips: the 10x win gone</li>
+                    <li><b>Writes cost more</b> — inserting one order touches every column strip, so columnar loads in batches</li>
+                </ul>
+                <p class="example">Warehouses bill by bytes scanned — <code>SELECT *</code> on the orders table costs 10x the two-column query.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Column layout only pays when you name your columns — <code>SELECT *</code> turns a columnar store back into a slow, expensive row store.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: bytes read for AVG(amount) — 8 GB vs 0.8 GB
+(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('AVG(amount) over 100M orders: bytes the disk must hand over', w / 2, 24);
+
+    // row store: 10 column segments all read
+    var segW = 52, segH = 44, x0 = 100, y1 = 70, y2 = 175;
+    var colNames = ['id', 'user', 'amount', 'status', 'date', 'ship', 'tax', 'disc', 'src', 'note'];
+
+    ctx.fillStyle = '#333'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('row store', 20, y1 + 27);
+    for (var i = 0; i < 10; i++) {
+        var x = x0 + i * (segW + 2);
+        ctx.fillStyle = 'rgba(217,89,38,0.55)';
+        ctx.fillRect(x, y1, segW, segH);
+        ctx.strokeStyle = P.orange; ctx.lineWidth = 1;
+        ctx.strokeRect(x, y1, segW, segH);
+        ctx.fillStyle = '#7a3312'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(colNames[i], x + segW / 2, y1 + 26);
+    }
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('8 GB read', x0 + 10 * (segW + 2) + 10, y1 + 27);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('columns interleaved inside every row — reading amount drags all 10 along', x0 + 5 * (segW + 2), y1 + segH + 18);
+
+    ctx.fillStyle = '#333'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('column store', 20, y2 + 27);
+    for (var i = 0; i < 10; i++) {
+        var x = x0 + i * (segW + 2);
+        var hot = (i === 2);
+        ctx.fillStyle = hot ? 'rgba(0,131,0,0.6)' : 'rgba(42,120,214,0.12)';
+        ctx.fillRect(x, y2, segW, segH);
+        ctx.strokeStyle = hot ? P.green : '#b9c2cc'; ctx.lineWidth = hot ? 2.5 : 1;
+        ctx.strokeRect(x, y2, segW, segH);
+        ctx.fillStyle = hot ? '#fff' : P.mute; ctx.font = hot ? 'bold 11px system-ui' : '11px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(colNames[i], x + segW / 2, y2 + 26);
+    }
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('0.8 GB read', x0 + 10 * (segW + 2) + 10, y2 + 27);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('each column stored as its own strip — 9 strips never touched', x0 + 5 * (segW + 2), y2 + segH + 18);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 14px system-ui';
+    ctx.fillText('10x less I/O by skipping the columns the question never mentions', w / 2, 282);
+})();
+
+// c2: 4 orders drawn byte-by-byte, row layout vs column layout
+(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Same 4 Orders on Disk — read order shown left to right', w / 2, 24);
+
+    var ids = ['501', '502', '503', '504'];
+    var users = ['u17', 'u02', 'u17', 'u31'];
+    var amts = ['12', '40', '12', '95'];
+    var stats = ['shp', 'shp', 'shp', 'ret'];
+    var colors = { id: P.blue, user: P.aqua, amount: P.yellow, status: P.violet };
+
+    var cw = 38, ch = 30, x0 = 105;
+
+    function cell(x, y, txt, c, hot) {
+        ctx.fillStyle = hot ? c : '#f4f6f8';
+        ctx.globalAlpha = hot ? 0.85 : 1;
+        ctx.fillRect(x, y, cw, ch);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = c; ctx.lineWidth = hot ? 2 : 1;
+        ctx.strokeRect(x, y, cw, ch);
+        ctx.fillStyle = hot ? '#fff' : '#666';
+        ctx.font = (hot ? 'bold ' : '') + '11px ui-monospace, Menlo, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(txt, x + cw / 2, y + 19);
+    }
+
+    // row layout: id,user,amount,status per order, 16 cells in a line
+    var y1 = 66;
+    ctx.fillStyle = '#333'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('row layout', 18, y1 + 19);
+    for (var o = 0; o < 4; o++) {
+        var vals = [ids[o], users[o], amts[o], stats[o]];
+        var keys = ['id', 'user', 'amount', 'status'];
+        for (var f = 0; f < 4; f++) {
+            cell(x0 + (o * 4 + f) * (cw - 1), y1, vals[f], colors[keys[f]], keys[f] === 'amount');
+        }
+    }
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('the 4 amounts are scattered — every cell must stream past to collect them', x0 + 8 * (cw - 1), y1 + ch + 18);
+
+    // column layout: grouped
+    var y2 = 165;
+    ctx.fillStyle = '#333'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('column layout', 18, y2 + 19);
+    var groups = [
+        { vals: ids, key: 'id' },
+        { vals: users, key: 'user' },
+        { vals: amts, key: 'amount' },
+        { vals: stats, key: 'status' }
+    ];
+    var gi = 0;
+    for (var g = 0; g < 4; g++) {
+        for (var v = 0; v < 4; v++) {
+            cell(x0 + gi * (cw - 1), y2, groups[g].vals[v], colors[groups[g].key], groups[g].key === 'amount');
+            gi++;
+        }
+    }
+    // bracket over the amount strip
+    var bx1 = x0 + 8 * (cw - 1), bx2 = x0 + 12 * (cw - 1);
+    ctx.strokeStyle = P.yellow; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(bx1, y2 - 8); ctx.lineTo(bx1, y2 - 14);
+    ctx.lineTo(bx2, y2 - 14); ctx.lineTo(bx2, y2 - 8);
+    ctx.stroke();
+    ctx.fillStyle = P.yellow; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('seek here, read 4 cells, stop', (bx1 + bx2) / 2, y2 - 20);
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('all ids, then all users, then all amounts, then all statuses', x0 + 8 * (cw - 1), y2 + ch + 18);
+
+    ctx.fillStyle = P.green; ctx.font = 'bold 14px system-ui';
+    ctx.fillText('AVG(amount): 4 cells touched instead of 16 — same data, 4x less read', w / 2, 282);
+})();
+
+// c3: compression of the status column
+(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Why a Column Strip Compresses So Well (status column)', w / 2, 24);
+
+    // raw strip: repeated statuses
+    var seq = ['shipped', 'shipped', 'shipped', 'shipped', 'returned', 'shipped', 'shipped', 'pending'];
+    var colorOf = { shipped: P.aqua, returned: P.magenta, pending: P.yellow };
+    var cw = 74, chh = 30, x0 = 95, y1 = 62;
+
+    ctx.fillStyle = '#333'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('raw', 40, y1 + 20);
+    for (var i = 0; i < seq.length; i++) {
+        var x = x0 + i * (cw - 1);
+        ctx.fillStyle = colorOf[seq[i]]; ctx.globalAlpha = 0.35;
+        ctx.fillRect(x, y1, cw, chh);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = colorOf[seq[i]]; ctx.lineWidth = 1.2;
+        ctx.strokeRect(x, y1, cw, chh);
+        ctx.fillStyle = '#444'; ctx.font = '11px ui-monospace, Menlo, monospace'; ctx.textAlign = 'center';
+        ctx.fillText(seq[i], x + cw / 2, y1 + 19);
+    }
+    ctx.fillStyle = P.mute; ctx.font = '11px system-ui';
+    ctx.fillText('... repeats like this for 100M values, only 5 distinct words', x0 + 3.5 * cw, y1 + chh + 16);
+
+    // run-length encoded strip
+    var y2 = 140;
+    var rle = [
+        { txt: 'shipped ×4', wgt: 4, c: P.aqua },
+        { txt: 'returned ×1', wgt: 1.6, c: P.magenta },
+        { txt: 'shipped ×2', wgt: 2, c: P.aqua },
+        { txt: 'pending ×1', wgt: 1.6, c: P.yellow }
+    ];
+    ctx.fillStyle = '#333'; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('encoded', 25, y2 + 20);
+    var x = x0;
+    for (var i = 0; i < rle.length; i++) {
+        var bw2 = rle[i].wgt * 32;
+        ctx.fillStyle = rle[i].c; ctx.globalAlpha = 0.6;
+        ctx.fillRect(x, y2, bw2, chh);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = rle[i].c; ctx.lineWidth = 1.5;
+        ctx.strokeRect(x, y2, bw2, chh);
+        ctx.fillStyle = '#333'; ctx.font = 'bold 10px ui-monospace, Menlo, monospace'; ctx.textAlign = 'center';
+        ctx.fillText(rle[i].txt, x + bw2 / 2, y2 + 19);
+        x += bw2 + 2;
+    }
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('run-length: value + count', x + 14, y2 + 20);
+
+    // bytes scanned funnel
+    var y3 = 210;
+    var funnel = [
+        { lab: 'whole table (row store)', v: 8, c: P.orange },
+        { lab: 'amount column only', v: 0.8, c: P.blue },
+        { lab: 'amount column, compressed', v: 0.16, c: P.green }
+    ];
+    var px = 260, pw = 330, maxV = 8;
+    for (var i = 0; i < funnel.length; i++) {
+        var y = y3 + i * 26;
+        ctx.fillStyle = '#333'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(funnel[i].lab, 40, y + 13);
+        var bw3 = Math.max(funnel[i].v / maxV * pw, 5);
+        ctx.fillStyle = funnel[i].c; ctx.globalAlpha = 0.7;
+        ctx.fillRect(px, y, bw3, 17);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = funnel[i].c; ctx.font = 'bold 12px system-ui';
+        ctx.fillText(funnel[i].v + ' GB', px + bw3 + 8, y + 13);
+    }
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('50x less than the row store scan — skip, then squeeze', w / 2, 295);
+})();
+
+// c4: two workloads, opposite access shapes
+(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Two Workloads Cut the Table in Opposite Directions', w / 2, 24);
+
+    ctx.strokeStyle = '#bdc3c7'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(360, 38); ctx.lineTo(360, 258); ctx.stroke();
+    ctx.setLineDash([]);
+
+    var nR = 7, nC = 10, cell2 = 24, gap2 = 3;
+    function grid(x0, y0, hotFn, hotColor) {
+        for (var r = 0; r < nR; r++) {
+            for (var c = 0; c < nC; c++) {
+                var hot = hotFn(r, c);
+                ctx.fillStyle = hot ? hotColor : 'rgba(107,114,128,0.14)';
+                ctx.fillRect(x0 + c * (cell2 + gap2 - 3), y0 + r * (cell2 + gap2 - 3), cell2 - 4, cell2 - 4);
+            }
+        }
+    }
+
+    // left: app query — one row, all columns
+    ctx.fillStyle = P.violet; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('app: "show order 501"', 190, 56);
+    grid(45, 70, function(r, c) { return r === 3; }, 'rgba(74,58,167,0.75)');
+    ctx.fillStyle = P.violet; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('one row, every column → row store wins', 190, 240);
+
+    // right: analytics — one column, all rows
+    ctx.fillStyle = P.green; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('analytics: AVG(amount)', 545, 56);
+    grid(400, 70, function(r, c) { return c === 4; }, 'rgba(0,131,0,0.7)');
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('one column, every row → column store wins', 545, 240);
+
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('SELECT * lights up the whole grid either way — name your columns in a warehouse', w / 2, 285);
+})();
+</script>
+
+</body>
+</html>

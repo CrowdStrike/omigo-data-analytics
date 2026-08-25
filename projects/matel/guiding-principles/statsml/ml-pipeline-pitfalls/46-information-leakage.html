@@ -78,6 +78,20 @@ ul {
     font-size: 0.92rem;
 }
 li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
 </style>
 </head>
 <body>
@@ -90,17 +104,19 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>Information that wouldn't be available at prediction time leaks into training, inflating offline metrics while guaranteeing production failure. Includes future data, test set signals, or cross-entity contamination. The model learns shortcuts that don't exist in reality.</p>
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">leakage</span></div>
                 <ul>
-                    <li><strong>Temporal boundaries:</strong> Feature uses data from after the prediction timestamp—e.g., "user churned 30 days later" as feature when predicting churn; model sees the answer</li>
-                    <li><strong>Train-test boundaries:</strong> Normalization or imputation computed on full dataset including test set, leaking test distribution into training preprocessing</li>
-                    <li><strong>Entity boundaries:</strong> User-level features include aggregates from other users in same test batch, leaking cross-user signals that won't be available for isolated predictions</li>
-                    <li><strong>Target encoding leakage:</strong> Categorical feature encoded with target mean computed on full dataset, directly embedding label information into feature</li>
+                    <li><b>The leak</b> — training uses information that will not exist at prediction time</li>
+                    <li><b>Temporal</b> — a feature reads data from after the prediction time, revealing the answer</li>
+                    <li><b>Train-test</b> — normalization or imputation fit on the full dataset leaks the test distribution</li>
+                    <li><b>Entity</b> — user features built from other users in the same batch leak cross-user signals</li>
+                    <li><b>Target encoding</b> — encoding categories with full-dataset target means embeds the label itself</li>
+                    <li><b>Shortcut learning</b> — the model memorizes patterns that violate causality and cannot generalize</li>
                 </ul>
+                <p class="example">A loan-default feature computed from account status 90 days after approval scores AUC 0.97 in training but 0.53 in production.</p>
                 <div class="key-point">
-                    <strong>Impact:</strong> Artificially perfect offline metrics (AUC > 0.99) collapse to random performance (AUC ~ 0.5) in production. Model has memorized patterns that don't generalize because they violate causality. <strong>Fix:</strong> Enforce strict temporal ordering—features use only data from before prediction time. Compute preprocessing statistics only on training set. Isolate entity-level computations. Simulate production data availability during training.
+                    <strong>Impact:</strong> Artificially strong offline metrics collapse to near-random in production once the leaked signal disappears.
                 </div>
-                <p class="example">Example: Predicting loan default. Feature "account_closed_within_90_days" computed from future data (loans approved today, account status checked 90 days later). Training AUC = 0.97; production AUC = 0.52. Model learned that closed accounts default (true) but can't predict closures in advance (leakage).</p>
             </td>
             <td class="viz-col">
                 <canvas id="c1" width="720" height="300"></canvas>
@@ -114,19 +130,19 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>Information leakage is an umbrella term covering many distinct failure modes. Each has different mechanics but the same symptom: unrealistically good offline metrics.</p>
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">boundaries</span></div>
                 <ul>
-                    <li><strong>Temporal leakage:</strong> Using future data to predict past events—features computed from data that didn't exist at prediction time</li>
-                    <li><strong>Split leakage:</strong> Same entity appears in train and test (grouped data not split by group)—e.g., multiple visits from one patient in both sets</li>
-                    <li><strong>Deployment leakage:</strong> Features available offline but not at prediction time—batch-computed fields unavailable in real-time serving</li>
-                    <li><strong>Label leakage:</strong> Target variable encoded into features (e.g., "cancelled_reason" predicting churn)—direct or indirect label exposure</li>
-                    <li><strong>Population leakage:</strong> Training population differs from deployment population—selection bias in who enters the dataset</li>
-                    <li><strong>Knowledge leakage:</strong> Domain knowledge about label inadvertently encoded during feature engineering</li>
+                    <li><b>No enforced boundary</b> — offline, all data coexists, so any stage can cross the prediction line</li>
+                    <li><b>Temporal leakage</b> — features are computed from data that did not exist at prediction time</li>
+                    <li><b>Split leakage</b> — grouped data split by row puts the same patient in both train and test</li>
+                    <li><b>Deployment leakage</b> — batch-computed features exist offline but are missing at serve time</li>
+                    <li><b>Label leakage</b> — fields like "cancelled_reason" encode the target directly into a feature</li>
+                    <li><b>Population leakage</b> — selection bias makes the training population differ from deployment</li>
                 </ul>
+                <p class="example">A hospital readmission model hits AUC 0.98 offline using "discharge_summary_text", a field only populated after the readmission decision.</p>
                 <div class="key-point">
-                    <strong>Root cause:</strong> Leakage is an umbrella term covering many distinct failure modes. Each has different mechanics but the same symptom: unrealistically good offline metrics. Recognizing which type you have determines the fix.
+                    <strong>Root Cause:</strong> Nothing in an offline pipeline enforces the prediction-time boundary, so every stage can silently cross it — and which boundary was crossed determines the fix.
                 </div>
-                <p class="example">Example: A hospital readmission model uses "discharge_summary_text" which contains phrases like "patient likely to return." The model achieves 98% AUC offline but the field isn't populated until after the readmission decision is made.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c2" width="720" height="300"></canvas>
@@ -140,18 +156,19 @@ li { margin-bottom: 4px; }
     <table class="layout">
         <tr>
             <td class="text-col">
-                <p>The universal test for leakage: "Is this feature available at prediction time?" Every feature must pass this test before inclusion in the training pipeline.</p>
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">availability</span></div>
                 <ul>
-                    <li><strong>Feature availability audit:</strong> Apply the universal test—"Is this feature available at prediction time?"</li>
-                    <li><strong>Feature parity:</strong> Ensure feature parity between training and serving environments—no offline-only features</li>
-                    <li><strong>Entity-aware splits:</strong> Split by entity (patient, user, session) not by row—all rows from one entity stay together</li>
-                    <li><strong>Time-based splits:</strong> For temporal data, train on past, validate on future—never shuffle time series</li>
-                    <li><strong>Feature registry:</strong> Document when each feature becomes available relative to prediction time</li>
+                    <li><b>Availability test</b> — ask of every feature: is it available at prediction time, yes or no</li>
+                    <li><b>Train-only stats</b> — fit normalization, imputation, and encodings on train, then freeze them</li>
+                    <li><b>Entity splits</b> — split by patient, user, or session so one entity never spans both sides</li>
+                    <li><b>Time splits</b> — train on the past, validate on the future; never shuffle a time series</li>
+                    <li><b>Feature parity</b> — ensure the serving environment computes every feature training relied on</li>
+                    <li><b>Feature registry</b> — record when each feature becomes available relative to prediction time</li>
                 </ul>
+                <p class="example">A registry stores available_at per feature (T-0, T+1h, T+1d), and the training pipeline auto-excludes any feature with available_at past the prediction time.</p>
                 <div class="key-point">
-                    <strong>Best practice:</strong> For every feature, document when it becomes available relative to prediction time. Build a feature availability timeline. Any feature filled after the prediction moment is leakage.
+                    <strong>Fix:</strong> Document each feature's availability relative to prediction time — any feature filled after the prediction moment is leakage.
                 </div>
-                <p class="example">Example: Feature registry has columns: feature_name, available_at (e.g., "T-0", "T+1h", "T+1d"). Training pipeline automatically excludes any feature where available_at > prediction_time.</p>
             </td>
             <td class="viz-col">
                 <canvas id="c3" width="720" height="300"></canvas>
