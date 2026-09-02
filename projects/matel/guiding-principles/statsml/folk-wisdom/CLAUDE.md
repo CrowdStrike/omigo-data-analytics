@@ -18,7 +18,7 @@ A claim that survives interrogation with its conditions stated is genuinely usef
 | Page | Role |
 |------|------|
 | `../17-folk-wisdom-fallacies.html` | Nav-grid index (cards link here) |
-| `02`–`24` | One saying each: title → why-believed → flaw table → undefined terms → counterexamples |
+| `02`–`26` | One saying each: title → why-believed → flaw table → undefined terms → counterexamples |
 | `01-contradictory-proverb-pairs.html` | **Special card**, renders above the grid. Pairs of proverbs that contradict each other; each pair brackets a hidden conditioning variable. Carries the claim-assessment checklist. |
 
 Every page ends at the counterexamples block. Cards `01` and `09` additionally close with a `.closing-note` on discounting presentation — rhyme and polished charts persuade independently of whether the underlying claim holds.
@@ -37,3 +37,10 @@ Every page ends at the counterexamples block. Cards `01` and `09` additionally c
 ## Note
 
 The "slow and steady wins the race" page debunks that proverb. The root CLAUDE.md has a pending item to add *"Slow is steady, steady is fast"* as words-of-wisdom. Same phrase, opposite verdict — that item needs a deliberate framing of why some aphorisms hold up and others do not, or the two will contradict each other.
+
+## Page Format (migrated)
+
+Pages follow the three-file model — `NN-topic.txt.md` (verbatim text), `NN-topic.viz.md` (per-canvas regen briefs), `NN-topic.v2.html` (fenced page on shared `ui-templates/js/base.js`). Spec: `../ui-templates/FORMAT.md`.
+
+- **Template default:** 07-claim-dissection (prose-only: pages have `txt.md` + `v2.html` only — NO `viz.md`, no shared js)
+- Originals (`NN-topic.html`, old `NN-topic.md`) are kept untouched until the user's bulk review — never edit or delete them; all edits go to the three-file set per FORMAT.md's edit workflows.

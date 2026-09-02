@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tracking Data: Connected Appliance Telemetry</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2c3e50; max-width: 100%; margin: 0; padding: 30px 40px; background: #fff; }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+        .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
+        .obj-table { width: 100%; border-collapse: collapse; }
+        .obj-table td { vertical-align: top; padding: 16px; border: 1px solid #2980b9; }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; text-align: center; }
+        ul { padding-left: 20px; margin: 8px 0; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        .obj-table td:last-child .payload,
+        .obj-table td:last-child .payload-note { text-align: left; }
+        .payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 12px 0; }
+        .payload-note { font-size: 0.82em; color: #666; margin: 12px 0 -6px 0; font-style: italic; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        .key-point strong:first-child { color: #1a5276; }
+        .lede { font-size: 0.95em; margin: 0 0 10px 0; }
+        .lbl { display: inline-block; font-size: 0.7em; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; margin: 10px 0 2px 0; }
+        .lbl-purpose { background: #eaf2fb; color: #1a5276; }
+        .lbl-effect { background: #fdf0e6; color: #a8501c; }
+        li b { color: #1a5276; font-weight: 600; }
+        canvas { display: block; margin: 0 auto; width: 100%; height: auto; }
+    </style>
+</head>
+<body>
+    <h1>Tracking Data: Connected Appliance Telemetry</h1>
+    <p class="subtitle">A washing machine, a fridge, an air conditioner, a microwave, a ceiling fan, a light. Each holds a small, steady connection open to the maker's cloud. Most of what it sends is not a measurement — it is a statement that it is still there. Those statements are a time series, and the gaps in it are the hard part.</p>
+
+    <table class="obj-table">
+        <tr>
+            <td>
+                <div class="obj-title">What is it?</div>
+                <p class="lede">One long-lived connection carrying very short messages.</p>
+                <ul>
+                    <li><b>Why not the web:</b> little memory, little spare power, an unreliable home network — so no fresh session per drum-speed change</li>
+                    <li><b>MQTT</b> is a published open standard: publish a small payload to a named topic, the broker forwards it to subscribers</li>
+                    <li><b>CoAP</b> is the request/response counterpart — shaped like HTTP but small enough for a light switch</li>
+                    <li><b>Both are public specs</b>, so the envelope fields below are spec concepts, not anyone's internals</li>
+                    <li><b>Keepalive:</b> say <em>something</em> inside a fixed window, or the broker treats the session as dead</li>
+                    <li><b>Periodic status</b> goes out whether anything changed or not — an idle dishwasher still reports idle</li>
+                </ul>
+                <div class="key-point"><strong>The heartbeat alone is informative:</strong> a fridge checking in every N seconds emits a presence-and-power series — up, up, up, then nothing. A set of appliances usually reveals a home's power and connectivity pattern before it reveals anything any of them was built to measure.</div>
+                <div class="key-point"><strong>Even with no reading at all:</strong> a smart plug reporting no wattage still says when the mains was live and the router reachable.</div>
+            </td>
+            <td><canvas id="c1" width="720" height="320"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">What does it collect?</div>
+                <ul>
+                    <li><b>Sensor samples</b> with a unit — watts, temperature, water inlet, fan speed, dimmer level</li>
+                    <li><b>State and cycle stage</b> — idle, fill, heat, wash, rinse, spin, door open, defrost, compressor on</li>
+                    <li><b>Report reason</b> — scheduled, or triggered by a change</li>
+                    <li><b>Firmware version</b> and each update check's outcome</li>
+                    <li><b>Connectivity</b> — signal strength, disconnect/reconnect counts, session resumes</li>
+                    <li><b>Battery or supply voltage</b>, on anything not mains-powered</li>
+                    <li><b>Appliance identifier</b> written at manufacture, plus a message counter</li>
+                    <li><b>Hub or gateway</b> the message arrived through</li>
+                </ul>
+                <div class="key-point"><strong>The interval bounds every conclusion:</strong> a fridge reporting once a minute cannot resolve a door opened and shut inside that minute, and no smoothing or model recovers it. A claim about short events from long-interval data is a claim about the interval.</div>
+                <div class="key-point"><strong>Duty cycles make fixed intervals worse:</strong> sampling a roughly periodic compressor on/off process at a fixed interval is the textbook setup for aliasing. If the sampling period lands near the duty-cycle period, the sampled fraction of "on" states sits far from the true one and stays there — the error looks like a stable reading, not noise.</div>
+                <div class="key-point"><strong>So averaging wattage to estimate energy needs a condition:</strong> a short interval relative to the cycle, or samples uniform in phase. A fixed interval is neither, by construction.</div>
+                <div class="key-point"><strong>Change-reporting breaks even spacing:</strong> lag operators, autocorrelation, differencing and most seasonal decompositions assume even spacing, so they are mis-specified unless the series is resampled onto a grid first.</div>
+                <div class="key-point"><strong>Averaging unweighted overweights brief states:</strong> a two-second drain burst and a forty-minute wash each contribute one row. The correct summary is duration-weighted, and on a wash cycle the difference is large.</div>
+            </td>
+            <td><canvas id="c2" width="720" height="320"></canvas>
+<p class="payload-note">Sample payload — illustrative structure, not real captured data.</p>
+<pre class="payload">{
+  // ── documented concept: MQTT-style envelope ──
+  "topic": "appliance/8f2c…/telemetry",
+  "client_id": "8f2c…",          // written at manufacture
+  "qos": 1,
+  "keepalive_s": 60,
+
+  // ── documented concept: standard appliance/sensor fields ──
+  "ts": "2026-08-22T07:14:03Z",  // stamped on arrival, see below
+  "kind": "washer",
+  "report_reason": "change",      // "change" | "interval"
+  "state": "spin",
+  "power_w": 480,
+  "drum_temp_c": null,            // read failed — this is not 0
+  "rssi_dbm": -84,
+  "fw": "2.4.1",
+  "seq": 40817,                   // last seen was 40792: 24 absent
+
+  // ── inferred / plausible: operator enrichment ──
+  "gap_prior_s": 5412,            // silence before this message
+  "gap_label": "offline",         // cause was not observed
+  "hub_id": "h_2213",             // hub it arrived through
+  "occupancy_guess": "away"       // derived from the gap, not measured
+}</pre>
+</td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">Why is it collected?</div>
+                <div class="lbl lbl-purpose">Stated purpose</div>
+                <ul>
+                    <li><b>Fleet reliability</b> — which firmware is on which unit, what fault it raised, whether it is powered and reachable</li>
+                    <li><b>Remote control</b> — starting the AC from a phone requires the channel to stay open</li>
+                </ul>
+                <div class="lbl lbl-effect">Additional consequence</div>
+                <ul>
+                    <li>The same rows form a <b>long, regular, per-unit behavioural series</b> — only the query differs</li>
+                    <li>It hangs off an <b>identifier written at manufacture</b>, more durable than an account</li>
+                </ul>
+                <div class="key-point"><strong>The key outlives the household:</strong> an account can be deleted or handed on, but a factory identifier usually survives resale and a factory reset — a reset clears configuration, not silicon. So a fridge sold secondhand arrives carrying the previous household's history, and a model keyed on the appliance attributes it to whoever lives there now. Nothing on this channel marks the handover.</div>
+            </td>
+            <td><canvas id="c3" width="720" height="320"></canvas></td>
+        </tr>
+    </table>
+
+    <script>
+    const dpr = window.devicePixelRatio || 1;
+    // Validated categorical palette (CVD-checked, see REVIEW-NOTES.md).
+    // Red is deliberately NOT in the rotation - it stays reserved for
+    // genuine error / alarm states so it keeps its meaning.
+    const P = {
+      blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+      aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+      ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+    };
+    const SERIES = [P.blue, P.green, P.violet, P.orange, P.aqua, P.magenta, P.yellow];
+    // Translucent fill derived from a palette token, so a shape's fill always
+    // matches its own series hue instead of a hardcoded blue.
+    function tint(hex, a) {
+      const n = parseInt(hex.slice(1), 16);
+      return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+    }
+    // Rounded-rect path helper (works without native ctx.roundRect).
+    function rr(ctx, x, y, w, h, r) {
+      r = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    function setupCanvas(id) {
+        const c = document.getElementById(id);
+        const w = c.getAttribute('width') ? +c.getAttribute('width') : 720;
+        const h = c.getAttribute('height') ? +c.getAttribute('height') : 240;
+        c.style.maxWidth = w + 'px';
+        var __cssW = c.getBoundingClientRect().width || w;
+        var __scale = (__cssW / w) * dpr;
+        c.width = Math.round(w * __scale);
+        c.height = Math.round(h * __scale);
+        const ctx = c.getContext('2d');
+        ctx.scale(__scale, __scale);
+        return { ctx, w, h };
+    }
+
+    // C1: the heartbeat alone — presence and power, with the gaps.
+    // Hue encodes provenance: blue = arrived as a message, violet = derived
+    // from the messages, orange = the gap, where nothing was observed.
+    (function() {
+        const { ctx, w, h } = setupCanvas('c1');
+        const x0 = 156, x1 = 700;
+        const span = x1 - x0;
+        const at = f => x0 + f * span;
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.ink;
+        ctx.font = 'bold 16px -apple-system, sans-serif';
+        ctx.fillText('A heartbeat with no reading in it is still a time series', w / 2, 22);
+
+        const gaps = [[0.30, 0.44], [0.66, 0.72]];
+        const inGap = f => gaps.some(g => f >= g[0] && f <= g[1]);
+
+        const ly = 78;
+        gaps.forEach(g => {
+            ctx.fillStyle = tint(P.orange, 0.10);
+            ctx.fillRect(at(g[0]), ly - 24, at(g[1]) - at(g[0]), 48);
+            ctx.strokeStyle = P.orange;
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 3]);
+            ctx.strokeRect(at(g[0]), ly - 24, at(g[1]) - at(g[0]), 48);
+            ctx.setLineDash([]);
+        });
+
+        ctx.strokeStyle = P.grid;
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x0, ly); ctx.lineTo(x1, ly); ctx.stroke();
+
+        ctx.textAlign = 'right';
+        ctx.fillStyle = P.blue;
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillText('Fridge keepalive', x0 - 12, ly + 4);
+
+        for (let f = 0.012; f <= 0.995; f += 0.0205) {
+            if (inGap(f)) continue;
+            const tx = at(f);
+            ctx.strokeStyle = P.blue;
+            ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(tx, ly - 9); ctx.lineTo(tx, ly + 9); ctx.stroke();
+        }
+
+        const py = 152;
+        ctx.textAlign = 'right';
+        ctx.fillStyle = P.violet;
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillText('Derived state', x0 - 12, py + 16);
+
+        const blocks = [
+            [0.00, 0.30, 'up'], [0.30, 0.44, 'silent'],
+            [0.44, 0.66, 'up'], [0.66, 0.72, 'silent'], [0.72, 1.00, 'up']
+        ];
+        blocks.forEach(b => {
+            const bx = at(b[0]), bw = at(b[1]) - at(b[0]);
+            if (b[2] === 'up') {
+                ctx.fillStyle = tint(P.violet, 0.20);
+                ctx.fillRect(bx, py, bw, 24);
+                ctx.strokeStyle = P.violet;
+            } else {
+                ctx.fillStyle = tint(P.orange, 0.14);
+                ctx.fillRect(bx, py, bw, 24);
+                ctx.strokeStyle = P.orange;
+            }
+            ctx.lineWidth = 1;
+            ctx.strokeRect(bx, py, bw, 24);
+        });
+
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillStyle = P.orange;
+        ctx.fillText('gap', (at(gaps[0][0]) + at(gaps[0][1])) / 2, ly + 44);
+        ctx.fillText('gap', (at(gaps[1][0]) + at(gaps[1][1])) / 2, ly + 44);
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.fillStyle = P.mute;
+        ctx.fillText('mains, router, low battery, or the fridge was unplugged to clean behind it', w / 2, ly + 62);
+
+        // Footer band: the three provenance classes on this canvas.
+        const fy = 214, fh = 74;
+        ctx.fillStyle = tint(P.violet, 0.08);
+        ctx.fillRect(20, fy, w - 40, fh);
+        ctx.fillStyle = P.violet;
+        ctx.fillRect(20, fy, 4, fh);
+        ctx.textAlign = 'left';
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        const legend = [
+            ['blue ticks — arrived as a message', P.blue],
+            ['violet blocks — derived from the ticks, not sent by the fridge', P.violet],
+            ['orange bands — nothing arrived; the cause was not observed', P.orange]
+        ];
+        legend.forEach(function(item, i) {
+            const ly2 = fy + 20 + i * 17;
+            ctx.fillStyle = item[1];
+            ctx.fillRect(38, ly2 - 8, 8, 8);
+            ctx.fillText(item[0], 54, ly2);
+        });
+        ctx.fillStyle = P.text;
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.fillText('The power and connectivity pattern arrives before any measurement does.', 38, fy + 68);
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.mute;
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.fillText('Schematic', w / 2, h - 4);
+    })();
+
+    // C2: one wash cycle, sampled on a fixed interval vs reported on change.
+    // Hue encodes the cycle stage — six stages, six SERIES hues — and the
+    // blind fixed grid gets the one remaining hue so it reads as a separate
+    // thing rather than as another stage.
+    (function() {
+        const { ctx, w, h } = setupCanvas('c2');
+        const x0 = 158, x1 = 700, top = 44, base = 126;
+        const span = x1 - x0;
+
+        // piecewise-constant wash cycle: [slots, watts]
+        const segs = [[12, 3], [4, 160], [9, 1900], [18, 120], [2, 480], [15, 130]];
+        const labels = ['idle', 'fill', 'heat', 'wash', 'drain', 'rinse'];
+        const stageHue = [P.blue, P.green, P.violet, P.orange, P.aqua, P.magenta];
+        const gridHue = P.yellow;
+        const N = segs.reduce((a, s) => a + s[0], 0);   // 60 slots
+        const vals = [];
+        segs.forEach((s, si) => { for (let k = 0; k < s[0]; k++) vals.push(s[1]); });
+
+        const lo = 0, hi = 2000;
+        const px = i => x0 + (i / N) * span;
+        const py = v => base - ((v - lo) / (hi - lo)) * (base - top);
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.ink;
+        ctx.font = 'bold 16px -apple-system, sans-serif';
+        ctx.fillText('One wash cycle: fixed-interval samples vs reports on change', w / 2, 18);
+
+        // true step trace, each stage in its own hue
+        let iStart = 0;
+        segs.forEach((s, si) => {
+            const xa = px(iStart), xb = px(iStart + s[0]), yv = py(s[1]);
+            ctx.strokeStyle = stageHue[si];
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(xa, yv); ctx.lineTo(xb, yv);
+            ctx.stroke();
+            // riser to the next level, drawn in the incoming stage's hue
+            if (si < segs.length - 1) {
+                ctx.beginPath();
+                ctx.moveTo(xb, yv); ctx.lineTo(xb, py(segs[si + 1][1]));
+                ctx.stroke();
+            }
+            iStart += s[0];
+        });
+
+        ctx.textAlign = 'right';
+        ctx.fillStyle = P.mute;
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.fillText('true draw (W)', x0 - 12, py(120) + 4);
+
+        // fixed-interval samples every 8 slots — one hue, the blind grid
+        const fixed = [];
+        for (let i = 0; i < N; i += 8) fixed.push(i);
+        fixed.forEach(i => {
+            const sx = px(i) + (span / N) / 2, sy = py(vals[i]);
+            ctx.fillStyle = gridHue;
+            ctx.beginPath(); ctx.arc(sx, sy, 3.5, 0, Math.PI * 2); ctx.fill();
+        });
+
+        // segment starts (change reports)
+        let acc = 0;
+        const changeIdx = [];
+        segs.forEach(s => { changeIdx.push(acc); acc += s[0]; });
+
+        // annotate the brief drain burst, missed by the fixed grid, in the
+        // drain stage's own hue
+        const drainStart = changeIdx[4];
+        const dx = px(drainStart + 1);
+        ctx.strokeStyle = stageHue[4];
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath(); ctx.moveTo(dx, py(480)); ctx.lineTo(dx, 40); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = stageHue[4];
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText('brief drain burst', dx - 6, 38);
+
+        // lane A: fixed interval
+        const ay = 154;
+        ctx.textAlign = 'right';
+        ctx.fillStyle = gridHue;
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillText('fixed interval', x0 - 12, ay + 4);
+        ctx.strokeStyle = P.grid;
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x0, ay); ctx.lineTo(x1, ay); ctx.stroke();
+        fixed.forEach(i => {
+            const sx = px(i) + (span / N) / 2;
+            ctx.strokeStyle = gridHue;
+            ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(sx, ay - 8); ctx.lineTo(sx, ay + 8); ctx.stroke();
+        });
+
+        // lane B: change-reported — each tick in the stage it opens
+        const by = 186;
+        ctx.textAlign = 'right';
+        ctx.fillStyle = P.text;
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillText('reports on change', x0 - 12, by + 4);
+        ctx.strokeStyle = P.grid;
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x0, by); ctx.lineTo(x1, by); ctx.stroke();
+        changeIdx.forEach((i, k) => {
+            const sx = px(i);
+            ctx.strokeStyle = stageHue[k];
+            ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(sx, by - 8); ctx.lineTo(sx, by + 8); ctx.stroke();
+            ctx.fillStyle = stageHue[k];
+            ctx.font = 'bold 12px -apple-system, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(labels[k], sx + 3, by + 20);
+        });
+
+        // the two means, from the literal arrays
+        let sw = 0, su = 0;
+        segs.forEach(s => { sw += s[0] * s[1]; su += s[1]; });
+        const weighted = sw / N, unweighted = su / segs.length;
+
+        // Footer band: the two summaries of the same rows.
+        const fy = 222, fh = 74;
+        ctx.fillStyle = P.grid;
+        ctx.fillRect(20, fy, w - 40, fh);
+        ctx.textAlign = 'left';
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        // six stage swatches mark the rows the unweighted mean averages
+        let sxx = 38;
+        stageHue.forEach(hue => {
+            ctx.fillStyle = hue;
+            ctx.fillRect(sxx, fy + 12, 9, 9);
+            sxx += 13;
+        });
+        ctx.fillStyle = P.text;
+        ctx.fillText('one row per stage, averaged unweighted: ' + unweighted.toFixed(0) + ' W', sxx + 6, fy + 21);
+        ctx.fillStyle = P.ink;
+        ctx.fillText('the same rows, weighted by how long each stage held: ' + weighted.toFixed(0) + ' W', 38, fy + 41);
+        ctx.fillStyle = gridHue;
+        ctx.fillRect(38, fy + 52, 9, 9);
+        ctx.fillStyle = P.text;
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.fillText('the fixed grid (yellow) samples the drain burst not at all — it falls between two ticks', 57, fy + 61);
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.mute;
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.fillText('Schematic', w / 2, h - 4);
+    })();
+
+    // C3: the appliance identifier outlives the account it was registered to.
+    // Hue encodes which household is behind the identifier — the same household
+    // keeps its hue across a reset, and a different one gets a different hue.
+    (function() {
+        const { ctx, w, h } = setupCanvas('c3');
+        const x0 = 158, x1 = 700;
+        const span = x1 - x0;
+        const at = f => x0 + f * span;
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.ink;
+        ctx.font = 'bold 16px -apple-system, sans-serif';
+        ctx.fillText('The appliance identifier is durable; the household behind it is not', w / 2, 22);
+
+        const ay = 54;
+        ctx.textAlign = 'right';
+        ctx.fillStyle = P.text;
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillText('Account', x0 - 12, ay + 18);
+
+        const accounts = [
+            [0.00, 0.42, 'household A', P.green],
+            [0.46, 0.62, 'household A again', P.green],
+            [0.66, 1.00, 'household B', P.magenta]
+        ];
+        accounts.forEach(a => {
+            const bx = at(a[0]), bw = at(a[1]) - at(a[0]);
+            ctx.fillStyle = tint(a[3], 0.16);
+            ctx.fillRect(bx, ay, bw, 28);
+            ctx.strokeStyle = a[3];
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(bx, ay, bw, 28);
+            ctx.fillStyle = a[3];
+            ctx.font = 'bold 13px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(a[2], bx + bw / 2, ay + 18);
+        });
+
+        // the two transitions — neither emits an event on the telemetry channel
+        const events = [[0.44, 'factory reset'], [0.64, 'sold secondhand']];
+        events.forEach(e => {
+            const ex = at(e[0]);
+            ctx.strokeStyle = P.orange;
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([4, 3]);
+            ctx.beginPath(); ctx.moveTo(ex, ay - 4); ctx.lineTo(ex, 158); ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = P.orange;
+            ctx.font = 'bold 13px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(e[1], ex, ay - 10);
+        });
+
+        const dy = 126;
+        ctx.textAlign = 'right';
+        ctx.fillStyle = P.blue;
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillText('Washing machine id', x0 - 12, dy + 20);
+        ctx.fillStyle = tint(P.blue, 0.20);
+        ctx.fillRect(x0, dy, span, 30);
+        ctx.strokeStyle = P.blue;
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(x0, dy, span, 30);
+        ctx.fillStyle = P.blue;
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('8f2c… — written at manufacture, unchanged throughout', x0 + span / 2, dy + 20);
+
+        // Cycle reports, coloured by the household actually behind each one.
+        const ty = 178;
+        ctx.strokeStyle = P.grid;
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x0, ty); ctx.lineTo(x1, ty); ctx.stroke();
+        ctx.textAlign = 'right';
+        ctx.fillStyle = P.text;
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillText('Cycle reports', x0 - 12, ty + 4);
+        for (let f = 0.015; f <= 0.995; f += 0.028) {
+            const tx = at(f);
+            const owner = accounts.find(a => f >= a[0] && f <= a[1]);
+            if (!owner) continue;
+            ctx.strokeStyle = owner[3];
+            ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(tx, ty - 7); ctx.lineTo(tx, ty + 7); ctx.stroke();
+        }
+
+        // Footer band: the linkage error, keyed to the incoming household's hue.
+        const fy = 208, fh = 82;
+        ctx.fillStyle = tint(P.magenta, 0.10);
+        ctx.fillRect(20, fy, w - 40, fh);
+        ctx.fillStyle = P.magenta;
+        ctx.fillRect(20, fy, 4, fh);
+        ctx.textAlign = 'left';
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillStyle = P.blue;
+        ctx.fillRect(38, fy + 12, 9, 9);
+        ctx.fillText('the identifier (blue) is one continuous key from manufacture onward', 55, fy + 21);
+        ctx.fillStyle = P.green;
+        ctx.fillRect(38, fy + 32, 9, 9);
+        ctx.fillStyle = P.magenta;
+        ctx.fillRect(51, fy + 32, 9, 9);
+        ctx.fillStyle = P.text;
+        ctx.fillText('two different households sit behind it, in green and magenta', 68, fy + 41);
+        ctx.fillStyle = P.orange;
+        ctx.fillRect(38, fy + 52, 9, 9);
+        ctx.fillText('neither transition (orange) emits an event on this channel', 55, fy + 61);
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.fillStyle = P.text;
+        ctx.fillText('A wash history joined on the identifier is attributed to whoever owns it now.', 38, fy + 78);
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.mute;
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.fillText('Schematic', w / 2, h - 4);
+    })();
+
+    </script>
+</body>
+</html>

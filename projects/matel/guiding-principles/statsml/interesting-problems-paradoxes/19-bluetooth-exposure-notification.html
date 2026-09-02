@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bluetooth Exposure Notification — A Join Without a Database</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 40px 20px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 45%; }
+.obj-table td:last-child { width: 55%; text-align: center; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; width: 100%; height: auto; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+.math-box { background: #f8fafb; border: 1px solid #e0e0e0; border-radius: 6px; padding: 16px 20px; margin: 12px 0; font-size: 0.9em; }
+.math-box code { background: #eef2f7; padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
+.summary-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 0.9em; }
+.summary-table th { background: #f0f4f8; padding: 10px 14px; text-align: left; border: 1px solid #e0e0e0; color: #1a5276; }
+.summary-table td { padding: 10px 14px; border: 1px solid #e0e0e0; }
+</style>
+</head>
+<body>
+
+<h1>Bluetooth Exposure Notification — A Join Without a Database</h1>
+<p class="subtitle">During COVID, phones answered the question "was I recently near someone who has now tested positive?" — with no location data, no names, and no server that ever learns who met whom.</p>
+
+<div class="philosophy">
+<strong>The question:</strong> Contact tracing needs a dataset that has never existed — who stood near whom, for how long, going back two weeks. Interviews recover a fraction of it and can't name the stranger on the bus. How do you build that table without building a surveillance system?<br><br>
+<strong>The answer:</strong> You don't build the table. The Apple/Google Exposure Notification system (public spec, 2020) leaves every observation on the phone that made it and ships the <em>query</em> — the diagnosis keys — to every handset instead. The join runs everywhere except the server. That inversion, and the two measurement problems it drags in, make this one of the most interesting deployed data systems of the decade.
+</div>
+
+<!-- Aspect 1 -->
+<h2>1. The Mechanism: Ship the Query, Not the Data</h2>
+<table class="obj-table">
+    <tr>
+        <td>
+            <div class="obj-title">The Inverted Join</div>
+            <p>Every participating phone broadcasts a random identifier over Bluetooth Low Energy and logs the identifiers it hears nearby, with signal strength and time. The identifier is derived from a daily key and rotates roughly every 15 minutes, so a listener cannot follow one phone across the day.</p>
+
+            <div class="math-box">
+            <strong>When Alice tests positive</strong> (with her consent):<br>
+            Her phone uploads its recent daily keys — <code>~14 days</code>, a few kilobytes.<br>
+            Every phone downloads the published key list, re-derives the rotating IDs those keys would have produced, and matches them against its <strong>own local log</strong>.<br><br>
+            Bob's phone finds a match from last Tuesday, 22 minutes, strong signal → Bob gets a notification. The server never sees Bob, the encounter, or any location.
+            </div>
+
+            <ul>
+                <li><strong>The privacy inversion:</strong> the query moves to the data, not the data to the query</li>
+                <li><strong>What the server holds:</strong> a key list from positive tests — no identities, no sightings, no graph</li>
+                <li><strong>The cost of the inversion:</strong> no table exists to re-query later</li>
+            </ul>
+        </td>
+        <td>
+            <canvas id="canvas1" width="720" height="360"></canvas>
+        </td>
+    </tr>
+</table>
+
+<!-- Aspect 2 -->
+<h2>2. The Measurement Problem: Radio Loss Is Not Distance</h2>
+<table class="obj-table">
+    <tr>
+        <td>
+            <div class="obj-title">A Proxy Wearing a Costume</div>
+            <p>Epidemiological risk was commonly framed as "within 2 meters for 15+ minutes." Bluetooth cannot measure meters. It measures received signal strength, and the gap between transmit power and received power — attenuation — is the only distance proxy available.</p>
+
+            <div class="math-box">
+            <strong>The estimator:</strong> <code>attenuation ≈ tx_power − rssi</code>, then thresholds decide "near" vs "far".<br><br>
+            But attenuation measures the <strong>radio path</strong>, not the geometric one:<br>
+            A phone in a back pocket with a body in the way at <code>1.5 m</code> can attenuate more than line-of-sight at <code>8 m</code>.<br>
+            Independent measurement studies on trams and buses found metal walls reflect the signal so strongly that attenuation barely tracked seat distance at all.
+            </div>
+
+            <ul>
+                <li><strong>Per-device calibration:</strong> every phone model is a different sensor — offsets published per model</li>
+                <li><strong>Thresholds are policy:</strong> health authorities set the buckets; each country tuned the trade-off</li>
+                <li><strong>The lesson:</strong> the error is structured by pockets, bodies and walls — not random noise</li>
+            </ul>
+        </td>
+        <td>
+            <canvas id="canvas2" width="720" height="360"></canvas>
+        </td>
+    </tr>
+</table>
+
+<!-- Aspect 3 -->
+<h2>3. The Coverage Problem: Adoption Enters Squared</h2>
+<table class="obj-table">
+    <tr>
+        <td>
+            <div class="obj-title">A Network Sensor's Arithmetic</div>
+            <p>An encounter is recorded only if <strong>both</strong> phones run the system. With adoption p, a random contact edge is observed with probability ≈ p² — and the notification chain multiplies further conditionals on top.</p>
+
+            <div class="math-box">
+            <strong>Coverage of a random contact (independence assumption, illustrative):</strong><br><br>
+            At <code>p = 20%</code> adoption: <code>0.2 × 0.2 = 4%</code> of contact edges observed<br>
+            At <code>p = 40%</code>: <code>16%</code><br>
+            At <code>p = 60%</code>: <code>36%</code><br><br>
+            And a notification also requires the infected person to get tested, receive the result, and consent to upload — each step a factor <code>&lt; 1</code> multiplying the chain.
+            </div>
+
+            <ul>
+                <li><strong>Items vs pairs, again:</strong> installs are items, encounters are pairs — birthday-paradox arithmetic</li>
+                <li><strong>Uneven adoption compounds it:</strong> clustered uptake leaves whole subnetworks below the useful threshold</li>
+                <li><strong>Design consequence:</strong> value is superlinear in adoption — hence built into the OS, not an app</li>
+            </ul>
+        </td>
+        <td>
+            <canvas id="canvas3" width="720" height="360"></canvas>
+        </td>
+    </tr>
+</table>
+
+<!-- Summary -->
+<h2>4. The Complete Picture</h2>
+<table class="summary-table">
+    <tr><th>Data concept</th><th>Typical analytics system</th><th>Exposure notification</th></tr>
+    <tr><td><strong>Where the data lives</strong></td><td>Central warehouse</td><td>Only on the handsets that made each observation</td></tr>
+    <tr><td><strong>The join</strong></td><td>Server joins tables it holds</td><td>Every phone joins published keys against its own log</td></tr>
+    <tr><td><strong>Identifier</strong></td><td>Stable user ID</td><td>Random ID rotating ~every 15 minutes</td></tr>
+    <tr><td><strong>Distance</strong></td><td>Measured or known</td><td>Inferred from radio attenuation + per-model calibration</td></tr>
+    <tr><td><strong>Coverage</strong></td><td>≈ install base (p)</td><td>≈ adoption squared (p²) — both endpoints needed</td></tr>
+    <tr><td><strong>Ad-hoc queries later</strong></td><td>Yes — the table exists</td><td>No — nothing the protocol didn't anticipate can ever be computed</td></tr>
+</table>
+
+<div class="philosophy">
+<strong>One sentence:</strong> Exposure notification solved "who was recently near a diagnosed person?" by inverting the join — data stays scattered, the query travels — and its two hard residuals, radio loss as a distance proxy and p² coverage, are measurement problems, not privacy problems.
+</div>
+
+<script>var __charts = [];
+function setupCanvas(id, w, h) {
+    var c = document.getElementById(id); if (!c) return null;
+    var dpr = window.devicePixelRatio || 1;
+    c.style.maxWidth = w + 'px';
+    var cssW = c.getBoundingClientRect().width || w;
+    var scale = (cssW / w) * dpr;
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    var ctx = c.getContext('2d'); ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, w, h);
+    return ctx;
+}
+function rr(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+}
+function arrowHead(ctx, x, y, angle, size, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - size * Math.cos(angle - 0.4), y - size * Math.sin(angle - 0.4));
+    ctx.lineTo(x - size * Math.cos(angle + 0.4), y - size * Math.sin(angle + 0.4));
+    ctx.closePath(); ctx.fill();
+}
+
+// Canvas 1: Exchange -> Upload -> Match, where the data lives at each stage
+__charts.push(function(){
+    var ctx = setupCanvas('canvas1', 720, 360);
+    var F = '-apple-system, BlinkMacSystemFont, sans-serif';
+
+    function phone(cx, top, w, h, name) {
+        rr(ctx, cx - w / 2, top, w, h, 5);
+        ctx.fillStyle = '#fff'; ctx.fill();
+        ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 1.5; ctx.stroke();
+        if (name) {
+            ctx.fillStyle = '#666'; ctx.font = 'bold 11px ' + F; ctx.textAlign = 'center';
+            ctx.fillText(name, cx, top - 7);
+        }
+    }
+
+    // Panels
+    var px = [20, 253, 486], pw = 213, py = 48, ph = 250;
+    var pc = [126.5, 359.5, 592.5];
+    var titles = ['1. Exchange (weeks of normal life)', '2. Upload (on diagnosis)', '3. Match (on every phone)'];
+    px.forEach(function(x, i) {
+        rr(ctx, x, py, pw, ph, 8);
+        ctx.fillStyle = '#f8fafb'; ctx.fill();
+        ctx.strokeStyle = '#e0e0e0'; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = '#1a5276'; ctx.font = 'bold 12px ' + F; ctx.textAlign = 'center';
+        ctx.fillText(titles[i], pc[i], py - 7);
+    });
+
+    // ---- Panel 1: Exchange ----
+    phone(68, 80, 32, 54, 'Alice');
+    phone(185, 80, 32, 54, 'Bob');
+    // dashed double arrow
+    ctx.strokeStyle = '#e67e22'; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(92, 107); ctx.lineTo(161, 107); ctx.stroke();
+    ctx.setLineDash([]);
+    arrowHead(ctx, 90, 107, Math.PI, 7, '#e67e22');
+    arrowHead(ctx, 163, 107, 0, 7, '#e67e22');
+    ctx.fillStyle = '#e67e22'; ctx.font = 'bold 11px ' + F; ctx.textAlign = 'center';
+    ctx.fillText('rotating IDs', 126.5, 98);
+    // connectors to log boxes
+    ctx.strokeStyle = '#ccc'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(68, 134); ctx.lineTo(68, 162);
+    ctx.moveTo(185, 134); ctx.lineTo(185, 162);
+    ctx.stroke();
+    // log boxes
+    [[26, 68], [143, 185]].forEach(function(b) {
+        rr(ctx, b[0], 162, 84, 44, 4);
+        ctx.fillStyle = '#eef2f7'; ctx.fill();
+        ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = '#1a5276'; ctx.font = 'bold 10px ' + F; ctx.textAlign = 'center';
+        ctx.fillText('local log', b[1], 176);
+        ctx.fillStyle = '#666'; ctx.font = '9px ' + F;
+        ctx.fillText('IDs heard + signal', b[1], 188);
+        ctx.fillText('+ time — stays here', b[1], 199);
+    });
+    ctx.fillStyle = '#666'; ctx.font = '10.5px ' + F; ctx.textAlign = 'center';
+    ctx.fillText('IDs rotate ~every 15 min', 126.5, 272);
+    ctx.fillText('nothing leaves either phone', 126.5, 286);
+
+    // ---- Panel 2: Upload ----
+    phone(288, 86, 32, 54, 'Alice');
+    rr(ctx, 368, 90, 86, 50, 6);
+    ctx.fillStyle = '#f0f4f8'; ctx.fill();
+    ctx.strokeStyle = '#2980b9'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 11px ' + F; ctx.textAlign = 'center';
+    ctx.fillText('key server', 411, 119);
+    // green arrow
+    ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(306, 113); ctx.lineTo(363, 113); ctx.stroke();
+    arrowHead(ctx, 366, 113, 0, 8, '#27ae60');
+    ctx.fillStyle = '#27ae60'; ctx.font = 'bold 10.5px ' + F; ctx.textAlign = 'center';
+    ctx.fillText('daily keys', 336, 102);
+    ctx.fillStyle = '#666'; ctx.font = '10px ' + F;
+    ctx.fillText('~14 days of keys, uploaded with consent', 359.5, 200);
+    ctx.font = '10.5px ' + F;
+    ctx.fillText('the server learns only:', 359.5, 250);
+    ctx.fillText('“these keys tested positive”', 359.5, 263);
+    ctx.fillText('not who, not where, not who they met', 359.5, 276);
+
+    // ---- Panel 3: Match ----
+    rr(ctx, 549, 58, 86, 44, 6);
+    ctx.fillStyle = '#f0f4f8'; ctx.fill();
+    ctx.strokeStyle = '#2980b9'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 11px ' + F; ctx.textAlign = 'center';
+    ctx.fillText('key server', 592, 84);
+    // fanning arrows
+    [[518], [579], [640]].forEach(function(t) {
+        var tx = t[0];
+        var ang = Math.atan2(146 - 104, tx - 592);
+        ctx.strokeStyle = '#2980b9'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(592, 104); ctx.lineTo(tx - 4 * Math.cos(ang), 146 - 4 * Math.sin(ang)); ctx.stroke();
+        arrowHead(ctx, tx, 146, ang, 7, '#2980b9');
+    });
+    // label with backing so the middle arrow doesn't cut through it
+    ctx.fillStyle = '#f8fafb'; ctx.fillRect(530, 112, 124, 14);
+    ctx.fillStyle = '#2980b9'; ctx.font = 'bold 10.5px ' + F; ctx.textAlign = 'center';
+    ctx.fillText('key list → all phones', 592, 123);
+    phone(518, 148, 26, 44, '');
+    phone(579, 148, 26, 44, '');
+    phone(640, 148, 26, 44, '');
+    ctx.fillStyle = '#666'; ctx.font = 'bold 11px ' + F; ctx.textAlign = 'center';
+    ctx.fillText('Bob', 579, 208);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 10.5px ' + F;
+    ctx.fillText('match: Tue, 22 min, strong signal', 592, 232);
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('→ notification, computed locally', 592, 248);
+
+    // Bottom caption + title
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 12px ' + F; ctx.textAlign = 'center';
+    ctx.fillText('The edge Alice–Bob exists in exactly one place: Bob’s phone.', 360, 330);
+    ctx.font = 'bold 14px ' + F;
+    ctx.fillText('The Join Runs Everywhere Except the Server', 360, 20);
+});
+
+// Canvas 2: attenuation vs true distance — the proxy's structured error
+__charts.push(function(){
+    var ctx = setupCanvas('canvas2', 720, 360);
+    var F = '-apple-system, BlinkMacSystemFont, sans-serif';
+    var ox = 70, oy = 300, gw = 590, gh = 240;
+
+    function dToX(d) { return ox + (d / 12) * gw; }
+    function aToY(a) { return oy - ((a - 40) / 50) * gh; }
+
+    // Gridlines + ticks
+    ctx.font = '11px ' + F; ctx.fillStyle = '#666';
+    [40, 50, 60, 70, 80, 90].forEach(function(a) {
+        var y = aToY(a);
+        ctx.strokeStyle = '#eee'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + gw, y); ctx.stroke();
+        ctx.textAlign = 'right'; ctx.fillText(String(a), ox - 8, y + 4);
+    });
+    [0, 2, 4, 6, 8, 10, 12].forEach(function(d) {
+        var x = dToX(d);
+        ctx.strokeStyle = '#eee'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, oy); ctx.lineTo(x, oy - gh); ctx.stroke();
+        ctx.textAlign = 'center'; ctx.fillStyle = '#666'; ctx.fillText(String(d), x, oy + 14);
+    });
+
+    // Axes
+    ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ox, oy); ctx.lineTo(ox + gw, oy);
+    ctx.moveTo(ox, oy); ctx.lineTo(ox, oy - gh);
+    ctx.stroke();
+    ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center'; ctx.font = '13px ' + F;
+    ctx.fillText('True distance between people (m)', ox + gw / 2, oy + 32);
+    ctx.save(); ctx.translate(20, oy - gh / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Attenuation (dB) — what the phone sees', 0, 0); ctx.restore();
+
+    // 2 m guideline
+    ctx.setLineDash([4, 4]); ctx.strokeStyle = '#bbb'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(dToX(2), oy); ctx.lineTo(dToX(2), oy - gh); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#999'; ctx.font = '10px ' + F; ctx.textAlign = 'left';
+    ctx.fillText('2 m — the epidemiological line', dToX(2) + 6, aToY(89));
+
+    // Threshold
+    ctx.setLineDash([6, 4]); ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(ox, aToY(63)); ctx.lineTo(ox + gw, aToY(63)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 11px ' + F; ctx.textAlign = 'right';
+    ctx.fillText('attenuation threshold — below reads as “near”', ox + gw - 6, aToY(63) - 8);
+
+    // Points (illustrative)
+    var good = [[0.6,50],[1.0,55],[1.4,52],[1.8,58],[3.0,64],[4.0,73],[4.5,67],[5.5,70],[6.0,80],[6.5,66],[7.5,72],[8.5,69],[9.0,75],[10.0,71],[11.0,78]];
+    var bad  = [[1.5,74],[1.9,70],[9.5,56],[10.5,58]];
+    good.forEach(function(p) {
+        ctx.fillStyle = '#27ae60';
+        ctx.beginPath(); ctx.arc(dToX(p[0]), aToY(p[1]), 4.5, 0, Math.PI * 2); ctx.fill();
+    });
+    bad.forEach(function(p) {
+        ctx.fillStyle = '#e74c3c';
+        ctx.beginPath(); ctx.arc(dToX(p[0]), aToY(p[1]), 4.5, 0, Math.PI * 2); ctx.fill();
+    });
+
+    // Annotation: missed near contact
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(dToX(1.5) + 4, aToY(74) - 5); ctx.lineTo(dToX(2.6), aToY(82)); ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 11px ' + F; ctx.textAlign = 'left';
+    ctx.fillText('1.5 m, phone in pocket,', dToX(2.7), aToY(83));
+    ctx.fillText('body in the path → missed', dToX(2.7), aToY(80.2));
+
+    // Annotation: false alarm far contact
+    ctx.beginPath(); ctx.moveTo(dToX(9.5), aToY(56) + 5); ctx.lineTo(dToX(8.4), aToY(48.5)); ctx.stroke();
+    ctx.textAlign = 'right';
+    ctx.fillText('10 m across a tram, metal', dToX(8.3), aToY(48));
+    ctx.fillText('reflections → false alarm', dToX(8.3), aToY(45.2));
+
+    // Spread note
+    ctx.fillStyle = '#999'; ctx.font = '11px ' + F; ctx.textAlign = 'left';
+    ctx.fillText('same distance, very different readings — the scatter is the problem', dToX(0.4), aToY(43));
+
+    // Title
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 14px ' + F; ctx.textAlign = 'center';
+    ctx.fillText('The Phone Measures the Radio Path, Not the Person’s Distance', ox + gw / 2, 18);
+});
+
+// Canvas 3: coverage grows as adoption squared
+__charts.push(function(){
+    var ctx = setupCanvas('canvas3', 720, 360);
+    var F = '-apple-system, BlinkMacSystemFont, sans-serif';
+    var ox = 70, oy = 300, gw = 580, gh = 240;
+
+    function pToX(p) { return ox + (p / 100) * gw; }
+    function vToY(v) { return oy - (v / 100) * gh; }
+
+    // Gridlines + ticks
+    ctx.font = '11px ' + F;
+    [0, 20, 40, 60, 80, 100].forEach(function(v) {
+        ctx.strokeStyle = '#eee'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, vToY(v)); ctx.lineTo(ox + gw, vToY(v)); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(pToX(v), oy); ctx.lineTo(pToX(v), oy - gh); ctx.stroke();
+        ctx.fillStyle = '#666';
+        ctx.textAlign = 'right'; ctx.fillText(v + '%', ox - 8, vToY(v) + 4);
+        ctx.textAlign = 'center'; ctx.fillText(v + '%', pToX(v), oy + 14);
+    });
+
+    // Gap shading between diagonal and curve
+    ctx.fillStyle = 'rgba(231,76,60,0.08)';
+    ctx.beginPath();
+    ctx.moveTo(pToX(0), vToY(0));
+    for (var p = 0; p <= 100; p += 1) ctx.lineTo(pToX(p), vToY(p));
+    for (var p = 100; p >= 0; p -= 1) ctx.lineTo(pToX(p), vToY(p * p / 100));
+    ctx.closePath(); ctx.fill();
+
+    // Axes
+    ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ox, oy); ctx.lineTo(ox + gw, oy);
+    ctx.moveTo(ox, oy); ctx.lineTo(ox, oy - gh);
+    ctx.stroke();
+    ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center'; ctx.font = '13px ' + F;
+    ctx.fillText('Adoption — share of phones participating', ox + gw / 2, oy + 32);
+    ctx.save(); ctx.translate(20, oy - gh / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Share of contact edges observed', 0, 0); ctx.restore();
+
+    // Diagonal (intuition)
+    ctx.setLineDash([6, 4]); ctx.strokeStyle = '#999'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(pToX(0), vToY(0)); ctx.lineTo(pToX(100), vToY(100)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#999'; ctx.font = '11px ' + F; ctx.textAlign = 'left';
+    ctx.fillText('what intuition expects (p)', pToX(46), vToY(58));
+
+    // Curve p^2
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (var p = 0; p <= 100; p += 1) {
+        var x = pToX(p), y = vToY(p * p / 100);
+        p === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 11px ' + F; ctx.textAlign = 'right';
+    ctx.fillText('what the pair actually needs (p²)', pToX(97), vToY(66));
+
+    // Marked points
+    [[20, 4], [40, 16], [60, 36]].forEach(function(pt) {
+        ctx.setLineDash([3, 3]); ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(pToX(pt[0]), oy); ctx.lineTo(pToX(pt[0]), vToY(pt[1])); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#1a5276';
+        ctx.beginPath(); ctx.arc(pToX(pt[0]), vToY(pt[1]), 5, 0, Math.PI * 2); ctx.fill();
+        ctx.font = 'bold 12px ' + F; ctx.textAlign = 'center';
+        ctx.fillText(pt[0] + '% → ' + pt[1] + '%', pToX(pt[0]) - 2, vToY(pt[1]) - 12);
+    });
+
+    // Note: the chain multiplies further
+    ctx.fillStyle = '#999'; ctx.font = '11px ' + F; ctx.textAlign = 'left';
+    ctx.fillText('and the notification chain multiplies further:', pToX(3), vToY(90));
+    ctx.fillText('tested × result received × consented to upload', pToX(3), vToY(84));
+
+    // Title
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 14px ' + F; ctx.textAlign = 'center';
+    ctx.fillText('Both Phones Must Participate — Coverage Grows as Adoption Squared', ox + gw / 2, 18);
+});
+
+__charts.forEach(function(f){ f(); });
+var __redrawTimer;
+window.addEventListener('resize', function(){
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function(){ __charts.forEach(function(f){ f(); }); }, 150);
+});
+</script>
+</body>
+</html>

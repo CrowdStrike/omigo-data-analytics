@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tracking Data: Server-Side Logging</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2c3e50; max-width: 100%; margin: 0; padding: 30px 40px; background: #fff; }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+        .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
+        .obj-table { width: 100%; border-collapse: collapse; }
+        .obj-table td { vertical-align: top; padding: 16px; border: 1px solid #2980b9; }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; text-align: center; }
+        ul { padding-left: 20px; margin: 8px 0; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        .obj-table td:last-child .payload,
+        .obj-table td:last-child .payload-note { text-align: left; }
+        .payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 12px 0; }
+        .payload-note { font-size: 0.82em; color: #666; margin: 12px 0 -6px 0; font-style: italic; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        .key-point strong:first-child { color: #1a5276; }
+        .lede { font-size: 0.95em; margin: 0 0 10px 0; }
+        .lbl { display: inline-block; font-size: 0.7em; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; margin: 10px 0 2px 0; }
+        .lbl-purpose { background: #eaf2fb; color: #1a5276; }
+        .lbl-effect { background: #fdf0e6; color: #a8501c; }
+        li b { color: #1a5276; font-weight: 600; }
+        canvas { display: block; margin: 0 auto; width: 100%; height: auto; }
+    </style>
+</head>
+<body>
+    <h1>Tracking Data: Server-Side Logging</h1>
+    <p class="subtitle">Every request a web server answers is written to a log — source address, path, timestamp, and client details. This is a byproduct of how HTTP works.</p>
+
+    <table class="obj-table">
+        <tr>
+            <td>
+                <div class="obj-title">What is it?</div>
+                <p class="lede">A byproduct of answering a request, not an added instrument.</p>
+                <ul>
+                    <li><b>Mechanism:</b> the server must receive the request and know where to reply</li>
+                    <li><b>Default on:</b> every common web server writes that exchange to a file</li>
+                    <li><b>Nothing added:</b> no tag, no script, no change to the page</li>
+                </ul>
+                <div class="key-point"><strong>Not blockable from the client:</strong> ad blockers and private browsing act in the browser. This record is written at the other end, after the request has arrived.</div>
+            </td>
+            <td><canvas id="c1" width="720" height="320"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">What does it collect?</div>
+                <ul>
+                    <li><b>Source IP address</b>, which resolves to a rough location — usually city level at best, often just the ISP's region</li>
+                    <li><b>Timestamp</b>, typically to the second or finer</li>
+                    <li><b>Path requested</b> and the response code</li>
+                    <li><b>User agent string</b> — browser, version, operating system</li>
+                    <li><b>Referrer</b> — the page that linked here</li>
+                </ul>
+                <div class="key-point"><strong>Derived fields are reconstructions:</strong> the log holds no city and no session. Each is added downstream, and each can be wrong.</div>
+                <div class="key-point"><strong>Unit-of-observation error:</strong> sessionising by IP merges everyone behind one office router into a single visitor.</div>
+            </td>
+            <td><canvas id="c2" width="720" height="320"></canvas>
+<p class="payload-note">Sample payload — illustrative structure, not real captured data.</p>
+<pre class="payload">// Combined Log Format — one line per request.
+// All fields below are part of the standard and
+// are written by default.
+203.0.113.42 - - [22/Aug/2026:14:23:07 +0000]
+  "GET /shoes/running?size=10 HTTP/2.0" 200 18342
+  "https://www.google.com/"
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)
+   AppleWebKit/537.36 Chrome/128.0 Safari/537.36"
+
+// As parsed into a warehouse table:
+{
+  // ── present in the raw log ──
+  "client_ip":    "203.0.113.42",
+  "ts":           "2026-08-22T14:23:07Z",
+  "method":       "GET",
+  "path":         "/shoes/running",
+  "query":        { "size": "10" },
+  "status":       200,
+  "bytes":        18342,
+  "referrer":     "https://www.google.com/",
+  "user_agent":   "Mozilla/5.0 … Chrome/128.0 …",
+
+  // ── inferred / plausible, added downstream ──
+  "geo_city":     "Austin",     // IP lookup
+  "geo_country":  "US",
+  "device_type":  "desktop",    // UA parsing
+  "bot_score":    0.02,
+  "session_id":   "a41f…"       // IP + UA + time window
+}</pre>
+</td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">Why is it collected?</div>
+                <div class="lbl lbl-purpose">Stated purpose</div>
+                <ul>
+                    <li><b>Operations</b> — diagnosing errors, measuring latency, capacity planning</li>
+                    <li><b>Abuse detection</b> — logs are genuinely required for this</li>
+                </ul>
+                <div class="lbl lbl-effect">Additional consequence</div>
+                <ul>
+                    <li>The same records support <b>traffic analysis</b>, and can be <b>joined to other datasets</b></li>
+                    <li>Sharing or segmentation is a <b>policy decision</b>, not a technical necessity</li>
+                </ul>
+                <div class="key-point"><strong>Retention decides the numbers:</strong> the window was chosen for how long an incident stays interesting. But a repeat visit is only visible while the earlier line is still on disk, so the same traffic reports a different split of new and returning depending on a choice nobody made for that purpose.</div>
+            </td>
+            <td><canvas id="c3" width="720" height="320"></canvas></td>
+        </tr>
+    </table>
+
+    <script>
+    const dpr = window.devicePixelRatio || 1;
+    // Validated categorical palette (CVD-checked, see REVIEW-NOTES.md).
+    // Red is deliberately NOT in the rotation - it stays reserved for
+    // genuine error / alarm states so it keeps its meaning.
+    const P = {
+      blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+      aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+      ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+    };
+    const SERIES = [P.blue, P.green, P.violet, P.orange, P.aqua, P.magenta, P.yellow];
+    // Translucent fill from a palette hex, so a shape keeps its hue but stays light.
+    function tint(hex, a) {
+      const n = parseInt(hex.slice(1), 16);
+      return 'rgba(' + (n >> 16) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+    }
+    // Rounded-rect path helper (works without native ctx.roundRect).
+    function rr(ctx, x, y, w, h, r) {
+      r = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    function setupCanvas(id) {
+        const c = document.getElementById(id);
+        const w = c.getAttribute('width') ? +c.getAttribute('width') : 720;
+        const h = c.getAttribute('height') ? +c.getAttribute('height') : 240;
+        c.style.maxWidth = w + 'px';
+        var __cssW = c.getBoundingClientRect().width || w;
+        var __scale = (__cssW / w) * dpr;
+        c.width = Math.round(w * __scale);
+        c.height = Math.round(h * __scale);
+        const ctx = c.getContext('2d');
+        ctx.scale(__scale, __scale);
+        return { ctx, w, h };
+    }
+
+    // C1: Data flow — User -> Server -> Log File
+    // One hue per actor: the visitor, the server that answers, the record it leaves.
+    (function() {
+        const { ctx, w, h } = setupCanvas('c1');
+        const cy = h / 2;
+        const VISITOR = P.blue, SERVER = P.violet, RECORD = P.aqua;
+
+        // User icon (circle + body)
+        ctx.fillStyle = VISITOR;
+        ctx.beginPath();
+        ctx.arc(80, cy - 20, 22, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 18px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('You', 80, cy - 14);
+        ctx.fillStyle = VISITOR;
+        ctx.font = '15px -apple-system, sans-serif';
+        ctx.fillText('(visitor)', 80, cy + 15);
+
+        // Arrow 1 — visitor's request
+        ctx.strokeStyle = VISITOR;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(115, cy - 10);
+        ctx.lineTo(200, cy - 10);
+        ctx.stroke();
+        ctx.fillStyle = VISITOR;
+        ctx.beginPath();
+        ctx.moveTo(200, cy - 15);
+        ctx.lineTo(210, cy - 10);
+        ctx.lineTo(200, cy - 5);
+        ctx.fill();
+        ctx.font = '14px -apple-system, sans-serif';
+        ctx.fillText('request page', 160, cy - 20);
+
+        // Server box
+        ctx.fillStyle = tint(SERVER, 0.30);
+        ctx.fillRect(220, cy - 45, 140, 70);
+        ctx.strokeStyle = SERVER;
+        ctx.strokeRect(220, cy - 45, 140, 70);
+        ctx.fillStyle = SERVER;
+        ctx.font = 'bold 16px -apple-system, sans-serif';
+        ctx.fillText('Web Server', 290, cy - 10);
+        ctx.font = '14px -apple-system, sans-serif';
+        ctx.fillText('(writes one line per request)', 290, cy + 8);
+
+        // Arrow 2 — the server's own write
+        ctx.strokeStyle = SERVER;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(360, cy - 10);
+        ctx.lineTo(440, cy - 10);
+        ctx.stroke();
+        ctx.fillStyle = SERVER;
+        ctx.beginPath();
+        ctx.moveTo(440, cy - 15);
+        ctx.lineTo(450, cy - 10);
+        ctx.lineTo(440, cy - 5);
+        ctx.fill();
+        ctx.font = '14px -apple-system, sans-serif';
+        ctx.fillText('writes log', 400, cy - 20);
+
+        // Log file — the record that remains
+        ctx.fillStyle = RECORD;
+        rr(ctx, 460, cy - 50, 180, 80, 6);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 17px -apple-system, sans-serif';
+        ctx.fillText('Log File', 550, cy - 28);
+        ctx.font = '14px -apple-system, sans-serif';
+        ctx.fillText('203.0.113.42 - GET /shoes', 550, cy - 10);
+        ctx.fillText('2026-08-22 14:23:07', 550, cy + 5);
+        ctx.fillText('Chrome/Mac - from google.com', 550, cy + 20);
+
+        // Bottom note
+        ctx.fillStyle = P.mute;
+        ctx.font = '15px -apple-system, sans-serif';
+        ctx.fillText('Created on the server side, so no client-side setting changes it.', w / 2, h - 20);
+    })();
+
+    // C2: Which log fields are always present vs client-supplied.
+    // A genuine binary distinction, so two hues is the correct count.
+    (function() {
+        const { ctx, w, h } = setupCanvas('c2');
+
+        const items = [
+            { label: 'IP Address', frac: 1.0, note: 'always present' },
+            { label: 'Timestamp', frac: 1.0, note: 'always present' },
+            { label: 'Path + status', frac: 1.0, note: 'always present' },
+            { label: 'User agent', frac: 0.8, note: 'if the client sends one' },
+            { label: 'Referrer', frac: 0.6, note: 'if the client sends one' }
+        ];
+
+        ctx.font = 'bold 16px -apple-system, sans-serif';
+        ctx.fillStyle = P.ink;
+        ctx.textAlign = 'center';
+        ctx.fillText('Standard log fields — always present vs. client-supplied', w / 2, 22);
+
+        const barH = 28;
+        const gap = 12;
+        const startY = 45;
+        const maxW = 260;
+        const labelW = 120;
+
+        items.forEach((item, i) => {
+            const y = startY + i * (barH + gap);
+            const barW = item.frac * maxW;
+            // Blue = written by the server itself; violet = supplied by the client.
+            const hue = item.frac === 1 ? P.blue : P.violet;
+
+            ctx.fillStyle = P.text;
+            ctx.font = '16px -apple-system, sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText(item.label, labelW, y + 18);
+
+            ctx.fillStyle = tint(hue, 0.32);
+            ctx.fillRect(labelW + 15, y, barW, barH);
+            ctx.strokeStyle = hue;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(labelW + 15, y, barW, barH);
+
+            ctx.fillStyle = hue;
+            ctx.textAlign = 'left';
+            ctx.font = '15px -apple-system, sans-serif';
+            ctx.fillText(item.note, labelW + barW + 22, y + 18);
+        });
+
+        ctx.fillStyle = P.mute;
+        ctx.font = '14px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Bar lengths are schematic. A missing referrer is not a missing visit.', w / 2, h - 8);
+    })();
+
+    // C3: how many repeat visits look like first visits, by how long logs are kept
+    (function() {
+        const { ctx, w, h } = setupCanvas('c3');
+
+        // 200 return visits, spaced by the gap since the visitor's previous one.
+        // A repeat visit can only be recognised if the earlier line is still on
+        // disk, so the retention window - chosen for incident response - decides
+        // the "new vs returning" split. Illustrative counts.
+        const GAPS = [
+            { lab: 'same day',    n: 34 },
+            { lab: '2-7 days',    n: 46 },
+            { lab: '8-30 days',   n: 52 },
+            { lab: '1-3 months',  n: 38 },
+            { lab: 'over 3 mths', n: 30 }
+        ];
+        const TOTAL = 200;
+        const WINDOWS = [
+            { lab: '24 hours', keeps: 1 },
+            { lab: '7 days',   keeps: 2 },
+            { lab: '30 days',  keeps: 3 },
+            { lab: '90 days',  keeps: 4 },
+            { lab: '2 years',  keeps: 5 }
+        ];
+        const base = 226, maxH = 148, x0 = 130, step = 118, bw = 66;
+        const yAt = v => base - (v / TOTAL) * maxH;
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.ink;
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillText('Repeat visits recognised as repeat, by how long the logs are kept', w / 2, 24);
+        ctx.fillStyle = P.mute;
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillText('200 return visits; a repeat is only visible while the earlier line still exists', w / 2, 42);
+
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(58, base); ctx.lineTo(w - 34, base); ctx.stroke();
+
+        // all 200, the number that never changes
+        ctx.strokeStyle = P.violet; ctx.lineWidth = 1.5;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath(); ctx.moveTo(58, yAt(TOTAL)); ctx.lineTo(w - 34, yAt(TOTAL)); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.textAlign = 'left';
+        ctx.fillStyle = P.violet;
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.fillText('all 200 return visits', 60, yAt(TOTAL) - 8);
+
+        WINDOWS.forEach((wd, i) => {
+            const seen = GAPS.slice(0, wd.keeps).reduce((a, g) => a + g.n, 0);
+            const cx = x0 + i * step;
+            const y = yAt(seen);
+
+            // the part the window cannot see, faint above the bar
+            ctx.fillStyle = 'rgba(107,114,128,0.14)';
+            ctx.fillRect(cx - bw / 2, yAt(TOTAL), bw, y - yAt(TOTAL));
+
+            ctx.fillStyle = 'rgba(42,120,214,0.30)';
+            ctx.fillRect(cx - bw / 2, y, bw, base - y);
+            ctx.strokeStyle = P.blue; ctx.lineWidth = 1;
+            ctx.strokeRect(cx - bw / 2, y, bw, base - y);
+
+            ctx.textAlign = 'center';
+            ctx.fillStyle = P.blue;
+            ctx.font = 'bold 12px -apple-system, sans-serif';
+            ctx.fillText(seen, cx, y - 8);
+            ctx.fillStyle = P.orange;
+            ctx.font = 'bold 12px -apple-system, sans-serif';
+            ctx.fillText((TOTAL - seen) + ' counted new', cx, yAt(TOTAL) - 8);
+
+            ctx.fillStyle = P.text;
+            ctx.font = '12px -apple-system, sans-serif';
+            ctx.fillText(wd.lab, cx, base + 18);
+        });
+
+        ctx.fillStyle = P.mute;
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillText('how long lines are kept — a choice made for incident response', w / 2, base + 38);
+
+        ctx.font = 'italic 12px -apple-system, sans-serif';
+        ctx.fillStyle = P.text;
+        ctx.fillText('The same traffic reports a different mix of new and returning at each window.', w / 2, h - 24);
+        ctx.fillStyle = P.mute;
+        ctx.font = 'italic 11px -apple-system, sans-serif';
+        ctx.fillText('Illustrative counts — the mechanism, not measured traffic.', w / 2, h - 8);
+    })();
+
+    </script>
+</body>
+</html>

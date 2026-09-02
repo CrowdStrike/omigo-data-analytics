@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tracking Data: Surround Cameras &amp; Object Detection</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2c3e50; max-width: 100%; margin: 0; padding: 30px 40px; background: #fff; }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+        .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
+        .obj-table { width: 100%; border-collapse: collapse; }
+        .obj-table td { vertical-align: top; padding: 16px; border: 1px solid #2980b9; }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; text-align: center; }
+        ul { padding-left: 20px; margin: 8px 0; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        .obj-table td:last-child .payload,
+        .obj-table td:last-child .payload-note { text-align: left; }
+        .payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 12px 0; }
+        .payload-note { font-size: 0.82em; color: #666; margin: 12px 0 -6px 0; font-style: italic; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        .key-point strong:first-child { color: #1a5276; }
+        .lede { font-size: 0.95em; margin: 0 0 10px 0; }
+        .lbl { display: inline-block; font-size: 0.7em; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; margin: 10px 0 2px 0; }
+        .lbl-purpose { background: #eaf2fb; color: #1a5276; }
+        .lbl-effect { background: #fdf0e6; color: #a8501c; }
+        li b { color: #1a5276; font-weight: 600; }
+        canvas { display: block; margin: 0 auto; width: 100%; height: auto; }
+    </style>
+</head>
+<body>
+    <h1>Tracking Data: Surround Cameras &amp; Object Detection</h1>
+    <p class="subtitle">Cameras around the car's body feed every frame to a model that draws labeled boxes around what it thinks it sees &mdash; and the driving software steers around the boxes, not the picture.</p>
+
+    <table class="obj-table">
+        <tr>
+            <td>
+                <div class="obj-title">What is it?</div>
+                <p class="lede">Cameras around the car that turn every frame into a list of labeled boxes.</p>
+                <ul>
+                    <li><b>Hardware:</b> cameras behind the windshield, on the sides, and at the rear, each sending many frames a second to an onboard computer</li>
+                    <li><b>Boxes, not pixels:</b> the model draws a box around each thing it thinks it sees &mdash; car, person, cyclist, sign &mdash; and the driving software works with the boxes, merged from all cameras into one picture of the surroundings (a fused world model)</li>
+                </ul>
+                <div class="key-point"><strong>Sure about the familiar only:</strong> the model scores high on things it has seen many times. A person in a costume, an overturned truck, a couch on a highway score low precisely because they are rare (the long tail) &mdash; the model doubts them most when they matter most.</div>
+            </td>
+            <td><canvas id="c1" width="720" height="320"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">What does it collect?</div>
+                <ul>
+                    <li><b>Per frame</b> — a list of boxes, each with a type label, a position in the frame, and a score for how sure the model is (a confidence score)</li>
+                    <li><b>Across frames</b> — boxes linked over time into moving objects, each with a guessed speed and direction (tracks)</li>
+                    <li><b>The footage itself</b> — the raw video behind the boxes; on some fleets, clips the system flags can be kept or uploaded</li>
+                </ul>
+                <div class="key-point"><strong>Every box is an opinion, not a fact:</strong> a cutoff on the sureness score decides which opinions become "objects". Set it low and a shadow becomes a phantom obstacle; set it high and a faint pedestrian disappears. There is no cutoff that removes both mistakes.</div>
+            </td>
+            <td><canvas id="c2" width="720" height="320"></canvas>
+<p class="payload-note">Sample payload — illustrative structure, not real captured data.</p>
+<pre class="payload">// Perception-stack schemas are not published.
+// Whole block is reconstruction; field names generic.
+// ── inferred / plausible ──
+{
+  "frame_ts": "2026-08-22T17:03:41.120Z",
+  "camera":   "front_main",
+
+  // model output — opinions, not measurements
+  "detections": [
+    { "class": "car",        "score": 0.97,
+      "box": [412, 188, 96, 54], "est_distance_m": 23.5 },
+    { "class": "pedestrian", "score": 0.44,
+      "box": [655, 230, 18, 40], "est_distance_m": 61.0 }
+  ],
+
+  // derived by linking boxes across frames
+  "tracked_objects": [
+    { "track_id": 3182, "class": "car",
+      "speed_mps": 12.4, "frames_seen": 214 }
+  ],
+
+  "clip_upload_flag": false   // some fleets upload flagged clips
+}</pre>
+</td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">Why is it collected?</div>
+                <div class="lbl lbl-purpose">Stated purpose</div>
+                <ul>
+                    <li><b>Knowing what is around the car</b> — the boxes and their tracks are the picture the driving software plans, brakes, and steers against</li>
+                    <li><b>Improving the model</b> — clips the system found confusing can be flagged and sent back for training on some fleets</li>
+                </ul>
+                <div class="lbl lbl-effect">Additional consequence</div>
+                <ul>
+                    <li><b>Continuous filming of public space</b> — pedestrians, license plates, and storefronts pass through the cameras all day; flagged clips can leave the car for review on some fleets</li>
+                </ul>
+                <div class="key-point"><strong>The distances are guesses:</strong> a single camera does not measure how far away anything is &mdash; it guesses from how big the thing looks in the frame, and the guess gets worse with range. A camera-only system steers on those guesses.</div>
+            </td>
+            <td><canvas id="c3" width="720" height="320"></canvas></td>
+        </tr>
+    </table>
+
+    <script>
+    const dpr = window.devicePixelRatio || 1;
+    // Validated categorical palette (CVD-checked, see REVIEW-NOTES.md).
+    // Red is deliberately NOT in the rotation - it stays reserved for
+    // genuine error / alarm states so it keeps its meaning.
+    const P = {
+      blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+      aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+      ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+    };
+    function tint(hex, alpha) {
+        const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+        return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+    }
+    // Rounded-rect path helper (works without native ctx.roundRect).
+    function rr(ctx, x, y, w, h, r) {
+      r = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    function setupCanvas(id) {
+        const c = document.getElementById(id);
+        const w = c.getAttribute('width') ? +c.getAttribute('width') : 720;
+        const h = c.getAttribute('height') ? +c.getAttribute('height') : 240;
+        c.style.maxWidth = w + 'px';
+        var __cssW = c.getBoundingClientRect().width || w;
+        var __scale = (__cssW / w) * dpr;
+        c.width = Math.round(w * __scale);
+        c.height = Math.round(h * __scale);
+        const ctx = c.getContext('2d');
+        ctx.scale(__scale, __scale);
+        return { ctx, w, h };
+    }
+
+    // C1: schematic front-camera frame - detection boxes with sureness scores
+    (function() {
+        const { ctx, w, h } = setupCanvas('c1');
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.ink;
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillText('One frame, as the driving software receives it', w / 2, 22);
+
+        ctx.textAlign = 'left';
+        ctx.fillStyle = P.mute;
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillText('front camera — schematic', 60, 44);
+
+        // horizon
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(60, 120); ctx.lineTo(660, 120); ctx.stroke();
+
+        // road: filled trapezoid + edges + dashed center line
+        ctx.fillStyle = tint(P.grid, 0.5);
+        ctx.beginPath();
+        ctx.moveTo(310, 120); ctx.lineTo(415, 120);
+        ctx.lineTo(600, 268); ctx.lineTo(130, 268);
+        ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = P.text; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(310, 120); ctx.lineTo(130, 268); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(415, 120); ctx.lineTo(600, 268); ctx.stroke();
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5;
+        ctx.setLineDash([6, 6]);
+        ctx.beginPath(); ctx.moveTo(362, 120); ctx.lineTo(365, 268); ctx.stroke();
+        ctx.setLineDash([]);
+
+        // car ahead (rear view): roof + body + wheels
+        ctx.fillStyle = P.grid;
+        ctx.strokeStyle = P.text; ctx.lineWidth = 1.5;
+        rr(ctx, 390, 150, 60, 22, 6); ctx.fill(); ctx.stroke();
+        rr(ctx, 378, 168, 84, 46, 8); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = P.text;
+        ctx.fillRect(388, 212, 14, 8);
+        ctx.fillRect(438, 212, 14, 8);
+        // detection box: car 0.97 (blue)
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(368, 142, 104, 84);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.blue;
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillText('car 0.97', 420, 136);
+
+        // person on left sidewalk: head + torso + legs
+        ctx.fillStyle = P.text;
+        ctx.beginPath(); ctx.arc(185, 168, 7, 0, Math.PI * 2); ctx.fill();
+        rr(ctx, 177, 176, 16, 32, 6); ctx.fill();
+        ctx.strokeStyle = P.text; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(181, 208); ctx.lineTo(177, 228); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(189, 208); ctx.lineTo(193, 228); ctx.stroke();
+        // detection box: person 0.91 (green)
+        ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+        ctx.strokeRect(166, 154, 38, 80);
+        ctx.fillStyle = P.green;
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillText('person 0.91', 185, 148);
+
+        // sign on right shoulder: pole + face
+        ctx.strokeStyle = P.text; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(585, 150); ctx.lineTo(585, 230); ctx.stroke();
+        ctx.fillStyle = tint(P.yellow, 0.5);
+        ctx.strokeStyle = P.yellow; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(585, 136, 13, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        // detection box: sign 0.86 (violet)
+        ctx.strokeStyle = P.violet; ctx.lineWidth = 2;
+        ctx.strokeRect(568, 119, 34, 34);
+        ctx.fillStyle = P.violet;
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillText('sign 0.86', 585, 113);
+
+        // ambiguous lump near right road edge
+        ctx.fillStyle = tint(P.mute, 0.5);
+        ctx.beginPath(); ctx.ellipse(470, 224, 16, 10, 0, 0, Math.PI * 2); ctx.fill();
+        // detection box: person? 0.44 (orange, dashed) - straddling the cutoff
+        ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+        ctx.setLineDash([5, 4]);
+        ctx.strokeRect(446, 204, 48, 34);
+        ctx.setLineDash([]);
+        ctx.fillStyle = P.orange;
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillText('person? 0.44', 470, 198);
+        ctx.fillStyle = P.mute;
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillText('below cutoff — dropped', 470, 252);
+
+        // caption
+        ctx.fillStyle = P.text;
+        ctx.font = 'italic 12px -apple-system, sans-serif';
+        ctx.fillText('The software keeps only boxes above its cutoff; the 0.44 box never becomes an object. Illustrative frame.', w / 2, 302);
+    })();
+
+    // C2: eight detections against two cutoffs - phantom vs miss
+    (function() {
+        const { ctx, w, h } = setupCanvas('c2');
+        const x0 = 70, x1 = 680, baseY = 252, scale = 192;
+        const slot = (x1 - x0) / 8, barW = 40;
+        // (label, score, really there?) - hardcoded illustrative scores
+        const dets = [
+            ['car',         0.97, true],
+            ['truck',       0.93, true],
+            ['person',      0.91, true],
+            ['sign',        0.86, true],
+            ['cyclist',     0.74, true],
+            ['shadow',      0.52, false],
+            ['faint person', 0.46, true],
+            ['plastic bag', 0.41, false]
+        ];
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.ink;
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillText('Eight detections, two possible cutoffs', w / 2, 22);
+
+        // legend
+        ctx.textAlign = 'left';
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillStyle = tint(P.blue, 0.45);
+        ctx.fillRect(x0, 36, 12, 10);
+        ctx.fillStyle = P.mute;
+        ctx.fillText('really there', x0 + 16, 44);
+        ctx.fillStyle = tint(P.yellow, 0.45);
+        ctx.fillRect(x0 + 90, 36, 12, 10);
+        ctx.fillStyle = P.mute;
+        ctx.fillText('nothing there', x0 + 106, 44);
+
+        // baseline
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x0, baseY); ctx.lineTo(x1, baseY); ctx.stroke();
+
+        // bars
+        dets.forEach(function(d, i) {
+            const cx = x0 + slot * (i + 0.5);
+            const bh = d[1] * scale;
+            const col = d[2] ? P.blue : P.yellow;
+            ctx.fillStyle = tint(col, 0.45);
+            ctx.strokeStyle = col; ctx.lineWidth = 1.5;
+            ctx.fillRect(cx - barW / 2, baseY - bh, barW, bh);
+            ctx.strokeRect(cx - barW / 2, baseY - bh, barW, bh);
+            ctx.textAlign = 'center';
+            ctx.fillStyle = P.mute;
+            ctx.font = '10px -apple-system, sans-serif';
+            ctx.fillText(d[1].toFixed(2), cx, baseY - bh - 5);
+            ctx.fillStyle = P.text;
+            ctx.fillText(d[0], cx, baseY + 14);
+        });
+
+        // annotations: miss under 0.7, phantoms under 0.4
+        ctx.font = 'bold 10px -apple-system, sans-serif';
+        dets.forEach(function(d, i) {
+            const cx = x0 + slot * (i + 0.5);
+            const topY = baseY - d[1] * scale;
+            if (d[2] && d[1] < 0.7 && d[1] > 0.4) {
+                ctx.fillStyle = P.violet;
+                ctx.fillText('missed at 0.7', cx, topY - 17);
+            }
+            if (!d[2]) {
+                ctx.fillStyle = P.orange;
+                ctx.fillText('phantom at 0.4', cx, topY - 17);
+            }
+        });
+
+        // strict cutoff 0.7 (violet)
+        const yStrict = baseY - 0.7 * scale;
+        ctx.strokeStyle = P.violet; ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath(); ctx.moveTo(x0, yStrict); ctx.lineTo(x1, yStrict); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = P.violet;
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillText('cutoff 0.7 — misses the faint person', x1, yStrict - 5);
+
+        // loose cutoff 0.4 (orange)
+        const yLoose = baseY - 0.4 * scale;
+        ctx.strokeStyle = P.orange; ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath(); ctx.moveTo(x0, yLoose); ctx.lineTo(x1, yLoose); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = P.orange;
+        ctx.fillText('cutoff 0.4 — keeps shadow and bag', x1, yLoose - 5);
+
+        // caption
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.text;
+        ctx.font = 'italic 12px -apple-system, sans-serif';
+        ctx.fillText('The shadow (0.52) outscores the faint person (0.46) — no cutoff drops one and keeps the other. Illustrative scores.', w / 2, 304);
+    })();
+
+    // C3: distance-guess error cone vs near-flat direct measurement
+    (function() {
+        const { ctx, w, h } = setupCanvas('c3');
+        const x0 = 80, x1 = 660, midY = 160, pxPerM = 4, maxD = 110;
+        function X(d) { return x0 + (d / maxD) * (x1 - x0); }
+        // (range m, +/- error m) - hardcoded illustrative widening
+        const cone = [[0, 0], [10, 1], [25, 3], [50, 8], [100, 20]];
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.ink;
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillText('How far away is it? One camera’s guess vs a direct measurement', w / 2, 22);
+
+        ctx.textAlign = 'left';
+        ctx.fillStyle = P.mute;
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillText('metres off, either way', 14, 64);
+
+        // gridlines at +/-20, +/-10, 0
+        [20, 10, 0, -10, -20].forEach(function(m) {
+            const y = midY - m * pxPerM;
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+            ctx.textAlign = 'right';
+            ctx.fillStyle = P.mute;
+            ctx.font = '10px -apple-system, sans-serif';
+            ctx.fillText(String(Math.abs(m)), 72, y + 3);
+        });
+
+        // x ticks
+        [10, 25, 50, 100].forEach(function(d) {
+            ctx.textAlign = 'center';
+            ctx.fillStyle = P.mute;
+            ctx.font = '10px -apple-system, sans-serif';
+            ctx.fillText(d + ' m', X(d), 256);
+        });
+
+        // camera error cone (blue)
+        ctx.fillStyle = tint(P.blue, 0.2);
+        ctx.beginPath();
+        cone.forEach(function(p, i) {
+            const x = X(p[0]), y = midY - p[1] * pxPerM;
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        for (let i = cone.length - 1; i >= 0; i--) {
+            ctx.lineTo(X(cone[i][0]), midY + cone[i][1] * pxPerM);
+        }
+        ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        cone.forEach(function(p, i) {
+            const x = X(p[0]), y = midY - p[1] * pxPerM;
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+        ctx.beginPath();
+        cone.forEach(function(p, i) {
+            const x = X(p[0]), y = midY + p[1] * pxPerM;
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+
+        // per-range error labels above the upper edge
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.blue;
+        ctx.font = '10px -apple-system, sans-serif';
+        [['±1', 10, 1], ['±3', 25, 3], ['±8', 50, 8], ['±20 m', 100, 20]].forEach(function(t) {
+            ctx.fillText(t[0], X(t[1]), midY - t[2] * pxPerM - 6);
+        });
+
+        // cone label
+        ctx.fillStyle = P.blue;
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillText('guess from apparent size', 560, 88);
+
+        // direct-measurement band (+/- 0.5 m, green) along the midline
+        ctx.fillStyle = tint(P.green, 0.5);
+        ctx.fillRect(x0, midY - 2, x1 - x0, 4);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = P.green;
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillText('direct measurement (timing a reflected pulse) — usually near-flat', x1, 178);
+
+        // caption
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.mute;
+        ctx.font = 'italic 11px -apple-system, sans-serif';
+        ctx.fillText('Illustrative — guessing distance from how big something looks degrades with range; timing an echo usually does not.', w / 2, 306);
+    })();
+    </script>
+</body>
+</html>

@@ -20,7 +20,7 @@ strong { color: #1a5276; }
 .obj-table td:first-child { width: 40%; }
 .obj-table td:last-child { width: 60%; text-align: center; }
 .obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
-canvas { display: block; margin: 0 auto; }
+canvas { display: block; margin: 0 auto; width: 100%; height: auto; }
 </style>
 </head>
 <body>
@@ -47,26 +47,29 @@ canvas { display: block; margin: 0 auto; }
 <canvas id="c3" width="720" height="300"></canvas></td></tr>
 </table>
 
-<script>
+<script>var __charts = [];
 var dpr = window.devicePixelRatio || 1;
 function setup(id) {
     var c = document.getElementById(id); if (!c) return null;
-    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
-    c.width = w * dpr; c.height = h * dpr;
-    c.style.width = w + 'px'; c.style.height = h + 'px';
-    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    if (!c.dataset.w) { c.dataset.w = c.getAttribute('width') || '720'; c.dataset.h = c.getAttribute('height') || '300'; }
+    var w = parseInt(c.dataset.w), h = parseInt(c.dataset.h);
+    var dpr = window.devicePixelRatio || 1;
+    c.style.maxWidth = w + 'px';
+    var cssW = c.getBoundingClientRect().width || w;
+    var scale = (cssW / w) * dpr;
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    var ctx = c.getContext('2d'); ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, w, h);
     return {ctx:ctx, w:w, h:h};
 }
-(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+__charts.push(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
 
-// Two side-by-side bar charts with target line at 10K
-var chartL = 100, chartR = w-100, chartBottom = 240, chartTop = 40;
-var chartH = chartBottom - chartTop;
-var mid = w/2;
-var barW = 100;
-
-// Scale: 15K = full height
-var scale = chartH / 15000;
+// Old-definition bar vs stacked new-definition bar, against the same 10K target line
+var chartL = 100, chartR = w-100, chartBottom = 240;
+var scale = 200/15000; // 15K = 200px
+var mid = w/2, barW = 100;
+var leftX = mid-180, rightX = mid+180;
+var i;
 
 // Target line at 10K
 var targetY = chartBottom - 10000*scale;
@@ -79,67 +82,75 @@ ctx.setLineDash([6,4]);
 ctx.stroke();
 ctx.setLineDash([]);
 ctx.fillStyle = '#e67e22';
-ctx.font = 'bold 18px sans-serif';
+ctx.font = 'bold 15px sans-serif';
 ctx.textAlign = 'left';
-ctx.fillText('Target: 10K DAU', chartR+25, targetY+4);
+ctx.fillText('Target: 10K DAU', chartL-20, targetY-8);
 
-// Left bar: real users 6K (red, below target)
-var leftBarX = mid - 180;
-var leftBarH = 6000*scale;
-ctx.fillStyle = '#e74c3c';
-ctx.fillRect(leftBarX-barW/2, chartBottom-leftBarH, barW, leftBarH);
-ctx.strokeStyle = '#c0392b';
-ctx.lineWidth = 1.5;
-ctx.strokeRect(leftBarX-barW/2, chartBottom-leftBarH, barW, leftBarH);
-
-ctx.fillStyle = '#fff';
-ctx.font = 'bold 17px sans-serif';
-ctx.textAlign = 'center';
-ctx.fillText('6K', leftBarX, chartBottom-leftBarH+25);
-
-ctx.fillStyle = '#e74c3c';
-ctx.font = 'bold 18px sans-serif';
-ctx.fillText('Real users: 6K', leftBarX, chartBottom+20);
-ctx.font = '16px sans-serif';
-ctx.fillStyle = '#666';
-ctx.fillText('Old definition', leftBarX, chartBottom+36);
-
-// Right bar: after redefinition 12K (green, above target)
-var rightBarX = mid + 180;
-var rightBarH = 12000*scale;
+// Left bar: real users 6K (green, old definition)
+var leftH = 6000*scale;
 ctx.fillStyle = '#27ae60';
-ctx.fillRect(rightBarX-barW/2, chartBottom-rightBarH, barW, rightBarH);
+ctx.fillRect(leftX-barW/2, chartBottom-leftH, barW, leftH);
 ctx.strokeStyle = '#1f8c4e';
 ctx.lineWidth = 1.5;
-ctx.strokeRect(rightBarX-barW/2, chartBottom-rightBarH, barW, rightBarH);
-
+ctx.strokeRect(leftX-barW/2, chartBottom-leftH, barW, leftH);
 ctx.fillStyle = '#fff';
-ctx.font = 'bold 17px sans-serif';
+ctx.font = 'bold 16px sans-serif';
 ctx.textAlign = 'center';
-ctx.fillText('12K', rightBarX, chartBottom-rightBarH+25);
-
+ctx.fillText('6K', leftX, chartBottom-leftH+25);
 ctx.fillStyle = '#27ae60';
-ctx.font = 'bold 18px sans-serif';
-ctx.fillText('After redefining', rightBarX, chartBottom+20);
-ctx.fillText('"active": 12K', rightBarX, chartBottom+36);
-ctx.font = '16px sans-serif';
+ctx.font = 'bold 16px sans-serif';
+ctx.fillText('Real users: 6K', leftX, chartBottom+20);
+ctx.font = '14px sans-serif';
 ctx.fillStyle = '#666';
-ctx.fillText('New definition', rightBarX, chartBottom+52);
+ctx.fillText('Old definition', leftX, chartBottom+38);
 
-// Center annotation
+// Right bar: stacked segments summing to 12K (new definition)
+var segs = [
+    {v:6000, fill:'#27ae60', label:'Real users: 6K',    lc:'#27ae60'},
+    {v:2000, fill:'#aab7b8', label:'Reinstalls: 2K',    lc:'#666'},
+    {v:1500, fill:'#e74c3c', label:'Bot traffic: 1.5K', lc:'#e74c3c'},
+    {v:2500, fill:'#7f8c8d', label:'API pings: 2.5K',   lc:'#666'}
+];
+var cum = 0;
+for (i = 0; i < segs.length; i++) {
+    var segH = segs[i].v*scale;
+    var yTopSeg = chartBottom - (cum + segs[i].v)*scale;
+    ctx.fillStyle = segs[i].fill;
+    ctx.fillRect(rightX-barW/2, yTopSeg, barW, segH);
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(rightX-barW/2, yTopSeg, barW, segH);
+    ctx.fillStyle = segs[i].lc;
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(segs[i].label, rightX+barW/2+8, yTopSeg+segH/2+4);
+    cum += segs[i].v;
+}
 ctx.fillStyle = '#333';
-ctx.font = '16px sans-serif';
+ctx.font = 'bold 16px sans-serif';
 ctx.textAlign = 'center';
-ctx.fillText('Same humans.', mid, chartBottom-chartH/2);
-ctx.fillText('Different measurement.', mid, chartBottom-chartH/2+16);
-
-// Bottom label
-ctx.font = 'italic 14px sans-serif';
+ctx.fillText('12K', rightX, chartBottom-12000*scale-8);
+ctx.fillText('After redefining "active"', rightX, chartBottom+20);
+ctx.font = '14px sans-serif';
 ctx.fillStyle = '#666';
-ctx.fillText('The target line is the same — only the bar moved by changing what it counts.', w/2, h-10);
-})();
+ctx.fillText('New definition', rightX, chartBottom+38);
 
-(function(){var s=setup('c2');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+// Insight annotation between the bars
+ctx.fillStyle = '#27ae60';
+ctx.font = 'bold 16px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('Only the green part is people.', mid, 148);
+ctx.fillStyle = '#666';
+ctx.font = '13px sans-serif';
+ctx.fillText('Same humans, different measurement.', mid, 170);
+
+// Bottom caption
+ctx.font = 'italic 13px sans-serif';
+ctx.fillStyle = '#666';
+ctx.fillText('Illustrative — the target line is unchanged; only what counts as "active" changed.', w/2, h-6);
+});
+
+__charts.push(function(){var s=setup('c2');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
 // Ratchet effect: growing gap between metric and reality
 ctx.font = 'bold 16px sans-serif';
 ctx.textAlign = 'center';
@@ -226,112 +237,122 @@ ctx.fillText('Actual reality (declines)', chartR-183, chartTop+28);
 
 // Gap label
 ctx.fillStyle = '#e74c3c';
-ctx.font = 'italic 10px sans-serif';
+ctx.font = 'bold 16px sans-serif';
 ctx.textAlign = 'center';
 var lastX = chartL+(quarters.length-1)*stepX;
-ctx.fillText('Gap', lastX+25, (chartBottom-(reported[5]/maxVal)*chartH + chartBottom-(real[5]/maxVal)*chartH)/2);
+ctx.fillText('Gap', lastX-45, 98);
 
 ctx.font = 'italic 14px sans-serif';
 ctx.fillStyle = '#666';
 ctx.textAlign = 'center';
 ctx.fillText('Each quarter inflates the baseline. Reality diverges further from the number.', w/2, h-5);
-})();
+});
 
-(function(){var s=setup('c3');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
-// Definition Drift Over Quarters
+__charts.push(function(){var s=setup('c3');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+// Mechanism view: the reported metric is a step function that jumps only at redefinition boundaries
 ctx.font = 'bold 16px sans-serif';
 ctx.textAlign = 'center';
 ctx.fillStyle = '#1a5276';
-ctx.fillText('Definition Drift Over Quarters', w/2, 20);
+ctx.fillText('Definition Drift: The Metric Moves Only When the Definition Does', w/2, 20);
 
-var quarters = ['Q1', 'Q2', 'Q3', 'Q4'];
-var reported = [100, 120, 140, 160]; // appears to grow
-var reality = [100, 100, 100, 100]; // actually flat
+var quarters = ['Q1','Q2','Q3','Q4','Q5','Q6','Q7','Q8'];
+// Reported (index): flat 100 through Q2, steps up at Q3/Q5/Q7 boundaries
+var levels = [100, 100, 120, 120, 140, 140, 160, 160];
+var jumps = [
+    {at: 2, label: 'redefined "active"'},
+    {at: 4, label: 'added reinstalls'},
+    {at: 6, label: 'counted API pings'}
+];
+var chartL = 70, chartR = 650, chartTop = 70, chartBottom = 215;
+var stepX = (chartR-chartL)/(quarters.length-1);
+var yMin = 90, yMax = 170;
+function X(i){ return chartL + i*stepX; }
+function Y(v){ return chartBottom - ((v-yMin)/(yMax-yMin))*(chartBottom-chartTop); }
+var i;
 
-var chartL = 80, chartR = w-80, chartBottom = 140, chartTop = 50;
-var chartW = chartR-chartL, chartH = chartBottom-chartTop;
-var maxVal = 180;
-
+// Gridlines + y ticks (index scale)
+ctx.strokeStyle = '#eeeeee';
+ctx.lineWidth = 1;
+ctx.fillStyle = '#666';
+ctx.font = '11px sans-serif';
+ctx.textAlign = 'right';
+for (i = 100; i <= 160; i += 20) {
+    ctx.beginPath(); ctx.moveTo(chartL, Y(i)); ctx.lineTo(chartR, Y(i)); ctx.stroke();
+    ctx.fillText(String(i), chartL-8, Y(i)+4);
+}
 // Axes
 ctx.beginPath();
-ctx.moveTo(chartL, chartBottom);
+ctx.moveTo(chartL, chartTop-8);
+ctx.lineTo(chartL, chartBottom);
 ctx.lineTo(chartR, chartBottom);
-ctx.moveTo(chartL, chartBottom);
-ctx.lineTo(chartL, chartTop);
-ctx.strokeStyle = '#ddd';
-ctx.lineWidth = 1;
+ctx.strokeStyle = '#ccc';
 ctx.stroke();
+
+// Quarter labels
+ctx.fillStyle = '#666';
+ctx.font = '13px sans-serif';
+ctx.textAlign = 'center';
+for (i = 0; i < quarters.length; i++) ctx.fillText(quarters[i], X(i), chartBottom+18);
 
 // Reality line (flat, dashed red)
 ctx.beginPath();
-var stepX = chartW/(quarters.length-1);
-for(var i=0;i<quarters.length;i++){
-    var x = chartL + i*stepX;
-    var y = chartBottom - (reality[i]/maxVal)*chartH;
-    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-}
+ctx.moveTo(X(0), Y(100));
+ctx.lineTo(X(7), Y(100));
 ctx.strokeStyle = '#e74c3c';
 ctx.lineWidth = 2.5;
 ctx.setLineDash([6,4]);
 ctx.stroke();
 ctx.setLineDash([]);
+ctx.fillStyle = '#e74c3c';
+ctx.font = 'bold 12px sans-serif';
+ctx.textAlign = 'right';
+ctx.fillText('Reality (flat)', chartR, Y(100)-10);
 
-// Reported line (growing, solid green)
+// Reported metric: step chart, vertical jumps only at redefinition boundaries
 ctx.beginPath();
-for(var i=0;i<quarters.length;i++){
-    var x = chartL + i*stepX;
-    var y = chartBottom - (reported[i]/maxVal)*chartH;
-    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+ctx.moveTo(X(0), Y(levels[0]));
+for (i = 1; i < quarters.length; i++) {
+    ctx.lineTo(X(i), Y(levels[i-1])); // flat run
+    if (levels[i] !== levels[i-1]) ctx.lineTo(X(i), Y(levels[i])); // vertical riser
 }
 ctx.strokeStyle = '#27ae60';
 ctx.lineWidth = 3;
 ctx.stroke();
+ctx.fillStyle = '#27ae60';
+ctx.font = 'bold 12px sans-serif';
+ctx.textAlign = 'right';
+ctx.fillText('Reported metric', chartR, Y(160)-8);
 
-// Quarter labels and annotations
-var annotations = [
-    'redefined\n"active"',
-    'added\nbots',
-    'included partial\nloads',
-    'counted\nAPI pings'
-];
-
-ctx.font = '16px sans-serif';
-ctx.fillStyle = '#666';
-ctx.textAlign = 'center';
-for(var i=0;i<quarters.length;i++){
-    var x = chartL + i*stepX;
-    // Quarter label
-    ctx.fillStyle = '#1a5276';
-    ctx.font = 'bold 17px sans-serif';
-    ctx.fillText(quarters[i], x, chartBottom+15);
-    // Annotation
-    ctx.fillStyle = '#e67e22';
-    ctx.font = '8px sans-serif';
-    var lines = annotations[i].split('\n');
-    for(var l=0;l<lines.length;l++){
-        ctx.fillText(lines[l], x, chartTop-10-l*10);
-    }
+// Step labels at each redefinition boundary
+ctx.fillStyle = '#e67e22';
+ctx.font = 'bold 12px sans-serif';
+ctx.textAlign = 'left';
+for (i = 0; i < jumps.length; i++) {
+    var jx = X(jumps[i].at);
+    var lo = levels[jumps[i].at - 1], hi = levels[jumps[i].at];
+    ctx.fillText(jumps[i].label, jx+6, (Y(lo)+Y(hi))/2 + 4);
 }
 
-// Legend
-ctx.fillStyle = '#27ae60';
-ctx.fillRect(chartL+20, chartTop+10, 12, 12);
-ctx.fillStyle = '#333';
-ctx.font = '16px sans-serif';
-ctx.textAlign = 'left';
-ctx.fillText('Reported metric', chartL+37, chartTop+20);
-
+// Insight annotation (upper-left free area)
 ctx.fillStyle = '#e74c3c';
-ctx.fillRect(chartL+20, chartTop+28, 12, 12);
-ctx.fillStyle = '#333';
-ctx.fillText('Reality (flat)', chartL+37, chartTop+38);
+ctx.font = 'bold 14px sans-serif';
+ctx.textAlign = 'left';
+ctx.fillText('Every jump is a definition change —', 85, 95);
+ctx.fillText('zero organic growth between steps.', 85, 113);
 
-// Bottom label
-ctx.font = 'italic 14px sans-serif';
+// Bottom caption
+ctx.font = 'italic 13px sans-serif';
 ctx.fillStyle = '#666';
 ctx.textAlign = 'center';
-ctx.fillText('Metric grows. Reality is flat. Each quarter inflates the definition.', w/2, h-5);
-})();
+ctx.fillText('Illustrative index (Q1 = 100). Flat between steps: no growth, only redefinition.', w/2, h-6);
+});
+
+__charts.forEach(function(f){ f(); });
+var __redrawTimer;
+window.addEventListener('resize', function(){
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function(){ __charts.forEach(function(f){ f(); }); }, 150);
+});
 </script>
 </body>
 </html>

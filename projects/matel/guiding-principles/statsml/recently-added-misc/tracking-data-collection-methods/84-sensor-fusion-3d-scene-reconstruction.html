@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tracking Data: Sensor Fusion &amp; 3D Scene Reconstruction</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2c3e50; max-width: 100%; margin: 0; padding: 30px 40px; background: #fff; }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+        .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
+        .obj-table { width: 100%; border-collapse: collapse; }
+        .obj-table td { vertical-align: top; padding: 16px; border: 1px solid #2980b9; }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; text-align: center; }
+        ul { padding-left: 20px; margin: 8px 0; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        .obj-table td:last-child .payload,
+        .obj-table td:last-child .payload-note { text-align: left; }
+        .payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 12px 0; }
+        .payload-note { font-size: 0.82em; color: #666; margin: 12px 0 -6px 0; font-style: italic; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        .key-point strong:first-child { color: #1a5276; }
+        .lede { font-size: 0.95em; margin: 0 0 10px 0; }
+        .lbl { display: inline-block; font-size: 0.7em; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; margin: 10px 0 2px 0; }
+        .lbl-purpose { background: #eaf2fb; color: #1a5276; }
+        .lbl-effect { background: #fdf0e6; color: #a8501c; }
+        li b { color: #1a5276; font-weight: 600; }
+        canvas { display: block; margin: 0 auto; width: 100%; height: auto; }
+    </style>
+</head>
+<body>
+    <h1>Tracking Data: Sensor Fusion &amp; 3D Scene Reconstruction</h1>
+    <p class="subtitle">The car merges what its cameras, radars, and laser scanner each report into one live 3-D picture of the street &mdash; the view its parking display draws is a simplified slice of that picture.</p>
+
+    <table class="obj-table">
+        <tr>
+            <td>
+                <div class="obj-title">What is it?</div>
+                <p class="lede">A referee that combines three kinds of eyes into one picture the car can drive from.</p>
+                <ul>
+                    <li><b>Three different witnesses:</b> the camera can tell what a thing is, the radar can tell how fast it is closing in, and the spinning laser scanner (lidar) can tell exactly where it sits</li>
+                    <li><b>One merged picture:</b> the car combines their reports into a single live 3-D model of everything around it (sensor fusion); the drawing on the parking screen is a simplified view of this model</li>
+                </ul>
+                <div class="key-point"><strong>An estimate, not a photograph:</strong> every object in the merged picture is a best guess built from whichever sensors voted for it, and it inherits their uncertainty. The car drives from this guess, revised many times per second.</div>
+            </td>
+            <td><canvas id="c1" width="720" height="320"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">What does it collect?</div>
+                <ul>
+                    <li><b>A list of tracked objects</b> — each nearby person, car, or bike gets an entry with its place, speed, kind, and a sureness score (confidence) that came from combining the sensors</li>
+                    <li><b>Disagreement records</b> — moments when the sensors told different stories about the same spot, kept alongside which sensor said what</li>
+                </ul>
+                <div class="key-point"><strong>The tie-break is a rule, not a measurement:</strong> when the radar reports something ahead and the camera sees nothing, which one wins was written down by a person in advance. Trusting the camera risks missing a real obstacle; trusting the radar risks braking for a ghost &mdash; the rule quietly picks which mistake the car will make.</div>
+            </td>
+            <td><canvas id="c2" width="720" height="320"></canvas>
+<p class="payload-note">Sample payload — illustrative structure, not real captured data.</p>
+<pre class="payload">// Perception-stack schemas are not published.
+// Whole block is reconstruction; field names generic.
+// ── inferred / plausible ──
+{
+  "frame_ts": "2026-08-22T17:03:41.120Z",
+  "fused_objects": [
+    { "id":         "obj-1041",
+      "type":       "pedestrian",       // fused estimate
+      "position_m": [12.4, -3.1, 0.0],  // fused estimate
+      "speed_mps":  1.4,                // fused estimate
+      "confidence": 0.93,
+      "sources":    ["camera", "lidar"] }
+  ],
+  "disagreement_event": {
+    "radar":  "object_ahead",
+    "camera": "no_object",
+    "lidar":  "weak_return",
+    "resolution": "rule: trust_camera",
+    "flagged_for_upload": true
+  }
+}</pre>
+</td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">Why is it collected?</div>
+                <div class="lbl lbl-purpose">Stated purpose</div>
+                <ul>
+                    <li><b>One coherent picture to drive from</b> — the car needs a single answer to "what is around me", not three partial ones</li>
+                    <li><b>Filling each other's gaps</b> — usually the merge keeps the car seeing when one sensor is blinded by darkness, glare, or heavy rain</li>
+                </ul>
+                <div class="lbl lbl-effect">Additional consequence</div>
+                <ul>
+                    <li><b>A 3-D record of public space</b> — the merged scene is a continuously updated map of where every nearby pedestrian and vehicle was and how it moved, and on some fleets it can be kept long after the drive ends</li>
+                </ul>
+                <div class="key-point"><strong>Disagreements are the most valuable data:</strong> the moments when the sensors' pictures of the world part ways mark exactly where the system is weakest. On some fleets those moments are flagged, uploaded, and reviewed &mdash; so an unusual street scene is more likely to leave the car than an ordinary one.</div>
+            </td>
+            <td><canvas id="c3" width="720" height="320"></canvas></td>
+        </tr>
+    </table>
+
+    <script>
+    const dpr = window.devicePixelRatio || 1;
+    // Validated categorical palette (CVD-checked, see REVIEW-NOTES.md).
+    // Red is deliberately NOT in the rotation - it stays reserved for
+    // genuine error / alarm states (used once in c2, missed obstacle).
+    const P = {
+      blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+      aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+      ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+    };
+    function tint(hex, alpha) {
+        const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+        return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+    }
+    // Rounded-rect path helper (works without native ctx.roundRect).
+    function rr(ctx, x, y, w, h, r) {
+      r = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    function setupCanvas(id) {
+        const c = document.getElementById(id);
+        const w = c.getAttribute('width') ? +c.getAttribute('width') : 720;
+        const h = c.getAttribute('height') ? +c.getAttribute('height') : 240;
+        c.style.maxWidth = w + 'px';
+        var __cssW = c.getBoundingClientRect().width || w;
+        var __scale = (__cssW / w) * dpr;
+        c.width = Math.round(w * __scale);
+        c.height = Math.round(h * __scale);
+        const ctx = c.getContext('2d');
+        ctx.scale(__scale, __scale);
+        return { ctx, w, h };
+    }
+
+    // C1: three sensor lanes, one street moment, merging into a fused lane
+    (function() {
+        const { ctx, w, h } = setupCanvas('c1');
+        const laneX0 = 115, laneX1 = 580;
+        const lanes = [
+            { name: 'camera', y: 30,  hgt: 34, hue: P.blue,   note: 'sees WHAT it is' },
+            { name: 'radar',  y: 80,  hgt: 34, hue: P.violet, note: 'measures CLOSING SPEED' },
+            { name: 'laser',  y: 130, hgt: 34, hue: P.aqua,   note: 'pins WHERE it is' },
+            { name: 'fused',  y: 210, hgt: 42, hue: P.green,  note: 'one merged list' }
+        ];
+        // same street moment: three objects, one column each (hardcoded)
+        const objs = [
+            { x: 217, type: 'person', speed: '1.4 m/s', conf: '0.93', dir: 1 },
+            { x: 357, type: 'car',    speed: '8.2 m/s', conf: '0.97', dir: -1 },
+            { x: 487, type: 'bike',   speed: '4.0 m/s', conf: '0.88', dir: 1 }
+        ];
+
+        // lane strips, names, annotations
+        lanes.forEach(function(L) {
+            ctx.fillStyle = tint(L.hue, 0.10);
+            ctx.fillRect(laneX0, L.y, laneX1 - laneX0, L.hgt);
+            if (L.name === 'fused') {
+                ctx.strokeStyle = P.green; ctx.lineWidth = 1.5;
+                ctx.strokeRect(laneX0, L.y, laneX1 - laneX0, L.hgt);
+            }
+            ctx.fillStyle = P.mute;
+            ctx.font = 'bold 11px -apple-system, sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText(L.name, 105, L.y + L.hgt / 2 + 4);
+            ctx.font = '10px -apple-system, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(L.note, 590, L.y + L.hgt / 2 + 4);
+        });
+
+        objs.forEach(function(o) {
+            // camera lane: wide uncertainty band + type label
+            var cy = lanes[0].y;
+            ctx.fillStyle = tint(P.blue, 0.30);
+            rr(ctx, o.x - 32, cy + 4, 64, 14, 7); ctx.fill();
+            ctx.fillStyle = P.blue;
+            ctx.font = '9px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(o.type, o.x, cy + 30);
+
+            // radar lane: medium band + speed arrow + speed label
+            var ry = lanes[1].y;
+            ctx.fillStyle = tint(P.violet, 0.30);
+            rr(ctx, o.x - 15, ry + 4, 30, 14, 7); ctx.fill();
+            var ax0 = o.x + o.dir * 15, ax1 = o.x + o.dir * 31;
+            ctx.strokeStyle = P.violet; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(ax0, ry + 11); ctx.lineTo(ax1, ry + 11); ctx.stroke();
+            ctx.fillStyle = P.violet;
+            ctx.beginPath();
+            ctx.moveTo(ax1 + o.dir * 5, ry + 11);
+            ctx.lineTo(ax1, ry + 7); ctx.lineTo(ax1, ry + 15);
+            ctx.closePath(); ctx.fill();
+            ctx.font = '9px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(o.speed, o.x, ry + 30);
+
+            // laser lane: tight marker + vertical tick, no label
+            var ly = lanes[2].y;
+            ctx.strokeStyle = P.aqua; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(o.x, ly); ctx.lineTo(o.x, ly + 34); ctx.stroke();
+            ctx.fillStyle = tint(P.aqua, 0.85);
+            ctx.fillRect(o.x - 4, ly + 10, 8, 14);
+
+            // merge arrow down the column
+            ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(o.x, 170); ctx.lineTo(o.x, 205); ctx.stroke();
+            ctx.fillStyle = P.mute;
+            ctx.beginPath();
+            ctx.moveTo(o.x, 210); ctx.lineTo(o.x - 4, 202); ctx.lineTo(o.x + 4, 202);
+            ctx.closePath(); ctx.fill();
+
+            // fused lane: tight marker + type + speed/sureness labels
+            var fy = lanes[3].y;
+            ctx.fillStyle = tint(P.green, 0.75);
+            ctx.fillRect(o.x - 5, fy + 3, 10, 16);
+            ctx.fillStyle = P.green;
+            ctx.font = '9px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(o.type, o.x, fy + 29);
+            ctx.fillText(o.speed + ' · ' + o.conf, o.x, fy + 39);
+        });
+
+        // caption
+        ctx.fillStyle = P.text;
+        ctx.font = 'italic 12px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Three partial reports of the same street moment merge into one list. Illustrative scene.', w / 2, 306);
+    })();
+
+    // C2: disagreement fork - two verdicts, one pre-written rule, two possible mistakes
+    (function() {
+        const { ctx, w, h } = setupCanvas('c2');
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.ink;
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillText('When the sensors disagree, a rule picks the mistake', w / 2, 24);
+
+        // converging lines to the fork
+        ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(270, 105); ctx.lineTo(330, 150); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(270, 195); ctx.lineTo(330, 150); ctx.stroke();
+        // branches from the fork
+        ctx.beginPath(); ctx.moveTo(330, 150); ctx.lineTo(460, 95); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(330, 150); ctx.lineTo(460, 205); ctx.stroke();
+
+        // verdict nodes
+        ctx.fillStyle = P.violet;
+        ctx.beginPath(); ctx.arc(95, 105, 7, 0, Math.PI * 2); ctx.fill();
+        ctx.textAlign = 'left';
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillText('radar: something ahead', 110, 109);
+        ctx.fillStyle = P.blue;
+        ctx.beginPath(); ctx.arc(95, 195, 7, 0, Math.PI * 2); ctx.fill();
+        ctx.fillText('camera: nothing there', 110, 199);
+
+        // fork marker: ink diamond + label
+        ctx.fillStyle = P.ink;
+        ctx.beginPath();
+        ctx.moveTo(330, 140); ctx.lineTo(340, 150); ctx.lineTo(330, 160); ctx.lineTo(320, 150);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = P.mute;
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('written rule decides', 330, 175);
+
+        // branch labels
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillText('rule: trust the camera', 395, 105);
+        ctx.fillText('rule: trust the radar', 395, 195);
+
+        // top outcome: keep driving, red alarm marker (genuine alarm state)
+        ctx.fillStyle = '#e74c3c';
+        ctx.beginPath();
+        ctx.moveTo(470, 86); ctx.lineTo(478, 101); ctx.lineTo(462, 101);
+        ctx.closePath(); ctx.fill();
+        ctx.textAlign = 'left';
+        ctx.fillStyle = P.text;
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillText('keep driving', 490, 92);
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillText('risk: a real obstacle is missed', 490, 110);
+
+        // bottom outcome: brake hard, orange marker
+        ctx.fillStyle = P.orange;
+        ctx.beginPath(); ctx.arc(470, 205, 8, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = P.text;
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillText('brake hard', 490, 202);
+        ctx.fillStyle = P.orange;
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillText('risk: braking for a ghost', 490, 220);
+
+        // caption
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.text;
+        ctx.font = 'italic 12px -apple-system, sans-serif';
+        ctx.fillText('Neither choice is safe in both worlds — the rule, written in advance, picks which error the car will make. Illustrative case.', w / 2, 300);
+    })();
+
+    // C3: sensor strengths - grouped bars over four situations, no sensor wins everywhere
+    (function() {
+        const { ctx, w, h } = setupCanvas('c3');
+        const px0 = 70, px1 = 680, baseY = 250, topY = 60;
+        const groups = ['what is it?', 'where exactly?', 'closing speed?', 'heavy rain?'];
+        // illustrative 0-10 scores, hardcoded
+        const sensors = [
+            { name: 'camera', hue: P.blue,   vals: [9, 4, 2, 3] },
+            { name: 'radar',  hue: P.violet, vals: [2, 5, 9, 8] },
+            { name: 'laser',  hue: P.aqua,   vals: [4, 9, 5, 4] }
+        ];
+        const gw = (px1 - px0) / groups.length;
+        const barW = 30, gap = 8;
+        function Y(v) { return baseY - (v / 10) * (baseY - topY); }
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.ink;
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillText('No sensor wins everywhere — why the reports get merged', w / 2, 22);
+
+        // gridlines + y labels
+        [0, 5, 10].forEach(function(v) {
+            ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(px0, Y(v)); ctx.lineTo(px1, Y(v)); ctx.stroke();
+            ctx.textAlign = 'right';
+            ctx.fillStyle = P.mute;
+            ctx.font = '11px -apple-system, sans-serif';
+            ctx.fillText(v, 62, Y(v) + 4);
+        });
+
+        // bars + values + group labels
+        groups.forEach(function(g, gi) {
+            const gc = px0 + gw * gi + gw / 2;
+            const totalW = sensors.length * barW + (sensors.length - 1) * gap;
+            sensors.forEach(function(s, si) {
+                const bx = gc - totalW / 2 + si * (barW + gap);
+                const by = Y(s.vals[gi]);
+                ctx.fillStyle = tint(s.hue, 0.55);
+                ctx.strokeStyle = s.hue; ctx.lineWidth = 1.5;
+                ctx.fillRect(bx, by, barW, baseY - by);
+                ctx.strokeRect(bx, by, barW, baseY - by);
+                ctx.textAlign = 'center';
+                ctx.fillStyle = P.mute;
+                ctx.font = '10px -apple-system, sans-serif';
+                ctx.fillText(s.vals[gi], bx + barW / 2, by - 5);
+            });
+            ctx.textAlign = 'center';
+            ctx.fillStyle = P.mute;
+            ctx.font = '11px -apple-system, sans-serif';
+            ctx.fillText(g, gc, 270);
+        });
+
+        // legend, top right
+        var lx = 500;
+        sensors.forEach(function(s) {
+            ctx.fillStyle = tint(s.hue, 0.55);
+            ctx.fillRect(lx, 32, 12, 10);
+            ctx.strokeStyle = s.hue; ctx.lineWidth = 1;
+            ctx.strokeRect(lx, 32, 12, 10);
+            ctx.textAlign = 'left';
+            ctx.fillStyle = s.hue;
+            ctx.font = '11px -apple-system, sans-serif';
+            ctx.fillText(s.name, lx + 16, 40);
+            lx += 16 + ctx.measureText(s.name).width + 14;
+        });
+
+        // caption
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.mute;
+        ctx.font = 'italic 11px -apple-system, sans-serif';
+        ctx.fillText('Illustrative 0–10 scores — each column has a different winner, so the car needs all three.', w / 2, 300);
+    })();
+    </script>
+</body>
+</html>

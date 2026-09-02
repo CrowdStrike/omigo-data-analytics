@@ -93,6 +93,7 @@ canvas { display: block; margin: 12px auto 0; width: 100%; }
 <div class="key-point">
 <strong>Rate limit structure:</strong> Graph API uses a sliding-window model. Exceeding limits returns HTTP 400 with an error code (4, 17, 32, or 80001-80008 for Business Use Case limits) and an <code>x-business-use-case-usage</code> header showing percentage consumed per business object.
 </div>
+<canvas id="chartRateLimit" height="300"></canvas>
 </td>
 </tr>
 
@@ -117,6 +118,7 @@ canvas { display: block; margin: 12px auto 0; width: 100%; }
 <div class="key-point">
 <strong>Privacy thresholds:</strong> If fewer than 100 people in a demographic bucket (e.g., women 18-24 in Portland), Meta suppresses that row entirely. Small-audience pages get very sparse demographic data.
 </div>
+<canvas id="chartLifetimeOnly" height="300"></canvas>
 </td>
 </tr>
 
@@ -141,6 +143,7 @@ canvas { display: block; margin: 12px auto 0; width: 100%; }
 <div class="key-point">
 <strong>Organic reach decline:</strong> A page that had 15% organic reach in 2014 may see 2-3% in 2026 for the same content quality. Year-over-year reach comparisons without controlling for algorithm changes are meaningless.
 </div>
+<canvas id="chartReachDecline" height="300"></canvas>
 </td>
 </tr>
 
@@ -279,6 +282,222 @@ canvas { display: block; margin: 12px auto 0; width: 100%; }
     ctx.strokeRect(legendX + 80, legendY, 14, 14);
     ctx.fillStyle = '#2c3e50';
     ctx.fillText('Impressions', legendX + 100, legendY + 11);
+})();
+
+(function() {
+    var canvas = document.getElementById('chartRateLimit');
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+    var dpr = window.devicePixelRatio || 1;
+    var rect = canvas.getBoundingClientRect();
+    var width = rect.width || 720, height = 300;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    ctx.scale(dpr, dpr);
+
+    var calls = [24, 38, 52, 70, 95, 124, 152, 176, 194, 213, 208, 168, 128, 96, 74, 58, 44, 36];
+    var cap = 200, yMax = 240;
+    var padLeft = 55, padRight = 20, padTop = 45, padBottom = 44;
+    var chartW = width - padLeft - padRight, chartH = height - padTop - padBottom;
+    function xPos(i) { return padLeft + (i / (calls.length - 1)) * chartW; }
+    function yPos(v) { return padTop + chartH - (v / yMax) * chartH; }
+
+    ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'left';
+    ctx.fillText('Sliding-window rate limit: calls per rolling hour vs the 200-call cap', padLeft, 20);
+
+    ctx.font = '11px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'right';
+    for (var v = 0; v <= yMax; v += 60) {
+        var y = yPos(v);
+        ctx.beginPath(); ctx.moveTo(padLeft, y); ctx.lineTo(padLeft + chartW, y);
+        ctx.strokeStyle = '#e0e0e0'; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillText(String(v), padLeft - 8, y + 4);
+    }
+
+    // red zone above the cap
+    ctx.fillStyle = 'rgba(231,76,60,0.08)';
+    ctx.fillRect(padLeft, yPos(yMax), chartW, yPos(cap) - yPos(yMax));
+
+    // cap line
+    ctx.setLineDash([6,4]);
+    ctx.beginPath(); ctx.moveTo(padLeft, yPos(cap)); ctx.lineTo(padLeft + chartW, yPos(cap));
+    ctx.strokeStyle = '#e67e22'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('cap: 200 calls / rolling hour', padLeft + 6, yPos(cap) - 6);
+
+    // calls line, red where above cap
+    for (var i = 1; i < calls.length; i++) {
+        ctx.beginPath();
+        ctx.moveTo(xPos(i-1), yPos(calls[i-1]));
+        ctx.lineTo(xPos(i), yPos(calls[i]));
+        ctx.strokeStyle = (calls[i-1] > cap || calls[i] > cap) ? '#e74c3c' : '#1a5276';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
+    for (var i = 0; i < calls.length; i++) {
+        ctx.beginPath();
+        ctx.arc(xPos(i), yPos(calls[i]), 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = calls[i] > cap ? '#e74c3c' : '#1a5276';
+        ctx.fill();
+    }
+
+    // annotation on the breach
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('HTTP 400 (code 4/17/32) until the window slides back under', xPos(9), yPos(213) - 12);
+
+    ctx.font = 'italic 11px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+    ctx.fillStyle = '#666';
+    ctx.fillText('Illustrative traffic — the cap is per user per page, evaluated on a rolling window, not a daily reset.', width/2, height - 8);
+})();
+
+(function() {
+    var canvas = document.getElementById('chartLifetimeOnly');
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+    var dpr = window.devicePixelRatio || 1;
+    var rect = canvas.getBoundingClientRect();
+    var width = rect.width || 720, height = 300;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    ctx.scale(dpr, dpr);
+
+    var cum = [1200, 2600, 3900, 4700, 5200, 5600, 5850, 6000, 6100, 6180, 6240, 6280, 6300, 6310];
+    var yMax = 7000;
+    var padLeft = 60, padRight = 20, padTop = 45, padBottom = 44;
+    var chartW = width - padLeft - padRight, chartH = height - padTop - padBottom;
+    function xPos(i) { return padLeft + (i / (cum.length - 1)) * chartW; }
+    function yPos(v) { return padTop + chartH - (v / yMax) * chartH; }
+
+    ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'left';
+    ctx.fillText('Post metrics are lifetime-only: the curve exists only if you polled for it', padLeft, 20);
+
+    ctx.font = '11px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'right';
+    for (var v = 0; v <= yMax; v += 2000) {
+        var y = yPos(v);
+        ctx.beginPath(); ctx.moveTo(padLeft, y); ctx.lineTo(padLeft + chartW, y);
+        ctx.strokeStyle = '#e0e0e0'; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillText((v/1000) + 'K', padLeft - 8, y + 4);
+    }
+    ctx.textAlign = 'center';
+    for (var i = 0; i < cum.length; i += 2) {
+        ctx.fillText('d' + (i+1), xPos(i), height - padBottom + 16);
+    }
+
+    // reconstructed curve (from daily polling)
+    ctx.beginPath();
+    for (var i = 0; i < cum.length; i++) {
+        if (i === 0) ctx.moveTo(xPos(i), yPos(cum[i])); else ctx.lineTo(xPos(i), yPos(cum[i]));
+    }
+    ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 2; ctx.stroke();
+    for (var i = 0; i < cum.length; i++) {
+        ctx.beginPath(); ctx.arc(xPos(i), yPos(cum[i]), 3, 0, Math.PI * 2);
+        ctx.fillStyle = '#1a5276'; ctx.fill();
+    }
+
+    // the one number the API returns
+    var lastX = xPos(cum.length - 1), lastY = yPos(cum[cum.length - 1]);
+    ctx.beginPath(); ctx.arc(lastX, lastY, 7, 0, Math.PI * 2);
+    ctx.fillStyle = '#27ae60'; ctx.fill();
+    ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'right';
+    ctx.fillText('what the API returns: 6,310 (one lifetime number)', lastX - 12, lastY - 10);
+
+    // early-momentum annotation
+    ctx.fillStyle = '#e67e22';
+    ctx.textAlign = 'left';
+    ctx.fillText('day-2 spike, day-7 plateau —', xPos(1) + 8, yPos(cum[1]) - 22);
+    ctx.fillText('visible only in your own stored deltas', xPos(1) + 8, yPos(cum[1]) - 9);
+
+    ctx.font = 'italic 11px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    ctx.fillText('Illustrative cumulative impressions — blue dots are your daily polls; the API alone gives only the endpoint.', width/2, height - 8);
+})();
+
+(function() {
+    var canvas = document.getElementById('chartReachDecline');
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+    var dpr = window.devicePixelRatio || 1;
+    var rect = canvas.getBoundingClientRect();
+    var width = rect.width || 720, height = 300;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    ctx.scale(dpr, dpr);
+
+    var years = [2014, 2016, 2018, 2020, 2022, 2024, 2026];
+    var reachPct = [15, 10.5, 7, 5.2, 3.8, 2.9, 2.4];
+    var yMax = 16;
+    var padLeft = 55, padRight = 20, padTop = 45, padBottom = 44;
+    var chartW = width - padLeft - padRight, chartH = height - padTop - padBottom;
+    function xPos(i) { return padLeft + (i / (years.length - 1)) * chartW; }
+    function yPos(v) { return padTop + chartH - (v / yMax) * chartH; }
+
+    ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'left';
+    ctx.fillText('Organic reach benchmark drift: the same content, a shrinking denominator', padLeft, 20);
+
+    ctx.font = '11px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'right';
+    for (var v = 0; v <= yMax; v += 4) {
+        var y = yPos(v);
+        ctx.beginPath(); ctx.moveTo(padLeft, y); ctx.lineTo(padLeft + chartW, y);
+        ctx.strokeStyle = '#e0e0e0'; ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillText(v + '%', padLeft - 8, y + 4);
+    }
+    ctx.textAlign = 'center';
+    for (var i = 0; i < years.length; i++) {
+        ctx.fillText(String(years[i]), xPos(i), height - padBottom + 16);
+    }
+
+    // area + line
+    ctx.beginPath();
+    ctx.moveTo(xPos(0), yPos(0));
+    for (var i = 0; i < reachPct.length; i++) ctx.lineTo(xPos(i), yPos(reachPct[i]));
+    ctx.lineTo(xPos(reachPct.length - 1), yPos(0));
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(231,76,60,0.12)';
+    ctx.fill();
+    ctx.beginPath();
+    for (var i = 0; i < reachPct.length; i++) {
+        if (i === 0) ctx.moveTo(xPos(i), yPos(reachPct[i])); else ctx.lineTo(xPos(i), yPos(reachPct[i]));
+    }
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.stroke();
+    for (var i = 0; i < reachPct.length; i++) {
+        ctx.beginPath(); ctx.arc(xPos(i), yPos(reachPct[i]), 3, 0, Math.PI * 2);
+        ctx.fillStyle = '#e74c3c'; ctx.fill();
+    }
+
+    // endpoints
+    ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'left';
+    ctx.fillText('15%', xPos(0) + 6, yPos(15) - 8);
+    ctx.textAlign = 'right';
+    ctx.fillText('2.4%', xPos(6) - 6, yPos(2.4) - 10);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('~6× decline from algorithm changes alone — raw YoY reach comparisons are meaningless', width/2, yPos(9));
+
+    ctx.font = 'italic 11px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+    ctx.fillStyle = '#666';
+    ctx.fillText('Illustrative industry-benchmark trajectory, not measured data.', width/2, height - 8);
 })();
 </script>
 

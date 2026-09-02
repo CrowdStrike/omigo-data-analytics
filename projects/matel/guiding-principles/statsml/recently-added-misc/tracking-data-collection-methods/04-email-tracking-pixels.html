@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tracking Data: Email Tracking Pixels</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2c3e50; max-width: 100%; margin: 0; padding: 30px 40px; background: #fff; }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+        .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
+        .obj-table { width: 100%; border-collapse: collapse; }
+        .obj-table td { vertical-align: top; padding: 16px; border: 1px solid #2980b9; }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; text-align: center; }
+        ul { padding-left: 20px; margin: 8px 0; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        .obj-table td:last-child .payload,
+        .obj-table td:last-child .payload-note { text-align: left; }
+        .payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 12px 0; }
+        .payload-note { font-size: 0.82em; color: #666; margin: 12px 0 -6px 0; font-style: italic; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        .key-point strong:first-child { color: #1a5276; }
+        .lede { font-size: 0.95em; margin: 0 0 10px 0; }
+        .lbl { display: inline-block; font-size: 0.7em; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; margin: 10px 0 2px 0; }
+        .lbl-purpose { background: #eaf2fb; color: #1a5276; }
+        .lbl-effect { background: #fdf0e6; color: #a8501c; }
+        li b { color: #1a5276; font-weight: 600; }
+        canvas { display: block; margin: 0 auto; width: 100%; height: auto; }
+    </style>
+</head>
+<body>
+    <h1>Tracking Data: Email Tracking Pixels</h1>
+    <p class="subtitle">A remote image referenced by an HTML email. Fetching it produces a server log line at the sender, keyed to the recipient. There is no separate "open" signal in email — this request is the entire measurement.</p>
+
+    <table class="obj-table">
+        <tr>
+            <td>
+                <div class="obj-title">What is it?</div>
+                <p class="lede">A remote image request standing in for a read.</p>
+                <ul>
+                    <li><b>Mechanism:</b> HTML email references a remote image, often 1x1 and transparent</li>
+                    <li><b>The URL carries</b> an encoded recipient and campaign identifier</li>
+                    <li><b>Rendering the body</b> issues an HTTP GET for that URL</li>
+                    <li><b>Unique per recipient</b>, so the log line attributes the fetch to one address on the list</li>
+                    <li><b>Nothing comes back</b> beyond an ordinary image — the request itself is the signal</li>
+                </ul>
+                <div class="key-point"><strong>The event is a request, not a read:</strong> open rate, open time, device and location are inferences layered on that one request, and each layer can fail independently.</div>
+            </td>
+            <td><canvas id="c1" width="720" height="320"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">What does it collect?</div>
+                <ul>
+                    <li><b>The request</b> — that the beacon URL was fetched, and when</li>
+                    <li><b>Recipient and campaign</b> encoded in the URL path</li>
+                    <li><b>Source IP</b> of whatever issued the request</li>
+                    <li><b>User-Agent</b>, which may name the client or a proxy</li>
+                    <li><b>Repeat requests</b>, subject to caching</li>
+                    <li><b>Precision</b> — a point event, usually logged to the second; how long the message stayed open is not observed</li>
+                </ul>
+                <div class="key-point"><strong>The IP is often a proxy's:</strong> Gmail routes remote images through its own proxy, and Apple's Mail Privacy Protection uses Apple-operated relays. Geolocation and device attribution from a proxied open describe the proxy.</div>
+                <div class="key-point"><strong>Bias runs both ways:</strong> a relay can load content with no human opening the message, inflating the numerator; proxy caching means a genuine second read may generate no request.</div>
+                <div class="key-point"><strong>Open rate is biased:</strong> the sign depends on the mailbox provider mix in the list.</div>
+            </td>
+            <td><canvas id="c2" width="720" height="320"></canvas>
+<p class="payload-note">Sample payload — illustrative structure, not real captured data.</p>
+<pre class="payload">// The GET as it lands in the sender's access log.
+GET /o/EXAMPLE_BASE64_TOKEN_redacted.gif  // Note: masked for illustration; real value is base64-encoded JSON with recipient + campaign IDs
+Host: track.example-shop.com
+
+// ── documented / standard ── HTTP request headers
+User-Agent: Mozilla/5.0 (Windows NT 5.1; rv:11.0)
+  Gecko Firefox/11.0 (via ggpht.com GoogleImageProxy)
+Accept: image/avif,image/webp,image/*,*/*;q=0.8
+X-Forwarded-For: 66.249.93.…
+Date: Fri, 22 Aug 2026 02:14:03 GMT
+
+// The open record derived from that one line:
+{
+  // ── documented / standard ── read off the request
+  "recipient_id":  "48219",     // decoded from path
+  "campaign_id":   "aug-sale",
+  "requested_at":  "2026-08-22T02:14:03Z",
+  "source_ip":     "66.249.93.…",
+
+  // ── inferred / plausible ──
+  "event":         "email_open",   // assumed, not observed
+  "client":        "Gmail",        // from UA substring
+  "device_type":   "unknown",      // proxy UA hides it
+  "geo_city":      "Mountain View" // IP is Google's, not
+                                   // the recipient's
+}</pre>
+</td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">Why is it collected?</div>
+                <div class="lbl lbl-purpose">Stated purpose</div>
+                <ul>
+                    <li><b>Reach</b> — email has no built-in delivery receipt, so the request stands in</li>
+                    <li><b>Subject-line comparison</b>, and suppression of addresses that never respond</li>
+                </ul>
+                <div class="lbl lbl-effect">Additional consequence</div>
+                <ul>
+                    <li><b>Engagement scoring</b> — send frequency, re-targeting and list pruning run on open history, so the request rate shapes how much mail an address later receives</li>
+                    <li>Timestamps accumulate into a <b>daily activity pattern</b> for the address</li>
+                </ul>
+                <div class="key-point"><strong>The model partly ranks mailbox providers, not people:</strong> a segment on providers that prefetch images scores as engaged and gets more mail; a segment on clients that block images scores as dormant and gets pruned. Neither score is about the person reading.</div>
+            </td>
+            <td><canvas id="c3" width="720" height="320"></canvas></td>
+        </tr>
+    </table>
+
+    <script>
+    const dpr = window.devicePixelRatio || 1;
+    // Validated categorical palette (CVD-checked, see REVIEW-NOTES.md).
+    // Red is deliberately NOT in the rotation - it stays reserved for
+    // genuine error / alarm states so it keeps its meaning.
+    const P = {
+      blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+      aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+      ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+    };
+    const SERIES = [P.blue, P.green, P.violet, P.orange, P.aqua, P.magenta, P.yellow];
+    // Translucent fill from a palette hex, so a shape keeps its hue but stays light.
+    function tint(hex, a) {
+      const n = parseInt(hex.slice(1), 16);
+      return 'rgba(' + (n >> 16) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+    }
+    // Rounded-rect path helper (works without native ctx.roundRect).
+    function rr(ctx, x, y, w, h, r) {
+      r = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    function setupCanvas(id) {
+        const c = document.getElementById(id);
+        const w = c.getAttribute('width') ? +c.getAttribute('width') : 720;
+        const h = c.getAttribute('height') ? +c.getAttribute('height') : 240;
+        c.style.maxWidth = w + 'px';
+        var __cssW = c.getBoundingClientRect().width || w;
+        var __scale = (__cssW / w) * dpr;
+        c.width = Math.round(w * __scale);
+        c.height = Math.round(h * __scale);
+        const ctx = c.getContext('2d');
+        ctx.scale(__scale, __scale);
+        return { ctx, w, h };
+    }
+
+    // C1: Email envelope with hidden pixel, data flowing to server
+    (function() {
+        const { ctx, w, h } = setupCanvas('c1');
+
+        // Draw envelope body
+        ctx.fillStyle = '#f0f4f8';
+        ctx.strokeStyle = P.blue;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(60, 60);
+        ctx.lineTo(60, 190);
+        ctx.lineTo(320, 190);
+        ctx.lineTo(320, 60);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Envelope flap
+        ctx.fillStyle = '#dce6f0';
+        ctx.beginPath();
+        ctx.moveTo(60, 60);
+        ctx.lineTo(190, 130);
+        ctx.lineTo(320, 60);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Email content lines
+        ctx.fillStyle = '#bbb';
+        ctx.fillRect(85, 140, 200, 8);
+        ctx.fillRect(85, 155, 180, 8);
+        ctx.fillRect(85, 170, 160, 8);
+
+        // Hidden pixel - tiny red dot in corner of email
+        ctx.fillStyle = P.magenta;
+        ctx.beginPath();
+        ctx.arc(300, 178, 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Pulse rings around pixel
+        ctx.strokeStyle = tint(P.magenta, 0.4);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(300, 178, 10, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = tint(P.magenta, 0.2);
+        ctx.beginPath();
+        ctx.arc(300, 178, 16, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Label for pixel
+        ctx.fillStyle = P.magenta;
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('1x1 pixel', 300, 200);
+
+        // Data flow arrows
+        ctx.strokeStyle = P.magenta;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 4]);
+
+        // Arrow 1 - IP
+        ctx.beginPath();
+        ctx.moveTo(320, 165);
+        ctx.quadraticCurveTo(420, 100, 520, 50);
+        ctx.stroke();
+
+        // Arrow 2 - Time
+        ctx.beginPath();
+        ctx.moveTo(320, 140);
+        ctx.quadraticCurveTo(420, 120, 520, 100);
+        ctx.stroke();
+
+        // Arrow 3 - Device
+        ctx.beginPath();
+        ctx.moveTo(320, 175);
+        ctx.quadraticCurveTo(420, 170, 520, 150);
+        ctx.stroke();
+
+        ctx.setLineDash([]);
+
+        // Arrow heads
+        const arrows = [[520, 50], [520, 100], [520, 150]];
+        arrows.forEach(([x, y]) => {
+            ctx.fillStyle = P.magenta;
+            ctx.beginPath();
+            ctx.moveTo(x, y - 4);
+            ctx.lineTo(x + 10, y);
+            ctx.lineTo(x, y + 4);
+            ctx.fill();
+        });
+
+        // Server
+        ctx.fillStyle = P.blue;
+        rr(ctx, 540, 30, 150, 145, 8);
+        ctx.fill();
+
+        // Server details
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 16px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Tracking Server', 615, 55);
+
+        ctx.font = '14px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('IP: 72.134.xx.xx', 555, 80);
+        ctx.fillText('Time: 2:14:03 AM', 555, 100);
+        ctx.fillText('Device: iPhone 15', 555, 120);
+        ctx.fillText('Client: Gmail App', 555, 140);
+        ctx.fillText('Opens: 3rd time', 555, 160);
+
+        // Caption
+        ctx.fillStyle = P.mute;
+        ctx.font = '14px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('You open the email. The pixel phones home.', w / 2, h - 10);
+    })();
+
+    // C2: Timeline showing email opens with device icons at different times
+    (function() {
+        const { ctx, w, h } = setupCanvas('c2');
+
+        ctx.font = 'bold 16px -apple-system, sans-serif';
+        ctx.fillStyle = P.blue;
+        ctx.textAlign = 'center';
+        ctx.fillText('Your opens tracked across time and devices', w / 2, 20);
+
+        // Timeline axis
+        const axisY = 150;
+        ctx.strokeStyle = P.blue;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(50, axisY);
+        ctx.lineTo(670, axisY);
+        ctx.stroke();
+
+        // Arrow at end
+        ctx.fillStyle = P.blue;
+        ctx.beginPath();
+        ctx.moveTo(670, axisY - 5);
+        ctx.lineTo(680, axisY);
+        ctx.lineTo(670, axisY + 5);
+        ctx.fill();
+
+        // Opens data
+        const opens = [
+            { x: 110, time: '7:02 AM', device: 'phone', label: 'Phone' },
+            { x: 240, time: '9:15 AM', device: 'laptop', label: 'Work PC' },
+            { x: 370, time: '12:30 PM', device: 'phone', label: 'Phone' },
+            { x: 500, time: '6:45 PM', device: 'laptop', label: 'Home PC' },
+            { x: 620, time: '11:58 PM', device: 'phone', label: 'Phone' }
+        ];
+
+        opens.forEach((o, i) => {
+            // Vertical tick
+            ctx.strokeStyle = P.magenta;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(o.x, axisY - 5);
+            ctx.lineTo(o.x, axisY - 50);
+            ctx.stroke();
+
+            // Dot on timeline
+            ctx.fillStyle = P.magenta;
+            ctx.beginPath();
+            ctx.arc(o.x, axisY, 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Device icon
+            if (o.device === 'phone') {
+                // Phone rectangle
+                ctx.strokeStyle = P.blue;
+                ctx.lineWidth = 2;
+                rr(ctx, o.x - 10, axisY - 85, 20, 32, 3);
+                ctx.stroke();
+                // Screen
+                ctx.fillStyle = 'rgba(42,120,214,0.35)';
+                ctx.fillRect(o.x - 7, axisY - 80, 14, 22);
+                // Home button
+                ctx.beginPath();
+                ctx.arc(o.x, axisY - 56, 2, 0, Math.PI * 2);
+                ctx.stroke();
+            } else {
+                // Laptop screen
+                ctx.strokeStyle = P.blue;
+                ctx.lineWidth = 2;
+                rr(ctx, o.x - 16, axisY - 88, 32, 24, 2);
+                ctx.stroke();
+                ctx.fillStyle = 'rgba(42,120,214,0.35)';
+                ctx.fillRect(o.x - 13, axisY - 85, 26, 18);
+                // Laptop base
+                ctx.beginPath();
+                ctx.moveTo(o.x - 20, axisY - 62);
+                ctx.lineTo(o.x + 20, axisY - 62);
+                ctx.lineTo(o.x + 18, axisY - 58);
+                ctx.lineTo(o.x - 18, axisY - 58);
+                ctx.closePath();
+                ctx.stroke();
+            }
+
+            // Time label below
+            ctx.fillStyle = P.text;
+            ctx.font = '14px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(o.time, o.x, axisY + 18);
+
+            // Device label
+            ctx.fillStyle = P.mute;
+            ctx.font = '13px -apple-system, sans-serif';
+            ctx.fillText(o.label, o.x, axisY + 32);
+        });
+
+        // Open count badge
+        ctx.fillStyle = P.magenta;
+        rr(ctx, 280, 195, 160, 26, 13);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 15px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('5 opens logged in one day', 360, 212);
+    })();
+
+    // C3: The observed "daily routine" is sampled on the sender's schedule
+    (function() {
+        const { ctx, w, h } = setupCanvas('c3');
+
+        // 24 hours. The campaign sends in five of them, so requests can only
+        // arrive in those five. The inferred routine is a curve fitted to five
+        // points, and the other nineteen hours are unsampled rather than quiet.
+        const SENDS  = [0,0,0,0,0,0, 0,0,140,0,0,0, 0,110,0,0,0,90, 0,0,60,0,40,0];
+        const OPENS  = [0,0,0,0,0,0, 0,0, 38,0,0,0, 0, 21,0,0,0,29, 0,0,17,0, 4,0];
+        const SENT_HOURS = [8, 13, 17, 20, 22];
+
+        const x0 = 62, x1 = 672, yBase = 214, yTop = 76;
+        const bw = (x1 - x0) / 24;
+        const xAt = hr => x0 + hr * bw;
+        const sMax = 140, oMax = 40;
+        const yS = v => yBase - (v / sMax) * (yBase - yTop);
+        const yO = v => yBase - (v / oMax) * (yBase - yTop);
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.ink;
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillText('A routine read off five hours of the day', w / 2, 24);
+        ctx.fillStyle = P.mute;
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillText('a request can only arrive in an hour the campaign sent in', w / 2, 42);
+
+        // Unsampled hours, shaded
+        for (let hr = 0; hr < 24; hr++) {
+            if (SENT_HOURS.indexOf(hr) === -1) {
+                ctx.fillStyle = tint(P.mute, 0.07);
+                ctx.fillRect(xAt(hr), yTop - 8, bw, yBase - yTop + 8);
+            }
+        }
+
+        ctx.strokeStyle = P.ink;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x0, yTop - 8); ctx.lineTo(x0, yBase); ctx.lineTo(x1, yBase);
+        ctx.stroke();
+
+        // Sends per hour
+        SENDS.forEach((v, hr) => {
+            if (!v) return;
+            const bh = yBase - yS(v);
+            ctx.fillStyle = tint(P.blue, 0.30);
+            ctx.fillRect(xAt(hr) + 2, yS(v), bw - 4, bh);
+            ctx.strokeStyle = P.blue;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(xAt(hr) + 2, yS(v), bw - 4, bh);
+        });
+
+        // Requests recorded in those same hours
+        ctx.fillStyle = P.orange;
+        OPENS.forEach((v, hr) => {
+            if (!v) return;
+            ctx.beginPath(); ctx.arc(xAt(hr) + bw / 2, yO(v), 5, 0, Math.PI * 2); ctx.fill();
+        });
+        ctx.strokeStyle = P.orange;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        SENT_HOURS.forEach((hr, k) => {
+            const x = xAt(hr) + bw / 2, y = yO(OPENS[hr]);
+            k ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+        });
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = P.orange;
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('the curve read as "their daily routine"', xAt(8) + bw / 2 + 8, yO(OPENS[8]) - 10);
+
+        // Hour labels
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.mute;
+        ctx.font = '11px -apple-system, sans-serif';
+        for (let hr = 0; hr < 24; hr += 3) {
+            ctx.fillText(hr + ':00', xAt(hr) + bw / 2, yBase + 16);
+        }
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillText('hour of day  \u2192', w / 2, yBase + 36);
+
+        // Legend
+        ctx.textAlign = 'left';
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = tint(P.blue, 0.30);
+        ctx.fillRect(96, 254, 11, 11);
+        ctx.strokeStyle = P.blue; ctx.strokeRect(96, 254, 11, 11);
+        ctx.fillStyle = P.text;
+        ctx.fillText('messages sent that hour', 113, 264);
+        ctx.fillStyle = P.orange;
+        ctx.beginPath(); ctx.arc(296, 260, 5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = P.text;
+        ctx.fillText('requests recorded', 308, 264);
+        ctx.fillStyle = tint(P.mute, 0.20);
+        ctx.fillRect(440, 254, 11, 11);
+        ctx.fillStyle = P.text;
+        ctx.fillText('no send, so no observation possible', 457, 264);
+
+        ctx.textAlign = 'center';
+        ctx.font = 'italic 12px -apple-system, sans-serif';
+        ctx.fillStyle = P.text;
+        ctx.fillText('The shaded hours are unsampled, not quiet \u2014 the grid is the campaign calendar.', w / 2, h - 26);
+        ctx.fillStyle = P.mute;
+        ctx.font = 'italic 11px -apple-system, sans-serif';
+        ctx.fillText('Illustrative counts \u2014 the shape of the sampling gap, not a measured campaign.', w / 2, h - 9);
+    })();
+
+    </script>
+</body>
+</html>

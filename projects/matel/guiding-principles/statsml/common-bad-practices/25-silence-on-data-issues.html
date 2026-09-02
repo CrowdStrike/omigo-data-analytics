@@ -18,7 +18,7 @@ strong { color: #1a5276; }
 .obj-table td:first-child { width: 40%; }
 .obj-table td:last-child { width: 60%; text-align: center; }
 .obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
-canvas { display: block; margin: 0 auto; }
+canvas { display: block; margin: 0 auto; width: 100%; height: auto; }
 </style>
 </head>
 <body>
@@ -102,19 +102,24 @@ canvas { display: block; margin: 0 auto; }
 </td><td><canvas id="c4" width="720" height="320"></canvas></td></tr>
 </table>
 
-<script>
+<script>var __charts = [];
 var dpr = window.devicePixelRatio || 1;
 function setup(id) {
     var c = document.getElementById(id); if (!c) return null;
-    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
-    c.width = w * dpr; c.height = h * dpr;
-    c.style.width = w + 'px'; c.style.height = h + 'px';
-    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    if (!c.dataset.w) { c.dataset.w = c.getAttribute('width') || '720'; c.dataset.h = c.getAttribute('height') || '300'; }
+    var w = parseInt(c.dataset.w), h = parseInt(c.dataset.h);
+    var dpr = window.devicePixelRatio || 1;
+    c.style.maxWidth = w + 'px';
+    var cssW = c.getBoundingClientRect().width || w;
+    var scale = (cssW / w) * dpr;
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    var ctx = c.getContext('2d'); ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, w, h);
     return {ctx:ctx, w:w, h:h};
 }
 
 // Chart 1: Cost accumulation over time
-(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+__charts.push(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
 ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
 ctx.fillStyle='#1a5276';ctx.font='bold 13px sans-serif';ctx.textAlign='center';
 ctx.fillText('Cost of silence accumulates daily — data damage is linear with time',w/2,18);
@@ -179,10 +184,10 @@ annotations.forEach(function(a){
     ctx.beginPath();ctx.arc(x,y,4,0,2*Math.PI);ctx.fill();
     ctx.textAlign='left';ctx.fillText(a.label,x+7,y+3);
 });
-})();
+});
 
 // Chart 2: A/B test bias propagation — before/after reveal
-(function(){var s=setup('c2');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+__charts.push(function(){var s=setup('c2');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
 ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
 ctx.fillStyle='#1a5276';ctx.font='bold 13px sans-serif';ctx.textAlign='center';
 ctx.fillText('Biased A/B Test: Phantom Lift from Population Imbalance',w/2,18);
@@ -241,10 +246,10 @@ ctx.fillText('(fake)',margin.left+40+barW+25,margin.top+plotH-(0.135/0.18)*plotH
 
 ctx.fillStyle='#27ae60';ctx.font='bold 11px sans-serif';
 ctx.fillText('Actual lift: 0%',margin.left+40+2*(barW+50)+barW/2,margin.top+plotH-(observed[2]/0.18)*plotH+20);
-})();
+});
 
 // Chart 3: Downstream blast radius — how many teams affected over time
-(function(){var s=setup('c3');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+__charts.push(function(){var s=setup('c3');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
 ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
 ctx.fillStyle='#1a5276';ctx.font='bold 13px sans-serif';ctx.textAlign='center';
 ctx.fillText('Blast Radius: Downstream Teams Affected by Silent Data Bug',w/2,18);
@@ -302,68 +307,108 @@ layers.forEach(function(l,i){
     ctx.fillStyle='#333';ctx.font='10px sans-serif';ctx.textAlign='left';
     ctx.fillText(l.name,margin.left+plotW-164,legendY+i*16+10);
 });
-})();
+});
 
-// Chart 4: The pattern — decision tree of silence vs report
-(function(){var s=setup('c4');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+// Chart 4: Cost crossover — speak up now vs stay silent
+__charts.push(function(){var s=setup('c4');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
 ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
 ctx.fillStyle='#1a5276';ctx.font='bold 13px sans-serif';ctx.textAlign='center';
-ctx.fillText('The Silence Decision Tree',w/2,18);
+ctx.fillText('Cost Crossover: Speak Up Now vs Stay Silent',w/2,18);
+ctx.fillStyle='#666';ctx.font='italic 11px sans-serif';
+ctx.fillText('Same bug, two choices — the only variable is when it gets surfaced.',w/2,34);
 
-// Draw decision tree
-function box(x,y,text,color,textColor){
-    ctx.fillStyle=color;
-    var tw=ctx.measureText(text).width+20;
-    var bx=x-tw/2,by=y-12;
-    ctx.beginPath();ctx.roundRect(bx,by,tw,24,4);ctx.fill();
-    ctx.fillStyle=textColor||'#fff';ctx.font='11px sans-serif';ctx.textAlign='center';
-    ctx.fillText(text,x,y+4);
-    return {x:x,y:y,w:tw,h:24};
+var margin={left:55,right:20,top:50,bottom:44};
+var plotW=w-margin.left-margin.right;
+var plotH=h-margin.top-margin.bottom;
+var speakUp=[12,12,13,13,14,14,14,15,15,15,16,16,16];
+var silent=[2,4,7,11,16,24,36,54,80,115,158,212,280];
+var maxY=300;
+function px(wk){return margin.left+(wk/12)*plotW;}
+function py(v){return margin.top+plotH-(v/maxY)*plotH;}
+
+// Gridlines
+for(var g=0;g<=6;g++){
+    var gv=g*50,gy=py(gv);
+    ctx.strokeStyle='#e8e8e8';ctx.lineWidth=0.5;
+    ctx.beginPath();ctx.moveTo(margin.left,gy);ctx.lineTo(margin.left+plotW,gy);ctx.stroke();
+    ctx.fillStyle='#666';ctx.font='11px sans-serif';ctx.textAlign='right';
+    ctx.fillText('$'+gv+'K',margin.left-6,gy+4);
 }
-function arrow(x1,y1,x2,y2,label,color){
-    ctx.strokeStyle=color||'#666';ctx.lineWidth=1.5;
-    ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
-    // Arrowhead
-    var angle=Math.atan2(y2-y1,x2-x1);
-    ctx.beginPath();ctx.moveTo(x2,y2);
-    ctx.lineTo(x2-8*Math.cos(angle-0.4),y2-8*Math.sin(angle-0.4));
-    ctx.lineTo(x2-8*Math.cos(angle+0.4),y2-8*Math.sin(angle+0.4));ctx.closePath();
-    ctx.fillStyle=color||'#666';ctx.fill();
-    if(label){ctx.fillStyle='#555';ctx.font='10px sans-serif';ctx.textAlign='center';
-    ctx.fillText(label,(x1+x2)/2-15,(y1+y2)/2-4);}
+for(var wk=0;wk<=12;wk++){
+    var gx=px(wk);
+    ctx.strokeStyle='#e0e0e0';ctx.lineWidth=0.5;
+    ctx.beginPath();ctx.moveTo(gx,margin.top);ctx.lineTo(gx,margin.top+plotH);ctx.stroke();
+    ctx.fillStyle='#333';ctx.font='11px sans-serif';ctx.textAlign='center';
+    ctx.fillText(wk+'',gx,margin.top+plotH+14);
 }
 
-var cx=w/2;
-box(cx,40,'You notice a data issue','#1a5276');
-arrow(cx,52,cx-160,75,'','#666');arrow(cx,52,cx+160,75,'','#666');
-ctx.fillStyle='#666';ctx.font='10px sans-serif';
-ctx.textAlign='right';ctx.fillText('Report',cx-60,63);
-ctx.textAlign='left';ctx.fillText('Stay silent',cx+50,63);
+// Axes
+ctx.strokeStyle='#333';ctx.lineWidth=1.5;
+ctx.beginPath();ctx.moveTo(margin.left,margin.top);ctx.lineTo(margin.left,margin.top+plotH);
+ctx.lineTo(margin.left+plotW,margin.top+plotH);ctx.stroke();
 
-// Report path
-box(cx-160,85,'Short-term pain: 1-2 weeks delay','#e67e22');
-arrow(cx-160,97,cx-160,120,'','#27ae60');
-box(cx-160,130,'Data fixed for everyone','#27ae60');
-arrow(cx-160,142,cx-160,165,'','#27ae60');
-box(cx-160,175,'Trust earned, problem bounded','#27ae60');
+ctx.fillStyle='#333';ctx.font='11px sans-serif';ctx.textAlign='center';
+ctx.fillText('Weeks since you noticed the issue',margin.left+plotW/2,h-8);
+ctx.save();ctx.translate(14,margin.top+plotH/2);ctx.rotate(-Math.PI/2);
+ctx.fillStyle='#333';ctx.font='11px sans-serif';ctx.textAlign='center';
+ctx.fillText('Total cost to fix ($K)',0,0);ctx.restore();
 
-// Silence path
-box(cx+160,85,'Short-term comfort: no disruption','#95a5a6');
-arrow(cx+160,97,cx+160,120,'','#e74c3c');
-box(cx+160,130,'Bad data accumulates (weeks → months)','#e74c3c');
-arrow(cx+160,142,cx+160,165,'','#e74c3c');
-box(cx+160,175,'Multiple teams make wrong decisions','#c0392b');
-arrow(cx+160,187,cx+160,210,'','#e74c3c');
-box(cx+160,220,'Postmortem: "nobody caught this"','#8e44ad');
-arrow(cx+160,232,cx+160,255,'','#8e44ad');
-box(cx+160,265,'(Someone did. They chose silence.)','#8e44ad');
+// Area under silent line
+ctx.fillStyle='rgba(231,76,60,0.08)';
+ctx.beginPath();ctx.moveTo(px(0),margin.top+plotH);
+silent.forEach(function(v,i){ctx.lineTo(px(i),py(v));});
+ctx.lineTo(px(12),margin.top+plotH);ctx.closePath();ctx.fill();
 
-// Cost summary at bottom
-ctx.fillStyle='#333';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
-ctx.fillText('Report: -2 weeks, +trust, problem fixed',cx-160,210);
+// Stay-silent line (red, compounding)
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=3;
+ctx.beginPath();
+silent.forEach(function(v,i){if(i===0)ctx.moveTo(px(i),py(v));else ctx.lineTo(px(i),py(v));});
+ctx.stroke();
+
+// Speak-up line (green, flat)
+ctx.strokeStyle='#27ae60';ctx.lineWidth=3;
+ctx.beginPath();
+speakUp.forEach(function(v,i){if(i===0)ctx.moveTo(px(i),py(v));else ctx.lineTo(px(i),py(v));});
+ctx.stroke();
+
+// Crossover marker at week 4
+ctx.strokeStyle='#e67e22';ctx.lineWidth=1.5;ctx.setLineDash([4,4]);
+ctx.beginPath();ctx.moveTo(px(4),margin.top+plotH);ctx.lineTo(px(4),150);ctx.stroke();
+ctx.setLineDash([]);
+ctx.fillStyle='#e67e22';
+ctx.beginPath();ctx.arc(px(4),py(silent[4]),5,0,2*Math.PI);ctx.fill();
+ctx.font='bold 11px sans-serif';ctx.textAlign='left';
+ctx.fillText('Crossover: week 4 —',px(4)+8,160);
+ctx.fillText('silence becomes the costlier path',px(4)+8,174);
+
+// Milestone dots on the silent line
 ctx.fillStyle='#e74c3c';
-ctx.fillText('Silence: -6 months bad decisions, -credibility, -$$$',cx+160,295);
-})();
+ctx.beginPath();ctx.arc(px(7),py(silent[7]),4,0,2*Math.PI);ctx.fill();
+ctx.beginPath();ctx.arc(px(10),py(silent[10]),4,0,2*Math.PI);ctx.fill();
+ctx.font='11px sans-serif';ctx.textAlign='left';
+ctx.fillText('Rework: analyses re-run',px(7)+8,py(silent[7])+4);
+ctx.textAlign='right';
+ctx.fillText('Models retrained on bad data',px(10)-8,py(silent[10])+4);
+
+// Line end labels
+ctx.font='bold 12px sans-serif';ctx.textAlign='right';
+ctx.fillStyle='#e74c3c';
+ctx.fillText('Stay silent: cost compounds',px(12)-8,py(silent[12])-10);
+ctx.fillStyle='#27ae60';
+ctx.fillText('Speak up now: cost stays flat',px(12)-8,py(speakUp[12])-8);
+
+// Insight annotation
+ctx.fillStyle='#e74c3c';ctx.font='bold 13px sans-serif';ctx.textAlign='left';
+ctx.fillText('By week 12, silence costs ~17× more —',margin.left+10,margin.top+18);
+ctx.fillText('and the gap widens every week.',margin.left+10,margin.top+34);
+});
+
+__charts.forEach(function(f){ f(); });
+var __redrawTimer;
+window.addEventListener('resize', function(){
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function(){ __charts.forEach(function(f){ f(); }); }, 150);
+});
 </script>
 </body>
 </html>

@@ -18,7 +18,7 @@ strong { color: #1a5276; }
 .obj-table td:first-child { width: 40%; }
 .obj-table td:last-child { width: 60%; text-align: center; }
 .obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
-canvas { display: block; margin: 0 auto; }
+canvas { display: block; margin: 0 auto; width: 100%; height: auto; }
 </style>
 </head>
 <body>
@@ -49,86 +49,84 @@ canvas { display: block; margin: 0 auto; }
 </td><td><canvas id="c2" width="720" height="400"></canvas></td></tr>
 </table>
 
-<script>
+<script>var __charts = [];
 var dpr = window.devicePixelRatio || 1;
 function setup(id) {
     var c = document.getElementById(id); if (!c) return null;
-    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
-    c.width = w * dpr; c.height = h * dpr;
-    c.style.width = w + 'px'; c.style.height = h + 'px';
-    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    if (!c.dataset.w) { c.dataset.w = c.getAttribute('width') || '720'; c.dataset.h = c.getAttribute('height') || '300'; }
+    var w = parseInt(c.dataset.w), h = parseInt(c.dataset.h);
+    var dpr = window.devicePixelRatio || 1;
+    c.style.maxWidth = w + 'px';
+    var cssW = c.getBoundingClientRect().width || w;
+    var scale = (cssW / w) * dpr;
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    var ctx = c.getContext('2d'); ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, w, h);
     return {ctx:ctx, w:w, h:h};
 }
-(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+__charts.push(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
 // Title
 ctx.fillStyle='#1a5276';ctx.font='bold 15px -apple-system';ctx.textAlign='center';
-ctx.fillText('Mandatory A/B Gate: 80% Theater, 20% Genuine',w/2,20);
+ctx.fillText('A Year of Mandatory A/B Tests: Ship vs. Kill Decisions',w/2,20);
 
-// Funnel visualization
-var funnelLeft=60,funnelTop=50,funnelW=600,funnelH=300;
+// Deterministic data: 42 experiments, measured lift (%) on primary metric
+var lifts=[-5.2,-4.4,-3.8,-3.3,-2.9,-2.6,-2.3,-2.0,-1.8,-1.5,-1.3,-1.1,-0.9,-0.7,-0.5,-0.3,-0.2,-0.1,0.0,0.0,0.1,0.1,0.2,0.3,0.4,0.5,0.7,0.9,1.1,1.3,1.5,1.7,1.9,2.2,2.5,2.8,3.1,3.5,3.9,4.3,4.8,5.4];
+var killed={'-5.2':true,'-4.4':true,'-3.3':true}; // everything else ships
 
-// Stage 1: Feature Ideas (wide box)
-ctx.fillStyle='rgba(26,82,118,0.15)';
-ctx.fillRect(funnelLeft,funnelTop,funnelW,50);
-ctx.strokeStyle='#1a5276';ctx.lineWidth=1.5;
-ctx.strokeRect(funnelLeft,funnelTop,funnelW,50);
-ctx.fillStyle='#1a5276';ctx.font='bold 14px -apple-system';ctx.textAlign='center';
-ctx.fillText('Feature Ideas (all types)',funnelLeft+funnelW/2,funnelTop+30);
+var x0=60,x1=680,axisY=316,baseY=300;
+function xs(v){return x0+(v+6)/12*(x1-x0);}
 
-// Arrow down
-ctx.fillStyle='#555';ctx.beginPath();
-ctx.moveTo(w/2-8,funnelTop+55);ctx.lineTo(w/2+8,funnelTop+55);ctx.lineTo(w/2,funnelTop+70);ctx.fill();
+// X axis line + ticks
+ctx.strokeStyle='#555';ctx.lineWidth=1;
+ctx.beginPath();ctx.moveTo(x0,axisY);ctx.lineTo(x1,axisY);ctx.stroke();
+ctx.fillStyle='#555';ctx.font='11px -apple-system';ctx.textAlign='center';
+for(var t=-6;t<=6;t+=2){
+    var tx=xs(t);
+    ctx.beginPath();ctx.moveTo(tx,axisY);ctx.lineTo(tx,axisY+5);ctx.stroke();
+    ctx.fillText((t>0?'+':'')+t+'%',tx,axisY+18);
+}
+ctx.font='12px -apple-system';
+ctx.fillText('Measured lift on primary metric (%)',(x0+x1)/2,axisY+36);
 
-// Stage 2: Mandatory A/B Gate (bottleneck)
-ctx.fillStyle='#e67e22';ctx.globalAlpha=0.2;
-ctx.fillRect(funnelLeft+100,funnelTop+75,funnelW-200,40);
-ctx.globalAlpha=1;ctx.strokeStyle='#e67e22';ctx.lineWidth=2;
-ctx.strokeRect(funnelLeft+100,funnelTop+75,funnelW-200,40);
-ctx.fillStyle='#e67e22';ctx.font='bold 14px -apple-system';
-ctx.fillText('MANDATORY A/B TEST GATE',w/2,funnelTop+100);
+// Zero (no effect) line
+ctx.strokeStyle='#999';ctx.setLineDash([4,3]);
+ctx.beginPath();ctx.moveTo(xs(0),92);ctx.lineTo(xs(0),axisY);ctx.stroke();
+ctx.setLineDash([]);
+ctx.fillStyle='#777';ctx.font='11px -apple-system';ctx.textAlign='center';
+ctx.fillText('no effect',xs(0),86);
 
-// Queue backup annotation
-ctx.fillStyle='#e74c3c';ctx.font='bold 12px -apple-system';ctx.textAlign='right';
-ctx.fillText('Queue backup: 6+ weeks',funnelLeft+funnelW-20,funnelTop+88);
+// Beeswarm dots: stack upward within half-percent bins (deterministic, array order)
+var bins={};
+for(var i=0;i<lifts.length;i++){
+    var v=lifts[i],b='b'+Math.round(v/0.5);
+    bins[b]=bins[b]||0;
+    var dy=baseY-bins[b]*16;bins[b]++;
+    var isKilled=killed[v.toFixed(1)];
+    ctx.beginPath();ctx.arc(xs(v),dy,6,0,Math.PI*2);
+    ctx.fillStyle=isKilled?'rgba(231,76,60,0.9)':'rgba(39,174,96,0.85)';ctx.fill();
+    ctx.strokeStyle=isKilled?'#e74c3c':'#27ae60';ctx.lineWidth=1;ctx.stroke();
+}
 
-// Arrow down
-ctx.fillStyle='#555';ctx.beginPath();
-ctx.moveTo(w/2-8,funnelTop+120);ctx.lineTo(w/2+8,funnelTop+120);ctx.lineTo(w/2,funnelTop+135);ctx.fill();
+// Legend (top right)
+ctx.beginPath();ctx.arc(590,52,6,0,Math.PI*2);
+ctx.fillStyle='rgba(39,174,96,0.85)';ctx.fill();ctx.strokeStyle='#27ae60';ctx.lineWidth=1;ctx.stroke();
+ctx.fillStyle='#333';ctx.font='12px -apple-system';ctx.textAlign='left';
+ctx.fillText('Shipped',602,56);
+ctx.beginPath();ctx.arc(590,72,6,0,Math.PI*2);
+ctx.fillStyle='rgba(231,76,60,0.9)';ctx.fill();ctx.strokeStyle='#e74c3c';ctx.stroke();
+ctx.fillStyle='#333';
+ctx.fillText('Killed',602,76);
 
-// Stage 3: Split into theater vs genuine
-var splitY=funnelTop+145;
-// Red section (80% - theater tests)
-var redW=funnelW*0.8;
-ctx.fillStyle='rgba(231,76,60,0.2)';
-ctx.fillRect(funnelLeft,splitY,redW,110);
-ctx.strokeStyle='#e74c3c';ctx.lineWidth=1.5;
-ctx.strokeRect(funnelLeft,splitY,redW,110);
-ctx.fillStyle='#e74c3c';ctx.font='bold 14px -apple-system';ctx.textAlign='center';
-ctx.fillText('80% — Predetermined Outcomes',funnelLeft+redW/2,splitY+20);
-ctx.font='12px -apple-system';ctx.fillStyle='#555';ctx.textAlign='left';
-ctx.fillText('- Legal compliance (must launch)',funnelLeft+15,splitY+40);
-ctx.fillText('- Brand redesigns (will ship anyway)',funnelLeft+15,splitY+56);
-ctx.fillText('- Infra migrations (no alternative)',funnelLeft+15,splitY+72);
-ctx.fillText('- Exec-mandated features (political)',funnelLeft+15,splitY+88);
-
-// Green section (20% - genuine)
-var greenX=funnelLeft+redW+5;
-var greenW=funnelW-redW-5;
-ctx.fillStyle='rgba(39,174,96,0.2)';
-ctx.fillRect(greenX,splitY,greenW,110);
-ctx.strokeStyle='#27ae60';ctx.lineWidth=1.5;
-ctx.strokeRect(greenX,splitY,greenW,110);
-ctx.fillStyle='#27ae60';ctx.font='bold 13px -apple-system';ctx.textAlign='center';
-ctx.fillText('20%',greenX+greenW/2,splitY+20);
-ctx.fillText('Genuine',greenX+greenW/2,splitY+40);
-ctx.fillText('Uncertainty',greenX+greenW/2,splitY+60);
-
-// Bottom annotation
+// Insight annotation
 ctx.fillStyle='#e74c3c';ctx.font='bold 13px -apple-system';ctx.textAlign='center';
-ctx.fillText('Result: genuine experiments starved of capacity while theater occupies the pipeline',w/2,splitY+135);
-})();
+ctx.fillText('18 experiments came back negative — 15 of them shipped anyway',w/2,60);
 
-(function(){var s=setup('c2');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+// Caption
+ctx.fillStyle='#555';ctx.font='italic 12px -apple-system';
+ctx.fillText('Each dot is one experiment from the launch-review pipeline; color is the ship/kill decision that followed.',w/2,380);
+});
+
+__charts.push(function(){var s=setup('c2');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
 // Title
 ctx.fillStyle='#1a5276';ctx.font='bold 15px -apple-system';ctx.textAlign='center';
 ctx.fillText('Experiment Capacity: Theater vs. Ideal Allocation',w/2,20);
@@ -232,7 +230,14 @@ for(var i=0;i<4;i++){
 // Summary
 ctx.fillStyle='#1a5276';ctx.font='bold 13px -apple-system';ctx.textAlign='center';
 ctx.fillText('Triage: test uncertain outcomes, monitor predetermined ones',w/2,monY+80);
-})();
+});
+
+__charts.forEach(function(f){ f(); });
+var __redrawTimer;
+window.addEventListener('resize', function(){
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function(){ __charts.forEach(function(f){ f(); }); }, 150);
+});
 </script>
 </body>
 </html>

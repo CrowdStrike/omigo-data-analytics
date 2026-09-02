@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tracking Data: WiFi Location Databases</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2c3e50; max-width: 100%; margin: 0; padding: 30px 40px; background: #fff; }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+        .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
+        .obj-table { width: 100%; border-collapse: collapse; }
+        .obj-table td { vertical-align: top; padding: 16px; border: 1px solid #2980b9; }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; text-align: center; }
+        ul { padding-left: 20px; margin: 8px 0; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        .obj-table td:last-child .payload,
+        .obj-table td:last-child .payload-note { text-align: left; }
+        .payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 12px 0; }
+        .payload-note { font-size: 0.82em; color: #666; margin: 12px 0 -6px 0; font-style: italic; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        .key-point strong:first-child { color: #1a5276; }
+        .lede { font-size: 0.95em; margin: 0 0 10px 0; }
+        .lbl { display: inline-block; font-size: 0.7em; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; margin: 10px 0 2px 0; }
+        .lbl-purpose { background: #eaf2fb; color: #1a5276; }
+        .lbl-effect { background: #fdf0e6; color: #a8501c; }
+        li b { color: #1a5276; font-weight: 600; }
+        canvas { display: block; margin: 0 auto; width: 100%; height: auto; }
+    </style>
+</head>
+<body>
+    <h1>Tracking Data: WiFi Location Databases</h1>
+    <p class="subtitle">Surveyed WiFi access points act as position references where satellite signals do not reach — returning a radius, not a point.</p>
+
+    <table class="obj-table">
+        <tr>
+            <td>
+                <div class="obj-title">What is it?</div>
+                <p class="lede">A lookup table from radio hardware to a surveyed coordinate.</p>
+                <ul>
+                    <li><b>How it was built:</b> survey vehicles, and later contributing handsets, recorded which access points were visible at satellite-fixed positions</li>
+                    <li><b>The table</b> maps an access point's hardware identifier to an estimated coordinate</li>
+                    <li><b>The request:</b> a phone sends the identifiers and signal strengths it can see</li>
+                    <li><b>The response:</b> a position and an accuracy radius, with no satellite fix required — which is why it works indoors</li>
+                    <li><b>A home router</b> appears as surveyed equipment, and contributes to fixes for any device that sees it</li>
+                </ul>
+            </td>
+            <td><canvas id="c1" width="720" height="320"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">What does it collect?</div>
+                <ul>
+                    <li><b>Hardware identifier</b> (BSSID) and its surveyed coordinate</li>
+                    <li><b>Signal strength</b> from the phone to each visible access point</li>
+                    <li><b>The returned position</b>, plus an accuracy radius</li>
+                    <li><b>Observation count</b> behind each entry, and when it was last seen</li>
+                    <li><b>A sequence of fixes</b> over time, from which visits are inferred</li>
+                </ul>
+                <div class="key-point"><strong>The row keys on equipment:</strong> a BSSID says where a radio was last observed, not where anyone lives.</div>
+                <div class="key-point"><strong>Why that makes it fragile:</strong> move the router to a new city and the stored coordinates stay put, so every phone that sees it is placed at the old address. <code>last_seen</code> and <code>observations</code> exist to manage this — a stale entry with many historical observations is harder to correct than a fresh one, so a well-surveyed router that moves gives a confidently wrong fix rather than a low-confidence one.</div>
+            </td>
+            <td><canvas id="c2" width="720" height="320"></canvas>
+<p class="payload-note">Sample payload — illustrative structure, not real captured data.</p>
+<pre class="payload">// Request/response field names follow the public
+// geolocation web APIs. Survey-side fields are inferred.
+{
+  // ── documented in public geolocation APIs ──
+  "wifiAccessPoints": [
+    { "macAddress": "a4:2b:8c:…", "signalStrength": -47,
+      "age": 1200, "channel": 6 },
+    { "macAddress": "f0:9f:c2:…", "signalStrength": -71,
+      "age": 4300, "channel": 36 }
+  ],
+  "location": { "lat": 30.26719, "lng": -97.74305 },
+  "accuracy": 24.0,          // metres, radius not a point
+
+  // ── inferred / plausible: the survey-side row ──
+  "bssid":        "a4:2b:8c:…",
+  "est_lat":      30.26721,
+  "est_lon":      -97.74298,
+  "observations": 14,        // sightings backing this estimate
+  "last_seen":    "2026-06-18",
+  "ssid":         null       // name not stored
+}</pre>
+</td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">Why is it collected?</div>
+                <div class="lbl lbl-purpose">Stated purpose</div>
+                <ul>
+                    <li><b>A fix where satellites are weak</b> — indoors and in dense streets GPS can be slow or fail</li>
+                    <li><b>Speed and battery:</b> a table match returns a position in a fraction of the time</li>
+                </ul>
+                <div class="lbl lbl-effect">Additional consequence</div>
+                <ul>
+                    <li><b>Location products indoors</b> — footfall, visit attribution, dwell — though the coordinate carries no floor, so two stacked units look the same</li>
+                    <li>A household's own router <b>contributes to fixes for passers-by</b>, because the table keys on equipment, not accounts</li>
+                </ul>
+                <div class="key-point"><strong>A coverage footprint, not a sample of places:</strong> entries exist where survey vehicles and contributing handsets happened to travel. And <code>accuracy</code> is a radius — treating the returned point as the location turns an interval into a claim about one shop.</div>
+            </td>
+            <td><canvas id="c3" width="720" height="320"></canvas></td>
+        </tr>
+    </table>
+
+    <script>
+    const dpr = window.devicePixelRatio || 1;
+    // Validated categorical palette (CVD-checked, see REVIEW-NOTES.md).
+    // Red is deliberately NOT in the rotation - it stays reserved for
+    // genuine error / alarm states so it keeps its meaning.
+    const P = {
+      blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+      aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+      ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+    };
+    const SERIES = [P.blue, P.green, P.violet, P.orange, P.aqua, P.magenta, P.yellow];
+    // Translucent fill from a palette hex, so a shape keeps its hue but stays light.
+    function tint(hex, a) {
+      const n = parseInt(hex.slice(1), 16);
+      return 'rgba(' + (n >> 16) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+    }
+    // Rounded-rect path helper (works without native ctx.roundRect).
+    function rr(ctx, x, y, w, h, r) {
+      r = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    function setupCanvas(id) {
+        const c = document.getElementById(id);
+        const w = c.getAttribute('width') ? +c.getAttribute('width') : 720;
+        const h = c.getAttribute('height') ? +c.getAttribute('height') : 240;
+        c.style.maxWidth = w + 'px';
+        var __cssW = c.getBoundingClientRect().width || w;
+        var __scale = (__cssW / w) * dpr;
+        c.width = Math.round(w * __scale);
+        c.height = Math.round(h * __scale);
+        const ctx = c.getContext('2d');
+        ctx.scale(__scale, __scale);
+        return { ctx, w, h };
+    }
+
+    // C1: Building map with router triangulation
+    (function() {
+        const { ctx, w, h } = setupCanvas('c1');
+
+        ctx.fillStyle = '#f8f9fa';
+        ctx.fillRect(0, 0, w, h);
+
+        // Building outline
+        ctx.strokeStyle = P.text;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(100, 30, 520, 180);
+
+        // Internal walls
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = P.mute;
+        ctx.beginPath();
+        ctx.moveTo(280, 30); ctx.lineTo(280, 210);
+        ctx.moveTo(450, 30); ctx.lineTo(450, 210);
+        ctx.moveTo(100, 120); ctx.lineTo(280, 120);
+        ctx.stroke();
+
+        // Room labels
+        ctx.fillStyle = P.mute;
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Store A', 190, 80);
+        ctx.fillText('Store B', 190, 170);
+        ctx.fillText('Corridor', 365, 120);
+        ctx.fillText('Store C', 540, 120);
+
+        // Router positions (triangles)
+        const routers = [
+            { x: 140, y: 50, label: 'R1' },
+            { x: 250, y: 180, label: 'R2' },
+            { x: 420, y: 55, label: 'R3' },
+            { x: 580, y: 170, label: 'R4' }
+        ];
+
+        routers.forEach(function(r) {
+            // Router icon (small antenna shape)
+            ctx.fillStyle = P.blue;
+            ctx.beginPath();
+            ctx.moveTo(r.x, r.y - 8);
+            ctx.lineTo(r.x - 6, r.y + 4);
+            ctx.lineTo(r.x + 6, r.y + 4);
+            ctx.closePath();
+            ctx.fill();
+
+            // Signal rings
+            for (let i = 1; i <= 2; i++) {
+                ctx.beginPath();
+                ctx.arc(r.x, r.y, i * 15, 0, Math.PI * 2);
+                ctx.strokeStyle = `rgba(26, 82, 118, ${0.3 - i * 0.1})`;
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+
+            ctx.fillStyle = P.blue;
+            ctx.font = 'bold 11px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(r.label, r.x, r.y + 16);
+        });
+
+        // Person position (calculated)
+        const px = 350, py = 130;
+
+        // Triangulation lines
+        ctx.setLineDash([4, 3]);
+        routers.forEach(function(r) {
+            ctx.beginPath();
+            ctx.moveTo(r.x, r.y);
+            ctx.lineTo(px, py);
+            ctx.strokeStyle = tint(P.magenta, 0.4);
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        });
+        ctx.setLineDash([]);
+
+        // Person dot
+        ctx.beginPath();
+        ctx.arc(px, py, 8, 0, Math.PI * 2);
+        ctx.fillStyle = P.magenta;
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(px, py, 14, 0, Math.PI * 2);
+        ctx.strokeStyle = tint(P.magenta, 0.4);
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Accuracy circle
+        ctx.beginPath();
+        ctx.arc(px, py, 22, 0, Math.PI * 2);
+        ctx.strokeStyle = tint(P.magenta, 0.2);
+        ctx.setLineDash([2, 2]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Label
+        ctx.fillStyle = P.blue;
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('Fix returned as a radius', px + 26, py + 4);
+
+        // Title
+        ctx.fillStyle = P.blue;
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Solved from surveyed access-point coordinates — schematic', w / 2, 225);
+    })();
+
+    // C2: Vertical data layer stack
+    (function() {
+        const { ctx, w, h } = setupCanvas('c2');
+
+        ctx.fillStyle = '#f8f9fa';
+        ctx.fillRect(0, 0, w, h);
+
+        const layers = [
+            { label: 'Router BSSID', detail: 'AA:BB:CC:DD:EE:FF', color: P.blue },
+            { label: 'Mapped GPS Location', detail: '37.7749° N, 122.4194° W', color: P.blue },
+            { label: 'Phone Signal Strength', detail: '-45 dBm, -62 dBm, -71 dBm', color: P.orange },
+            { label: 'Your Calculated Position', detail: 'Floor 3, Room 302, Near window', color: P.magenta }
+        ];
+
+        const boxW = 400, boxH = 40;
+        const startX = 55;
+        const boxCx = startX + boxW / 2;
+        const startY = 20;
+        const gap = 12;
+
+        layers.forEach(function(layer, i) {
+            const y = startY + i * (boxH + gap);
+
+            // Box
+            ctx.fillStyle = layer.color;
+            rr(ctx, startX, y, boxW, boxH, 6);
+            ctx.fill();
+
+            // Text
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 14px -apple-system, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(layer.label, startX + 15, y + 17);
+            ctx.font = '12px monospace';
+            ctx.fillStyle = 'rgba(255,255,255,0.85)';
+            ctx.fillText(layer.detail, startX + 15, y + 33);
+
+            // Arrow down
+            if (i < layers.length - 1) {
+                const arrowY = y + boxH + 2;
+                ctx.beginPath();
+                ctx.moveTo(boxCx, arrowY);
+                ctx.lineTo(boxCx, arrowY + gap - 2);
+                ctx.lineTo(boxCx - 5, arrowY + gap - 6);
+                ctx.moveTo(boxCx, arrowY + gap - 2);
+                ctx.lineTo(boxCx + 5, arrowY + gap - 6);
+                ctx.strokeStyle = P.mute;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+
+            // Step number
+            ctx.beginPath();
+            ctx.arc(startX - 25, y + boxH / 2, 12, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(26, 82, 118, 0.15)';
+            ctx.fill();
+            ctx.fillStyle = P.blue;
+            ctx.font = 'bold 14px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText((i + 1).toString(), startX - 25, y + boxH / 2 + 4);
+        });
+
+        // Right side labels
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = P.mute;
+        ctx.fillText('Surveyed at a known position', startX + boxW + 15, startY + 28);
+        ctx.fillText('Stored as an estimate per access point', startX + boxW + 15, startY + boxH + gap + 28);
+        ctx.fillText('Observed by the phone', startX + boxW + 15, startY + 2 * (boxH + gap) + 28);
+        ctx.fillText('Solved, and returned with a radius', startX + boxW + 15, startY + 3 * (boxH + gap) + 28);
+    })();
+
+    // C3: the returned radius against the size of the thing being attributed
+    (function() {
+        const { ctx, w, h } = setupCanvas('c3');
+
+        // The fix comes back as a point plus a radius. The radius narrows as more
+        // surveyed access points are visible. Visit attribution needs the circle to
+        // fit inside one unit, so it is the radius, not the point, that decides
+        // whether the answer means anything. Illustrative metres.
+        const BARS = [
+            { lab: '1 seen',  r: 180 },
+            { lab: '2 seen',  r: 95 },
+            { lab: '4 seen',  r: 55 },
+            { lab: '8 seen',  r: 32 },
+            { lab: '15 seen', r: 20 }
+        ];
+        const SHOP = 22;                 // metres across one shop front
+        const base = 232, maxH = 148, maxV = 190, x0 = 128, step = 116, bw = 62;
+        const yAt = v => base - (v / maxV) * maxH;
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.ink;
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillText('Reported accuracy radius, by how many surveyed access points are visible', w / 2, 24);
+        ctx.fillStyle = P.mute;
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillText('a visit claim needs the circle to fit inside one unit', w / 2, 42);
+
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(64, base); ctx.lineTo(w - 30, base); ctx.stroke();
+
+        // the width the answer has to beat
+        const sy = yAt(SHOP);
+        ctx.strokeStyle = P.violet; ctx.lineWidth = 1.5;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath(); ctx.moveTo(64, sy); ctx.lineTo(w - 30, sy); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.textAlign = 'left';
+        ctx.fillStyle = P.violet;
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.fillText('width of one shop front, about 22 m', 300, sy - 8);
+
+        BARS.forEach((b, i) => {
+            const cx = x0 + i * step;
+            const y = yAt(b.r);
+            const fits = b.r <= SHOP;
+            ctx.fillStyle = fits ? 'rgba(0,131,0,0.40)' : 'rgba(42,120,214,0.28)';
+            ctx.fillRect(cx - bw / 2, y, bw, base - y);
+            ctx.strokeStyle = fits ? P.green : P.blue; ctx.lineWidth = 1;
+            ctx.strokeRect(cx - bw / 2, y, bw, base - y);
+
+            ctx.textAlign = 'center';
+            ctx.fillStyle = fits ? P.green : P.blue;
+            ctx.font = 'bold 12px -apple-system, sans-serif';
+            ctx.fillText(b.r + ' m', cx, y - 8);
+            ctx.fillStyle = P.text;
+            ctx.font = '12px -apple-system, sans-serif';
+            ctx.fillText(b.lab, cx, base + 18);
+        });
+
+        ctx.fillStyle = P.mute;
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillText('access points in range with a stored coordinate', w / 2, base + 38);
+
+        ctx.font = 'italic 12px -apple-system, sans-serif';
+        ctx.fillStyle = P.text;
+        ctx.fillText('Above the dashed line the circle spans several units, so "which shop" is not answered.', w / 2, h - 26);
+        ctx.fillStyle = P.mute;
+        ctx.font = 'italic 11px -apple-system, sans-serif';
+        ctx.fillText('Illustrative — the trend is the point, not these metre values.', w / 2, h - 9);
+    })();
+
+    </script>
+</body>
+</html>

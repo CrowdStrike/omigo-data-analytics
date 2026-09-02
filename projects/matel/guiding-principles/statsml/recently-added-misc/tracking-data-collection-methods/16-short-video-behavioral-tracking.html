@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tracking Data: Short Video Behavioral Tracking</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2c3e50; max-width: 100%; margin: 0; padding: 30px 40px; background: #fff; }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+        .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
+        .obj-table { width: 100%; border-collapse: collapse; }
+        .obj-table td { vertical-align: top; padding: 16px; border: 1px solid #2980b9; }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; text-align: center; }
+        ul { padding-left: 20px; margin: 8px 0; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        .obj-table td:last-child .payload,
+        .obj-table td:last-child .payload-note { text-align: left; }
+        .payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 12px 0; }
+        .payload-note { font-size: 0.82em; color: #666; margin: 12px 0 -6px 0; font-style: italic; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        .key-point strong:first-child { color: #1a5276; }
+        .lede { font-size: 0.95em; margin: 0 0 10px 0; }
+        .lbl { display: inline-block; font-size: 0.7em; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; margin: 10px 0 2px 0; }
+        .lbl-purpose { background: #eaf2fb; color: #1a5276; }
+        .lbl-effect { background: #fdf0e6; color: #a8501c; }
+        li b { color: #1a5276; font-weight: 600; }
+        canvas { display: block; margin: 0 auto; width: 100%; height: auto; }
+    </style>
+</head>
+<body>
+    <h1>Tracking Data: Short Video Behavioral Tracking</h1>
+    <p class="subtitle">Short-video feeds record how long each video was on screen, where it was scrubbed or replayed, and how the swipe away was performed.</p>
+
+    <table class="obj-table">
+        <tr>
+            <td>
+                <div class="obj-title">What is it?</div>
+                <p class="lede">The feed does not count views, it times them.</p>
+                <ul>
+                    <li><b>Instrumented player</b> reports milliseconds on screen</li>
+                    <li><b>Loops and scrubs</b> — whether it repeated, where it was scrubbed back to</li>
+                    <li><b>Exit gesture</b> — how the swipe away was performed</li>
+                    <li><b>Why so fine:</b> with no follows, likes, or search, watch time is all a fresh feed has</li>
+                </ul>
+                <div class="key-point"><strong>Timing is not attention:</strong> the player reports that a video was on screen and unpaused, not that anyone was looking. A video playing to a face-down phone gives the same watch time as one someone studied.</div>
+            </td>
+            <td><canvas id="c1" width="720" height="320"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">What does it collect?</div>
+                <ul>
+                    <li><b>Time on screen</b> per video, in milliseconds</li>
+                    <li><b>Loop count</b>, and the scrub position when replayed</li>
+                    <li><b>Swipe gesture</b> duration and direction</li>
+                    <li><b>Orientation changes</b></li>
+                    <li><b>Gap</b> between one video ending and the next starting</li>
+                    <li><b>Sound state</b> — on or off</li>
+                    <li><b>Two timestamps</b> — client and server receipt</li>
+                    <li><b>Precision:</b> fields carry milliseconds, but timing is usually only as fine as the player's reporting cadence, and client clocks drift — the server timestamp is there to catch that</li>
+                </ul>
+                <div class="key-point"><strong>Completion is derived, and above 1 here:</strong> a loop pushes watch time past video length. An "average completion" metric is unbounded above, so a few heavy rewatchers dominate the mean.</div>
+                <div class="key-point"><strong>Clipping does not fix it:</strong> capping the ratio at 1 removes the rewatch signal rather than repairing the metric.</div>
+            </td>
+            <td><canvas id="c2" width="720" height="320"></canvas>
+<p class="payload-note">Sample payload — illustrative structure, not real captured data.</p>
+<pre class="payload">// No public API for feed telemetry — the whole block
+// is reconstruction from plausible fields.
+// ── inferred / plausible ──
+{
+  "event":          "video_impression_end",
+  "video_id":       "v_88231…",
+  "video_len_ms":   14200,
+  "watch_ms":       31600,      // exceeds length: rewatched
+  "loops":          2,
+  "completion":     2.23,       // derived: watch_ms / video_len_ms
+  "max_scrub_ms":   9800,
+  "paused":         false,
+  "exit_action":    "swipe_next",
+  "swipe_ms":       140,        // gesture duration, not dwell
+  "sound_on":       true,
+  "ts_client":      "2026-08-22T22:07:41.905Z",
+  "ts_server":      "2026-08-22T22:07:44.118Z"
+}</pre>
+</td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">Why is it collected?</div>
+                <div class="lbl lbl-purpose">Stated purpose</div>
+                <ul>
+                    <li><b>Ranking the feed</b> — with no follow graph and no query, behaviour is all there is, and a view flag is too coarse: two seconds and fourteen are both "a view"</li>
+                    <li><b>Bot detection</b> — timing is the fastest signal for scripted playback</li>
+                </ul>
+                <div class="lbl lbl-effect">Additional consequence</div>
+                <ul>
+                    <li><b>Daily rhythm</b> from timestamps across sessions, and <b>predicted-interest labels</b> from response to categories</li>
+                    <li>Those are <b>model outputs with error rates</b> — but a stored label reads like a measured field once it lands in a table</li>
+                </ul>
+                <div class="key-point"><strong>A closed loop:</strong> watch time is only observed on videos the ranker chose to show, so the training data is a sample the model selected for itself. Low-ranked content is rarely shown, so it rarely gathers the evidence that would revise its rank.</div>
+            </td>
+            <td><canvas id="c3" width="720" height="320"></canvas></td>
+        </tr>
+    </table>
+
+    <script>
+    const dpr = window.devicePixelRatio || 1;
+    // Validated categorical palette (CVD-checked, see REVIEW-NOTES.md).
+    // Red is deliberately NOT in the rotation - it stays reserved for
+    // genuine error / alarm states so it keeps its meaning.
+    const P = {
+      blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+      aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+      ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+    };
+    const SERIES = [P.blue, P.green, P.violet, P.orange, P.aqua, P.magenta, P.yellow];
+    // Translucent fill derived from a palette token, so panel washes stay in
+    // step with the series hue instead of introducing new colour literals.
+    function tint(hex, a) {
+      const n = parseInt(hex.slice(1), 16);
+      return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+    }
+    // Rounded-rect path helper (works without native ctx.roundRect).
+    function rr(ctx, x, y, w, h, r) {
+      r = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    function setupCanvas(id) {
+        const c = document.getElementById(id);
+        const w = c.getAttribute('width') ? +c.getAttribute('width') : 720;
+        const h = c.getAttribute('height') ? +c.getAttribute('height') : 240;
+        c.style.maxWidth = w + 'px';
+        var __cssW = c.getBoundingClientRect().width || w;
+        var __scale = (__cssW / w) * dpr;
+        c.width = Math.round(w * __scale);
+        c.height = Math.round(h * __scale);
+        const ctx = c.getContext('2d');
+        ctx.scale(__scale, __scale);
+        return { ctx, w, h };
+    }
+
+    // C1: Video player with measurement overlays
+    // The seven fields are not one signal repeated — they are five different
+    // kinds of engagement signal, and hue now carries the kind:
+    //   blue = dwell, green = playback control, violet = gesture,
+    //   orange = device state, aqua = pacing between videos.
+    // The screen fill and the play triangle stay as they are: those are a mock
+    // of a device, representational rather than categorical.
+    (function() {
+        const { ctx, w, h } = setupCanvas('c1');
+        const KIND = {
+            dwell: { c: P.blue, t: 'dwell' },
+            playback: { c: P.green, t: 'playback control' },
+            gesture: { c: P.violet, t: 'gesture' },
+            device: { c: P.orange, t: 'device state' },
+            pacing: { c: P.aqua, t: 'pacing' }
+        };
+
+        // Phone frame
+        ctx.strokeStyle = P.ink;
+        ctx.lineWidth = 2;
+        rr(ctx, 40, 10, 180, 220, 14);
+        ctx.stroke();
+
+        // Video screen — device mock, not a data category
+        ctx.fillStyle = '#1a1a2e';
+        ctx.fillRect(48, 35, 164, 180);
+
+        // Video content (abstract)
+        ctx.fillStyle = P.blue;
+        ctx.globalAlpha = 0.45;
+        ctx.fillRect(60, 80, 140, 80);
+        ctx.globalAlpha = 1;
+
+        // Play indicator
+        ctx.fillStyle = '#fff';
+        ctx.globalAlpha = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(115, 105);
+        ctx.lineTo(145, 120);
+        ctx.lineTo(115, 135);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // Measurement annotations, coloured by the kind of signal
+        const annotations = [
+            { y: 35, label: 'Time on screen: 4.2s of a 15s video', kind: 'dwell' },
+            { y: 65, label: 'Scrub position on replay: 0:03', kind: 'playback' },
+            { y: 95, label: 'Swipe gesture duration: 140ms', kind: 'gesture' },
+            { y: 125, label: 'Paused: 800ms', kind: 'playback' },
+            { y: 155, label: 'Orientation change: yes', kind: 'device' },
+            { y: 185, label: 'Sound on: yes', kind: 'device' },
+            { y: 215, label: 'Gap to next video: 1.4s', kind: 'pacing' }
+        ];
+
+        annotations.forEach(a => {
+            const col = KIND[a.kind].c;
+            // Dotted line from phone to annotation
+            ctx.strokeStyle = col;
+            ctx.lineWidth = 1;
+            ctx.setLineDash([2, 2]);
+            ctx.beginPath();
+            ctx.moveTo(212, a.y);
+            ctx.lineTo(240, a.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Dot
+            ctx.fillStyle = col;
+            ctx.beginPath();
+            ctx.arc(240, a.y, 3, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Text
+            ctx.fillStyle = col;
+            ctx.font = '14px -apple-system, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(a.label, 250, a.y + 4);
+        });
+
+        // Right side label. Centred at 606 rather than the canvas midpoint of
+        // the free column: the longest line here is ~198px wide, so a centre
+        // further right would run past the 720px edge.
+        ctx.fillStyle = P.mute;
+        ctx.font = '14px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Every field here is a timing', 606, 104);
+        ctx.fillText('or a flag from the player.', 606, 120);
+        ctx.fillStyle = P.magenta;
+        ctx.fillText('None of them observes', 606, 146);
+        ctx.fillText('whether anyone was watching.', 606, 162);
+
+        // Footer band — the five signal kinds the hues stand for.
+        ctx.fillStyle = tint(P.ink, 0.05);
+        ctx.fillRect(0, 250, w, 70);
+        ctx.textAlign = 'left';
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillStyle = P.text;
+        ctx.fillText('Kinds of signal the player emits:', 40, 274);
+        ctx.font = '13px -apple-system, sans-serif';
+        const order = ['dwell', 'playback', 'gesture', 'device', 'pacing'];
+        const kx = [40, 160, 300, 420, 560];
+        order.forEach((k, i) => {
+            ctx.fillStyle = KIND[k].c;
+            ctx.fillRect(kx[i], 290, 9, 9);
+            ctx.fillStyle = P.text;
+            ctx.fillText(KIND[k].t, kx[i] + 14, 299);
+        });
+    })();
+
+    // C2: Playback occupancy across one video
+    // The chart already annotates three phases — a first pass, a replayed
+    // segment, and the swipe away — but drew all three under one blue fill, so
+    // the phases were legible only from the three tiny labels. The fill is now
+    // split at boundaries taken from the existing array (the trough between the
+    // two humps, and the start of the final decline) with one hue per phase.
+    // No value in `points` changed.
+    (function() {
+        const { ctx, w, h } = setupCanvas('c2');
+
+        ctx.font = 'bold 16px -apple-system, sans-serif';
+        ctx.fillStyle = P.ink;
+        ctx.textAlign = 'center';
+        ctx.fillText('Time on screen per second of one video (schematic)', w / 2, 20);
+
+        // Axes
+        const leftM = 80, rightM = 50, topM = 46, botM = 84;
+        const graphW = w - leftM - rightM;
+        const graphH = h - topM - botM;
+
+        ctx.strokeStyle = P.ink;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(leftM, topM);
+        ctx.lineTo(leftM, topM + graphH);
+        ctx.lineTo(leftM + graphW, topM + graphH);
+        ctx.stroke();
+
+        // Y-axis label
+        ctx.save();
+        ctx.translate(20, topM + graphH / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillStyle = P.ink;
+        ctx.font = '14px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Time on screen', 0, 0);
+        ctx.restore();
+
+        // X-axis label
+        ctx.fillStyle = P.ink;
+        ctx.font = '14px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Position in the video (seconds)', leftM + graphW / 2, topM + graphH + 40);
+
+        // Time markers
+        for (let i = 0; i <= 15; i += 3) {
+            const x = leftM + (i / 15) * graphW;
+            ctx.fillStyle = P.mute;
+            ctx.font = '13px -apple-system, sans-serif';
+            ctx.fillText(i + 's', x, topM + graphH + 17);
+            ctx.strokeStyle = P.grid;
+            ctx.beginPath();
+            ctx.moveTo(x, topM);
+            ctx.lineTo(x, topM + graphH);
+            ctx.stroke();
+        }
+
+        // Occupancy per second — above the baseline where a segment was replayed
+        const points = [0.3, 0.5, 0.8, 0.9, 0.95, 0.7, 0.4, 0.3, 0.6, 0.85, 0.9, 0.88, 0.5, 0.3, 0.1];
+        const px = i => leftM + (i / (points.length - 1)) * graphW;
+        const py = p => topM + graphH - (p * graphH);
+
+        // Three phases, boundaries read off the array itself: index 7 is the
+        // trough between the humps, index 12 begins the final decline.
+        const phases = [
+            { from: 0,  to: 7,  c: P.blue,   name: 'first pass' },
+            { from: 7,  to: 12, c: P.violet, name: 'segment replayed' },
+            { from: 12, to: 14, c: P.mute,   name: 'swiped away' }
+        ];
+
+        phases.forEach(ph => {
+            ctx.fillStyle = tint(ph.c, 0.32);
+            ctx.beginPath();
+            ctx.moveTo(px(ph.from), topM + graphH);
+            for (let i = ph.from; i <= ph.to; i++) ctx.lineTo(px(i), py(points[i]));
+            ctx.lineTo(px(ph.to), topM + graphH);
+            ctx.closePath();
+            ctx.fill();
+
+            // Phase boundary tick, so the split is visible where the fills meet.
+            if (ph.from > 0) {
+                ctx.strokeStyle = ph.c;
+                ctx.lineWidth = 1;
+                ctx.setLineDash([2, 3]);
+                ctx.beginPath();
+                ctx.moveTo(px(ph.from), topM);
+                ctx.lineTo(px(ph.from), topM + graphH);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+        });
+
+        // Curve, drawn per phase so the line carries the hue too
+        phases.forEach(ph => {
+            ctx.strokeStyle = ph.c;
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            for (let i = ph.from; i <= ph.to; i++) {
+                if (i === ph.from) ctx.moveTo(px(i), py(points[i]));
+                else ctx.lineTo(px(i), py(points[i]));
+            }
+            ctx.stroke();
+        });
+
+        // Annotations — what the player recorded, not what it meant
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.blue;
+        ctx.fillText('longest on screen', px(4), topM - 8);
+        ctx.fillStyle = P.violet;
+        ctx.fillText('segment replayed', px(10), topM - 8);
+        ctx.fillStyle = P.mute;
+        ctx.fillText('swiped away', px(13), topM - 8);
+
+        // Footer band — the phase legend.
+        ctx.fillStyle = tint(P.ink, 0.05);
+        ctx.fillRect(0, topM + graphH + 52, w, 32);
+        ctx.textAlign = 'left';
+        ctx.font = '13px -apple-system, sans-serif';
+        const lx = [80, 250, 460];
+        phases.forEach((ph, i) => {
+            ctx.fillStyle = ph.c;
+            ctx.fillRect(lx[i], topM + graphH + 66, 9, 9);
+            ctx.fillStyle = P.text;
+            ctx.fillText(ph.name, lx[i] + 14, topM + graphH + 75);
+        });
+    })();
+
+    // C3: How much evidence each rank bucket ever accumulates
+    (function() {
+        const { ctx, w, h } = setupCanvas('c3');
+
+        // The precision of a watch-time estimate improves with the square root
+        // of the number of times the video was shown. The ranker decides that
+        // number, so the buckets it ranks low sit where the curve is flat and
+        // more exposure would change the estimate most. Illustrative placements.
+        const x0 = 96, x1 = 600, yBase = 232, yTop = 74;
+        const lo = 1, hi = 5;                        // log10 impressions, 10 to 100,000
+        const xAt = l => x0 + ((l - lo) / (hi - lo)) * (x1 - x0);
+        const err = n => 1 / Math.sqrt(n);           // standard-error shape
+        const eMax = err(10);
+        const yAt = e => yBase - (e / eMax) * (yBase - yTop);
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.ink;
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillText('How sharp the watch-time estimate can get', w / 2, 24);
+        ctx.fillStyle = P.mute;
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillText('precision improves with the square root of the number of times a video was shown', w / 2, 42);
+
+        // Axes
+        ctx.strokeStyle = P.ink;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x0, yTop - 8); ctx.lineTo(x0, yBase); ctx.lineTo(x1 + 12, yBase);
+        ctx.stroke();
+
+        // X ticks, one decade each
+        ctx.fillStyle = P.mute;
+        ctx.font = '12px -apple-system, sans-serif';
+        const TICKS = [[1, '10'], [2, '100'], [3, '1,000'], [4, '10,000'], [5, '100,000']];
+        TICKS.forEach(t => {
+            ctx.strokeStyle = P.grid;
+            ctx.beginPath(); ctx.moveTo(xAt(t[0]), yTop - 8); ctx.lineTo(xAt(t[0]), yBase); ctx.stroke();
+            ctx.fillStyle = P.mute;
+            ctx.fillText(t[1], xAt(t[0]), yBase + 18);
+        });
+        ctx.fillText('times the video was shown  \u2192', (x0 + x1) / 2, yBase + 38);
+
+        ctx.save();
+        ctx.translate(30, (yTop + yBase) / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillStyle = P.ink;
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('how wide the estimate stays', 0, 0);
+        ctx.restore();
+
+        // The curve
+        ctx.strokeStyle = P.blue;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        for (let l = lo; l <= hi + 0.001; l += 0.05) {
+            const x = xAt(l), y = yAt(err(Math.pow(10, l)));
+            if (l === lo) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+
+        // Where the ranker puts each bucket of its own catalogue
+        const BUCKETS = [
+            { l: 1.4, n: '25 times',      t: 'videos it ranks low',    c: P.orange, side: 'right' },
+            { l: 3.0, n: '1,000 times',   t: 'the middle of the feed', c: P.violet, side: 'right' },
+            { l: 4.8, n: '60,000 times',  t: 'videos it ranks high',   c: P.aqua,   side: 'left'  }
+        ];
+        BUCKETS.forEach(b => {
+            const n = Math.pow(10, b.l), x = xAt(b.l), y = yAt(err(n));
+            ctx.strokeStyle = tint(b.c, 0.7);
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([3, 3]);
+            ctx.beginPath(); ctx.moveTo(x, yBase); ctx.lineTo(x, y); ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = b.c;
+            ctx.beginPath(); ctx.arc(x, y, 5.5, 0, Math.PI * 2); ctx.fill();
+            ctx.font = 'bold 12px -apple-system, sans-serif';
+            ctx.textAlign = b.side === 'right' ? 'left' : 'right';
+            const lx = b.side === 'right' ? x + 11 : x - 11;
+            ctx.fillText(b.t, lx, y - 5);
+            ctx.font = '12px -apple-system, sans-serif';
+            ctx.fillText('shown about ' + b.n, lx, y + 11);
+        });
+
+        ctx.textAlign = 'center';
+        ctx.font = 'italic 12px -apple-system, sans-serif';
+        ctx.fillStyle = P.text;
+        ctx.fillText('The bucket whose estimate would move most is the one given the fewest chances to move it.', w / 2, h - 26);
+        ctx.fillStyle = P.mute;
+        ctx.font = 'italic 11px -apple-system, sans-serif';
+        ctx.fillText('Illustrative \u2014 the curve is the standard-error shape; the three placements show the spread.', w / 2, h - 9);
+    })();
+
+    </script>
+</body>
+</html>

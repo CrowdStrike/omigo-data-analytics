@@ -18,7 +18,7 @@ strong { color: #1a5276; }
 .obj-table td:first-child { width: 40%; }
 .obj-table td:last-child { width: 60%; text-align: center; }
 .obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
-canvas { display: block; margin: 0 auto; }
+canvas { display: block; margin: 0 auto; width: 100%; height: auto; }
 .example-box { background: #f8fafb; border: 1px solid #e0e0e0; border-radius: 6px; padding: 12px 16px; margin: 10px 0; font-size: 0.88em; }
 .example-box .ex-title { font-weight: 700; color: #1a5276; margin-bottom: 4px; }
 </style>
@@ -106,19 +106,24 @@ canvas { display: block; margin: 0 auto; }
 </td><td><canvas id="c6" width="720" height="300"></canvas></td></tr>
 </table>
 
-<script>
+<script>var __charts = [];
 var dpr = window.devicePixelRatio || 1;
 function setup(id) {
     var c = document.getElementById(id); if (!c) return null;
-    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
-    c.width = w * dpr; c.height = h * dpr;
-    c.style.width = w + 'px'; c.style.height = h + 'px';
-    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    if (!c.dataset.w) { c.dataset.w = c.getAttribute('width') || '720'; c.dataset.h = c.getAttribute('height') || '300'; }
+    var w = parseInt(c.dataset.w), h = parseInt(c.dataset.h);
+    var dpr = window.devicePixelRatio || 1;
+    c.style.maxWidth = w + 'px';
+    var cssW = c.getBoundingClientRect().width || w;
+    var scale = (cssW / w) * dpr;
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    var ctx = c.getContext('2d'); ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, w, h);
     return {ctx:ctx, w:w, h:h};
 }
 
 // Canvas 1: Same percentage, different knowledge
-(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+__charts.push(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
 
 ctx.font = 'bold 15px sans-serif';
 ctx.textAlign = 'center';
@@ -192,75 +197,114 @@ ctx.fillStyle = '#666';
 ctx.textAlign = 'center';
 ctx.fillText('Once normalized to percentage, both produce the identical published claim.', w/2, pubY + 70);
 ctx.fillText('The reader cannot recover which one they are looking at.', w/2, pubY + 87);
-})();
+});
 
-// Canvas 2: Perverse incentive alignment
-(function(){var s=setup('c2');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+// Canvas 2: Strip/dot plot — published claims vs their denominators
+__charts.push(function(){var s=setup('c2');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
 
 ctx.font = 'bold 15px sans-serif';
 ctx.textAlign = 'center';
 ctx.fillStyle = '#1a5276';
-ctx.fillText('The Incentive Alignment: Less Work → Better-Looking Numbers', w/2, 22);
+ctx.fillText('Published Percentage Claims vs the Denominator Behind Them', w/2, 22);
 
-// Three columns showing the alignment
-var colW = 200, colH = 220, startY = 50;
-var cols = [
-    {x: 60, title: 'Effort', items: ['Less data collection', 'Faster timeline', 'Lower cost'], color: '#27ae60'},
-    {x: 260, title: 'Outcome', items: ['Higher variance', 'More extreme rates', 'Easier to curate'], color: '#e67e22'},
-    {x: 460, title: 'Published', items: ['"99% accuracy"', 'No CI visible', 'No n visible'], color: '#e74c3c'}
-];
+var chartL = 70, chartR = w - 40, chartTop = 50, chartBottom = 280;
 
-cols.forEach(function(col) {
-    ctx.fillStyle = col.color + '11';
-    ctx.fillRect(col.x, startY, colW, colH);
-    ctx.strokeStyle = col.color;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(col.x, startY, colW, colH);
+function xPos(n) { return chartL + (Math.log10(n) - 1) / 4 * (chartR - chartL); }
+function yPos(v) { return chartBottom - (v - 88) / 13 * (chartBottom - chartTop); }
 
-    ctx.fillStyle = col.color;
-    ctx.font = 'bold 14px sans-serif';
+// Headline zone band (>= 95%)
+ctx.fillStyle = 'rgba(231,76,60,0.06)';
+ctx.fillRect(chartL, chartTop, chartR - chartL, yPos(95) - chartTop);
+ctx.fillStyle = '#e74c3c';
+ctx.font = '11px sans-serif';
+ctx.textAlign = 'right';
+ctx.fillText('headline zone (≥ 95%)', chartR - 6, chartTop + 14);
+
+// Vertical gridlines (log scale)
+var xTicks = [{n: 10, label: '10'}, {n: 100, label: '100'}, {n: 1000, label: '1k'}, {n: 10000, label: '10k'}, {n: 100000, label: '100k'}];
+ctx.lineWidth = 1;
+xTicks.forEach(function(t) {
+    ctx.strokeStyle = '#eee';
+    ctx.beginPath();
+    ctx.moveTo(xPos(t.n), chartTop);
+    ctx.lineTo(xPos(t.n), chartBottom);
+    ctx.stroke();
+    ctx.fillStyle = '#999';
+    ctx.font = '11px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(col.title, col.x + colW/2, startY + 25);
-
-    ctx.fillStyle = '#333';
-    ctx.font = '13px sans-serif';
-    col.items.forEach(function(item, i) {
-        ctx.fillText(item, col.x + colW/2, startY + 55 + i * 28);
-    });
+    ctx.fillText(t.label, xPos(t.n), chartBottom + 14);
 });
 
-// Arrows between columns
-ctx.strokeStyle = '#999';
-ctx.lineWidth = 2;
-for (var i = 0; i < 2; i++) {
-    var fromX = cols[i].x + colW;
-    var toX = cols[i+1].x;
+// Horizontal gridlines
+[90, 95, 100].forEach(function(v) {
+    ctx.strokeStyle = '#eee';
     ctx.beginPath();
-    ctx.moveTo(fromX + 2, startY + colH/2);
-    ctx.lineTo(toX - 2, startY + colH/2);
+    ctx.moveTo(chartL, yPos(v));
+    ctx.lineTo(chartR, yPos(v));
     ctx.stroke();
-    // Arrowhead
-    ctx.beginPath();
-    ctx.moveTo(toX - 12, startY + colH/2 - 6);
-    ctx.lineTo(toX - 2, startY + colH/2);
-    ctx.lineTo(toX - 12, startY + colH/2 + 6);
     ctx.fillStyle = '#999';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(v + '%', chartL - 8, yPos(v) + 4);
+});
+
+// True-rate reference line at 90%
+ctx.strokeStyle = '#27ae60';
+ctx.lineWidth = 1.5;
+ctx.setLineDash([4, 3]);
+ctx.beginPath();
+ctx.moveTo(chartL, yPos(90));
+ctx.lineTo(chartR, yPos(90));
+ctx.stroke();
+ctx.setLineDash([]);
+ctx.fillStyle = '#27ae60';
+ctx.font = '11px sans-serif';
+ctx.textAlign = 'left';
+ctx.fillText('true rate ≈ 90%', chartL + 6, yPos(90) - 6);
+
+// Headline claims: extreme rates, tiny denominators
+var headline = [[30, 100], [50, 99], [60, 98], [80, 97.5], [100, 99], [120, 96], [150, 98], [200, 95.5]];
+headline.forEach(function(d) {
+    ctx.beginPath();
+    ctx.arc(xPos(d[0]), yPos(d[1]), 5, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(231,76,60,0.75)';
     ctx.fill();
-}
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+});
 
-// Bottom summary
-ctx.font = 'bold 13px sans-serif';
+// Routine claims: modest rates, real denominators
+var routine = [[400, 93.5], [700, 92], [1000, 92.5], [1500, 91], [2500, 90.8], [4000, 90.4], [8000, 90.6], [15000, 90.2], [30000, 89.9], [60000, 90.1], [100000, 90.0]];
+routine.forEach(function(d) {
+    ctx.beginPath();
+    ctx.arc(xPos(d[0]), yPos(d[1]), 4, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(26,82,118,0.55)';
+    ctx.fill();
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+});
+
+// Insight annotation
 ctx.fillStyle = '#e74c3c';
+ctx.font = 'bold 13px sans-serif';
 ctx.textAlign = 'center';
-ctx.fillText('Rigor is punished: more effort → longer timeline → less impressive number (regression to mean + visible CI)', w/2, startY + colH + 30);
+ctx.fillText('Every claim above 95% rests on n ≤ 200', 460, 100);
 
-ctx.font = 'italic 13px sans-serif';
+// Axis label
 ctx.fillStyle = '#666';
-ctx.fillText('The format rewards the shortcut and hides the evidence that it was taken.', w/2, startY + colH + 50);
-})();
+ctx.font = '11px sans-serif';
+ctx.fillText('sample size n behind the claim (log scale)', w/2, chartBottom + 32);
+
+// Caption
+ctx.font = 'italic 12px sans-serif';
+ctx.fillStyle = '#666';
+ctx.fillText('Each dot is one published claim. Extreme percentages are a small-denominator artifact — and the format hides the denominator.', w/2, h - 10);
+});
 
 // Canvas 3: CI width comparison at different n
-(function(){var s=setup('c3');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+__charts.push(function(){var s=setup('c3');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
 
 ctx.font = 'bold 15px sans-serif';
 ctx.textAlign = 'center';
@@ -336,10 +380,10 @@ ctx.font = 'italic 12px sans-serif';
 ctx.fillStyle = '#666';
 ctx.textAlign = 'center';
 ctx.fillText('All report "99%." The CI tells you how much you actually know.', w/2, h - 10);
-})();
+});
 
 // Canvas 4: Production vs curated eval
-(function(){var s=setup('c4');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+__charts.push(function(){var s=setup('c4');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
 
 ctx.font = 'bold 15px sans-serif';
 ctx.textAlign = 'center';
@@ -439,102 +483,205 @@ ctx.font = 'italic 12px sans-serif';
 ctx.fillStyle = '#666';
 ctx.textAlign = 'center';
 ctx.fillText('The published percentage is technically correct. It is also practically meaningless.', w/2, h - 10);
-})();
+});
 
-// Canvas 5: What responsible reporting looks like
-(function(){var s=setup('c5');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+// Canvas 5: Audit-style paired bars — reported claim vs evidence-supported floor
+__charts.push(function(){var s=setup('c5');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
 
 ctx.font = 'bold 15px sans-serif';
 ctx.textAlign = 'center';
 ctx.fillStyle = '#1a5276';
-ctx.fillText('Minimum Credibility Checklist', w/2, 22);
+ctx.fillText('The Audit: Reported Claim vs What the Evidence Supports', w/2, 22);
 
-var items = [
-    {label: 'Sample size (n)', present: true, note: 'Makes CI computable'},
-    {label: 'Confidence interval / SE', present: true, note: 'Quantifies uncertainty'},
-    {label: 'Dataset provenance', present: true, note: 'Enables replication'},
-    {label: 'Baseline comparison', present: true, note: 'Contextualizes magnitude'},
-    {label: 'Effect size in context', present: true, note: 'Practical significance'}
+var rows = [
+    {claim: '"99% accuracy"', n: 100, reported: 99, audited: 94.6},
+    {claim: '"98% detection"', n: 50, reported: 98, audited: 89.4},
+    {claim: '"95% satisfaction"', n: 47, reported: 95, audited: 84.0},
+    {claim: '"96% precision"', n: 25, reported: 96, audited: 79.7},
+    {claim: '"100% pass rate"', n: 20, reported: 100, audited: 83.2}
 ];
 
-var startY = 50, rowH = 42, colL = 120;
+var chartL = 190, chartR = w - 50, chartTop = 60, chartBottom = 245;
+var rowH = (chartBottom - chartTop) / rows.length;
 
-items.forEach(function(item, i) {
-    var y = startY + i * rowH;
+function xPos(v) { return chartL + (v - 75) / 25 * (chartR - chartL); }
 
-    // Checkmark box
-    ctx.fillStyle = '#27ae60';
-    ctx.font = 'bold 18px sans-serif';
+// Gridlines
+ctx.lineWidth = 1;
+for (var v = 75; v <= 100; v += 5) {
+    ctx.strokeStyle = '#eee';
+    ctx.beginPath();
+    ctx.moveTo(xPos(v), chartTop);
+    ctx.lineTo(xPos(v), chartBottom);
+    ctx.stroke();
+    ctx.fillStyle = '#999';
+    ctx.font = '11px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('☑', colL - 20, y + 18);
+    ctx.fillText(v + '%', xPos(v), chartBottom + 13);
+}
 
-    // Label
-    ctx.fillStyle = '#1a5276';
-    ctx.font = 'bold 14px sans-serif';
+// Legend
+ctx.fillStyle = 'rgba(231,76,60,0.55)';
+ctx.fillRect(70, 32, 14, 14);
+ctx.strokeStyle = '#c0392b';
+ctx.lineWidth = 1;
+ctx.strokeRect(70, 32, 14, 14);
+ctx.fillStyle = '#333';
+ctx.font = '12px sans-serif';
+ctx.textAlign = 'left';
+ctx.fillText('As reported', 90, 43);
+ctx.fillStyle = 'rgba(39,174,96,0.45)';
+ctx.fillRect(180, 32, 14, 14);
+ctx.strokeStyle = '#27ae60';
+ctx.strokeRect(180, 32, 14, 14);
+ctx.fillStyle = '#333';
+ctx.fillText('95% CI floor once n is disclosed', 200, 43);
+
+rows.forEach(function(r, i) {
+    var y0 = chartTop + i * rowH;
+    var barH = 11;
+
+    // Reported bar
+    var yR = y0 + 6;
+    ctx.fillStyle = 'rgba(231,76,60,0.55)';
+    ctx.fillRect(chartL, yR, xPos(r.reported) - chartL, barH);
+    ctx.strokeStyle = '#c0392b';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(chartL, yR, xPos(r.reported) - chartL, barH);
+    ctx.fillStyle = '#c0392b';
+    ctx.font = 'bold 11px sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText(item.label, colL, y + 16);
+    ctx.fillText(r.reported + '%', xPos(r.reported) + 5, yR + 9);
 
-    // Note
+    // Audited floor bar
+    var yA = y0 + 19;
+    ctx.fillStyle = 'rgba(39,174,96,0.45)';
+    ctx.fillRect(chartL, yA, xPos(r.audited) - chartL, barH);
+    ctx.strokeStyle = '#27ae60';
+    ctx.strokeRect(chartL, yA, xPos(r.audited) - chartL, barH);
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText(r.audited + '%', xPos(r.audited) + 5, yA + 9);
+
+    // Row labels
+    ctx.fillStyle = '#333';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(r.claim, chartL - 10, y0 + 15);
     ctx.fillStyle = '#666';
-    ctx.font = '12px sans-serif';
-    ctx.fillText('→ ' + item.note, colL + 220, y + 16);
+    ctx.font = '11px sans-serif';
+    ctx.fillText('n = ' + r.n, chartL - 10, y0 + 29);
 });
 
-// Failure state
-var failY = startY + items.length * rowH + 20;
-ctx.fillStyle = 'rgba(231,76,60,0.06)';
-ctx.fillRect(60, failY, w - 120, 50);
-ctx.strokeStyle = '#e74c3c';
-ctx.lineWidth = 1.5;
-ctx.strokeRect(60, failY, w - 120, 50);
-
+// Insight annotation
 ctx.fillStyle = '#e74c3c';
-ctx.font = 'bold 14px sans-serif';
+ctx.font = 'bold 13px sans-serif';
 ctx.textAlign = 'center';
-ctx.fillText('If all five are missing: the percentage is a claim, not a finding.', w/2, failY + 22);
-ctx.font = '12px sans-serif';
-ctx.fillStyle = '#666';
-ctx.fillText('Precision of the number does not substitute for evidence behind it.', w/2, failY + 40);
-})();
+ctx.fillText('The smaller the n, the more of the headline evaporates under audit', w/2, 275);
 
-// Canvas 6: Taxonomy positioning
-(function(){var s=setup('c6');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+// Caption
+ctx.font = 'italic 12px sans-serif';
+ctx.fillStyle = '#666';
+ctx.fillText('Same claims, audited: disclosing the denominator turns each headline into its evidence-supported floor.', w/2, h - 8);
+});
+
+// Canvas 6: Scatter — pipeline stage vs deliberateness of the distortion
+__charts.push(function(){var s=setup('c6');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
 
 ctx.font = 'bold 15px sans-serif';
 ctx.textAlign = 'center';
 ctx.fillStyle = '#1a5276';
 ctx.fillText('Where This Sits Among Related Practices', w/2, 22);
 
-var items = [
-    {label: 'Denominator Trick', desc: 'Shrinks denominator to inflate rate', x: 100, y: 70, color: '#8e44ad'},
-    {label: 'Unqualified %', desc: 'Hides that denominator was always small', x: 360, y: 70, color: '#e74c3c'},
-    {label: 'Dashboard Cherry-Pick', desc: 'Selects favorable time/segment slices', x: 100, y: 160, color: '#e67e22'},
-    {label: 'Small-Sample Extremes', desc: 'System acts on low-n rates (automated)', x: 360, y: 160, color: '#2980b9'},
-    {label: 'Overconfidence Bias', desc: 'Consumer cognitive error on small n', x: 230, y: 240, color: '#27ae60'}
-];
+var chartL = 70, chartR = w - 50, chartTop = 50, chartBottom = 225;
+var stages = ['Data selection', 'Computation', 'Publication format', 'Reader cognition'];
+var colW = (chartR - chartL) / stages.length;
 
-items.forEach(function(item) {
-    var boxW = 250, boxH = 55;
-    ctx.fillStyle = item.color + '11';
-    ctx.fillRect(item.x, item.y, boxW, boxH);
-    ctx.strokeStyle = item.color;
-    ctx.lineWidth = item.label === 'Unqualified %' ? 3 : 1.5;
-    ctx.strokeRect(item.x, item.y, boxW, boxH);
+function xPos(stage) { return chartL + (stage + 0.5) * colW; }
+function yPos(v) { return chartBottom - v / 10 * (chartBottom - chartTop); }
 
-    ctx.fillStyle = item.color;
-    ctx.font = 'bold 13px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(item.label, item.x + boxW/2, item.y + 22);
-    ctx.fillStyle = '#555';
+// Highlight band behind "Publication format"
+ctx.fillStyle = 'rgba(231,76,60,0.05)';
+ctx.fillRect(chartL + 2 * colW, chartTop, colW, chartBottom - chartTop);
+
+// Horizontal gridlines + y ticks
+ctx.lineWidth = 1;
+for (var v = 0; v <= 10; v += 2) {
+    ctx.strokeStyle = '#eee';
+    ctx.beginPath();
+    ctx.moveTo(chartL, yPos(v));
+    ctx.lineTo(chartR, yPos(v));
+    ctx.stroke();
+    ctx.fillStyle = '#999';
     ctx.font = '11px sans-serif';
-    ctx.fillText(item.desc, item.x + boxW/2, item.y + 40);
+    ctx.textAlign = 'right';
+    ctx.fillText(v, chartL - 8, yPos(v) + 4);
+}
+
+// Y-axis end labels
+ctx.fillStyle = '#666';
+ctx.font = '11px sans-serif';
+ctx.textAlign = 'right';
+ctx.fillText('deliberate', chartL - 8, chartTop - 8);
+ctx.fillText('accidental', chartL - 8, chartBottom + 15);
+
+// Stage labels
+ctx.textAlign = 'center';
+stages.forEach(function(st, i) {
+    ctx.fillStyle = '#666';
+    ctx.font = '11px sans-serif';
+    ctx.fillText(st, xPos(i), chartBottom + 15);
 });
 
+var points = [
+    {label: 'Dashboard Cherry-Pick', desc: 'picks favorable slices', stage: 0, delib: 8, color: '#e67e22', r: 6, nameDy: -14, descDy: 22},
+    {label: 'Denominator Trick', desc: 'shrinks the denominator', stage: 1, delib: 9, color: '#8e44ad', r: 6, nameDy: -14, descDy: 22},
+    {label: 'Small-Sample Extremes', desc: 'automated low-n rates', stage: 1, delib: 2, color: '#2980b9', r: 6, nameDy: -14, descDy: 22},
+    {label: 'Unqualified %', desc: 'hides that n was small', stage: 2, delib: 6, color: '#e74c3c', r: 8, ring: true, nameDy: -20, descDy: 26},
+    {label: 'Overconfidence Bias', desc: 'reader misjudges small n', stage: 3, delib: 1, color: '#27ae60', r: 6, nameDy: -30, descDy: -16}
+];
+
+points.forEach(function(p) {
+    var x = xPos(p.stage), y = yPos(p.delib);
+
+    ctx.beginPath();
+    ctx.arc(x, y, p.r, 0, Math.PI * 2);
+    ctx.fillStyle = p.color;
+    ctx.fill();
+    if (p.ring) {
+        ctx.beginPath();
+        ctx.arc(x, y, p.r + 4, 0, Math.PI * 2);
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+    }
+
+    ctx.fillStyle = p.color;
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(p.label, x, y + p.nameDy);
+    ctx.fillStyle = '#555';
+    ctx.font = '11px sans-serif';
+    ctx.fillText(p.desc, x, y + p.descDy);
+});
+
+// Insight annotation
+ctx.fillStyle = '#e74c3c';
+ctx.font = 'bold 13px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('Only Unqualified % distorts at the publication step — the number is true; the format deceives', w/2, 264);
+
+// Caption
 ctx.font = 'italic 12px sans-serif';
 ctx.fillStyle = '#666';
-ctx.textAlign = 'center';
 ctx.fillText('Each exploits a different stage: data selection, computation, publication format, or reader cognition.', w/2, h - 10);
-})();
+});
+
+__charts.forEach(function(f){ f(); });
+var __redrawTimer;
+window.addEventListener('resize', function(){
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function(){ __charts.forEach(function(f){ f(); }); }, 150);
+});
 </script>
 </body>
 </html>

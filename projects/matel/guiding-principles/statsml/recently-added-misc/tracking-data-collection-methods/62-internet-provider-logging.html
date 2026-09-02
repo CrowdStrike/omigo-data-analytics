@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tracking Data: Internet Provider Logging</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2c3e50; max-width: 100%; margin: 0; padding: 30px 40px; background: #fff; }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+        .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
+        .obj-table { width: 100%; border-collapse: collapse; }
+        .obj-table td { vertical-align: top; padding: 16px; border: 1px solid #2980b9; }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; text-align: center; }
+        ul { padding-left: 20px; margin: 8px 0; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        .obj-table td:last-child .payload,
+        .obj-table td:last-child .payload-note { text-align: left; }
+        .payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 12px 0; }
+        .payload-note { font-size: 0.82em; color: #666; margin: 12px 0 -6px 0; font-style: italic; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        .key-point strong:first-child { color: #1a5276; }
+        .lede { font-size: 0.95em; margin: 0 0 10px 0; }
+        .lbl { display: inline-block; font-size: 0.7em; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; margin: 10px 0 2px 0; }
+        .lbl-purpose { background: #eaf2fb; color: #1a5276; }
+        .lbl-effect { background: #fdf0e6; color: #a8501c; }
+        li b { color: #1a5276; font-weight: 600; }
+        canvas { display: block; margin: 0 auto; width: 100%; height: auto; }
+    </style>
+</head>
+<body>
+    <h1>Tracking Data: Internet Provider Logging</h1>
+    <p class="subtitle">Resolving a domain name requires a resolver to be asked. Whoever operates that resolver can log the question.</p>
+
+    <table class="obj-table">
+        <tr>
+            <td>
+                <div class="obj-title">What is it?</div>
+                <p class="lede">A name has to be turned into an address, and something has to be asked.</p>
+                <ul>
+                    <li><b>Mechanism:</b> a device asks a DNS resolver to turn a name into an address before it can connect</li>
+                    <li><b>Default resolver</b> is the one the internet provider supplies</li>
+                    <li><b>Question and answer pass through it</b>, so the operator is in a position to log them</li>
+                    <li><b>Encrypted DNS</b> changes who is asked, not whether the question is loggable</li>
+                </ul>
+                <div class="key-point"><strong>Encryption moves the record, not the record-keeping:</strong> the question still has to be answered by somebody, and that somebody is then the party holding the log.</div>
+            </td>
+            <td><canvas id="c1" width="720" height="320"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">What does it collect?</div>
+                <ul>
+                    <li><b>Domain name</b> queried — not the page path, which is inside the encrypted connection</li>
+                    <li><b>Query type</b>, response code, and the answer records</li>
+                    <li><b>Timestamp</b> of each query</li>
+                    <li><b>Subscriber address</b> the query came from</li>
+                    <li><b>Device hint</b>, sometimes, from the local hostname</li>
+                    <li><b>Server names from the traffic itself</b> — the provider also carries the connection, and a TLS handshake typically names the host in the clear (SNI), so switching resolvers does not hide which domains are visited</li>
+                </ul>
+                <div class="key-point"><strong>A name, not a page or an action:</strong> the row records that a device asked where a domain lives. Whether the connection followed, what was read, and whether a person or a background app asked are all absent.</div>
+                <div class="key-point"><strong>TTL breaks counting:</strong> a repeat visit inside the cache window generates no query at all, so query counts undercount visits by an amount that varies per domain.</div>
+            </td>
+            <td><canvas id="c2" width="720" height="320"></canvas>
+<p class="payload-note">Sample payload — illustrative structure, not real captured data.</p>
+<pre class="payload">{
+  // ── standard DNS fields (RFC-defined) ──
+  "qname":       "www.example-clinic.com",
+  "qtype":       "A",           // also AAAA, HTTPS, TXT
+  "rcode":       "NOERROR",
+  "answer":      ["198.51.100.7"],
+  "ttl":         300,           // seconds; a re-visit inside
+                                // the TTL produces no query
+  "ts":          "2026-08-22T21:33:02Z",
+
+  // ── inferred / plausible, added by the resolver operator ──
+  "subscriber_id": "acct-4471…",
+  "client_ip":     "203.0.113.42",   // the household, not a person
+  "device_hint":   "android-tablet", // from DHCP hostname
+  "category":      "health",         // domain classification list
+  "transport":     "Do53"            // vs DoH / DoT
+}</pre>
+</td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">Why is it collected?</div>
+                <div class="lbl lbl-purpose">Stated purpose</div>
+                <ul>
+                    <li><b>Diagnosing failures</b> and sizing cache capacity</li>
+                    <li><b>Blocking malware domains</b> — a blocklist cannot work without inspecting the name; retention for a set period is legally required in some places</li>
+                </ul>
+                <div class="lbl lbl-effect">Additional consequence</div>
+                <ul>
+                    <li>Classified against a category list, it yields <b>interest categories per subscriber line</b>; categorised aggregates are openly sold</li>
+                    <li>Held by the operator, so it is <b>reachable by legal process</b> without the subscriber's involvement</li>
+                </ul>
+                <div class="key-point"><strong>The trap is the unit:</strong> a row is keyed to a subscriber line, so the unit of observation is a household or an office, not a person. Running a resolver never needed that split, so nothing in the log supports it — a category may belong to a household member other than the one being modelled.</div>
+            </td>
+            <td><canvas id="c3" width="720" height="320"></canvas></td>
+        </tr>
+    </table>
+
+    <script>
+    const dpr = window.devicePixelRatio || 1;
+    // Validated categorical palette (CVD-checked, see REVIEW-NOTES.md).
+    // Red is deliberately NOT in the rotation - it stays reserved for
+    // genuine error / alarm states so it keeps its meaning.
+    const P = {
+      blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+      aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+      ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+    };
+    const SERIES = [P.blue, P.green, P.violet, P.orange, P.aqua, P.magenta, P.yellow];
+    // Rounded-rect path helper (works without native ctx.roundRect).
+    function rr(ctx, x, y, w, h, r) {
+      r = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    function setupCanvas(id) {
+        const c = document.getElementById(id);
+        const w = c.getAttribute('width') ? +c.getAttribute('width') : 720;
+        const h = c.getAttribute('height') ? +c.getAttribute('height') : 240;
+        c.style.maxWidth = w + 'px';
+        var __cssW = c.getBoundingClientRect().width || w;
+        var __scale = (__cssW / w) * dpr;
+        c.width = Math.round(w * __scale);
+        c.height = Math.round(h * __scale);
+        const ctx = c.getContext('2d');
+        ctx.scale(__scale, __scale);
+        return { ctx, w, h };
+    }
+
+    // C1: Traffic pipe — device -> ISP (watching eye) -> websites
+    (function() {
+        const { ctx, w, h } = setupCanvas('c1');
+
+        ctx.font = 'bold 16px -apple-system, sans-serif';
+        ctx.fillStyle = P.blue;
+        ctx.textAlign = 'center';
+        ctx.fillText('The resolver has to be asked before the connection can be made', w / 2, 18);
+
+        // Device (left)
+        ctx.fillStyle = P.blue;
+        rr(ctx, 30, 80, 100, 80, 8);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 15px -apple-system, sans-serif';
+        ctx.fillText('Your', 80, 112);
+        ctx.fillText('Device', 80, 128);
+
+        // Pipe from device to ISP
+        ctx.fillStyle = 'rgba(42,120,214,0.35)';
+        ctx.beginPath();
+        ctx.moveTo(130, 105);
+        ctx.lineTo(260, 85);
+        ctx.lineTo(260, 95);
+        ctx.lineTo(130, 115);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(130, 125);
+        ctx.lineTo(260, 145);
+        ctx.lineTo(260, 155);
+        ctx.lineTo(130, 135);
+        ctx.closePath();
+        ctx.fill();
+
+        // Resolver box (center)
+        ctx.fillStyle = P.blue;
+        rr(ctx, 260, 60, 180, 120, 10);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 16px -apple-system, sans-serif';
+        ctx.fillText('DNS resolver', 350, 85);
+
+        // Log-lines glyph — the record the resolver can write
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        [0, 1, 2, 3].forEach(i => {
+            const ly = 108 + i * 12;
+            ctx.beginPath();
+            ctx.moveTo(312, ly);
+            ctx.lineTo(i === 3 ? 366 : 388, ly);
+            ctx.stroke();
+        });
+
+        ctx.fillStyle = '#fff';
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.fillText('name asked, and when', 350, 172);
+
+        // Pipe from ISP to websites
+        ctx.fillStyle = 'rgba(42,120,214,0.35)';
+        ctx.beginPath();
+        ctx.moveTo(440, 85);
+        ctx.lineTo(560, 65);
+        ctx.lineTo(560, 75);
+        ctx.lineTo(440, 95);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(440, 145);
+        ctx.lineTo(560, 160);
+        ctx.lineTo(560, 170);
+        ctx.lineTo(440, 155);
+        ctx.closePath();
+        ctx.fill();
+
+        // Websites (right)
+        const sites = ['example.com', 'cdn.example.net', 'api.example.org', 'example-clinic.com'];
+        sites.forEach((site, i) => {
+            const y = 55 + i * 42;
+            ctx.fillStyle = 'rgba(42,120,214,0.35)';
+            rr(ctx, 565, y, 130, 30, 5);
+            ctx.fill();
+            ctx.strokeStyle = P.blue;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.fillStyle = P.blue;
+            ctx.font = '14px -apple-system, sans-serif';
+            ctx.fillText(site, 630, y + 19);
+        });
+
+        // Arrow labels
+        ctx.fillStyle = P.mute;
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.fillText('DNS request →', 195, 78);
+        ctx.fillText('← response', 500, 58);
+    })();
+
+    // C2: Terminal-style scrolling DNS log
+    (function() {
+        const { ctx, w, h } = setupCanvas('c2');
+
+        ctx.font = 'bold 16px -apple-system, sans-serif';
+        ctx.fillStyle = P.blue;
+        ctx.textAlign = 'center';
+        ctx.fillText('What a resolver log row holds — illustrative', w / 2, 18);
+
+        // Terminal background
+        ctx.fillStyle = '#1a1a2e';
+        rr(ctx, 60, 30, 600, 200, 6);
+        ctx.fill();
+
+        // Terminal header bar
+        ctx.fillStyle = '#2d2d44';
+        ctx.fillRect(60, 30, 600, 22);
+        // Dots
+        ctx.fillStyle = P.magenta;
+        ctx.beginPath(); ctx.arc(78, 41, 5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = P.orange;
+        ctx.beginPath(); ctx.arc(94, 41, 5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = P.green;
+        ctx.beginPath(); ctx.arc(110, 41, 5, 0, Math.PI * 2); ctx.fill();
+
+        ctx.fillStyle = '#aaa';
+        ctx.font = '12px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('isp-dns-log.txt', 360, 44);
+
+        // Log entries — illustrative, on reserved example domains
+        const logs = [
+            { time: '08:01:12', domain: 'mail.example.com', device: 'phone' },
+            { time: '08:03:44', domain: 'forum.example.net', device: 'phone' },
+            { time: '08:15:02', domain: 'health-info.example', device: 'laptop' },
+            { time: '08:22:18', domain: 'jobs.example.org', device: 'laptop' },
+            { time: '08:34:55', domain: 'cdn.example.net', device: 'laptop' },
+            { time: '08:41:30', domain: 'video.example.com', device: 'tv' },
+            { time: '09:02:11', domain: 'bank.example.com', device: 'phone' },
+        ];
+
+        ctx.textAlign = 'left';
+        logs.forEach((log, i) => {
+            const y = 72 + i * 24;
+            // Timestamp
+            ctx.fillStyle = P.green;
+            ctx.font = '13px monospace';
+            ctx.fillText(log.time, 80, y);
+            // Domain
+            ctx.fillStyle = '#fff';
+            ctx.fillText(log.domain, 180, y);
+            // Device hint
+            ctx.fillStyle = P.orange;
+            ctx.fillText(log.device, 420, y);
+            // Query type
+            ctx.fillStyle = P.mute;
+            ctx.fillText('│ A', 560, y);
+        });
+
+        // Caption inside the terminal frame
+        ctx.fillStyle = P.mute;
+        ctx.font = '12px monospace';
+        ctx.fillText('the row records the name asked — not the page, and not who asked', 80, 244 - 22);
+    })();
+
+    // C3: A day of queries on one subscriber line, split by what sent them.
+    // Illustrative shares; the point is that the row carries no such field.
+    (function() {
+        const { ctx, w, h } = setupCanvas('c3');
+
+        const SRC = [
+            { label: 'one household member', n: 1840, c: P.blue,    person: true },
+            { label: 'another member',       n: 1120, c: P.violet,  person: true },
+            { label: 'a third member',       n: 640,  c: P.aqua,    person: true },
+            { label: 'TV, speaker, thermostat', n: 980, c: P.yellow, person: false },
+            { label: 'background prefetch and retries', n: 1420, c: P.magenta, person: false }
+        ];
+        const total = SRC.reduce((a, s) => a + s.n, 0);
+        const nobody = SRC.filter(s => !s.person).reduce((a, s) => a + s.n, 0);
+        const pct = Math.round((nobody / total) * 100);
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.ink;
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillText('One day of queries on one subscriber line', w / 2, 24);
+        ctx.fillStyle = P.mute;
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillText('the log records the line — not which of these sent the query', w / 2, 42);
+
+        // one bar, segmented by originator
+        const bx = 42, bw = w - 84, by = 62, bh = 52;
+        let x = bx;
+        SRC.forEach(s => {
+            const sw = (s.n / total) * bw;
+            const n = parseInt(s.c.slice(1), 16);
+            ctx.fillStyle = 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',0.40)';
+            ctx.fillRect(x, by, sw, bh);
+            ctx.strokeStyle = s.c; ctx.lineWidth = 1;
+            ctx.strokeRect(x, by, sw, bh);
+            ctx.fillStyle = s.c;
+            ctx.font = 'bold 12px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(String(s.n), x + sw / 2, by + 31);
+            x += sw;
+        });
+        ctx.fillStyle = P.mute;
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillText(total.toLocaleString ? total.toLocaleString() : String(total), bx + bw / 2, by + bh + 22);
+
+        // legend
+        ctx.textAlign = 'left';
+        SRC.forEach((s, i) => {
+            const y = 154 + i * 24;
+            const n = parseInt(s.c.slice(1), 16);
+            ctx.fillStyle = 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',0.40)';
+            ctx.fillRect(112, y - 10, 13, 13);
+            ctx.strokeStyle = s.c; ctx.lineWidth = 1;
+            ctx.strokeRect(112, y - 10, 13, 13);
+            ctx.fillStyle = P.text;
+            ctx.font = '13px -apple-system, sans-serif';
+            ctx.fillText(s.label, 134, y);
+            ctx.fillStyle = s.person ? P.mute : P.orange;
+            ctx.font = '12px -apple-system, sans-serif';
+            ctx.fillText(s.person ? 'a person' : 'nobody was at a screen', 400, y);
+        });
+
+        ctx.fillStyle = P.orange;
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillText('About ' + pct + '% of the day had nobody behind it', 112, 278);
+
+        ctx.textAlign = 'center';
+        ctx.font = 'italic 12px -apple-system, sans-serif';
+        ctx.fillStyle = P.text;
+        ctx.fillText('A profile read off this line attributes all five segments to one person.', w / 2, h - 26);
+        ctx.fillStyle = P.mute;
+        ctx.font = 'italic 11px -apple-system, sans-serif';
+        ctx.fillText('Illustrative shares — the shape, not a measured line.', w / 2, h - 9);
+    })();
+
+    </script>
+</body>
+</html>

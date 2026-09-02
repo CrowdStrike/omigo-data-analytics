@@ -20,7 +20,7 @@ strong { color: #1a5276; }
 .obj-table td:first-child { width: 40%; }
 .obj-table td:last-child { width: 60%; text-align: center; }
 .obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
-canvas { display: block; margin: 0 auto; }
+canvas { display: block; margin: 0 auto; width: 100%; height: auto; }
 </style>
 </head>
 <body>
@@ -58,76 +58,143 @@ canvas { display: block; margin: 0 auto; }
 </ul>
 <p><strong>Why it persists:</strong> Logging feels like overhead when things are working. Its value is only visible during outages. Teams that have never had a major data quality incident don't invest in logging. After the first incident costs them 3 months, they log everything. Proactive teams log from day 1.</p>
 <p><strong>The tell:</strong> Ask: "If step 5 of 10 started producing subtly wrong values today, how long until we'd detect it and which step would we identify first?" If the answer is "weeks" and "we'd have to check each one" — you have an instrumentation problem.</p>
-</td><td><canvas id="c1" width="720" height="380"></canvas></td></tr>
+</td><td><canvas id="c1" width="720" height="400"></canvas></td></tr>
 </table>
 
-<script>
+<script>var __charts = [];
 var dpr = window.devicePixelRatio || 1;
 function setup(id) {
     var c = document.getElementById(id); if (!c) return null;
-    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
-    c.width = w * dpr; c.height = h * dpr;
-    c.style.width = w + 'px'; c.style.height = h + 'px';
-    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    if (!c.dataset.w) { c.dataset.w = c.getAttribute('width') || '720'; c.dataset.h = c.getAttribute('height') || '300'; }
+    var w = parseInt(c.dataset.w), h = parseInt(c.dataset.h);
+    var dpr = window.devicePixelRatio || 1;
+    c.style.maxWidth = w + 'px';
+    var cssW = c.getBoundingClientRect().width || w;
+    var scale = (cssW / w) * dpr;
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    var ctx = c.getContext('2d'); ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, w, h);
     return {ctx:ctx, w:w, h:h};
 }
 
-(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+__charts.push(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
 ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
 
 ctx.fillStyle='#1a5276';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
-ctx.fillText('Cost of logging vs cost of NOT logging',w/2,22);
+ctx.fillText('Tracing a bad output back to the step that broke',w/2,20);
 
-var margin={left:180,right:50,top:60,bottom:40};
-var barH=60, gap=50;
+// Two panels: same 10-step pipeline, per-step row-total checksum
+var top=62,bottom=300;
+var p1L=60,p1R=340,p2L=415,p2R=695;
+var step1=(p1R-p1L)/9, step2=(p2R-p2L)/9;
+var baseline=[100,98,97,96,95,94,93,92,91,90];
+var today   =[100,98,97,96,95,78,73,68,64,60];
+function yPos(v){return bottom-(v-50)/55*(bottom-top);}
 
-// With logging
-var withY=margin.top;
-ctx.fillStyle='#1a5276';ctx.font='bold 12px sans-serif';ctx.textAlign='right';
-ctx.fillText('With instrumentation:',margin.left-12,withY+barH/2+4);
+// Panel titles
+ctx.font='bold 13px sans-serif';ctx.textAlign='center';
+ctx.fillStyle='#27ae60';ctx.fillText('With checkpoints',(p1L+p1R)/2,44);
+ctx.fillStyle='#e74c3c';ctx.fillText('Without checkpoints',(p2L+p2R)/2,44);
 
-var withItems=[
-    {label:'Storage',cost:'$50/mo',width:0.02,color:'#27ae60'},
-    {label:'Debug time',cost:'5 min',width:0.01,color:'#27ae60'}
-];
-var maxW=w-margin.left-margin.right;
-var x=margin.left;
-withItems.forEach(function(item){
-    var barW=Math.max(item.width*maxW,30);
-    ctx.fillStyle=item.color;ctx.fillRect(x,withY,barW,barH);
-    ctx.strokeStyle='#333';ctx.lineWidth=1;ctx.strokeRect(x,withY,barW,barH);
-    ctx.fillStyle='#fff';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
-    ctx.fillText(item.label,x+barW/2,withY+barH/2-4);
-    ctx.fillText(item.cost,x+barW/2,withY+barH/2+10);
-    x+=barW+4;
+// Gridlines + axes for both panels
+[[p1L,p1R],[p2L,p2R]].forEach(function(p){
+    for(var v=60;v<=100;v+=10){
+        ctx.beginPath();ctx.moveTo(p[0],yPos(v));ctx.lineTo(p[1],yPos(v));
+        ctx.strokeStyle='#e8e8e8';ctx.lineWidth=1;ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.moveTo(p[0],top);ctx.lineTo(p[0],bottom);ctx.lineTo(p[1],bottom);
+    ctx.strokeStyle='#ccc';ctx.lineWidth=1;ctx.stroke();
 });
 
-// Without logging
-var withoutY=margin.top+barH+gap;
-ctx.fillStyle='#1a5276';ctx.font='bold 12px sans-serif';ctx.textAlign='right';
-ctx.fillText('Without instrumentation:',margin.left-12,withoutY+barH/2+4);
+// Y labels (left panel only)
+ctx.font='11px sans-serif';ctx.fillStyle='#666';ctx.textAlign='right';
+for(var v=60;v<=100;v+=10) ctx.fillText(v,p1L-6,yPos(v)+4);
 
-var withoutItems=[
-    {label:'Debug time: 2+ weeks',cost:'$10,000+',width:0.4,color:'#e67e22'},
-    {label:'Lost data: months of re-collection',cost:'priceless',width:0.55,color:'#e74c3c'}
-];
-x=margin.left;
-withoutItems.forEach(function(item){
-    var barW=item.width*maxW;
-    ctx.fillStyle=item.color;ctx.fillRect(x,withoutY,barW,barH);
-    ctx.strokeStyle='#333';ctx.lineWidth=1;ctx.strokeRect(x,withoutY,barW,barH);
-    ctx.fillStyle='#fff';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
-    ctx.fillText(item.label,x+barW/2,withoutY+barH/2-4);
-    ctx.fillText(item.cost,x+barW/2,withoutY+barH/2+10);
-    x+=barW+4;
-});
+// X labels: step numbers under both panels
+ctx.textAlign='center';ctx.fillStyle='#666';ctx.font='11px sans-serif';
+for(var i=0;i<10;i++){
+    ctx.fillText(i+1,p1L+i*step1,314);
+    ctx.fillText(i+1,p2L+i*step2,314);
+}
+ctx.fillText('pipeline step',(p1L+p1R)/2,331);
+ctx.fillText('pipeline step',(p2L+p2R)/2,331);
 
-// ROI annotation
+// --- Left panel: both runs logged at every step ---
+function drawLine(pts,px0,st,color){
+    ctx.beginPath();
+    for(var i=0;i<pts.length;i++){
+        var x=px0+i*st,y=yPos(pts[i]);
+        if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+    }
+    ctx.strokeStyle=color;ctx.lineWidth=2;ctx.stroke();
+    for(var i=0;i<pts.length;i++){
+        ctx.beginPath();ctx.arc(px0+i*st,yPos(pts[i]),3,0,Math.PI*2);
+        ctx.fillStyle=color;ctx.fill();
+    }
+}
+drawLine(baseline,p1L,step1,'#1a5276');
+drawLine(today,p1L,step1,'#27ae60');
+
+// Divergence circled at step 6
+var dx=p1L+5*step1,dy=yPos(today[5]);
+ctx.beginPath();ctx.arc(dx,dy,11,0,Math.PI*2);
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=2;ctx.stroke();
+ctx.fillStyle='#e74c3c';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
+ctx.fillText('found in 5 min',dx,245);
+
+// Legend (top right of left panel)
+ctx.strokeStyle='#1a5276';ctx.lineWidth=2;
+ctx.beginPath();ctx.moveTo(228,70);ctx.lineTo(246,70);ctx.stroke();
+ctx.strokeStyle='#27ae60';
+ctx.beginPath();ctx.moveTo(228,86);ctx.lineTo(246,86);ctx.stroke();
+ctx.fillStyle='#333';ctx.font='11px sans-serif';ctx.textAlign='left';
+ctx.fillText('logged baseline',251,74);
+ctx.fillText("today's run",251,90);
+
+// --- Right panel: only the two endpoints exist ---
+// Shaded unknown region: steps 2-9
+var shadeL=p2L+1*step2, shadeR=p2L+8*step2;
+ctx.fillStyle='rgba(231,76,60,0.10)';
+ctx.fillRect(shadeL,top,shadeR-shadeL,bottom-top);
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=1;ctx.setLineDash([4,3]);
+ctx.strokeRect(shadeL,top,shadeR-shadeL,bottom-top);
+ctx.setLineDash([]);
+
+// Question marks across the unknown steps
+ctx.fillStyle='#e74c3c';ctx.font='bold 15px sans-serif';ctx.textAlign='center';
+for(var i=1;i<=8;i++) ctx.fillText('?',p2L+i*step2,185+(i%2)*24);
+
+ctx.fillStyle='#e74c3c';ctx.font='bold 13px sans-serif';
+ctx.fillText('2-week search space',(shadeL+shadeR)/2,110);
+
+// Endpoints: input (both runs agree), output (expected vs actual)
+ctx.beginPath();ctx.arc(p2L,yPos(100),4,0,Math.PI*2);ctx.fillStyle='#1a5276';ctx.fill();
+ctx.beginPath();ctx.arc(p2L,yPos(100),7,0,Math.PI*2);ctx.strokeStyle='#27ae60';ctx.lineWidth=2;ctx.stroke();
+ctx.fillStyle='#333';ctx.font='11px sans-serif';ctx.textAlign='left';
+ctx.fillText('input: OK',p2L+10,78);
+
+ctx.beginPath();ctx.arc(p2R,yPos(90),4,0,Math.PI*2);ctx.fillStyle='#1a5276';ctx.fill();
+ctx.fillStyle='#1a5276';ctx.font='11px sans-serif';ctx.textAlign='right';
+ctx.fillText('expected',p2R-9,yPos(90)+4);
+
+ctx.beginPath();ctx.arc(p2R,yPos(60),4,0,Math.PI*2);ctx.fillStyle='#27ae60';ctx.fill();
+ctx.fillStyle='#e74c3c';ctx.font='bold 11px sans-serif';
+ctx.fillText('actual',p2R-9,yPos(60)+4);
+
+// Takeaway + caption
 ctx.fillStyle='#e74c3c';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
-ctx.fillText('ROI of instrumentation: 100:1 minimum. Often 1000:1.',w/2,h-40);
-ctx.fillStyle='#555';ctx.font='italic 13px sans-serif';
-ctx.fillText('$50/month in storage prevents $10,000+ in debug time and months of lost data.',w/2,h-20);
-})();
+ctx.fillText('Checkpoints turn a 2-week hunt into a 5-minute diff.',w/2,362);
+ctx.fillStyle='#666';ctx.font='italic 12px sans-serif';
+ctx.fillText('Row-total checksum logged at each step; illustrative values.',w/2,384);
+});
+
+__charts.forEach(function(f){ f(); });
+var __redrawTimer;
+window.addEventListener('resize', function(){
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function(){ __charts.forEach(function(f){ f(); }); }, 150);
+});
 </script>
 </body>
 </html>

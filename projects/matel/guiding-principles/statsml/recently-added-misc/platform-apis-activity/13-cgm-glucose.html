@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CGM / Glucose Monitor APIs</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2c3e50; max-width: 100%; margin: 0; padding: 30px 40px; background: #fff; }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+        .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
+        .obj-table { width: 100%; border-collapse: collapse; }
+        .obj-table td { vertical-align: top; padding: 16px; border: 1px solid #2980b9; }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; text-align: center; }
+        ul { padding-left: 20px; margin: 8px 0; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        a { color: #1a5276; }
+        .payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 12px 0; text-align: left; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        canvas { display: block; margin: 12px auto 0; width: 100%; }
+    </style>
+</head>
+<body>
+
+<h1>CGM / Glucose Monitor APIs</h1>
+<div class="subtitle">Continuous interstitial glucose from arm-worn sensors — over-the-counter since 2024, no prescription required</div>
+
+<table class="obj-table">
+
+    <!-- Row 1: What the API Provides -->
+    <tr>
+        <td>
+            <div class="obj-title">What the API Provides</div>
+            <ul>
+                <li><strong>Estimated glucose values (EGVs):</strong> one reading roughly every 5 minutes, in mg/dL or mmol/L</li>
+                <li><strong>Trend:</strong> direction arrow and rate of change per reading (rising, falling, flat)</li>
+                <li><strong>Devices:</strong> sensor model, transmitter generation, display device</li>
+                <li><strong>Events:</strong> user-logged meals, insulin, exercise entries</li>
+                <li><strong>Calibrations:</strong> user fingerstick calibration entries, where the device supports them</li>
+                <li><strong>Alerts:</strong> high/low threshold crossings and urgent-low events</li>
+                <li><strong>Data range:</strong> earliest and latest available timestamps per record type</li>
+                <li><strong>OTC shift:</strong> the FDA cleared over-the-counter CGMs in 2024 (Dexcom Stelo in March, Abbott Lingo and Libre Rio in June) — sensors are now sold to wellness users with no prescription and no clinician in the loop</li>
+            </ul>
+        </td>
+        <td>
+            <div class="payload">// ── illustrative payload; field names follow the documented
+//    Dexcom API v3 EGV response shape, values are not real ──
+{
+  "recordType": "egv",
+  "recordVersion": "3.0",
+  "userId": "EXAMPLE_USER_redacted",  // Note: masked for illustration
+  "records": [
+    {
+      "systemTime":  "2026-08-22T07:45:00Z",
+      "displayTime": "2026-08-22T09:45:00",
+      "value": 112,                // mg/dL — an estimate, not a blood draw
+      "trend": "flat",
+      "trendRate": 0.3,            // mg/dL per minute
+      "unit": "mg/dL",
+      "rateUnit": "mg/dL/min",
+      "transmitterGeneration": "g7",
+      "displayDevice": "receiver"
+    }
+  ]
+}</div>
+            <canvas id="glucoseCanvas" height="380"></canvas>
+        </td>
+    </tr>
+
+    <!-- Row 2: Access & Authentication -->
+    <tr>
+        <td>
+            <div class="obj-title">Access &amp; Authentication</div>
+            <ul>
+                <li>OAuth 2.0 authorization code flow (Dexcom API); the user grants access to their own data</li>
+                <li>Sandbox environment with synthetic users for development — no real accounts needed</li>
+                <li><strong>API base:</strong> https://api.dexcom.com/v3/users/self/</li>
+                <li><strong>Endpoints:</strong> egvs, devices, events, calibrations, alerts, dataRange</li>
+                <li>Abbott's ecosystem routes through LibreView/LibreLinkUp apps; there is no comparable open developer API — third-party integrations commonly rely on unofficial LibreLinkUp endpoints</li>
+                <li>Consumer apps also write glucose into Apple HealthKit and Android Health Connect, which is often the practical integration path</li>
+            </ul>
+        </td>
+        <td>
+            <div class="key-point">
+                <strong>Request shape:</strong>
+            </div>
+            <div class="payload">GET /v3/users/self/egvs?startDate=2026-08-21T00:00:00&amp;endDate=2026-08-22T00:00:00
+Host: api.dexcom.com
+Authorization: Bearer (your-access-token)
+
+// OAuth 2.0 authorization code flow; user consents
+// to sharing their own glucose records.
+// Sandbox: sandbox-api.dexcom.com with synthetic users.
+// Abbott/Libre: no equivalent open API — data reaches
+// third parties via LibreLinkUp (unofficial) or via
+// HealthKit / Health Connect on the phone.</div>
+        </td>
+    </tr>
+
+    <!-- Row 3: Granularity & Limitations -->
+    <tr>
+        <td>
+            <div class="obj-title">Granularity &amp; Limitations</div>
+            <ul>
+                <li><strong>Interval:</strong> ~5 minutes per EGV (288/day); gaps appear during sensor warm-up, signal loss, and between sessions</li>
+                <li><strong>Delayed, not real-time:</strong> the public API serves recent history with a built-in delay — live values stay in the vendor's own app ecosystem</li>
+                <li><strong>Interstitial, not blood:</strong> the sensor reads interstitial fluid, which lags blood glucose by several minutes — fastest-moving values are the least trustworthy</li>
+                <li><strong>EGV means estimated:</strong> an algorithm converts sensor current to mg/dL; accuracy is characterized by a relative error (MARD) of several percent, not by an error bar per reading</li>
+                <li><strong>Sensor sessions are finite:</strong> 10–15 days per sensor depending on model, so a long series is a chain of sensors, each with its own bias and warm-up</li>
+                <li><strong>Artifacts are structural:</strong> pressure on the sensor during sleep produces false lows ("compression lows"); first-day readings run noisier than the rest of the session</li>
+            </ul>
+        </td>
+        <td>
+            <div class="key-point">
+                <strong>Resolution summary:</strong>
+            </div>
+            <div class="payload">// Data granularity and caveats:
+//
+// EGV interval:    ~5 min (288 per day)
+// Sensor life:     10-15 days per sensor (model-dependent)
+// Warm-up:         no data for the first hours of a session
+// Latency:         delayed history via API; live values
+//                  remain in the vendor app
+// Value type:      estimated (interstitial fluid + algorithm),
+//                  lags blood glucose by several minutes
+// Known artifacts: compression lows at night,
+//                  noisier first-day readings</div>
+        </td>
+    </tr>
+
+    <!-- Row 4: Business Scenarios & Notes -->
+    <tr>
+        <td>
+            <div class="obj-title">Business Scenarios &amp; Notes</div>
+            <ul>
+                <li>Metabolic wellness apps, nutrition-response tracking, and research studies on non-diabetic populations — the OTC clearances created this segment</li>
+                <li>Diabetes management remains the regulated core: alerts, follower/share features, and clinician reports live in the vendor apps, not the public API</li>
+                <li><strong>A wellness reading is not a diagnosis:</strong> post-meal rises into the 140–180 mg/dL range are normal physiology; wellness dashboards that grade every spike invite over-interpretation of healthy variation</li>
+                <li><strong>Population shift:</strong> OTC sensors put CGM data on people it was never validated against as a diagnostic — comparing their curves to diabetic reference ranges is a base-rate error</li>
+                <li><strong>Integration partners:</strong> Apple HealthKit and Android Health Connect both carry blood-glucose record types written by CGM apps</li>
+            </ul>
+        </td>
+        <td>
+            <div class="key-point">
+                <strong>The 2024 OTC shift:</strong>
+            </div>
+            <div class="payload">// Prescription CGM (pre-2024)      OTC CGM (2024-)
+// -------------------------        -------------------------
+// Prescribed for diabetes          Sold to anyone 18+
+// Clinician sees the data          User alone interprets it
+// Alerts tuned for insulin risk    Wellness framing, softer alerts
+// Validated on diabetic users      Worn by healthy users
+//
+// Cleared in 2024: Dexcom Stelo (March),
+// Abbott Lingo and Libre Rio (June).
+// Same sensor technology - different population,
+// different decisions made from the same curve.</div>
+        </td>
+    </tr>
+
+</table>
+
+<h2>Official API References</h2>
+<ul>
+    <li><a href="https://developer.dexcom.com/">Dexcom Developer API</a> — official reference for OAuth, sandbox, and the egvs/devices/events/calibrations/alerts/dataRange endpoints</li>
+</ul>
+
+<script>
+(function() {
+    var canvas = document.getElementById('glucoseCanvas');
+    var ctx = canvas.getContext('2d');
+    var dpr = window.devicePixelRatio || 1;
+
+    function resizeCanvas() {
+        var rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * dpr;
+        canvas.height = 380 * dpr;
+        ctx.scale(dpr, dpr);
+    }
+
+    resizeCanvas();
+
+    var width = canvas.width / dpr;
+    var height = 380;
+
+    // Control points: [hour, mg/dL]. Linear interpolation between them —
+    // deterministic, no randomness. Illustrative day, not measured data.
+    var controls = [
+        [0, 96], [1, 95], [2, 94], [2.7, 90], [3, 62], [3.4, 68], [4, 84],
+        [5, 90], [6, 92], [7, 94], [7.5, 105], [8.25, 148], [8.75, 165],
+        [9.5, 138], [10.5, 110], [11.5, 104], [12.5, 118], [13.5, 150],
+        [14.5, 128], [15.5, 108], [16.5, 102], [18, 100], [19, 130],
+        [19.75, 175], [20.5, 152], [21.5, 124], [22.5, 108], [23.5, 101], [24, 100]
+    ];
+
+    function valueAt(h) {
+        for (var i = 1; i < controls.length; i++) {
+            if (h <= controls[i][0]) {
+                var a = controls[i - 1], b = controls[i];
+                var t = (h - a[0]) / (b[0] - a[0] || 1);
+                return a[1] + t * (b[1] - a[1]);
+            }
+        }
+        return controls[controls.length - 1][1];
+    }
+
+    var marginLeft = 50;
+    var marginRight = 20;
+    var marginTop = 40;
+    var marginBottom = 60;
+    var plotWidth = width - marginLeft - marginRight;
+    var plotHeight = height - marginTop - marginBottom;
+
+    var yMin = 40, yMax = 220;
+    function xAt(h) { return marginLeft + (h / 24) * plotWidth; }
+    function yAt(v) { return marginTop + plotHeight - ((v - yMin) / (yMax - yMin)) * plotHeight; }
+
+    // Title
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 13px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('One Day of 5-Minute EGVs (illustrative)', width / 2, 20);
+
+    // Target band 70-180
+    ctx.fillStyle = 'rgba(39,174,96,0.12)';
+    ctx.fillRect(marginLeft, yAt(180), plotWidth, yAt(70) - yAt(180));
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(marginLeft, yAt(180)); ctx.lineTo(marginLeft + plotWidth, yAt(180)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(marginLeft, yAt(70)); ctx.lineTo(marginLeft + plotWidth, yAt(70)); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Y-axis labels
+    ctx.textAlign = 'right';
+    ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.fillStyle = '#2c3e50';
+    [70, 100, 140, 180].forEach(function(v) {
+        ctx.fillText(String(v), marginLeft - 8, yAt(v) + 4);
+    });
+
+    // Glucose curve: 288 five-minute samples from the control points
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (var s = 0; s <= 288; s++) {
+        var h = (s / 288) * 24;
+        var x = xAt(h), y = yAt(valueAt(h));
+        if (s === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Annotation: compression low at 3am
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(xAt(3), yAt(62) + 6);
+    ctx.lineTo(xAt(3), yAt(52));
+    ctx.stroke();
+    ctx.fillStyle = '#e67e22';
+    ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('compression low — pressure on the sensor,', xAt(3) - 10, yAt(52) + 14);
+    ctx.fillText('not hypoglycemia', xAt(3) - 10, yAt(52) + 27);
+
+    // Annotation: meal rises
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    ctx.fillText('meal rises', xAt(8.75), yAt(165) - 10);
+
+    // X-axis: time labels
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    var timeLabels = ['12am', '4am', '8am', '12pm', '4pm', '8pm', '12am'];
+    for (var t = 0; t < timeLabels.length; t++) {
+        var tx = marginLeft + (t / 6) * plotWidth;
+        ctx.fillText(timeLabels[t], tx, marginTop + plotHeight + 16);
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(tx, marginTop + plotHeight);
+        ctx.lineTo(tx, marginTop + plotHeight + 4);
+        ctx.stroke();
+    }
+
+    // Bottom caption
+    ctx.fillStyle = '#6b7280';
+    ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Illustrative curve — values are constructed, not measured data.', width / 2, height - 14);
+
+})();
+</script>
+
+</body>
+</html>

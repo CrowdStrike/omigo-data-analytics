@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tracking Data: Bluetooth Beacon Scanning</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2c3e50; max-width: 100%; margin: 0; padding: 30px 40px; background: #fff; }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+        .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
+        .obj-table { width: 100%; border-collapse: collapse; }
+        .obj-table td { vertical-align: top; padding: 16px; border: 1px solid #2980b9; }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; text-align: center; }
+        ul { padding-left: 20px; margin: 8px 0; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        .obj-table td:last-child .payload,
+        .obj-table td:last-child .payload-note { text-align: left; }
+        .payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 12px 0; }
+        .payload-note { font-size: 0.82em; color: #666; margin: 12px 0 -6px 0; font-style: italic; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        .key-point strong:first-child { color: #1a5276; }
+        .lede { font-size: 0.95em; margin: 0 0 10px 0; }
+        .lbl { display: inline-block; font-size: 0.7em; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; margin: 10px 0 2px 0; }
+        .lbl-purpose { background: #eaf2fb; color: #1a5276; }
+        .lbl-effect { background: #fdf0e6; color: #a8501c; }
+        li b { color: #1a5276; font-weight: 600; }
+        canvas { display: block; margin: 0 auto; width: 100%; height: auto; }
+    </style>
+</head>
+<body>
+    <h1>Tracking Data: Bluetooth Beacon Scanning</h1>
+    <p class="subtitle">Phones, earbuds and watches transmit BLE advertising packets, and passive receivers turn them into footfall and dwell estimates — via two chosen parameters.</p>
+
+    <table class="obj-table">
+        <tr>
+            <td>
+                <div class="obj-title">What is it?</div>
+                <p class="lede">Cheap receivers listening to packets devices already broadcast.</p>
+                <ul>
+                    <li><b>What broadcasts:</b> phones, earbuds, watches and fitness bands send short advertising packets at regular intervals so other devices can find them</li>
+                    <li><b>Each packet</b> carries an address and, often, a declared transmit power</li>
+                    <li><b>What venues do:</b> install inexpensive receivers that log the packets to estimate footfall, dwell and route</li>
+                    <li><b>No install, no pairing</b> — the receiver only listens</li>
+                </ul>
+            </td>
+            <td><canvas id="c1" width="720" height="320"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">What does it collect?</div>
+                <ul>
+                    <li><b>Advertising address</b> — rotates, so not a stable device ID</li>
+                    <li><b>Received signal strength</b>, from which a range is estimated</li>
+                    <li><b>First and last time</b> a radio was seen in each zone</li>
+                    <li><b>An ordered sequence of zones</b>, stitched across observations</li>
+                    <li><b>Dwell per zone</b>, bounded by the rotation window</li>
+                    <li><b>Radios repeatedly co-present</b> — devices, not necessarily people</li>
+                </ul>
+                <div class="key-point"><strong>Distance is not measured:</strong> it is <code>tx_power_dbm</code> minus <code>rssi_dbm</code> inverted through an assumed path-loss exponent, and that assumption is the estimate. Indoors, bodies and shelving attenuate faster than free space, so the signal is placed farther away than the device is. TX power is declared by the device, not verified, so an error there shifts every distance from it one way.</div>
+                <div class="key-point"><strong><code>track_id</code> is a stitching decision:</strong> the identifier rotates, so too short a window makes one visitor several and too long makes several one. Position and visitor count both rest on parameters the operator chose.</div>
+            </td>
+            <td><canvas id="c2" width="720" height="320"></canvas>
+<p class="payload-note">Sample payload — illustrative structure, not real captured data.</p>
+<pre class="payload">{
+  // ── present in the advertising packet (BLE spec) ──
+  "adv_address":   "6f:1d:a3:…",
+  "address_type":  "random_resolvable",
+  "adv_type":      "ADV_IND",
+  // Note: masked for illustration; real BT SIG UUIDs follow
+  // 0000xxxx-0000-1000-8000-00805f9b34fb format
+  "service_uuid_masked":  "EXAMPLE_BT_SIG_UUID_redacted",
+  "tx_power_dbm":  -4,          // as declared by the device
+  "local_name":    null,
+  "rssi_dbm":      -73,         // measured at the receiver
+  "ts":            "2026-08-22T16:31:08.940Z",
+
+  // ── inferred / plausible, added by the receiver ──
+  "path_loss_exp": 2.0,         // free-space assumption
+  "est_distance_m": 11.2,       // from tx_power − rssi
+  "zone":          "concourse-B",
+  "rotates":       true,
+  "track_id":      "tr_44b8…"   // stitched, not observed
+}</pre>
+</td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">Why is it collected?</div>
+                <div class="lbl lbl-purpose">Stated purpose</div>
+                <ul>
+                    <li><b>How a space is used</b> — where people enter, which routes they take, where queues form</li>
+                    <li><b>Cheap and install-free</b>, and none of it appears in till data</li>
+                </ul>
+                <div class="lbl lbl-effect">Additional consequence</div>
+                <ul>
+                    <li><b>Zone footfall becomes a saleable series</b>, read outside the venue as a proxy for retail activity</li>
+                    <li><b>Loyalty falls out for free</b> — the logic separating a distinct visitor from a repeat observation also separates a first visit from a repeat one</li>
+                </ul>
+                <div class="key-point"><strong>The unit is an advertising radio:</strong> one visitor with a phone, earbuds and a watch contributes several. That inflates counts most for the device-rich, who are not evenly spread, so a level read off this series carries an inflation factor that moves with who walked in.</div>
+            </td>
+            <td><canvas id="c3" width="720" height="320"></canvas></td>
+        </tr>
+    </table>
+
+    <script>
+    const dpr = window.devicePixelRatio || 1;
+    // Validated categorical palette (CVD-checked, see REVIEW-NOTES.md).
+    // Red is deliberately NOT in the rotation - it stays reserved for
+    // genuine error / alarm states so it keeps its meaning.
+    const P = {
+      blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+      aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+      ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+    };
+    const SERIES = [P.blue, P.green, P.violet, P.orange, P.aqua, P.magenta, P.yellow];
+    // Rounded-rect path helper (works without native ctx.roundRect).
+    function rr(ctx, x, y, w, h, r) {
+      r = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    function setupCanvas(id) {
+        const c = document.getElementById(id);
+        const w = c.getAttribute('width') ? +c.getAttribute('width') : 720;
+        const h = c.getAttribute('height') ? +c.getAttribute('height') : 240;
+        c.style.maxWidth = w + 'px';
+        var __cssW = c.getBoundingClientRect().width || w;
+        var __scale = (__cssW / w) * dpr;
+        c.width = Math.round(w * __scale);
+        c.height = Math.round(h * __scale);
+        const ctx = c.getContext('2d');
+        ctx.scale(__scale, __scale);
+        return { ctx, w, h };
+    }
+
+    // C1: Building floor plan with BLE receivers detecting a phone's path
+    (function() {
+        const { ctx, w, h } = setupCanvas('c1');
+
+        // Floor plan background
+        ctx.fillStyle = '#f8f9fa';
+        ctx.fillRect(40, 20, 640, 190);
+        ctx.strokeStyle = P.grid;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(40, 20, 640, 190);
+
+        // Internal walls
+        ctx.strokeStyle = '#95a5a6';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(250, 20); ctx.lineTo(250, 130);
+        ctx.moveTo(450, 80); ctx.lineTo(450, 210);
+        ctx.moveTo(250, 130); ctx.lineTo(350, 130);
+        ctx.moveTo(40, 130); ctx.lineTo(180, 130);
+        ctx.stroke();
+
+        // Room labels
+        ctx.fillStyle = '#95a5a6';
+        ctx.font = '14px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('ENTRANCE', 145, 80);
+        ctx.fillText('SHOES', 145, 165);
+        ctx.fillText('CLOTHING', 350, 65);
+        ctx.fillText('ELECTRONICS', 350, 175);
+        ctx.fillText('CHECKOUT', 570, 115);
+
+        // BLE receivers (blue circles with signal rings)
+        const receivers = [
+            { x: 80, y: 45 }, { x: 250, y: 55 }, { x: 450, y: 45 },
+            { x: 620, y: 55 }, { x: 145, y: 180 }, { x: 450, y: 180 }
+        ];
+        receivers.forEach(r => {
+            // Signal ring
+            ctx.strokeStyle = P.blue;
+            ctx.lineWidth = 1;
+            ctx.globalAlpha = 0.2;
+            ctx.beginPath();
+            ctx.arc(r.x, r.y, 30, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+            // Receiver dot
+            ctx.fillStyle = P.blue;
+            ctx.beginPath();
+            ctx.arc(r.x, r.y, 6, 0, Math.PI * 2);
+            ctx.fill();
+            // Antenna lines
+            ctx.strokeStyle = P.blue;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(r.x, r.y - 6); ctx.lineTo(r.x, r.y - 14);
+            ctx.moveTo(r.x - 4, r.y - 12); ctx.lineTo(r.x, r.y - 14); ctx.lineTo(r.x + 4, r.y - 12);
+            ctx.stroke();
+        });
+
+        // Phone path (dotted line with timestamps)
+        const path = [
+            { x: 80, y: 100 }, { x: 145, y: 95 }, { x: 200, y: 90 },
+            { x: 300, y: 80 }, { x: 380, y: 95 }, { x: 420, y: 120 },
+            { x: 400, y: 160 }, { x: 350, y: 170 }, { x: 420, y: 185 },
+            { x: 500, y: 150 }, { x: 570, y: 120 }
+        ];
+
+        // Draw path — magenta, because this line is the stitched (inferred)
+        // route, distinct from the blue receivers that actually observed it.
+        // Red is not used here: an inferred path is not an alarm.
+        ctx.strokeStyle = P.magenta;
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(path[0].x, path[0].y);
+        for (let i = 1; i < path.length; i++) {
+            ctx.lineTo(path[i].x, path[i].y);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Timestamps along path
+        ctx.fillStyle = P.magenta;
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        const times = ['2:01', '2:03', '2:06', '2:11', '2:14'];
+        const timeIdx = [0, 2, 5, 7, 10];
+        timeIdx.forEach((idx, i) => {
+            ctx.beginPath();
+            ctx.arc(path[idx].x, path[idx].y, 3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillText(times[i], path[idx].x, path[idx].y + 14);
+        });
+
+        // Phone icon at end of path
+        ctx.fillStyle = P.magenta;
+        rr(ctx, 564, 108, 14, 22, 3);
+        ctx.fill();
+
+        // Legend
+        ctx.fillStyle = P.blue;
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.beginPath(); ctx.arc(50, 222, 5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillText('BLE Receiver', 60, 225);
+        ctx.fillStyle = P.magenta;
+        ctx.fillText('--- Stitched path (inferred)', 170, 225);
+    })();
+
+    // C2: Signal diagram — phone broadcasting with data fields labeled
+    (function() {
+        const { ctx, w, h } = setupCanvas('c2');
+
+        // Phone in center
+        ctx.fillStyle = P.text;
+        rr(ctx, 320, 90, 60, 100, 10);
+        ctx.fill();
+        ctx.fillStyle = P.grid;
+        ctx.fillRect(326, 103, 48, 74);
+
+        // Bluetooth symbol on phone screen. Ink, not a series hue — the
+        // handset and its rings are chrome; the four fields carry the colour.
+        ctx.fillStyle = P.ink;
+        ctx.font = 'bold 22px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('ᛒ', 350, 147);
+
+        // Broadcasting rings
+        ctx.strokeStyle = P.ink;
+        ctx.lineWidth = 1.5;
+        for (let i = 1; i <= 5; i++) {
+            ctx.globalAlpha = 0.7 - i * 0.12;
+            ctx.beginPath();
+            ctx.arc(350, 140, 55 + i * 20, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+
+        // Data fields as labeled arrows pointing outward. Each outward arrow is
+        // a different broadcast field, so each gets its own hue in SERIES order.
+        const fields = [
+            { angle: -0.8, label: 'Adv address: A3:F2:9B:…', color: SERIES[0] },
+            { angle: -0.2, label: 'Signal: -67 dBm', color: SERIES[1] },
+            { angle: 0.3, label: 'Frequency: 2.4 GHz', color: SERIES[2] },
+            { angle: 0.9, label: 'Type: BLE Advertisement', color: SERIES[3] }
+        ];
+
+        fields.forEach(f => {
+            const startR = 65;
+            const endR = 155;
+            const sx = 350 + Math.cos(f.angle) * startR;
+            const sy = 140 + Math.sin(f.angle) * startR;
+            const ex = 350 + Math.cos(f.angle) * endR;
+            const ey = 140 + Math.sin(f.angle) * endR;
+
+            // Arrow line
+            ctx.strokeStyle = f.color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(sx, sy);
+            ctx.lineTo(ex, ey);
+            ctx.stroke();
+
+            // Arrowhead
+            const headLen = 8;
+            const angle = Math.atan2(ey - sy, ex - sx);
+            ctx.fillStyle = f.color;
+            ctx.beginPath();
+            ctx.moveTo(ex, ey);
+            ctx.lineTo(ex - headLen * Math.cos(angle - 0.4), ey - headLen * Math.sin(angle - 0.4));
+            ctx.lineTo(ex - headLen * Math.cos(angle + 0.4), ey - headLen * Math.sin(angle + 0.4));
+            ctx.closePath();
+            ctx.fill();
+
+            // Label
+            const lx = 350 + Math.cos(f.angle) * (endR + 10);
+            const ly = 140 + Math.sin(f.angle) * (endR + 10);
+            ctx.fillStyle = f.color;
+            ctx.font = 'bold 14px -apple-system, sans-serif';
+            ctx.textAlign = f.angle > 0 && f.angle < Math.PI ? 'left' : (Math.cos(f.angle) > 0 ? 'left' : 'right');
+            ctx.fillText(f.label, lx, ly + 4);
+        });
+
+        // "Broadcasts per second" label
+        ctx.fillStyle = P.text;
+        ctx.font = '14px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Advertising interval is set by the device', 350, 215);
+
+        // Footer band — fills the space below the diagram and separates the
+        // one field that changes over time from the three that do not.
+        rr(ctx, 40, 244, 640, 62, 8);
+        ctx.fillStyle = 'rgba(42,120,214,0.06)';
+        ctx.fill();
+        ctx.strokeStyle = P.ink;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        ctx.textAlign = 'left';
+        ctx.fillStyle = SERIES[0];
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillText('The address rotates', 56, 266);
+        ctx.fillStyle = P.text;
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.fillText('— so it is an identifier for a window, not a stable identity.', 190, 266);
+
+        ctx.fillStyle = SERIES[1];
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillText('Signal strength, frequency and packet type', 56, 289);
+        ctx.fillStyle = P.text;
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.fillText('carry no identifier at all.', 344, 289);
+    })();
+
+    // C3: One hour of visitors, counted twice. People walking in carry a varying
+    // number of advertising radios, so the receiver's count is the sum of the
+    // radios, not of the people. Illustrative mix, not a measured venue.
+    (function() {
+        const { ctx, w, h } = setupCanvas('c3');
+
+        // groups of visitors by how many advertising radios they carry
+        const MIX = [
+            { radios: 1, people: 120, label: 'phone only' },
+            { radios: 2, people: 90,  label: 'phone + earbuds' },
+            { radios: 3, people: 60,  label: 'phone + earbuds + watch' },
+            { radios: 4, people: 30,  label: 'phone, earbuds, watch, band' }
+        ];
+        const people = MIX.reduce((a, g) => a + g.people, 0);          // 300
+        const radios = MIX.reduce((a, g) => a + g.people * g.radios, 0); // 600
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.ink;
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillText('One hour of visitors, counted two ways', w / 2, 24);
+        ctx.fillStyle = P.mute;
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillText('the receiver counts radios; the venue reports the number as footfall', w / 2, 42);
+
+        // stacked comparison: people on the left, radios on the right
+        const base = 210, maxH = 130, scale = maxH / radios;
+        const hues = [P.blue, P.aqua, P.violet, P.yellow];
+
+        function stack(cx, counts, title, total) {
+            let y = base;
+            counts.forEach((c, i) => {
+                const bh = c * scale;
+                ctx.fillStyle = tintLocal(hues[i], 0.42);
+                ctx.fillRect(cx - 44, y - bh, 88, bh);
+                ctx.strokeStyle = hues[i]; ctx.lineWidth = 1;
+                ctx.strokeRect(cx - 44, y - bh, 88, bh);
+                y -= bh;
+            });
+            ctx.fillStyle = P.ink;
+            ctx.font = 'bold 15px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(String(total), cx, y - 10);
+            ctx.fillStyle = P.text;
+            ctx.font = '12px -apple-system, sans-serif';
+            ctx.fillText(title, cx, base + 18);
+        }
+        function tintLocal(hex, a) {
+            const n = parseInt(hex.slice(1), 16);
+            return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+        }
+
+        stack(122, MIX.map(g => g.people), 'people who walked in', people);
+        stack(292, MIX.map(g => g.people * g.radios), 'radios the receiver heard', radios);
+
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(58, base); ctx.lineTo(356, base); ctx.stroke();
+
+        // legend, and the per-group inflation each band contributes
+        ctx.textAlign = 'left';
+        MIX.forEach((g, i) => {
+            const y = 74 + i * 26;
+            ctx.fillStyle = tintLocal(hues[i], 0.42);
+            ctx.fillRect(392, y - 9, 13, 13);
+            ctx.strokeStyle = hues[i]; ctx.lineWidth = 1;
+            ctx.strokeRect(392, y - 9, 13, 13);
+            ctx.fillStyle = P.text;
+            ctx.font = '12px -apple-system, sans-serif';
+            ctx.fillText(g.label, 414, y + 1);
+            ctx.fillStyle = hues[i];
+            ctx.font = 'bold 12px -apple-system, sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText(g.people + ' people → ' + g.people * g.radios + ' radios', 690, y + 1);
+            ctx.textAlign = 'left';
+        });
+
+        const factor = (radios / people).toFixed(2);
+        ctx.fillStyle = P.orange;
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillText('Inflation this hour: ×' + factor, 392, 194);
+        ctx.fillStyle = P.text;
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillText('An hour with a different mix of visitors gives a', 392, 216);
+        ctx.fillText('different factor, and the series does not record it.', 392, 234);
+
+        ctx.textAlign = 'center';
+        ctx.font = 'italic 12px -apple-system, sans-serif';
+        ctx.fillStyle = P.text;
+        ctx.fillText('Comparing two hours in the same venue survives this. Reading a footfall level off it does not.', w / 2, h - 26);
+        ctx.fillStyle = P.mute;
+        ctx.font = 'italic 11px -apple-system, sans-serif';
+        ctx.fillText('Illustrative device mix — the shape, not a measured venue.', w / 2, h - 9);
+    })();
+
+    </script>
+</body>
+</html>

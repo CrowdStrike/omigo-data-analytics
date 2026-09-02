@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tracking Data: Face & Emotion Tracking</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #2c3e50; max-width: 100%; margin: 0; padding: 30px 40px; background: #fff; }
+        h1 { color: #1a5276; font-size: 1.8rem; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 1.05em; margin-bottom: 24px; }
+        .obj-title { font-weight: bold; color: #1a5276; font-size: 1.1em; margin-bottom: 8px; }
+        .obj-table { width: 100%; border-collapse: collapse; }
+        .obj-table td { vertical-align: top; padding: 16px; border: 1px solid #2980b9; }
+        .obj-table td:first-child { width: 45%; }
+        .obj-table td:last-child { width: 55%; text-align: center; }
+        ul { padding-left: 20px; margin: 8px 0; }
+        li { margin-bottom: 6px; font-size: 0.93em; }
+        .obj-table td:last-child .payload,
+        .obj-table td:last-child .payload-note { text-align: left; }
+        .payload { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.78em; overflow-x: auto; white-space: pre; line-height: 1.45; margin: 12px 0; }
+        .payload-note { font-size: 0.82em; color: #666; margin: 12px 0 -6px 0; font-style: italic; }
+        .key-point { background: #f8f9fa; border-left: 3px solid #1a5276; padding: 10px 14px; margin: 12px 0; font-size: 0.93em; }
+        .key-point strong:first-child { color: #1a5276; }
+        .lede { font-size: 0.95em; margin: 0 0 10px 0; }
+        .lbl { display: inline-block; font-size: 0.7em; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; margin: 10px 0 2px 0; }
+        .lbl-purpose { background: #eaf2fb; color: #1a5276; }
+        .lbl-effect { background: #fdf0e6; color: #a8501c; }
+        li b { color: #1a5276; font-weight: 600; }
+        canvas { display: block; margin: 0 auto; width: 100%; height: auto; }
+    </style>
+</head>
+<body>
+    <h1>Tracking Data: Face & Emotion Tracking</h1>
+    <p class="subtitle">A camera measures face geometry. Age, gender and emotion are classifier outputs computed from it — predictions with confidence scores, not properties read off the face.</p>
+
+    <table class="obj-table">
+        <tr>
+            <td>
+                <div class="obj-title">What is it?</div>
+                <p class="lede">A camera turns a face into numbers, then models turn the numbers into labels.</p>
+                <ul>
+                    <li><b>Embedding:</b> a vector encoding geometry — relative positions of eyes, nose and jaw, plus surrounding texture</li>
+                    <li><b>Matching:</b> comparing two embeddings gives a similarity score — how a phone recognises its owner, or a store system links a face to one seen last week</li>
+                    <li><b>Separate models</b> output an age bracket, a gender category, an expression category</li>
+                    <li><b>Each carries a confidence score</b>, because each is a prediction over a fixed list of trained options</li>
+                </ul>
+                <div class="key-point"><strong>Two different problems:</strong> matching one face against one enrolled template under controlled conditions is a well-posed measurement problem. Assigning an emotion word to a face is not a measurement at all — it is a classification into categories chosen by whoever built the training set.</div>
+            </td>
+            <td><canvas id="c1" width="720" height="320"></canvas></td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">What does it collect?</div>
+                <ul>
+                    <li><b>Face geometry</b>, stored as an embedding vector</li>
+                    <li><b>Bounding box</b> and a per-session track identifier</li>
+                    <li><b>Age bracket</b> — model output, with a confidence score</li>
+                    <li><b>Gender category</b> — model output, with a confidence score</li>
+                    <li><b>Expression label</b> — model output, with a confidence score</li>
+                    <li><b>Match flag</b> — whether a prior embedding fell within a threshold</li>
+                    <li><b>Head direction</b> relative to the display, and dwell time</li>
+                </ul>
+                <div class="key-point"><strong><code>emotion</code> is a model output:</strong> the camera observes an arrangement of facial muscles; the label maps that arrangement onto a category from a fixed list. Expression and internal state are different variables, and the record holds no evidence about the second. Any downstream count of "happy shoppers" is a count of classifier decisions.</div>
+            </td>
+            <td><canvas id="c2" width="720" height="320"></canvas>
+<p class="payload-note">Sample payload — illustrative structure, not real captured data.</p>
+<pre class="payload">// Reconstruction. Field names are generic — no single
+// published schema covers these systems.
+{
+  // ── inferred / plausible ──
+  "t":            "2026-08-22T13:07:55Z",
+  "camera_id":    "entr-02",
+  "track_id":     "tr_9f4c…",         // per-session, resets on loss of track
+  "bbox":         { "x": 610, "y": 288, "w": 122, "h": 122 },
+  "face_embedding": [0.041, -0.118, …],  // vector, not an image
+
+  // model outputs — each is a prediction with a score
+  "age_bracket":  "25-34",  "age_conf":     0.51,
+  "gender_pred":  "f",      "gender_conf":  0.78,
+  "emotion":      "happy",  "emotion_conf": 0.62,
+  "gaze_at_display": true,
+  "dwell_ms":     4300,
+  "reid_match":   null       // no prior embedding within threshold
+}</pre>
+</td>
+        </tr>
+        <tr>
+            <td>
+                <div class="obj-title">Why is it collected?</div>
+                <div class="lbl lbl-purpose">Stated purpose</div>
+                <ul>
+                    <li><b>Unlocking a phone</b> — one enrolled face, close range, cooperative pose, and no password to type</li>
+                    <li><b>Counting</b> — faces past a camera give a footfall figure broken down by direction and dwell</li>
+                </ul>
+                <div class="lbl lbl-effect">Additional consequence</div>
+                <ul>
+                    <li>The same pipeline <b>splits footfall by predicted age and gender</b>, and <b>recognises a return visit</b> with no account or card</li>
+                    <li>Those labels are a <b>by-product of running the detector</b> — the model emits them whether or not anyone asked</li>
+                </ul>
+                <div class="key-point"><strong>The split describes who the camera saw:</strong> enrolment is deliberate — the subject faces the sensor. A doorway camera gets whatever angle and light a path gives it, and detection usually works best on people who looked toward the lens. So an age or gender breakdown describes the subset the mounting favoured.</div>
+            </td>
+            <td><canvas id="c3" width="720" height="320"></canvas></td>
+        </tr>
+    </table>
+
+    <script>
+    const dpr = window.devicePixelRatio || 1;
+    // Validated categorical palette (CVD-checked, see REVIEW-NOTES.md).
+    // Red is deliberately NOT in the rotation - it stays reserved for
+    // genuine error / alarm states so it keeps its meaning.
+    const P = {
+      blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+      aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+      ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+    };
+    const SERIES = [P.blue, P.green, P.violet, P.orange, P.aqua, P.magenta, P.yellow];
+    // Rounded-rect path helper (works without native ctx.roundRect).
+    function rr(ctx, x, y, w, h, r) {
+      // Accepts a single radius or a [tl, tr, br, bl] array, matching the
+      // roundRect signature this replaces. A bare Math.min() on an array
+      // yields NaN and draws nothing, so the two forms are split here.
+      const lim = Math.min(Math.abs(w) / 2, Math.abs(h) / 2);
+      const a = Array.isArray(r) ? r : [r, r, r, r];
+      const tl = Math.min(a[0], lim), tr = Math.min(a[1], lim);
+      const br = Math.min(a[2], lim), bl = Math.min(a[3], lim);
+      ctx.beginPath();
+      ctx.moveTo(x + tl, y); ctx.lineTo(x + w - tr, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + tr);
+      ctx.lineTo(x + w, y + h - br);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - br, y + h);
+      ctx.lineTo(x + bl, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - bl);
+      ctx.lineTo(x, y + tl); ctx.quadraticCurveTo(x, y, x + tl, y);
+      ctx.closePath();
+    }
+
+    function setupCanvas(id) {
+        const c = document.getElementById(id);
+        const w = c.getAttribute('width') ? +c.getAttribute('width') : 720;
+        const h = c.getAttribute('height') ? +c.getAttribute('height') : 240;
+        c.style.maxWidth = w + 'px';
+        var __cssW = c.getBoundingClientRect().width || w;
+        var __scale = (__cssW / w) * dpr;
+        c.width = Math.round(w * __scale);
+        c.height = Math.round(h * __scale);
+        const ctx = c.getContext('2d');
+        ctx.scale(__scale, __scale);
+        return { ctx, w, h };
+    }
+
+    // C1: Face outline with measurement lines and detected attribute labels
+    (function() {
+        const { ctx, w, h } = setupCanvas('c1');
+        const cx = 220, cy = 120;
+
+        // Face oval
+        ctx.strokeStyle = P.blue;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, 65, 85, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Eyes
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(cx - 22, cy - 15, 14, 8, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.ellipse(cx + 22, cy - 15, 14, 8, 0, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Pupils
+        ctx.fillStyle = P.blue;
+        ctx.beginPath();
+        ctx.arc(cx - 22, cy - 15, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(cx + 22, cy - 15, 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Nose
+        ctx.strokeStyle = P.blue;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - 5);
+        ctx.lineTo(cx - 8, cy + 18);
+        ctx.lineTo(cx + 8, cy + 18);
+        ctx.stroke();
+
+        // Mouth (neutral line)
+        ctx.beginPath();
+        ctx.moveTo(cx - 18, cy + 35);
+        ctx.quadraticCurveTo(cx, cy + 38, cx + 18, cy + 35);
+        ctx.stroke();
+
+        // Measurement lines (dashed)
+        ctx.setLineDash([4, 3]);
+        ctx.strokeStyle = P.magenta;
+        ctx.lineWidth = 1.5;
+
+        // Eye distance measurement
+        ctx.beginPath();
+        ctx.moveTo(cx - 22, cy - 35);
+        ctx.lineTo(cx + 22, cy - 35);
+        ctx.stroke();
+        // Arrows on measurement
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(cx - 22, cy - 38);
+        ctx.lineTo(cx - 22, cy - 32);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx + 22, cy - 38);
+        ctx.lineTo(cx + 22, cy - 32);
+        ctx.stroke();
+
+        // Jaw width measurement
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(cx - 55, cy + 50);
+        ctx.lineTo(cx + 55, cy + 50);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(cx - 55, cy + 47);
+        ctx.lineTo(cx - 55, cy + 53);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx + 55, cy + 47);
+        ctx.lineTo(cx + 55, cy + 53);
+        ctx.stroke();
+
+        // Nose-to-chin measurement (vertical)
+        ctx.setLineDash([4, 3]);
+        ctx.strokeStyle = P.orange;
+        ctx.beginPath();
+        ctx.moveTo(cx + 50, cy + 18);
+        ctx.lineTo(cx + 50, cy + 85);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(cx + 47, cy + 18);
+        ctx.lineTo(cx + 53, cy + 18);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx + 47, cy + 85);
+        ctx.lineTo(cx + 53, cy + 85);
+        ctx.stroke();
+
+        // Detected attributes panel (right side)
+        ctx.fillStyle = 'rgba(42,120,214,0.35)';
+        rr(ctx, 380, 30, 300, 180, 8);
+        ctx.fill();
+        ctx.strokeStyle = P.blue;
+        ctx.lineWidth = 1.5;
+        rr(ctx, 380, 30, 300, 180, 8);
+        ctx.stroke();
+
+        ctx.fillStyle = P.blue;
+        ctx.font = 'bold 16px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('MEASURED GEOMETRY', 400, 54);
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.fillStyle = P.mute;
+        ctx.fillText('read from the image', 400, 68);
+
+        ctx.font = '16px -apple-system, sans-serif';
+        ctx.fillStyle = P.text;
+        const measured = [
+            { label: 'Eye spacing:', value: '44 px' },
+            { label: 'Jaw width:', value: '110 px' },
+            { label: 'Nose–chin:', value: '67 px' }
+        ];
+        measured.forEach((a, i) => {
+            const y = 88 + i * 22;
+            ctx.fillStyle = P.blue;
+            ctx.font = 'bold 15px -apple-system, sans-serif';
+            ctx.fillText(a.label, 400, y);
+            ctx.fillStyle = P.text;
+            ctx.font = '15px -apple-system, sans-serif';
+            ctx.fillText(a.value, 500, y);
+        });
+
+        // Divider between measured and predicted
+        ctx.strokeStyle = P.blue;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(400, 160);
+        ctx.lineTo(660, 160);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = P.orange;
+        ctx.font = 'bold 16px -apple-system, sans-serif';
+        ctx.fillText('MODEL OUTPUT', 400, 178);
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.fillStyle = P.mute;
+        ctx.fillText('predicted categories, not readings', 400, 192);
+
+        const predicted = [
+            { label: 'Age bracket:', value: '28–34' },
+            { label: 'Expression:', value: '"neutral"' }
+        ];
+        predicted.forEach((a, i) => {
+            const y = 210 + i * 20;
+            ctx.fillStyle = P.orange;
+            ctx.font = 'bold 15px -apple-system, sans-serif';
+            ctx.fillText(a.label, 400, y);
+            ctx.fillStyle = P.text;
+            ctx.font = '15px -apple-system, sans-serif';
+            ctx.fillText(a.value, 500, y);
+        });
+
+        // Measurement labels on the face
+        ctx.fillStyle = P.magenta;
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('44px', cx, cy - 42);
+        ctx.fillText('110px', cx, cy + 63);
+        ctx.fillStyle = P.orange;
+        ctx.fillText('67px', cx + 63, cy + 52);
+    })();
+
+    // C2: The inference gap — one measured expression, many possible internal states
+    (function() {
+        const { ctx, w, h } = setupCanvas('c2');
+
+        ctx.font = 'bold 16px -apple-system, sans-serif';
+        ctx.fillStyle = P.blue;
+        ctx.textAlign = 'center';
+        ctx.fillText('What is measured, what is returned, and what is not in the frame', w / 2, 20);
+
+        // --- Left: the measurement ---
+        const fx = 92, fy = 108;
+        ctx.fillStyle = 'rgba(42,120,214,0.12)';
+        ctx.beginPath();
+        ctx.arc(fx, fy, 40, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = P.blue;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(fx, fy, 40, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Eyes
+        ctx.fillStyle = P.text;
+        ctx.beginPath();
+        ctx.arc(fx - 13, fy - 10, 3.5, 0, Math.PI * 2);
+        ctx.arc(fx + 13, fy - 10, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+        // Upturned mouth — the muscle configuration, nothing more
+        ctx.strokeStyle = P.text;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(fx, fy + 4, 16, 0.15 * Math.PI, 0.85 * Math.PI);
+        ctx.stroke();
+
+        ctx.fillStyle = P.blue;
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('MEASURED', fx, fy + 62);
+        ctx.fillStyle = P.mute;
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillText('muscle configuration', fx, fy + 76);
+        ctx.fillText('(pixels, then geometry)', fx, fy + 88);
+
+        // --- Middle: the classifier ---
+        const mx = 262;
+        ctx.fillStyle = 'rgba(217,89,38,0.18)';
+        rr(ctx, mx - 52, fy - 34, 104, 68, 6);
+        ctx.fill();
+        ctx.strokeStyle = P.orange;
+        ctx.lineWidth = 1.5;
+        rr(ctx, mx - 52, fy - 34, 104, 68, 6);
+        ctx.stroke();
+
+        ctx.fillStyle = P.text;
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillText('classifier', mx, fy - 12);
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = P.mute;
+        ctx.fillText('fixed list of', mx, fy + 4);
+        ctx.fillText('categories', mx, fy + 16);
+
+        ctx.fillStyle = P.orange;
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillText('RETURNED', mx, fy + 62);
+        ctx.fillStyle = P.mute;
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillText('one label + a score', mx, fy + 76);
+        ctx.fillText('emotion: "happy", 0.62', mx, fy + 88);
+
+        // Arrow measured -> classifier
+        ctx.strokeStyle = P.grid;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(fx + 46, fy);
+        ctx.lineTo(mx - 60, fy);
+        ctx.stroke();
+        ctx.fillStyle = P.grid;
+        ctx.beginPath();
+        ctx.moveTo(mx - 60, fy);
+        ctx.lineTo(mx - 68, fy - 4);
+        ctx.lineTo(mx - 68, fy + 4);
+        ctx.closePath();
+        ctx.fill();
+
+        // --- Right: the states the label cannot separate ---
+        const states = [
+            'genuine amusement',
+            'social politeness',
+            'embarrassment',
+            'a habitual expression',
+            'posing for a camera'
+        ];
+        const sx = 470;
+        ctx.textAlign = 'left';
+        states.forEach(function(s, i) {
+            const y = 58 + i * 24;
+
+            // Dashed box: not evidenced by the frame
+            ctx.fillStyle = '#fff';
+            rr(ctx, sx, y - 13, 196, 20, 4);
+            ctx.fill();
+            ctx.strokeStyle = P.mute;
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 2]);
+            rr(ctx, sx, y - 13, 196, 20, 4);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            ctx.fillStyle = P.text;
+            ctx.font = '13px -apple-system, sans-serif';
+            ctx.fillText(s, sx + 8, y + 1);
+
+            // Fan line from the classifier box
+            ctx.strokeStyle = P.grid;
+            ctx.lineWidth = 1;
+            ctx.setLineDash([2, 3]);
+            ctx.beginPath();
+            ctx.moveTo(mx + 56, fy);
+            ctx.lineTo(sx - 6, y - 3);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        });
+
+        ctx.fillStyle = P.mute;
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('NOT DISTINGUISHED BY THE LABEL', sx + 98, 40);
+
+        // Bottom note
+        ctx.fillStyle = P.blue;
+        ctx.font = '14px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('The same configuration is consistent with all of these. The label picks one;', w / 2, h - 26);
+        ctx.fillText('the frame contains no evidence for the choice.', w / 2, h - 9);
+    })();
+
+    // C3: detection falls off with head angle, so the labelled set is not the crowd
+    (function() {
+        const { ctx, w, h } = setupCanvas('c3');
+
+        // 400 illustrative passers-by at one doorway camera, bucketed by how far
+        // the head was turned from the lens. Detection thins as the angle grows,
+        // so the records that carry age and gender labels over-represent the
+        // people who happened to look toward it.
+        const B = [
+            { lab: 'at the lens', past: 60,  seen: 57 },
+            { lab: '15° off',     past: 90,  seen: 79 },
+            { lab: '30° off',     past: 110, seen: 77 },
+            { lab: '45° off',     past: 80,  seen: 36 },
+            { lab: 'turned away', past: 60,  seen: 12 }
+        ];
+        const base = 236, maxH = 140, maxV = 110, x0 = 124, step = 118, bw = 64, iw = 38;
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.ink;
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillText('Who gets detected, by which way the head was turned', w / 2, 22);
+        ctx.fillStyle = P.mute;
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillText('400 people past one doorway camera', w / 2, 40);
+
+        // legend
+        let lx = 232;
+        const legend = [
+            ['rgba(42,120,214,0.18)', P.blue, 'walked past'],
+            ['rgba(0,131,0,0.45)', P.green, 'detected and labelled']
+        ];
+        ctx.textAlign = 'left';
+        ctx.font = '12px -apple-system, sans-serif';
+        legend.forEach(([fill, line, txt]) => {
+            ctx.fillStyle = fill; ctx.fillRect(lx, 52, 12, 12);
+            ctx.strokeStyle = line; ctx.lineWidth = 1; ctx.strokeRect(lx, 52, 12, 12);
+            ctx.fillStyle = P.text;
+            ctx.fillText(txt, lx + 17, 62);
+            lx += 17 + txt.length * 6.5 + 22;
+        });
+
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(30, base); ctx.lineTo(w - 30, base); ctx.stroke();
+
+        B.forEach((b, i) => {
+            const cx = x0 + i * step;
+            const ph = (b.past / maxV) * maxH, sh = (b.seen / maxV) * maxH;
+            ctx.fillStyle = 'rgba(42,120,214,0.18)';
+            ctx.fillRect(cx - bw / 2, base - ph, bw, ph);
+            ctx.strokeStyle = P.blue; ctx.lineWidth = 1;
+            ctx.strokeRect(cx - bw / 2, base - ph, bw, ph);
+            ctx.fillStyle = 'rgba(0,131,0,0.45)';
+            ctx.fillRect(cx - iw / 2, base - sh, iw, sh);
+            ctx.strokeStyle = P.green;
+            ctx.strokeRect(cx - iw / 2, base - sh, iw, sh);
+
+            ctx.textAlign = 'center';
+            ctx.fillStyle = P.green;
+            ctx.font = 'bold 12px -apple-system, sans-serif';
+            ctx.fillText(Math.round(100 * b.seen / b.past) + '%', cx, base - ph - 8);
+            ctx.fillStyle = P.text;
+            ctx.font = '12px -apple-system, sans-serif';
+            ctx.fillText(b.lab, cx, base + 18);
+        });
+
+        ctx.fillStyle = P.mute;
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillText('head angle away from the lens', w / 2, base + 38);
+
+        ctx.font = 'italic 12px -apple-system, sans-serif';
+        ctx.fillStyle = P.text;
+        ctx.fillText('Within 15° of the lens: 38% of the people who walked past, 52% of the labelled records.', w / 2, h - 26);
+        ctx.fillStyle = P.mute;
+        ctx.font = 'italic 11px -apple-system, sans-serif';
+        ctx.fillText('Illustrative — the rates show the shape, not a tested camera.', w / 2, h - 9);
+    })();
+
+    </script>
+</body>
+</html>
