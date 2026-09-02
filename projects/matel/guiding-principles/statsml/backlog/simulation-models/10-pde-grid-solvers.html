@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDE Solvers — Physics on a Mesh</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #fff;
+            color: #2c3e50;
+            padding: 40px;
+            line-height: 1.6;
+        }
+        h1 {
+            font-size: 2rem;
+            color: #1a5276;
+            margin-bottom: 8px;
+            border-bottom: 2px solid #2980b9;
+            padding-bottom: 8px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 32px;
+            font-size: 0.95rem;
+        }
+        .intro {
+            background: #f0f4f8;
+            border-left: 3px solid #2980b9;
+            padding: 8px 12px;
+            margin-bottom: 32px;
+            font-size: 0.9rem;
+        }
+        .lang-section {
+            margin-bottom: 40px;
+        }
+        .lang-section h2 {
+            font-size: 1.3rem;
+            color: #1a5276;
+            margin-bottom: 12px;
+            border-bottom: 2px solid #2980b9;
+            padding-bottom: 4px;
+        }
+        table.layout {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+        }
+        table.layout td {
+            vertical-align: top;
+            padding: 12px;
+        }
+        table.layout td.text-col {
+            width: 50%;
+        }
+        table.layout td.viz-col {
+            width: 50%;
+        }
+        canvas {
+            width: 100%;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px; height: auto; }
+        .key-point {
+            background: #f8f9fa;
+            border-left: 3px solid #e74c3c;
+            padding: 8px 12px;
+            margin-top: 12px;
+            font-size: 0.9rem;
+        }
+        ul {
+            margin: 8px 0 8px 20px;
+            font-size: 0.92rem;
+        }
+        li { margin-bottom: 4px; }
+        li strong { color: #1a5276; }
+    </style>
+</head>
+<body>
+    <h1>PDE Solvers — Physics on a Mesh</h1>
+    <p class="subtitle">Continuous physics — heat, air, steel — chopped onto a mesh of cells that only talk to their neighbors: how the machine works, why it explodes, and what it cannot see.</p>
+
+    <div class="intro">Weather forecasts, car crash tests, and wing design all run on one idea: the laws of physics only say how each point responds to its immediate surroundings, so chop space into cells, let each cell trade with its neighbors, and step time forward in small ticks. This page builds that machine by hand on a six-cell metal rod, then shows the two ways it bites: a tick that is too big does not blur the answer — it detonates it — and any detail smaller than a cell was never simulated at all.</div>
+
+<div class="lang-section">
+    <h2>1. Chop the world into cells</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>The rules behind weather, crashes, and airflow tie how things change in time to how they vary across space (partial differential equations), and for real shapes those rules have no formula answer — so space becomes a mesh of cells and time becomes small steps.</p>
+                <ul>
+                    <li><strong>The rule is local:</strong> Heat, pressure, and stress at a point respond only to conditions right next door.</li>
+                    <li><strong>No formula answer:</strong> A real shape like a car body has no exact pencil-and-paper solution.</li>
+                    <li><strong>Cells replace space:</strong> Space becomes a mesh of small boxes, each storing one number per quantity.</li>
+                    <li><strong>Steps replace time:</strong> Time advances in small ticks, and every cell updates once per tick.</li>
+                    <li><strong>Neighbors only:</strong> At each tick, a cell looks only at its immediate neighbors to decide its new value.</li>
+                    <li><strong>Influence hops:</strong> A distant disturbance reaches a cell only by hopping across cells, one hop per tick.</li>
+                    <li><strong>One recipe, many physics:</strong> The same chop-and-step recipe (finite differences) handles heat, waves, and flow.</li>
+                </ul>
+                <div class="key-point">A mesh solver never sees the smooth world — it sees one number per cell, and everything it predicts is built from neighbor-to-neighbor bookkeeping.</div>
+            </td>
+            <td class="viz-col"><canvas id="c1" width="720" height="360"></canvas></td>
+        </tr>
+    </table>
+</div>
+
+<div class="lang-section">
+    <h2>2. Heat on a rod, by hand</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Take a metal rod chopped into 6 cells, put all the heat in cell 1 at 96 degrees, and apply one rule per tick: every interior cell moves halfway toward the average of its two neighbors, and each insulated end cell moves a quarter of the way toward its single neighbor.</p>
+                <ul>
+                    <li><strong>Start (tick 0):</strong> The cells read 96, 0, 0, 0, 0, 0 — all the heat sits in cell 1.</li>
+                    <li><strong>The update rule:</strong> Each tick, a cell moves halfway toward the average of its two neighbors.</li>
+                    <li><strong>Insulated ends:</strong> An end cell moves a quarter of the way toward its single neighbor.</li>
+                    <li><strong>Tick 1:</strong> Cell 1 drops to 72 and cell 2 rises to 24 — the heat has hopped one cell.</li>
+                    <li><strong>Tick 2:</strong> The rod reads 60, 30, 6, 0, 0, 0 — the warm front hops again.</li>
+                    <li><strong>Tick 3:</strong> The rod reads 52.5, 31.5, 10.5, 1.5, 0, 0 — the profile keeps smoothing out.</li>
+                    <li><strong>Heat is conserved:</strong> Every row sums to exactly 96 — the rule moves heat, it never creates it.</li>
+                </ul>
+                <div class="key-point">Three ticks of grade-school arithmetic already show heat diffusing down a rod — a supercomputer weather run is this same neighbor averaging, repeated over billions of cells and thousands of ticks.</div>
+            </td>
+            <td class="viz-col"><canvas id="c2" width="720" height="360"></canvas></td>
+        </tr>
+    </table>
+</div>
+
+<div class="lang-section">
+    <h2>3. The speed limit of the timestep</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>If the tick is too big for the cell size, each cell leaps past its neighbors' average instead of settling toward it, the overshoots compound, and the run explodes — there is a hard speed limit tying the tick to the cell size (the CFL condition).</p>
+                <ul>
+                    <li><strong>Overshoot, not blur:</strong> With a tick three times too big, cell 1 leaps from 96 down to 24 in one step.</li>
+                    <li><strong>Past the target:</strong> The rule should stop at the neighbor average, but the oversized tick jumps far beyond it.</li>
+                    <li><strong>Wiggles feed themselves:</strong> Every overshoot creates a bigger imbalance for the next tick to overshoot.</li>
+                    <li><strong>Explosion, not noise:</strong> Within eight ticks the end cell swings to −147° and then +304° — physically meaningless.</li>
+                    <li><strong>A hard threshold:</strong> A tick even slightly over the limit still explodes, just a few ticks later.</li>
+                    <li><strong>Cells set the tick:</strong> Halving the cell size forces a smaller safe tick too, so resolution is paid twice.</li>
+                    <li><strong>3D is brutal:</strong> Halving cells in three dimensions means 8x the cells before the smaller tick is even counted.</li>
+                </ul>
+                <div class="key-point">The stability limit is a cliff, not a slope — solvers compute the largest safe tick from the cell size and the physics, because guessing even slightly high turns the entire run into garbage.</div>
+            </td>
+            <td class="viz-col"><canvas id="c3" width="720" height="380"></canvas></td>
+        </tr>
+    </table>
+</div>
+
+<div class="lang-section">
+    <h2>4. Meshes in the wild</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>The same cells-and-ticks recipe runs the world's biggest simulations, and the practical skill is knowing what a given mesh can and cannot resolve.</p>
+                <ul>
+                    <li><strong>Weather:</strong> Global forecast models carve the atmosphere into boxes roughly 10 km on a side.</li>
+                    <li><strong>Below the boxes:</strong> Individual clouds are smaller than a box, so they are hand-modeled, not simulated.</li>
+                    <li><strong>Crash tests:</strong> A car body panel becomes a mesh of tiny triangles (finite elements) that bend and tear.</li>
+                    <li><strong>Airflow:</strong> Air over a wing becomes cells trading pressure and flow with neighbors (finite volumes).</li>
+                    <li><strong>The artifact rule:</strong> Any feature about the size of one or two cells is grid noise, not physics.</li>
+                    <li><strong>Common mistake:</strong> Zooming into a simulation and trusting a swirl that is three cells wide.</li>
+                    <li><strong>Refinement test:</strong> Rerun on a finer mesh — real features stay put, mesh artifacts move or vanish.</li>
+                </ul>
+                <div class="key-point">Trust nothing within a few cells of the mesh resolution — if a feature survives a mesh-refinement rerun it is physics, and if it changes it was the grid talking.</div>
+            </td>
+            <td class="viz-col"><canvas id="c4" width="720" height="380"></canvas></td>
+        </tr>
+    </table>
+</div>
+
+    <script>
+    const dpr = window.devicePixelRatio || 1;
+    function setupCanvas(id, hh) {
+        const c = document.getElementById(id);
+        const w = 720, h = hh;
+        c.style.maxWidth = w + 'px';
+        var __cssW = c.getBoundingClientRect().width || w;
+        var __scale = (__cssW / w) * dpr;
+        c.width = Math.round(w * __scale);
+        c.height = Math.round(h * __scale);
+        const ctx = c.getContext('2d');
+        ctx.scale(__scale, __scale);
+        return { ctx, w, h };
+    }
+
+    // C1: Smooth heat profile vs its staircase mesh version
+    (function() {
+        const { ctx, w, h } = setupCanvas('c1', 360);
+
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('One smooth reality, one staircase copy — what the solver actually sees', w / 2, 22);
+
+        // staircase cells (under the curve)
+        const cellTops = [114, 172, 212, 240, 258, 271, 280, 286];
+        const cellW = 72.5;
+        cellTops.forEach((top, i) => {
+            const x = 70 + i * cellW;
+            ctx.fillStyle = 'rgba(26,82,118,0.12)';
+            ctx.fillRect(x, top, cellW, 300 - top);
+            ctx.strokeStyle = '#1a5276';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x, top, cellW, 300 - top);
+        });
+
+        // baseline axis
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(60, 300);
+        ctx.lineTo(660, 300);
+        ctx.stroke();
+        ctx.fillStyle = '#999';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillText('position along the rod →', 360, 320);
+
+        // smooth curve
+        const smooth = [[70, 75], [128, 133], [186, 177], [244, 209], [302, 232], [360, 250], [418, 263], [476, 272], [534, 280], [592, 285], [650, 289]];
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        smooth.forEach((p, i) => { if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]); });
+        ctx.stroke();
+
+        // labels
+        ctx.fillStyle = '#27ae60';
+        ctx.font = 'bold 10px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('smooth reality', 135, 95);
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('one number per cell', 470, 245);
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(470, 250);
+        ctx.lineTo(470, 268);
+        ctx.stroke();
+
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.fillText('Illustrative heat profile — the solver keeps one number per cell; the curve between cells is gone', w / 2, h - 14);
+    })();
+
+    // C2: Six-cell rod, ticks 0-3 — grouped bars of the hand-computed values
+    (function() {
+        const { ctx, w, h } = setupCanvas('c2', 360);
+
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('The six-cell rod, ticks 0–3 — heat evening out cell by cell', w / 2, 22);
+
+        // baseline axis
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(60, 300);
+        ctx.lineTo(660, 300);
+        ctx.stroke();
+
+        // temperature per cell at ticks 0/1/2/3 (exact hand-computed values)
+        const cells = [
+            [96, 72, 60, 52.5],
+            [0, 24, 30, 31.5],
+            [0, 0, 6, 10.5],
+            [0, 0, 0, 1.5],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0]
+        ];
+        const tickColors = ['#1a5276', '#2980b9', '#27ae60', '#e67e22'];
+        const scale = 2.2;
+
+        cells.forEach((vals, ci) => {
+            const gx = 80 + ci * 95;
+            let allZero = true;
+            vals.forEach((v, ti) => {
+                if (v > 0) {
+                    allZero = false;
+                    const ht = v * scale;
+                    const bx = gx + ti * 21;
+                    ctx.fillStyle = tickColors[ti];
+                    ctx.fillRect(bx, 300 - ht, 20, ht);
+                    ctx.fillStyle = '#666';
+                    ctx.font = '9px -apple-system, sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(String(v), bx + 10, 300 - ht - 4);
+                }
+            });
+            if (allZero) {
+                ctx.fillStyle = '#999';
+                ctx.font = '9px -apple-system, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('all 0', gx + 41.5, 292);
+            }
+            ctx.fillStyle = '#555';
+            ctx.font = 'bold 11px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('cell ' + (ci + 1), gx + 41.5, 320);
+        });
+
+        // legend
+        const legend = ['tick 0', 'tick 1', 'tick 2', 'tick 3'];
+        legend.forEach((label, i) => {
+            const ly = 48 + i * 16;
+            ctx.fillStyle = tickColors[i];
+            ctx.fillRect(560, ly - 10, 12, 12);
+            ctx.fillStyle = '#666';
+            ctx.font = '10px -apple-system, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(label, 578, ly);
+        });
+
+        ctx.textAlign = 'center';
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.fillText('Halfway-to-the-neighbor-average rule; every tick the six cells still sum to 96', w / 2, h - 14);
+    })();
+
+    // C3: Cell-1 temperature over ticks — safe tick relaxes, 3x tick explodes
+    (function() {
+        const { ctx, w, h } = setupCanvas('c3', 380);
+
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Same rod, two tick sizes — one relaxes, one explodes', w / 2, 22);
+
+        // x = 90 + 65t, y = 210 - 0.45v
+        // zero line
+        ctx.strokeStyle = '#bbb';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(70, 210);
+        ctx.lineTo(650, 210);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#999';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText('0°', 66, 214);
+
+        // tick labels
+        ctx.textAlign = 'center';
+        for (let t = 0; t <= 8; t++) {
+            ctx.fillText(String(t), 90 + 65 * t, 318);
+        }
+        ctx.fillText('ticks →', 360, 340);
+
+        // stability limit line at value 96 (y = 167)
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.moveTo(70, 167);
+        ctx.lineTo(650, 167);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('96° — hottest the rod ever really was', 395, 160);
+
+        function series(pts, color) {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            pts.forEach((p, i) => { if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]); });
+            ctx.stroke();
+            ctx.fillStyle = color;
+            pts.forEach(p => {
+                ctx.beginPath();
+                ctx.arc(p[0], p[1], 3, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        // safe tick: 96, 72, 60, 52.5, 47.2, 43.3, 40.2, 37.7, 35.6
+        series([[90, 167], [155, 178], [220, 183], [285, 186], [350, 189], [415, 190], [480, 192], [545, 193], [610, 194]], '#27ae60');
+        // tick 3x too big: 96, 24, 60, 1.5, 71.2, -39.6, 127.2, -146.8, 303.9
+        series([[90, 167], [155, 199], [220, 183], [285, 209], [350, 178], [415, 228], [480, 153], [545, 276], [610, 73]], '#e74c3c');
+
+        // legend
+        const legend = [
+            { color: '#27ae60', label: 'safe tick — moves halfway to the neighbor average' },
+            { color: '#e74c3c', label: 'tick 3x too big — overshoots every step' }
+        ];
+        legend.forEach((l, i) => {
+            const ly = 48 + i * 16;
+            ctx.strokeStyle = l.color;
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.moveTo(80, ly - 4);
+            ctx.lineTo(98, ly - 4);
+            ctx.stroke();
+            ctx.fillStyle = '#666';
+            ctx.font = '10px -apple-system, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(l.label, 104, ly);
+        });
+
+        // annotation
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('−147°, then +304° — numbers from nowhere', 480, 100);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(555, 106);
+        ctx.lineTo(600, 80);
+        ctx.stroke();
+
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.fillText('Exact simulated values — past the stability limit the run detonates, it does not degrade', w / 2, h - 14);
+    })();
+
+    // C4: Same bump on a coarse 7-cell mesh vs a fine 28-cell mesh
+    (function() {
+        const { ctx, w, h } = setupCanvas('c4', 380);
+
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Same bump, two meshes — the coarse grid clips and smears it', w / 2, 22);
+
+        // coarse cells (left panel)
+        const coarse = [0, 2, 48, 124, 48, 2, 0];
+        coarse.forEach((ht, i) => {
+            if (ht > 0) {
+                const x = 60 + i * 40;
+                ctx.fillStyle = 'rgba(231,76,60,0.18)';
+                ctx.fillRect(x, 300 - ht, 40, ht);
+                ctx.strokeStyle = '#e74c3c';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(x, 300 - ht, 40, ht);
+            }
+        });
+
+        // fine cells (right panel)
+        const fine = [0, 0, 0, 0, 0, 1, 2, 5, 13, 29, 55, 90, 125, 147, 147, 125, 90, 55, 29, 13, 5, 2, 1, 0, 0, 0, 0, 0];
+        fine.forEach((ht, i) => {
+            if (ht > 0) {
+                const x = 390 + i * 10;
+                ctx.fillStyle = 'rgba(26,82,118,0.35)';
+                ctx.fillRect(x, 300 - ht, 10, ht);
+                ctx.strokeStyle = '#1a5276';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(x, 300 - ht, 10, ht);
+            }
+        });
+
+        // baselines
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(60, 300);
+        ctx.lineTo(340, 300);
+        ctx.moveTo(390, 300);
+        ctx.lineTo(670, 300);
+        ctx.stroke();
+
+        // true bump curves
+        function poly(pts) {
+            ctx.strokeStyle = '#555';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            pts.forEach((p, i) => { if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]); });
+            ctx.stroke();
+        }
+        poly([[60, 300], [100, 300], [140, 292], [160, 259], [180, 192], [200, 150], [220, 192], [240, 259], [260, 292], [300, 300], [340, 300]]);
+        poly([[390, 300], [430, 300], [470, 292], [490, 259], [510, 192], [530, 150], [550, 192], [570, 259], [590, 292], [630, 300], [670, 300]]);
+
+        // panel labels
+        ctx.fillStyle = '#555';
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillText('coarse mesh — 7 cells', 200, 332);
+        ctx.fillText('fine mesh — 28 cells', 530, 332);
+
+        // left annotation
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillText('true peak 150, coarse mesh says 124', 200, 112);
+        ctx.fillText('cell-sized features are fiction', 200, 128);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(200, 134);
+        ctx.lineTo(200, 146);
+        ctx.stroke();
+
+        // right annotation
+        ctx.fillStyle = '#27ae60';
+        ctx.font = 'bold 10px -apple-system, sans-serif';
+        ctx.fillText('fine mesh tracks it', 530, 120);
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(530, 126);
+        ctx.lineTo(530, 148);
+        ctx.stroke();
+
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.fillText('Illustrative bump — anything near the size of a cell is an artifact of the mesh, not the physics', w / 2, h - 14);
+    })();
+    </script>
+</body>
+</html>

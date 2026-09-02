@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wildfire &amp; Flood Spread — Fire Over Fuel, Water Over Terrain</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #fff;
+            color: #2c3e50;
+            padding: 40px;
+            line-height: 1.6;
+        }
+        h1 {
+            font-size: 2rem;
+            color: #1a5276;
+            margin-bottom: 8px;
+            border-bottom: 2px solid #2980b9;
+            padding-bottom: 8px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 32px;
+            font-size: 0.95rem;
+        }
+        .intro {
+            background: #f0f4f8;
+            border-left: 3px solid #2980b9;
+            padding: 8px 12px;
+            margin-bottom: 32px;
+            font-size: 0.9rem;
+        }
+        .lang-section {
+            margin-bottom: 40px;
+        }
+        .lang-section h2 {
+            font-size: 1.3rem;
+            color: #1a5276;
+            margin-bottom: 12px;
+            border-bottom: 2px solid #2980b9;
+            padding-bottom: 4px;
+        }
+        table.layout {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+        }
+        table.layout td {
+            vertical-align: top;
+            padding: 12px;
+        }
+        table.layout td.text-col {
+            width: 50%;
+        }
+        table.layout td.viz-col {
+            width: 50%;
+        }
+        canvas {
+            width: 100%;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px; height: auto; }
+        .key-point {
+            background: #f8f9fa;
+            border-left: 3px solid #e74c3c;
+            padding: 8px 12px;
+            margin-top: 12px;
+            font-size: 0.9rem;
+        }
+        ul {
+            margin: 8px 0 8px 20px;
+            font-size: 0.92rem;
+        }
+        li { margin-bottom: 4px; }
+        li strong { color: #1a5276; }
+    </style>
+</head>
+<body>
+    <h1>Wildfire &amp; Flood Spread</h1>
+    <p class="subtitle">Both are spread processes over a landscape grid — fire propagates by fuel, wind, and slope; water routes downhill over elevation data — and both inherit their biggest uncertainty from the weather forecast upstream.</p>
+
+    <div class="intro">Wildfire and flood models share a shape: a physical spread rule applied cell by cell over terrain, driven by a weather forecast, feeding an evacuation decision with a hard deadline. The fire rule is combustion physics over a fuel map; the flood rule is water flowing downhill over an elevation grid. In both cases the model is only the middle of a chain — the weather forecast feeds it, and a go/no-go evacuation call consumes it.</div>
+
+<div class="lang-section">
+    <h2>1. Fire behavior: fuel, wind, slope</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Operational fire models descend from the Rothermel line of spread-rate models: given fuel type, fuel moisture, wind speed, and slope, compute how fast the fire line advances.</p>
+                <ul>
+                    <li><strong>Rothermel line:</strong> spread rate is computed from fuel, moisture, wind, and slope.</li>
+                    <li><strong>Uphill acceleration:</strong> flames preheat the fuel above them, so fire runs upslope.</li>
+                    <li><strong>Wind alignment:</strong> spread is fastest where wind and slope push the same way.</li>
+                    <li><strong>Elliptical growth:</strong> the perimeter grows as an ellipse stretched downwind.</li>
+                    <li><strong>Huygens wavefront:</strong> each perimeter point spawns its own small ellipse.</li>
+                    <li><strong>Stale inputs:</strong> fuel maps and moisture estimates lag the real landscape.</li>
+                    <li><strong>The output:</strong> perimeter positions by the hour for crews and planners.</li>
+                </ul>
+                <div class="key-point">The physics is local and simple — rate of spread per cell — but the inputs are perpetually stale: the fuel map was surveyed years ago, and the moisture estimate is an interpolation. The model is exact arithmetic on approximate ground truth.</div>
+            </td>
+            <td class="viz-col"><canvas id="c1" width="720" height="360"></canvas></td>
+        </tr>
+    </table>
+</div>
+
+<div class="lang-section">
+    <h2>2. Coupled to weather — and to itself</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>The fire model's largest input is the weather forecast, and its largest omission is the fire's own effect on that weather.</p>
+                <ul>
+                    <li><strong>Inherited uncertainty:</strong> a wind shift redraws the entire spread map.</li>
+                    <li><strong>Forecast dependence:</strong> the fire forecast is only as good as the weather feed.</li>
+                    <li><strong>Ember spotting:</strong> lofted embers ignite new fires far ahead of the front.</li>
+                    <li><strong>Broken assumption:</strong> spotting breaks the smooth-wavefront picture entirely.</li>
+                    <li><strong>Fire-made weather:</strong> pyroconvective plumes generate their own winds.</li>
+                    <li><strong>Omitted feedback:</strong> most operational models leave that coupling out.</li>
+                    <li><strong>Ensembles:</strong> many wind scenarios yield burn-probability maps, not one line.</li>
+                </ul>
+                <div class="key-point">A single predicted perimeter is a statement about one wind forecast; an ensemble of wind scenarios turns the same model into a burn-probability map — the honest product when the dominant input is itself uncertain.</div>
+            </td>
+            <td class="viz-col"><canvas id="c2" width="720" height="380"></canvas></td>
+        </tr>
+    </table>
+</div>
+
+<div class="lang-section">
+    <h2>3. Floods: routing water over a grid</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Flood forecasting is a two-stage chain: rainfall-runoff hydrology converts forecast rain into river inflow, then hydraulic models route that water over elevation grids to map inundation.</p>
+                <ul>
+                    <li><strong>Two-stage chain:</strong> rainfall-runoff hydrology feeds hydraulic routing.</li>
+                    <li><strong>Runoff models:</strong> forecast rain becomes river inflow via the catchment model.</li>
+                    <li><strong>Hydraulic routing:</strong> water is routed downhill over a digital elevation grid.</li>
+                    <li><strong>The output:</strong> inundation depth, cell by cell, across the floodplain.</li>
+                    <li><strong>Terrain dominates:</strong> small elevation errors flip neighborhoods wet or dry.</li>
+                    <li><strong>"100-year" misread:</strong> it means 1% chance in any year, not once a century.</li>
+                    <li><strong>Back-to-back floods:</strong> independent 1% draws can land in consecutive years.</li>
+                </ul>
+                <div class="key-point">The hydraulics is mature; the risk lives in the inputs. Elevation data quality decides which houses the map shows wet, and the "100-year flood" label misleads anyone who reads it as a schedule rather than a 1%-per-year probability.</div>
+            </td>
+            <td class="viz-col"><canvas id="c3" width="720" height="380"></canvas></td>
+        </tr>
+    </table>
+</div>
+
+<div class="lang-section">
+    <h2>4. From model to evacuation</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>The deliverable is not a map; it is a decision with a deadline — evacuate or hold — and the model earns its keep only if its warning outruns the evacuation itself.</p>
+                <ul>
+                    <li><strong>The real output:</strong> a decision with a deadline, not a prettier map.</li>
+                    <li><strong>Trigger points:</strong> pre-committed thresholds turn forecasts into orders.</li>
+                    <li><strong>Fire example:</strong> the fire crossing line X issues the evacuation automatically.</li>
+                    <li><strong>Flood example:</strong> river stage Y triggers the siren, not another meeting.</li>
+                    <li><strong>Lead-time test:</strong> model warning time must exceed total evacuation time.</li>
+                    <li><strong>Decoration risk:</strong> a perfect forecast that arrives late is worth nothing.</li>
+                    <li><strong>Asymmetric costs:</strong> false alarms are expensive; misses are catastrophic.</li>
+                </ul>
+                <div class="key-point">Trigger points move the decision out of the panic window: the argument about when to evacuate happens calmly, in advance, and the model's job narrows to one question — will the trigger be crossed, and how long before impact?</div>
+            </td>
+            <td class="viz-col"><canvas id="c4" width="720" height="340"></canvas></td>
+        </tr>
+    </table>
+</div>
+
+    <script>
+    const dpr = window.devicePixelRatio || 1;
+    function setupCanvas(id, hh) {
+        const c = document.getElementById(id);
+        const w = 720, h = hh;
+        c.style.maxWidth = w + 'px';
+        var __cssW = c.getBoundingClientRect().width || w;
+        var __scale = (__cssW / w) * dpr;
+        c.width = Math.round(w * __scale);
+        c.height = Math.round(h * __scale);
+        const ctx = c.getContext('2d');
+        ctx.scale(__scale, __scale);
+        return { ctx, w, h };
+    }
+
+    // C1: Terrain side-profile — hourly fire positions spread apart on the uphill, downwind side
+    (function() {
+        const { ctx, w, h } = setupCanvas('c1', 360);
+
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Fire runs uphill and downwind — hourly perimeter positions spread apart', w / 2, 22);
+
+        function terrain(x) {
+            return x <= 300 ? 300 - 0.112 * (x - 50) : 272 - 0.3784 * (x - 300);
+        }
+
+        // terrain fill + top edge
+        ctx.fillStyle = 'rgba(26,82,118,0.12)';
+        ctx.beginPath();
+        ctx.moveTo(50, 300);
+        ctx.lineTo(300, 272);
+        ctx.lineTo(670, 132);
+        ctx.lineTo(670, 320);
+        ctx.lineTo(50, 320);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(50, 300);
+        ctx.lineTo(300, 272);
+        ctx.lineTo(670, 132);
+        ctx.stroke();
+
+        // hourly flame markers
+        const hours = [[120, '0h'], [190, '1h'], [280, '2h'], [400, '3h'], [560, '4h']];
+        hours.forEach(hr => {
+            const x = hr[0], ty = terrain(x);
+            ctx.fillStyle = '#e74c3c';
+            ctx.beginPath();
+            ctx.moveTo(x - 6, ty);
+            ctx.lineTo(x + 6, ty);
+            ctx.lineTo(x, ty - 16);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = '#666';
+            ctx.font = '10px -apple-system, sans-serif';
+            ctx.fillText(hr[1], x, ty + 16);
+        });
+
+        // wind arrow
+        ctx.strokeStyle = '#2980b9';
+        ctx.fillStyle = '#2980b9';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(140, 70);
+        ctx.lineTo(290, 70);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(290, 70);
+        ctx.lineTo(279, 64);
+        ctx.lineTo(279, 76);
+        ctx.fill();
+        ctx.textAlign = 'left';
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillText('wind', 300, 74);
+
+        // slope annotation
+        ctx.fillStyle = '#e67e22';
+        ctx.fillText('flames preheat the fuel upslope —', 330, 190);
+        ctx.fillText('equal hours, widening distance', 330, 206);
+        ctx.strokeStyle = '#e67e22';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(455, 212);
+        ctx.lineTo(480, 236);
+        ctx.stroke();
+
+        ctx.textAlign = 'center';
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.fillText('Same fire, same hours — the uphill, downwind side covers more ground every hour', w / 2, h - 14);
+    })();
+
+    // C2: Top-down map — two wind scenarios fan out from one ignition; the union is the planning zone
+    (function() {
+        const { ctx, w, h } = setupCanvas('c2', 380);
+
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Two wind scenarios, two futures — the union is the burn-probability zone', w / 2, 22);
+
+        // map frame
+        ctx.fillStyle = '#fdfdfd';
+        ctx.fillRect(40, 44, 640, 280);
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(40, 44, 640, 280);
+
+        // fire fans (clipped to the map frame)
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(40, 44, 640, 280);
+        ctx.clip();
+        // scenario A
+        ctx.beginPath();
+        ctx.ellipse(341, 131, 200, 72, -0.30, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(230,126,34,0.30)';
+        ctx.fill();
+        ctx.strokeStyle = '#e67e22';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        // scenario B
+        ctx.beginPath();
+        ctx.ellipse(344, 238, 200, 72, 0.25, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(231,76,60,0.25)';
+        ctx.fill();
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.restore();
+
+        // ignition
+        ctx.fillStyle = '#555';
+        ctx.beginPath();
+        ctx.arc(150, 190, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillText('ignition', 150, 212);
+
+        // wind legend
+        function arrow(x1, y1, x2, y2, color) {
+            ctx.strokeStyle = color;
+            ctx.fillStyle = color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+            const ang = Math.atan2(y2 - y1, x2 - x1);
+            ctx.beginPath();
+            ctx.moveTo(x2, y2);
+            ctx.lineTo(x2 - 9 * Math.cos(ang - 0.4), y2 - 9 * Math.sin(ang - 0.4));
+            ctx.lineTo(x2 - 9 * Math.cos(ang + 0.4), y2 - 9 * Math.sin(ang + 0.4));
+            ctx.fill();
+        }
+        arrow(520, 66, 552, 56, '#e67e22');
+        arrow(520, 90, 552, 98, '#e74c3c');
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#666';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillText('wind scenario A', 560, 62);
+        ctx.fillText('wind scenario B', 560, 94);
+
+        // spot fire
+        ctx.strokeStyle = '#8e44ad';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(520, 105);
+        ctx.lineTo(584, 98);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#e74c3c';
+        ctx.beginPath();
+        ctx.arc(588, 96, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#8e44ad';
+        ctx.font = 'bold 10px -apple-system, sans-serif';
+        ctx.fillText('spot fire — ember ignition', 640, 130);
+        ctx.fillText('beyond the modeled front', 640, 143);
+
+        // union note
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#666';
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillText('darker overlap burns under both winds — the union is the planning zone', 360, 344);
+
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.fillText('One model, an ensemble of winds — probability contours instead of a single confident perimeter', w / 2, h - 14);
+    })();
+
+    // C3: Valley cross-section — stacked water levels labeled by annual exceedance probability
+    (function() {
+        const { ctx, w, h } = setupCanvas('c3', 380);
+
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('One valley, three water levels — each labeled by annual probability, not by schedule', w / 2, 22);
+
+        // terrain cross-section
+        const profile = [[50, 120], [160, 240], [300, 255], [320, 300], [400, 300], [420, 255], [560, 240], [670, 110]];
+        ctx.fillStyle = '#f8f9fa';
+        ctx.beginPath();
+        profile.forEach((p, i) => { if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]); });
+        ctx.lineTo(670, 340);
+        ctx.lineTo(50, 340);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#555';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        profile.forEach((p, i) => { if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]); });
+        ctx.stroke();
+
+        // normal water in the channel
+        ctx.fillStyle = 'rgba(26,82,118,0.35)';
+        ctx.beginPath();
+        ctx.moveTo(312, 282);
+        ctx.lineTo(408, 282);
+        ctx.lineTo(400, 300);
+        ctx.lineTo(320, 300);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#2980b9';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillText('normal flow', 360, 318);
+
+        // AEP levels
+        const levels = [
+            { y: 250, x1: 302, x2: 418, color: '#2980b9', label: '10% per year' },
+            { y: 226, x1: 252, x2: 498, color: '#e67e22', label: '1% per year ("100-yr")' },
+            { y: 206, x1: 210, x2: 545, color: '#e74c3c', label: '0.2% per year' }
+        ];
+        levels.forEach(l => {
+            ctx.strokeStyle = l.color;
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([5, 4]);
+            ctx.beginPath();
+            ctx.moveTo(l.x1, l.y);
+            ctx.lineTo(l.x2, l.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.textAlign = 'left';
+            ctx.fillStyle = l.color;
+            ctx.font = 'bold 11px -apple-system, sans-serif';
+            ctx.fillText(l.label, 575, l.y + 4);
+        });
+
+        // houses on the floodplain
+        function house(x) {
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(x, 226, 24, 16);
+            ctx.strokeStyle = '#555';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(x, 226, 24, 16);
+            ctx.fillStyle = '#999';
+            ctx.beginPath();
+            ctx.moveTo(x - 4, 226);
+            ctx.lineTo(x + 28, 226);
+            ctx.lineTo(x + 12, 212);
+            ctx.closePath();
+            ctx.fill();
+        }
+        house(218);
+        house(486);
+
+        // house annotation
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillText('both houses sit inside the 1%-per-year zone', 360, 62);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(280, 68);
+        ctx.lineTo(230, 208);
+        ctx.moveTo(440, 68);
+        ctx.lineTo(498, 208);
+        ctx.stroke();
+
+        // terrain note
+        ctx.fillStyle = '#666';
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillText('levels assume today\'s terrain data — small elevation errors flip wet and dry', 360, 352);
+
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.fillText('A 1%-per-year flood can arrive twice in a decade — the label is a probability, not a promise', w / 2, h - 14);
+    })();
+
+    // C4: Evacuation timeline — decision + notification + travel stacked against the available lead time
+    (function() {
+        const { ctx, w, h } = setupCanvas('c4', 340);
+
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('The only test that matters: warning lead time minus evacuation time', w / 2, 22);
+
+        // trigger note
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#8e44ad';
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillText('trigger point crossed (fire line X / river stage Y)', 60, 58);
+        ctx.strokeStyle = '#8e44ad';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(60, 64);
+        ctx.lineTo(60, 125);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // endpoints
+        ctx.fillStyle = '#1a5276';
+        ctx.fillText('model warning issued', 60, 96);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillText('impact', 660, 96);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(660, 100);
+        ctx.lineTo(660, 225);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // lead-time bar
+        ctx.fillStyle = 'rgba(26,82,118,0.12)';
+        ctx.fillRect(60, 108, 600, 26);
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(60, 108, 600, 26);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#1a5276';
+        ctx.fillText('available lead time', 360, 125);
+
+        // needed-time stack
+        const segs = [
+            { x1: 60,  x2: 210, fill: 'rgba(26,82,118,0.35)', label: 'decision time' },
+            { x1: 210, x2: 360, fill: '#e67e22',              label: 'notification' },
+            { x1: 360, x2: 590, fill: '#e74c3c',              label: 'evacuation travel' }
+        ];
+        segs.forEach(s => {
+            ctx.fillStyle = s.fill;
+            ctx.fillRect(s.x1, 163, s.x2 - s.x1, 26);
+            ctx.fillStyle = '#555';
+            ctx.font = '10px -apple-system, sans-serif';
+            ctx.fillText(s.label, (s.x1 + s.x2) / 2, 205);
+            ctx.font = 'bold 11px -apple-system, sans-serif';
+        });
+
+        // margin arrow
+        const my = 176;
+        ctx.strokeStyle = '#27ae60';
+        ctx.fillStyle = '#27ae60';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(592, my);
+        ctx.lineTo(658, my);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(592, my);
+        ctx.lineTo(601, my - 5);
+        ctx.lineTo(601, my + 5);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(658, my);
+        ctx.lineTo(649, my - 5);
+        ctx.lineTo(649, my + 5);
+        ctx.fill();
+        ctx.textAlign = 'right';
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillText('margin — the model\'s', 658, 232);
+        ctx.fillText('real deliverable', 658, 248);
+
+        // failure note
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#666';
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillText('if the stack outgrows the lead time, the forecast is decoration', 360, 280);
+
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.fillText('Pre-committed triggers spend the lead time on moving people, not on holding meetings', w / 2, h - 14);
+    })();
+    </script>
+</body>
+</html>

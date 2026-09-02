@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Revocation & Lifetime Semantics</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #fff;
+            color: #2c3e50;
+            padding: 40px;
+            line-height: 1.6;
+        }
+        h1 {
+            font-size: 2rem;
+            color: #1a5276;
+            margin-bottom: 8px;
+            border-bottom: 2px solid #2980b9;
+            padding-bottom: 8px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 32px;
+            font-size: 0.95rem;
+        }
+        .intro {
+            background: #f0f4f8;
+            border-left: 3px solid #2980b9;
+            padding: 8px 12px;
+            margin-bottom: 32px;
+            font-size: 0.9rem;
+        }
+        .lang-section {
+            margin-bottom: 40px;
+        }
+        .lang-section h2 {
+            font-size: 1.3rem;
+            color: #1a5276;
+            margin-bottom: 12px;
+            border-bottom: 2px solid #2980b9;
+            padding-bottom: 4px;
+        }
+        table.layout {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+        }
+        table.layout td {
+            vertical-align: top;
+            padding: 12px;
+        }
+        table.layout td.text-col {
+            width: 45%;
+        }
+        table.layout td.viz-col {
+            width: 55%;
+        }
+        canvas {
+            width: 100%;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px; height: auto; }
+        .key-point {
+            background: #f8f9fa;
+            border-left: 3px solid #e74c3c;
+            padding: 8px 12px;
+            margin-top: 12px;
+            font-size: 0.9rem;
+        }
+        .example {
+            font-style: italic;
+            color: #555;
+            margin-top: 8px;
+            font-size: 0.9rem;
+        }
+        ul {
+            margin: 8px 0 8px 20px;
+            font-size: 0.92rem;
+        }
+        li { margin-bottom: 4px; }
+        .pt-label { font-weight: 600; }
+        pre {
+            background: #f4f4f4;
+            padding: 12px 16px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            margin-bottom: 12px;
+        }
+        table.cred {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            margin: 8px 0;
+        }
+        table.cred th {
+            color: #1a5276;
+            text-align: left;
+            border-bottom: 2px solid #ddd;
+            padding: 4px 8px;
+        }
+        table.cred td {
+            border-bottom: 1px solid #ddd;
+            padding: 4px 8px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Revocation &amp; Lifetime Semantics</h1>
+    <p class="subtitle">Whether a credential can be killed before its expiry is decided by one design choice — does the server look it up on every request, or trust it on sight.</p>
+
+    <div class="intro"><span class="pt-label" style="color:#2980b9">Premise:</span> Revocability cannot be bolted on later &mdash; every fix on this page works around one design split.</div>
+
+<div class="lang-section">
+    <h2>1. The core split: lookup vs self-contained</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <ul>
+                    <li><span class="pt-label" style="color:#1a5276">Opaque design:</span> server consults a record on every request</li>
+                    <li><span class="pt-label" style="color:#27ae60">Instant kill:</span> delete the record, dead on the very next request</li>
+                    <li><span class="pt-label" style="color:#1a5276">Signed design:</span> signature verified locally, no per-token record</li>
+                    <li><span class="pt-label" style="color:#e74c3c">No kill switch:</span> nothing to delete &mdash; valid until embedded expiry</li>
+                    <li><span class="pt-label" style="color:#e67e22">Standard patch:</span> denylist of revoked token IDs, checked every request</li>
+                    <li><span class="pt-label" style="color:#e74c3c">Hidden cost:</span> restores the per-request lookup you tried to avoid</li>
+                </ul>
+                <div class="key-point"><span class="pt-label" style="color:#e74c3c">No free lunch:</span> stateless instant revocation does not exist &mdash; per-request state is paid upfront (opaque) or smuggled back (denylist).</div>
+            </td>
+            <td class="viz-col"><canvas id="c1" width="720" height="300"></canvas></td>
+        </tr>
+    </table>
+</div>
+
+<div class="lang-section">
+    <h2>2. What can be revoked, what cannot</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <table class="cred">
+                    <tr><th>Credential</th><th>Revocable?</th><th>How</th><th>Latency</th></tr>
+                    <tr><td>Opaque API token</td><td>yes</td><td>delete server record</td><td>instant</td></tr>
+                    <tr><td>Session ID</td><td>yes</td><td>delete server session</td><td>instant</td></tr>
+                    <tr><td>Signed JWT</td><td>no</td><td>wait for expiry, or denylist</td><td>until expiry</td></tr>
+                    <tr><td>Refresh token</td><td>yes</td><td>revoke server-side record</td><td>instant</td></tr>
+                    <tr><td>Reset link</td><td>self-limiting</td><td>single use + short TTL</td><td>minutes</td></tr>
+                    <tr><td>Recovery codes</td><td>yes</td><td>mark used / regenerate set</td><td>instant</td></tr>
+                    <tr><td>Certificate</td><td>partly</td><td>revocation lists / status checks</td><td>hours&ndash;days</td></tr>
+                </table>
+                <div class="key-point"><span class="pt-label" style="color:#e74c3c">Cautionary tale:</span> certificate lists and status checks propagate too slowly, so short lifetimes do the real work &mdash; the conclusion every row reaches.</div>
+            </td>
+            <td class="viz-col"><canvas id="c2" width="720" height="300"></canvas></td>
+        </tr>
+    </table>
+</div>
+
+<div class="lang-section">
+    <h2>3. The standard compromise</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <ul>
+                    <li><span class="pt-label" style="color:#1a5276">Split design:</span> short self-contained access, long opaque refresh</li>
+                    <li><span class="pt-label" style="color:#27ae60">Lookup-free path:</span> most requests verify with no server lookup</li>
+                    <li><span class="pt-label" style="color:#27ae60">Damage cap:</span> revoking refresh caps loss at access minutes left</li>
+                    <li><span class="pt-label" style="color:#1a5276">Refresh rotation:</span> each use issues a new token, retires the old</li>
+                    <li><span class="pt-label" style="color:#1a5276">One live token:</span> exactly one family member live at any moment</li>
+                    <li><span class="pt-label" style="color:#1a5276">Reuse detection:</span> a retired refresh token should never reappear</li>
+                    <li><span class="pt-label" style="color:#e74c3c">Red flag:</span> reuse means attacker or user holds a stale copy</li>
+                    <li><span class="pt-label" style="color:#e74c3c">Safe response:</span> revoke the whole family and force re-login</li>
+                </ul>
+                <div class="key-point"><span class="pt-label" style="color:#e74c3c">Expiry is the revocation story:</span> worst-case revocation latency equals the access-token lifetime &mdash; why lifetimes shrank to minutes.</div>
+            </td>
+            <td class="viz-col"><canvas id="c3" width="720" height="320"></canvas></td>
+        </tr>
+    </table>
+</div>
+
+<div class="lang-section">
+    <h2>4. TTL design: current vs historical</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <ul>
+                    <li><span class="pt-label" style="color:#e67e22">Historical:</span> API keys and sessions once lived months or years</li>
+                    <li><span class="pt-label" style="color:#e74c3c">Forgotten chore:</span> revocation was manual and often skipped</li>
+                    <li><span class="pt-label" style="color:#e74c3c">Leak exposure:</span> leaked credentials stayed live long after the leak</li>
+                    <li><span class="pt-label" style="color:#e67e22">Current norm:</span> access-token lifetimes now measured in minutes</li>
+                    <li><span class="pt-label" style="color:#1a5276">Load shift:</span> security moved from revocation machinery to expiry</li>
+                    <li><span class="pt-label" style="color:#27ae60">Short-TTL win:</span> lower worst-case revocation latency</li>
+                    <li><span class="pt-label" style="color:#e74c3c">Short-TTL cost:</span> more refresh traffic, more re-auth failures</li>
+                    <li><span class="pt-label" style="color:#1a5276">Cost knee:</span> refresh cost bends sharply below roughly five minutes</li>
+                    <li><span class="pt-label" style="color:#e67e22">Why minutes:</span> that knee made minutes-scale lifetimes the norm</li>
+                </ul>
+                <div class="key-point"><span class="pt-label" style="color:#e74c3c">TTL is a dial:</span> stolen-token usable time versus honest-client refresh churn &mdash; modern practice sits near the short end.</div>
+            </td>
+            <td class="viz-col"><canvas id="c4" width="720" height="320"></canvas></td>
+        </tr>
+    </table>
+</div>
+
+    <script>
+    const dpr = window.devicePixelRatio || 1;
+    function setupCanvas(id, wIn, hIn) {
+        const c = document.getElementById(id);
+        const w = wIn || 720, h = hIn || 240;
+        c.style.maxWidth = w + 'px';
+        var __cssW = c.getBoundingClientRect().width || w;
+        var __scale = (__cssW / w) * dpr;
+        c.width = Math.round(w * __scale);
+        c.height = Math.round(h * __scale);
+        const ctx = c.getContext('2d');
+        ctx.scale(__scale, __scale);
+        return { ctx, w, h };
+    }
+
+    function arrowHead(ctx, x, y, dir, color) {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        if (dir === 'right') {
+            ctx.moveTo(x, y - 4); ctx.lineTo(x + 7, y); ctx.lineTo(x, y + 4);
+        } else { // up
+            ctx.moveTo(x - 4, y); ctx.lineTo(x, y - 7); ctx.lineTo(x + 4, y);
+        }
+        ctx.fill();
+    }
+
+    // C1: The core split flow diagram
+    (function() {
+        const { ctx, w, h } = setupCanvas('c1', 720, 300);
+
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('The core split: lookup-verified vs self-contained', w / 2, 20);
+
+        const boxes = [
+            { x: 30, y: 70, w: 150, color: '#1a5276', label: 'Opaque token' },
+            { x: 250, y: 70, w: 150, color: '#1a5276', label: 'Server lookup' },
+            { x: 470, y: 70, w: 220, color: '#27ae60', label: 'Row deleted → dead now' },
+            { x: 30, y: 160, w: 150, color: '#8e44ad', label: 'Signed token' },
+            { x: 250, y: 160, w: 150, color: '#8e44ad', label: 'Signature check' },
+            { x: 470, y: 160, w: 220, color: '#e74c3c', label: 'Valid until expiry' }
+        ];
+        boxes.forEach(b => {
+            ctx.fillStyle = b.color;
+            ctx.globalAlpha = 0.12;
+            ctx.fillRect(b.x, b.y, b.w, 44);
+            ctx.globalAlpha = 1;
+            ctx.strokeStyle = b.color;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(b.x, b.y, b.w, 44);
+            ctx.fillStyle = b.color;
+            ctx.font = 'bold 12px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(b.label, b.x + b.w / 2, b.y + 27);
+        });
+
+        // Row arrows
+        [92, 182].forEach(y => {
+            [[180, 244], [400, 464]].forEach(seg => {
+                ctx.strokeStyle = '#bbb';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(seg[0], y); ctx.lineTo(seg[1] - 7, y);
+                ctx.stroke();
+                arrowHead(ctx, seg[1] - 7, y, 'right', '#bbb');
+            });
+        });
+
+        // Denylist box
+        ctx.strokeStyle = '#e67e22';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 4]);
+        ctx.strokeRect(180, 232, 360, 48);
+        ctx.beginPath();
+        ctx.moveTo(360, 232); ctx.lineTo(360, 215);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        arrowHead(ctx, 360, 215, 'up', '#e67e22');
+        ctx.fillStyle = '#e67e22';
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Denylist fix: works, but restores the', 360, 251);
+        ctx.fillText('per-request lookup you tried to avoid', 360, 266);
+    })();
+
+    // C2: Revocation latency spectrum
+    (function() {
+        const { ctx, w, h } = setupCanvas('c2', 720, 300);
+
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Revocation latency spectrum (illustrative)', w / 2, 20);
+
+        const segs = [
+            { label: 'instant', x0: 60, x1: 210, color: '#27ae60' },
+            { label: 'minutes', x0: 210, x1: 360, color: '#2980b9' },
+            { label: 'hours–days', x0: 360, x1: 510, color: '#e67e22' },
+            { label: 'until expiry', x0: 510, x1: 660, color: '#e74c3c' }
+        ];
+        segs.forEach(s => {
+            ctx.fillStyle = s.color;
+            ctx.globalAlpha = 0.35;
+            ctx.fillRect(s.x0, 150, s.x1 - s.x0, 26);
+            ctx.globalAlpha = 1;
+            ctx.strokeStyle = s.color;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(s.x0, 150, s.x1 - s.x0, 26);
+            ctx.fillStyle = s.color;
+            ctx.font = 'bold 11px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(s.label, (s.x0 + s.x1) / 2, 196);
+        });
+
+        // Instant-zone stacked list
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ['opaque API token', 'session ID', 'refresh token', 'recovery code'].forEach((t, i) => {
+            ctx.fillText(t, 135, 60 + i * 16);
+        });
+        ctx.strokeStyle = '#bbb';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(135, 116); ctx.lineTo(135, 148);
+        ctx.stroke();
+
+        // Single labels with leaders
+        [
+            { label: 'reset link (single-use + TTL)', x: 285 },
+            { label: 'certificate (list propagation)', x: 435 },
+            { label: 'signed JWT, no denylist', x: 585 }
+        ].forEach(m => {
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = '11px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(m.label, m.x, 92);
+            ctx.strokeStyle = '#bbb';
+            ctx.beginPath();
+            ctx.moveTo(m.x, 100); ctx.lineTo(m.x, 148);
+            ctx.stroke();
+        });
+
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.textAlign = 'center';
+        ctx.fillText('Server-side records die instantly; self-contained tokens only age out.', w / 2, 245);
+    })();
+
+    // C3: Refresh rotation and reuse detection
+    (function() {
+        const { ctx, w, h } = setupCanvas('c3', 720, 320);
+
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Refresh rotation and reuse detection', w / 2, 20);
+
+        // Rotation chain
+        const chain = [{ x: 40 }, { x: 260 }, { x: 480 }];
+        chain.forEach((b, i) => {
+            ctx.fillStyle = '#1a5276';
+            ctx.globalAlpha = 0.12;
+            ctx.fillRect(b.x, 70, 120, 40);
+            ctx.globalAlpha = 1;
+            ctx.strokeStyle = '#1a5276';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(b.x, 70, 120, 40);
+            ctx.fillStyle = '#1a5276';
+            ctx.font = 'bold 11px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('refresh #' + (i + 1), b.x + 60, 94);
+        });
+
+        // Chain arrows
+        [[160, 254], [380, 474]].forEach((seg, i) => {
+            ctx.strokeStyle = '#27ae60';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(seg[0], 90); ctx.lineTo(seg[1] - 7, 90);
+            ctx.stroke();
+            arrowHead(ctx, seg[1] - 7, 90, 'right', '#27ae60');
+            ctx.fillStyle = '#27ae60';
+            ctx.font = '10px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('use → rotate', (seg[0] + seg[1]) / 2, 82);
+        });
+
+        // Status labels
+        ctx.font = 'italic 10px -apple-system, sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.textAlign = 'center';
+        ctx.fillText('retired', 100, 128);
+        ctx.fillText('retired', 320, 128);
+        ctx.font = 'bold 10px -apple-system, sans-serif';
+        ctx.fillStyle = '#27ae60';
+        ctx.fillText('active', 540, 128);
+
+        // Copied-earlier link
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(100, 110); ctx.lineTo(100, 190);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#999';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('copied earlier', 110, 150);
+
+        // Attacker lane
+        const redBoxes = [
+            { x: 40, w: 160, label: 'stolen copy of #1', fillA: 0.12 },
+            { x: 340, w: 180, label: 'reuse of retired token', fillA: 0.12 },
+            { x: 550, w: 150, label: 'revoke entire family', fillA: 0.25 }
+        ];
+        redBoxes.forEach(b => {
+            ctx.fillStyle = '#e74c3c';
+            ctx.globalAlpha = b.fillA;
+            ctx.fillRect(b.x, 190, b.w, 40);
+            ctx.globalAlpha = 1;
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(b.x, 190, b.w, 40);
+            ctx.fillStyle = '#e74c3c';
+            ctx.font = 'bold 11px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(b.label, b.x + b.w / 2, 214);
+        });
+
+        // Dashed replay arrow
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.moveTo(200, 210); ctx.lineTo(327, 210);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        arrowHead(ctx, 327, 210, 'right', '#e74c3c');
+
+        // Solid arrow to revoke box
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(520, 210); ctx.lineTo(537, 210);
+        ctx.stroke();
+        arrowHead(ctx, 537, 210, 'right', '#e74c3c');
+
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.textAlign = 'center';
+        ctx.fillText('A retired token reappearing means someone holds a stolen copy — kill the whole family.', w / 2, 285);
+    })();
+
+    // C4: TTL trade-off curves
+    (function() {
+        const { ctx, w, h } = setupCanvas('c4', 720, 320);
+
+        ctx.font = 'bold 13px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('TTL trade-off: revocation latency vs refresh traffic (illustrative)', w / 2, 20);
+
+        const ox = 70, baseY = 260, pw = 580, ph = 190;
+
+        // Sweet-spot band
+        ctx.fillStyle = '#27ae60';
+        ctx.globalAlpha = 0.08;
+        ctx.fillRect(ox + 0.15 * pw, baseY - ph, 0.30 * pw, ph);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#27ae60';
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('common choice', ox + 0.30 * pw, 84);
+
+        // Axes
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(ox, baseY - ph); ctx.lineTo(ox, baseY); ctx.lineTo(ox + pw, baseY);
+        ctx.stroke();
+
+        ctx.fillStyle = '#666';
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('access-token lifetime →', 360, 298);
+        ctx.save();
+        ctx.translate(30, baseY - ph / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillText('relative cost →', 0, 0);
+        ctx.restore();
+
+        // X ticks
+        const ticks = [['1m', 0.05], ['5m', 0.2], ['15m', 0.4], ['1h', 0.6], ['6h', 0.8], ['24h', 0.95]];
+        ctx.font = '10px -apple-system, sans-serif';
+        ticks.forEach(t => {
+            ctx.fillStyle = '#666';
+            ctx.textAlign = 'center';
+            ctx.fillText(t[0], ox + t[1] * pw, 278);
+        });
+
+        // Curves
+        const curves = [
+            { color: '#2980b9', pts: [[0.05, 0.95], [0.2, 0.40], [0.4, 0.18], [0.6, 0.08], [0.8, 0.03], [0.95, 0.01]] },
+            { color: '#e74c3c', pts: [[0.05, 0.02], [0.2, 0.08], [0.4, 0.18], [0.6, 0.35], [0.8, 0.65], [0.95, 0.95]] }
+        ];
+        curves.forEach(cv => {
+            ctx.strokeStyle = cv.color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            cv.pts.forEach((p, i) => {
+                const x = ox + p[0] * pw, y = baseY - p[1] * ph;
+                if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+        });
+
+        // Curve labels
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#2980b9';
+        ctx.fillText('refresh traffic', ox + 0.45 * pw, baseY - 0.16 * ph);
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillText('worst-case revocation latency', ox + 0.58 * pw, baseY - 0.45 * ph);
+    })();
+    </script>
+</body>
+</html>
