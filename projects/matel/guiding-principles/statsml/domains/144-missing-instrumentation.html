@@ -16,11 +16,11 @@ li { margin: 4px 0; }
 strong { color: #1a5276; }
 .obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
 .obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
-.obj-table td:first-child { width: 40%; }
-.obj-table td:last-child { width: 60%; text-align: center; }
+.obj-table td:first-child { width: 50%; }
+.obj-table td:last-child { width: 50%; text-align: center; }
 .obj-table tr:nth-child(even) td { background: #fafcfe; }
 .obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
-canvas { display: block; margin: 0 auto; }
+canvas { display: block; margin: 0 auto; width: 100%; height: auto; }
 .philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
 </style>
 </head>
@@ -39,9 +39,11 @@ canvas { display: block; margin: 0 auto; }
 <tr><td>
 <div class="obj-title">5-Step Pipeline, 2 Checkpoints. 3 Blind Spots.</div>
 <ul>
-<li><strong>The symptom:</strong> Model accuracy drops 8%; step 5 looks wrong, step 1 looks fine — the problem is in the uninspectable middle.</li>
-<li><strong>Without checkpoints:</strong> You can only guess whether the join fanned out, the aggregate hit NULLs, or the clean step dropped rows.</li>
-<li><strong>The re-run fallacy:</strong> Re-running shows a different result — upstream data changed, transient state is gone — and tells you nothing about last time.</li>
+<li><strong>The symptom:</strong> Model accuracy drops 8%; step 5 looks wrong, step 1 looks fine.</li>
+<li><strong>The blind spot:</strong> The three middle steps persisted nothing, so the fault region is uninspectable.</li>
+<li><strong>Without checkpoints:</strong> You can only guess — join fanout, aggregate hitting NULLs, or clean dropping rows.</li>
+<li><strong>The re-run fallacy:</strong> Re-running gives a different result; upstream data changed and transient state is gone.</li>
+<li><strong>No evidence either way:</strong> A fresh run says nothing about what the failing run actually produced.</li>
 <li><strong>With checkpoints:</strong> Inspect step 3 output directly and spot the join fanout in minutes.</li>
 </ul>
 </td><td><canvas id="c1" width="720" height="340"></canvas></td></tr>
@@ -53,9 +55,11 @@ canvas { display: block; margin: 0 auto; }
 <tr><td>
 <div class="obj-title">By the Time You Investigate, the Source Has Moved</div>
 <ul>
-<li><strong>Mutable sources:</strong> The pipeline read a production database at 3am; by investigation time the source has been updated and now returns different data.</li>
-<li><strong>Temporal debugging is impossible:</strong> "What did this stage produce Tuesday?" is only answerable if you saved it — logs prove it ran, not what the data looked like.</li>
-<li><strong>The months-later discovery:</strong> A September problem with a June root cause is untraceable once June's data is overwritten.</li>
+<li><strong>Mutable sources:</strong> The pipeline read a production database at 3am; that source has been updated since.</li>
+<li><strong>Different answer now:</strong> Query it during the investigation and it returns data the run never saw.</li>
+<li><strong>Temporal debugging is impossible:</strong> "What did this stage produce Tuesday?" is answerable only if you saved it.</li>
+<li><strong>Logs are not data:</strong> They prove the step ran, not what the rows looked like going through it.</li>
+<li><strong>The months-later discovery:</strong> A September problem with a June root cause dies once June is overwritten.</li>
 </ul>
 </td><td><canvas id="c2" width="720" height="300"></canvas></td></tr>
 </table>
@@ -66,9 +70,10 @@ canvas { display: block; margin: 0 auto; }
 <tr><td>
 <div class="obj-title">After Aggregation, You Cannot Decompose the Number</div>
 <ul>
-<li><strong>The problem:</strong> A cohort average comes out at $450 instead of $200, and without pre-aggregation rows you can't decompose which users drove it.</li>
-<li><strong>The JOIN amplification variant:</strong> Post-averaging, you can't tell 50 unique transactions from 5 duplicated 10&times; by a bad join.</li>
-<li><strong>The general principle:</strong> Every aggregation is lossy compression — save the rows before it, or you can never inspect them.</li>
+<li><strong>The problem:</strong> A cohort average comes out at $450 instead of the expected $200.</li>
+<li><strong>Nothing to open up:</strong> Without the pre-aggregation rows you cannot decompose which users drove it.</li>
+<li><strong>The JOIN amplification variant:</strong> A bad join duplicates 5 transactions 10&times;; post-averaging that reads as 50.</li>
+<li><strong>The general principle:</strong> Every aggregation is lossy compression — save the rows before it, or lose them.</li>
 </ul>
 </td><td><canvas id="c3" width="720" height="300"></canvas></td></tr>
 </table>
@@ -80,7 +85,9 @@ canvas { display: block; margin: 0 auto; }
 <div class="obj-title">Fix Step 3, Re-Run Steps 3-5. But Without Step 2 Output, You Must Start From Step 1.</div>
 <ul>
 <li><strong>The scenario:</strong> You fix a bug in step 3, but its input is step 2's output — which was never saved.</li>
-<li><strong>The cost:</strong> Without the checkpoint you re-run steps 1-2 just to reach the fix; with it you start from step 2's output.</li>
+<li><strong>The cost without:</strong> You re-run steps 1 and 2 (4hr + 2hr) just to reach the fix you want to test.</li>
+<li><strong>The cost with:</strong> Start from step 2's saved output and the 1-hour fix run is all you pay.</li>
+<li><strong>The gap:</strong> 7 hours to first test versus 1 hour — 12 experiments a day instead of 2.</li>
 <li><strong>The experimentation cost:</strong> Debugging velocity is directly proportional to checkpoint density.</li>
 </ul>
 </td><td><canvas id="c4" width="720" height="300"></canvas></td></tr>
@@ -92,9 +99,11 @@ canvas { display: block; margin: 0 auto; }
 <tr><td>
 <div class="obj-title">"We Don't Checkpoint Because Storage Is Expensive"</div>
 <ul>
-<li><strong>The math:</strong> Checkpoint storage costs dollars a month; two weeks of blind debugging costs orders of magnitude more, plus models training on wrong data meanwhile.</li>
+<li><strong>The math:</strong> Checkpoint storage runs $23 a month; two weeks of blind debugging costs $8,000+.</li>
+<li><strong>The hidden line item:</strong> Meanwhile models keep training on wrong data, which no storage bill captures.</li>
 <li><strong>Retention policy:</strong> Keep 7 days at full granularity and weekly snapshots for 3 months, then purge.</li>
-<li><strong>The compromise that fails:</strong> "Checkpoint on demand when something goes wrong" is useless — a checkpoint only helps if it exists before you need it.</li>
+<li><strong>The compromise that fails:</strong> "Checkpoint on demand when something goes wrong" is useless in practice.</li>
+<li><strong>Why it fails:</strong> A checkpoint only helps if it already exists at the moment you discover you need it.</li>
 </ul>
 </td><td><canvas id="c5" width="720" height="280"></canvas></td></tr>
 </table>
@@ -106,66 +115,76 @@ canvas { display: block; margin: 0 auto; }
 <div class="obj-title">home-buying platform's $500M Loss (2021)</div>
 <ul>
 <li>An ML pricing pipeline (comps → features → scoring → offer) kept no auditable intermediate data.</li>
-<li>When offers systematically overpaid, no one could pinpoint which step diverged — stale comps, wrong transforms, or model drift.</li>
+<li>When offers systematically overpaid, no one could pinpoint which step had diverged.</li>
+<li>The candidates — stale comps, wrong transforms, model drift — were all equally unfalsifiable.</li>
 <li>Thousands of homes were bought at inflated prices; the division shut down with a ~$500M loss.</li>
-<li><strong>With full checkpoints:</strong> "Which comps did the model see for this house?" was answerable within days, not months.</li>
+<li><strong>With full checkpoints:</strong> "Which comps did the model see for this house?" answerable in days, not months.</li>
 </ul>
 </td><td>
 <div class="obj-title">a trading firm — $440M in 45 Minutes (2012)</div>
 <ul>
 <li>A deploy accidentally activated dead code trading on stale parameters from a retired system.</li>
-<li>Only market data in and executed trades out were recorded — no checkpoint of the strategy module's signals.</li>
+<li>Only market data in and executed trades out were recorded — no checkpoint of strategy signals.</li>
 <li>$7B in erroneous trades and a $440M loss before humans noticed from the output alone.</li>
-<li><strong>With signal-level checkpoints:</strong> The 1000&times; abnormal order volume would have been visible in seconds.</li>
+<li><strong>With signal-level checkpoints:</strong> The 1000&times; abnormal order volume would show up in seconds.</li>
 </ul>
 </td></tr>
 <tr><td>
 <div class="obj-title">social network's 2019 Ad Metrics Bug</div>
 <ul>
-<li>Video view metrics were inflated for over a year by a bug in an intermediate time-threshold filtering step.</li>
+<li>Video view metrics were inflated for over a year by a bug in an intermediate filtering step.</li>
+<li>The bug sat in a time-threshold filter, between raw events and the published aggregates.</li>
 <li>Only raw events and final aggregates were retained, so scoping the overcount took months.</li>
 <li>Advertisers who had shifted millions in budget couldn't get accurate historical corrections.</li>
-<li><strong>With post-filter checkpoint:</strong> The inflated count would have stood out immediately against raw event ratios.</li>
+<li><strong>With post-filter checkpoint:</strong> The inflated count stands out immediately against raw event ratios.</li>
 </ul>
 </td><td>
 <div class="obj-title">government enrollment portal Launch Failure (2013)</div>
 <ul>
-<li>The enrollment pipeline (identity → eligibility → subsidy → confirmation) passed data between steps without checkpointing.</li>
-<li>When enrollments failed silently, nothing showed where the hand-off between steps had dropped users.</li>
+<li>The enrollment pipeline ran identity → eligibility → subsidy → confirmation with no checkpointing.</li>
+<li>When enrollments failed silently, nothing showed where the hand-off had dropped users.</li>
 <li>Debugging meant manually replaying user journeys across systems — weeks of investigation.</li>
-<li><strong>With per-step checkpoints:</strong> "4,000 users verified but never reached the eligibility queue" becomes a 5-minute query.</li>
+<li><strong>With per-step checkpoints:</strong> "4,000 users verified, none reached eligibility" is a 5-minute query.</li>
 </ul>
 </td></tr>
 <tr><td>
 <div class="obj-title">music platform's "Discover Weekly" Retraining Issue (reported in engineering blog)</div>
 <ul>
-<li>When recommendation quality degraded, the team couldn't tell whether the cause was stale features, corrupted training data, or a ranking config change.</li>
-<li>They spent days narrowing down issues that would be "immediately obvious" from diffing stage outputs against historical runs.</li>
-<li><strong>Lesson they shared:</strong> After checkpointing each stage and comparing distribution stats across runs, debugging dropped from days to hours.</li>
+<li>When recommendation quality degraded, the team could not identify which stage caused it.</li>
+<li>Stale features, corrupted training data, and a ranking config change were all live suspects.</li>
+<li>They spent days on questions that diffing stage outputs against historical runs makes obvious.</li>
+<li><strong>Lesson they shared:</strong> Checkpoint each stage, compare distribution stats across runs — days became hours.</li>
 </ul>
 </td><td>
 <div class="obj-title">Every ETL Pipeline That Joins Fact + Dimension Tables</div>
 <ul>
-<li>The most common silent corruption: a fact-dimension JOIN quietly produces 15M rows instead of 10M because the dimension table had duplicates.</li>
-<li>With only the final output saved, you can't tell legitimate growth from duplication — that needs pre-join row counts and the dimension state at join time.</li>
-<li><strong>Real frequency:</strong> This happens monthly at any sizable data team, and every incident ends with "now we save the intermediate state."</li>
+<li>The most common silent corruption: a fact-dimension JOIN yields 15M rows instead of 10M.</li>
+<li>The cause is duplicates in the dimension table, and the final output looks like ordinary growth.</li>
+<li>Telling growth from duplication needs pre-join row counts and the dimension state at join time.</li>
+<li><strong>Real frequency:</strong> Monthly at any sizable data team, and every incident ends the same way.</li>
+<li><strong>The postmortem line:</strong> "Now we save the intermediate state" — written after the damage, every time.</li>
 </ul>
 </td></tr>
 </table>
 
-<script>
+<script>var __charts = [];
 var dpr = window.devicePixelRatio || 1;
 function setup(id) {
     var c = document.getElementById(id); if (!c) return null;
-    var w = parseInt(c.getAttribute('width')), h = parseInt(c.getAttribute('height'));
-    c.width = w * dpr; c.height = h * dpr;
-    c.style.width = w + 'px'; c.style.height = h + 'px';
-    var ctx = c.getContext('2d'); ctx.scale(dpr, dpr);
+    if (!c.dataset.w) { c.dataset.w = c.getAttribute('width') || '720'; c.dataset.h = c.getAttribute('height') || '300'; }
+    var w = parseInt(c.dataset.w), h = parseInt(c.dataset.h);
+    var dpr = window.devicePixelRatio || 1;
+    c.style.maxWidth = w + 'px';
+    var cssW = c.getBoundingClientRect().width || w;
+    var scale = (cssW / w) * dpr;
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    var ctx = c.getContext('2d'); ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, w, h);
     return {ctx:ctx, w:w, h:h};
 }
 
 // Chart 1: Pipeline with vs without checkpoints
-(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+__charts.push(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
 ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
 
 ctx.fillStyle='#1a5276';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
@@ -236,10 +255,10 @@ ctx.fillStyle='#e74c3c';ctx.font='12px sans-serif';ctx.textAlign='center';
 ctx.fillText('Without: have step 1 and step 5. Steps 2-4 are gone. Must re-run.',w/2,h-32);
 ctx.fillStyle='#27ae60';
 ctx.fillText('With: inspect step 2→3 diff directly. No re-run needed.',w/2,h-14);
-})();
+});
 
 // Chart 2: Temporal impossibility
-(function(){var s=setup('c2');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+__charts.push(function(){var s=setup('c2');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
 ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
 
 ctx.fillStyle='#1a5276';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
@@ -292,10 +311,10 @@ ctx.fillText('Query source NOW → get different data than pipeline saw Tuesday.
 
 ctx.fillStyle='#555';ctx.font='italic 12px sans-serif';ctx.textAlign='center';
 ctx.fillText('Checkpoints are snapshots of what the pipeline ACTUALLY SAW at each step. Without them, that state is lost.',w/2,h-10);
-})();
+});
 
 // Chart 3: Aggregation destroys detail
-(function(){var s=setup('c3');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+__charts.push(function(){var s=setup('c3');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
 ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
 
 ctx.fillStyle='#1a5276';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
@@ -352,10 +371,10 @@ ctx.fillText('Only see wrong aggregate, not WHY',rx+4,ly+122);
 // Bottom
 ctx.fillStyle='#555';ctx.font='italic 12px sans-serif';ctx.textAlign='center';
 ctx.fillText('Every GROUP BY / SUM / AVG destroys row-level evidence. Save BEFORE aggregating.',w/2,h-10);
-})();
+});
 
 // Chart 4: Re-run cost
-(function(){var s=setup('c4');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+__charts.push(function(){var s=setup('c4');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
 ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
 
 ctx.fillStyle='#1a5276';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
@@ -405,10 +424,10 @@ ctx.fillText('1 hour',margin.left+bw2+10,y2+barH/2+4);
 // Ratio
 ctx.fillStyle='#555';ctx.font='bold 13px sans-serif';ctx.textAlign='center';
 ctx.fillText('7× faster debugging. 12 experiments/day vs 2 experiments/day.',w/2,h-12);
-})();
+});
 
 // Chart 5: Storage cost vs debugging cost
-(function(){var s=setup('c5');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+__charts.push(function(){var s=setup('c5');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
 ctx.fillStyle='#f9f9f9';ctx.fillRect(0,0,w,h);
 
 ctx.fillStyle='#1a5276';ctx.font='bold 14px sans-serif';ctx.textAlign='center';
@@ -444,7 +463,14 @@ ctx.fillText('$8,000+ engineer time + weeks of models training on bad data',marg
 
 ctx.fillStyle='#555';ctx.font='italic 12px sans-serif';ctx.textAlign='center';
 ctx.fillText('$23/month buys time-travel debugging. The "storage is expensive" excuse costs 350× more.',w/2,h-10);
-})();
+});
+
+__charts.forEach(function(f){ f(); });
+var __redrawTimer;
+window.addEventListener('resize', function(){
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function(){ __charts.forEach(function(f){ f(); }); }, 150);
+});
 </script>
 </body>
 </html>
