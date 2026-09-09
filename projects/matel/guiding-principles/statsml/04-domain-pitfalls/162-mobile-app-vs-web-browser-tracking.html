@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>162. Mobile App vs Web Browser Tracking</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 20px 10px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 50%; }
+.obj-table td:last-child { width: 50%; text-align: center; }
+.obj-table tr:nth-child(even) td { background: #fafcfe; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; width: 100%; height: auto; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+.philosophy p { font-size: 1em; }
+</style>
+</head>
+<body>
+
+<h1>Mobile App vs Web Browser Tracking</h1>
+<p class="subtitle">An app and a browser instrument the same human with different identifier lifetimes, different consent gates, and different delivery guarantees. Any metric unioned across them is a mixture of two measurement regimes, not a measurement of users.</p>
+
+<div class="philosophy">
+<strong>The fundamental problem:</strong> Hold behaviour exactly constant and the two channels still report different numbers, because the identifier that defines the denominator, the gate that decides who is observed at all, and the rule that closes a session are all channel properties. A blended "user analytics" table therefore mixes two distributions with different biases, and the blend moves when instrumentation coverage moves even though no human did anything new.
+<p><strong>Illustrative Example.</strong> Every cohort size, rate, coverage fraction, and arrival share below is constructed so the arithmetic closes exactly. None of them is a measurement of any real product, platform, or population — in particular the permission-grant and banner-consent fractions are chosen for clarity, not sourced.</p>
+</div>
+
+<h2>An Install-Scoped Identifier and a Capped Cookie Count Different Denominators</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Identical 280,000 Visits Report 60.0% Returning In-App and 27.3% on the Web</div>
+<ul>
+<li><strong>The cohort's behaviour:</strong> 60,000 people visit on days 1, 4, 13 and 22; the other 40,000 visit only on day 1.</li>
+<li><strong>Total visits:</strong> 60,000 × 4 + 40,000 = 280,000 visits, and both channels see all 280,000 of them.</li>
+<li><strong>App identifier:</strong> one install-scoped identifier per person survives all four visits — 100,000 identifiers.</li>
+<li><strong>Web identifier:</strong> the browser's storage cap expires an unused cookie after 7 days of inactivity.</li>
+<li><strong>Where it splits:</strong> days 1 and 4 are 3 days apart and survive; days 13 and 22 each start a fresh cookie.</li>
+<li><strong>Web identifier count:</strong> 60,000 × 3 + 40,000 = 220,000 identifiers for the same 100,000 people.</li>
+<li><strong>Returning rate in-app:</strong> 60,000 identifiers show ≥2 visits out of 100,000 → 60.0%.</li>
+<li><strong>Returning rate on web:</strong> the same 60,000 two-visit cookies out of 220,000 → 27.3%.</li>
+<li><strong>The whole gap is the denominator:</strong> the numerator is 60,000 in both, so 60.0 / 27.3 = 2.20× exactly matches 220,000 / 100,000.</li>
+<li><strong>What it is not:</strong> app users are not 2.2× more loyal; nobody's loyalty was measured at all.</li>
+</ul>
+</td><td><canvas id="c1" width="720" height="360"></canvas></td></tr>
+</table>
+
+<h2>Two Consent Gates Observe Two Differently-Selected Subsets</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">App Reads 26.0%, Web Reads 24.0%, the Cohort's Rate Is 22.0%</div>
+<ul>
+<li><strong>The gates differ in kind:</strong> an OS permission prompt is opt-in per install; a consent banner is a page-level choice.</li>
+<li><strong>App coverage:</strong> 15% of the Light tier and 40% of the Heavy tier grant it → 6,000 + 24,000 = 30,000 observed.</li>
+<li><strong>Web coverage:</strong> 45% of Light and 70% of Heavy accept → 18,000 + 42,000 = 60,000 observed.</li>
+<li><strong>Both gates favour the engaged:</strong> heavier users grant more often, so both channels over-sample the Heavy tier.</li>
+<li><strong>App tier mix:</strong> 24,000 / 30,000 = 80.0% Heavy against a true cohort share of 60.0%.</li>
+<li><strong>Web tier mix:</strong> 42,000 / 60,000 = 70.0% Heavy — also skewed, but by a different amount.</li>
+<li><strong>App measured rate:</strong> (6,000 × 0.10 + 24,000 × 0.30) / 30,000 = 7,800 / 30,000 = 26.0%.</li>
+<li><strong>Web measured rate:</strong> (18,000 × 0.10 + 42,000 × 0.30) / 60,000 = 14,400 / 60,000 = 24.0%.</li>
+<li><strong>Neither is wrong about itself:</strong> each is the correct rate for the subset it can see, and neither subset is the cohort.</li>
+<li><strong>The 2.0 pp channel "effect":</strong> 26.0 − 24.0 is a difference in tier mix, since both tiers convert identically in both channels.</li>
+</ul>
+</td><td><canvas id="c2" width="720" height="360"></canvas></td></tr>
+</table>
+
+<h2>Unioning the Two Channels Averages Two Biases Instead of Cancelling Them</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Naive Union Reads 24.7%; Deduplicating People Only Gets to 24.0%</div>
+<ul>
+<li><strong>What a union table holds:</strong> 30,000 app rows + 60,000 web rows = 90,000 rows for at most 100,000 people.</li>
+<li><strong>Naive union rate:</strong> (7,800 + 14,400) / 90,000 = 22,200 / 90,000 = 24.7% against a true 22.0%.</li>
+<li><strong>Direction of the error:</strong> +2.7 pp, and both channels err the same way, so no cancellation is possible.</li>
+<li><strong>The double-count:</strong> with independent gates, 6.75% of Light and 28% of Heavy pass both → 2,700 + 16,800 = 19,500 people appear twice.</li>
+<li><strong>Distinct people observed:</strong> 90,000 − 19,500 = 70,500, or 70.5% of the cohort.</li>
+<li><strong>Deduplicated rate:</strong> (21,300 × 0.10 + 49,200 × 0.30) / 70,500 = 16,890 / 70,500 = 24.0%, still 2.0 pp high.</li>
+<li><strong>Why dedupe is not the fix:</strong> it removes double counting, which was never the main error — selection was.</li>
+<li><strong>The unstable part:</strong> raise app Heavy-tier coverage from 40% to 70% and app rows become 48,000 at a 27.5% rate.</li>
+<li><strong>The union moves on its own:</strong> (13,200 + 14,400) / 108,000 = 25.6%, a +0.9 pp jump caused by better instrumentation.</li>
+<li><strong>The reporting trap:</strong> that jump will be read as a behaviour change, because nothing in the table records the coverage change.</li>
+</ul>
+</td><td><canvas id="c3" width="720" height="360"></canvas></td></tr>
+</table>
+
+<h2>Offline Queueing Makes the App Series Revise Upward for Days</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Same-Day App Conversions Land 18.0% Low and Flip the Channel Comparison</div>
+<ul>
+<li><strong>Why app events queue:</strong> an app can capture an event with no connectivity and buffer it on the device.</li>
+<li><strong>Why web events do not:</strong> a page-level beacon either reaches the collector during the visit or is lost.</li>
+<li><strong>App arrival profile:</strong> 82.0% of day-D events arrive on day D, then 9.0%, 4.5%, 2.5%, 1.3%, 0.5%, 0.15%, 0.05%.</li>
+<li><strong>The shares close:</strong> those eight fractions sum to exactly 1.000, so the app series converges to its true total.</li>
+<li><strong>Day-D app reading:</strong> 6,396 of an eventual 7,800 conversions → same-day understatement of 18.0%.</li>
+<li><strong>Web is final immediately:</strong> 14,400 on day D and 14,400 forever, so the web series never revises.</li>
+<li><strong>The apples-to-oranges ratio:</strong> same-day app/web = 6,396 / 14,400 = 44.4%; settled = 7,800 / 14,400 = 54.2%.</li>
+<li><strong>The sign flip:</strong> same-day app rate is 6,396 / 30,000 = 21.3%, below web's 24.0% — the settled app rate is 26.0%, above it.</li>
+<li><strong>The dangerous window:</strong> any dashboard read inside 4 days ranks the channels in the wrong order.</li>
+<li><strong>The operational rule:</strong> compare channels only at a matched settlement age, and publish the revision curve beside the total.</li>
+</ul>
+</td><td><canvas id="c4" width="720" height="360"></canvas></td></tr>
+</table>
+
+<h2>Tab Lifetime and an Inactivity Timeout Count Different Sessions</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">One 95-Minute Trace Is 2 Sessions In-App and 3 on the Web</div>
+<ul>
+<li><strong>The trace:</strong> one person emits 12 events at minutes 0, 3, 7, 12, 57, 60, 66, 70, 78, 82, 90, 95.</li>
+<li><strong>App rule:</strong> a session ends after 30 minutes of inactivity, and only the 45-minute gap qualifies.</li>
+<li><strong>App result:</strong> 2 sessions — a 4-event, 12-minute one and an 8-event, 38-minute one.</li>
+<li><strong>Web rule:</strong> a session ends when the tab closes, which happened just before minutes 57 and 78.</li>
+<li><strong>Web result:</strong> 3 sessions of 4 events each, lasting 12, 13 and 17 minutes.</li>
+<li><strong>Session count:</strong> 3 vs 2 → the web channel reports 50.0% more sessions from identical behaviour.</li>
+<li><strong>Events per session:</strong> 12/2 = 6.00 in-app vs 12/3 = 4.00 on web, a 33.3% shortfall.</li>
+<li><strong>In-session time:</strong> 12 + 38 = 50 minutes in-app vs 12 + 13 + 17 = 42 minutes on web, since gaps inside a session count.</li>
+<li><strong>At cohort scale:</strong> 100,000 identical traces = 1,200,000 events either way, but 200,000 app sessions vs 300,000 web ones.</li>
+<li><strong>Every per-session metric inherits it:</strong> conversions per session, bounce rate, and session duration all move by the same artifact.</li>
+</ul>
+</td><td><canvas id="c5" width="720" height="340"></canvas></td></tr>
+</table>
+
+<h2>Cross-Device Stitching Collapses Identifiers by Estimate, Not by Observation</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">160,000 Raw Identifiers Become 116,250 Stitched Entities for 100,000 Real People</div>
+<ul>
+<li><strong>Device distribution:</strong> 55,000 people use 1 device, 30,000 use 2, and 15,000 use 3.</li>
+<li><strong>Raw identifier count:</strong> 55,000 + 60,000 + 45,000 = 160,000 identifiers for 100,000 people.</li>
+<li><strong>Links needed:</strong> collapsing to the truth requires removing 160,000 − 100,000 = 60,000 excess identifiers.</li>
+<li><strong>Stitching is a classifier:</strong> at 70% recall it finds 42,000 of those 60,000 links and misses 18,000.</li>
+<li><strong>Precision costs too:</strong> at 96% precision it asserts 42,000 / 0.96 = 43,750 links, of which 1,750 are wrong.</li>
+<li><strong>Resulting entity count:</strong> 160,000 − 43,750 = 116,250 stitched entities, 16.25% above the true 100,000.</li>
+<li><strong>Two errors, opposite signs:</strong> 18,000 missed links inflate the count; 1,750 false merges deflate it.</li>
+<li><strong>They do not cancel:</strong> 100,000 + 18,000 − 1,750 = 116,250, so the miss term dominates by more than 10×.</li>
+<li><strong>One numerator, three rates:</strong> 22,000 converters read as 13.8% over raw ids, 18.9% over stitched entities, 22.0% over people.</li>
+<li><strong>What is actually reported:</strong> whichever denominator the join happened to produce, with no error bar on it.</li>
+<li><strong>Worse than a wrong number:</strong> the count is a model output, so it changes when the stitching model is retrained.</li>
+</ul>
+</td><td><canvas id="c6" width="720" height="340"></canvas></td></tr>
+</table>
+
+<h2>Reweighting to a Common Observed Fraction Is the Only Union That Recovers the Truth</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Both Channels Return Exactly 22.0% Once Each Tier Carries Weight 1 / Coverage</div>
+<ul>
+<li><strong>The requirement:</strong> a channel's rate is unbiased only if every tier is observed at the same fraction.</li>
+<li><strong>The weight:</strong> give each observed row the reciprocal of its tier's coverage, so each tier sums back to its true size.</li>
+<li><strong>App weights:</strong> Light 40,000 / 6,000 = 6.667; Heavy 60,000 / 24,000 = 2.500.</li>
+<li><strong>App reweighted numerator:</strong> 600 × 6.667 + 7,200 × 2.500 = 4,000 + 18,000 = 22,000.</li>
+<li><strong>App reweighted denominator:</strong> 6,000 × 6.667 + 24,000 × 2.500 = 40,000 + 60,000 = 100,000 → 22.0% exactly.</li>
+<li><strong>Web weights:</strong> Light 40,000 / 18,000 = 2.222; Heavy 60,000 / 42,000 = 1.429, and the same algebra returns 22.0%.</li>
+<li><strong>Now the union is safe:</strong> 44,000 / 200,000 = 22.0%, and it no longer moves when channel row-share moves.</li>
+<li><strong>The cost of the fix:</strong> the weights need an external cohort frame, so the correction inherits that frame's error.</li>
+<li><strong>No session metric is invariant:</strong> any metric whose unit is a session or an identifier is defined by the channel, not the user.</li>
+<li><strong>A channel-invariant metric:</strong> one counted per known cohort member over a fixed wall-clock window, which needs the weights anyway.</li>
+<li><strong>The minimum discipline:</strong> publish per-channel numbers with their observed fractions, and never a blended rate alone.</li>
+</ul>
+</td><td><canvas id="c7" width="720" height="360"></canvas></td></tr>
+</table>
+
+<script>var __charts = [];
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    if (!c.dataset.w) { c.dataset.w = c.getAttribute('width') || '720'; c.dataset.h = c.getAttribute('height') || '360'; }
+    var w = parseInt(c.dataset.w), h = parseInt(c.dataset.h);
+    var dpr = window.devicePixelRatio || 1;
+    c.style.maxWidth = w + 'px';
+    var cssW = c.getBoundingClientRect().width || w;
+    var scale = (cssW / w) * dpr;
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    var ctx = c.getContext('2d'); ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, w, h);
+    return {ctx:ctx, w:w, h:h};
+}
+
+/* ---- single source of truth: the shared cohort of 100,000 people ---- */
+var LIGHT = 40000, HEAVY = 60000;          // tier sizes
+var RL = 0.10, RH = 0.30;                  // true per-tier conversion rates
+var A_LIGHT = 6000,  A_HEAVY = 24000;      // observed by the app
+var W_LIGHT = 18000, W_HEAVY = 42000;      // observed by the browser
+var A_HEAVY_2 = 42000;                     // app heavy coverage after an SDK upgrade
+var REPEAT = 60000, ONCE = 40000;          // visit behaviour split
+var VISIT_DAYS = [1, 4, 13, 22], COOKIE_CAP = 7;
+var EVENTS = [0, 3, 7, 12, 57, 60, 66, 70, 78, 82, 90, 95], IDLE = 30, TAB_CLOSE = [57, 78];
+var ARRIVALS = [6396, 702, 351, 195, 101, 39, 12, 4];
+var DEVICES = [[1, 55000], [2, 30000], [3, 15000]];
+var RECALL = 0.70, PRECISION = 0.96;
+
+var PEOPLE = LIGHT + HEAVY;
+var TRUE_CONV = LIGHT * RL + HEAVY * RH;
+var TRUE_RATE = TRUE_CONV / PEOPLE;
+var A_OBS = A_LIGHT + A_HEAVY, A_CONV = A_LIGHT * RL + A_HEAVY * RH, A_RATE = A_CONV / A_OBS;
+var W_OBS = W_LIGHT + W_HEAVY, W_CONV = W_LIGHT * RL + W_HEAVY * RH, W_RATE = W_CONV / W_OBS;
+
+function num(v) { return Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+function pct(v, d) { return (v * 100).toFixed(d === undefined ? 1 : d) + '%'; }
+function pp(v, d) { return (v >= 0 ? '+' : '−') + (Math.abs(v) * 100).toFixed(d === undefined ? 1 : d) + ' pp'; }
+function chg(v, d) { return (v >= 0 ? '+' : '−') + (Math.abs(v) * 100).toFixed(d === undefined ? 1 : d) + '%'; }
+function cookieGroups(days, cap) {
+    var g = [[days[0]]];
+    for (var i = 1; i < days.length; i++) {
+        if (days[i] - days[i - 1] <= cap) g[g.length - 1].push(days[i]);
+        else g.push([days[i]]);
+    }
+    return g;
+}
+function sessions(evs, splitFn) {
+    var out = [], cur = [evs[0]];
+    for (var i = 1; i < evs.length; i++) {
+        if (splitFn(evs[i], evs[i - 1])) { out.push(cur); cur = [evs[i]]; }
+        else cur.push(evs[i]);
+    }
+    out.push(cur); return out;
+}
+
+/* 1. Identifier lifetime asymmetry */
+__charts.push(function () {
+    var s = setup('c1'); if (!s) return; var ctx = s.ctx, w = s.w;
+    var groups = cookieGroups(VISIT_DAYS, COOKIE_CAP);
+    var appIds = REPEAT + ONCE;
+    var webIds = REPEAT * groups.length + ONCE;
+    var visits = REPEAT * VISIT_DAYS.length + ONCE;
+    var appRate = REPEAT / appIds, webRate = REPEAT / webIds;
+
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Same ' + num(visits) + ' Visits, Two Denominators', w / 2, 22);
+    ctx.fillStyle = '#555'; ctx.font = '15px -apple-system';
+    ctx.fillText('Illustrative Example — ' + num(REPEAT) + ' people visit on days ' + VISIT_DAYS.join(', '), w / 2, 44);
+
+    var x0 = 70, x1 = 660, dMax = 24;
+    function dx(d) { return x0 + (x1 - x0) * d / dMax; }
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, 96); ctx.lineTo(x1, 96); ctx.stroke();
+    VISIT_DAYS.forEach(function (d) {
+        ctx.beginPath(); ctx.moveTo(dx(d), 96); ctx.lineTo(dx(d), 90); ctx.stroke();
+        ctx.fillStyle = '#555'; ctx.font = '15px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText('d' + d, dx(d), 84);
+        ctx.fillStyle = '#1a5276'; ctx.beginPath(); ctx.arc(dx(d), 96, 6, 0, Math.PI * 2); ctx.fill();
+    });
+
+    ctx.fillStyle = '#27ae60'; ctx.font = '15px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('App: install-scoped identifier', x0, 134);
+    var aL = dx(VISIT_DAYS[0]), aR = dx(VISIT_DAYS[VISIT_DAYS.length - 1]);
+    ctx.fillStyle = 'rgba(39,174,96,0.35)'; ctx.fillRect(aL, 142, aR - aL, 30);
+    ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 2; ctx.strokeRect(aL, 142, aR - aL, 30);
+    ctx.fillStyle = '#27ae60'; ctx.textAlign = 'center';
+    ctx.fillText('one identifier — ' + VISIT_DAYS.length + ' visits', (aL + aR) / 2, 162);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = '15px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Web: cookie expires after ' + COOKIE_CAP + ' idle days', x0, 204);
+    groups.forEach(function (g, i) {
+        var gl, gr;
+        if (g.length > 1) { gl = dx(g[0]); gr = dx(g[g.length - 1]); }
+        else { gl = dx(g[0]) - 13; gr = dx(g[0]) + 13; }
+        ctx.fillStyle = 'rgba(231,76,60,0.30)'; ctx.fillRect(gl, 212, gr - gl, 30);
+        ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.strokeRect(gl, 212, gr - gl, 30);
+        ctx.fillStyle = '#e74c3c'; ctx.font = '14px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText('id #' + (i + 1) + ' — ' + g.length + (g.length === 1 ? ' visit' : ' visits'), (gl + gr) / 2, 258);
+    });
+    for (var k = 0; k < groups.length - 1; k++) {
+        var ex = dx(groups[k][groups[k].length - 1] + COOKIE_CAP);
+        ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
+        ctx.beginPath(); ctx.moveTo(ex, 206); ctx.lineTo(ex, 250); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = '#e74c3c'; ctx.font = '14px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText('✂', ex, 204);
+    }
+
+    ctx.font = '17px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('App: ' + num(REPEAT) + ' / ' + num(appIds) + ' identifiers returning = ' + pct(appRate), x0, 296);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Web: ' + num(REPEAT) + ' / ' + num(webIds) + ' identifiers returning = ' + pct(webRate), x0, 318);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Numerator identical at ' + num(REPEAT) + ' — the ' + (appRate / webRate).toFixed(2) +
+        '× gap is ' + num(webIds) + ' / ' + num(appIds) + ', nothing else', w / 2, 346);
+});
+
+/* 2. Consent gates select different subsets */
+__charts.push(function () {
+    var s = setup('c2'); if (!s) return; var ctx = s.ctx, w = s.w;
+    var PX = 300 / HEAVY;   // pixels per person
+    var x = 200;
+
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('One Cohort, Two Gates, Three Rates', w / 2, 22);
+    ctx.fillStyle = '#555'; ctx.font = '15px -apple-system';
+    ctx.fillText('Illustrative Example — coverage fractions are constructed, not measured', w / 2, 44);
+
+    function block(heading, hColor, fill, obsL, obsH, yTop) {
+        ctx.fillStyle = hColor; ctx.font = 'bold 15px -apple-system'; ctx.textAlign = 'left';
+        ctx.fillText(heading, 70, yTop);
+        [[LIGHT, RL, obsL, 'Light'], [HEAVY, RH, obsH, 'Heavy']].forEach(function (r, i) {
+            var y = yTop + 8 + i * 44, size = r[0], rate = r[1], obs = r[2];
+            ctx.fillStyle = '#555'; ctx.font = '15px -apple-system'; ctx.textAlign = 'right';
+            ctx.fillText(r[3] + ' — ' + num(size) + ' @ ' + pct(rate, 0), x - 8, y + 22);
+            ctx.strokeStyle = '#bbb'; ctx.lineWidth = 1; ctx.strokeRect(x, y, size * PX, 30);
+            ctx.fillStyle = fill; ctx.fillRect(x, y, obs * PX, 30);
+            ctx.fillStyle = '#333'; ctx.font = '14px -apple-system'; ctx.textAlign = 'left';
+            ctx.fillText(num(obs) + ' of ' + num(size) + ' = ' + pct(obs / size, 0), 510, y + 20);
+        });
+    }
+    block('App — OS permission prompt', '#27ae60', '#27ae60', A_LIGHT, A_HEAVY, 70);
+    block('Web — consent banner', '#2980b9', '#2980b9', W_LIGHT, W_HEAVY, 192);
+
+    var items = [
+        ['App ' + pct(A_RATE), '#27ae60', num(A_CONV) + ' / ' + num(A_OBS), 110],
+        ['Web ' + pct(W_RATE), '#2980b9', num(W_CONV) + ' / ' + num(W_OBS), 300],
+        ['Cohort ' + pct(TRUE_RATE), '#e74c3c', num(TRUE_CONV) + ' / ' + num(PEOPLE), 500]
+    ];
+    items.forEach(function (it) {
+        ctx.fillStyle = it[1]; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'left';
+        ctx.fillText(it[0], it[3], 306);
+        ctx.fillStyle = '#555'; ctx.font = '14px -apple-system';
+        ctx.fillText(it[2], it[3], 326);
+    });
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Heavy share: ' + pct(A_HEAVY / A_OBS) + ' in-app, ' + pct(W_HEAVY / W_OBS) +
+        ' on web, ' + pct(HEAVY / PEOPLE) + ' in truth — the rate gap is the mix gap', w / 2, 350);
+});
+
+/* 3. Union averages two biases */
+__charts.push(function () {
+    var s = setup('c3'); if (!s) return; var ctx = s.ctx, w = s.w;
+    var covAL = A_LIGHT / LIGHT, covAH = A_HEAVY / HEAVY;
+    var covWL = W_LIGHT / LIGHT, covWH = W_HEAVY / HEAVY;
+    var bothL = LIGHT * covAL * covWL, bothH = HEAVY * covAH * covWH;
+    var distL = LIGHT * (covAL + covWL - covAL * covWL), distH = HEAVY * (covAH + covWH - covAH * covWH);
+    var naiveRate = (A_CONV + W_CONV) / (A_OBS + W_OBS);
+    var dedupConv = distL * RL + distH * RH, dedupObs = distL + distH;
+    var dedupRate = dedupConv / dedupObs;
+    var a2Obs = A_LIGHT + A_HEAVY_2, a2Conv = A_LIGHT * RL + A_HEAVY_2 * RH;
+    var driftRate = (a2Conv + W_CONV) / (a2Obs + W_OBS);
+
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText("Four Numbers for One Cohort's Conversion Rate", w / 2, 22);
+    ctx.fillStyle = '#555'; ctx.font = '15px -apple-system';
+    ctx.fillText('Illustrative Example — behaviour identical in every bar', w / 2, 44);
+
+    var base = 284, PXPP = 9, bw = 96;
+    var bars = [
+        {r: TRUE_RATE, c: '#27ae60', t: 'Cohort truth', f: num(TRUE_CONV) + ' / ' + num(PEOPLE)},
+        {r: naiveRate, c: '#e74c3c', t: 'Naive union', f: num(A_CONV + W_CONV) + ' / ' + num(A_OBS + W_OBS)},
+        {r: dedupRate, c: '#e67e22', t: 'People-deduped', f: num(dedupConv) + ' / ' + num(dedupObs)},
+        {r: driftRate, c: 'rgba(231,76,60,0.55)', lc: '#e74c3c',
+         t: 'App coverage ' + pct(covAH, 0) + '→' + pct(A_HEAVY_2 / HEAVY, 0),
+         f: num(a2Conv + W_CONV) + ' / ' + num(a2Obs + W_OBS)}
+    ];
+    var trueY = base - TRUE_RATE * 100 * PXPP;
+    bars.forEach(function (b, i) {
+        var x = 76 + i * (bw + 60), hgt = b.r * 100 * PXPP, y = base - hgt;
+        ctx.fillStyle = b.c; ctx.fillRect(x, y, bw, hgt);
+        ctx.fillStyle = b.lc || b.c; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText(pct(b.r), x + bw / 2, y - 8);
+        ctx.fillStyle = '#333'; ctx.font = '14px -apple-system';
+        ctx.fillText(b.t, x + bw / 2, base + 20);
+        ctx.fillStyle = '#555'; ctx.fillText(b.f, x + bw / 2, base + 38);
+        if (i > 0) {
+            ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(x + bw / 2, trueY); ctx.lineTo(x + bw / 2, y); ctx.stroke();
+            ctx.fillStyle = '#e74c3c'; ctx.font = '14px -apple-system'; ctx.textAlign = 'left';
+            ctx.fillText(pp(b.r - TRUE_RATE), x + bw / 2 + 6, (trueY + y) / 2 + 4);
+        }
+    });
+    ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(60, trueY); ctx.lineTo(680, trueY); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#27ae60'; ctx.font = '14px -apple-system'; ctx.textAlign = 'right';
+    ctx.fillText('cohort truth ' + pct(TRUE_RATE), 678, trueY - 6);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Every bar describes the same ' + num(TRUE_CONV) +
+        ' converters. Only the instrument changed.', w / 2, 350);
+});
+
+/* 4. Late-arriving app events */
+__charts.push(function () {
+    var s = setup('c4'); if (!s) return; var ctx = s.ctx, w = s.w;
+    var cum = [], run = 0;
+    ARRIVALS.forEach(function (v) { run += v; cum.push(run); });
+    var settled = run, sameDay = cum[0];
+    var shortfall = (settled - sameDay) / settled;
+
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('App Data Revises for a Week; Web Data Is Final', w / 2, 22);
+    ctx.fillStyle = '#555'; ctx.font = '15px -apple-system';
+    ctx.fillText('Illustrative Example — conversions attributed to a single day D', w / 2, 44);
+
+    var x0 = 90, x1 = 650, y0 = 300, y1 = 70, yMax = 16000, dMax = ARRIVALS.length - 1;
+    function px(i) { return x0 + (x1 - x0) * i / dMax; }
+    function py(v) { return y0 - (y0 - y1) * v / yMax; }
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, y1); ctx.lineTo(x0, y0); ctx.lineTo(x1, y0); ctx.stroke();
+    for (var i = 0; i <= dMax; i++) {
+        ctx.beginPath(); ctx.moveTo(px(i), y0); ctx.lineTo(px(i), y0 + 5); ctx.stroke();
+        ctx.fillStyle = '#555'; ctx.font = '14px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText(i === 0 ? 'D' : 'D+' + i, px(i), y0 + 18);
+    }
+    for (var v = 0; v <= yMax; v += 4000) {
+        ctx.strokeStyle = '#333'; ctx.beginPath(); ctx.moveTo(x0 - 5, py(v)); ctx.lineTo(x0, py(v)); ctx.stroke();
+        ctx.fillStyle = '#555'; ctx.font = '14px -apple-system'; ctx.textAlign = 'right';
+        ctx.fillText(num(v), x0 - 8, py(v) + 4);
+    }
+
+    ctx.strokeStyle = '#2980b9'; ctx.lineWidth = 2.5; ctx.beginPath();
+    ctx.moveTo(px(0), py(W_CONV)); ctx.lineTo(px(dMax), py(W_CONV)); ctx.stroke();
+    ctx.fillStyle = '#2980b9';
+    for (i = 0; i <= dMax; i++) { ctx.beginPath(); ctx.arc(px(i), py(W_CONV), 5, 0, Math.PI * 2); ctx.fill(); }
+    ctx.font = '15px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Web — ' + num(W_CONV) + ', final on day D', 360, py(W_CONV) - 14);
+
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2.5; ctx.beginPath();
+    cum.forEach(function (v, j) { if (j === 0) ctx.moveTo(px(j), py(v)); else ctx.lineTo(px(j), py(v)); });
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c';
+    cum.forEach(function (v, j) { ctx.beginPath(); ctx.arc(px(j), py(v), 5, 0, Math.PI * 2); ctx.fill(); });
+    ctx.font = '15px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('App — settles at ' + num(settled) + ' by D+' + dMax, 360, 232);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1.5; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(x0, py(settled)); ctx.lineTo(x1, py(settled)); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '14px -apple-system'; ctx.textAlign = 'right';
+    ctx.fillText(num(settled), 648, py(settled) - 6);
+
+    ctx.fillStyle = 'rgba(231,76,60,0.18)';
+    ctx.fillRect(px(0), py(settled), 26, py(sameDay) - py(settled));
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 15px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText(pct(shortfall) + ' missing on day D', px(0) + 32, (py(settled) + py(sameDay)) / 2 + 4);
+
+    ctx.font = '15px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillStyle = '#555';
+    ctx.fillText('Read on day D: app ' + pct(sameDay / A_OBS) + ' vs web ' + pct(W_RATE) +
+        ' — app looks worse', 110, 254);
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('Read on D+' + dMax + ': app ' + pct(settled / A_OBS) + ' vs web ' + pct(W_RATE) +
+        ' — app looks better', 110, 274);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Same numerator, ' + ARRIVALS.length +
+        ' different answers. A same-day comparison compares a partial series to a complete one.', w / 2, 344);
+});
+
+/* 5. Session definition mismatch */
+__charts.push(function () {
+    var s = setup('c5'); if (!s) return; var ctx = s.ctx, w = s.w;
+    var appS = sessions(EVENTS, function (cur, prev) { return cur - prev > IDLE; });
+    var webS = sessions(EVENTS, function (cur) { return TAB_CLOSE.indexOf(cur) >= 0; });
+    function dur(g) { return g[g.length - 1] - g[0]; }
+    function total(ss) { var t = 0; ss.forEach(function (g) { t += dur(g); }); return t; }
+    var maxGap = 0, gapAt = 0;
+    for (var i = 1; i < EVENTS.length; i++) {
+        if (EVENTS[i] - EVENTS[i - 1] > maxGap) { maxGap = EVENTS[i] - EVENTS[i - 1]; gapAt = i; }
+    }
+
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('One Trace, Two Session Counts', w / 2, 22);
+    ctx.fillStyle = '#555'; ctx.font = '15px -apple-system';
+    ctx.fillText('Illustrative Example — ' + EVENTS.length + ' events over ' +
+        EVENTS[EVENTS.length - 1] + ' minutes, one person', w / 2, 44);
+
+    var x0 = 70, x1 = 660, mMax = 100;
+    function mx(m) { return x0 + (x1 - x0) * m / mMax; }
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, 96); ctx.lineTo(x1, 96); ctx.stroke();
+    for (var t = 0; t <= mMax; t += 20) {
+        ctx.beginPath(); ctx.moveTo(mx(t), 96); ctx.lineTo(mx(t), 102); ctx.stroke();
+        ctx.fillStyle = '#555'; ctx.font = '14px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText(String(t), mx(t), 116);
+    }
+    ctx.fillStyle = '#1a5276';
+    EVENTS.forEach(function (m) { ctx.beginPath(); ctx.arc(mx(m), 96, 5, 0, Math.PI * 2); ctx.fill(); });
+
+    ctx.strokeStyle = '#e67e22'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(mx(EVENTS[gapAt - 1]), 76); ctx.lineTo(mx(EVENTS[gapAt]), 76); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e67e22'; ctx.font = '14px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText(maxGap + '-min gap', (mx(EVENTS[gapAt - 1]) + mx(EVENTS[gapAt])) / 2, 70);
+
+    function row(label, color, fill, ss, labelY, barY) {
+        ctx.fillStyle = color; ctx.font = 'bold 15px -apple-system'; ctx.textAlign = 'left';
+        ctx.fillText(label, x0, labelY);
+        ss.forEach(function (g) {
+            var l = mx(g[0]), r = mx(g[g.length - 1]);
+            ctx.fillStyle = fill; ctx.fillRect(l, barY, r - l, 34);
+            ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.strokeRect(l, barY, r - l, 34);
+            ctx.fillStyle = color; ctx.font = '14px -apple-system'; ctx.textAlign = 'center';
+            ctx.fillText(g.length + ' ev / ' + dur(g) + ' min', (l + r) / 2, barY + 22);
+        });
+    }
+    row('App — ' + IDLE + '-min inactivity timeout', '#27ae60', 'rgba(39,174,96,0.35)', appS, 152, 160);
+    row('Web — session ends when the tab closes', '#e74c3c', 'rgba(231,76,60,0.30)', webS, 228, 236);
+    TAB_CLOSE.forEach(function (m) {
+        ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(mx(m), 232); ctx.lineTo(mx(m), 274); ctx.stroke();
+        ctx.fillStyle = '#e74c3c'; ctx.font = '14px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText('×', mx(m), 286);
+    });
+
+    var aN = appS.length, wN = webS.length;
+    ctx.fillStyle = '#1a5276'; ctx.font = '15px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Sessions ' + aN + ' vs ' + wN + ' (' + chg((wN - aN) / aN) + ')' +
+        ' · events/session ' + (EVENTS.length / aN).toFixed(2) + ' vs ' + (EVENTS.length / wN).toFixed(2) +
+        ' (' + chg((EVENTS.length / wN - EVENTS.length / aN) / (EVENTS.length / aN)) + ')' +
+        ' · in-session minutes ' + total(appS) + ' vs ' + total(webS) +
+        ' (' + chg((total(appS) - total(webS)) / total(webS)) + ')', w / 2, 306);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 17px -apple-system';
+    ctx.fillText('Nothing about the person changed. The session boundary is a property of the channel.', w / 2, 332);
+});
+
+/* 6. Cross-device stitching */
+__charts.push(function () {
+    var s = setup('c6'); if (!s) return; var ctx = s.ctx, w = s.w;
+    var raw = 0, ppl = 0;
+    DEVICES.forEach(function (d) { raw += d[0] * d[1]; ppl += d[1]; });
+    var links = raw - ppl;
+    var found = links * RECALL, missed = links - found;
+    var asserted = found / PRECISION, falseM = asserted - found;
+    var entities = raw - asserted;
+
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Three Denominators, One Set of ' + num(TRUE_CONV) + ' Converters', w / 2, 22);
+    ctx.fillStyle = '#555'; ctx.font = '15px -apple-system';
+    ctx.fillText('Illustrative Example — stitching at ' + pct(RECALL, 0) + ' recall, ' +
+        pct(PRECISION, 0) + ' precision', w / 2, 44);
+
+    var x = 150, PXID = 480 / raw;
+    var rows = [
+        {v: raw, y: 76, fill: 'rgba(26,82,118,0.35)', tc: '#1a5276', lab: num(raw) + ' raw identifiers', row: 'Raw', rc: '#1a5276'},
+        {v: entities, y: 146, fill: '#e67e22', tc: '#ffffff', lab: num(entities) + ' stitched entities', row: 'Stitched', rc: '#e67e22'},
+        {v: ppl, y: 216, fill: '#27ae60', tc: '#ffffff', lab: num(ppl) + ' real people', row: 'Truth', rc: '#27ae60'}
+    ];
+    rows.forEach(function (r) {
+        ctx.fillStyle = r.fill; ctx.fillRect(x, r.y, r.v * PXID, 40);
+        ctx.fillStyle = r.tc; ctx.font = '15px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText(r.lab, x + r.v * PXID / 2, r.y + 25);
+        ctx.fillStyle = r.rc; ctx.font = 'bold 15px -apple-system'; ctx.textAlign = 'right';
+        ctx.fillText(r.row, x - 8, r.y + 25);
+    });
+    ctx.fillStyle = 'rgba(231,76,60,0.20)';
+    ctx.fillRect(x + ppl * PXID, 146, (entities - ppl) * PXID, 44);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x + ppl * PXID, 190); ctx.lineTo(x + entities * PXID, 190); ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = '14px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('+' + num(missed) + ' missed links − ' + num(falseM) + ' false merges = +' +
+        num(entities - ppl), x + entities * PXID + 8, 196);
+
+    var readouts = [
+        [num(TRUE_CONV) + ' / ' + num(raw) + ' = ' + pct(TRUE_CONV / raw), '#1a5276', 90],
+        [num(TRUE_CONV) + ' / ' + num(entities) + ' = ' + pct(TRUE_CONV / entities), '#e67e22', 300],
+        [num(TRUE_CONV) + ' / ' + num(ppl) + ' = ' + pct(TRUE_CONV / ppl), '#27ae60', 510]
+    ];
+    readouts.forEach(function (r) {
+        ctx.fillStyle = r[1]; ctx.font = 'bold 15px -apple-system'; ctx.textAlign = 'left';
+        ctx.fillText(r[0], r[2], 276);
+    });
+    ctx.fillStyle = '#555'; ctx.font = '14px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Numerator held at ' + num(TRUE_CONV) + ' by construction; false merges also deflate it, so ' +
+        pct(TRUE_CONV / entities) + ' is an upper bound.', w / 2, 300);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 17px -apple-system';
+    ctx.fillText('The stitched denominator is a model output — retrain the model and the metric moves', w / 2, 328);
+});
+
+/* 7. Reweighting recovers the truth */
+__charts.push(function () {
+    var s = setup('c7'); if (!s) return; var ctx = s.ctx, w = s.w;
+    var tiers = [{n: 'Light', size: LIGHT, rate: RL, a: A_LIGHT, wb: W_LIGHT},
+                 {n: 'Heavy', size: HEAVY, rate: RH, a: A_HEAVY, wb: W_HEAVY}];
+    function reweight(key) {
+        var conv = 0, base = 0;
+        tiers.forEach(function (t) { var wt = t.size / t[key]; conv += t[key] * t.rate * wt; base += t[key] * wt; });
+        return {conv: conv, base: base, rate: conv / base};
+    }
+    var rwA = reweight('a'), rwW = reweight('wb');
+
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Weight = 1 / Coverage → Both Channels Recover ' + pct(rwA.rate), w / 2, 22);
+    ctx.fillStyle = '#555'; ctx.font = '15px -apple-system';
+    ctx.fillText('Illustrative Example — weights require a cohort frame the channels do not contain', w / 2, 44);
+
+    var cols = [80, 230, 360, 500, 640];
+    var heads = ['Tier', 'Coverage', 'Weight', 'Weighted conv.', 'Weighted base'];
+    ctx.fillStyle = '#333'; ctx.font = 'bold 15px -apple-system'; ctx.textAlign = 'left';
+    heads.forEach(function (hd, i) { ctx.fillText(hd, cols[i], 76); });
+
+    function channelRows(key, label, color, yLabel, rw) {
+        ctx.fillStyle = color; ctx.font = 'bold 15px -apple-system'; ctx.textAlign = 'left';
+        ctx.fillText(label, cols[0], yLabel);
+        tiers.forEach(function (t, i) {
+            var y = yLabel + 22 + i * 22, obs = t[key], wt = t.size / obs;
+            var cells = [t.n, pct(obs / t.size, 0), wt.toFixed(3), num(obs * t.rate * wt), num(obs * wt)];
+            ctx.fillStyle = '#333'; ctx.font = '15px -apple-system';
+            cells.forEach(function (cv, j) { ctx.fillText(cv, cols[j], y); });
+        });
+        var obsTot = tiers.reduce(function (a, t) { return a + t[key]; }, 0);
+        var y2 = yLabel + 22 + tiers.length * 22;
+        ctx.fillStyle = color;
+        [label + ' total', pct(obsTot / PEOPLE), '—', num(rw.conv), num(rw.base)]
+            .forEach(function (cv, j) { ctx.fillText(cv, cols[j], y2); });
+    }
+    channelRows('a', 'App', '#27ae60', 100, rwA);
+    channelRows('wb', 'Web', '#2980b9', 196, rwW);
+
+    var bx = 210, PXPP = 8;
+    ctx.fillStyle = '#555'; ctx.font = '14px -apple-system'; ctx.textAlign = 'right';
+    ctx.fillText('reweighted', bx - 8, 309);
+    [[rwA, '#27ae60', 292, 'App'], [rwW, '#2980b9', 316, 'Web']].forEach(function (b) {
+        ctx.fillStyle = b[1]; ctx.fillRect(bx, b[2], b[0].rate * 100 * PXPP, 18);
+        ctx.font = '14px -apple-system'; ctx.textAlign = 'left';
+        ctx.fillText(b[3] + ' reweighted ' + pct(b[0].rate), bx + b[0].rate * 100 * PXPP + 8, b[2] + 14);
+    });
+    var tx = bx + TRUE_RATE * 100 * PXPP;
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(tx, 286); ctx.lineTo(tx, 340); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '14px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('cohort truth', tx + 6, 284);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Reweighted union ' + num(rwA.conv + rwW.conv) + ' / ' + num(rwA.base + rwW.base) +
+        ' = ' + pct((rwA.conv + rwW.conv) / (rwA.base + rwW.base)) +
+        ' — and it stays ' + pct(TRUE_RATE) + ' at any channel row-share', w / 2, 352);
+});
+
+__charts.forEach(function (f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function () {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function () { __charts.forEach(function (f) { f(); }); }, 150);
+});
+</script>
+</body>
+</html>

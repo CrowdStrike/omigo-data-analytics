@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>163. Cookies and Browser Tracking</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 20px 10px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 50%; }
+.obj-table td:last-child { width: 50%; text-align: center; }
+.obj-table tr:nth-child(even) td { background: #fafcfe; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; width: 100%; height: auto; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+</style>
+</head>
+<body>
+
+<h1>Cookies and Browser Tracking</h1>
+<p class="subtitle">A web metric is not a measurement of people &mdash; it is a measurement of what the browser's storage and identity rules were willing to let you observe that month. Change the rules and every number moves with no product change behind it.</p>
+
+<div class="philosophy">
+<strong>The fundamental problem:</strong> Cookies, client-side storage, fingerprints and beacons are the <em>instrument</em>, not the phenomenon. Each one has a scope (who set it), a lifetime (how long the browser keeps it), and a resolution (person, device, or group). When a tracking-prevention policy or a third-party phase-out changes any of those three, the time series takes a step &mdash; and the step is the instrument changing, not users changing. Comparing across that step compares two different instruments.
+</div>
+
+<div class="philosophy">
+<strong>Illustrative Example.</strong> Every count, rate, entropy value and lifetime below is constructed so the arithmetic closes and can be checked by hand. None of it is a measurement of any real browser, vendor, or population. Real storage lifetimes, real deprecation timetables, and real fingerprint entropy are not asserted anywhere on this page.
+</div>
+
+<h2>A Cookie's Scope Is Set by Who Wrote It, Not by Who Reads the Report</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">One Shared Third-Party Identifier Sees 45 Site Pairs; First-Party Sees 0</div>
+<ul>
+<li><strong>The definition:</strong> "First-party" and "third-party" describe the top-level site in the address bar, not ownership.</li>
+<li><strong>The same vendor, both roles:</strong> Vendor A's cookie is first-party on its own site and third-party inside an embed.</li>
+<li><strong>What first-party observes:</strong> every event on one site, and nothing whatsoever about the other nine.</li>
+<li><strong>What third-party observes:</strong> the same identifier across all 10 sites, so co-visits become visible.</li>
+<li><strong>The reach arithmetic:</strong> 10 embedded sites give C(10,2) = 45 observable cross-site pairs; first-party gives 0.</li>
+<li><strong>Coverage per island:</strong> one first-party cookie sees 1/10 = 10.0% of the 10-site graph it used to see whole.</li>
+<li><strong>Not a volume loss:</strong> the per-site event counts are unchanged &mdash; only the joins between them disappear.</li>
+<li><strong>The reporting consequence:</strong> cross-site reach, frequency, and attribution are not degraded, they are undefined.</li>
+</ul>
+</td><td><canvas id="c1" width="720" height="340"></canvas></td></tr>
+</table>
+
+<h2>A Partitioned Storage Model Splits One Person Into Many Identifiers</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">165,000 Identifiers for 100,000 People &mdash; and 10,000 for Another 30,000</div>
+<ul>
+<li><strong>The mechanism:</strong> storage is keyed by (top-level site, embedded origin), so the same code gets a fresh slot per site.</li>
+<li><strong>One-to-many:</strong> a person on 5 sites holds 5 identifiers, and a unique-visitor count adds all 5.</li>
+<li><strong>The inflation:</strong> 60,000&times;1 + 25,000&times;2 + 10,000&times;3 + 5,000&times;5 = 165,000 identifiers for 100,000 people.</li>
+<li><strong>The factor:</strong> 165,000 / 100,000 = 1.65&times;, so "unique visitors" overstates people by 65% on private devices.</li>
+<li><strong>Many-to-one:</strong> 30,000 people sharing 10,000 household devices collapse to 10,000 identifiers, a 0.333&times; factor.</li>
+<li><strong>They do not cancel:</strong> together, 130,000 people appear as 175,000 identifiers &mdash; a 1.346&times; net inflation.</li>
+<li><strong>Direction is unknowable:</strong> the same reported number can be an overcount or an undercount by segment.</li>
+<li><strong>What to do:</strong> treat identifier counts as an upper bound on devices, never as an estimate of people.</li>
+</ul>
+</td><td><canvas id="c2" width="720" height="340"></canvas></td></tr>
+</table>
+
+<h2>A Storage Eviction Cap Rewrites "Returning Visitor" as a Policy Setting</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Same 120,000 Visitors: New-Visitor Share Moves 16.67% &rarr; 66.67% by Cap Alone</div>
+<ul>
+<li><strong>The mechanism:</strong> client-side storage carries a maximum retention window, and eviction is silent.</li>
+<li><strong>The consequence:</strong> any visitor whose gap between visits exceeds the cap arrives with no prior identifier.</li>
+<li><strong>Reclassified, not changed:</strong> that person is logged as new, though the behaviour is identical to last month.</li>
+<li><strong>The composition:</strong> of 120,000 visitors, 40,000 return within 3 days, 25,000 at 10, 20,000 at 21, 15,000 at 90.</li>
+<li><strong>Truth:</strong> 100,000 of the 120,000 are genuinely returning, so the true new-visitor share is 16.67%.</li>
+<li><strong>Cap 400 days:</strong> nothing is evicted and the report reproduces the truth &mdash; new share 16.67%.</li>
+<li><strong>Cap 30 days:</strong> the 90-day cohort resets, so new = 35,000 and the reported new share is 29.17%.</li>
+<li><strong>Cap 7 days:</strong> the 10-, 21- and 90-day cohorts all reset, new = 80,000, and new share reads 66.67%.</li>
+<li><strong>The distortion factor:</strong> 80,000 / 20,000 = 4.0&times; more "new visitors" from a storage setting, not from growth.</li>
+</ul>
+</td><td><canvas id="c3" width="720" height="340"></canvas></td></tr>
+</table>
+
+<h2>A Deprecation Wave Is a Regime Change, Not a Trend</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Behaviour Flat at 0.0%; the Year-Over-Year Report Says &minus;60.0%</div>
+<ul>
+<li><strong>The setup:</strong> the same 12-month human series repeats exactly, so the true year-over-year change is 0.0%.</li>
+<li><strong>The only change:</strong> the observation share drops from 5/6 to 1/3 when a tracking-prevention policy ships.</li>
+<li><strong>Regime A total:</strong> the 12 observed monthly counts sum to 1,250,000 against 1,500,000 real humans.</li>
+<li><strong>Regime B total:</strong> the identical humans are observed as 500,000 &mdash; the instrument, not the audience, halved.</li>
+<li><strong>The naive comparison:</strong> 500,000 / 1,250,000 &minus; 1 = &minus;60.0%, exactly (1/3) &divide; (5/6) &minus; 1, entirely instrumental.</li>
+<li><strong>What survives:</strong> within-regime growth is +20.0% in both years, because a ratio cancels the observation share.</li>
+<li><strong>Denominator contamination:</strong> server-side conversions are unaffected, so conversion rate moves the other way.</li>
+<li><strong>The rate numbers:</strong> true 2.50% is reported as 3.00% in regime A and 7.50% in regime B &mdash; a 2.5&times; jump.</li>
+<li><strong>The tell:</strong> a step with no ramp, aligned to a release date and not to any product change, is an instrument.</li>
+</ul>
+</td><td><canvas id="c4" width="720" height="360"></canvas></td></tr>
+</table>
+
+<h2>Fingerprinting Is a Probabilistic Identifier Whose Accuracy Falls With Scale</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">18 Bits Is 99.62% Unique at N=1,000 and 2.20% Unique at N=1,000,000</div>
+<ul>
+<li><strong>What it is:</strong> a fingerprint is a hash of observable configuration, so it is a bucket label, not an ID.</li>
+<li><strong>The capacity:</strong> H bits of entropy give 2<sup>H</sup> distinguishable configurations &mdash; at H=18 that is 262,144 buckets.</li>
+<li><strong>Expected collisions:</strong> the number of <em>other</em> people sharing your exact fingerprint is (N&minus;1)&middot;2<sup>&minus;H</sup>.</li>
+<li><strong>The birthday form:</strong> P(not unique) = 1 &minus; (1 &minus; 2<sup>&minus;H</sup>)<sup>(N&minus;1)</sup>, which grows with N at fixed H.</li>
+<li><strong>The degradation:</strong> at H=18, P(not unique) runs 0.38% &rarr; 3.74% &rarr; 31.71% &rarr; 97.80% as N runs 10&sup3; &rarr; 10&#8310;.</li>
+<li><strong>Scale is the enemy:</strong> the instrument does not get worse &mdash; the population it must separate gets bigger.</li>
+<li><strong>The entropy needed:</strong> 95% uniqueness at N=10&#8310; requires H = log2(999,999 / &minus;ln 0.95) = 24.22 &rarr; 25 bits.</li>
+<li><strong>The cost of those bits:</strong> 18 &rarr; 25 bits is 2&#8311; = 128&times; the configuration space for one 95% guarantee.</li>
+<li><strong>The undercount:</strong> at H=18, N=10&#8310;, only 256,365 distinct fingerprints exist &mdash; a 74.36% deficit in "unique users".</li>
+</ul>
+</td><td><canvas id="c5" width="720" height="360"></canvas></td></tr>
+</table>
+
+<h2>A Fired Beacon Is Evidence of a Load, Not of a Human</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">1,000,000 Fires Cover 775,000 Human Views: 62.0% Precision, 80.0% Recall</div>
+<ul>
+<li><strong>What a beacon proves:</strong> a request reached the collector, which means a load happened somewhere.</li>
+<li><strong>What it does not prove:</strong> that a person was present, awake, or looking at the rendered pixel.</li>
+<li><strong>False positives:</strong> of 1,000,000 fires, 140,000 are automated fetches and 120,000 are speculative preloads.</li>
+<li><strong>Double counting:</strong> 80,000 fires are duplicates from retries and restored back-navigation pages.</li>
+<li><strong>Rendered but unseen:</strong> 40,000 fires come from offscreen renders with no human view behind them at all.</li>
+<li><strong>Precision:</strong> 620,000 of the 1,000,000 fires correspond to a human view, so precision is 62.0%.</li>
+<li><strong>False negatives:</strong> 155,000 genuine human views fired nothing, so true human views are 775,000.</li>
+<li><strong>Recall:</strong> 620,000 / 775,000 = 80.0%, and the two error directions partly offset by accident.</li>
+<li><strong>The dangerous part:</strong> the headline total is only 29.03% high, so the 38% precision defect stays invisible.</li>
+</ul>
+</td><td><canvas id="c6" width="720" height="340"></canvas></td></tr>
+</table>
+
+<h2>An Aggregate Reporting Scheme Changes the Unit of Observation</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">1,006 Conversions Become 8 Noisy Group Totals and 0 Person Records</div>
+<ul>
+<li><strong>The substitution:</strong> per-person events are replaced by group counts with noise added and small groups withheld.</li>
+<li><strong>The unit changes:</strong> the observation is no longer a person, so per-person questions have no denominator.</li>
+<li><strong>Not recoverable:</strong> reach and frequency need a per-person visit count, which no group total contains.</li>
+<li><strong>Silent suppression:</strong> a minimum-group threshold of 10 drops the group of 6, removing 0.60% with no error.</li>
+<li><strong>Noise is per group, not per total:</strong> &sigma; = 10 added to each of 8 groups is 2.83% of the 1,000 released total.</li>
+<li><strong>But per group it dominates:</strong> relative noise runs 2.5% on the group of 400 and 100.0% on the group of 10.</li>
+<li><strong>The usable subset:</strong> only 5 groups have count &ge; 3&sigma;, covering 950 of 1,006 conversions &mdash; 94.43%.</li>
+<li><strong>The unusable tail:</strong> the groups of 25, 15 and 10 carry 4.97% of conversions at &ge;40% relative noise each.</li>
+<li><strong>The right read:</strong> trust the aggregate, refuse the small cells, and stop reporting per-person metrics entirely.</li>
+</ul>
+</td><td><canvas id="c7" width="720" height="360"></canvas></td></tr>
+</table>
+
+<h2>Segment by Observability Regime, Re-Baseline at the Step, Never Mix</h2>
+
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">A Pooled 24-Month Mean of 72,917 Is 30.0% Below One Regime and 75.0% Above the Other</div>
+<ul>
+<li><strong>The rule:</strong> an observability regime is a dimension of the data, so put it in the group-by, not in the total.</li>
+<li><strong>Why pooling fails:</strong> the 24-month mean is 1,750,000 / 24 = 72,917, a month that occurred in neither regime.</li>
+<li><strong>The two truths:</strong> regime A averages 104,167/month and regime B averages 41,667/month.</li>
+<li><strong>The distance:</strong> 72,917 is 30.0% below regime A and 75.0% above regime B &mdash; it describes no observed month.</li>
+<li><strong>Re-baseline, don't backfill:</strong> index each regime to its own first month and compare shapes, not levels.</li>
+<li><strong>What is comparable:</strong> ratios inside one regime &mdash; both years show +20.0% growth, matching the truth exactly.</li>
+<li><strong>What is not:</strong> any level, any absolute count, and any rate whose denominator crosses the boundary.</li>
+<li><strong>Annotate the series:</strong> mark the boundary in the data model itself so no future query pools across it.</li>
+<li><strong>Say it out loud:</strong> report "instrument changed, level not comparable" rather than a number nobody can use.</li>
+</ul>
+</td><td><canvas id="c8" width="720" height="340"></canvas></td></tr>
+</table>
+
+<script>
+var __charts = [];
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    if (!c.dataset.w) { c.dataset.w = c.getAttribute('width') || '720'; c.dataset.h = c.getAttribute('height') || '340'; }
+    var w = parseInt(c.dataset.w), h = parseInt(c.dataset.h);
+    var dpr = window.devicePixelRatio || 1;
+    c.style.maxWidth = w + 'px';
+    var cssW = c.getBoundingClientRect().width || w;
+    var scale = (cssW / w) * dpr;
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    var ctx = c.getContext('2d'); ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, w, h);
+    return {ctx: ctx, w: w, h: h};
+}
+
+/* ---- Single source of truth: scenario constants, declared once ---- */
+var SITES = 10;
+var COHORTS = [[60000,1],[25000,2],[10000,3],[5000,5]];
+var SHARED_PEOPLE = 30000, SHARED_PER_DEVICE = 3;
+var GAPS = [[40000,3],[25000,10],[20000,21],[15000,90]];
+var TRUE_NEW = 20000, CAPS = [400,30,7];
+var TRUE_K = [120,114,126,120,126,120,114,120,126,132,138,144];
+var SHARE_A = 5/6, SHARE_B = 1/3, CONV = 3000;
+var H_LOW = 18, H_HIGH = 25, TARGET_UNIQ = 0.95;
+var FIRES = [620000,140000,120000,80000,40000];
+var MISSED = 155000;
+var GROUPS = [400,250,160,90,50,25,15,10,6];
+var SIGMA = 10, MIN_GROUP = 10;
+
+/* ---- Helpers ---- */
+function sum(a) { return a.reduce(function (x, y) { return x + y; }, 0); }
+function num(v) { return Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+function pct(v, d) { return (v * 100).toFixed(d === undefined ? 1 : d) + '%'; }
+function notUnique(H, N) { return 1 - Math.pow(1 - Math.pow(2, -H), N - 1); }
+
+/* Derived series shared by charts c4 and c8 */
+var TRUE_SERIES = TRUE_K.map(function (k) { return k * 1000; });
+var OBS_A = TRUE_SERIES.map(function (v) { return v * SHARE_A; });
+var OBS_B = TRUE_SERIES.map(function (v) { return v * SHARE_B; });
+var TOTAL_A = sum(OBS_A), TOTAL_B = sum(OBS_B);
+
+/* 1. Scope: third-party vs first-party observability graph */
+__charts.push(function () {
+    var s = setup('c1'); if (!s) return; var ctx = s.ctx, w = s.w;
+    var pairs = SITES * (SITES - 1) / 2, coverage = 1 / SITES;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Same Vendor, Same Code, Two Different Instruments', w / 2, 22);
+    ctx.fillStyle = '#555'; ctx.font = '15px -apple-system';
+    ctx.fillText('Illustrative Example — measurement code embedded on ' + SITES + ' top-level sites', w / 2, 44);
+    ctx.font = 'bold 15px -apple-system';
+    ctx.fillStyle = '#e67e22'; ctx.fillText('Third-party cookie', 180, 72);
+    ctx.fillStyle = '#27ae60'; ctx.fillText('First-party only', 530, 72);
+
+    function nodes(cx, cy) {
+        var out = [];
+        for (var i = 0; i < SITES; i++) {
+            var a = -Math.PI / 2 + i * (2 * Math.PI / SITES);
+            out.push([cx + 78 * Math.cos(a), cy + 78 * Math.sin(a)]);
+        }
+        return out;
+    }
+    var L = nodes(180, 180), R = nodes(530, 180);
+
+    // chords: every observable pair
+    ctx.strokeStyle = 'rgba(230,126,34,0.28)'; ctx.lineWidth = 0.5;
+    for (var i = 0; i < SITES; i++) for (var j = i + 1; j < SITES; j++) {
+        ctx.beginPath(); ctx.moveTo(L[i][0], L[i][1]); ctx.lineTo(L[j][0], L[j][1]); ctx.stroke();
+    }
+    // spokes to the shared identifier
+    ctx.strokeStyle = 'rgba(230,126,34,0.75)'; ctx.lineWidth = 1;
+    L.forEach(function (p) { ctx.beginPath(); ctx.moveTo(180, 180); ctx.lineTo(p[0], p[1]); ctx.stroke(); });
+    L.forEach(function (p) {
+        ctx.fillStyle = 'rgba(26,82,118,0.35)'; ctx.beginPath(); ctx.arc(p[0], p[1], 9, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 1; ctx.stroke();
+    });
+    ctx.fillStyle = '#e67e22'; ctx.beginPath(); ctx.arc(180, 180, 16, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffffff'; ctx.font = '11px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('one ID', 180, 184);
+
+    ctx.fillStyle = '#e67e22'; ctx.font = 'bold 15px -apple-system';
+    ctx.fillText(num(pairs) + ' joinable site pairs', 180, 290);
+    ctx.fillStyle = '#555'; ctx.font = '14px -apple-system';
+    ctx.fillText('reach, frequency, attribution all defined', 180, 310);
+
+    // first-party: isolated storage islands
+    R.forEach(function (p) {
+        ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(p[0], p[1], 20, 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = 'rgba(26,82,118,0.35)'; ctx.beginPath(); ctx.arc(p[0], p[1], 9, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 1; ctx.stroke();
+    });
+    ctx.fillStyle = '#27ae60'; ctx.font = 'bold 15px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText(num(0) + ' joinable site pairs', 530, 290);
+    ctx.fillStyle = '#555'; ctx.font = '14px -apple-system';
+    ctx.fillText('each site sees ' + pct(coverage, 1) + ' of the graph', 530, 310);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 15px -apple-system';
+    ctx.fillText('Per-site event counts are identical in both panels. Only the joins vanish.', w / 2, 332);
+});
+
+/* 2. Partitioned storage: identity inflation and collapse */
+__charts.push(function () {
+    var s = setup('c2'); if (!s) return; var ctx = s.ctx, w = s.w;
+    var privPeople = sum(COHORTS.map(function (c) { return c[0]; }));
+    var privIds = sum(COHORTS.map(function (c) { return c[0] * c[1]; }));
+    var sharedIds = SHARED_PEOPLE / SHARED_PER_DEVICE;
+    var totPeople = privPeople + SHARED_PEOPLE, totIds = privIds + sharedIds;
+
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('One Person, k Identifiers — and k People, One Identifier', w / 2, 22);
+    ctx.fillStyle = '#555'; ctx.font = '15px -apple-system';
+    ctx.fillText('Illustrative Example — ' + num(totPeople) + ' people under a partitioned storage model', w / 2, 44);
+
+    ctx.font = 'bold 15px -apple-system'; ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'left'; ctx.fillText('People', 50, 72);
+    ctx.textAlign = 'center'; ctx.fillText('Sites visited', 330, 72);
+    ctx.textAlign = 'right'; ctx.fillText('Identifiers created', 690, 72);
+
+    var rows = COHORTS.map(function (c) {
+        return {people: c[0], mid: '×' + c[1] + (c[1] === 1 ? ' site' : ' sites'), ids: c[0] * c[1]};
+    });
+    rows.push({people: SHARED_PEOPLE, mid: SHARED_PER_DEVICE + ' per device', ids: sharedIds, shared: true});
+    var SC = 240;
+    rows.forEach(function (r, i) {
+        var y = 92 + i * 34, lw = r.people / SC, rw = r.ids / SC;
+        var rc = r.shared ? '#2980b9' : (r.ids / r.people >= 5 ? '#e74c3c' : (r.ids > r.people ? '#e67e22' : 'rgba(26,82,118,0.35)'));
+        ctx.fillStyle = 'rgba(26,82,118,0.35)'; ctx.fillRect(50, y, lw, 22);
+        ctx.fillStyle = rc; ctx.fillRect(690 - rw, y, rw, 22);
+        ctx.font = '14px -apple-system'; ctx.textAlign = 'left';
+        ctx.fillStyle = '#1a5276'; ctx.fillText(num(r.people), 50 + lw + 6, y + 16);
+        ctx.textAlign = 'center'; ctx.fillStyle = '#555'; ctx.fillText(r.mid, 330, y + 16);
+        ctx.textAlign = 'right'; ctx.fillStyle = rc === 'rgba(26,82,118,0.35)' ? '#1a5276' : rc;
+        ctx.fillText(num(r.ids), 690 - rw - 6, y + 16);
+    });
+
+    ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(50, 272); ctx.lineTo(690, 272); ctx.stroke();
+    ctx.font = 'bold 15px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillStyle = '#1a5276'; ctx.fillText(num(totPeople) + ' people', 50, 292);
+    ctx.textAlign = 'right'; ctx.fillStyle = '#e74c3c'; ctx.fillText(num(totIds) + ' identifiers', 690, 292);
+
+    ctx.textAlign = 'center'; ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 15px -apple-system';
+    ctx.fillText('Private devices inflate ' + (privIds / privPeople).toFixed(2) + '×, shared devices deflate '
+        + (sharedIds / SHARED_PEOPLE).toFixed(3) + '×, net ' + (totIds / totPeople).toFixed(3) + '× — they do not cancel.', w / 2, 316);
+    ctx.fillStyle = '#555'; ctx.font = '14px -apple-system';
+    ctx.fillText('Identifier count is an upper bound on devices. It is not an estimate of people.', w / 2, 334);
+});
+
+/* 3. Eviction cap rewrites "returning visitor" */
+__charts.push(function () {
+    var s = setup('c3'); if (!s) return; var ctx = s.ctx, w = s.w;
+    var TOTAL = TRUE_NEW + sum(GAPS.map(function (g) { return g[0]; }));
+    var trueRet = TOTAL - TRUE_NEW;
+    var BASE = 272, PX = 200 / TOTAL, BW = 120;
+
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Behaviour Held Constant. The Cap Moves the Metric.', w / 2, 22);
+    ctx.fillStyle = '#555'; ctx.font = '15px -apple-system';
+    ctx.fillText('Illustrative Example — ' + num(TOTAL) + ' monthly visitors, identical in all three bars', w / 2, 44);
+
+    var newAt = {};
+    CAPS.forEach(function (cap, i) {
+        var x = 90 + i * 210;
+        var nc = TRUE_NEW + sum(GAPS.filter(function (g) { return g[1] > cap; }).map(function (g) { return g[0]; }));
+        newAt[cap] = nc;
+        var rc = TOTAL - nc, rh = rc * PX, nh = nc * PX;
+        ctx.fillStyle = 'rgba(26,82,118,0.35)'; ctx.fillRect(x, BASE - rh, BW, rh);
+        ctx.fillStyle = '#e74c3c'; ctx.fillRect(x, BASE - rh - nh, BW, nh);
+        ctx.font = '14px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillStyle = '#1a5276'; ctx.fillText(num(rc), x + BW / 2, BASE - rh / 2 + 5);
+        if (nh > 20) { ctx.fillStyle = '#ffffff'; ctx.fillText(num(nc), x + BW / 2, BASE - rh - nh / 2 + 5); }
+        else { ctx.fillStyle = '#e74c3c'; ctx.fillText(num(nc), x + BW / 2, BASE - rh - nh - 6); }
+        ctx.fillStyle = '#333'; ctx.font = '15px -apple-system';
+        ctx.fillText('Cap ' + cap + ' days', x + BW / 2, 292);
+        ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 15px -apple-system';
+        ctx.fillText((i === 0 ? 'new = ' : '') + pct(nc / TOTAL, 2), x + BW / 2, 312);
+    });
+
+    var ty = BASE - trueRet * PX;
+    ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(60, ty); ctx.lineTo(660, ty); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#27ae60'; ctx.font = '14px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('true returning = ' + num(trueRet) + ' (' + pct(trueRet / TOTAL, 2) + ')', 60, ty - 6);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 15px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText((newAt[7] / TRUE_NEW).toFixed(1) + '× more "new visitors" with zero change in who visited or when.', w / 2, 334);
+});
+
+/* 4. Deprecation wave as a regime step */
+__charts.push(function () {
+    var s = setup('c4'); if (!s) return; var ctx = s.ctx, w = s.w;
+    var X0 = 60, X1 = 690, STEP = (X1 - X0) / 24, BASE = 250, YS = 180 / 150000;
+    function y(v) { return BASE - v * YS; }
+    function xi(i) { return X0 + (i + 0.5) * STEP; }
+
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('One Step in the Instrument, Read as a 60% Decline', w / 2, 22);
+    ctx.fillStyle = '#555'; ctx.font = '15px -apple-system';
+    ctx.fillText('Illustrative Example — the same 12 human months repeated twice', w / 2, 44);
+
+    [50000, 100000, 150000].forEach(function (g) {
+        ctx.strokeStyle = '#e0e0e0'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(X0, y(g)); ctx.lineTo(X1, y(g)); ctx.stroke();
+        ctx.fillStyle = '#999'; ctx.font = '12px -apple-system'; ctx.textAlign = 'right';
+        ctx.fillText((g / 1000) + 'K', 56, y(g) + 4);
+    });
+    ctx.strokeStyle = '#ccc'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(X0, BASE); ctx.lineTo(X1, BASE); ctx.stroke();
+
+    var truth24 = TRUE_SERIES.concat(TRUE_SERIES);
+    ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 2; ctx.beginPath();
+    truth24.forEach(function (v, i) { if (i === 0) ctx.moveTo(xi(i), y(v)); else ctx.lineTo(xi(i), y(v)); });
+    ctx.stroke();
+    ctx.fillStyle = '#27ae60'; ctx.font = '14px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('true humans (unchanged)', 66, y(144000) - 8);
+
+    function poly(arr, off) {
+        ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 2.5; ctx.beginPath();
+        arr.forEach(function (v, i) { var px = xi(i + off); if (i === 0) ctx.moveTo(px, y(v)); else ctx.lineTo(px, y(v)); });
+        ctx.stroke();
+        ctx.fillStyle = '#1a5276';
+        arr.forEach(function (v, i) { ctx.beginPath(); ctx.arc(xi(i + off), y(v), 3, 0, Math.PI * 2); ctx.fill(); });
+    }
+    poly(OBS_A, 0); poly(OBS_B, 12);
+
+    var bx = X0 + 12 * STEP;
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.setLineDash([5, 5]);
+    ctx.beginPath(); ctx.moveTo(bx, 60); ctx.lineTo(bx, 258); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 14px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('policy ships', bx, 54);
+
+    ctx.fillStyle = '#1a5276'; ctx.font = '14px -apple-system';
+    ctx.fillText('Regime A — observes 5/6', 215, 270);
+    ctx.fillText('Regime B — observes 1/3', 535, 270);
+    ctx.font = 'bold 15px -apple-system';
+    ctx.fillText('12-mo total ' + num(TOTAL_A), 215, 290);
+    ctx.fillText('12-mo total ' + num(TOTAL_B), 535, 290);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 15px -apple-system';
+    ctx.fillText('Naive year-over-year: ' + pct(TOTAL_B / TOTAL_A - 1, 1) + ' — true change '
+        + pct(sum(TRUE_SERIES) / sum(TRUE_SERIES) - 1, 1), w / 2, 314);
+    ctx.fillStyle = '#27ae60'; ctx.font = '15px -apple-system';
+    ctx.fillText('Within regime A: +' + pct(OBS_A[11] / OBS_A[0] - 1, 1) + '. Within regime B: +'
+        + pct(OBS_B[11] / OBS_B[0] - 1, 1) + '. Truth: +'
+        + pct(TRUE_SERIES[11] / TRUE_SERIES[0] - 1, 1) + '.', w / 2, 334);
+    ctx.fillStyle = '#555'; ctx.font = '14px -apple-system';
+    ctx.fillText('Conversion rate on ' + num(CONV) + ' server-side conversions: true '
+        + pct(CONV / TRUE_SERIES[0], 2) + ', regime A ' + pct(CONV / OBS_A[0], 2)
+        + ', regime B ' + pct(CONV / OBS_B[0], 2) + '.', w / 2, 354);
+});
+
+/* 5. Fingerprint entropy vs population size */
+__charts.push(function () {
+    var s = setup('c5'); if (!s) return; var ctx = s.ctx, w = s.w;
+    var X0 = 90, X1 = 660, BASE = 250, TOP = 80;
+    function y(p) { return BASE - p * (BASE - TOP); }
+    function xN(n) { return X0 + (Math.log(n) / Math.LN10 - 3) / 4 * (X1 - X0); }
+    function nAt(x) { return Math.pow(10, 3 + (x - X0) / (X1 - X0) * 4); }
+
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Fixed Entropy, Growing Population: Uniqueness Collapses', w / 2, 22);
+    ctx.fillStyle = '#555'; ctx.font = '15px -apple-system';
+    ctx.fillText('Illustrative Example — P(not unique) = 1 − (1 − 2^−H)^(N−1)', w / 2, 44);
+
+    [0, 0.25, 0.5, 0.75, 1].forEach(function (p) {
+        ctx.strokeStyle = '#eeeeee'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(X0, y(p)); ctx.lineTo(X1, y(p)); ctx.stroke();
+        ctx.fillStyle = '#666'; ctx.font = '13px -apple-system'; ctx.textAlign = 'right';
+        ctx.fillText(pct(p, 0), 84, y(p) + 4);
+    });
+    ctx.strokeStyle = '#ccc'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(X0, BASE); ctx.lineTo(X1, BASE); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(X0, 76); ctx.lineTo(X0, BASE); ctx.stroke();
+    [[1e3, '1K'], [1e4, '10K'], [1e5, '100K'], [1e6, '1M'], [1e7, '10M']].forEach(function (t) {
+        ctx.fillStyle = '#666'; ctx.font = '13px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText(t[1], xN(t[0]), 268);
+    });
+
+    function curve(H, color) {
+        ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.beginPath();
+        for (var x = X0; x <= X1; x++) {
+            var p = notUnique(H, nAt(x));
+            if (x === X0) ctx.moveTo(x, y(p)); else ctx.lineTo(x, y(p));
+        }
+        ctx.stroke();
+    }
+    curve(H_LOW, '#e74c3c'); curve(H_HIGH, '#27ae60');
+    ctx.font = 'bold 14px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillStyle = '#e74c3c'; ctx.fillText('H = ' + H_LOW + ' bits', 300, y(notUnique(H_LOW, nAt(300))) - 10);
+    ctx.fillStyle = '#27ae60'; ctx.fillText('H = ' + H_HIGH + ' bits', 520, y(notUnique(H_HIGH, nAt(520))) + 18);
+
+    [1e3, 1e4, 1e5, 1e6].forEach(function (N) {
+        var p = notUnique(H_LOW, N);
+        ctx.fillStyle = '#e74c3c'; ctx.beginPath(); ctx.arc(xN(N), y(p), 4, 0, Math.PI * 2); ctx.fill();
+        ctx.font = '13px -apple-system'; ctx.textAlign = 'left';
+        ctx.fillText(pct(p, 2), xN(N) + 8, y(p) - 8);
+    });
+
+    var budget = 1 - TARGET_UNIQ;
+    ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(X0, y(budget)); ctx.lineTo(X1, y(budget)); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#1a5276'; ctx.font = '13px -apple-system'; ctx.textAlign = 'right';
+    ctx.fillText(pct(budget, 0) + ' collision budget', 656, y(budget) - 6);
+
+    var Nt = 1e6;
+    var Hneed = Math.log((Nt - 1) / (-Math.log(TARGET_UNIQ))) / Math.LN2;
+    ctx.fillStyle = '#1a5276'; ctx.font = '15px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('For ' + pct(TARGET_UNIQ, 0) + ' uniqueness at N = ' + num(Nt) + ': H = '
+        + Hneed.toFixed(2) + ' bits → ' + Math.ceil(Hneed) + ' bits', w / 2, 290);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 15px -apple-system';
+    ctx.fillText('Same instrument, ' + pct(1 - notUnique(H_LOW, 1e3), 2) + ' unique at 1K and '
+        + pct(1 - notUnique(H_LOW, Nt), 2) + ' unique at 1M.', w / 2, 316);
+    var distinct = Math.pow(2, H_LOW) * (1 - Math.pow(1 - Math.pow(2, -H_LOW), Nt));
+    ctx.fillStyle = '#555'; ctx.font = '14px -apple-system';
+    ctx.fillText('At H=' + H_LOW + ', N=1M: only ' + num(distinct) + ' distinct fingerprints exist — a '
+        + pct(1 - distinct / Nt, 2) + ' undercount of people.', w / 2, 340);
+});
+
+/* 6. A beacon proves a load, not a human */
+__charts.push(function () {
+    var s = setup('c6'); if (!s) return; var ctx = s.ctx, w = s.w;
+    var LABELS = ['human view', 'automated fetch', 'speculative preload', 'duplicate fire', 'offscreen render'];
+    var COLORS = ['#27ae60', '#e67e22', 'rgba(230,126,34,0.6)', '#e74c3c', 'rgba(231,76,60,0.6)'];
+    var total = sum(FIRES), trueViews = FIRES[0] + MISSED;
+    var PX = 600 / total, X0 = 60;
+
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('The Beacon Log Is Not a Log of People', w / 2, 22);
+    ctx.fillStyle = '#555'; ctx.font = '15px -apple-system';
+    ctx.fillText('Illustrative Example — ' + num(total) + ' beacon fires vs ' + num(trueViews) + ' true human views', w / 2, 44);
+
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 15px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText(num(total) + ' beacon fires', X0, 76);
+    var cx = X0;
+    FIRES.forEach(function (v, i) { ctx.fillStyle = COLORS[i]; ctx.fillRect(cx, 84, v * PX, 40); cx += v * PX; });
+
+    FIRES.forEach(function (v, i) {
+        var ly = 142 + i * 18;
+        ctx.fillStyle = COLORS[i]; ctx.fillRect(X0, ly - 10, 12, 12);
+        ctx.fillStyle = '#333'; ctx.font = '14px -apple-system'; ctx.textAlign = 'left';
+        ctx.fillText(num(v) + ' — ' + LABELS[i] + ' (' + pct(v / total, 1) + ')', X0 + 18, ly);
+    });
+
+    var tw = trueViews * PX, mw = FIRES[0] * PX;
+    ctx.fillStyle = 'rgba(39,174,96,0.5)'; ctx.fillRect(X0, 248, tw, 40);
+    ctx.save(); ctx.beginPath(); ctx.rect(X0 + mw, 248, tw - mw, 40); ctx.clip();
+    ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 1;
+    for (var d = 0; d < tw + 40; d += 6) {
+        ctx.beginPath(); ctx.moveTo(X0 + mw + d, 288); ctx.lineTo(X0 + mw + d - 40, 248); ctx.stroke();
+    }
+    ctx.restore();
+    ctx.fillStyle = '#27ae60'; ctx.fillRect(X0, 248, mw, 40);
+    ctx.fillStyle = '#27ae60'; ctx.font = 'bold 15px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText(num(trueViews) + ' true human views', X0, 240);
+    ctx.font = '13px -apple-system';
+    ctx.fillText(num(MISSED) + ' fired nothing', X0 + mw + 4, 272);
+
+    var precision = FIRES[0] / total, recall = FIRES[0] / trueViews;
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 15px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Precision ' + pct(precision, 1) + ', recall ' + pct(recall, 1) + ' — total only '
+        + pct(total / trueViews - 1, 2) + ' high.', w / 2, 312);
+    ctx.fillStyle = '#555'; ctx.font = '14px -apple-system';
+    ctx.fillText('Two large errors of opposite sign. A close total hides both.', w / 2, 332);
+});
+
+/* 7. Aggregate reporting: precise total, worthless cells */
+__charts.push(function () {
+    var s = setup('c7'); if (!s) return; var ctx = s.ctx, w = s.w;
+    var trueTotal = sum(GROUPS);
+    var released = GROUPS.filter(function (g) { return g >= MIN_GROUP; });
+    var relTotal = sum(released);
+    var BASE = 250, PX = 170 / GROUPS[0], BW = 52;
+
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Aggregate Precise, Every Small Cell Worthless', w / 2, 22);
+    ctx.fillStyle = '#555'; ctx.font = '15px -apple-system';
+    ctx.fillText('Illustrative Example — ' + num(trueTotal) + ' conversions, σ = ' + SIGMA
+        + ' per group, minimum group ' + MIN_GROUP, w / 2, 44);
+
+    GROUPS.forEach(function (g, i) {
+        var x = 62 + i * 72, bh = g * PX, top = BASE - bh, live = g >= MIN_GROUP;
+        if (!live) {
+            ctx.fillStyle = 'rgba(231,76,60,0.45)'; ctx.fillRect(x, top, BW, bh);
+            ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+            ctx.strokeRect(x, top, BW, bh); ctx.setLineDash([]);
+        } else if (g >= 3 * SIGMA) {
+            ctx.fillStyle = 'rgba(26,82,118,0.35)'; ctx.fillRect(x, top, BW, bh);
+            ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 1; ctx.strokeRect(x, top, BW, bh);
+        } else {
+            ctx.fillStyle = '#e67e22'; ctx.fillRect(x, top, BW, bh);
+        }
+        if (live) {
+            var hi = top - SIGMA * PX, lo = top + SIGMA * PX, mx = x + BW / 2;
+            ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(mx, hi); ctx.lineTo(mx, lo);
+            ctx.moveTo(mx - 3, hi); ctx.lineTo(mx + 3, hi);
+            ctx.moveTo(mx - 3, lo); ctx.lineTo(mx + 3, lo); ctx.stroke();
+        }
+        ctx.font = 'bold 13px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillStyle = live ? (g >= 3 * SIGMA ? '#1a5276' : '#e67e22') : '#e74c3c';
+        ctx.fillText(num(g), x + BW / 2, top - (live ? SIGMA * PX + 6 : 6));
+        if (live) {
+            ctx.fillStyle = '#e74c3c'; ctx.font = '12px -apple-system';
+            ctx.fillText((SIGMA / g * 100).toFixed(1) + '%', x + BW / 2, 268);
+        } else {
+            ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 12px -apple-system';
+            ctx.fillText('suppressed', x + BW / 2, 286);
+        }
+    });
+
+    var uy = BASE - 3 * SIGMA * PX;
+    ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(56, uy); ctx.lineTo(680, uy); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#27ae60'; ctx.font = '13px -apple-system'; ctx.textAlign = 'right';
+    ctx.fillText('3σ = ' + (3 * SIGMA) + ' conversions', 676, uy - 6);
+
+    ctx.textAlign = 'left'; ctx.font = '14px -apple-system';
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('Released total ' + num(relTotal) + ' of ' + num(trueTotal) + ' (' + pct(relTotal / trueTotal, 2)
+        + ') — ' + pct(1 - relTotal / trueTotal, 2) + ' suppressed silently', 62, 306);
+    var tot_sigma = SIGMA * Math.sqrt(released.length);
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('Total noise σ√' + released.length + ' = ' + tot_sigma.toFixed(2) + ' on ' + num(relTotal)
+        + ' = ' + pct(tot_sigma / relTotal, 2) + ' — the aggregate is fine', 62, 324);
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 14px -apple-system';
+    ctx.fillText('Person-level records released: 0. Reach and frequency are not derivable.', 62, 342);
+});
+
+/* 8. Segment by regime, re-baseline at the step */
+__charts.push(function () {
+    var s = setup('c8'); if (!s) return; var ctx = s.ctx, w = s.w;
+    var obs24 = OBS_A.concat(OBS_B);
+    var pooledMean = sum(obs24) / obs24.length;
+    var meanA = TOTAL_A / 12, meanB = TOTAL_B / 12;
+
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Pool and the Mean Fits Nothing. Re-Baseline and Both Regimes Agree.', w / 2, 22);
+    ctx.fillStyle = '#555'; ctx.font = '15px -apple-system';
+    ctx.fillText('Illustrative Example — identical human behaviour, two instruments', w / 2, 44);
+
+    /* left panel: pooled levels */
+    var BASE = 250, PX = 160 / 150000;
+    function yL(v) { return BASE - v * PX; }
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 15px -apple-system';
+    ctx.fillText('Pooled levels', 190, 72);
+    obs24.forEach(function (v, i) {
+        ctx.fillStyle = 'rgba(26,82,118,0.35)';
+        ctx.fillRect(60 + i * 11, yL(v), 8, BASE - yL(v));
+    });
+    ctx.strokeStyle = '#ccc'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(56, BASE); ctx.lineTo(334, BASE); ctx.stroke();
+    ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(60, yL(meanA)); ctx.lineTo(192, yL(meanA)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(198, yL(meanB)); ctx.lineTo(330, yL(meanB)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#1a5276'; ctx.font = '12px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText(num(meanA), 60, yL(meanA) - 5);
+    ctx.fillText(num(meanB), 198, yL(meanB) - 5);
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(56, yL(pooledMean)); ctx.lineTo(334, yL(pooledMean)); ctx.stroke();
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px -apple-system';
+    ctx.fillText('pooled mean ' + num(pooledMean), 60, yL(pooledMean) - 6);
+    ctx.font = '13px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText(pct(pooledMean / meanA - 1, 1) + ' vs A, +' + pct(pooledMean / meanB - 1, 1) + ' vs B', 190, 274);
+
+    /* right panel: re-baselined index */
+    var RX0 = 390, RX1 = 660, RSTEP = (RX1 - RX0) / 11;
+    function yR(idx) { return BASE - idx / 100 * 120; }
+    ctx.fillStyle = '#27ae60'; ctx.font = 'bold 15px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Re-baselined per regime', 520, 72);
+    [100, 120].forEach(function (g) {
+        ctx.strokeStyle = '#e0e0e0'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(RX0, yR(g)); ctx.lineTo(RX1, yR(g)); ctx.stroke();
+    });
+    ctx.fillStyle = '#999'; ctx.font = '12px -apple-system'; ctx.textAlign = 'right';
+    ctx.fillText('120', 386, yR(120) + 4);
+    var idxA = OBS_A.map(function (v) { return v / OBS_A[0] * 100; });
+    var idxB = OBS_B.map(function (v) { return v / OBS_B[0] * 100; });
+    ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 2.5; ctx.beginPath();
+    idxA.forEach(function (v, i) { var px = RX0 + i * RSTEP; if (i === 0) ctx.moveTo(px, yR(v)); else ctx.lineTo(px, yR(v)); });
+    ctx.stroke();
+    ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 2.5; ctx.setLineDash([6, 4]); ctx.beginPath();
+    idxB.forEach(function (v, i) { var px = RX0 + i * RSTEP; if (i === 0) ctx.moveTo(px, yR(v)); else ctx.lineTo(px, yR(v)); });
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#27ae60'; ctx.font = '13px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('both lines coincide — identical shape', 520, 274);
+    ctx.font = 'bold 13px -apple-system'; ctx.textAlign = 'right';
+    ctx.fillStyle = '#1a5276'; ctx.fillText('A: ' + idxA[11].toFixed(1), 656, yR(idxA[11]) - 8);
+    ctx.fillStyle = '#27ae60'; ctx.fillText('B: ' + idxB[11].toFixed(1), 656, yR(idxB[11]) + 16);
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#27ae60'; ctx.font = 'bold 15px -apple-system';
+    ctx.fillText('Within-regime growth: A +' + pct(idxA[11] / 100 - 1, 1) + ', B +' + pct(idxB[11] / 100 - 1, 1)
+        + ', truth +' + pct(TRUE_SERIES[11] / TRUE_SERIES[0] - 1, 1) + '.', w / 2, 302);
+    ctx.fillStyle = '#555'; ctx.font = '14px -apple-system';
+    ctx.fillText('Segment by regime. Compare ratios, never levels. Never average across the step.', w / 2, 326);
+});
+
+__charts.forEach(function (f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function () {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function () { __charts.forEach(function (f) { f(); }); }, 150);
+});
+</script>
+</body>
+</html>

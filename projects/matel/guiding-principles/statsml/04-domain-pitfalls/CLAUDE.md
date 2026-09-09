@@ -30,7 +30,7 @@ Industry-specific data traps across finance, healthcare, e-commerce, cybersecuri
   python3 - <<'PY'
   import re,glob
   norm=lambda s:re.sub(r'\s+',' ',re.sub(r'<[^>]+>','',s).replace('&amp;','&')).strip().lower().rstrip(':.')
-  for f in sorted(glob.glob('domains/*.html')):
+  for f in sorted(glob.glob('04-domain-pitfalls/*.html')):
       t=open(f).read(); d=0
       for h,b in re.findall(r'<h2[^>]*>(.*?)</h2>(.*?)(?=<h2|\Z)',t,re.S):
           m=re.search(r'class="obj-title"[^>]*>(.*?)</div>',b,re.S)
@@ -74,7 +74,7 @@ Industry-specific data traps across finance, healthcare, e-commerce, cybersecuri
     two but no new information: `033-stock-markets`, `049-protein-discovery`,
     `050-research-publications`, `051-rental-apartments`, `052-commercial-realestate`. The detector
     above does not catch these.
-  - **`folk-wisdom/21`-`25` have the defect in the `.md` only** — their html does not, which means
+  - **`17-folk-wisdom-fallacies/21`-`25` have the defect in the `.md` only** — their html does not, which means
     those five html pages are stale relative to their specs. Confirm the direction of that drift
     before regenerating either side.
 
