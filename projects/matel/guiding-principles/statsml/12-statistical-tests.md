@@ -11,15 +11,15 @@ Each card links to a detail page under `statistical-tests/`. The card shows an u
 
 | # | Category | Title | Link | Description | Topics |
 |---|----------|-------|------|-------------|--------|
-| 1 | HYPOTHESIS | t-test (Student's and Welch's) | [statistical-tests/01-ttest.md](statistical-tests/01-ttest.md) | Whether two groups have significantly different means. Breaks with skew and heavy tails. | means, two-groups, normality |
-| 2 | HYPOTHESIS | z-test / Proportion test | [statistical-tests/02-ztest.md](statistical-tests/02-ztest.md) | Whether an observed proportion differs from expected. Fails when np < 10 or clustering present. | proportions, binomial, sample-size |
-| 3 | HYPOTHESIS | Chi-squared test | [statistical-tests/03-chi-squared.md](statistical-tests/03-chi-squared.md) | Whether observed frequencies differ from expected. Inflated with sparse cells (expected < 5). | categorical, contingency, independence |
-| 4 | HYPOTHESIS | KS test | [statistical-tests/04-ks-test.md](statistical-tests/04-ks-test.md) | Whether two samples come from the same distribution. Power collapses with ties or discrete data. | distributions, CDF, continuous |
-| 5 | INFO-THEORY | Cross-entropy | [statistical-tests/05-cross-entropy.md](statistical-tests/05-cross-entropy.md) | Loss function measuring predicted vs true distribution. Catastrophic penalty for overconfident wrong predictions. | loss-function, classification, calibration |
-| 6 | INFO-THEORY | Gini impurity | [statistical-tests/06-gini-impurity.md](statistical-tests/06-gini-impurity.md) | Decision tree split criterion. Favors balanced partitions, can miss rare but important classes. | decision-trees, splits, imbalance |
-| 7 | INFO-THEORY | Information gain | [statistical-tests/07-information-gain.md](statistical-tests/07-information-gain.md) | Feature selection metric. Biased toward high-cardinality features like IDs. | feature-selection, cardinality, entropy |
-| 8 | INFO-THEORY | Entropy | [statistical-tests/08-entropy.md](statistical-tests/08-entropy.md) | Uncertainty measure of a distribution. Same value can mean very different structures. | uncertainty, information-theory, distribution-shape |
-| 9 | HYPOTHESIS | ANOVA (F-test) | [statistical-tests/09-anova.md](statistical-tests/09-anova.md) | Whether means differ across 3+ groups. Unreliable with unequal variances or unbalanced designs. | multiple-groups, variance, homoscedasticity |
+| 1 | HYPOTHESIS | t-test (Student's and Welch's) | [12-statistical-tests/01-t-test-students-and-welchs.md](12-statistical-tests/01-t-test-students-and-welchs.md) | Whether two groups have significantly different means. Breaks with skew and heavy tails. | means, two-groups, normality |
+| 2 | HYPOTHESIS | z-test / Proportion test | [12-statistical-tests/02-z-test-proportion-test.md](12-statistical-tests/02-z-test-proportion-test.md) | Whether an observed proportion differs from expected. Fails when np < 10 or clustering present. | proportions, binomial, sample-size |
+| 3 | HYPOTHESIS | Chi-squared test | [12-statistical-tests/03-chi-squared-test.md](12-statistical-tests/03-chi-squared-test.md) | Whether observed frequencies differ from expected. Inflated with sparse cells (expected < 5). | categorical, contingency, independence |
+| 4 | HYPOTHESIS | KS test | [12-statistical-tests/04-ks-test.md](12-statistical-tests/04-ks-test.md) | Whether two samples come from the same distribution. Power collapses with ties or discrete data. | distributions, CDF, continuous |
+| 5 | INFO-THEORY | Cross-entropy | [12-statistical-tests/05-cross-entropy.md](12-statistical-tests/05-cross-entropy.md) | Loss function measuring predicted vs true distribution. Catastrophic penalty for overconfident wrong predictions. | loss-function, classification, calibration |
+| 6 | INFO-THEORY | Gini impurity | [12-statistical-tests/06-gini-impurity.md](12-statistical-tests/06-gini-impurity.md) | Decision tree split criterion. Favors balanced partitions, can miss rare but important classes. | decision-trees, splits, imbalance |
+| 7 | INFO-THEORY | Information gain | [12-statistical-tests/07-information-gain.md](12-statistical-tests/07-information-gain.md) | Feature selection metric. Biased toward high-cardinality features like IDs. | feature-selection, cardinality, entropy |
+| 8 | INFO-THEORY | Entropy | [12-statistical-tests/08-entropy.md](12-statistical-tests/08-entropy.md) | Uncertainty measure of a distribution. Same value can mean very different structures. | uncertainty, information-theory, distribution-shape |
+| 9 | HYPOTHESIS | ANOVA (F-test) | [12-statistical-tests/09-anova-f-test.md](12-statistical-tests/09-anova-f-test.md) | Whether means differ across 3+ groups. Unreliable with unequal variances or unbalanced designs. | multiple-groups, variance, homoscedasticity |
 
 ## Regeneration instructions
 

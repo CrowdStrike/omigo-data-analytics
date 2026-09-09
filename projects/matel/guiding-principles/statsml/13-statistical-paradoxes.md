@@ -17,20 +17,20 @@ uppercase category label, a numbered title matching the file index, a one-line d
 
 | # | Category | Title | Link | Description | Tags |
 |---|----------|-------|------|-------------|------|
-| 1 | AGGREGATION | Simpson's Paradox | [01-simpsons-paradox.md](statistical-paradoxes/01-simpsons-paradox.md) | The winner of every round can still lose the match. | every subgroup · group sizes · reversal |
-| 2 | PROBABILITY | Base Rate Fallacy | [02-base-rate-fallacy.md](statistical-paradoxes/02-base-rate-fallacy.md) | Hunt something rare and a great test still cries wolf. | rare things · false alarms · alert queues |
-| 3 | SAMPLING | Berkson's Paradox | [03-berksons-paradox.md](statistical-paradoxes/03-berksons-paradox.md) | Who gets through the door invents a trade-off nobody had. | entry rules · missing corner · fake link |
-| 4 | MEASUREMENT | Regression to the Mean | [04-regression-to-mean.md](statistical-paradoxes/04-regression-to-mean.md) | Nobody got worse — the luck just ran out. | extremes · noise · false credit |
-| 5 | AGGREGATION | Ecological Fallacy | [05-ecological-fallacy.md](statistical-paradoxes/05-ecological-fallacy.md) | The average belongs to the group, not to anyone in it. | group vs person · coarse joins · wrong grain |
-| 6 | MEASUREMENT | Multiple Comparisons | [06-multiple-comparisons.md](statistical-paradoxes/06-multiple-comparisons.md) | Search long enough and noise hands you a winner. | many tests · dashboards · forking paths |
-| 7 | SAMPLING | Survivorship Bias | [07-survivorship-bias.md](statistical-paradoxes/07-survivorship-bias.md) | The failures left no forwarding address. | vanished cases · highlight reel · denominators |
-| 8 | AGGREGATION | Will Rogers Phenomenon | [08-will-rogers-phenomenon.md](statistical-paradoxes/08-will-rogers-phenomenon.md) | Move one case across a line and both averages rise. | reclassifying · tier metrics · flat totals |
-| 9 | MEASUREMENT | Lindley's Paradox | [09-lindleys-paradox.md](statistical-paradoxes/09-lindleys-paradox.md) | "Not chance" can still mean "nothing happened". | huge samples · tiny effects · thresholds |
-| 10 | SAMPLING | Inspection Paradox | [10-inspection-paradox.md](statistical-paradoxes/10-inspection-paradox.md) | Everything looks bigger when you bump into it. | waiting times · snapshots · length bias |
-| 11 | INCENTIVES | Goodhart's Law | [11-goodharts-law.md](statistical-paradoxes/11-goodharts-law.md) | The number you pay for stops telling you the truth. | targets · proxy labels · guard metrics |
-| 12 | PROBABILITY | Birthday Paradox | [12-birthday-paradox.md](statistical-paradoxes/12-birthday-paradox.md) | Your ID space runs out long before you think it does. | collisions · pairs not items · hash width |
-| 13 | PROBABILITY | Monty Hall Problem | [13-monty-hall-problem.md](statistical-paradoxes/13-monty-hall-problem.md) | Who removed the option decides where its odds go. | elimination · what they knew · redistribution |
-| 14 | PROBABILITY | Lottery Paradox | [14-lottery-paradox.md](statistical-paradoxes/14-lottery-paradox.md) | Each claim is safe; the whole set is certainly wrong. | many claims · joint confidence · pipelines |
+| 1 | AGGREGATION | Simpson's Paradox | [13-statistical-paradoxes/01-simpsons-paradox.md](13-statistical-paradoxes/01-simpsons-paradox.md) | The winner of every round can still lose the match. | every subgroup · group sizes · reversal |
+| 2 | PROBABILITY | Base Rate Fallacy | [13-statistical-paradoxes/02-base-rate-fallacy.md](13-statistical-paradoxes/02-base-rate-fallacy.md) | Hunt something rare and a great test still cries wolf. | rare things · false alarms · alert queues |
+| 3 | SAMPLING | Berkson's Paradox | [13-statistical-paradoxes/03-berksons-paradox.md](13-statistical-paradoxes/03-berksons-paradox.md) | Who gets through the door invents a trade-off nobody had. | entry rules · missing corner · fake link |
+| 4 | MEASUREMENT | Regression to the Mean | [13-statistical-paradoxes/04-regression-to-the-mean.md](13-statistical-paradoxes/04-regression-to-the-mean.md) | Nobody got worse — the luck just ran out. | extremes · noise · false credit |
+| 5 | AGGREGATION | Ecological Fallacy | [13-statistical-paradoxes/05-ecological-fallacy.md](13-statistical-paradoxes/05-ecological-fallacy.md) | The average belongs to the group, not to anyone in it. | group vs person · coarse joins · wrong grain |
+| 6 | MEASUREMENT | Multiple Comparisons | [13-statistical-paradoxes/06-multiple-comparisons.md](13-statistical-paradoxes/06-multiple-comparisons.md) | Search long enough and noise hands you a winner. | many tests · dashboards · forking paths |
+| 7 | SAMPLING | Survivorship Bias | [13-statistical-paradoxes/07-survivorship-bias.md](13-statistical-paradoxes/07-survivorship-bias.md) | The failures left no forwarding address. | vanished cases · highlight reel · denominators |
+| 8 | AGGREGATION | Will Rogers Phenomenon | [13-statistical-paradoxes/08-will-rogers-phenomenon.md](13-statistical-paradoxes/08-will-rogers-phenomenon.md) | Move one case across a line and both averages rise. | reclassifying · tier metrics · flat totals |
+| 9 | MEASUREMENT | Lindley's Paradox | [13-statistical-paradoxes/09-lindleys-paradox.md](13-statistical-paradoxes/09-lindleys-paradox.md) | "Not chance" can still mean "nothing happened". | huge samples · tiny effects · thresholds |
+| 10 | SAMPLING | Inspection Paradox | [13-statistical-paradoxes/10-inspection-paradox.md](13-statistical-paradoxes/10-inspection-paradox.md) | Everything looks bigger when you bump into it. | waiting times · snapshots · length bias |
+| 11 | INCENTIVES | Goodhart's Law | [13-statistical-paradoxes/11-goodharts-law.md](13-statistical-paradoxes/11-goodharts-law.md) | The number you pay for stops telling you the truth. | targets · proxy labels · guard metrics |
+| 12 | PROBABILITY | Birthday Paradox | [13-statistical-paradoxes/12-birthday-paradox.md](13-statistical-paradoxes/12-birthday-paradox.md) | Your ID space runs out long before you think it does. | collisions · pairs not items · hash width |
+| 13 | PROBABILITY | Monty Hall Problem | [13-statistical-paradoxes/13-monty-hall-problem.md](13-statistical-paradoxes/13-monty-hall-problem.md) | Who removed the option decides where its odds go. | elimination · what they knew · redistribution |
+| 14 | PROBABILITY | Lottery Paradox | [13-statistical-paradoxes/14-lottery-paradox.md](13-statistical-paradoxes/14-lottery-paradox.md) | Each claim is safe; the whole set is certainly wrong. | many claims · joint confidence · pipelines |
 
 ## Callout (philosophy box, after grid)
 

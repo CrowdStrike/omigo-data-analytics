@@ -11,13 +11,13 @@ Each card links to a detail page under `brainstorm/`. Each card shows an upperca
 
 | # | Category | Title | Link | Description | Topics |
 |---|----------|-------|------|-------------|--------|
-| 1 | PROFILING | Feature Type Detection | [brainstorm/01-profiling-feature-types.md](brainstorm/01-profiling-feature-types.md) | How to determine if a feature is categorical, discrete numeric, or continuous — without assumptions. | unique value ratio, gap analysis, type inference |
-| 2 | PROFILING | Value Existence Mapping | [brainstorm/02-profiling-value-mapping.md](brainstorm/02-profiling-value-mapping.md) | Finding where data actually lives on the number line. Clusters, gaps, dense regions, isolated points. | density clusters, gap detection, sparse regions |
-| 3 | PROFILING | Shape Detection | [brainstorm/03-profiling-shape-detection.md](brainstorm/03-profiling-shape-detection.md) | Identifying actual distribution shape: hills, twin peaks, multiple peaks, flat, spike-and-tail. | peak finding, valley depth, symmetry |
-| 4 | PROFILING | Sample Sufficiency | [brainstorm/04-profiling-sample-sufficiency.md](brainstorm/04-profiling-sample-sufficiency.md) | Minimum data points per region to make statistical claims. Base rate correction, confidence bounds. | minimum n, base rate, power |
-| 5 | PROFILING | Separation Scenarios | [brainstorm/05-profiling-separation-scenarios.md](brainstorm/05-profiling-separation-scenarios.md) | How pos/neg class distributions relate. When to use a feature, parts of it, or reject it. | full separation, partial, bucket purity |
-| 6 | PROFILING | Bucket Strategy & Decision | [brainstorm/06-profiling-bucket-strategy.md](brainstorm/06-profiling-bucket-strategy.md) | Adaptive bucketing that follows data density and shape. Final decision criteria for feature selection. | adaptive bins, purity threshold, stability |
-| 7 | PROFILING | Temporal Dynamics | [brainstorm/07-profiling-temporal-dynamics.md](brainstorm/07-profiling-temporal-dynamics.md) | Shape drift, seasonality, concept drift, changepoints, windowed profiling strategies. | drift, seasonality, changepoints |
+| 1 | PROFILING | Feature Type Detection | [03-brainstorm/01-feature-type-detection.md](03-brainstorm/01-feature-type-detection.md) | How to determine if a feature is categorical, discrete numeric, or continuous — without assumptions. | unique value ratio, gap analysis, type inference |
+| 2 | PROFILING | Value Existence Mapping | [03-brainstorm/02-value-existence-mapping.md](03-brainstorm/02-value-existence-mapping.md) | Finding where data actually lives on the number line. Clusters, gaps, dense regions, isolated points. | density clusters, gap detection, sparse regions |
+| 3 | PROFILING | Shape Detection | [03-brainstorm/03-shape-detection.md](03-brainstorm/03-shape-detection.md) | Identifying actual distribution shape: hills, twin peaks, multiple peaks, flat, spike-and-tail. | peak finding, valley depth, symmetry |
+| 4 | PROFILING | Sample Sufficiency | [03-brainstorm/04-sample-sufficiency.md](03-brainstorm/04-sample-sufficiency.md) | Minimum data points per region to make statistical claims. Base rate correction, confidence bounds. | minimum n, base rate, power |
+| 5 | PROFILING | Separation Scenarios | [03-brainstorm/05-separation-scenarios.md](03-brainstorm/05-separation-scenarios.md) | How pos/neg class distributions relate. When to use a feature, parts of it, or reject it. | full separation, partial, bucket purity |
+| 6 | PROFILING | Bucket Strategy & Decision | [03-brainstorm/06-bucket-strategy-and-decision.md](03-brainstorm/06-bucket-strategy-and-decision.md) | Adaptive bucketing that follows data density and shape. Final decision criteria for feature selection. | adaptive bins, purity threshold, stability |
+| 7 | PROFILING | Temporal Dynamics | [03-brainstorm/07-temporal-dynamics.md](03-brainstorm/07-temporal-dynamics.md) | Shape drift, seasonality, concept drift, changepoints, windowed profiling strategies. | drift, seasonality, changepoints |
 
 ## Regeneration instructions
 

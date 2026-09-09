@@ -1,13 +1,13 @@
 # Tutorials Review & Fix Report
 
-Full-corpus review and fix pass over `tutorials/` (topic pages + category grids + sibling `.md` specs), run 2026-08-26/27.
+Full-corpus review and fix pass over `23-tutorials/` (topic pages + category grids + sibling `.md` specs), run 2026-08-26/27.
 
 ## Scope and method
 
 - **1,169 HTML pages reviewed** (1,111 topic pages in 58 folders + 58 category grids), including files added or renamed while the review was running (two delta passes caught them).
 - Two layers:
   1. **Automated sweep** over every file: inline-script syntax (`node --check`), grid-link integrity, card-number ↔ filename match, `Math.random()` ban, devicePixelRatio scaling, forbidden nav/cross-links, md-sibling presence.
-  2. **Agent deep review** in 126 chunks (~10-12 pages each): recompute every worked example by hand, verify text numbers match hardcoded chart arrays, trace canvas drawing code for clipping/overlap/off-scale geometry, check factual claims, example quality, and page conventions per `tutorials/CLAUDE.md`.
+  2. **Agent deep review** in 126 chunks (~10-12 pages each): recompute every worked example by hand, verify text numbers match hardcoded chart arrays, trace canvas drawing code for clipping/overlap/off-scale geometry, check factual claims, example quality, and page conventions per `23-tutorials/CLAUDE.md`.
 - Every finding was then **re-verified and fixed** by a second agent pass (minimal edits, sibling `.md` kept in sync, `node --check` after every edit).
 
 ## Results
@@ -41,7 +41,7 @@ Another session was actively editing the repo. All of the following were caught 
 
 ## Deliberately not changed (flagged, not fixed)
 
-- **Responsive breakpoints:** all 58 grids use `1400/1100/900/600px`; `tutorials/CLAUDE.md` documents `1200/900/600`. The corpus is self-consistent, so the doc likely lags reality — update CLAUDE.md or the grids, one or the other.
+- **Responsive breakpoints:** all 58 grids use `1400/1100/900/600px`; `23-tutorials/CLAUDE.md` documents `1200/900/600`. The corpus is self-consistent, so the doc likely lags reality — update CLAUDE.md or the grids, one or the other.
 - **Red subcategory labels** on ~6 grids and **red key-point borders** on statistical-inference 06–19: series-wide style choices, left as-is.
 - **Numbering gaps/order across sections** in a few grids (40, 44, 46; data-structures has no files 20+…19 now contiguous): numbers ascend within each subcategory; full renumbering was out of scope.
 - **Pre-existing `.md` spec drift:** a handful of `.md` regeneration specs (e.g. tech-data 12, 17, 25, 27, 31, airflow) describe older versions of their html and didn't contain the text being fixed — they predate this job and may deserve a regeneration pass.

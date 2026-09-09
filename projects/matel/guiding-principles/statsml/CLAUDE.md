@@ -127,15 +127,15 @@ Each subfolder has its own `CLAUDE.md` with folder-specific context and pending 
 
 | Folder | Focus |
 |--------|-------|
-| `ab-testing/` | A/B testing pitfalls and methodology |
-| `domains/` | Industry-specific data traps |
-| `folk-wisdom/` | Popular sayings decomposed for hidden fallacies |
-| `real-world-distributions/` | Surprising shapes from real data |
-| `cognitive-biases/` | Human psychology failures in analysis |
-| `metrics/` | Good/bad metrics, vanity metrics, reporting |
-| `backlog/` | Unresolved topics and future directions |
-| `interesting-problems-paradoxes/` | Classic puzzles and real-world analogues |
-| `common-bad-practices/` | Organizational anti-patterns in data teams |
+| `07-ab-testing-pitfalls/` | A/B testing pitfalls and methodology |
+| `04-domain-pitfalls/` | Industry-specific data traps |
+| `17-folk-wisdom-fallacies/` | Popular sayings decomposed for hidden fallacies |
+| `20-real-world-distribution-gallery/` | Surprising shapes from real data |
+| `05-cognitive-biases/` | Human psychology failures in analysis |
+| `14-metrics-design/` | Good/bad metrics, vanity metrics, reporting |
+| `02-backlog/` | Unresolved topics and future directions |
+| `18-interesting-problems-paradoxes/` | Classic puzzles and real-world analogues |
+| `09-common-bad-practices/` | Organizational anti-patterns in data teams |
 
 ## Exclusions
 Work only inside statsml directory. Dont go to parent or other outside directories (except /tmp) unless told so.
@@ -143,4 +143,63 @@ Work only inside statsml directory. Dont go to parent or other outside directori
 ## Global TODO
 
 - Remove dead `.nav` CSS rules from ~289 HTML files (the `<div class="nav">` elements are already gone, but the style blocks remain as unused code)
+
+- **Replace remaining `Math.random()` chart data with a seeded PRNG — 20 files, all under `04-domain-pitfalls/`.**
+  Deferred until the domains content itself is reduced, since several of these pages are likely to
+  shrink or merge and fixing charts that are about to be cut is wasted work.
+
+  Find them with:
+  `grep -rln "Math\.random()" 04-domain-pitfalls --include="*.html"`
+  Four of the hits are comment-only (`// … never Math.random()`) in already-converted pages —
+  `034-crypto-defi`, `081-real-time-sports-analytics`, `150-schema-compliance-not-equals-data-compliance`,
+  `159-job-seeker-visibility-bias`. Same for `05-cognitive-biases/23-the-judgment-free-chatbot.html`.
+
+  Remaining, by call count: `103-world-events-as-data-regime-breaks` (14),
+  `035-prediction-markets-kalshi-polymarket` (4), `A-cross-domain-patterns` (3),
+  `036-intelligence-platforms` (3), then 2 each in `143-silent-bugs-poisoning-data`,
+  `129-low-hanging-fruit-trap-simple-wins-justifying-complex-systems`,
+  `116-influencing-content-spikes-and-sudden-vanishing`,
+  `110-cross-domain-cross-platform-transfer`, `093-screen-time-app-usage-analytics`,
+  `088-food-science-nutrition`, `077-startup-funding-ipo-planning`,
+  `033-stock-markets-equities`, `014-energy-utilities`, and 1 each in
+  `154-recommendation-driven-sentiment-manufacturing`,
+  `089-data-anonymization-de-anonymization`,
+  `080-ai-agent-clusters-multi-agent-systems`, `158-churn-spikes-at-stock-grant-cliffs`,
+  `029-payments-fintech`, `007-insurance-actuarial`, `002-healthcare-clinical`.
+
+  Already converted (use as reference): `04-domain-pitfalls/150-schema-compliance-not-equals-data-compliance`,
+  `04-domain-pitfalls/034-crypto-defi`, `04-domain-pitfalls/081-real-time-sports-analytics`, all of `06-ml-pipeline-pitfalls/`,
+  `07-ab-testing-pitfalls/10-non-random-assignment-as-a-b-test` + `14-ratio-metric-traps`,
+  `15-ml-assumptions/04-decision-trees`, `08-pseudoscience/12-base-rate-neglect` +
+  `20-naturalistic-fallacy`, `10-anti-patterns/05-use-one-bin-count-for-all-features` +
+  `23-no-source-id-logged-with-ingested-data`,
+  `22-recently-added-misc/06-personal-data-archives-and-takeout/05-linkedin-data-export`, `ui-templates/03-toc-reference`.
+
+  **The fix is two defects, not one.** Seeding alone makes a wrong label *consistently* wrong.
+  1. Add the canonical helper (copy verbatim from `13-statistical-paradoxes/03-berksons-paradox.html`),
+     one generator per chart function with its own fixed seed:
+     ```js
+     // Seeded Park-Miller LCG — deterministic, never Math.random()
+     function lcg(seed) {
+         var s = seed;
+         return function () { s = (s * 16807) % 2147483647; return s / 2147483647; };
+     }
+     ```
+  2. Compute every statistic printed beside generated data from the plotted points at render time.
+     Prefer retuning the generator so it genuinely produces the figure the prose teaches; relabel to
+     the computed truth only when that isn't sensible.
+
+  **Fix the `.md` sibling too — it is the root cause.** `150`'s spec literally said "random points
+  regenerated per render", so the html was generated correctly from a bad spec; html-only fixes
+  regress on the next regeneration.
+
+  Notes from the pages already done:
+  - Where the *shape or counts* carry the lesson (bin heights, tall-vs-short splits, rows meant to
+    look identical), a hardcoded literal array beats a seeded draw.
+  - An error bar is itself a statistic — derive it (e.g. ±1.96·√n) rather than generating it.
+  - A fabricated coefficient (`corr = 0.3 + Math.random()*0.5`) must be computed from real series or
+    removed; seeding it just makes fiction reproducible.
+  - Expect neighbouring defects: totals that don't sum, bars drawn off-canvas, labels contradicting
+    their own chart, unlabeled illustrative figures, one-sided "noise" that makes an effect an
+    artifact of the generator.
 

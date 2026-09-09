@@ -11,19 +11,19 @@ Each card links to a detail page under `ml-assumptions/`. The card shows an uppe
 
 | # | Category | Title | Link | Description | Topics |
 |---|----------|-------|------|-------------|--------|
-| 1 | LINEAR | Logistic Regression | [ml-assumptions/01-logistic-regression.md](ml-assumptions/01-logistic-regression.md) | Requires linear log-odds relationships; non-linear signal becomes invisible | linearity, multicollinearity, sample-size |
-| 2 | LINEAR | Linear Discriminant Analysis (LDA) | [ml-assumptions/02-lda.md](ml-assumptions/02-lda.md) | Assumes multivariate normality and equal covariance per class | normality, covariance, parametric |
-| 3 | PROBABILISTIC | Naive Bayes | [ml-assumptions/03-naive-bayes.md](ml-assumptions/03-naive-bayes.md) | Requires feature independence; correlated features double-count evidence | independence, density, zero-frequency |
-| 4 | TREE | Decision Trees | [ml-assumptions/04-decision-trees.md](ml-assumptions/04-decision-trees.md) | Axis-aligned splits with no statistical validation; splits on noise | greedy, overfitting, axis-aligned |
-| 5 | TREE | Random Forest | [ml-assumptions/05-random-forest.md](ml-assumptions/05-random-forest.md) | Ensemble masks overfitting but cannot extrapolate beyond training range | extrapolation, black-box, bootstrap |
-| 6 | ENSEMBLE | Gradient Boosting Machines (GBM) | [ml-assumptions/06-gradient-boosting.md](ml-assumptions/06-gradient-boosting.md) | Sequential regression trees correcting residuals; amplifies noise, memorizes hard examples | residuals, overfitting, early-stopping |
-| 7 | DISTANCE | Support Vector Machines | [ml-assumptions/07-svm.md](ml-assumptions/07-svm.md) | Feature scaling required; unscaled features dominate margin entirely | scaling, kernel, outliers |
-| 8 | DISTANCE | K-Nearest Neighbors | [ml-assumptions/08-knn.md](ml-assumptions/08-knn.md) | Curse of dimensionality; nearest becomes meaningless in high dimensions | scaling, curse-dimensionality, distance |
-| 9 | DEEP-LEARNING | Neural Networks | [ml-assumptions/09-neural-networks.md](ml-assumptions/09-neural-networks.md) | Requires large sample size; small data leads to pure memorization | sample-size, scaling, architecture |
-| 10 | REDUCTION | PCA (Principal Component Analysis) | [ml-assumptions/10-pca.md](ml-assumptions/10-pca.md) | Finds linear max-variance directions; non-linear structure destroyed | linearity, variance, interpretability |
-| 11 | CLUSTERING | K-Means Clustering | [ml-assumptions/11-kmeans.md](ml-assumptions/11-kmeans.md) | Assumes spherical, equal-size clusters; fails on elongated shapes | spherical, equal-variance, initialization |
-| 12 | LINEAR | Linear Regression (OLS) | [ml-assumptions/12-linear-regression.md](ml-assumptions/12-linear-regression.md) | Most assumption-heavy algorithm; linearity, normality, homoscedasticity required | linearity, residuals, homoscedasticity |
-| 13 | PROBABILISTIC | EM / Gaussian Mixture Models | [ml-assumptions/13-em-gmm.md](ml-assumptions/13-em-gmm.md) | Assumes Gaussian components; wrong K or initialization causes fake clusters | gaussian, initialization, model-selection |
+| 1 | LINEAR | Logistic Regression | [15-ml-assumptions/01-logistic-regression.md](15-ml-assumptions/01-logistic-regression.md) | Requires linear log-odds relationships; non-linear signal becomes invisible | linearity, multicollinearity, sample-size |
+| 2 | LINEAR | Linear Discriminant Analysis (LDA) | [15-ml-assumptions/02-linear-discriminant-analysis-lda.md](15-ml-assumptions/02-linear-discriminant-analysis-lda.md) | Assumes multivariate normality and equal covariance per class | normality, covariance, parametric |
+| 3 | PROBABILISTIC | Naive Bayes | [15-ml-assumptions/03-naive-bayes.md](15-ml-assumptions/03-naive-bayes.md) | Requires feature independence; correlated features double-count evidence | independence, density, zero-frequency |
+| 4 | TREE | Decision Trees | [15-ml-assumptions/04-decision-trees.md](15-ml-assumptions/04-decision-trees.md) | Axis-aligned splits with no statistical validation; splits on noise | greedy, overfitting, axis-aligned |
+| 5 | TREE | Random Forest | [15-ml-assumptions/05-random-forest.md](15-ml-assumptions/05-random-forest.md) | Ensemble masks overfitting but cannot extrapolate beyond training range | extrapolation, black-box, bootstrap |
+| 6 | ENSEMBLE | Gradient Boosting Machines (GBM) | [15-ml-assumptions/06-gradient-boosting-machines-gbm.md](15-ml-assumptions/06-gradient-boosting-machines-gbm.md) | Sequential regression trees correcting residuals; amplifies noise, memorizes hard examples | residuals, overfitting, early-stopping |
+| 7 | DISTANCE | Support Vector Machines | [15-ml-assumptions/07-support-vector-machines.md](15-ml-assumptions/07-support-vector-machines.md) | Feature scaling required; unscaled features dominate margin entirely | scaling, kernel, outliers |
+| 8 | DISTANCE | K-Nearest Neighbors | [15-ml-assumptions/08-k-nearest-neighbors.md](15-ml-assumptions/08-k-nearest-neighbors.md) | Curse of dimensionality; nearest becomes meaningless in high dimensions | scaling, curse-dimensionality, distance |
+| 9 | DEEP-LEARNING | Neural Networks | [15-ml-assumptions/09-neural-networks.md](15-ml-assumptions/09-neural-networks.md) | Requires large sample size; small data leads to pure memorization | sample-size, scaling, architecture |
+| 10 | REDUCTION | PCA (Principal Component Analysis) | [15-ml-assumptions/10-pca-principal-component-analysis.md](15-ml-assumptions/10-pca-principal-component-analysis.md) | Finds linear max-variance directions; non-linear structure destroyed | linearity, variance, interpretability |
+| 11 | CLUSTERING | K-Means Clustering | [15-ml-assumptions/11-k-means-clustering.md](15-ml-assumptions/11-k-means-clustering.md) | Assumes spherical, equal-size clusters; fails on elongated shapes | spherical, equal-variance, initialization |
+| 12 | LINEAR | Linear Regression (OLS) | [15-ml-assumptions/12-linear-regression-ols.md](15-ml-assumptions/12-linear-regression-ols.md) | Most assumption-heavy algorithm; linearity, normality, homoscedasticity required | linearity, residuals, homoscedasticity |
+| 13 | PROBABILISTIC | EM / Gaussian Mixture Models | [15-ml-assumptions/13-em-gaussian-mixture-models.md](15-ml-assumptions/13-em-gaussian-mixture-models.md) | Assumes Gaussian components; wrong K or initialization causes fake clusters | gaussian, initialization, model-selection |
 
 ## Regeneration instructions
 
