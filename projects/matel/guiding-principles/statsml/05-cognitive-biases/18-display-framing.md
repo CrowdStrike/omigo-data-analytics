@@ -7,18 +7,18 @@
 
 ---
 
-## Section 1 — The Same Twelve Months, Two Scales, Two Verdicts
+## Section 1 — One Year of Figures, Two Scales, Two Verdicts
 
 **Tags:** `core idea` (magenta), `same figures` (blue), `opposite reading` (violet)
 
 **Bullets:**
 - **The measure** — the share of parcels a depot got there on time, one figure for each month
-- **What happened** — the year opened at 90.0 in every hundred and closed at 88.2 in every hundred
-- **The honest size** — a fall of 1.8 in every hundred parcels, one part in fifty of where it began
-- **The panel on the left** — its scale runs from just under the worst month to just over the best
-- **What that does** — the line falls through 86 percent of the panel height and reads as collapse
-- **The panel on the right** — the same twelve figures on a scale running from zero to a hundred
-- **What that does** — the line covers 2 percent of the panel height and reads as a flat year
+- **What happened** — the year opened a little higher than it closed, drifting down in between
+- **The honest size** — the slip is slight, a sliver of where the depot stood in January
+- **The panel on the left** — its scale starts just under the worst month and stops just over the best
+- **What that does** — the line dives almost the whole height of the panel and reads as collapse
+- **The panel on the right** — the same months on a scale running from nothing at all up to perfect
+- **What that does** — the line barely leaves the flat, so the year reads as nothing happened
 - **Nothing was faked** — both panels plot every point correctly from one identical list
 
 **Key point:** The reader is not measuring parcels, they are measuring how far the line moved down the page. Whoever picks the top and bottom of the scale picks how far that is, and so picks the conclusion.
@@ -48,13 +48,13 @@ Two line panels side by side plotting one identical twelve-value series, differi
 **Bullets:**
 - **The board** — twelve branches, each bar showing how its sales moved against last month
 - **The rule** — a bar below the line is painted red, a bar at or above it is painted green
-- **Line at zero** — four go red, and the room starts asking what went wrong in four places
-- **Line nudged up to plus 1.5** — eight go red, and the same year looks like a broad failure
-- **Line nudged down to minus 1.5** — one goes red, and the same year looks like a clean run
-- **The numbers never moved** — all three rows carry the identical twelve figures, to the digit
+- **With the line at no change** — a handful go red, and the room asks what went wrong in those places
+- **Nudge the line up a little** — most of the board goes red and the same year looks like a broad failure
+- **Nudge the line down a little** — almost everything goes green and the same year looks like a clean run
+- **The numbers never moved** — all three rows carry the identical figures, branch for branch
 - **What red does to a reader** — it hands over alarm before anyone has judged a single size
 - **Who put the line there** — a person, once, usually with nothing written down about why
-- **The figure no colouring shows** — the average branch was up 0.8, a middling but real year
+- **The thing no colouring shows** — the typical branch was modestly up, a middling but real year
 
 **Key point:** Colour is not a summary of the data, it is a summary of somebody's cut-off. Red arrives as a verdict already reached, so the reader spends their attention defending or attacking a threshold they never saw chosen.
 
@@ -84,13 +84,13 @@ The same twelve bars drawn in three stacked rows. Only the threshold changes bet
 
 **Bullets:**
 - **The map** — sixteen districts, each shaded by the average wait at its walk-in clinic
-- **The waits** — from 17.2 minutes to 21.2 minutes, a spread of four minutes end to end
+- **The waits** — the quickest clinic and the slowest are only a few minutes apart end to end
 - **The shading** — cool blue-green at the quick end, warm orange at the slow end
-- **Middle set at 18.5 minutes** — eleven of the sixteen come out warm and the map looks sick
-- **Middle set at 20 minutes** — five come out warm and the very same map looks mostly healthy
-- **The true middle** — 19.2 minutes, halfway between the quickest district and the slowest
-- **What the eye reads** — warm as failing, cool as fine, without ever reading a minute figure
-- **The tell** — nothing on the map says the whole ramp covers only four minutes of waiting
+- **Turn the ramp warm early** — most of the districts come out warm and the map looks sick
+- **Turn the ramp warm later** — only a few stay warm and the very same map looks mostly healthy
+- **The true middle** — sits halfway between the quickest district and the slowest, and neither map uses it
+- **What the eye reads** — warm as failing, cool as fine, without ever reading a waiting time
+- **The tell** — nothing on the map says how little waiting the whole span of colour covers
 
 **Key point:** A shaded map hands the reader a verdict per district without ever handing over a scale. Two maps that disagree about which half of a city is failing can be drawn from one identical set of waits.
 
@@ -119,13 +119,13 @@ The same sixteen district waits drawn as two four-by-four shaded maps that diffe
 
 **Bullets:**
 - **The setup** — Alice drills for a driving theory test on the same fifty practice questions
-- **Round one** — she gets 62 in a hundred, on the practice fifty and on unseen questions alike
+- **Round one** — she scores the same on the practice set as she does on questions she has never seen
 - **What she does after each round** — looks up the answers she got wrong, which is sensible
-- **Round eight on the practice fifty** — 98 in a hundred, so she books the test feeling ready
-- **Round eight on unseen questions** — 64 in a hundred, barely above where she began
-- **The gap** — 34 points, and every one of them is memory of these fifty questions
-- **Why the score had to climb** — by round eight she had looked up 49 of the fifty answers
-- **What the 98 measures** — how familiar those fifty are, which is not what the test asks
+- **By the last round on the practice set** — she is near full marks, so she books the test feeling ready
+- **The same round on unseen questions** — barely above where she started back in round one
+- **The gap between the two lines** — every bit of it is memory of these particular fifty questions
+- **Why the score had to climb** — by the end she had looked up nearly every answer in the pool
+- **What the practice score measures** — how familiar those fifty are, which is not what the test asks
 - **The unseen score is the flat one** — her actual driving knowledge never moved all month
 
 **Key point:** A score taken on the material you have already adjusted yourself against measures familiarity, not ability. It has to rise, whatever happens to the skill underneath it, and it rises fastest right before it is most trusted.
@@ -158,14 +158,14 @@ Two lines over eight rounds of drilling: the practice-set score climbing to near
 
 **Bullets:**
 - **A cropped scale is not automatically a lie** — sometimes the narrow band is the whole story
-- **A patient's temperature** — eight readings across one illness, from 36.8 up to 38.9 degrees
-- **On a zero-to-forty scale** — the illness covers 5 percent of the panel and looks like nothing
-- **On a 36.5-to-39.2 scale** — it covers 78 percent, which is the picture a doctor needs
-- **Why cropping is right here** — two degrees separates resting at home from a hospital bed
-- **Same with pond acidity** — 7.4 down to 6.8 changes what can live there, and barely shows
+- **A patient's temperature** — a run of readings taken across one illness, rising then easing off
+- **Drawn on a wide scale** — the fever is a faint wobble near the top and looks like nothing at all
+- **Drawn on a scale cropped to the fever** — the illness fills the panel, the picture a doctor needs
+- **Why cropping is right here** — a couple of degrees separates resting at home from a hospital bed
+- **Same with pond acidity** — a small shift changes what can live there, and barely shows on a wide scale
 - **Where it turns** — a bar chart, because a reader takes bar height as how much there is
-- **Two bars off a base cut at 100** — 100.5 against 102.0 draws the second four times as tall
-- **What it actually is** — one and a half percent bigger, so the drawing overstates it wildly
+- **Cut the base off a bar chart** — 100.5 beside 102.0 draws the second bar four times as tall
+- **What that pair really is** — one and a half percent bigger, so the drawing overstates it wildly
 - **The working rule** — crop a line when the band is the story, never crop a bar the eye measures
 
 **Key point:** The test is not whether the scale starts at zero, it is what the reader's eye is being invited to measure. A line asks how the value moved, so cropping to the band it moved in is honest. A bar asks how much there is, so a cut base makes the eye read a ratio that does not exist.
@@ -197,7 +197,8 @@ Two blocks. On the left, one temperature series drawn on a full scale and on a c
 - **Template:** the card-section layout from `statistical-paradoxes/03-berksons-paradox.html`, matching the converted `05-clustering-illusion.html` and `01-confirmation-bias.html` in this folder. One `.card-section` per section, each holding an `<h2>` (1.3rem `#1a5276`, `border-bottom: 2px solid #2980b9`, 4px bottom padding) and a `table.layout` with `td.text-col` 50% / `td.viz-col` 50%.
 - **Canvas placement:** `td.viz-col` gets `text-align: center` and the canvas `display: block; width: 100%; margin: 0 auto`. The canvas is capped at 720px, so a wide cell leaves slack — centering puts the chart in the middle of the right half.
 - **Text column order:** `.tags` pill row → `<ul>` of one-line bullets each opening `<b>label</b>` then an em dash → one `.key-point` callout → `.src` note. Every section on this page is a constructed example, so every section carries a `.src`. No paragraph blocks, no data tables, no philosophy box.
-- **Bullet form:** each is ONE line that does not wrap at 50% column width (≤95 characters including the bold label). Bullet counts follow the content: 8, 9, 8, 9, 10. No padding, no line that restates another.
+- **Bullet form:** each is ONE line that does not wrap at 50% column width (≤105 characters including the bold label). Bullet counts follow the content: 8, 9, 8, 9, 10. No padding, no line that restates another.
+- **Numbers live in the charts, not the prose** — at most a couple of figures in bullets, and only where the figure is the argument. Bullets state the idea in plain words ("a slight slip", "most of the board goes red"); the exact values, shares, counts and ratios are computed and printed on the canvas. No bullet opens with a count, a size or a percentage, and no decimal percentages or precise averages appear in prose.
 - **Section titles name the content**, never a role. No index number appears anywhere on the page.
 - **Page CSS:** body system-ui, white, `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with `border-bottom: 2px solid #2980b9`, 8px bottom padding. `.subtitle` `#666` 0.95rem, 32px bottom margin. `.card-section` 40px bottom margin. `table.layout` full width, border-collapse, cells vertical-align top padding 12px. `ul` 0.92rem, margin `8px 0 8px 20px`, `li` 4px bottom margin, `li b` in `#1a5276`. `.key-point` background `#f8f9fa`, `border-left: 3px solid #e74c3c`, padding 8px 12px, 0.9rem. `.src` 0.78rem `#888`. No nav, no `.nav` CSS, no back/home links, no cross-page links.
 - **Tag pills:** `display:inline-block`, 0.72rem, weight 600, padding 2px 10px, radius 10px. Classes used: `.blue` `.green` `.red` `.orange` `.violet` `rgba(74,58,167,0.12)`/`#4a3aa7`, `.magenta` `rgba(213,81,129,0.14)`/`#c2426f`, `.aqua` `rgba(25,158,112,0.14)`/`#17805d`, `.yellow` `rgba(201,133,0,0.15)`/`#a06c00`.

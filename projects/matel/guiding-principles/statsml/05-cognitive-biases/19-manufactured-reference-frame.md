@@ -12,13 +12,13 @@
 **Tags:** `core idea` (violet), `a slice, not the whole` (blue), `every price is real` (magenta)
 
 **Bullets:**
-- **The town** — 600 second-hand bikes are for sale, priced from $65 up to $655
-- **The shop window** — 60 of them on display, every one a shop-restored bike
+- **The town** — every second-hand bike for sale, from rusty runabouts up to shop-restored ones
+- **The shop window** — a small display, and every bike in it has been restored by the shop
 - **Nothing is hidden** — every price in the window is real and not one of them is a lie
-- **What the window leaves out** — 177 bikes in town cost less than the cheapest one shown
-- **Middle of the window** — $325, and after a fortnight that is what "a bike costs"
-- **Middle of the town** — $225, which is the number Alice actually needed
-- **The gap** — $100, put there by the choosing rather than by the market
+- **What the window leaves out** — hundreds of cheaper bikes exist and not one of them is on show
+- **Middle of the window** — walk past it for a fortnight and that becomes "what a bike costs"
+- **Middle of the town** — a good deal lower, and it is the price Alice actually needed to know
+- **The gap** — a hundred dollars of it, put there by the choosing rather than by the market
 
 **Key point:** No false price was ever shown. The window's whole effect comes from which bikes it had room for, and the sense of "normal" it installs is a fact about the window that gets stored as a fact about the town.
 
@@ -46,12 +46,12 @@ Two overlaid price histograms on one shared axis — the whole town in flat grey
 **Tags:** `judging yourself` (magenta), `the median feels poor` (blue), `it feeds itself` (red)
 
 **Bullets:**
-- **Alice's budget** — $225, exactly the middle price of every bike for sale in town
-- **Against the town** — it clears 304 of the 600 bikes, so she is a middling buyer
-- **Against the window** — it clears 2 of the 60 on show, so she reads as nearly broke
+- **Alice's budget** — she can spend exactly the middle price of every bike for sale in town
+- **Against the town** — about half of them are within her reach, so she is a middling buyer
+- **Against the window** — almost nothing on show is within reach, so she reads as nearly broke
 - **What she concludes** — "I cannot afford a decent bike", which is false about her town
-- **Why it lands** — she is measuring herself against a reference that was assembled
-- **The self-feeding part** — feeling short, she stretches to $325 and joins the window
+- **Why it lands** — she is measuring herself against a reference that was assembled for her
+- **The self-feeding part** — feeling short, she stretches up to the window and becomes part of it
 - **Nobody quoted her a price** — there is no figure she could have argued herself down from
 
 **Key point:** She has not misjudged her own budget — she has misjudged the crowd she is standing in. Swap the crowd and the identical budget goes from ordinary to inadequate, which is why the conclusion feels like self-knowledge rather than an error about the town.
@@ -81,16 +81,16 @@ The same budget line drawn through two different crowds. In the top row half the
 **Tags:** `volume beats intensity` (orange), `the forgettable ones` (yellow), `opposite of one big number` (magenta)
 
 **Bullets:**
-- **Her own year of looking** — 40 bikes seen around town, middle price $235
-- **One shocking bike** — a $1,510 racer appears, sitting $1,275 above that middle
-- **What it does to normal** — the middle moves to $245, ten dollars, and becomes an anecdote
-- **Fifteen dull bikes** — each at $320, $85 over her middle, $1,275 over it in total
-- **What they do to normal** — the middle moves to $275, forty dollars, four times as far
-- **Same total excess** — $1,275 either way, and the mild many win by four to one
-- **Why** — one freak price is filed as a freak; fifteen ordinary ones become the pile
-- **The reversal** — a single memorable figure is the weaker mover here, not the stronger
+- **Her own year of looking** — bikes seen around town, and a settled private sense of the middle
+- **One shocking bike** — a racer turns up priced far above anything she had ever seen for sale
+- **What it does to normal** — her middle barely budges, and the racer is filed away as a story
+- **A cluster of dull bikes** — each only mildly over her middle, forgettable one at a time
+- **What they do to normal** — her middle moves several times further than the shocking one moved it
+- **Same total excess** — the identical dollars added either way, and the mild many win easily
+- **Why** — one freak price is filed as a freak; the ordinary ones quietly become the pile
+- **The reversal** — the single memorable figure is the weaker mover here, not the stronger
 
-**Key point:** A price so far out that you remember it gets stored as an exception and barely moves your sense of normal. Fifteen prices dull enough to forget cannot be quarantined as exceptions, so they quietly become the pile the next price is compared against.
+**Key point:** A price so far out that you remember it gets stored as an exception and barely moves your sense of normal. Prices dull enough to forget cannot be quarantined as exceptions, so they quietly become the pile the next price is compared against.
 
 **Source note (`.src`):** Illustrative Example — 40 seeded bikes drawn from the same town, with two additions carrying an identical total excess; every middle price is computed in the draw function.
 
@@ -117,11 +117,11 @@ Three rows of the same forty prices with the same total excess added in two diff
 **Tags:** `why it resists` (aqua), `nothing to discount` (yellow), `the quiet majority` (blue)
 
 **Bullets:**
-- **The gap to close** — $100 between the window's middle and the town's
-- **The prices she can name** — $620, $610, $585 and $580, the four that stood out
-- **Throwing those four out** — the middle falls to $322.50, three dollars of the hundred
-- **Throwing out twenty** — a third of all she saw, and it closes twenty of the hundred
-- **Why so little** — 27 of the 60 prices sat within $60 of the middle and left no trace
+- **The gap to close** — the distance between what the window says a bike costs and what one costs
+- **The prices she can name** — the handful at the very top of the window, the ones that stood out
+- **Throwing those out** — the window's middle barely moves, so almost none of the gap closes
+- **Throwing out a third of them** — still only a small corner of the gap, for a drastic correction
+- **Why so little** — nearly half the prices sat close to the middle and left no trace to correct for
 - **What actually closes it** — the ordinary bikes she never saw, put back into the pile
 - **The remedy that fails** — discounting the loud prices, since the quiet ones did the work
 - **The remedy that works** — going out and finding the cases the window had no reason to show
@@ -152,16 +152,16 @@ The sixty window prices as a tick strip on top, with the four loudest flagged an
 **Tags:** `the boundary` (green), `sometimes it is the right reference` (aqua), `silent substitution` (magenta)
 
 **Bullets:**
-- **One window, two questions** — the same 60 restored bikes, asked to answer both
-- **What does a restored bike cost** — the window says $325, the truth is $330
-- **What does a bike in town cost** — the window says $325, the truth is $225
+- **One window, two questions** — the same restored bikes on show, asked to answer both of them
+- **What does a restored bike cost** — the window is right, near enough that the miss does not matter
+- **What does a bike in town cost** — the window is out by the whole gap, hundreds apart from truth
 - **The window never changed** — the same prices answer one question well and one badly
 - **When it is the right reference** — when the group you asked about is the group on show
-- **When it quietly substitutes** — when you wanted the town and got the restored corner
-- **The test** — name the group your question is about, then ask who was left out
-- **Restored bikes are real** — 170 of the 600 are restored, so the window is no fiction
+- **When it quietly substitutes** — when you wanted the town and got the restored corner of it
+- **The test** — name the group your question is about, then ask who was left out of the display
+- **Restored bikes are real** — a genuine slice of the town is restored, so the window is no fiction
 
-**Key point:** A curated stream is not a distortion by nature — asked what a restored bike costs, sixty restored bikes are exactly the reference you want and land within $5. It becomes the bias only when it stands in for a group it was never drawn from, and the tell is that the substitution is silent: the window looks identical in both cases.
+**Key point:** A curated stream is not a distortion by nature — asked what a restored bike costs, a window of restored bikes is exactly the reference you want and lands on the truth. It becomes the bias only when it stands in for a group it was never drawn from, and the tell is that the substitution is silent: the window looks identical in both cases.
 
 **Source note (`.src`):** Illustrative Example — the same seeded town and window; both true middles and both misses are computed in the draw function.
 
@@ -188,7 +188,8 @@ One vertical line for what the window says, held fixed, with two rows for the tw
 
 - **Template:** the card-section layout from `statistical-paradoxes/03-berksons-paradox.html`, matching the approved conversions in `05-clustering-illusion.html` and `01-confirmation-bias.html`. Five `.card-section` blocks, each an `<h2>` (1.3rem `#1a5276`, `border-bottom: 2px solid #2980b9`, 4px bottom padding) plus a `table.layout` with one row: `td.text-col` 50% / `td.viz-col` 50%. One canvas per section. No index number anywhere on the page.
 - **Text column order:** `.tags` pill row → `<ul>` of one-line bullets each opening `<b>label</b>` then an em dash → one `.key-point` → `.src` note. Every section carries a `.src` note because every figure on the page is constructed. No paragraph blocks, no `.example` lines, no data tables, no philosophy box.
-- **Bullet form:** each bullet is ONE line that does not wrap at 50% column width — verified at ≤95 characters including the bold label. Counts follow content: 7, 7, 8, 8, 8. Nothing padded, nothing restated between a bullet and the key point.
+- **Numbers live in the charts, not the prose** — at most a couple of figures in bullets, and only where the figure is the argument.
+- **Bullet form:** each bullet is ONE line that does not wrap at 50% column width — verified at ≤105 characters including the bold label. Counts follow content: 7, 7, 8, 8, 8. Nothing padded, nothing restated between a bullet and the key point.
 - **Language:** layman-first. No jargon from the banned list. No recommender, algorithm, feed-ranking, engagement, impression, ad-revenue or platform-incentive vocabulary — the whole page runs on a shop window, a town full of bikes, and one buyer named Alice.
 - **Scope boundary against `02-anchoring-bias`:** that page covers a single salient number, consciously seen at one moment, pulling one estimate. This page is the accumulated volume-based version, and the distinction is made load-bearing rather than mentioned. Section 3 is the argument: with the total excess held identical at $1,275, fifteen forgettable prices move the sense of normal four times as far as one unforgettable price does, which reverses the direction anchoring would predict. Section 4 completes it — an anchor can be named and discounted, and here the discounting repair recovers 3% of the gap because the movers were the prices too dull to recall. No cross-links of any kind.
 - **Chart shapes deliberately unlike `02-anchoring-bias`:** that page opens on two swarms split by an arbitrary number and uses a gap bracket between two group averages as its signature. This page opens on two overlaid histograms of a population against a slice of it, and its other charts are a shared budget line through two crowds, three rows sharing one reference line with off-scale marking, a repair-effectiveness bar set with a tick strip above it, and one fixed line answering two questions. No swarm-pair-with-gap-bracket figure appears.

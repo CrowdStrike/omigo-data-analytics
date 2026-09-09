@@ -14,10 +14,10 @@
 **Bullets:**
 - **The setting** — one team answered six questions about how they use an internal tool
 - **Two ways of asking** — half spoke to a person, half typed the same answers into a chat box
-- **Held constant** — same six questions, same wording, same order, same week
-- **Never read the instructions** — 21 in a hundred admitted it to the person, 44 to the box
-- **Kept retrying rather than ask** — 18 to the person, 37 to the box, nineteen points apart
-- **The harmless question** — preferring email to a call sits at 61 and 63, near enough level
+- **Held constant** — the same questions, the same wording, the same order, the same week
+- **Never read the instructions** — about twice as many owned up to the box as owned up to a person
+- **Kept retrying rather than ask** — again far more admitted it to the box, and by a wide margin
+- **The harmless question** — preferring email to a call comes back level whichever way you ask
 - **So the gap belongs to the question** — the more awkward it is, the further the two land apart
 - **Nobody misled the interviewer** — they left out the part that would have cost them something
 
@@ -59,12 +59,12 @@ A dumbbell chart: one row per question, a dot for each channel, and the connecti
 
 **Bullets:**
 - **An outside answer** — three of the questions leave a trace in the tool's own usage log
-- **Never read the instructions** — the log shows 56 in a hundred never opened the help page
-- **What the person heard** — 21, well under half the people the log says actually did it
-- **What the box heard** — 44, much closer, and still short of what the log recorded
-- **Across the three questions** — the box lands 9.3 points from the log, the person 28.3
-- **Three times closer** — where admitting costs something, the freer channel is the better one
-- **Still not the truth** — the box undercounts all three, so it is no benchmark either
+- **Never read the instructions** — the log shows most of the team never opened the help page
+- **What the person heard** — well under half of what the log says actually happened
+- **What the box heard** — much nearer the log, though still short of what it recorded
+- **Closer by a wide margin** — the box lands about three times nearer the log than the person does
+- **Where admitting costs something** — the channel nobody is watching is the better instrument
+- **Still not the truth** — the box undercounts on every one of the three, so it is no benchmark
 - **Why the freedom is worth having** — a channel nobody watches gets nearer to what happened
 
 **Key point:** Where owning up costs something, the channel with nobody listening gets closer to what actually happened — that is the real value of it. It still falls short of the log, so closer is not the same as right.
@@ -100,13 +100,13 @@ Three questions, each a pair of horizontal bars with the log value drawn as a da
 **Tags:** `the punchline` (orange), `nothing changed` (yellow), `a fake trend` (magenta)
 
 **Bullets:**
-- **One question tracked** — hiding a small mistake at work, asked once a quarter for five quarters
-- **Neither channel moved** — the box reports 33 in a hundred every quarter, the person 12
-- **What did move** — the share of answers arriving through the box, 10 in a hundred up to 90
-- **The blended number** — 14.1 in a hundred in the first quarter, 30.9 in the fifth
-- **How a slide reads it** — the rate more than doubled, up 119 percent, a team in trouble
-- **What produced it** — the 80-point swing in the mix times the 21-point gap, exactly 16.8
-- **A suspiciously straight line** — 4.2 points a quarter, because the mix moved 20 a quarter
+- **One question tracked** — hiding a small mistake at work, asked once a quarter over five quarters
+- **Neither channel moved** — the box reported the same rate every quarter, and so did the person
+- **What did move** — the share of answers arriving through the box, from almost none to almost all
+- **The blended number** — the published rate climbed steadily from the first quarter to the last
+- **How a slide reads it** — the rate more than doubled, a team apparently in growing trouble
+- **What produced it** — the swing in the mix multiplied by the gap between the two channels
+- **A suspiciously straight line** — it rises by the same amount each quarter, as the mix does
 - **Nobody changed** — every person in every quarter answered exactly as they had before
 
 **Key point:** Both channels held still and the published number more than doubled. Any series that spans a change in how the answers were collected is partly measuring that change and not the people.
@@ -136,10 +136,10 @@ Two dead-flat channel lines, a rising blended line drawn between them, and the m
 **Tags:** `the boundary` (green), `which one to trust` (orange), `common mistake` (red)
 
 **Bullets:**
-- **Set the bar first** — name the smallest change you would act on, two points for this team
-- **The arithmetic** — a 20-point drift in the mix moves the blend by a fifth of the channel gap
-- **The harmless questions** — gaps of two and one manufacture 0.4 and 0.2, under the bar
-- **The awkward ones** — gaps of 15 to 23 manufacture 3.0 to 4.6 points, over the bar alone
+- **Set the bar first** — name the smallest change you would actually act on, before looking at anything
+- **The arithmetic** — a drift in the mix moves the blend by a fraction of the channel gap
+- **The harmless questions** — where the two channels agree, the drift moves nothing worth noticing
+- **The awkward ones** — where they disagree, the drift alone clears the bar with no help at all
 - **Where a log exists** — measure both channels against it and keep whichever lands closer
 - **Where the answer costs nothing** — the channels agree, so use whichever is cheaper to run
 - **Where being watched is the point** — behaviour in front of people is the thing being measured
@@ -172,7 +172,8 @@ The six questions ranked by how much a mix drift alone can move their blended nu
 - **No index number** anywhere on the page — not in the h1, not in the section headings.
 - **Text column order:** `.tags` pill row → `<ul>` of one-line bullets each opening `<b>label</b>` → one `.key-point` callout → `.src` note. Every section's figures are constructed, so every section carries a `.src`. No paragraph blocks, no data tables, no `.math-box`, no `.example` line.
 - **Bullet form:** each is ONE line under 95 characters that does not wrap at 50% column width, `<b>bold label</b>` then an em dash then the fact.
-- **Tone:** neutral and observational. Lower disclosure cost is treated as genuinely useful, not as a pathology — section 2 exists to say so with numbers. No moralising, no sensitive subject matter: the illustrations are admitting you skipped the instructions, admitting a small mistake, and asking a question you think is stupid.
+- **Numbers live in the charts, not the prose** — at most a couple of figures in bullets, and only where the figure is the argument. Never open a bullet with a count, a size or a percentage; prefer "about half", "several times as many", "a handful" to decimals and precise averages.
+- **Tone:** neutral and observational. Lower disclosure cost is treated as genuinely useful, not as a pathology — section 2 exists to say so. No moralising, no sensitive subject matter: the illustrations are admitting you skipped the instructions, admitting a small mistake, and asking a question you think is stupid.
 - **No real product or company names**, no invented brand names. The two channels are "a person" and "a chat box".
 - **Page CSS:** body system-ui, white, `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with `border-bottom: 2px solid #2980b9`, 8px bottom padding. `.subtitle` `#666` 0.95rem, 32px bottom margin. `.card-section` 40px bottom margin. `table.layout` full width, border-collapse, cells vertical-align top padding 12px, `.viz-col` centered. `ul` 0.92rem margin `8px 0 8px 20px`, `li` 4px bottom margin, `li b` `#1a5276`. `.key-point` `#f8f9fa`, `border-left: 3px solid #e74c3c`, padding 8px 12px, 0.9rem. `.src` 0.78rem `#888`. No nav, no `.nav` CSS, no back/home links, no cross-page links.
 - **Tag pills:** `display:inline-block`, 0.72rem, weight 600, padding 2px 10px, radius 10px. Classes used: `.blue`, `.green`, `.red`, `.orange`, `.violet` `rgba(74,58,167,0.12)`/`#4a3aa7`, `.magenta` `rgba(213,81,129,0.14)`/`#c2426f`, `.aqua` `rgba(25,158,112,0.14)`/`#17805d`, `.yellow` `rgba(201,133,0,0.15)`/`#a06c00`.
@@ -181,5 +182,5 @@ The six questions ranked by how much a mix drift alone can move their blended nu
 - **Canvas font sizes:** chart title bold 15px; in-chart header bold 12–13px; body and axis labels 12px floor; the one big callout figure bold 19px; caption bold 13px.
 - **Palette** (shared `P`): `blue #2a78d6`, `green #008300`, `magenta #d55181`, `yellow #c98500`, `aqua #199e70`, `orange #d95926`, `violet #4a3aa7`, `ink #1a5276`, `text #2c3e50`, `mute #6b7280`, `grid #e5e9ef`. Hard red `#e74c3c` is reserved for the `.key-point` border and is not used in any chart.
 - **Determinism:** no `Math.random()` anywhere, and no seeded generator either — the `lcg` helper from the reference is deliberately omitted because every series on this page is a literal constructed array. Every printed figure (each gap, the average gap, each shortfall, both average distances and their ratio, every blended point, the rise and the relative rise, every manufactured amount, the tally clearing the bar) is computed inside the draw function from the plotted data.
-- **Reconciliation:** the bullets, the key points and the chart labels state the same quantities to the digit — gaps 23/21/19/15/2/1, average gap 13.5, average distance from the log 28.3 and 9.3 at a ratio of 3.0×, blended series 14.1 → 30.9 for a rise of 16.8 points and 119 percent, manufactured amounts 4.6 down to 0.2 against a bar of 2.0.
+- **Reconciliation:** the prose carries the direction and the size of an effect in words; the exact quantities are printed only by the charts, computed there — gaps 23/21/19/15/2/1, average gap 13.5, average distance from the log 28.3 and 9.3 at a ratio of 3.0×, blended series 14.1 → 30.9 for a rise of 16.8 points and 119 percent, manufactured amounts 4.6 down to 0.2 against a bar of 2.0. Where a bullet does keep a figure it must match the chart to the digit.
 - **Corrections applied to the earlier version of this page:** the old section 2 claimed the machine channel was "the more accurate one" and told the reader not to correct it downward, while its own chart showed the machine short of the benchmark on all three items — the page argued for treating a known undercount as the truth. Section 2 now states the same finding as "closer, and still short", and the trust question is settled by the last section instead. The old page also gave no boundary at all: it closed on a defenses workflow diagram with no statement of how large a channel gap has to be before pooling matters, so a reader had no way to tell a real hazard from a harmless one. That is now the final section, with the manufactured amount computed per question against a stated bar. The old subtitle asserted the two channels "measure two different populations", which overstates it — the people are the same, their willingness to answer is not; the wording is now about the answers, not the populations. Numbers were rebuilt from scratch: the old five-item set mixed a safety-step item into a page whose examples are meant to stay mundane, and its mean gap label (+13.6) came from a five-item set that the later sections then quietly re-used with different rates.

@@ -12,13 +12,13 @@
 **Tags:** `core idea` (violet), `arbitrary number` (blue), `it moves anyway` (magenta)
 
 **Bullets:**
-- **The setup** — one jar of beans on a table, and forty people asked how many are inside
+- **The setup** — one jar of beans on a table, and a room of people asked how many are inside
 - **Before guessing** — each person spins a wheel and reads out whatever number it lands on
-- **Group A's spin** — the wheel gave 200, a number with no connection to the jar at all
-- **Group B's spin** — the same wheel gave 1500, equally unconnected and equally arbitrary
-- **Group A's guesses** — cluster low, averaging 516, and 37 of the 40 sit under the true count
-- **Group B's guesses** — cluster high, averaging 1021, and 39 of the 40 sit above it
-- **The gap** — 505 beans between the two averages, put there entirely by a wheel spin
+- **The two spins** — one room heard 200, the other heard 1500, both straight off the same wheel
+- **Everyone could see** — the wheel has no connection to the jar, and nobody pretended otherwise
+- **The low-spin room** — guessed low, nearly every one of them landing under the real count
+- **The high-spin room** — guessed high, nearly every one of them landing above it
+- **The gap** — hundreds of beans between the two rooms, put there entirely by a wheel spin
 
 **Key point:** Both groups looked at the identical jar and knew the wheel was a wheel. The number they read out first still decided which half of the answer space they searched.
 
@@ -47,11 +47,11 @@ Two swarms of guesses on one shared bean-count axis, one swarm per wheel spin, w
 **Tags:** `where you meet it` (orange), `discount tags` (yellow), `manufactured deal` (magenta)
 
 **Bullets:**
-- **The tag** — a jacket priced at $120, and sixty shoppers asked what it is actually worth
-- **No crossed-out price** — the typical answer is $107, and 35% call $120 a good deal
-- **Tag reads "was $180"** — the typical answer climbs to $133, and 67% call it a good deal
-- **Tag reads "was $260"** — the typical answer reaches $154, and 87% call it a good deal
-- **The jacket never changed** — same cloth, same stitching, same $120 asked for it
+- **The tag** — a jacket priced at $120, and a crowd of shoppers asked what it is actually worth
+- **A plain tag** — with no crossed-out price, most shoppers say the jacket is worth a bit less than it costs
+- **A tag reading "was more"** — the same jacket is suddenly judged worth more than the shop is asking
+- **A tag reading "was far more"** — the judged worth climbs again, and almost everyone calls it a deal
+- **The jacket never changed** — same cloth, same stitching, same price asked for it
 - **What changed** — a struck-through number the shopper knows the shop chose itself
 - **Why the shop prints it** — that crossed-out number is the cheapest part of the jacket
 
@@ -81,10 +81,10 @@ Three swarm rows on one shared dollar axis, one row per version of the tag, with
 **Tags:** `negotiation` (magenta), `who opens first` (blue), `the range is set` (green)
 
 **Bullets:**
-- **The room** — a hiring conversation where both sides privately think $100k is fair
-- **Candidate opens at $130k** — eight such conversations settle between $111k and $116k
-- **Employer opens at $78k** — eight otherwise identical ones settle between $84k and $93k
-- **The averages** — $114k when the candidate spoke first, $89k when the employer did
+- **The room** — a hiring conversation where both sides privately think the same salary is fair
+- **The candidate speaks first** — naming a figure well above fair, and the deals land well above fair
+- **The employer speaks first** — naming one well below, and otherwise identical deals land below fair
+- **Neither cluster of deals** — comes anywhere near the figure both sides quietly agreed on
 - **Nothing about the job differed** — same role, same skills, same private sense of fair
 - **Every settlement leans** — toward whichever side put a figure on the table first
 - **Why both sides stall** — each waits for the other to hand over the number that sets the range
@@ -118,13 +118,13 @@ Two rows on one shared salary axis: the opening figure as a hollow marker, the e
 
 **Bullets:**
 - **The question** — how many days a job takes, with two teams estimating it separately
-- **Team A's whiteboard** — opened at 12 days, a figure nobody could source afterwards
-- **Team B's whiteboard** — opened at 26 days, sourced no better, and 14 days away from A
-- **Then real data** — six trial runs, the same six for both teams, averaging 19.6 days
-- **Both teams revised** — every reading pulled each estimate toward what was measured
-- **Where they stopped** — A at 16.1 days, B at 22.6, still 6.5 days apart after all six
+- **One team's whiteboard** — opened with a short guess that nobody could source afterwards
+- **The other team's whiteboard** — opened weeks longer, sourced no better, and far away from the first
+- **Then real data** — a handful of trial runs, the same runs shown to both teams
+- **Both teams revised** — every reading pulled each estimate toward what had actually been measured
+- **Where they stopped** — one still below the measured days, one still above, and clearly apart
 - **Adjustment ran out** — each team stopped once its number looked defensible, not once it fit
-- **The residue** — 46% of a gap built from two unsourced figures survived six measurements
+- **The residue** — nearly half of a gap built from two unsourced guesses survived every reading
 
 **Key point:** People do adjust away from an anchor, and they adjust in the right direction. They stop early, so the anchor keeps a share of the final answer no matter how much evidence arrives afterwards.
 
@@ -154,14 +154,14 @@ Two estimate paths converging toward the same measured evidence but stopping sho
 **Tags:** `the real distinction` (green), `informative reference` (aqua), `phantom` (magenta)
 
 **Bullets:**
-- **The same jar** — 750 beans inside, guessed forty times under three conditions
-- **No reference number** — guesses miss by 188 beans on average, the honest baseline
-- **A counted jar of 700** — a genuinely similar jar, counted; the typical miss falls to 140
-- **A spinner landing on 1500** — the typical miss rises to 281, worse than guessing cold
+- **The same jar** — guessed over and over under three conditions, with the true count fixed
+- **No reference number** — people guess cold, and how far off they land is the honest baseline
+- **A similar jar, counted** — hearing that real count first, people land noticeably closer to the truth
+- **A spinner** — hearing whatever it landed on, people land further off than if they had guessed cold
 - **Both numbers moved the answers** — that alone does not tell you which one was bias
 - **What separates them** — whether the number was measured on something comparable
 - **The counted jar qualifies** — it says something real about how big a jar of beans gets
-- **The spinner does not** — it says nothing, and still pulls the average 275 past the truth
+- **The spinner does not** — it says nothing, and still drags the typical answer past the truth
 
 **Key point:** Being pulled by a first number is not the bias — a measured reference from a comparable case earns the pull, and ignoring it makes you worse. The bias is being pulled by a number that carries no information about the question, and the test is where the number came from, not how strongly it moved you.
 
@@ -188,11 +188,12 @@ Three bars of typical miss against a dashed baseline set by guessing with no ref
 
 - **Template:** the card-section layout from `statistical-paradoxes/03-berksons-paradox.html`, matching the approved conversion in `05-clustering-illusion.html`. Five `.card-section` blocks, each an `<h2>` (1.3rem `#1a5276`, `border-bottom: 2px solid #2980b9`, 4px bottom padding) plus a `table.layout` with one row: `td.text-col` 50% / `td.viz-col` 50%. One canvas per section, no more. No index number anywhere on the page.
 - **Text column order:** `.tags` pill row → `<ul>` of one-line bullets each opening `<b>label</b>` then an em dash → one `.key-point` → `.src` note (present in all five sections here, because every figure on the page is constructed). No paragraph blocks, no `.example` lines, no data tables, no philosophy box.
-- **Bullet form:** each bullet is ONE line that does not wrap at 50% column width — verified at ≤95 characters including the bold label. Counts follow content: 7, 7, 7, 8, 8. Nothing padded, nothing restated between a bullet and the key point.
+- **Bullet form:** each bullet is ONE line that does not wrap at 50% column width — verified at ≤105 characters including the bold label. Counts follow content: 7, 7, 7, 8, 8. Nothing padded, nothing restated between a bullet and the key point.
+- **Numbers live in the charts, not the prose** — at most a couple of figures in bullets, and only where the figure is the argument. Two survive here: the wheel's 200-versus-1500 spins in section 1, and the jacket's asking price in section 2, both because "this number is arbitrary" is the whole point. Averages, shares, percentages, counts and gaps are read off the charts, where they are computed at render time; in prose they are stated as "nearly all", "hundreds apart", "noticeably closer". Never open a bullet with a count, a size, a price, or a numbered group label.
 - **Language:** layman-first. No jargon from the banned list appears — no p-value, prior, posterior, correlation coefficient, confidence interval, variance, holdout, or pipeline framing. The old page's ML vocabulary (learning rate, grid search, AUC, epochs, batch size, `α = 0.05`, `n = 30`, 80/20 split, BERT defaults) is gone entirely; the scope is analyst and everyday psychology.
 - **Scope boundary:** this page covers the single salient number — one figure, consciously seen, at one moment. Volume-based reference-setting from repeated curated exposure belongs to `19-manufactured-reference-frame` and is deliberately absent here. No cross-links of any kind.
 - **Section titles name content**, never a role. "The Trap", "Where It Strikes", "In Data Science" and "Pipeline Defense" from the old page were all replaced.
-- **Last section is the boundary case** and must stay precise: it does not claim every reference point is bias. A measured reference from a comparable case genuinely improves the answer (miss falls from 188 to 140); the bias is a reference with no bearing on the question that still moves the answer (miss rises to 281). The discriminator is provenance, not strength of pull.
+- **Last section is the boundary case** and must stay precise: it does not claim every reference point is bias. A measured reference from a comparable case genuinely improves the answer (its bar sits below the no-reference baseline); the bias is a reference with no bearing on the question that still moves the answer (its bar sits above it). The discriminator is provenance, not strength of pull. The bar heights carry those figures — the bullets state the direction in words only.
 - **Page CSS:** body system-ui, white, `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with `border-bottom: 2px solid #2980b9`, 8px bottom padding. `.subtitle` `#666` 0.95rem, 32px bottom margin. `.card-section` 40px bottom margin. `table.layout` full width, border-collapse, td vertical-align top padding 12px, `.text-col`/`.viz-col` 50% each, `.viz-col` `text-align: center`. `ul` 0.92rem margin `8px 0 8px 20px`, `li` 4px bottom margin, `li b` `#1a5276`. `.key-point` `#f8f9fa` background, `border-left: 3px solid #e74c3c`, padding 8px 12px, 0.9rem. `.src` 0.78rem `#888`. No nav, no `.nav` CSS, no back/home links.
 - **Tag pills:** `display:inline-block`, 0.72rem, weight 600, padding 2px 10px, radius 10px. Classes used: `.blue` `rgba(26,82,118,0.12)`/`#1a5276`, `.green` `rgba(39,174,96,0.15)`/`#27ae60`, `.orange` `rgba(230,126,34,0.15)`/`#e67e22`, `.violet` `rgba(74,58,167,0.12)`/`#4a3aa7`, `.magenta` `rgba(213,81,129,0.14)`/`#c2426f`, `.aqua` `rgba(25,158,112,0.14)`/`#17805d`, `.yellow` `rgba(201,133,0,0.15)`/`#a06b00`. `.red` is not used — no section on this page is a genuine alarm.
 - **Colour rotation across sections is a requirement:** section 1 violet/blue with a green truth line, section 2 orange/yellow against a mute majority, section 3 magenta/blue with a green fair line, section 4 aqua evidence with yellow/orange paths, section 5 green versus magenta over a mute baseline. Hard red `#e74c3c` appears only as the `.key-point` left border.

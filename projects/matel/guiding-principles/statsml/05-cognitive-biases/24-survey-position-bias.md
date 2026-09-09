@@ -28,10 +28,10 @@ landslide, and the unsettling part is that a *small* nudge still changes who win
 **Bullets:**
 - **The poll** — a thousand listeners, four nominated songs, one vote each, no ties allowed
 - **How people vote** — they read from the top, tire on the way down, and pick something they like
-- **Alphabetical ballot** — Amber Skies takes 284 votes and is announced song of the year
-- **Same voters, reversed ballot** — Cold Coffee takes 278 and Amber Skies drops to third
-- **What Amber Skies earned** — 260 votes; it got 284 from the top seat and 236 from the last
-- **The race was tight** — the four songs are liked by 26, 23, 27 and 24 listeners in a hundred
+- **Alphabetical ballot** — the song listed first is the one announced as song of the year
+- **Same voters, reversed ballot** — a different song wins and the old champion slides to third
+- **What the winner truly earned** — less than the top seat gave it, more than the bottom seat would have
+- **The race was tight** — the four songs are liked by almost the same share of listeners, a dead heat
 - **Nobody misbehaved** — every voter picked a song they liked, and the layout picked which one
 
 **Key point:** A poll with one fixed running order cannot tell "most loved" apart from "listed first" —
@@ -70,16 +70,17 @@ song actually earned.
 **Tags:** `every arrangement` (blue), `four possible champions` (aqua), `the seat wins` (yellow)
 
 **Bullets:**
-- **The experiment** — same voters, same likes, and all 24 ways of ordering the four names
-- **Winners produced** — all four songs win at least one ordering, including the least liked
-- **The genuinely best song** — Cold Coffee wins 11 of the 24, so it loses more often than it wins
-- **Where the winner sat** — 15 of the 24 winners were printed first, 23 of 24 in the top two seats
-- **The rank outsider** — Broken Compass, liked least of the four, still wins one ordering outright
+- **The experiment** — same voters, same likes, and every possible way of ordering the four names
+- **Winners produced** — every song on the list wins somewhere, including the one liked least
+- **The genuinely best song** — wins fewer than half the orderings, so it loses more often than it wins
+- **Where the winner sat** — most champions were printed first, and nearly all of the rest came second
+- **The rank outsider** — Broken Compass, liked least of the four, still wins an ordering outright
+- **The bottom seat never wins** — a name in the last seat is read by too few voters to come first
 - **What the poll measures** — the running order, plus enough real liking to stay believable
-- **One ordering tells you little** — you cannot tell your result apart from the other 23
+- **One ordering tells you little** — you cannot tell your result apart from all the others
 
 **Key point:** Run every arrangement and the trophy moves around the whole shortlist. A single ordering
-hands you one of 24 answers and no way to know which one you got.
+hands you one answer out of many, and no way to know which one you got.
 
 **Source note (`.src`):** Illustrative Example — all 24 orderings enumerated in the draw function; the win tallies and seat counts are scanned from that enumeration.
 
@@ -106,12 +107,12 @@ seat the winner sat in.
 
 **Bullets:**
 - **The poll** — twenty films nominated for best romance, and voters like all twenty equally
-- **Down the list** — each seat is read by about 6 percent fewer voters than the seat above it
-- **Seat one** — read by every voter, and it collects 8.5 percent of the vote
-- **Seat twenty** — read by 31 voters in 100, and it collects 2.6 percent
-- **Past seat thirteen** — fewer than half the voters are still reading, so the tail is barely seen
-- **The advantage** — the top seat takes 3.2 times the votes of the bottom, on equal merit
-- **The two ends** — the first three films take 24 percent of the vote, the last three take 8
+- **Down the list** — each seat is read by a few voters fewer than the seat directly above it
+- **Seat one** — read by everybody, so it collects far more than its fair share of the vote
+- **Seat twenty** — read by under a third of the voters, and it collects barely half a fair share
+- **Past the halfway mark** — fewer than half the voters are still reading, so the tail is barely seen
+- **The advantage** — the top seat takes several times the votes of the bottom one, on equal merit
+- **The two ends** — the films at the head of the list take about three times what the tail films take
 - **Adding a nominee** — pushes every film below it one seat further out of sight
 
 **Key point:** On a long list the bottom half is measuring who kept scrolling, not who was loved. If a
@@ -145,9 +146,9 @@ comparison of first-versus-last for lists of five, ten and twenty.
 - **Why the top gains** — everybody starts there, and some voters stop before the end
 - **Why the bottom gains** — it is the name still in mind when the reader looks back up
 - **Read the list aloud** — the order flips, and the song heard last is now the freshest
-- **Both ends together** — the two end seats take 5.5 percent each against a fair share of 5.0
-- **The worst seats** — the two in the middle, on 4.7 percent each, below every other seat
-- **Twelve seats of twenty** — sit below their fair share, and all twelve are in the middle
+- **Both ends together** — the first and last seats each finish a little above their fair share
+- **The worst seats** — the pair in the very middle, which finish below every other seat on the list
+- **Most seats lose out** — well over half sit below their fair share, and all of them are in the middle
 - **So it is a shape** — position pushes votes toward the ends, not simply toward the top
 
 **Key point:** "First wins" is the wrong summary. Both ends of a list are advantaged and the middle is
@@ -181,10 +182,10 @@ both directions — so the second curve visibly sags in the middle.
 **Bullets:**
 - **The fix** — shuffle the running order for every voter, and record the list each one saw
 - **Why it works** — across many voters, every song spends an equal share of time in every seat
-- **One fixed order** — a song's reported share lands as much as 2.4 points from what it earned
-- **Shuffled instead** — that worst gap falls below a hundredth of a point, so the tilt is gone
-- **Forty repeat polls, fixed ballot** — the genuinely best song is declared winner in only 4
-- **Forty repeat polls, shuffled** — it wins 35, and the 5 it drops are lost to ordinary luck
+- **One fixed order** — a song's reported share drifts a couple of points away from what it earned
+- **Shuffled instead** — that worst gap all but vanishes, so the tilt from seating is gone
+- **Repeat the fixed poll** — the genuinely best song is crowned in only a small handful of the runs
+- **Repeat it shuffled** — it now wins nearly every run, and the few it drops are ordinary luck
 - **What shuffling costs** — no two voters see the same list, so a single result wobbles more
 - **What shuffling cannot fix** — a film nobody scrolled to; every long list has a dead middle
 - **So keep the list short** — shuffling shares the bad seats out, a short list has fewer of them
@@ -217,18 +218,18 @@ poll crowned.
 
 **Bullets:**
 - **Two things decide it** — how many names are on the list, and how far ahead the favourite is
-- **Four songs, clear favourite** — liked 60 percent more than the next: it wins from every seat
-- **Four songs, photo finish** — all within 4 percent: the best song wins 46 percent of orderings
-- **Twenty films, clear favourite** — liked 60 percent more: it wins 39 percent of orderings
-- **Twenty films, photo finish** — all within 4 percent: 8 percent, so the seating decides it
+- **Short list, clear favourite** — the best song is loved well ahead of the rest and wins from any seat
+- **Short list, photo finish** — near-equals, and the best song now wins under half the orderings
+- **Long list, clear favourite** — even a runaway favourite is crowned in a minority of orderings
+- **Long list, photo finish** — near-equals on twenty names, and the seating decides it outright
 - **Length beats merit** — a runaway favourite on a long list fares worse than a close short list
-- **The lead you need** — on four names the favourite must be liked 20 percent more than the next
-- **On twenty names** — that required lead becomes 224 percent, which real tastes rarely reach
+- **The lead you need** — on a short list a favourite needs only a modest edge to survive the last seat
+- **On a long list** — the edge it needs is more than double the field, which real tastes rarely reach
 - **When to stop worrying** — a handful of options with one obvious favourite; otherwise shuffle
 
 **Key point:** Order effects are negligible on a short list with one clear favourite and decisive on a long
-list of near-equals. The test is whether the favourite's lead beats what the last seat costs — 20 percent
-on four names, 224 percent on twenty.
+list of near-equals. The test is whether the favourite's lead beats what the last seat costs, and that cost
+grows with every name you add.
 
 **Source note (`.src`):** Illustrative Example — four constructed preference sets; the four-name cases enumerate all 24 orderings exactly, the twenty-name cases use 3,000 seeded orderings each.
 
@@ -259,6 +260,7 @@ best option wins, beside the lead a favourite needs to be safe at each list leng
 - **Template:** the card-section layout from `statistical-paradoxes/03-berksons-paradox.html`, as converted in `05-clustering-illusion.html`. One `.card-section` per section, each holding an `<h2>` (1.3rem `#1a5276`, `border-bottom: 2px solid #2980b9`, 4px bottom padding) and a `table.layout` with `td.text-col` 50% / `td.viz-col` 50%.
 - **Text column order:** `.tags` pill row → `<ul>` of one-line bullets each opening `<b>label</b>` then an em dash → one `.key-point` callout → `.src` note. Every section here is constructed, so every section carries a `.src`. No paragraph blocks, no data tables, no `.math-box`, no `.example` line.
 - **Bullet form:** each bullet is ONE line under 95 characters that does not wrap at 50 percent column width. Count follows the content — seven where seven covers it, nine where the fix and its limits need nine.
+- **Numbers live in the charts, not the prose — at most a couple of figures in bullets, and only where the figure is the argument.**
 - **Section titles name the content.** No role labels ("The Trap", "The Fix", "In the Pipeline") and no phrasing that would fit another page.
 - **Page CSS:** body system-ui, white, `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with `border-bottom: 2px solid #2980b9`, 8px bottom padding. `.subtitle` `#666` 0.95rem, 32px bottom margin. `.card-section` 40px bottom margin. `table.layout` full width, border-collapse, cells vertical-align top padding 12px. `ul` 0.92rem, margin `8px 0 8px 20px`, `li` 4px bottom margin, `li b` `#1a5276`. `.key-point` `#f8f9fa`, `border-left: 3px solid #e74c3c`, padding 8px 12px, 0.9rem. `.src` 0.78rem `#888`. Canvas `display: block; width: 100%; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 4px`.
 - **No nav, no `.nav` CSS, no back/home links, no cross-page links of any kind.** In particular no link to `10-recency-bias`, which covers position in *time*; this page is position in a list presented all at once and shares no chart form with it.
@@ -270,9 +272,9 @@ best option wins, beside the lead a favourite needs to be safe at each list leng
 - **Single shared model.** One top-level `TRUE = [26, 23, 27, 24]`, `DROP = 0.94`, `SHORT` name array, `readRate(seat) = DROP^seat`, `poll(order, like)`, `votes(shares, total)` with largest-remainder rounding, and `argmax`. No chart re-derives the rule locally and no chart hardcodes a share, count, ratio, winner or ranking — all six draw functions compute their labels from the model and print from those variables.
 - **Determinism:** no `Math.random()`. Seeded Park–Miller LCG (`s = (s × 16807) % 2147483647`), seed 42, used only where sampling is genuinely needed — section 5's repeat polls and section 6's twenty-name orderings. Sections 1, 2, 3 and 4 are exact; section 5's shuffled limit is the exact average over all 24 orderings, not a simulation.
 - **Vote counts total exactly 1,000** in section 1 via largest-remainder rounding, so no panel shows 999 or 1,001.
-- **Plain language.** The page says "each seat is read by about 6 percent fewer voters", never "decay constant" or a Greek letter. Charts say "what the song earned", "fair share" and "worst gap", never "relative error" or "bias magnitude".
+- **Plain language.** The page says "each seat is read by a few voters fewer than the seat above", never "decay constant" or a Greek letter. Charts say "what the song earned", "fair share" and "worst gap", never "relative error" or "bias magnitude".
 - **The lead chart shows the winner changing.** Two panels of the same preferences under two orderings, with the earned votes ticked on both — the reader sees the trophy move before reading a word. A distribution or an abstract curve would not open the page.
-- **Rounding discipline:** the shuffled worst gap is `0.0033` points, printed as "0.00 pts" with "under 0.01" beside it rather than a false-precision figure. The 3.24 ratio in section 3 prints as "3.2×" everywhere including the prose. Section 6's twenty-name win rates print as whole percentages because the sampled figures are only stable to that digit.
+- **Rounding discipline:** the shuffled worst gap is `0.0033` points, printed as "0.00 pts" with "under 0.01" beside it rather than a false-precision figure. The 3.24 ratio in section 3 prints as "3.2×" on the chart; the prose says "several times" rather than repeating the figure. Section 6's twenty-name win rates print as whole percentages because the sampled figures are only stable to that digit.
 - **Corrections from the earlier version of this page:**
   - The old section 3 claimed a spoken list "behaves exactly like the same list printed backwards" and inferred from it that "on the radio, late wins". Under the page's own rule that is a *pure reversal*, not a both-ends effect — it moves the advantage to the bottom rather than giving both ends an advantage. That section has been replaced by section 4, which adds the two directions and shows the resulting end-heavy, middle-poor shape (ends 5.5 percent, middle 4.7, twelve of twenty seats below fair share). The old framing also implied radio voters do not experience primacy at all, which the page never justified.
   - The old fix section printed the shuffled worst gap as "0.002 pp". The correct value under the stated model is `0.0033` points, and it is now printed as "0.00 pts / under 0.01" rather than as a spuriously precise decimal.

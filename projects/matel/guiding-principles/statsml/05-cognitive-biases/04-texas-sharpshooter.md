@@ -17,9 +17,9 @@
 - **Step 2 — spot a cluster** — a few points happen to sit closer together than the rest
 - **Step 3 — invent a rule** — that cluster is treated as proof of a cause
 - **Step 4 — drop the rest** — the data that does not fit is left out of the write-up
-- **The barn wall** — 40 shots at a blank wall, then a ring painted round the tightest 10
-- **Its fair share** — that ring covers 4.9% of the wall, so it earns 2 holes, not 10
-- **The honest ring** — the same ring at a spot named before firing catches 1 hole
+- **The barn wall** — a volley of shots at a blank wall, then a ring painted round wherever they landed thickest
+- **Its fair share** — a ring that small should have caught a couple of holes, and it is holding five times that
+- **The honest ring** — the same ring at a spot named before firing catches almost nothing
 - **Why it fools you** — ring and holes arrive in one picture, so the order is invisible
 - **The defense** — name the target before you look, and make it hold up on a second batch
 
@@ -51,14 +51,14 @@ The barn wall with 40 seeded holes, the after-the-fact ring drawn around the den
 
 **Bullets:**
 - **The claim** — "countries that drink our soda are healthier", with three countries as proof
-- **The three shown** — 2 sodas a week and wellness 47, then 3 and 79, then 14 and 88
-- **Why it works** — the numbers are real, and they climb three times in a row
-- **The whole file** — 50 countries, sodas a week beside a wellness score out of 100
-- **The check anyone can do** — of the 25 heaviest drinkers, 13 are in the healthier half
-- **The even split** — of the 25 lightest drinkers, also 13, so the soda makes no difference
-- **Cherry-picking** — showing the 3 countries that fit and never the 47 that do not
+- **The three shown** — a light drinker doing poorly, a middling one, and the heaviest doing best
+- **Why it works** — every figure in the advert is real, and wellness rises at each step of the three
+- **The whole file** — a country per row, its sodas a week sitting beside its wellness score
+- **The check anyone can do** — split the file into heavy and light drinkers, count who lands in the healthier half
+- **The even split** — both groups land there in equal measure, so the soda makes no difference at all
+- **Cherry-picking** — showing the handful of countries that fit and never the many that do not
 
-**Key point:** Every number in the claim is correct, so fact-checking the three countries confirms it. The claim only breaks when you ask what happened to the other 47, and a reader given three countries cannot tell that 47 were dropped.
+**Key point:** Every figure in the claim is correct, so fact-checking those three countries confirms it. The claim only breaks when you ask what became of the rest of the file, and a reader handed three countries cannot tell how many were dropped.
 
 **Source note (`.src`):** Illustrative Example — 50 seeded countries with soda and wellness drawn independently; the shown trio, the opposite trio and both trio counts are found by searching the plotted points.
 
@@ -88,15 +88,15 @@ The three countries in the claim, drawn alone at the top as the reader would see
 **Tags:** `the same move, words` (violet), `read backwards` (blue), `120 verses` (magenta)
 
 **Bullets:**
-- **The book** — 120 short verses, each naming three vague images: a tower, a river, a red sky
+- **The book** — a long list of short verses, each naming three vague images: a tower, a river, a red sky
 - **The reading** — an event happens, then someone finds the verse whose images match it
 - **What you are shown** — that one verse beside that one event, and the fit looks uncanny
-- **What is not shown** — the other 112 verses, which have nothing to do with what happened
-- **Nothing was foretold** — 103 of the 120 verses fit at least one ordinary event
+- **What is not shown** — nearly every other verse in the book, none of which touch what happened
+- **Nothing was foretold** — almost all the verses fit some ordinary event, so fitting one is no feat
 - **Why vagueness pays** — the fewer specifics a verse names, the more events it can be matched to
 - **A real prediction** — is written down before the event, and is wrong if it does not happen
 
-**Key point:** Circling the verse that fits is the barn-wall ring in words. The book is not predicting anything — the reader is picking, after the fact, from 120 attempts, and only the winner is ever quoted.
+**Key point:** Circling the verse that fits is the barn-wall ring in words. The book is not predicting anything — the reader is picking, after the fact, from a whole shelf of attempts, and only the winner is ever quoted.
 
 **Source note (`.src`):** Illustrative Example — 120 seeded verses and 30 seeded events over a 24-image vocabulary; every match count is tallied in the draw function.
 
@@ -121,9 +121,10 @@ A grid of 120 verse tiles for one chosen event: the 8 that can be read as forete
 - **Template:** the card-section layout from `statistical-paradoxes/03-berksons-paradox.html`. One `.card-section` per section, each holding an `<h2>` (1.3rem `#1a5276`, `border-bottom: 2px solid #2980b9`, 4px bottom padding) and a `table.layout` with `td.text-col` 50% / `td.viz-col` 50%.
 - **Canvas placement:** `td.viz-col` gets `text-align: center` and the canvas `display: block; width: 100%; margin: 0 auto`, capped at 720px so a wide cell leaves slack.
 - **Text column order:** `.tags` pill row → `<ul>` of one-line bullets each opening `<b>term</b>` → one `.key-point` callout → `.src` note where the figures are constructed. No paragraph blocks, no data tables, no `.example` line restating a bullet.
-- **Bullet form:** each is ONE line that does not wrap at 50% column width (≤95 characters including the bold label), opening with a `<b>bold label</b>` then an em dash and the fact. Bullet counts: 10 / 7 / 7. Seven is enough for a worked example — resist adding a bullet for every computed figure the chart already shows.
-- **Digits, not words.** Every quantity is written as a numeral — `40 shots`, `13 of 25`, `112 verses` — never "one run in ten" or "a lift of a quarter". The prose and the chart labels use the same notation so a reader can compare them without translating.
-- **Countable whole numbers only.** No correlation coefficients, no fitted slopes, no conversion rates anywhere on the page. A claim is settled by counting things a reader can point at — `13 of 25` against `13 of 25`, `8 verses` against `112` — because "r = 0.00" and "4.0 points per serving" are unreadable to a non-statistician and cannot be checked by eye. The one exception is section 1's `4.9%` of wall area, which is there to make `2 holes` derivable rather than asserted.
+- **Bullet form:** each is ONE line at 50% column width (~90–105 characters including the bold label), opening with a `<b>bold label</b>` then an em dash and the idea. Bullet counts: 10 / 7 / 7. Seven is enough for a worked example — resist adding a bullet for every computed figure the chart already shows.
+- **Numbers live in the charts, not the prose — at most a couple of figures in bullets, and only where the figure is the argument.**
+- **Words, not digits, in the text column.** The bullets and key points say "about half", "nearly all", "five times that", "a couple" and "a handful". No decimal percentages, no precise averages, no counts opening a bullet. The chart beside them prints the exact tally, computed at render time, for a reader who wants it. The numbered `Step 1 … Step 4` labels are sequence markers, not data, and stay.
+- **Countable whole numbers only — in the charts.** No correlation coefficients, no fitted slopes, no conversion rates anywhere on the page. A claim is settled by counting things a reader can point at — one group's healthy count against the other's, the lit tiles against the grey — because "r = 0.00" and "4.0 points per serving" are unreadable to a non-statistician and cannot be checked by eye. Section 1's ring-area percentage lives in the chart's side panel so the deserved hole count is derivable rather than asserted, and the prose renders that comparison in words.
 - **Name the move in plain words.** The page uses "cherry-picking" for showing the few cases that fit, and "painted afterwards" for the ring. It does not use multiple comparisons, family-wise error, p-hacking, subgroup analysis or selection bias anywhere in the visible text.
 - **Section titles name the content.** No role labels ("The Trap", "Pipeline Defense") and no phrasing that would fit another page.
 - **Page CSS:** body system-ui, white, `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with `border-bottom: 2px solid #2980b9`, 8px bottom padding. `.subtitle` `#666` 0.95rem, 32px bottom margin. `.card-section` 40px bottom margin. `table.layout` full width, border-collapse, cells vertical-align top padding 12px. `ul` 0.92rem, margin `8px 0 8px 20px`, `li` 4px bottom margin, `li b` in `#1a5276`. `.key-point` `#f8f9fa`, `border-left: 3px solid #e74c3c`, padding 8px 12px, 0.9rem. `.src` 0.78rem `#888`. No nav, no back/home links, no cross-page links, no `.nav` CSS.

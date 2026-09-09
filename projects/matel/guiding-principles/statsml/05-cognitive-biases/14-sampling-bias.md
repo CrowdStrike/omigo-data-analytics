@@ -14,16 +14,16 @@
 Tag classes in HTML: `magenta`, `violet`, `green`.
 
 **Bullets:**
-- **The town** — 10,000 working adults, whose journeys to work truly average 28.3 minutes
-- **The method** — forms left at the railway station, filled in by whoever walks past them
-- **250 forms** — the answer comes out 40.3 minutes, run to run wobbling by about a minute
-- **4,000 forms** — the answer comes out 40.0 minutes, and the wobble drops to a third of that
-- **Sixteen times the data** — bought a run-to-run wobble four times smaller and nothing else
-- **The error stayed** — about twelve minutes too high at every size, never once shrinking
+- **The town** — every working adult in it, whose real average journey nobody has measured yet
+- **The method** — forms left at the railway station, filled in by whoever happens to walk past
+- **The small batch** — the answer comes out far longer than the truth, and wanders a bit run to run
+- **Sixteen times the forms** — the answer barely moves, it just stops wobbling around the wrong number
+- **What the extra data bought** — a steadier answer, and not one step closer to being right
+- **The error stayed put** — the same stretch too high at every size, never once shrinking
 - **What the wobble measures** — how much this method's answer moves, not how close it lands
-- **Knocking on doors instead** — 250 forms already lands on 27.3, and every size covers the truth
+- **Knocking on doors instead** — even the smallest batch lands near the truth, and stays there
 
-**Key point:** Collecting more of the same thing makes an answer steadier, not truer. The station forms converge — they just converge on the wrong number, and every extra form makes the report sound more certain about it.
+**Key point:** Collecting more of the same thing makes an answer steadier, not truer. The station forms do settle down — they settle on the wrong number, and every extra form makes the report sound more certain about it.
 
 **Source note (`.src`):** Illustrative Example — a constructed town of 10,000 where the true average is known; every band and error on the chart is computed from the drawn samples.
 
@@ -55,7 +55,7 @@ Six horizontal wobble bands — station forms and door knocks at three sample si
 
 ---
 
-## Section 2 — Two Honest Surveys, Seventeen Minutes Apart
+## Section 2 — Two Honest Surveys, Two Very Different Answers
 
 **Tags:** `same question` (violet), `two channels` (blue), `both wrong` (magenta)
 
@@ -63,15 +63,15 @@ Tag classes in HTML: `violet`, `blue`, `magenta`.
 
 **Bullets:**
 - **One question** — how long does the average person in this town take to get to work
-- **Survey A** — 1,200 forms left at the railway station, answering 39.7 minutes
-- **Survey B** — 1,200 forms left under windscreen wipers in car parks, answering 23.0 minutes
-- **The truth** — 28.3 minutes, which neither survey came anywhere near
-- **The spread** — the two answers sit nearly seventeen minutes apart on the same question
+- **Forms left at the station** — the answer comes back long, from a crowd who all commute by train
+- **Forms left on windscreens** — the answer comes back short, from a crowd who all drive to work
+- **Both piles the same size** — so neither survey can blame the other for asking too few people
+- **The truth** — sits between the two answers, and neither survey came anywhere near it
+- **The spread** — the two answers land well over a quarter of an hour apart on the same question
 - **Nobody lied** — every form was filled in truthfully and both piles were counted correctly
-- **Who filled them in** — 78 percent train riders in one pile, 5 percent in the other
-- **Splitting the difference** — averaging the two lands on 31.3, still three minutes adrift
+- **Splitting the difference** — averaging the two still misses, because both were wrong in scale
 
-**Key point:** Two surveys of the same size, asking the same words, reached answers seventeen minutes apart. The only thing that differed was where the forms were placed — so the placement, not the question, produced the answer.
+**Key point:** Two surveys of the same size, asking the same words, came back with answers that disagreed wildly. The only thing that differed was where the forms were placed — so the placement, not the question, produced the answer.
 
 **Source note (`.src`):** Illustrative Example — the same constructed town; both survey answers and the shape of each pile are computed from the drawn samples.
 
@@ -100,14 +100,14 @@ Three overlaid journey-time histograms on one shared axis — the whole town in 
 Tag classes in HTML: `orange`, `yellow`, `red`.
 
 **Bullets:**
-- **What the station reaches** — 58 of every 100 train riders, and only 7 of every 100 road users
-- **So the pile fills up** — 77 percent train riders, against 30 percent out in the town
+- **What the station reaches** — more than half of all train riders, and barely a handful of drivers
+- **So the pile fills up** — mostly train riders, where the town itself is mostly drivers
 - **The channel's own shape** — a station is where train riders pass, so its forms are theirs
-- **Nobody in the pile is odd** — train riders say 44.6 minutes on the forms, 43.8 in the town
-- **Road users on the forms too** — they report 22.8 against the town's 21.8, also about right
+- **Nobody in the pile is odd** — the train riders on the forms report what train riders really take
+- **Road users on the forms too** — they report about what road users out in the town report
 - **Every group answers honestly** — the whole error lives in how many of each group turned up
-- **The arithmetic** — 47.7 more points of train riders times a 22.0-minute longer trip is 10.5 min
-- **That covers it** — 10.5 of the 11.4 minutes the pile is wrong, so 92 percent is pure mix
+- **The arithmetic of it** — an excess of the slow group, times how much slower their trip is
+- **That covers nearly all of it** — almost the entire error is explained by the mix, not by the replies
 
 **Key point:** Ask what kind of person your gathering method physically passes through, and you have already predicted your answer. The forms did not distort anybody's reply — the station simply decided how many of each kind of person got one.
 
@@ -136,13 +136,13 @@ Tag classes in HTML: `aqua`, `yellow`, `green`.
 
 **Bullets:**
 - **The repair** — the pile has too many train riders, so count each of them for less
-- **The sums** — every train rider counts 0.38 of a person, every road user 3.09
+- **The sums** — every train rider counts for a fraction of a person, every road user for several
 - **Why those figures** — they pull each group's share in the pile back to its share in the town
-- **The result** — the answer moves from 39.7 minutes to 29.2, closing 92 percent of the error
+- **The result** — the answer walks most of the way home, closing nearly all of the error at once
 - **What you need to do it** — the town's true travel mix, from a census or a survey you trust
 - **The thing nobody recorded** — the forms never asked what shift the person works
-- **Why it mattered** — early shifts add nine minutes, and the pile holds 31 percent against 20
-- **Correct that too** — the answer lands on 28.3, exactly right, but only because it was recorded
+- **Why it mattered** — early starters travel longer, and the pile is stuffed with early starters
+- **Correct that too** — the answer lands exactly right, but only because that field was recorded
 - **The limit** — a repair reaches every imbalance you measured and not one you did not
 
 **Key point:** Weighting works, and it is worth doing. It only ever fixes the imbalances you thought to record — every unrecorded difference between your pile and the town survives the repair untouched, and nothing in the numbers tells you it is still there.
@@ -180,14 +180,14 @@ A four-step ladder of answers, each step a dot on a shared minutes axis with the
 Tag classes in HTML: `green`, `aqua`, `orange`.
 
 **Bullets:**
-- **The setting** — 250 forms from the station, the cheapest sample anybody could gather
-- **Safe question** — what share of the town is left-handed, where the forms say 9.2 percent
-- **The truth** — 11.3 percent, and an honest 250-person sample wobbles by about 3 points anyway
+- **The setting** — one small batch of station forms, the cheapest sample anybody could gather
+- **Safe question** — what share of the town is left-handed, where the forms come back a shade low
+- **The comparison** — even an honest small sample of that size wobbles by a few points anyway
 - **So it passed** — the error sits inside the wobble any small sample gives you for free
-- **Why it passed** — left-handedness runs 11.1 percent among train riders, 11.4 among road users
-- **Unsafe question** — the average journey, where the same 250 forms say 39.6 against 28.3
-- **How far out** — 11.3 minutes, about ten times the wobble an honest sample that size gives
-- **Why it failed** — train riders average 43.8 minutes and road users 21.8, a 22-minute split
+- **Why it passed** — left-handers are just as common among train riders as among drivers
+- **Unsafe question** — the average journey, where the same forms come back far too long
+- **How far out** — about ten times the wobble an honest sample of that size would give you
+- **Why it failed** — a train rider's trip is worlds longer than a driver's, and the pile is train riders
 - **The one test** — does what you are measuring differ between who you reach and who you miss
 - **Cost of getting it wrong** — demanding a perfect sample for the handedness question is waste
 
@@ -222,6 +222,7 @@ Two stacked panels, one per question. Each shows the wobble an honest 250-person
 - **Canvas placement:** `td.viz-col` gets `text-align: center` and the canvas `display: block; width: 100%; margin: 0 auto`. The canvas is capped at 720px, so a wide cell leaves slack.
 - **Text column order:** `.tags` pill row → `<ul>` of one-line bullets each opening `<b>term</b>` → one `.key-point` callout → `.src` note. No paragraph blocks, no data tables, no `.example` boxes.
 - **Bullet form:** each is ONE line that does not wrap at 50% column width (≤95 characters), opening with a `<b>bold term</b>` then an em dash and the fact. Count follows the content: 8, 8, 8, 9, 10 across the five sections.
+- **Numbers live in the charts, not the prose — at most a couple of figures in bullets, and only where the figure is the argument.** Bullets and key points state the idea in plain words ("far longer than the truth", "nearly all of the error"); the computed figures appear on the canvases, and the `.src` notes carry the method. Never open a bullet with a count or a size.
 - **Page CSS:** body system-ui, white, `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276` with `border-bottom: 2px solid #2980b9`, 8px bottom padding. `.subtitle` `#666` 0.95rem, 32px bottom margin. `.card-section` 40px bottom margin. `table.layout` full width, border-collapse, cells vertical-align top padding 12px. `ul` 0.92rem, margin `8px 0 8px 20px`, `li` 4px bottom margin, `li b` in `#1a5276`. `.key-point` background `#f8f9fa`, `border-left: 3px solid #e74c3c`, padding 8px 12px, 0.9rem. `.src` 0.78rem `#888`. No nav, no back/home links, no cross-page links, no `.nav` CSS.
 - **Tag pills:** `display:inline-block`, 0.72rem, weight 600, padding 2px 10px, radius 10px. Classes used: `.blue`, `.green`, `.red`, `.orange`, `.violet` `rgba(74,58,167,0.12)`/`#4a3aa7`, `.magenta` `rgba(213,81,129,0.14)`/`#c2426f`, `.aqua` `rgba(25,158,112,0.14)`/`#17805d`, `.yellow` `rgba(201,133,0,0.15)`/`#a06c00`.
 - **Colour rotation, one hue family per section:** section 1 magenta bands against green truth with a violet shrink bracket; section 2 violet and blue histograms against a green truth line; section 3 orange and yellow reach grids; section 4 a magenta→yellow→aqua→green ladder; section 5 green reference bands with aqua and orange markers.
