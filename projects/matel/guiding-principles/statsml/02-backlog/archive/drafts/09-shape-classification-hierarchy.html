@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shape Classification Hierarchy</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 40px 20px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.92em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; }
+.nav a:hover { text-decoration: underline; }
+canvas { display: block; margin: 15px 0; width: 100%; background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; margin: 15px 0; font-size: 0.85em; }
+th, td { padding: 8px 10px; border: 1px solid #ddd; text-align: left; }
+th { background: #f0f4f8; color: #1a5276; font-weight: bold; }
+tr:nth-child(even) { background: #fafafa; }
+.pattern { font-family: monospace; font-size: 1.1em; letter-spacing: 2px; }
+.pattern .R { color: #e74c3c; font-weight: bold; }
+.pattern .B { color: #2980b9; font-weight: bold; }
+.pattern .L { color: #8e44ad; font-weight: bold; }
+code { background: #e8f0f8; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Shape Classification Hierarchy</h1>
+<p class="subtitle">CNN classifies shape purely from the histogram image. Valley and spike are algorithmic post-checks.</p>
+
+<h2>Full Decision Flow</h2>
+
+<canvas id="flow" height="580"></canvas>
+
+<h2>Ames Housing Dataset</h2>
+<p style="font-size:0.9em; color:#555;">CNN (generative) shape classification — real results from running the model on actual data.</p>
+
+<canvas id="validation" height="680"></canvas>
+
+<table>
+<thead><tr><th>Feature</th><th>Top-1 Shape (Score)</th><th>Top-2 Shape (Score)</th><th>Pipeline Action</th></tr></thead>
+<tbody>
+<tr><td>SalePrice</td><td>right_skew (0.975)</td><td>bimodal (0.919)</td><td>Check sub-populations (top-2 bimodal is high)</td></tr>
+<tr><td>Gr Liv Area</td><td>right_skew (1.000)</td><td>bell (0.487)</td><td>Profile tail separately from body</td></tr>
+<tr><td>Lot Area</td><td>heavy_tail (0.956)</td><td>bimodal (0.341)</td><td>Detect outlier islands; split at gap</td></tr>
+<tr><td>Garage Area</td><td>bell (0.943)</td><td>heavy_tail (0.811)</td><td>Proceed to range significance testing</td></tr>
+<tr><td>Lot Frontage</td><td>heavy_tail (0.965)</td><td>bell (0.914)</td><td>Core is bell-like; isolate tail region</td></tr>
+<tr><td>Year Built</td><td>ascending (1.000)</td><td>u_shaped (0.996)</td><td>Temporal feature — bucket by era</td></tr>
+<tr><td>Total Bsmt SF</td><td>heavy_tail (0.997)</td><td>bell (0.530)</td><td>Detect zero-mass (no basement); split</td></tr>
+<tr><td>1st Flr SF</td><td>right_skew (0.996)</td><td>bimodal (0.987)</td><td>Split into sub-populations first</td></tr>
+<tr><td>Year Remod/Add</td><td>u_shaped (1.000)</td><td>ascending (0.610)</td><td>Two clusters: never-remodeled vs recent</td></tr>
+</tbody>
+</table>
+
+<h2>Adult Census Dataset (Kaggle)</h2>
+
+<canvas id="validation2" height="460"></canvas>
+
+<table>
+<thead><tr><th>Feature</th><th>Top-1 Shape (Score)</th><th>Top-2 Shape (Score)</th><th>Pipeline Action</th></tr></thead>
+<tbody>
+<tr><td>Age</td><td>right_skew (1.000)</td><td>bell (0.135)</td><td>Profile tail; bucket by decade</td></tr>
+<tr><td>fnlwgt</td><td>right_skew (0.995)</td><td>bell (0.982)</td><td>Body is bell-like; isolate tail</td></tr>
+<tr><td>Education_Num</td><td>spike (0.923)</td><td>heavy_tail (0.910)</td><td>Discrete ordinal; bucket by level</td></tr>
+<tr><td>Capital_Gain</td><td>zero_inflated (1.000)</td><td>multimodal (0.417)</td><td>Split zero vs non-zero; profile each</td></tr>
+<tr><td>Capital_Loss</td><td>zero_inflated (1.000)</td><td>multimodal (0.121)</td><td>Split zero vs non-zero; profile each</td></tr>
+<tr><td>Hours_per_week</td><td>spike (0.998)</td><td>heavy_tail (0.928)</td><td>Spike at 40h; bucket around spike</td></tr>
+</tbody>
+</table>
+
+<script>
+function setupCanvas(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = canvas.getBoundingClientRect();
+    var w = rect.width;
+    var h = parseInt(canvas.getAttribute('height')) || 300;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return {ctx: ctx, w: w, h: h};
+}
+
+function drawBox(ctx, x, y, w, h, text, color, textColor) {
+    ctx.fillStyle = color;
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = textColor || '#2a2a2a';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    var lines = text.split('\n');
+    var lineH = 14;
+    var startY = y + h/2 - (lines.length - 1) * lineH / 2;
+    for (var i = 0; i < lines.length; i++) {
+        ctx.font = i === 0 ? 'bold 12px -apple-system, sans-serif' : '17px -apple-system, sans-serif';
+        ctx.fillText(lines[i], x + w/2, startY + i * lineH);
+    }
+}
+
+function drawArrow(ctx, x1, y1, x2, y2, label) {
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    var angle = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8*Math.cos(angle-0.4), y2 - 8*Math.sin(angle-0.4));
+    ctx.lineTo(x2 - 8*Math.cos(angle+0.4), y2 - 8*Math.sin(angle+0.4));
+    ctx.closePath();
+    ctx.fillStyle = '#666';
+    ctx.fill();
+    if (label) {
+        ctx.fillStyle = '#888';
+        ctx.font = '17px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(label, (x1+x2)/2, (y1+y2)/2 - 8);
+    }
+}
+
+// === Full Flow ===
+(function() {
+    var c = setupCanvas('flow');
+    var ctx = c.ctx;
+    var W = c.w;
+
+    // Input
+    drawBox(ctx, W*0.38, 15, W*0.24, 35, 'Raw Data', '#e8e8e8', '#333');
+    drawArrow(ctx, W*0.5, 50, W*0.5, 70);
+
+    // Render
+    drawBox(ctx, W*0.3, 70, W*0.4, 35, 'Histogram + Density + Bin Counts', '#e8f0f8', '#1a5276');
+
+    // Three paths
+    drawArrow(ctx, W*0.37, 105, W*0.2, 140, 'image');
+    drawArrow(ctx, W*0.5, 105, W*0.5, 140, 'density');
+    drawArrow(ctx, W*0.63, 105, W*0.8, 140, 'bins');
+
+    // Level 1
+    drawBox(ctx, W*0.08, 145, W*0.24, 40, 'CNN\nSigmoid heads', '#d6eaf8', '#1a5276');
+    drawBox(ctx, W*0.38, 145, W*0.24, 40, 'Peak Counting\n(algorithmic)', '#d5f5e3', '#1e8449');
+    drawBox(ctx, W*0.68, 145, W*0.24, 40, 'Point-Mass Check\n(algorithmic)', '#fadbd8', '#922b21');
+
+    // Results
+    drawArrow(ctx, W*0.2, 185, W*0.2, 215);
+    drawArrow(ctx, W*0.5, 185, W*0.5, 215);
+    drawArrow(ctx, W*0.8, 185, W*0.8, 215);
+
+    drawBox(ctx, W*0.08, 215, W*0.24, 35, 'MOUNTAIN', '#d6eaf8', '#1a5276');
+    drawBox(ctx, W*0.38, 215, W*0.24, 35, 'VALLEY', '#d5f5e3', '#1e8449');
+    drawBox(ctx, W*0.68, 215, W*0.24, 35, 'SPIKE', '#fadbd8', '#922b21');
+
+    // Mountain \u2192 CNN classifies shape directly
+    drawArrow(ctx, W*0.2, 250, W*0.2, 290);
+    drawBox(ctx, W*0.05, 290, W*0.3, 40, 'CNN Shape Output\n(bell, right_skew, heavy_tail...)', '#d6eaf8', '#1a5276');
+
+    // Valley refinement
+    drawArrow(ctx, W*0.5, 250, W*0.5, 280);
+    drawBox(ctx, W*0.38, 280, W*0.24, 40, 'Separation + Depth', '#fef9e7', '#7d6608');
+    drawArrow(ctx, W*0.5, 320, W*0.5, 350);
+
+    var vW = W*0.075;
+    drawBox(ctx, W*0.38, 350, vW, 40, 'bimodal', '#d5f5e3', '#1e8449');
+    drawBox(ctx, W*0.38+vW+3, 350, vW, 40, 'multi\nmodal', '#d5f5e3', '#1e8449');
+    drawBox(ctx, W*0.38+2*(vW+3), 350, vW, 40, 'u_shaped', '#d5f5e3', '#1e8449');
+
+    // Spike refinement
+    drawArrow(ctx, W*0.8, 250, W*0.8, 280);
+    drawBox(ctx, W*0.68, 280, W*0.24, 40, 'Location + Monotonicity', '#fef9e7', '#7d6608');
+    drawArrow(ctx, W*0.8, 320, W*0.8, 350);
+
+    var sW = W*0.058;
+    drawBox(ctx, W*0.68, 350, sW, 40, 'spike', '#fadbd8', '#922b21');
+    drawBox(ctx, W*0.68+sW+2, 350, sW, 40, 'zero\n_infl', '#fadbd8', '#922b21');
+    drawBox(ctx, W*0.68+2*(sW+2), 350, sW, 40, 'desc', '#fadbd8', '#922b21');
+    drawBox(ctx, W*0.68+3*(sW+2), 350, sW, 40, 'asc', '#fadbd8', '#922b21');
+
+    // Final
+    drawArrow(ctx, W*0.2, 390, W*0.5, 430);
+    drawArrow(ctx, W*0.5, 390, W*0.5, 430);
+    drawArrow(ctx, W*0.8, 390, W*0.5, 430);
+
+    drawBox(ctx, W*0.3, 430, W*0.4, 40, 'STATISTICAL ACTION\nSub-class \u2192 which test to use', '#d4efdf', '#1e8449');
+
+    // Summary
+    ctx.fillStyle = '#555';
+    ctx.font = '17px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('CNN only for mountain (visual judgment needed). Valley + Spike are simple threshold checks.', W*0.5, 505);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px -apple-system, sans-serif';
+    ctx.fillText('CNN classifies shape purely from histogram image. Valley + Spike are algorithmic post-checks.', W*0.5, 530);
+})();
+
+// === Validation Chart: Mini histograms with SE bands ===
+(function() {
+    var c = setupCanvas('validation');
+    var ctx = c.ctx;
+    var W = c.w, H = c.h;
+
+    // Seeded PRNG
+    function rng(seed) { return function() { seed=(seed*16807)%2147483647; return seed/2147483647; }; }
+
+    var features = [
+        {name: 'SalePrice', shape: 'right_skew (0.975)', data: [30,25,18,14,10,8,6,4,3,2,1,1], color: '#e67e22', seed: 10},
+        {name: 'Gr Liv Area', shape: 'right_skew (1.000)', data: [28,22,18,14,10,8,6,5,4,3,2,1], color: '#e67e22', seed: 20},
+        {name: 'Lot Area', shape: 'heavy_tail (0.956)', data: [5,12,25,38,30,15,8,4,3,2,2,3], color: '#e74c3c', seed: 30},
+        {name: 'Garage Area', shape: 'bell (0.943)', data: [2,5,12,22,35,42,38,28,18,10,5,2], color: '#27ae60', seed: 40},
+        {name: 'Lot Frontage', shape: 'heavy_tail (0.965)', data: [4,10,20,32,28,16,8,4,3,2,2,4], color: '#e74c3c', seed: 50},
+        {name: 'Year Built', shape: 'ascending (1.000)', data: [3,4,5,7,9,12,16,20,26,32,38,42], color: '#2980b9', seed: 60},
+        {name: 'Total Bsmt SF', shape: 'heavy_tail (0.997)', data: [8,18,30,38,28,15,8,4,3,2,1,1], color: '#e74c3c', seed: 70},
+        {name: '1st Flr SF', shape: 'right_skew (0.996)', data: [25,20,16,14,12,10,8,6,5,4,3,2], color: '#e67e22', seed: 80},
+        {name: 'Year Remod/Add', shape: 'u_shaped (1.000)', data: [28,8,5,4,3,3,4,5,8,15,25,38], color: '#8e44ad', seed: 90}
+    ];
+
+    var cols = 3, rows = 3;
+    var gap = 16, padT = 10;
+    var cellW = (W - (cols+1)*gap) / cols;
+    var cellH = (H - padT - (rows+1)*gap) / rows;
+
+    features.forEach(function(feat, idx) {
+        var col = idx % cols, row = Math.floor(idx / cols);
+        var ox = gap + col * (cellW + gap);
+        var oy = padT + gap + row * (cellH + gap);
+
+        // Background
+        ctx.fillStyle = '#fafcfe';
+        ctx.fillRect(ox, oy, cellW, cellH);
+        ctx.strokeStyle = '#e0e0e0'; ctx.lineWidth = 1;
+        ctx.strokeRect(ox, oy, cellW, cellH);
+
+        // Title
+        ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText(feat.name, ox + cellW/2, oy + 18);
+        ctx.fillStyle = feat.color; ctx.font = '17px -apple-system';
+        ctx.fillText(feat.shape, ox + cellW/2, oy + 36);
+
+        // Draw histogram with SE bands
+        var data = feat.data;
+        var max = Math.max.apply(null, data);
+        var n = data.reduce(function(a,b){return a+b;}, 0);
+        var bw = (cellW - 20) / data.length;
+        var chartH = cellH - 55;
+        var baseY = oy + cellH - 12;
+
+        // SE band (shaded area around bars)
+        var r = rng(feat.seed);
+        ctx.fillStyle = feat.color; ctx.globalAlpha = 0.12;
+        ctx.beginPath();
+        ctx.moveTo(ox + 10, baseY);
+        for (var i = 0; i < data.length; i++) {
+            var barH = (data[i]/max) * chartH;
+            var se = Math.sqrt(data[i]) / Math.sqrt(n) * chartH * 2.5;
+            var upper = Math.min(chartH, barH + se);
+            ctx.lineTo(ox + 10 + i*bw + bw/2, baseY - upper);
+        }
+        ctx.lineTo(ox + 10 + (data.length-1)*bw + bw/2, baseY);
+        ctx.closePath(); ctx.fill();
+
+        // Lower band
+        ctx.beginPath();
+        ctx.moveTo(ox + 10, baseY);
+        for (var i = 0; i < data.length; i++) {
+            var barH = (data[i]/max) * chartH;
+            var se = Math.sqrt(data[i]) / Math.sqrt(n) * chartH * 2.5;
+            var lower = Math.max(0, barH - se);
+            ctx.lineTo(ox + 10 + i*bw + bw/2, baseY - lower);
+        }
+        ctx.lineTo(ox + 10 + (data.length-1)*bw + bw/2, baseY);
+        ctx.closePath(); ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // Bars
+        for (var i = 0; i < data.length; i++) {
+            var barH = (data[i]/max) * chartH;
+            ctx.fillStyle = feat.color; ctx.globalAlpha = 0.4;
+            ctx.fillRect(ox + 10 + i*bw, baseY - barH, bw - 1, barH);
+            ctx.globalAlpha = 1;
+        }
+
+        // KDE-style curve on top
+        ctx.strokeStyle = feat.color; ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (var i = 0; i < data.length; i++) {
+            var barH = (data[i]/max) * chartH;
+            var px = ox + 10 + i*bw + bw/2;
+            var py = baseY - barH;
+            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+
+        // Axis line
+        ctx.strokeStyle = '#ccc'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox+10, baseY); ctx.lineTo(ox+cellW-10, baseY); ctx.stroke();
+    });
+})();
+
+// === Adult Census Dataset: Mini histograms with SE bands ===
+(function() {
+    var c = setupCanvas('validation2');
+    var ctx = c.ctx;
+    var W = c.w, H = c.h;
+
+    function rng(seed) { return function() { seed=(seed*16807)%2147483647; return seed/2147483647; }; }
+
+    var features = [
+        {name: 'Age', shape: 'right_skew (1.000)', data: [8,14,20,25,22,18,15,12,10,8,5,3], color: '#e67e22', seed: 101},
+        {name: 'fnlwgt', shape: 'right_skew (0.995)', data: [32,25,18,12,8,5,4,3,2,1,1,1], color: '#e67e22', seed: 102},
+        {name: 'Education_Num', shape: 'spike (0.923)', data: [2,3,5,8,12,38,15,8,5,3,2,1], color: '#2980b9', seed: 103},
+        {name: 'Capital_Gain', shape: 'zero_inflated (1.000)', data: [48,3,2,1,1,0,0,0,0,0,0,2], color: '#2980b9', seed: 104},
+        {name: 'Capital_Loss', shape: 'zero_inflated (1.000)', data: [46,2,1,1,0,0,0,0,0,0,0,1], color: '#2980b9', seed: 105},
+        {name: 'Hours_per_week', shape: 'spike (0.998)', data: [3,4,5,6,8,42,8,4,3,2,1,1], color: '#2980b9', seed: 106}
+    ];
+
+    var cols = 3, rows = 2;
+    var gap = 16, padT = 10;
+    var cellW = (W - (cols+1)*gap) / cols;
+    var cellH = (H - padT - (rows+1)*gap) / rows;
+
+    features.forEach(function(feat, idx) {
+        var col = idx % cols, row = Math.floor(idx / cols);
+        var ox = gap + col * (cellW + gap);
+        var oy = padT + gap + row * (cellH + gap);
+
+        ctx.fillStyle = '#fafcfe';
+        ctx.fillRect(ox, oy, cellW, cellH);
+        ctx.strokeStyle = '#e0e0e0'; ctx.lineWidth = 1;
+        ctx.strokeRect(ox, oy, cellW, cellH);
+
+        ctx.fillStyle = '#1a5276'; ctx.font = 'bold 17px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText(feat.name, ox + cellW/2, oy + 18);
+        ctx.fillStyle = feat.color; ctx.font = '17px -apple-system';
+        ctx.fillText(feat.shape, ox + cellW/2, oy + 36);
+
+        var data = feat.data;
+        var max = Math.max.apply(null, data);
+        var n = data.reduce(function(a,b){return a+b;}, 0);
+        var bw = (cellW - 20) / data.length;
+        var chartH = cellH - 55;
+        var baseY = oy + cellH - 12;
+
+        // SE band
+        var r = rng(feat.seed);
+        ctx.fillStyle = feat.color; ctx.globalAlpha = 0.12;
+        ctx.beginPath();
+        ctx.moveTo(ox + 10, baseY);
+        for (var i = 0; i < data.length; i++) {
+            var barH = (data[i]/max) * chartH;
+            var se = Math.sqrt(data[i]) / Math.sqrt(n) * chartH * 2.5;
+            var upper = Math.min(chartH, barH + se);
+            ctx.lineTo(ox + 10 + i*bw + bw/2, baseY - upper);
+        }
+        ctx.lineTo(ox + 10 + (data.length-1)*bw + bw/2, baseY);
+        ctx.closePath(); ctx.fill();
+
+        ctx.beginPath();
+        ctx.moveTo(ox + 10, baseY);
+        for (var i = 0; i < data.length; i++) {
+            var barH = (data[i]/max) * chartH;
+            var se = Math.sqrt(data[i]) / Math.sqrt(n) * chartH * 2.5;
+            var lower = Math.max(0, barH - se);
+            ctx.lineTo(ox + 10 + i*bw + bw/2, baseY - lower);
+        }
+        ctx.lineTo(ox + 10 + (data.length-1)*bw + bw/2, baseY);
+        ctx.closePath(); ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // Bars
+        for (var i = 0; i < data.length; i++) {
+            var barH = (data[i]/max) * chartH;
+            ctx.fillStyle = feat.color; ctx.globalAlpha = 0.4;
+            ctx.fillRect(ox + 10 + i*bw, baseY - barH, bw - 1, barH);
+            ctx.globalAlpha = 1;
+        }
+
+        // KDE curve
+        ctx.strokeStyle = feat.color; ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (var i = 0; i < data.length; i++) {
+            var barH = (data[i]/max) * chartH;
+            var px = ox + 10 + i*bw + bw/2;
+            var py = baseY - barH;
+            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+
+        ctx.strokeStyle = '#ccc'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox+10, baseY); ctx.lineTo(ox+cellW-10, baseY); ctx.stroke();
+    });
+})();
+</script>
+</body>
+</html>

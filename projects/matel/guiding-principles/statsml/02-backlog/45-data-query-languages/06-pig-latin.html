@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>6. Pig Latin</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #fff;
+            color: #2c3e50;
+            padding: 40px;
+            line-height: 1.6;
+        }
+        h1 {
+            font-size: 2rem;
+            color: #1a5276;
+            margin-bottom: 8px;
+            border-bottom: 2px solid #2980b9;
+            padding-bottom: 8px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 32px;
+            font-size: 0.95rem;
+        }
+        .intro-callout {
+            background: #f0f4f8;
+            border-left: 4px solid #2980b9;
+            padding: 12px 16px;
+            margin-bottom: 32px;
+            font-size: 0.95rem;
+        }
+        .section {
+            margin-bottom: 40px;
+        }
+        .section h2 {
+            font-size: 1.3rem;
+            color: #1a5276;
+            margin-bottom: 12px;
+            border-bottom: 2px solid #2980b9;
+            padding-bottom: 4px;
+        }
+        table.layout {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+        }
+        table.layout td {
+            vertical-align: top;
+            padding: 12px;
+        }
+        table.layout td.text-col {
+            width: 45%;
+        }
+        table.layout td.viz-col {
+            width: 55%;
+        }
+        canvas {
+            width: 100%;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px; height: auto; }
+        .key-point {
+            background: #f8f9fa;
+            border-left: 3px solid #e74c3c;
+            padding: 8px 12px;
+            margin-top: 12px;
+            font-size: 0.9rem;
+        }
+        .example {
+            font-style: italic;
+            color: #555;
+            margin-top: 8px;
+            font-size: 0.9rem;
+        }
+        ul {
+            margin: 8px 0 8px 20px;
+            font-size: 0.92rem;
+        }
+        li { margin-bottom: 4px; }
+        pre { background: #f4f4f4; padding: 12px; border-radius: 4px; overflow-x: auto; font-size: 0.85em; line-height: 1.5; margin-bottom: 12px; }
+    </style>
+</head>
+<body>
+
+<h1>6. Pig Latin</h1>
+<p class="subtitle">Dataflow DAGs for Hadoop &mdash; the transitional language between MapReduce and SQL-on-cluster.</p>
+
+<div class="intro-callout"><strong>Core trade-off:</strong> Higher-level than MapReduce but lower than SQL. You describe dataflow steps and the system compiles to MapReduce jobs. Proved the concept &mdash; then was replaced by exactly what it proved.<br><br><strong>Bottom-up vs top-down:</strong> SQL is top-down &mdash; you declare the final result and the optimizer works backward to find the path. Pig Latin is bottom-up &mdash; you build the result step by step, each line transforming the previous output. Like Splunk SPL, you think in a pipeline: load &rarr; filter &rarr; group &rarr; project &rarr; store. The programmer sees the data flow; in SQL, only the optimizer does.</div>
+
+<!-- Section 1: How It Works -->
+<div class="section">
+    <h2>1. How It Works</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>A dataflow language developed at Yahoo (2008) that compiles procedural data transformation scripts into sequences of MapReduce jobs on Hadoop.</p>
+                <ul>
+                    <li><strong>Operators:</strong> you write LOAD, FILTER, GROUP, FOREACH, JOIN, STORE &mdash; the compiler plans the MapReduce stages</li>
+                    <li><strong>Explicit data flow, implicit parallelism:</strong> the compiler sees the full DAG and can merge stages where possible</li>
+                    <li><strong>Pipeline thinking:</strong> each statement transforms the previous output, so you see the data at every stage</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Why it mattered:</strong> proved that a higher-level abstraction over MapReduce was viable and necessary &mdash; paving the way for SQL-on-Hadoop.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<!-- Section 2: Where It Fits -->
+<div class="section">
+    <h2>2. Where It Fits</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <ul>
+                    <li><strong>Strength:</strong> much easier than raw MapReduce for multi-step pipelines &mdash; a ~200-line Java job became ~10 lines of Pig</li>
+                    <li><strong>Strength:</strong> handles nested data (bags, tuples, maps) naturally; extensible via User Defined Functions (UDFs)</li>
+                    <li><strong>Weakness:</strong> no optimizer in early versions &mdash; execution order was literal; another language to learn (neither SQL nor Java)</li>
+                    <li><strong>Weakness:</strong> batch only, no interactive queries; made redundant by HiveQL and then Spark SQL &mdash; effectively abandoned by 2017</li>
+                    <li><strong>Use case (historical, 2008-2014):</strong> Hadoop ETL pipelines at Yahoo, letting analysts process web-scale data without raw Java MapReduce &mdash; retired once SQL itself could compile to distributed plans</li>
+                </ul>
+                <p class="example">Example: process web server access logs to find the URLs with the most 500-errors.</p>
+            </td>
+            <td class="viz-col">
+                <pre><code>-- Load web server logs
+logs = LOAD '/data/access_logs'
+    USING PigStorage('\t')
+    AS (ip:chararray, ts:chararray,
+        method:chararray, url:chararray,
+        status:int, bytes:int);
+
+-- Keep only server errors
+errors = FILTER logs BY status >= 500;
+
+-- Group by URL
+by_url = GROUP errors BY url;
+
+-- Count errors per URL
+counts = FOREACH by_url GENERATE
+    group AS url,
+    COUNT(errors) AS error_count;
+
+-- Top offenders
+ranked = ORDER counts BY error_count DESC;
+top20 = LIMIT ranked 20;
+
+-- Write output
+STORE top20 INTO '/output/error_hotspots';</code></pre>
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="key-point">
+<strong>The meta-point:</strong> Pig Latin proved a higher-level abstraction over MapReduce was viable &mdash; and once SQL itself compiled to distributed plans, the hand-visible pipeline lost to the optimiser-driven declarative approach it had paved the way for.
+</div>
+
+<script>var __charts = [];
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    if (!c.dataset.w) { c.dataset.w = c.getAttribute('width') || '720'; c.dataset.h = c.getAttribute('height') || '300'; }
+    var w = parseInt(c.dataset.w), h = parseInt(c.dataset.h);
+    var dpr = window.devicePixelRatio || 1;
+    c.style.maxWidth = w + 'px';
+    var cssW = c.getBoundingClientRect().width || w;
+    var scale = (cssW / w) * dpr;
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    var ctx = c.getContext('2d'); ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, w, h);
+    return {ctx:ctx, w:w, h:h};
+}
+
+// ═══ Color palette ═══
+// Primary:  #1a5276 (blue)   Positive: #27ae60 (green)
+// Negative: #e74c3c (red)    Warning:  #e67e22 (orange)
+// Bar fill: rgba(26,82,118,0.35)   Text: #222 (labels), #444 (secondary)
+
+// Canvas 1: compilation flow + top-down vs bottom-up paradigm
+__charts.push(function(){
+    const { ctx, w, h } = setup('c1');
+
+    function box(x, y, wd, ht, color, line1, line2, fontPx) {
+        ctx.fillStyle = color;
+        ctx.fillRect(x, y, wd, ht);
+        ctx.fillStyle = '#fff';
+        ctx.font = (fontPx || 13) + 'px system-ui';
+        ctx.textAlign = 'center';
+        if (line2) {
+            ctx.fillText(line1, x + wd / 2, y + ht / 2 - 3);
+            ctx.fillText(line2, x + wd / 2, y + ht / 2 + 13);
+        } else {
+            ctx.fillText(line1, x + wd / 2, y + ht / 2 + 4);
+        }
+    }
+
+    function arrow(x1, x2, y) {
+        ctx.strokeStyle = '#444';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x1, y);
+        ctx.lineTo(x2 - 6, y);
+        ctx.stroke();
+        ctx.fillStyle = '#444';
+        ctx.beginPath();
+        ctx.moveTo(x2 - 6, y - 4);
+        ctx.lineTo(x2 - 6, y + 4);
+        ctx.lineTo(x2, y);
+        ctx.fill();
+    }
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Pig Latin Compilation Flow', w / 2, 25);
+
+    // Main flow: script -> DAG -> MapReduce jobs
+    const colW = 190, gap = 45;
+    const startX = (w - (3 * colW + 2 * gap)) / 2;
+    const colX = [startX, startX + colW + gap, startX + 2 * (colW + gap)];
+
+    box(colX[0], 45, colW, 52, '#1a5276', 'Pig Latin script', 'LOAD · FILTER · GROUP · STORE');
+    box(colX[1], 45, colW, 52, '#e67e22', 'Dataflow DAG', 'relational operators');
+    box(colX[2], 45, colW, 52, '#27ae60', 'Compiled MapReduce jobs', 'run on Hadoop cluster');
+    arrow(colX[0] + colW, colX[1], 71);
+    arrow(colX[1] + colW, colX[2], 71);
+
+    // Paradigm comparison: top-down (SQL) vs bottom-up (Pig)
+    const leftCx = 185, rightCx = 548;
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('Top-down (SQL)', leftCx, 150);
+    ctx.fillStyle = '#e67e22';
+    ctx.fillText('Bottom-up (Pig)', rightCx, 150);
+
+    // SQL side: query -> hidden optimizer -> result
+    const rowY = 168, rowH = 36, midRow = rowY + rowH / 2;
+    box(20, rowY, 95, rowH, '#1a5276', 'SELECT …', null, 12);
+    arrow(115, 142, midRow);
+    // Hidden optimizer (dashed)
+    ctx.fillStyle = 'rgba(26,82,118,0.12)';
+    ctx.fillRect(142, rowY, 125, rowH);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(142, rowY, 125, rowH);
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = '12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('optimizer (hidden)', 204.5, midRow + 4);
+    arrow(267, 288, midRow);
+    box(288, rowY, 62, rowH, '#27ae60', 'Result', null, 12);
+
+    // Pig side: chained pipeline steps
+    const steps = ['LOAD', 'FILTER', 'GROUP', 'FOREACH', 'STORE'];
+    const stepW = 56, stepGap = 14, pigStart = 380;
+    for (let i = 0; i < steps.length; i++) {
+        const x = pigStart + i * (stepW + stepGap);
+        box(x, rowY, stepW, rowH, '#e67e22', steps[i], null, 11);
+        if (i < steps.length - 1) {
+            arrow(x + stepW, x + stepW + stepGap, midRow);
+        }
+    }
+
+    // Captions
+    ctx.fillStyle = '#444';
+    ctx.font = '12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('you never see intermediate steps', leftCx, 228);
+    ctx.fillText('you see data at every stage', rightCx, 228);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('The transitional layer — higher than MapReduce, lower than SQL', w / 2, 270);
+});
+
+// Canvas 2: example output — 500-errors per URL (top 5)
+__charts.push(function(){
+    const { ctx, w, h } = setup('c2');
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Example Output — 500-Errors per URL (top of error_hotspots)', w / 2, 25);
+
+    const urls = ['/api/checkout', '/api/search', '/login', '/api/cart', '/home'];
+    const counts = [143, 97, 58, 41, 12];
+    const maxC = 150;
+    const labelW = 150, rightPad = 70;
+    const plotW = w - labelW - rightPad;
+    const barH = 30, gap = 12;
+    const startY = 50;
+
+    for (let i = 0; i < urls.length; i++) {
+        const y = startY + i * (barH + gap);
+        const bw = (counts[i] / maxC) * plotW;
+
+        ctx.fillStyle = 'rgba(26,82,118,0.35)';
+        ctx.fillRect(labelW, y, bw, barH);
+
+        ctx.fillStyle = '#222';
+        ctx.font = '13px system-ui';
+        ctx.textAlign = 'right';
+        ctx.fillText(urls[i], labelW - 8, y + barH / 2 + 4);
+        ctx.textAlign = 'left';
+        ctx.font = 'bold 13px system-ui';
+        ctx.fillText(counts[i], labelW + bw + 8, y + barH / 2 + 4);
+    }
+
+    // Baseline
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(labelW, startY);
+    ctx.lineTo(labelW, startY + 5 * barH + 4 * gap);
+    ctx.stroke();
+
+    ctx.fillStyle = '#444';
+    ctx.font = '12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('rows written by STORE top20 INTO \'/output/error_hotspots\'', w / 2, h - 10);
+});
+
+__charts.forEach(function(f){ f(); });
+var __redrawTimer;
+window.addEventListener('resize', function(){
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function(){ __charts.forEach(function(f){ f(); }); }, 150);
+});
+</script>
+
+</body>
+</html>

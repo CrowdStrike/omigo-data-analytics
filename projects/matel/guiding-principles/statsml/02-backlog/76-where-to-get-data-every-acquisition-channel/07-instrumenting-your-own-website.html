@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instrumenting Your Own Website — Turning Visits Into an Event Stream</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #fff;
+            color: #2c3e50;
+            padding: 40px;
+            line-height: 1.6;
+        }
+        h1 {
+            font-size: 2rem;
+            color: #1a5276;
+            margin-bottom: 8px;
+            border-bottom: 2px solid #2980b9;
+            padding-bottom: 8px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 32px;
+            font-size: 0.95rem;
+        }
+        .intro {
+            background: #f0f4f8;
+            border-left: 3px solid #2980b9;
+            padding: 8px 12px;
+            margin-bottom: 32px;
+            font-size: 0.9rem;
+        }
+        .lang-section {
+            margin-bottom: 40px;
+        }
+        .lang-section h2 {
+            font-size: 1.3rem;
+            color: #1a5276;
+            margin-bottom: 12px;
+            border-bottom: 2px solid #2980b9;
+            padding-bottom: 4px;
+        }
+        table.layout {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+        }
+        table.layout td {
+            vertical-align: top;
+            padding: 12px;
+        }
+        table.layout td.text-col {
+            width: 45%;
+        }
+        table.layout td.viz-col {
+            width: 55%;
+        }
+        canvas {
+            width: 100%;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px; height: auto; }
+        .key-point {
+            background: #f8f9fa;
+            border-left: 3px solid #e74c3c;
+            padding: 8px 12px;
+            margin-top: 12px;
+            font-size: 0.9rem;
+        }
+        ul {
+            margin: 8px 0 8px 20px;
+            font-size: 0.92rem;
+        }
+        li { margin-bottom: 4px; }
+        li strong { color: #1a5276; }
+    </style>
+</head>
+<body>
+    <h1>Instrumenting Your Own Website</h1>
+    <p class="subtitle">Embed a small analytics snippet in pages you own and every visit becomes structured behavioral data: who arrived, what they clicked, where they dropped off. This is one of the few channels where you manufacture the data yourself — but it only applies to your own property; inserting trackers into pages you don't control is not a legitimate acquisition channel.</p>
+
+    <div class="intro">The mechanics are simple: a JavaScript tag in the page fires a small network request — an event — to a collector every time something notable happens. The hard parts are everything around that: deciding which events to record, keeping names consistent, stitching identities together, and understanding that consent banners and ad blockers make the recorded stream a filtered sample of what actually happened.</div>
+
+<div class="lang-section">
+    <h2>1. How the snippet works</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>A few lines of JavaScript in the page header turn every visit into a stream of timestamped events sent to a collector endpoint, where a hosted tool stores and aggregates them.</p>
+                <ul>
+                    <li><strong>The event beacon:</strong> the tag fires on page load or visitor click</li>
+                    <li><strong>Beacon payload:</strong> event name, timestamp, URL, anonymous visitor id</li>
+                    <li><strong>Delivery:</strong> each payload goes to the vendor's collector over HTTP</li>
+                    <li><strong>Hosted analytics tools:</strong> GA4, Mixpanel, and Amplitude all follow this pattern</li>
+                    <li><strong>Zero infrastructure:</strong> paste the tag once, get dashboards, funnels, retention</li>
+                    <li><strong>The CDP router:</strong> Segment popularized the customer-data-platform model</li>
+                    <li><strong>Fan-out:</strong> one stream routes to analytics, email, a data warehouse</li>
+                    <li><strong>No new tags:</strong> adding a downstream tool no longer means adding a tag</li>
+                    <li><strong>Conversion pixels:</strong> ad platforms learn "this visitor completed a purchase"</li>
+                    <li><strong>Session replay:</strong> tools like Hotjar reconstruct movies of scrolls and clicks</li>
+                </ul>
+                <div class="key-point">The snippet is the cheap part; every hosted tool hands you one for free. What you are actually building is the pipeline behind it — and the discipline to decide what is worth measuring before the data starts flowing.</div>
+            </td>
+            <td class="viz-col"><canvas id="c1" width="720" height="380"></canvas></td>
+        </tr>
+    </table>
+</div>
+
+<div class="lang-section">
+    <h2>2. Designing the event schema</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Page views arrive automatically, but insight does not: the questions you can answer later are exactly the events and properties you chose to record up front.</p>
+                <ul>
+                    <li><strong>Deliberate events:</strong> "signup_completed", "search_performed", "checkout_started"</li>
+                    <li><strong>Design rule:</strong> record an event only if some decision will depend on it</li>
+                    <li><strong>Naming chaos:</strong> "Sign Up", "signup", "user_registered" — one action, three names</li>
+                    <li><strong>Funnel archaeology:</strong> inconsistent names break every funnel query</li>
+                    <li><strong>Tracking plan:</strong> a written plan fixes event names before code ships</li>
+                    <li><strong>Useful properties:</strong> plan selected, search term used, experiment variant shown</li>
+                    <li><strong>Skipped properties:</strong> absent from history — there is no backfilling later</li>
+                    <li><strong>Identity resolution:</strong> link the anonymous device id to the logged-in account</li>
+                    <li><strong>One timeline:</strong> pre-login and post-login behavior become one person</li>
+                </ul>
+                <div class="key-point">Instrumentation is retrospective-proof in the worst way: you cannot re-record last quarter. Every question you failed to anticipate in the schema is a question the data cannot answer, no matter how sophisticated the analysis.</div>
+            </td>
+            <td class="viz-col"><canvas id="c2" width="720" height="380"></canvas></td>
+        </tr>
+    </table>
+</div>
+
+<div class="lang-section">
+    <h2>3. The vendor-side flip</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>The snippet economy has two sides: each site sees its own visitors, but the vendor whose tag is embedded everywhere sees aggregated behavior across all of them.</p>
+                <ul>
+                    <li><strong>One tag, many sites:</strong> thousands of unrelated sites embed the same tag</li>
+                    <li><strong>Single terminus:</strong> every site's event stream ends at the vendor's collectors</li>
+                    <li><strong>The aggregate view:</strong> cross-site patterns no single customer can observe</li>
+                    <li><strong>Vendor-only insight:</strong> industry benchmarks, traffic shifts, category trends</li>
+                    <li><strong>Free is the price of scale:</strong> each new site extends the aggregate dataset</li>
+                    <li><strong>Recruited sensors:</strong> the free product itself recruits the sensors</li>
+                    <li><strong>A channel in itself:</strong> supplying the instrument is an acquisition strategy</li>
+                    <li><strong>Unmatched scale:</strong> it acquires beyond what any single property could</li>
+                </ul>
+                <div class="key-point">Whoever supplies the instrument sees across everyone who uses it. When you embed a vendor's tag you gain dashboards; the vendor gains one more window into the web — read the data-sharing terms knowing both halves of that trade.</div>
+            </td>
+            <td class="viz-col"><canvas id="c3" width="720" height="360"></canvas></td>
+        </tr>
+    </table>
+</div>
+
+<div class="lang-section">
+    <h2>4. What limits collection</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>The recorded stream is not the visit stream: legal gates, browser defenses, and platform changes each remove a slice, and the removal is not random.</p>
+                <ul>
+                    <li><strong>Consent gates:</strong> under GDPR/ePrivacy, the tag waits for banner acceptance</li>
+                    <li><strong>Declines vanish:</strong> a refused banner is a visit that never enters your data</li>
+                    <li><strong>Ad blockers:</strong> blocklist extensions silently strip known analytics tags</li>
+                    <li><strong>Skewed undercount:</strong> developer audiences block far more than general ones</li>
+                    <li><strong>Cookie deprecation:</strong> browsers are phasing out third-party cookies</li>
+                    <li><strong>What survives:</strong> cross-site tracking collapses; same-site analytics stays</li>
+                    <li><strong>Server-side tagging:</strong> collection moves to an endpoint on your own domain</li>
+                    <li><strong>Partial fix:</strong> restores some measurement but raises the engineering bar</li>
+                    <li><strong>No consent bypass:</strong> server-side tagging still requires consent</li>
+                </ul>
+                <div class="key-point">Treat your analytics numbers as a filtered sample, not a census. The filters — consent, blockers, browser policy — correlate with who the visitor is, so the missing slice is systematically different from the recorded one, and comparisons across audiences inherit that bias.</div>
+            </td>
+            <td class="viz-col"><canvas id="c4" width="720" height="360"></canvas></td>
+        </tr>
+    </table>
+</div>
+
+    <script>
+    const dpr = window.devicePixelRatio || 1;
+    function setupCanvas(id, hh) {
+        const c = document.getElementById(id);
+        const w = 720, h = hh;
+        c.style.maxWidth = w + 'px';
+        var __cssW = c.getBoundingClientRect().width || w;
+        var __scale = (__cssW / w) * dpr;
+        c.width = Math.round(w * __scale);
+        c.height = Math.round(h * __scale);
+        const ctx = c.getContext('2d');
+        ctx.scale(__scale, __scale);
+        return { ctx, w, h };
+    }
+
+    // C1: Browser page -> event beacons -> collector -> dashboard, with CDP fan-out below
+    (function() {
+        const { ctx, w, h } = setupCanvas('c1', 380);
+
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('One tag in the page, a structured event stream out the back', w / 2, 22);
+
+        // Browser box
+        ctx.fillStyle = 'rgba(26,82,118,0.12)';
+        ctx.fillRect(30, 60, 200, 120);
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(30, 60, 200, 120);
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText("VISITOR'S BROWSER", 44, 84);
+        ctx.fillStyle = '#555';
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillText('your page +', 44, 106);
+        ctx.fillText('analytics tag (JS)', 44, 122);
+        ctx.fillStyle = '#999';
+        ctx.fillText('fires on load, click, purchase', 44, 146);
+
+        // Event beacon arrows browser -> collector
+        const beacons = [
+            { y1: 85,  y2: 85,  label: 'page_view' },
+            { y1: 120, y2: 120, label: 'click_pricing' },
+            { y1: 155, y2: 155, label: 'purchase' }
+        ];
+        beacons.forEach(b => {
+            ctx.strokeStyle = '#e67e22';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(230, b.y1);
+            ctx.lineTo(296, b.y2);
+            ctx.stroke();
+            // arrowhead
+            ctx.fillStyle = '#e67e22';
+            ctx.beginPath();
+            ctx.moveTo(300, b.y2);
+            ctx.lineTo(292, b.y2 - 4);
+            ctx.lineTo(292, b.y2 + 4);
+            ctx.fill();
+            ctx.font = '10px -apple-system, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(b.label, 265, b.y1 - 5);
+        });
+
+        // Collector box
+        ctx.fillStyle = 'rgba(39,174,96,0.10)';
+        ctx.fillRect(300, 60, 180, 120);
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(300, 60, 180, 120);
+        ctx.fillStyle = '#27ae60';
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('COLLECTOR', 314, 84);
+        ctx.fillStyle = '#555';
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillText('vendor endpoint', 314, 106);
+        ctx.fillText('receives + stores', 314, 122);
+        ctx.fillText('every event', 314, 138);
+        ctx.fillStyle = '#999';
+        ctx.fillText('GA4, Mixpanel, Amplitude', 314, 162);
+
+        // Collector -> dashboard arrow
+        ctx.strokeStyle = '#bbb';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(480, 120);
+        ctx.lineTo(516, 120);
+        ctx.stroke();
+        ctx.fillStyle = '#bbb';
+        ctx.beginPath();
+        ctx.moveTo(520, 120);
+        ctx.lineTo(512, 116);
+        ctx.lineTo(512, 124);
+        ctx.fill();
+
+        // Dashboard box
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(520, 60, 180, 120);
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(520, 60, 180, 120);
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.fillText('DASHBOARD', 534, 84);
+        ctx.fillStyle = '#555';
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillText('funnels, retention,', 534, 106);
+        ctx.fillText('traffic sources', 534, 122);
+        ctx.fillStyle = '#999';
+        ctx.fillText('aggregated views', 534, 146);
+
+        // CDP router below collector
+        ctx.strokeStyle = '#bbb';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(390, 180);
+        ctx.lineTo(390, 230);
+        ctx.stroke();
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(315, 230, 150, 34);
+        ctx.strokeStyle = '#8e44ad';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(315, 230, 150, 34);
+        ctx.fillStyle = '#8e44ad';
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('CDP ROUTER (Segment)', 390, 251);
+
+        // Router -> destinations
+        const dests = [
+            { x: 120, label: 'analytics tool' },
+            { x: 290, label: 'email platform' },
+            { x: 460, label: 'data warehouse' }
+        ];
+        dests.forEach(d => {
+            ctx.strokeStyle = '#bbb';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(390, 264);
+            ctx.lineTo(d.x + 70, 300);
+            ctx.stroke();
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(d.x, 300, 140, 30);
+            ctx.strokeStyle = '#999';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(d.x, 300, 140, 30);
+            ctx.fillStyle = '#666';
+            ctx.font = '10px -apple-system, sans-serif';
+            ctx.fillText(d.label, d.x + 70, 319);
+        });
+
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.fillText('Send each event once; the router decides who else gets a copy', w / 2, h - 14);
+    })();
+
+    // C2: Event-schema table with identity resolution and a bad-naming callout
+    (function() {
+        const { ctx, w, h } = setupCanvas('c2', 380);
+
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('The schema decides which questions the data can ever answer', w / 2, 22);
+
+        // Header row
+        ctx.fillStyle = 'rgba(26,82,118,0.12)';
+        ctx.fillRect(40, 48, 640, 30);
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(40, 48, 640, 30);
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('event name', 60, 67);
+        ctx.fillText('properties', 250, 67);
+        ctx.fillText('identity key', 520, 67);
+
+        // Data rows
+        const rows = [
+            { name: 'page_view',        props: 'url: /pricing · referrer: search',   id: 'anon_visitor_183', idColor: '#e67e22', idBold: false },
+            { name: 'search_performed', props: 'term: "team plan" · results: 12',    id: 'anon_visitor_183', idColor: '#e67e22', idBold: false },
+            { name: 'signup_completed', props: 'plan: team · variant: B',            id: 'user_alice ← linked', idColor: '#27ae60', idBold: true },
+            { name: 'checkout_started', props: 'plan: team · seats: 5',              id: 'user_alice', idColor: '#27ae60', idBold: false }
+        ];
+        rows.forEach((r, i) => {
+            const y = 78 + i * 34;
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(40, y, 640, 34);
+            ctx.strokeStyle = '#ccc';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(40, y, 640, 34);
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = '11px -apple-system, sans-serif';
+            ctx.fillText(r.name, 60, y + 21);
+            ctx.fillStyle = '#666';
+            ctx.font = '10px -apple-system, sans-serif';
+            ctx.fillText(r.props, 250, y + 21);
+            ctx.fillStyle = r.idColor;
+            ctx.font = (r.idBold ? 'bold ' : '') + '10px -apple-system, sans-serif';
+            ctx.fillText(r.id, 520, y + 21);
+        });
+
+        // Column dividers
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 1;
+        [235, 505].forEach(x => {
+            ctx.beginPath();
+            ctx.moveTo(x, 48);
+            ctx.lineTo(x, 78 + rows.length * 34);
+            ctx.stroke();
+        });
+
+        // Identity stitch bracket to the right of the table
+        const bx = 688, by1 = 82, by2 = 78 + rows.length * 34 - 6;
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(bx, by1);
+        ctx.lineTo(bx + 6, by1);
+        ctx.moveTo(bx + 6, by1);
+        ctx.lineTo(bx + 6, by2);
+        ctx.moveTo(bx + 6, by2);
+        ctx.lineTo(bx, by2);
+        ctx.stroke();
+
+        // Identity resolution note below the table (left side)
+        ctx.fillStyle = '#27ae60';
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillText('identity resolution: the anonymous visitor and the logged-in user become one person, one timeline', 40, 78 + rows.length * 34 + 22);
+
+        // Bad-naming callout
+        const cy = 250;
+        ctx.setLineDash([5, 4]);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(40, cy, 640, 60);
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillText('WITHOUT A TRACKING PLAN', 56, cy + 22);
+        ctx.fillStyle = '#666';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillText('"Sign Up" on one page, "signup" on another, "user_registered" on a third —', 56, cy + 38);
+        ctx.fillText('three names, one action, broken funnels', 56, cy + 52);
+
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.textAlign = 'center';
+        ctx.fillText('Properties you skipped at design time are absent from history — there is no re-recording last quarter', w / 2, h - 14);
+    })();
+
+    // C3: Many sites embedding one tag, converging into the vendor's aggregate view
+    (function() {
+        const { ctx, w, h } = setupCanvas('c3', 360);
+
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Each site sees its visitors; the vendor sees every site', w / 2, 22);
+
+        // Site grid: 2 rows x 4 cols
+        const labels = ['news site', 'web store', 'SaaS app', 'travel blog', 'forum', 'recipe site', 'job board', 'portfolio'];
+        const sites = [];
+        labels.forEach((label, i) => {
+            const col = i % 4, row = Math.floor(i / 4);
+            const x = 40 + col * 165;
+            const y = 55 + row * 60;
+            sites.push({ x, y });
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(x, y, 130, 44);
+            ctx.strokeStyle = '#999';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(x, y, 130, 44);
+            ctx.fillStyle = '#666';
+            ctx.font = '10px -apple-system, sans-serif';
+            ctx.fillText(label, x + 65, y + 18);
+            ctx.fillStyle = '#e67e22';
+            ctx.font = 'bold 9px -apple-system, sans-serif';
+            ctx.fillText('⟨tag⟩', x + 65, y + 34);
+        });
+
+        // Vendor box
+        const vx = w / 2 - 190, vy = 215;
+        // convergence lines
+        sites.forEach(s => {
+            ctx.strokeStyle = '#bbb';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(s.x + 65, s.y + 44);
+            ctx.lineTo(w / 2, vy);
+            ctx.stroke();
+        });
+        ctx.fillStyle = 'rgba(26,82,118,0.12)';
+        ctx.fillRect(vx, vy, 380, 70);
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(vx, vy, 380, 70);
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.fillText('ANALYTICS VENDOR', w / 2, vy + 22);
+        ctx.fillStyle = '#555';
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillText('every embedded tag reports here', w / 2, vy + 40);
+        ctx.fillStyle = '#999';
+        ctx.fillText('aggregate view: benchmarks, cross-site trends, category shifts', w / 2, vy + 58);
+
+        // Contrast notes
+        ctx.fillStyle = '#27ae60';
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillText("one site's view: its own funnel", w / 2, 310);
+        ctx.fillStyle = '#8e44ad';
+        ctx.fillText("vendor's view: the web-wide pattern", w / 2, 328);
+
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.fillText('Being the instrument is itself an acquisition strategy — the product recruits the sensors', w / 2, h - 14);
+    })();
+
+    // C4: Shrinking funnel bars — all visits down to recorded events
+    (function() {
+        const { ctx, w, h } = setupCanvas('c4', 360);
+
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('What the dashboard shows is what survived the filters', w / 2, 22);
+
+        const bars = [
+            { wid: 560, fill: 'rgba(26,82,118,0.35)', border: '#1a5276', label: 'ALL VISITS', labelColor: '#1a5276',
+              note: 'everything that actually happened', noteColor: '#666' },
+            { wid: 440, fill: 'rgba(26,82,118,0.28)', border: '#1a5276', label: 'AFTER CONSENT BANNER', labelColor: '#1a5276',
+              note: '− declines: tag never fires (GDPR / ePrivacy)', noteColor: '#e74c3c' },
+            { wid: 340, fill: 'rgba(26,82,118,0.20)', border: '#1a5276', label: 'AFTER AD BLOCKERS', labelColor: '#1a5276',
+              note: '− blocked tags: undercount differs by audience', noteColor: '#e74c3c' },
+            { wid: 300, fill: 'rgba(39,174,96,0.25)', border: '#27ae60', label: 'RECORDED EVENTS', labelColor: '#27ae60',
+              note: 'what your dashboard calls "traffic"', noteColor: '#666' }
+        ];
+        const bx = 60, bh = 34, gap = 66, y0 = 60;
+        bars.forEach((b, i) => {
+            const y = y0 + i * gap;
+            ctx.fillStyle = b.fill;
+            ctx.fillRect(bx, y, b.wid, bh);
+            ctx.strokeStyle = b.border;
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(bx, y, b.wid, bh);
+            ctx.fillStyle = b.labelColor;
+            ctx.font = 'bold 11px -apple-system, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(b.label, bx + 12, y + 21);
+            ctx.fillStyle = b.noteColor;
+            ctx.font = '10px -apple-system, sans-serif';
+            ctx.fillText(b.note, bx + b.wid + 10, y + 21);
+
+            // dashed connector marking the lost slice
+            if (i < bars.length - 1) {
+                const next = bars[i + 1];
+                ctx.setLineDash([4, 4]);
+                ctx.strokeStyle = '#bbb';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(bx + b.wid, y + bh);
+                ctx.lineTo(bx + next.wid, y + gap);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+        });
+
+        // Server-side tagging annotation
+        ctx.fillStyle = '#8e44ad';
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText('server-side tagging recovers some of the blocked slice —', 660, 300);
+        ctx.fillText('but consent still gates everything', 660, 316);
+
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.textAlign = 'center';
+        ctx.fillText('The missing visitors are not random — the filters select on who the visitor is', w / 2, h - 14);
+    })();
+    </script>
+</body>
+</html>

@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCMC &amp; Particle Filters — Calibrating Simulators Against Reality</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #fff;
+            color: #2c3e50;
+            padding: 40px;
+            line-height: 1.6;
+        }
+        h1 {
+            font-size: 2rem;
+            color: #1a5276;
+            margin-bottom: 8px;
+            border-bottom: 2px solid #2980b9;
+            padding-bottom: 8px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 32px;
+            font-size: 0.95rem;
+        }
+        .intro {
+            background: #f0f4f8;
+            border-left: 3px solid #2980b9;
+            padding: 8px 12px;
+            margin-bottom: 32px;
+            font-size: 0.9rem;
+        }
+        .lang-section {
+            margin-bottom: 40px;
+        }
+        .lang-section h2 {
+            font-size: 1.3rem;
+            color: #1a5276;
+            margin-bottom: 12px;
+            border-bottom: 2px solid #2980b9;
+            padding-bottom: 4px;
+        }
+        table.layout {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+        }
+        table.layout td {
+            vertical-align: top;
+            padding: 12px;
+        }
+        table.layout td.text-col {
+            width: 50%;
+        }
+        table.layout td.viz-col {
+            width: 50%;
+        }
+        canvas {
+            width: 100%;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px; height: auto; }
+        .key-point {
+            background: #f8f9fa;
+            border-left: 3px solid #e74c3c;
+            padding: 8px 12px;
+            margin-top: 12px;
+            font-size: 0.9rem;
+        }
+        ul {
+            margin: 8px 0 8px 20px;
+            font-size: 0.92rem;
+        }
+        li { margin-bottom: 4px; }
+        li strong { color: #1a5276; }
+    </style>
+</head>
+<body>
+    <h1>MCMC &amp; Particle Filters</h1>
+    <p class="subtitle">A simulator turns settings into predicted data — but reality hands us the data and hides the settings. These are the machines that run the movie backwards.</p>
+
+    <div class="intro">Weather models, epidemic models, and engineering simulators all play forward: dial in the settings, get out a prediction. The question science actually asks is the reverse — which settings would make the simulator reproduce what we measured? There is rarely a formula for that answer, so two workhorse machines approximate it by sheer repetition: a guided random walk through the space of settings (MCMC), and a swarm of candidate states pruned every time a new observation arrives (particle filters).</div>
+
+<div class="lang-section">
+    <h2>1. Running the Movie Backwards</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>A simulator is a movie that only plays forward — settings in, predicted data out — while reality hands us the ending and hides the settings (the inverse problem).</p>
+                <ul>
+                    <li><strong>Forward is easy:</strong> Give the simulator its settings and it plays forward to predicted data.</li>
+                    <li><strong>Reality reverses it:</strong> We hold the measured data, and the settings that produced it are hidden.</li>
+                    <li><strong>Many settings fit:</strong> Several different dial positions can produce data that looks like ours.</li>
+                    <li><strong>The answer is a cloud:</strong> The honest answer is a weighted cloud of settings, not one best value.</li>
+                    <li><strong>Weigh by fit:</strong> Each candidate setting is weighted by how well it explains the data.</li>
+                    <li><strong>Weigh by plausibility:</strong> That weight is multiplied by how believable the setting was beforehand.</li>
+                    <li><strong>The one rule:</strong> Belief after seeing data is fit times prior plausibility (Bayes' rule).</li>
+                </ul>
+                <div class="key-point">Calibration never returns the setting — it returns a weighted cloud of settings the data cannot rule out, and every method on this page is just a different way of drawing samples from that cloud.</div>
+            </td>
+            <td class="viz-col"><canvas id="c1" width="720" height="340"></canvas></td>
+        </tr>
+    </table>
+</div>
+
+<div class="lang-section">
+    <h2>2. MCMC — a Guided Random Walk</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>When the cloud of plausible settings cannot be written down as a formula, walk through it — a random stroll that spends its time where the data fit is good (Markov chain Monte Carlo).</p>
+                <ul>
+                    <li><strong>Propose nearby:</strong> From the current setting, nudge the dials a little at random.</li>
+                    <li><strong>Keep if better:</strong> If the new setting explains the data better, move there.</li>
+                    <li><strong>Sometimes keep worse:</strong> Accept a worse setting with a probability tied to how much worse (Metropolis rule).</li>
+                    <li><strong>Why accept worse:</strong> Occasional downhill moves keep the walk from freezing on one peak.</li>
+                    <li><strong>Throw away the start:</strong> Early steps remember the arbitrary starting point and are discarded (burn-in).</li>
+                    <li><strong>Healthy walks roam:</strong> A good walk covers the whole plausible region instead of getting stuck (mixing).</li>
+                    <li><strong>Check with rivals:</strong> Run several walks from scattered starts and demand that they agree.</li>
+                    <li><strong>Every step costs:</strong> Each proposed step requires one full run of the simulator.</li>
+                </ul>
+                <div class="key-point">MCMC turns "map the whole cloud" into "take a long guided stroll through it" — but every step buys one simulator run, and a stuck walk quietly reports the wrong cloud with full confidence.</div>
+            </td>
+            <td class="viz-col"><canvas id="c2" width="720" height="400"></canvas></td>
+        </tr>
+    </table>
+</div>
+
+<div class="lang-section">
+    <h2>3. Particle Filters — Tracking as Data Streams In</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>When data arrive as a stream, keep a swarm of candidate states alive and let each new observation prune it (particle filter).</p>
+                <ul>
+                    <li><strong>Swarm, not estimate:</strong> Track a crowd of candidate states instead of one best guess (particles).</li>
+                    <li><strong>Predict forward:</strong> The simulator pushes every candidate one step ahead in time.</li>
+                    <li><strong>Reweight on arrival:</strong> Each new observation scores every candidate by agreement with it.</li>
+                    <li><strong>Clone and drop:</strong> Good candidates are copied and bad ones are deleted (resampling).</li>
+                    <li><strong>Spread is honesty:</strong> The swarm's spread at any moment is the current uncertainty.</li>
+                    <li><strong>Weather does this:</strong> Forecast centers fold fresh observations into running models the same way (data assimilation).</li>
+                    <li><strong>Kalman cousin:</strong> Their tool of choice is a bell-curve cousin of the swarm (ensemble Kalman filter).</li>
+                    <li><strong>Collapse risk:</strong> The swarm can shrink to a few identical clones and lose its diversity (degeneracy).</li>
+                </ul>
+                <div class="key-point">A particle filter is survival of the fittest for hypotheses — each observation prunes the swarm — but let it collapse to clones of one winner and it becomes confidently blind.</div>
+            </td>
+            <td class="viz-col"><canvas id="c3" width="720" height="380"></canvas></td>
+        </tr>
+    </table>
+</div>
+
+<div class="lang-section">
+    <h2>4. Traps in the Inverse Road</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Running the movie backwards has failure modes of its own, and the worst ones look exactly like success.</p>
+                <ul>
+                    <li><strong>Twins in the data:</strong> Different setting combinations can produce identical outputs (non-identifiability).</li>
+                    <li><strong>Data can't split twins:</strong> No amount of the same data separates them — only a new kind of measurement can.</li>
+                    <li><strong>Hours per step:</strong> When one simulator run takes hours, a walk of a hundred thousand steps is off the table.</li>
+                    <li><strong>Fast stand-ins:</strong> Train a cheap lookalike of the simulator and walk on that instead (emulator).</li>
+                    <li><strong>Compare summaries:</strong> Or accept settings whose simulated summary statistics land near the real ones (approximate Bayesian computation).</li>
+                    <li><strong>Wrong simulator, sure answer:</strong> If the simulator itself is wrong, calibration confidently converges on wrong settings (model discrepancy).</li>
+                    <li><strong>Replay the fit:</strong> Always simulate from the fitted settings and check the output reproduces the data (posterior predictive check).</li>
+                </ul>
+                <div class="key-point">Calibration measures how well the settings fit the simulator, not how well the simulator fits the world — a confidently converged answer from a wrong model is the most dangerous output on this page.</div>
+            </td>
+            <td class="viz-col"><canvas id="c4" width="720" height="380"></canvas></td>
+        </tr>
+    </table>
+</div>
+
+    <script>
+    const dpr = window.devicePixelRatio || 1;
+    function setupCanvas(id, hh) {
+        const c = document.getElementById(id);
+        const w = 720, h = hh;
+        c.style.maxWidth = w + 'px';
+        var __cssW = c.getBoundingClientRect().width || w;
+        var __scale = (__cssW / w) * dpr;
+        c.width = Math.round(w * __scale);
+        c.height = Math.round(h * __scale);
+        const ctx = c.getContext('2d');
+        ctx.scale(__scale, __scale);
+        return { ctx, w, h };
+    }
+
+    function arrow(ctx, x1, y1, x2, y2, color, lw) {
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = lw;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+        const ang = Math.atan2(y2 - y1, x2 - x1);
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - 9 * Math.cos(ang - 0.5), y2 - 9 * Math.sin(ang - 0.5));
+        ctx.lineTo(x2 - 9 * Math.cos(ang + 0.5), y2 - 9 * Math.sin(ang + 0.5));
+        ctx.fill();
+    }
+
+    // C1: Forward pipeline on top, reversed pipeline with hidden settings below, Bayes strip underneath
+    (function() {
+        const { ctx, w, h } = setupCanvas('c1', 340);
+
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Forward is easy — reality asks the reverse question', w / 2, 22);
+
+        // Top row header
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillStyle = '#27ae60';
+        ctx.textAlign = 'left';
+        ctx.fillText('FORWARD — what the simulator does', 50, 58);
+        ctx.textAlign = 'center';
+
+        // Top boxes
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(50, 70, 150, 60);
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(50, 70, 150, 60);
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.fillText('SETTINGS', 125, 96);
+        ctx.fillStyle = '#666';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillText("the model's dials", 125, 114);
+
+        ctx.fillStyle = 'rgba(26,82,118,0.12)';
+        ctx.fillRect(280, 70, 160, 60);
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(280, 70, 160, 60);
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.fillText('SIMULATOR', 360, 96);
+        ctx.fillStyle = '#666';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillText('plays the movie forward', 360, 114);
+
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(520, 70, 150, 60);
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(520, 70, 150, 60);
+        ctx.fillStyle = '#27ae60';
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.fillText('PREDICTED DATA', 595, 96);
+        ctx.fillStyle = '#666';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillText('what you would observe', 595, 114);
+
+        // Top arrows
+        arrow(ctx, 210, 100, 275, 100, '#27ae60', 2);
+        arrow(ctx, 450, 100, 515, 100, '#27ae60', 2);
+        ctx.fillStyle = '#27ae60';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillText('run', 242, 88);
+
+        // Bottom row header
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillStyle = '#e74c3c';
+        ctx.textAlign = 'left';
+        ctx.fillText('INVERSE — what reality hands us', 50, 170);
+        ctx.textAlign = 'center';
+
+        // Question mark over settings box
+        ctx.font = 'bold 16px -apple-system, sans-serif';
+        ctx.fillText('?', 125, 186);
+
+        // Bottom boxes
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(520, 190, 150, 60);
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(520, 190, 150, 60);
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.fillText('MEASURED DATA', 595, 216);
+        ctx.fillStyle = '#666';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillText('this is all we get', 595, 234);
+
+        ctx.fillStyle = 'rgba(26,82,118,0.12)';
+        ctx.fillRect(280, 190, 160, 60);
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(280, 190, 160, 60);
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.fillText('SIMULATOR', 360, 216);
+        ctx.fillStyle = '#666';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillText('same machine, run in reverse?', 360, 234);
+
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(50, 190, 150, 60);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 3]);
+        ctx.strokeRect(50, 190, 150, 60);
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.fillText('SETTINGS = ?', 125, 216);
+        ctx.fillStyle = '#666';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillText('hidden from us', 125, 234);
+
+        // Bottom arrows (right to left)
+        arrow(ctx, 515, 220, 450, 220, '#e74c3c', 2);
+        arrow(ctx, 275, 220, 210, 220, '#e74c3c', 2);
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillText('which settings?', 482, 208);
+
+        // Belief rule strip
+        ctx.fillStyle = '#8e44ad';
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillText('belief after seeing data ∝ how well a setting explains it × how plausible it was beforehand', 360, 288);
+        ctx.fillStyle = '#666';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillText('(Bayes’ rule: posterior ∝ likelihood × prior)', 360, 306);
+
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.fillText('The answer is not one best setting — it is a weighted cloud of settings the data cannot rule out', w / 2, h - 14);
+    })();
+
+    // C2: Contour rings, gray burn-in path, blue sample cloud, orange second walk
+    (function() {
+        const { ctx, w, h } = setupCanvas('c2', 400);
+
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('A guided random walk maps the plausible region', w / 2, 22);
+
+        ctx.fillStyle = '#666';
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillText('each dot below cost one full simulator run', 390, 44);
+
+        // Contour rings
+        const rings = [
+            { rx: 170, ry: 105, color: '#ccc' },
+            { rx: 115, ry: 70,  color: '#bbb' },
+            { rx: 60,  ry: 36,  color: '#999' }
+        ];
+        rings.forEach(r => {
+            ctx.strokeStyle = r.color;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.ellipse(390, 215, r.rx, r.ry, 0, 0, Math.PI * 2);
+            ctx.stroke();
+        });
+
+        // Gray burn-in path with dots
+        const burnin = [[70, 310], [115, 285], [100, 255], [150, 265], [175, 235], [160, 210], [210, 225], [245, 198], [275, 212], [300, 192]];
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        burnin.forEach((p, i) => {
+            if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]);
+        });
+        ctx.stroke();
+        ctx.fillStyle = '#999';
+        burnin.forEach(p => {
+            ctx.beginPath();
+            ctx.arc(p[0], p[1], 2, 0, Math.PI * 2);
+            ctx.fill();
+        });
+
+        // Blue sample cloud (deterministic)
+        ctx.fillStyle = 'rgba(26,82,118,0.35)';
+        for (let i = 0; i < 40; i++) {
+            const a = i * 2.399963;
+            const r = 14 + ((i * 37) % 100) * 0.85;
+            const x = 390 + r * Math.cos(a);
+            const y = 215 + 0.62 * r * Math.sin(a);
+            ctx.beginPath();
+            ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Orange second walk with dots
+        const walk2 = [[655, 75], [610, 105], [630, 140], [575, 130], [545, 165], [500, 150], [470, 185], [440, 200]];
+        ctx.strokeStyle = '#e67e22';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        walk2.forEach((p, i) => {
+            if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]);
+        });
+        ctx.stroke();
+        ctx.fillStyle = '#e67e22';
+        walk2.forEach(p => {
+            ctx.beginPath();
+            ctx.arc(p[0], p[1], 2, 0, Math.PI * 2);
+            ctx.fill();
+        });
+
+        // Legend
+        ctx.textAlign = 'left';
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.fillText('gray — early steps from an arbitrary start, thrown away (burn-in)', 36, 336);
+        ctx.fillStyle = '#1a5276';
+        ctx.fillText('blue — later steps roam the whole plausible region (mixing)', 36, 352);
+        ctx.fillStyle = '#e67e22';
+        ctx.fillText('orange — a second walk from a different start must land in the same region', 36, 368);
+
+        ctx.textAlign = 'center';
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.fillText('Healthy walks forget where they started and agree with each other — disagreement means keep walking', w / 2, h - 14);
+    })();
+
+    // C3: Particle clouds narrowing around a dashed true trajectory as observations arrive
+    (function() {
+        const { ctx, w, h } = setupCanvas('c3', 380);
+
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('A swarm of guesses, pruned by every new observation', w / 2, 22);
+
+        ctx.fillStyle = '#27ae60';
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillText('spread of the swarm = current uncertainty — it shrinks after every observation', 360, 48);
+        ctx.fillStyle = '#666';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillText('weather centers fold observations into forecasts the same way (data assimilation)', 360, 64);
+
+        // Axis and observation ticks
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(55, 308);
+        ctx.lineTo(680, 308);
+        ctx.stroke();
+        const ticksX = [150, 290, 430, 570];
+        ticksX.forEach((tx, i) => {
+            ctx.beginPath();
+            ctx.moveTo(tx, 308);
+            ctx.lineTo(tx, 314);
+            ctx.stroke();
+            ctx.fillStyle = '#999';
+            ctx.font = '10px -apple-system, sans-serif';
+            ctx.fillText('obs ' + (i + 1), tx, 324);
+        });
+        ctx.fillStyle = '#999';
+        ctx.fillText('time →', 655, 324);
+
+        // True trajectory (dashed)
+        ctx.strokeStyle = '#555';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.moveTo(80, 250);
+        ctx.quadraticCurveTo(370, 215, 660, 168);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#555';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('true state (unknown, dashed)', 84, 236);
+        ctx.textAlign = 'center';
+
+        // Particle clouds
+        const clouds = [
+            { cx: 150, cy: 241, sp: 62 },
+            { cx: 290, cy: 223, sp: 40 },
+            { cx: 430, cy: 203, sp: 24 },
+            { cx: 570, cy: 182, sp: 13 }
+        ];
+        const fr = [-1, -0.75, -0.55, -0.38, -0.22, -0.08, 0.08, 0.22, 0.38, 0.55, 0.75, 1];
+        clouds.forEach((cl, ci) => {
+            fr.forEach((f, i) => {
+                const xj = ((i * 7) % 13) - 6;
+                const extreme = Math.abs(f) === 1 && ci < 2;
+                ctx.fillStyle = extreme ? 'rgba(231,76,60,0.45)' : 'rgba(26,82,118,0.35)';
+                ctx.beginPath();
+                ctx.arc(cl.cx + xj, cl.cy + f * cl.sp, 2.5, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        });
+
+        // Legend
+        ctx.textAlign = 'left';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.fillText('blue — surviving candidates (particles)', 60, 344);
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillText('red — poor fits, deleted and replaced by clones (resampling)', 360, 344);
+
+        ctx.textAlign = 'center';
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.fillText("If every particle becomes a clone of one winner, the filter is confidently blind — watch the swarm's diversity", w / 2, h - 14);
+    })();
+
+    // C4: Banana-shaped ridge of equally good settings with two distant equally-fitting points
+    (function() {
+        const { ctx, w, h } = setupCanvas('c4', 380);
+
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Two different settings, one identical fit — the data cannot choose', w / 2, 22);
+
+        // Axes
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(70, 50);
+        ctx.lineTo(70, 320);
+        ctx.lineTo(680, 320);
+        ctx.stroke();
+        ctx.fillStyle = '#666';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillText('how fast it spreads →', 375, 340);
+        ctx.textAlign = 'left';
+        ctx.fillText('↑ how fast people recover', 76, 60);
+        ctx.textAlign = 'center';
+
+        // Annotations
+        ctx.fillStyle = '#8e44ad';
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillText('infection rate and recovery rate trade off — only their ratio is pinned down', 400, 60);
+        ctx.fillStyle = '#666';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillText('every point on the ridge reproduces the data exactly as well', 400, 78);
+
+        // Outer ridge band
+        ctx.fillStyle = 'rgba(26,82,118,0.12)';
+        ctx.beginPath();
+        ctx.moveTo(140, 268);
+        ctx.quadraticCurveTo(330, 185, 560, 88);
+        ctx.lineTo(560, 132);
+        ctx.quadraticCurveTo(330, 235, 160, 312);
+        ctx.closePath();
+        ctx.fill();
+
+        // Inner ridge band
+        ctx.fillStyle = 'rgba(26,82,118,0.35)';
+        ctx.beginPath();
+        ctx.moveTo(146, 280);
+        ctx.quadraticCurveTo(330, 197, 558, 100);
+        ctx.lineTo(558, 120);
+        ctx.quadraticCurveTo(330, 223, 154, 300);
+        ctx.closePath();
+        ctx.fill();
+
+        // Point A
+        ctx.fillStyle = '#e74c3c';
+        ctx.beginPath();
+        ctx.arc(205, 266, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillText('Setting A — fits equally well', 185, 220);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(203, 258);
+        ctx.lineTo(187, 226);
+        ctx.stroke();
+
+        // Point B
+        ctx.beginPath();
+        ctx.arc(491, 140, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.textAlign = 'right';
+        ctx.fillText('Setting B — fits equally well', 665, 168);
+        ctx.beginPath();
+        ctx.moveTo(500, 148);
+        ctx.lineTo(560, 162);
+        ctx.stroke();
+        ctx.textAlign = 'center';
+
+        // Tie-breaker note
+        ctx.fillStyle = '#27ae60';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillText('no amount of this data breaks the tie — only a new kind of measurement can', 400, 292);
+
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.fillText('A ridge of equally good settings means the answer is the ridge, not a point on it', w / 2, h - 14);
+    })();
+    </script>
+</body>
+</html>

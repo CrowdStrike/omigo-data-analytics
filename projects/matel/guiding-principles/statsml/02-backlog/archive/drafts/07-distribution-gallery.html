@@ -1,0 +1,1363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Distribution Gallery - 100+ Real-World Patterns</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f8f9fa; color: #2d3436; padding: 20px; }
+h1 { text-align: center; margin-bottom: 8px; font-size: 1.8em; color: #2c3e50; }
+.subtitle { text-align: center; color: #636e72; margin-bottom: 30px; font-size: 0.95em; }
+.category { margin-bottom: 40px; }
+.category h2 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 6px; margin-bottom: 16px; font-size: 1.3em; }
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.card { background: #fff; border-radius: 8px; padding: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.card h3 { font-size: 1.05em; color: #2c3e50; margin-bottom: 4px; }
+.card p { font-size: 0.95em; color: #636e72; margin-bottom: 8px; line-height: 1.4; }
+canvas { width: 100%; height: 203px; background: #fefefe; border-radius: 4px; border: 1px solid #ecf0f1; }
+.nav { text-align: center; margin-bottom: 20px; }
+.nav a { color: #3498db; text-decoration: none; margin: 0 10px; font-size: 0.9em; }
+.nav a:hover { text-decoration: underline; }
+.tag { display: inline-block; font-size: 0.85em; background: #e8f4fd; color: #2980b9; padding: 2px 6px; border-radius: 3px; margin-right: 4px; }
+</style>
+</head>
+<body>
+<h1>Distribution Gallery: 100+ Real-World Patterns</h1>
+<p class="subtitle">Real data is messy. These examples show what actual feature distributions look like &mdash; spikes, gaps, clusters, mixed shapes, and combinations that don't fit any textbook formula.</p>
+
+<div class="category" id="cat-spikes">
+<h2>1. Spike &amp; Point Mass Patterns</h2>
+<div class="grid" id="grid-spikes"></div>
+</div>
+
+<div class="category" id="cat-gaps">
+<h2>2. Gaps &amp; Clusters</h2>
+<div class="grid" id="grid-gaps"></div>
+</div>
+
+<div class="category" id="cat-skew">
+<h2>3. Skewed &amp; Heavy-Tail</h2>
+<div class="grid" id="grid-skew"></div>
+</div>
+
+<div class="category" id="cat-multimodal">
+<h2>4. Multimodal &amp; Mixed</h2>
+<div class="grid" id="grid-multimodal"></div>
+</div>
+
+<div class="category" id="cat-bounded">
+<h2>5. Bounded, Truncated &amp; Censored</h2>
+<div class="grid" id="grid-bounded"></div>
+</div>
+
+<div class="category" id="cat-sparse">
+<h2>6. Sparse &amp; Small-Sample</h2>
+<div class="grid" id="grid-sparse"></div>
+</div>
+
+<div class="category" id="cat-discrete">
+<h2>7. Discrete &amp; Categorical-Like</h2>
+<div class="grid" id="grid-discrete"></div>
+</div>
+
+<div class="category" id="cat-realworld">
+<h2>8. Real-World Domain Patterns</h2>
+<div class="grid" id="grid-realworld"></div>
+</div>
+
+<div class="category" id="cat-combo">
+<h2>9. Weird Combinations &amp; Edge Cases</h2>
+<div class="grid" id="grid-combo"></div>
+</div>
+
+<div class="category" id="cat-temporal">
+<h2>10. Temporal &amp; Periodic</h2>
+<div class="grid" id="grid-temporal"></div>
+</div>
+
+<div class="category" id="cat-separation">
+<h2>11. Pos/Neg Separation Patterns</h2>
+<div class="grid" id="grid-separation"></div>
+</div>
+
+<script>
+// Seeded random for reproducibility
+function mulberry32(a) {
+    return function() {
+        a |= 0; a = a + 0x6D2B79F5 | 0;
+        var t = Math.imul(a ^ a >>> 15, 1 | a);
+        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    }
+}
+let rng = mulberry32(42);
+
+function randn() {
+    let u = 0, v = 0;
+    while(u === 0) u = rng();
+    while(v === 0) v = rng();
+    return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+}
+
+function randExp(lambda) { return -Math.log(1 - rng()) / lambda; }
+function randUniform(a, b) { return a + rng() * (b - a); }
+function randPareto(alpha, xm) { return xm / Math.pow(1 - rng(), 1/alpha); }
+
+function drawBand(ctx, bins, ox, barBottom, bw, maxBarH, maxVal, totalN) {
+    const numBins = bins.length;
+    const sigma = 1.2; // sigma in bin units
+    const kernelRadius = Math.ceil(sigma * 3);
+    const effN = Math.min(200, Math.max(30, totalN)); // cap for visual clarity
+
+    // Gaussian-weighted smoothing of bin heights
+    const smoothed = new Array(numBins);
+    for (let i = 0; i < numBins; i++) {
+        let weightSum = 0, valSum = 0;
+        for (let j = Math.max(0, i - kernelRadius); j <= Math.min(numBins - 1, i + kernelRadius); j++) {
+            const dist = j - i;
+            const w = Math.exp(-0.5 * (dist / sigma) * (dist / sigma));
+            valSum += bins[j] * w;
+            weightSum += w;
+        }
+        smoothed[i] = valSum / weightSum;
+    }
+
+    // Winsorize: cap smoothed values at 2x the bar height to prevent spike bleed
+    for (let i = 0; i < numBins; i++) {
+        if (bins[i] > 0) {
+            smoothed[i] = Math.min(smoothed[i], 2 * bins[i]);
+        } else {
+            // For zero-height bins, cap at 2x nearest nonzero neighbor
+            let refH = 0;
+            for (let r = 1; r <= kernelRadius; r++) {
+                if (i - r >= 0 && bins[i - r] > 0) { refH = Math.max(refH, bins[i - r]); break; }
+            }
+            for (let r = 1; r <= kernelRadius; r++) {
+                if (i + r < numBins && bins[i + r] > 0) { refH = Math.max(refH, bins[i + r]); break; }
+            }
+            if (refH > 0) smoothed[i] = Math.min(smoothed[i], 2 * refH);
+        }
+    }
+
+    // Compute SE band
+    const upper = new Array(numBins);
+    const lower = new Array(numBins);
+    for (let i = 0; i < numBins; i++) {
+        const se = 1.96 * smoothed[i] / Math.sqrt(effN);
+        upper[i] = smoothed[i] + se;
+        lower[i] = Math.max(0, smoothed[i] - se);
+    }
+
+    // Convert to pixel coordinates
+    function yPx(val) {
+        return barBottom - (val / maxVal) * maxBarH;
+    }
+    function xPx(i) {
+        return ox + i * bw + bw / 2;
+    }
+
+    // Draw filled SE band
+    ctx.save();
+    ctx.fillStyle = 'rgba(230, 126, 34, 0.25)';
+    ctx.beginPath();
+    ctx.moveTo(xPx(0), yPx(upper[0]));
+    for (let i = 1; i < numBins; i++) {
+        ctx.lineTo(xPx(i), yPx(upper[i]));
+    }
+    for (let i = numBins - 1; i >= 0; i--) {
+        ctx.lineTo(xPx(i), yPx(lower[i]));
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    // Draw smoothed center line
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < numBins; i++) {
+        const px = xPx(i);
+        const py = yPx(smoothed[i]);
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    ctx.restore();
+}
+
+function drawHistogram(canvas, data, color, opts = {}) {
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+
+    if (data.length === 0) return;
+
+    let min = Math.min(...data), max = Math.max(...data);
+    if (min === max) { min -= 1; max += 1; }
+
+    const numBins = opts.bins || Math.min(60, Math.max(15, Math.floor(data.length / 5)));
+    const binWidth = (max - min) / numBins;
+    const bins = new Array(numBins).fill(0);
+
+    data.forEach(v => {
+        let idx = Math.floor((v - min) / binWidth);
+        if (idx >= numBins) idx = numBins - 1;
+        if (idx < 0) idx = 0;
+        bins[idx]++;
+    });
+
+    const maxCount = Math.max(...bins);
+    const barW = W / numBins;
+    const pad = 4;
+
+    // Draw bars
+    ctx.fillStyle = color || '#3498db';
+    ctx.globalAlpha = 0.5;
+    for (let i = 0; i < numBins; i++) {
+        const barH = (bins[i] / maxCount) * (H - pad * 2);
+        ctx.fillRect(i * barW + 0.5, H - pad - barH, barW - 1, barH);
+    }
+    ctx.globalAlpha = 1.0;
+
+    // Variance/SE band: Gaussian-weighted smoothing over bin heights
+    drawBand(ctx, bins, 0, H - pad, barW, H - pad * 2, maxCount, data.length);
+
+    // If there's a second dataset (for pos/neg overlay)
+    if (opts.data2) {
+        const bins2 = new Array(numBins).fill(0);
+        opts.data2.forEach(v => {
+            let idx = Math.floor((v - min) / binWidth);
+            if (idx >= numBins) idx = numBins - 1;
+            if (idx < 0) idx = 0;
+            bins2[idx]++;
+        });
+        const maxCount2 = Math.max(...bins2);
+        ctx.fillStyle = opts.color2 || 'rgba(231, 76, 60, 0.6)';
+        ctx.globalAlpha = 0.4;
+        for (let i = 0; i < numBins; i++) {
+            const barH = (bins2[i] / maxCount2) * (H - pad * 2) * 0.8;
+            ctx.fillRect(i * barW + 0.5, H - pad - barH, barW - 1, barH);
+        }
+        ctx.globalAlpha = 1.0;
+
+        // Variance/SE band for second dataset (scaled by 0.8 like the bars)
+        drawBand(ctx, bins2, 0, H - pad, barW, (H - pad * 2) * 0.8, maxCount2, opts.data2.length);
+    }
+}
+
+function createCard(grid, title, desc, dataFn, opts = {}) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    const tags = opts.tags ? opts.tags.map(t => `<span class="tag">${t}</span>`).join('') : '';
+    card.innerHTML = `<h3>${title}</h3><p>${tags}${desc}</p><canvas width="560" height="240"></canvas>`;
+    grid.appendChild(card);
+    const canvas = card.querySelector('canvas');
+    const data = dataFn();
+    drawHistogram(canvas, Array.isArray(data[0]) ? data[0] : data, opts.color || '#3498db',
+        { bins: opts.bins, data2: Array.isArray(data[0]) ? data[1] : null, color2: opts.color2 });
+}
+
+// ============ CATEGORY 1: SPIKES & POINT MASSES ============
+const gridSpikes = document.getElementById('grid-spikes');
+
+createCard(gridSpikes, '#1: Single Spike at Zero',
+    'Most values are exactly 0, with a thin spread of positives. Common in count data, inactive accounts.',
+    () => { let d = []; for(let i=0;i<800;i++) d.push(0); for(let i=0;i<200;i++) d.push(randExp(0.3)); return d; },
+    {tags:['zero-inflated','count']});
+
+createCard(gridSpikes, '#2: Spike at Round Number',
+    'Data clusters at 100 (default/placeholder value) with actual values scattered around.',
+    () => { let d=[]; for(let i=0;i<400;i++) d.push(100); for(let i=0;i<600;i++) d.push(randn()*30+70); return d; },
+    {tags:['default-value','placeholder']});
+
+createCard(gridSpikes, '#3: Multiple Spikes (Tiered Pricing)',
+    'Values concentrate at 9.99, 19.99, 29.99, 49.99 with tiny noise between.',
+    () => { let d=[]; let prices=[9.99,19.99,29.99,49.99]; let weights=[40,30,20,10];
+    for(let p=0;p<prices.length;p++) for(let i=0;i<weights[p]*8;i++) d.push(prices[p]+randn()*0.1);
+    for(let i=0;i<50;i++) d.push(randUniform(5,55)); return d; },
+    {tags:['pricing','discrete-continuous']});
+
+createCard(gridSpikes, '#4: Spike at Max (Capped Sensor)',
+    'Sensor maxes out at 1023. Real values below, plus pile-up at ceiling.',
+    () => { let d=[]; for(let i=0;i<600;i++) d.push(randn()*200+700); d=d.map(v=>Math.min(v,1023));
+    for(let i=0;i<300;i++) d.push(1023); return d; },
+    {tags:['censored','sensor','ceiling']});
+
+createCard(gridSpikes, '#5: Spike at Min (Floor Effect)',
+    'Scores cannot go below 0. Many hit the floor, rest spread upward.',
+    () => { let d=[]; for(let i=0;i<1000;i++) { let v=randn()*15-5; d.push(Math.max(0,v)); } return d; },
+    {tags:['floor','censored']});
+
+createCard(gridSpikes, '#6: Two Spikes + Gap',
+    'Binary-like but not quite: values cluster at 0 and 1 with a few in between.',
+    () => { let d=[]; for(let i=0;i<400;i++) d.push(randn()*0.02); for(let i=0;i<400;i++) d.push(1+randn()*0.02);
+    for(let i=0;i<50;i++) d.push(randUniform(0.1,0.9)); return d; },
+    {tags:['binary-like','flags']});
+
+createCard(gridSpikes, '#7: Spike at -1 (Missing Encoded)',
+    'Missing values encoded as -1. Real data is positive and right-skewed.',
+    () => { let d=[]; for(let i=0;i<350;i++) d.push(-1); for(let i=0;i<650;i++) d.push(randExp(0.1)+5); return d; },
+    {tags:['missing-encoded','sentinel']});
+
+createCard(gridSpikes, '#8: Narrow Spike + Long Tail',
+    '90% of values in tight range 0-5, then rare extreme values up to 500.',
+    () => { let d=[]; for(let i=0;i<900;i++) d.push(randExp(1)); for(let i=0;i<100;i++) d.push(randPareto(1.2,5)); return d; },
+    {tags:['heavy-tail','outlier-rich']});
+
+createCard(gridSpikes, '#9: Spike + Uniform Spread',
+    'Half the data at exactly 50 (default), other half uniformly distributed 0-100.',
+    () => { let d=[]; for(let i=0;i<500;i++) d.push(50); for(let i=0;i<500;i++) d.push(randUniform(0,100)); return d; },
+    {tags:['default-value','mixed']});
+
+createCard(gridSpikes, '#10: Multiple Spikes (Categorical Encoded)',
+    'Categories encoded as 1,2,3,4,5 but stored as float. Slight noise from data errors.',
+    () => { let d=[]; let cats=[1,2,3,4,5]; let counts=[200,350,180,150,80];
+    for(let c=0;c<5;c++) for(let i=0;i<counts[c];i++) d.push(cats[c]+randn()*0.01);
+    for(let i=0;i<40;i++) d.push(randUniform(1,5)); return d; },
+    {tags:['encoded-categorical','ordinal']});
+
+createCard(gridSpikes, '#11: Spike + Bimodal Background',
+    'Default value at 0, plus two separate populations at 30 and 70.',
+    () => { let d=[]; for(let i=0;i<300;i++) d.push(0); for(let i=0;i<350;i++) d.push(randn()*8+30);
+    for(let i=0;i<350;i++) d.push(randn()*8+70); return d; },
+    {tags:['zero-inflated','bimodal']});
+
+createCard(gridSpikes, '#12: Weekend Spike (Hour-of-Day)',
+    'Activity data: spike at hours 9,12,17 with lower activity elsewhere.',
+    () => { let d=[]; for(let i=0;i<200;i++) d.push(9+randn()*0.5); for(let i=0;i<150;i++) d.push(12+randn()*0.5);
+    for(let i=0;i<250;i++) d.push(17+randn()*0.8); for(let i=0;i<400;i++) d.push(randUniform(0,24)); return d; },
+    {tags:['temporal','periodic']});
+
+// ============ CATEGORY 2: GAPS & CLUSTERS ============
+const gridGaps = document.getElementById('grid-gaps');
+
+createCard(gridGaps, '#13: Two Distinct Clusters',
+    'Clear gap between 20-40. Like age groups: young adults (18-25) and middle-aged (45-65).',
+    () => { let d=[]; for(let i=0;i<500;i++) d.push(randn()*3+22); for(let i=0;i<500;i++) d.push(randn()*7+55); return d; },
+    {tags:['bimodal','gap']});
+
+createCard(gridGaps, '#14: Three Clusters Unequal Size',
+    'Small cluster, large cluster, medium cluster with gaps between.',
+    () => { let d=[]; for(let i=0;i<100;i++) d.push(randn()*2+10); for(let i=0;i<600;i++) d.push(randn()*5+50);
+    for(let i=0;i<300;i++) d.push(randn()*3+85); return d; },
+    {tags:['multimodal','unequal']});
+
+createCard(gridGaps, '#15: Dense Core + Isolated Outliers',
+    '95% of data in tight range, 5% scattered far away in both directions.',
+    () => { let d=[]; for(let i=0;i<950;i++) d.push(randn()*5+50);
+    for(let i=0;i<25;i++) d.push(randUniform(-50,20)); for(let i=0;i<25;i++) d.push(randUniform(80,150)); return d; },
+    {tags:['outliers','tight-core']});
+
+createCard(gridGaps, '#16: Clusters at Powers of 10',
+    'Values cluster near 1, 10, 100, 1000. Log-scale structure.',
+    () => { let d=[]; for(let i=0;i<250;i++) d.push(Math.pow(10, randn()*0.1));
+    for(let i=0;i<300;i++) d.push(Math.pow(10, 1+randn()*0.15));
+    for(let i=0;i<250;i++) d.push(Math.pow(10, 2+randn()*0.12));
+    for(let i=0;i<200;i++) d.push(Math.pow(10, 3+randn()*0.1)); return d; },
+    {tags:['log-scale','orders-of-magnitude']});
+
+createCard(gridGaps, '#17: One Dense + One Sparse Cluster',
+    'Primary cluster has 90% of data; secondary cluster at higher range is sparse.',
+    () => { let d=[]; for(let i=0;i<900;i++) d.push(randn()*3+25); for(let i=0;i<100;i++) d.push(randn()*10+80); return d; },
+    {tags:['asymmetric','sparse-cluster']});
+
+createCard(gridGaps, '#18: Staircase Clusters',
+    'Data at 5 levels with gaps. Like salary bands or rating levels.',
+    () => { let d=[]; let levels=[30,45,60,80,110]; let ns=[150,250,300,200,100];
+    for(let l=0;l<5;l++) for(let i=0;i<ns[l];i++) d.push(levels[l]+randn()*2); return d; },
+    {tags:['banded','salary-like']});
+
+createCard(gridGaps, '#19: Gap in Middle (Donut)',
+    'Values at extremes but empty in center. Like confidence scores: high or low, rarely medium.',
+    () => { let d=[]; for(let i=0;i<500;i++) d.push(randn()*8+15); for(let i=0;i<500;i++) d.push(randn()*8+85);
+    for(let i=0;i<30;i++) d.push(randUniform(40,60)); return d; },
+    {tags:['bimodal','polarized']});
+
+createCard(gridGaps, '#20: Irregular Gaps',
+    'Data exists in ranges [0-10], [25-35], [60-65], [90-100]. Random gaps.',
+    () => { let d=[]; for(let i=0;i<300;i++) d.push(randUniform(0,10)); for(let i=0;i<250;i++) d.push(randUniform(25,35));
+    for(let i=0;i<200;i++) d.push(randUniform(60,65)); for(let i=0;i<250;i++) d.push(randUniform(90,100)); return d; },
+    {tags:['multi-range','irregular']});
+
+createCard(gridGaps, '#21: Cluster + Scatter',
+    'One tight cluster at 50, with individual scattered points everywhere else.',
+    () => { let d=[]; for(let i=0;i<700;i++) d.push(randn()*3+50);
+    for(let i=0;i<300;i++) d.push(randUniform(0,100)); return d; },
+    {tags:['mixed','noise']});
+
+createCard(gridGaps, '#22: Progressively Wider Clusters',
+    'First cluster tight, each subsequent one wider. Like measurement uncertainty growing.',
+    () => { let d=[]; for(let i=0;i<250;i++) d.push(randn()*1+10);
+    for(let i=0;i<250;i++) d.push(randn()*4+35);
+    for(let i=0;i<250;i++) d.push(randn()*9+65);
+    for(let i=0;i<250;i++) d.push(randn()*15+100); return d; },
+    {tags:['heteroscedastic','widening']});
+
+// ============ CATEGORY 3: SKEWED & HEAVY-TAIL ============
+const gridSkew = document.getElementById('grid-skew');
+
+createCard(gridSkew, '#23: Extreme Right Skew (Income)',
+    'Most values low, long tail to the right. Classic income or transaction amount.',
+    () => { let d=[]; for(let i=0;i<1000;i++) d.push(randExp(0.02)+20); return d; },
+    {tags:['income-like','exponential']});
+
+createCard(gridSkew, '#24: Right-Skew (Response Times)',
+    'Multiplicative process. Bulk of values 50-200ms, tail extends to 5000ms.',
+    () => { let d=[]; for(let i=0;i<1000;i++) d.push(Math.exp(randn()*0.8+4)); return d; },
+    {tags:['right_skew','latency']});
+
+createCard(gridSkew, '#25: Power-Law (City Sizes)',
+    'Few very large values dominate. Most values tiny.',
+    () => { let d=[]; for(let i=0;i<1000;i++) d.push(randPareto(1.5, 1)); return d; },
+    {tags:['power-law','heavy-tail']});
+
+createCard(gridSkew, '#26: Pareto 80/20',
+    '80% of values below 20, remaining 20% spread across 20-1000.',
+    () => { let d=[]; for(let i=0;i<1000;i++) d.push(randPareto(1.16, 5)); return d; },
+    {tags:['pareto','inequality']});
+
+createCard(gridSkew, '#27: Right Skew + Ceiling',
+    'Would be exponential but hits a max at 100. Pile-up at boundary.',
+    () => { let d=[]; for(let i=0;i<1000;i++) d.push(Math.min(100, randExp(0.03))); return d; },
+    {tags:['truncated','ceiling']});
+
+createCard(gridSkew, '#28: Left Skew (Test Scores)',
+    'Most people score high, few score very low. Like an easy exam.',
+    () => { let d=[]; for(let i=0;i<1000;i++) { let v=100-randExp(0.08); d.push(Math.max(0,v)); } return d; },
+    {tags:['left-skew','scores']});
+
+createCard(gridSkew, '#29: Extreme Kurtosis (Fat Tails)',
+    'Looks normal-ish in the center but has way more extreme values than expected.',
+    () => { let d=[]; for(let i=0;i<900;i++) d.push(randn()*10+50);
+    for(let i=0;i<100;i++) d.push(randn()*50+50); return d; },
+    {tags:['leptokurtic','fat-tails']});
+
+createCard(gridSkew, '#30: Exponential Decay with Noise',
+    'Decaying signal with measurement noise overlaid.',
+    () => { let d=[]; for(let i=0;i<1000;i++) d.push(randExp(0.5) + randn()*0.3); return d.map(v=>Math.max(0,v)); },
+    {tags:['noisy','exponential']});
+
+createCard(gridSkew, '#31: Weibull (Time to Failure)',
+    'Infant mortality early, then steady failure rate. Shape parameter < 1.',
+    () => { let d=[]; for(let i=0;i<1000;i++) { let u=rng(); d.push(10*Math.pow(-Math.log(1-u),1/0.5)); } return d; },
+    {tags:['weibull','reliability']});
+
+createCard(gridSkew, '#32: Half-Normal (Absolute Errors)',
+    'Only positive values, density highest at zero, decays smoothly.',
+    () => { let d=[]; for(let i=0;i<1000;i++) d.push(Math.abs(randn()*20)); return d; },
+    {tags:['half-normal','errors']});
+
+createCard(gridSkew, '#33: Chi-Squared (k=2)',
+    'Highly right-skewed, common in statistical tests and variance distributions.',
+    () => { let d=[]; for(let i=0;i<1000;i++) { let v=randn(); let w=randn(); d.push(v*v+w*w); } return d; },
+    {tags:['chi-squared','variance']});
+
+createCard(gridSkew, '#34: Right Skew + Point Mass at Zero',
+    'Many exact zeros (no purchase), then exponential spending for buyers.',
+    () => { let d=[]; for(let i=0;i<400;i++) d.push(0); for(let i=0;i<600;i++) d.push(randExp(0.05)+0.01); return d; },
+    {tags:['zero-inflated','spending']});
+
+// ============ CATEGORY 4: MULTIMODAL & MIXED ============
+const gridMultimodal = document.getElementById('grid-multimodal');
+
+createCard(gridMultimodal, '#35: Bimodal Equal (Two Populations)',
+    'Two distinct populations mixed together. Like male/female heights.',
+    () => { let d=[]; for(let i=0;i<500;i++) d.push(randn()*3+165); for(let i=0;i<500;i++) d.push(randn()*3+178); return d; },
+    {tags:['bimodal','subpopulations']});
+
+createCard(gridMultimodal, '#36: Bimodal Very Unequal',
+    'Primary mode has 85% of data, secondary mode is a small bump.',
+    () => { let d=[]; for(let i=0;i<850;i++) d.push(randn()*8+40); for(let i=0;i<150;i++) d.push(randn()*5+80); return d; },
+    {tags:['bimodal','asymmetric']});
+
+createCard(gridMultimodal, '#37: Trimodal (Three Shifts)',
+    'Work shift data: morning, afternoon, night clusters.',
+    () => { let d=[]; for(let i=0;i<350;i++) d.push(randn()*1+7);
+    for(let i=0;i<400;i++) d.push(randn()*1+14);
+    for(let i=0;i<250;i++) d.push(randn()*1+22); return d; },
+    {tags:['trimodal','shifts']});
+
+createCard(gridMultimodal, '#38: Four Peaks (Quarterly)',
+    'Data peaks at Q1-Q4 end dates with valleys between.',
+    () => { let d=[]; for(let i=0;i<250;i++) d.push(randn()*2+3); for(let i=0;i<300;i++) d.push(randn()*2+6);
+    for(let i=0;i<250;i++) d.push(randn()*2+9); for(let i=0;i<200;i++) d.push(randn()*2+12); return d; },
+    {tags:['periodic','quarterly']});
+
+createCard(gridMultimodal, '#39: Modes + Connecting Bridge',
+    'Two modes connected by low-density bridge rather than clean gap.',
+    () => { let d=[]; for(let i=0;i<400;i++) d.push(randn()*5+25); for(let i=0;i<400;i++) d.push(randn()*5+65);
+    for(let i=0;i<200;i++) d.push(randUniform(30,60)); return d; },
+    {tags:['bimodal','bridged']});
+
+createCard(gridMultimodal, '#40: Mixture of Narrow + Wide',
+    'One tight spike-like mode + one wide spread mode at same location.',
+    () => { let d=[]; for(let i=0;i<500;i++) d.push(randn()*2+50); for(let i=0;i<500;i++) d.push(randn()*15+50); return d; },
+    {tags:['mixed-variance','overlapping']});
+
+createCard(gridMultimodal, '#41: Skewed + Symmetric Mix',
+    'Exponential population mixed with normal population.',
+    () => { let d=[]; for(let i=0;i<500;i++) d.push(randExp(0.1)); for(let i=0;i<500;i++) d.push(randn()*5+30); return d; },
+    {tags:['mixed-shape','heterogeneous']});
+
+createCard(gridMultimodal, '#42: Many Small Modes (Comb)',
+    'Regular spacing of peaks. Like rounding to nearest 5.',
+    () => { let d=[]; for(let i=0;i<1000;i++) { let base=Math.floor(rng()*20)*5; d.push(base+randn()*0.8); } return d; },
+    {tags:['rounding','comb-pattern']});
+
+createCard(gridMultimodal, '#43: Bimodal + Heavy Tail',
+    'Two modes in main body, plus extreme outliers forming a tail.',
+    () => { let d=[]; for(let i=0;i<400;i++) d.push(randn()*5+30); for(let i=0;i<400;i++) d.push(randn()*5+60);
+    for(let i=0;i<200;i++) d.push(randPareto(2, 70)); return d; },
+    {tags:['bimodal','tail']});
+
+createCard(gridMultimodal, '#44: Overlapping Exponentials',
+    'Two exponential populations with different rates, creating a shoulder.',
+    () => { let d=[]; for(let i=0;i<600;i++) d.push(randExp(0.5)); for(let i=0;i<400;i++) d.push(randExp(0.1)+2); return d; },
+    {tags:['mixed-exponential','shoulder']});
+
+createCard(gridMultimodal, '#45: Five Unequal Modes',
+    'Complex real-world: 5 distinct populations with different sizes and spreads.',
+    () => { let d=[];
+    for(let i=0;i<150;i++) d.push(randn()*2+10);
+    for(let i=0;i<300;i++) d.push(randn()*4+30);
+    for(let i=0;i<100;i++) d.push(randn()*1+50);
+    for(let i=0;i<250;i++) d.push(randn()*6+70);
+    for(let i=0;i<200;i++) d.push(randn()*3+95); return d; },
+    {tags:['multimodal','complex']});
+
+// ============ CATEGORY 5: BOUNDED, TRUNCATED & CENSORED ============
+const gridBounded = document.getElementById('grid-bounded');
+
+createCard(gridBounded, '#46: Beta-like (Probabilities)',
+    'Values between 0 and 1, U-shaped: most values near 0 or 1.',
+    () => { let d=[]; for(let i=0;i<500;i++) { let v=Math.pow(rng(),0.3); d.push(v); }
+    for(let i=0;i<500;i++) { let v=1-Math.pow(rng(),0.3); d.push(v); } return d; },
+    {tags:['bounded','U-shaped']});
+
+createCard(gridBounded, '#47: J-shaped (Ratings)',
+    'Mostly 5s and 1s, few in between. Like product ratings.',
+    () => { let d=[]; for(let i=0;i<350;i++) d.push(5+randn()*0.1); for(let i=0;i<200;i++) d.push(1+randn()*0.1);
+    for(let i=0;i<100;i++) d.push(4+randn()*0.1); for(let i=0;i<50;i++) d.push(3+randn()*0.1);
+    for(let i=0;i<80;i++) d.push(2+randn()*0.1); return d; },
+    {tags:['ratings','J-shaped']});
+
+createCard(gridBounded, '#48: Truncated Normal (Positive Only)',
+    'Underlying normal with mean near zero, but negatives impossible.',
+    () => { let d=[]; for(let i=0;i<1000;i++) { let v=randn()*20+10; if(v>0) d.push(v); } return d; },
+    {tags:['truncated','positive-only']});
+
+createCard(gridBounded, '#49: Bounded Uniform + Edge Pileup',
+    'Uniform in [0,100] but 0 and 100 have extra mass (boundary effects).',
+    () => { let d=[]; for(let i=0;i<100;i++) d.push(0); for(let i=0;i<100;i++) d.push(100);
+    for(let i=0;i<800;i++) d.push(randUniform(0,100)); return d; },
+    {tags:['bounded','edge-effects']});
+
+createCard(gridBounded, '#50: Percentage Bunching',
+    'Percentages that bunch at 0%, 25%, 50%, 75%, 100%.',
+    () => { let d=[]; let anchors=[0,25,50,75,100]; for(let a of anchors) for(let i=0;i<120;i++) d.push(a+randn()*2);
+    for(let i=0;i<400;i++) d.push(randUniform(0,100)); return d; },
+    {tags:['anchoring','percentage']});
+
+createCard(gridBounded, '#51: Right-Censored (Survival)',
+    'Study ended at time 365. Many observations censored at that point.',
+    () => { let d=[]; for(let i=0;i<700;i++) d.push(Math.min(365, randExp(0.005)));
+    for(let i=0;i<300;i++) d.push(365); return d; },
+    {tags:['censored','survival']});
+
+createCard(gridBounded, '#52: Double-Bounded Sigmoid',
+    'Values compressed between 0-1 with S-curve density. Like transformed probabilities.',
+    () => { let d=[]; for(let i=0;i<1000;i++) { let x=randn()*2; d.push(1/(1+Math.exp(-x))); } return d; },
+    {tags:['sigmoid','bounded']});
+
+createCard(gridBounded, '#53: Triangular (Estimates)',
+    'Peak at mode, linear decay to min and max. Common in project estimates.',
+    () => { let d=[]; for(let i=0;i<1000;i++) { let u=rng(); d.push(u<0.6 ? 5+Math.sqrt(u/0.6)*15 : 20-(1-u)/0.4*10); } return d; },
+    {tags:['triangular','estimates']});
+
+createCard(gridBounded, '#54: Interval-Censored (Age Ranges)',
+    'Only know age is in a range: 18-24, 25-34, 35-44, etc. Represented as midpoints.',
+    () => { let d=[]; let mids=[21,29.5,39.5,49.5,59.5,69.5]; let ns=[200,300,250,150,70,30];
+    for(let m=0;m<6;m++) for(let i=0;i<ns[m];i++) d.push(mids[m]+randUniform(-3,3)); return d; },
+    {tags:['interval','age-bands']});
+
+createCard(gridBounded, '#55: Wrapped/Circular (Angles)',
+    'Data on a circle: values near 0/360 are actually close together.',
+    () => { let d=[]; for(let i=0;i<400;i++) d.push((randn()*30+350)%360);
+    for(let i=0;i<300;i++) d.push((randn()*20+90)%360);
+    for(let i=0;i<300;i++) d.push(randUniform(0,360)); return d; },
+    {tags:['circular','angles']});
+
+// ============ CATEGORY 6: SPARSE & SMALL-SAMPLE ============
+const gridSparse = document.getElementById('grid-sparse');
+
+createCard(gridSparse, '#56: Only 15 Data Points',
+    'Barely any data. Cannot determine shape. Each point matters.',
+    () => { let d=[]; for(let i=0;i<15;i++) d.push(randn()*10+50); return d; },
+    {tags:['tiny-n','uncertain'], bins: 8});
+
+createCard(gridSparse, '#57: 30 Points with One Outlier',
+    'Small sample where single outlier dominates range and skews everything.',
+    () => { let d=[]; for(let i=0;i<29;i++) d.push(randn()*5+50); d.push(200); return d; },
+    {tags:['outlier-dominant','small-n'], bins: 10});
+
+createCard(gridSparse, '#58: Sparse Everywhere',
+    'Data points scattered with no clear pattern. N=50 over wide range.',
+    () => { let d=[]; for(let i=0;i<50;i++) d.push(randUniform(0,1000)); return d; },
+    {tags:['sparse','no-pattern'], bins: 20});
+
+createCard(gridSparse, '#59: Mostly Empty Bins',
+    'Large range but data only in few spots. Like rare event times.',
+    () => { let d=[]; for(let i=0;i<20;i++) d.push(randExp(0.001)); return d; },
+    {tags:['rare-events','sparse'], bins: 15});
+
+createCard(gridSparse, '#60: Dense Region + Lone Points',
+    'Cluster of 80 points near 50, plus 5 lone points scattered far away.',
+    () => { let d=[]; for(let i=0;i<80;i++) d.push(randn()*3+50);
+    d.push(5); d.push(12); d.push(88); d.push(95); d.push(150); return d; },
+    {tags:['cluster+outliers','sparse-tail'], bins: 25});
+
+createCard(gridSparse, '#61: All Same Value Except One',
+    'Constant feature with single anomaly. Nearly zero variance.',
+    () => { let d=[]; for(let i=0;i<99;i++) d.push(42); d.push(43.5); return d; },
+    {tags:['near-constant','anomaly'], bins: 10});
+
+createCard(gridSparse, '#62: Two Points Per Region',
+    'Extremely sparse: 2-3 points in each of several distant locations.',
+    () => { let d=[10,11,30,31,32,55,56,78,79,80,120,121]; return d; },
+    {tags:['ultra-sparse','ambiguous'], bins: 15});
+
+createCard(gridSparse, '#63: Sparse with Wide Confidence',
+    'N=25 points. Shape could be anything - normal, uniform, skewed all plausible.',
+    () => { let d=[]; for(let i=0;i<25;i++) d.push(Math.exp(randn()*0.5+3)); return d; },
+    {tags:['ambiguous-shape','low-power'], bins: 10});
+
+// ============ CATEGORY 7: DISCRETE & CATEGORICAL-LIKE ============
+const gridDiscrete = document.getElementById('grid-discrete');
+
+createCard(gridDiscrete, '#64: Integer Counts (0-10)',
+    'Discrete counts. Poisson-like: most are 0-3, rare values 7+.',
+    () => { let d=[]; for(let i=0;i<1000;i++) { let v=0; for(let j=0;j<10;j++) if(rng()<0.2) v++; d.push(v); } return d; },
+    {tags:['discrete','counts']});
+
+createCard(gridDiscrete, '#65: Binary (0/1) Imbalanced',
+    '95% zeros, 5% ones. Like rare disease indicator.',
+    () => { let d=[]; for(let i=0;i<950;i++) d.push(0); for(let i=0;i<50;i++) d.push(1); return d; },
+    {tags:['binary','imbalanced'], bins: 5});
+
+createCard(gridDiscrete, '#66: Discrete Uniform (Dice)',
+    'Equal probability for each value 1-6.',
+    () => { let d=[]; for(let i=0;i<1000;i++) d.push(Math.floor(rng()*6)+1); return d; },
+    {tags:['discrete-uniform','equal'], bins: 6});
+
+createCard(gridDiscrete, '#67: Zipf (Word Frequencies)',
+    'Rank 1 has huge count, rank 2 half that, rapid decay.',
+    () => { let d=[]; for(let i=0;i<1000;i++) { let rank = Math.floor(1/Math.pow(rng(), 1/1.5)); d.push(Math.min(rank,50)); } return d; },
+    {tags:['zipf','power-law']});
+
+createCard(gridDiscrete, '#68: Geometric (Trials Until Success)',
+    'First success at trial 1,2,3,... Monotone decreasing.',
+    () => { let d=[]; for(let i=0;i<1000;i++) { let t=1; while(rng()>0.3) t++; d.push(t); } return d; },
+    {tags:['geometric','waiting-time']});
+
+createCard(gridDiscrete, '#69: Discrete with Forbidden Values',
+    'Integers 1-20 but never 7 or 13. Like superstition or system rules.',
+    () => { let d=[]; while(d.length<1000) { let v=Math.floor(rng()*20)+1; if(v!==7 && v!==13) d.push(v); } return d; },
+    {tags:['discrete','gaps']});
+
+createCard(gridDiscrete, '#70: Negative Binomial (Overdispersed)',
+    'Like Poisson but with extra variance. Clumpy counts.',
+    () => { let d=[]; for(let i=0;i<1000;i++) { let r=3, p=0.3; let v=0;
+    for(let j=0;j<r;j++) { let t=1; while(rng()>p) { t++; v++; } } d.push(v); } return d; },
+    {tags:['overdispersed','counts']});
+
+createCard(gridDiscrete, '#71: Benford First Digit',
+    'First digits follow log distribution: 1 most common, 9 rarest.',
+    () => { let d=[]; for(let i=0;i<1000;i++) { let v=Math.pow(10, rng()*4); d.push(Math.floor(String(Math.floor(v))[0])); } return d; },
+    {tags:['benford','digits'], bins: 9});
+
+createCard(gridDiscrete, '#72: Score with Grade Inflation',
+    'Discrete 0-100 but bunched at top: 85,90,95,100 dominate.',
+    () => { let d=[]; for(let i=0;i<50;i++) d.push(Math.floor(rng()*70));
+    for(let i=0;i<150;i++) d.push(Math.floor(randUniform(70,85)));
+    for(let i=0;i<300;i++) d.push(Math.floor(randUniform(85,95)));
+    for(let i=0;i<500;i++) d.push(Math.floor(randUniform(95,100))); return d; },
+    {tags:['inflated','scores']});
+
+// ============ CATEGORY 8: REAL-WORLD DOMAIN PATTERNS ============
+const gridRealworld = document.getElementById('grid-realworld');
+
+createCard(gridRealworld, '#73: Income (USA-like)',
+    'Median ~60k, long right tail to millions. Spike at min wage. Gap in 200k-500k.',
+    () => { let d=[]; for(let i=0;i<200;i++) d.push(randUniform(15,25)); // min wage
+    for(let i=0;i<500;i++) d.push(Math.exp(randn()*0.5+10.8)); // bulk
+    for(let i=0;i<200;i++) d.push(randExp(0.00002)+100000); // high earners
+    for(let i=0;i<50;i++) d.push(randPareto(1.5,200000)); // ultra-rich
+    return d.map(v=>Math.max(0,v)); },
+    {tags:['income','real-world']});
+
+createCard(gridRealworld, '#74: Website Session Duration',
+    'Spike at 0-5sec (bounces), mode at 30sec, long tail to 30min.',
+    () => { let d=[]; for(let i=0;i<300;i++) d.push(randUniform(0,5)); // bounces
+    for(let i=0;i<400;i++) d.push(randExp(0.05)+10); // normal sessions
+    for(let i=0;i<200;i++) d.push(randExp(0.01)+60); // engaged
+    for(let i=0;i<100;i++) d.push(randUniform(300,1800)); // left tab open
+    return d; },
+    {tags:['session','web']});
+
+createCard(gridRealworld, '#75: Blood Pressure (Systolic)',
+    'Main mode at 120, small mode at 140+ (hypertension). Hard floor at ~80.',
+    () => { let d=[]; for(let i=0;i<700;i++) d.push(randn()*12+118);
+    for(let i=0;i<200;i++) d.push(randn()*10+145);
+    for(let i=0;i<100;i++) d.push(randn()*15+160);
+    return d.map(v=>Math.max(80,v)); },
+    {tags:['medical','bimodal']});
+
+createCard(gridRealworld, '#76: E-Commerce Order Value',
+    'Spikes at $0 (free), $9.99, $19.99. Exponential tail. Zero-inflated.',
+    () => { let d=[]; for(let i=0;i<150;i++) d.push(0);
+    for(let i=0;i<200;i++) d.push(9.99+randn()*0.5);
+    for(let i=0;i<150;i++) d.push(19.99+randn()*0.5);
+    for(let i=0;i<300;i++) d.push(randExp(0.03)+5);
+    for(let i=0;i<100;i++) d.push(randPareto(2,50));
+    return d.map(v=>Math.max(0,v)); },
+    {tags:['ecommerce','pricing']});
+
+createCard(gridRealworld, '#77: Credit Score',
+    'Range 300-850. Left-skewed, pile-up near 750-800. Floor at 300.',
+    () => { let d=[]; for(let i=0;i<1000;i++) { let v=850-randExp(0.008); d.push(Math.max(300,Math.min(850,v))); } return d; },
+    {tags:['credit','bounded']});
+
+createCard(gridRealworld, '#78: File Sizes (Bytes)',
+    'Bimodal: small files (configs) ~1KB, large files (media) ~5MB. Log scale.',
+    () => { let d=[]; for(let i=0;i<400;i++) d.push(Math.exp(randn()*1+7)); // ~1KB
+    for(let i=0;i<300;i++) d.push(Math.exp(randn()*0.8+13)); // ~500KB
+    for(let i=0;i<200;i++) d.push(Math.exp(randn()*0.5+15.5)); // ~5MB
+    for(let i=0;i<100;i++) d.push(Math.exp(randn()*1+18)); return d; }, // large
+    {tags:['file-size','log-scale']});
+
+createCard(gridRealworld, '#79: Insurance Claims',
+    'Most zero (no claim). Non-zero claims are right-skewed with occasional huge ones.',
+    () => { let d=[]; for(let i=0;i<600;i++) d.push(0);
+    for(let i=0;i<300;i++) d.push(randExp(0.002)+100);
+    for(let i=0;i<80;i++) d.push(randPareto(1.5, 1000));
+    for(let i=0;i<20;i++) d.push(randPareto(1.2, 10000)); return d; },
+    {tags:['insurance','zero-inflated']});
+
+createCard(gridRealworld, '#80: Temperature (City, Annual)',
+    'Bimodal: winter mode at 5C, summer mode at 25C.',
+    () => { let d=[]; for(let i=0;i<400;i++) d.push(randn()*5+5);
+    for(let i=0;i<200;i++) d.push(randn()*3+15);
+    for(let i=0;i<400;i++) d.push(randn()*4+25); return d; },
+    {tags:['temperature','seasonal']});
+
+createCard(gridRealworld, '#81: Network Packet Sizes',
+    'Trimodal: ACKs at 64 bytes, standard at 576, jumbo at 1500.',
+    () => { let d=[]; for(let i=0;i<300;i++) d.push(64+randn()*5);
+    for(let i=0;i<400;i++) d.push(576+randn()*100);
+    for(let i=0;i<300;i++) d.push(1500+randn()*10); return d; },
+    {tags:['network','trimodal']});
+
+createCard(gridRealworld, '#82: App Load Time (Mobile)',
+    'Fast wifi: mode at 0.8s. Slow 3G: mode at 4s. Timeouts at 30s.',
+    () => { let d=[]; for(let i=0;i<400;i++) d.push(Math.abs(randn()*0.3+0.8));
+    for(let i=0;i<300;i++) d.push(Math.abs(randn()*1+4));
+    for(let i=0;i<150;i++) d.push(randExp(0.1)+6);
+    for(let i=0;i<50;i++) d.push(30+randn()*0.1); return d; },
+    {tags:['latency','multi-network']});
+
+createCard(gridRealworld, '#83: Taxi Trip Distance',
+    'Spike at very short (0.5mi), mode at 2mi, long tail to 30mi airport trips.',
+    () => { let d=[]; for(let i=0;i<200;i++) d.push(randUniform(0.3,0.8));
+    for(let i=0;i<500;i++) d.push(Math.exp(randn()*0.5+0.7));
+    for(let i=0;i<200;i++) d.push(randUniform(8,12)); // airport
+    for(let i=0;i<100;i++) d.push(randExp(0.1)+12); return d; },
+    {tags:['distance','transport']});
+
+createCard(gridRealworld, '#84: Employee Tenure (Years)',
+    'Spike at <1 year (new hires/turnover). Clusters at 5,10,15,20 year marks.',
+    () => { let d=[]; for(let i=0;i<300;i++) d.push(randExp(2));
+    for(let i=0;i<150;i++) d.push(randn()*0.8+5);
+    for(let i=0;i<100;i++) d.push(randn()*0.8+10);
+    for(let i=0;i<80;i++) d.push(randn()*0.8+15);
+    for(let i=0;i<50;i++) d.push(randn()*0.8+20);
+    return d.map(v=>Math.max(0,v)); },
+    {tags:['tenure','clustered']});
+
+// ============ CATEGORY 9: WEIRD COMBINATIONS & EDGE CASES ============
+const gridCombo = document.getElementById('grid-combo');
+
+createCard(gridCombo, '#85: Normal + Uniform Background',
+    'Signal buried in noise: normal peak sitting on flat uniform background.',
+    () => { let d=[]; for(let i=0;i<500;i++) d.push(randn()*5+50);
+    for(let i=0;i<500;i++) d.push(randUniform(0,100)); return d; },
+    {tags:['signal-in-noise','mixed']});
+
+createCard(gridCombo, '#86: Exponential + Reverse Exponential',
+    'Two opposing decays meeting in the middle. Like distance from two sources.',
+    () => { let d=[]; for(let i=0;i<500;i++) d.push(randExp(0.1));
+    for(let i=0;i<500;i++) d.push(50-randExp(0.1)); return d.map(v=>Math.max(0,Math.min(50,v))); },
+    {tags:['opposing','symmetric-decay']});
+
+createCard(gridCombo, '#87: Sawtooth Pattern',
+    'Periodic ramp-up then sudden drop. Like battery charge cycles.',
+    () => { let d=[]; for(let i=0;i<1000;i++) { let cycle=rng()*100; d.push(cycle % 25); } return d; },
+    {tags:['periodic','sawtooth']});
+
+createCard(gridCombo, '#88: Spike at Every 10th Value',
+    'Regular spikes in otherwise smooth data. Like quantization artifacts.',
+    () => { let d=[]; for(let i=0;i<1000;i++) {
+    if(rng()<0.3) d.push(Math.round(rng()*10)*10); else d.push(rng()*100); } return d; },
+    {tags:['quantized','artifacts']});
+
+createCard(gridCombo, '#89: Hollow Distribution (Ring)',
+    'Data avoids the center. Like distance from a target - rarely exact.',
+    () => { let d=[]; for(let i=0;i<1000;i++) {
+    let r = randn()*3+15; d.push(Math.abs(r)); } return d; },
+    {tags:['hollow','ring-like']});
+
+createCard(gridCombo, '#90: Zigzag Density',
+    'Alternating high/low density bands. Like interference pattern.',
+    () => { let d=[]; for(let i=0;i<1000;i++) {
+    let v = rng()*100; let band = Math.floor(v/10);
+    if(band%2===0 && rng()<0.7) d.push(v); else if(band%2===1 && rng()<0.3) d.push(v);
+    else d.push(rng()*100); } return d; },
+    {tags:['interference','banded']});
+
+createCard(gridCombo, '#91: Contaminated Normal',
+    'Normal distribution with 5% values from a completely different process.',
+    () => { let d=[]; for(let i=0;i<950;i++) d.push(randn()*10+50);
+    for(let i=0;i<50;i++) d.push(randUniform(-100,200)); return d; },
+    {tags:['contaminated','robust']});
+
+createCard(gridCombo, '#92: Folded Distribution',
+    'Absolute value of something centered at 0. V-shape valley at zero.',
+    () => { let d=[]; for(let i=0;i<500;i++) d.push(Math.abs(randn()*20));
+    for(let i=0;i<500;i++) d.push(Math.abs(randn()*5+15)); return d; },
+    {tags:['folded','absolute-value']});
+
+createCard(gridCombo, '#93: Step Function Density',
+    'Density changes abruptly at thresholds. Like different rules in different ranges.',
+    () => { let d=[]; for(let i=0;i<100;i++) d.push(randUniform(0,20)); // sparse
+    for(let i=0;i<400;i++) d.push(randUniform(20,40)); // dense
+    for(let i=0;i<150;i++) d.push(randUniform(40,70)); // medium
+    for(let i=0;i<350;i++) d.push(randUniform(70,80)); // very dense
+    return d; },
+    {tags:['step-density','piecewise']});
+
+createCard(gridCombo, '#94: Needle in Haystack',
+    '999 values in tight range, 1 value extremely far away.',
+    () => { let d=[]; for(let i=0;i<999;i++) d.push(randn()*2+50); d.push(500); return d; },
+    {tags:['extreme-outlier','needle']});
+
+createCard(gridCombo, '#95: Mixture of Uniforms',
+    'Three overlapping uniform distributions of different widths.',
+    () => { let d=[]; for(let i=0;i<300;i++) d.push(randUniform(20,80)); // wide
+    for(let i=0;i<400;i++) d.push(randUniform(35,55)); // narrow center
+    for(let i=0;i<300;i++) d.push(randUniform(50,90)); // shifted wide
+    return d; },
+    {tags:['mixed-uniform','overlapping']});
+
+createCard(gridCombo, '#96: Discrete + Continuous Mix',
+    'Some values are exact integers (categories), others are continuous measurements.',
+    () => { let d=[]; for(let i=0;i<300;i++) d.push(Math.floor(rng()*5)+1); // discrete 1-5
+    for(let i=0;i<700;i++) d.push(randn()*1.5+3); // continuous around 3
+    return d; },
+    {tags:['mixed-type','categorical+continuous']});
+
+// ============ CATEGORY 10: TEMPORAL & PERIODIC ============
+const gridTemporal = document.getElementById('grid-temporal');
+
+createCard(gridTemporal, '#97: Day-of-Week (Cyclic)',
+    'Business days high, weekends low. Clear 5-2 pattern.',
+    () => { let d=[]; let weights=[0.18,0.19,0.19,0.18,0.16,0.05,0.05];
+    for(let i=0;i<1000;i++) { let r=rng(),cum=0; for(let j=0;j<7;j++) { cum+=weights[j]; if(r<cum) { d.push(j+1+randn()*0.1); break; } } }
+    return d; },
+    {tags:['cyclic','weekly'], bins: 7});
+
+createCard(gridTemporal, '#98: Time-of-Day (24h)',
+    'Rush hours at 8-9, 17-18. Dead zone 2-5am. Lunch bump at 12.',
+    () => { let d=[]; for(let i=0;i<200;i++) d.push(randn()*0.5+8.5);
+    for(let i=0;i<250;i++) d.push(randn()*0.7+17.5);
+    for(let i=0;i<100;i++) d.push(randn()*0.5+12);
+    for(let i=0;i<350;i++) d.push(randUniform(6,23));
+    for(let i=0;i<100;i++) d.push(randUniform(0,6)); return d; },
+    {tags:['time-of-day','bimodal']});
+
+createCard(gridTemporal, '#99: Monthly Seasonality',
+    'Sales peak in Nov-Dec (holiday), trough in Jan-Feb.',
+    () => { let d=[]; let monthly=[0.06,0.05,0.07,0.08,0.08,0.09,0.09,0.09,0.08,0.08,0.12,0.11];
+    for(let m=0;m<12;m++) for(let i=0;i<Math.floor(monthly[m]*1000);i++) d.push(m+1+randn()*0.2);
+    return d; },
+    {tags:['seasonal','monthly']});
+
+createCard(gridTemporal, '#100: Inter-Arrival Times',
+    'Time between events. Mostly short, with occasional long waits.',
+    () => { let d=[]; for(let i=0;i<800;i++) d.push(randExp(2));
+    for(let i=0;i<150;i++) d.push(randExp(0.2)+2);
+    for(let i=0;i<50;i++) d.push(randUniform(10,60)); return d; },
+    {tags:['inter-arrival','bursty']});
+
+createCard(gridTemporal, '#101: Batch Arrivals',
+    'Events come in bursts. Long quiet, then many at once.',
+    () => { let d=[]; for(let batch=0;batch<20;batch++) {
+    let batchTime = batch*50+randn()*5;
+    let batchSize = Math.floor(rng()*30)+5;
+    for(let i=0;i<batchSize;i++) d.push(batchTime+randn()*2); } return d; },
+    {tags:['bursty','batch']});
+
+createCard(gridTemporal, '#102: Deadline Clustering',
+    'Activity spikes just before deadlines at t=30,60,90.',
+    () => { let d=[]; for(let dl of [30,60,90]) {
+    for(let i=0;i<150;i++) d.push(dl-randExp(0.5));
+    for(let i=0;i<30;i++) d.push(dl-randUniform(5,20)); }
+    for(let i=0;i<200;i++) d.push(randUniform(0,90)); return d; },
+    {tags:['deadline','clustering']});
+
+// ============ CATEGORY 11: POS/NEG SEPARATION PATTERNS ============
+const gridSeparation = document.getElementById('grid-separation');
+
+createCard(gridSeparation, '#103: Clean Separation',
+    'Positive class clearly higher than negative. Ideal for classification.',
+    () => { let pos=[],neg=[]; for(let i=0;i<500;i++) neg.push(randn()*5+30);
+    for(let i=0;i<500;i++) pos.push(randn()*5+60); return [neg,pos]; },
+    {tags:['clean-split','ideal'], color:'#3498db', color2:'rgba(231,76,60,0.6)'});
+
+createCard(gridSeparation, '#104: Partial Overlap',
+    'Distributions overlap in 40-60 range. Good signal but not perfect.',
+    () => { let pos=[],neg=[]; for(let i=0;i<500;i++) neg.push(randn()*10+40);
+    for(let i=0;i<500;i++) pos.push(randn()*10+55); return [neg,pos]; },
+    {tags:['overlap','partial'], color:'#3498db', color2:'rgba(231,76,60,0.6)'});
+
+createCard(gridSeparation, '#105: No Separation',
+    'Both classes identically distributed. Feature is useless.',
+    () => { let pos=[],neg=[]; for(let i=0;i<500;i++) neg.push(randn()*15+50);
+    for(let i=0;i<500;i++) pos.push(randn()*15+50); return [neg,pos]; },
+    {tags:['no-signal','useless'], color:'#3498db', color2:'rgba(231,76,60,0.6)'});
+
+createCard(gridSeparation, '#106: Separation Only in Tail',
+    'Mostly overlapping but positive cases dominate the extreme right tail.',
+    () => { let pos=[],neg=[]; for(let i=0;i<450;i++) neg.push(randn()*10+50);
+    for(let i=0;i<50;i++) neg.push(randn()*5+50);
+    for(let i=0;i<350;i++) pos.push(randn()*10+50);
+    for(let i=0;i<150;i++) pos.push(randn()*5+80); return [neg,pos]; },
+    {tags:['tail-signal','subtle'], color:'#3498db', color2:'rgba(231,76,60,0.6)'});
+
+createCard(gridSeparation, '#107: Multimodal Separation',
+    'Neg is unimodal. Pos is bimodal - some overlap, some separate.',
+    () => { let pos=[],neg=[]; for(let i=0;i<500;i++) neg.push(randn()*8+50);
+    for(let i=0;i<250;i++) pos.push(randn()*5+50);
+    for(let i=0;i<250;i++) pos.push(randn()*5+80); return [neg,pos]; },
+    {tags:['multimodal','partial-signal'], color:'#3498db', color2:'rgba(231,76,60,0.6)'});
+
+createCard(gridSeparation, '#108: Variance Difference Only',
+    'Same mean, but positive class has much wider spread.',
+    () => { let pos=[],neg=[]; for(let i=0;i<500;i++) neg.push(randn()*5+50);
+    for(let i=0;i<500;i++) pos.push(randn()*20+50); return [neg,pos]; },
+    {tags:['variance-signal','same-mean'], color:'#3498db', color2:'rgba(231,76,60,0.6)'});
+
+createCard(gridSeparation, '#109: Spike vs Spread',
+    'Negative class all at one value. Positive class spread across range.',
+    () => { let pos=[],neg=[]; for(let i=0;i<500;i++) neg.push(50+randn()*1);
+    for(let i=0;i<500;i++) pos.push(randUniform(20,80)); return [neg,pos]; },
+    {tags:['spike-vs-spread','shape-diff'], color:'#3498db', color2:'rgba(231,76,60,0.6)'});
+
+createCard(gridSeparation, '#110: Reversed in Subranges',
+    'In range 0-50, neg dominates. In range 50-100, pos dominates. Non-monotonic.',
+    () => { let pos=[],neg=[];
+    for(let i=0;i<350;i++) neg.push(randn()*10+30);
+    for(let i=0;i<150;i++) neg.push(randn()*10+70);
+    for(let i=0;i<150;i++) pos.push(randn()*10+30);
+    for(let i=0;i<350;i++) pos.push(randn()*10+70); return [neg,pos]; },
+    {tags:['non-monotonic','crossing'], color:'#3498db', color2:'rgba(231,76,60,0.6)'});
+
+createCard(gridSeparation, '#111: Rare Positive in Dense Negative',
+    'Neg: 950 samples everywhere. Pos: only 50 samples in narrow range.',
+    () => { let pos=[],neg=[]; for(let i=0;i<950;i++) neg.push(randn()*20+50);
+    for(let i=0;i<50;i++) pos.push(randn()*3+75); return [neg,pos]; },
+    {tags:['imbalanced','needle-signal'], color:'#3498db', color2:'rgba(231,76,60,0.6)'});
+
+createCard(gridSeparation, '#112: Both Skewed, Different Direction',
+    'Neg right-skewed, Pos left-skewed. Overlap in middle.',
+    () => { let pos=[],neg=[]; for(let i=0;i<500;i++) neg.push(randExp(0.1)+10);
+    for(let i=0;i<500;i++) pos.push(80-randExp(0.1)); return [neg,pos]; },
+    {tags:['opposite-skew','crossing'], color:'#3498db', color2:'rgba(231,76,60,0.6)'});
+
+createCard(gridSeparation, '#113: Separation Only With Enough Data',
+    'With N=30, looks like no signal. With N=500, subtle shift visible.',
+    () => { let pos=[],neg=[]; for(let i=0;i<500;i++) neg.push(randn()*12+48);
+    for(let i=0;i<500;i++) pos.push(randn()*12+52); return [neg,pos]; },
+    {tags:['subtle','needs-power'], color:'#3498db', color2:'rgba(231,76,60,0.6)'});
+
+createCard(gridSeparation, '#114: Discrete Feature Separation',
+    'Feature has values 1-5. Neg clusters at 1-2, Pos clusters at 4-5.',
+    () => { let pos=[],neg=[];
+    for(let i=0;i<200;i++) neg.push(1+randn()*0.1);
+    for(let i=0;i<200;i++) neg.push(2+randn()*0.1);
+    for(let i=0;i<100;i++) neg.push(3+randn()*0.1);
+    for(let i=0;i<100;i++) pos.push(3+randn()*0.1);
+    for(let i=0;i<200;i++) pos.push(4+randn()*0.1);
+    for(let i=0;i<200;i++) pos.push(5+randn()*0.1); return [neg,pos]; },
+    {tags:['discrete','ordinal-signal'], color:'#3498db', color2:'rgba(231,76,60,0.6)'});
+
+// ============ CATEGORY 12: TRANSFORMATION RESPONSES ============
+const catTransform = document.createElement('div');
+catTransform.className = 'category';
+catTransform.id = 'cat-transform';
+catTransform.innerHTML = '<h2>12. Transformation Responses</h2><div class="grid" id="grid-transform"></div>';
+document.querySelector('.category:last-of-type').after(catTransform);
+const gridTransform = document.getElementById('grid-transform');
+
+createCard(gridTransform, '#115: Log-Transformable (Becomes Bell)',
+    'Extreme right-skew that becomes nearly normal after log transform.',
+    () => { let d=[]; for(let i=0;i<1000;i++) d.push(Math.exp(randn()*1.2+5)); return d; },
+    {tags:['right_skew','transformable']});
+
+createCard(gridTransform, '#116: Sqrt-Transformable (Count Data)',
+    'Poisson-like counts where sqrt brings closer to symmetry.',
+    () => { let d=[]; for(let i=0;i<1000;i++) { let v=0; for(let j=0;j<20;j++) if(rng()<0.15) v++; d.push(v); } return d; },
+    {tags:['sqrt','counts']});
+
+createCard(gridTransform, '#117: Box-Cox Resistant (Multi-Mode)',
+    'No single transform fixes this — fundamentally multimodal.',
+    () => { let d=[]; for(let i=0;i<300;i++) d.push(randn()*2+5);
+    for(let i=0;i<400;i++) d.push(randn()*3+25);
+    for(let i=0;i<300;i++) d.push(randn()*2+50); return d; },
+    {tags:['non-transformable','multimodal']});
+
+createCard(gridTransform, '#118: Reciprocal Transformable',
+    '1/x brings heavy-tail data closer to symmetric. Common in rates.',
+    () => { let d=[]; for(let i=0;i<1000;i++) d.push(1/(rng()*0.9+0.1)); return d; },
+    {tags:['reciprocal','rates']});
+
+createCard(gridTransform, '#119: Arcsin-Sqrt (Proportion Data)',
+    'Proportions between 0-1 with edge compression. Arcsin-sqrt stabilizes variance.',
+    () => { let d=[]; for(let i=0;i<1000;i++) { let p=Math.pow(rng(),0.7)*0.8+0.1; d.push(p); } return d; },
+    {tags:['proportion','variance-stabilizing']});
+
+createCard(gridTransform, '#120: Log Fails (Zero-Inflated)',
+    'Right-skewed but has zeros — log transform undefined at zero without adjustment.',
+    () => { let d=[]; for(let i=0;i<400;i++) d.push(0);
+    for(let i=0;i<600;i++) d.push(randExp(0.05)+0.01); return d; },
+    {tags:['zero-inflated','log-fails']});
+
+// ============ CATEGORY 13: CONTAMINATION & DATA QUALITY ============
+const catQuality = document.createElement('div');
+catQuality.className = 'category';
+catQuality.id = 'cat-quality';
+catQuality.innerHTML = '<h2>13. Contamination &amp; Data Quality</h2><div class="grid" id="grid-quality"></div>';
+catTransform.after(catQuality);
+const gridQuality = document.getElementById('grid-quality');
+
+createCard(gridQuality, '#121: 5% Wrong-Unit Contamination',
+    'Mostly in kg, but 5% entered in lbs. Creates phantom right shoulder.',
+    () => { let d=[]; for(let i=0;i<950;i++) d.push(randn()*12+70);
+    for(let i=0;i<50;i++) d.push((randn()*12+70)*2.2); return d; },
+    {tags:['unit-error','contamination']});
+
+createCard(gridQuality, '#122: Placeholder -999 Values',
+    'Sentinel value -999 for missing mixed with real data. Bimodal artifact.',
+    () => { let d=[]; for(let i=0;i<200;i++) d.push(-999);
+    for(let i=0;i<800;i++) d.push(randn()*15+50); return d; },
+    {tags:['sentinel','missing-encoded']});
+
+createCard(gridQuality, '#123: Duplicate Records (Spike)',
+    'Same record repeated 100x creates artificial spike in otherwise smooth data.',
+    () => { let d=[]; for(let i=0;i<800;i++) d.push(randn()*10+50);
+    for(let i=0;i<200;i++) d.push(47.3); return d; },
+    {tags:['duplicates','data-error']});
+
+createCard(gridQuality, '#124: Mixed Precision (Rounding)',
+    'Old data rounded to integers, new data has 2 decimal places.',
+    () => { let d=[]; for(let i=0;i<500;i++) d.push(Math.round(randn()*10+50));
+    for(let i=0;i<500;i++) d.push(randn()*10+50); return d; },
+    {tags:['mixed-precision','rounding']});
+
+createCard(gridQuality, '#125: Truncated at Reporting Threshold',
+    'Values below 0.01 reported as 0.01. Creates artificial floor.',
+    () => { let d=[]; for(let i=0;i<1000;i++) { let v=randExp(5); d.push(Math.max(0.01,v)); } return d; },
+    {tags:['detection-limit','floor']});
+
+createCard(gridQuality, '#126: Drift Between Batches',
+    'Two collection periods with shifted means. Looks bimodal but isn\'t.',
+    () => { let d=[]; for(let i=0;i<500;i++) d.push(randn()*8+45);
+    for(let i=0;i<500;i++) d.push(randn()*8+55); return d; },
+    {tags:['batch-drift','temporal']});
+
+createCard(gridQuality, '#127: Systematic Bias + Noise',
+    'Underlying uniform data with additive instrument bias creating skew.',
+    () => { let d=[]; for(let i=0;i<1000;i++) d.push(randUniform(0,50) + randExp(0.1)); return d; },
+    {tags:['instrument-bias','additive']});
+
+createCard(gridQuality, '#128: Merged Datasets (Scale Mismatch)',
+    'Two sources: one 0-100 scale, other 0-10 scale. Not normalized.',
+    () => { let d=[]; for(let i=0;i<500;i++) d.push(randn()*15+60);
+    for(let i=0;i<500;i++) d.push(randn()*1.5+6); return d; },
+    {tags:['scale-mismatch','merged']});
+
+createCard(gridQuality, '#129: String-to-Numeric Artifacts',
+    'Parsed numbers: most valid, some got 0 from failed parse.',
+    () => { let d=[]; for(let i=0;i<850;i++) d.push(randn()*20+100);
+    for(let i=0;i<150;i++) d.push(0); return d; },
+    {tags:['parse-error','zero-spike']});
+
+createCard(gridQuality, '#130: Clipped Outliers (Winsorized)',
+    'Outliers replaced by boundary values. Pile-up at clip points.',
+    () => { let d=[]; for(let i=0;i<1000;i++) {
+    let v=randn()*20+50; d.push(Math.max(10, Math.min(90, v))); } return d; },
+    {tags:['winsorized','clipped']});
+
+// ============ CATEGORY 14: STRUCTURAL & MECHANICAL ============
+const catStructural = document.createElement('div');
+catStructural.className = 'category';
+catStructural.id = 'cat-structural';
+catStructural.innerHTML = '<h2>14. Structural &amp; Mechanical Patterns</h2><div class="grid" id="grid-structural"></div>';
+catQuality.after(catStructural);
+const gridStructural = document.getElementById('grid-structural');
+
+createCard(gridStructural, '#131: Quantized to 0.25 Steps',
+    'Continuous value forced to nearest 0.25. Creates comb-like pattern.',
+    () => { let d=[]; for(let i=0;i<1000;i++) d.push(Math.round((randn()*3+10)*4)/4); return d; },
+    {tags:['quantized','step-size']});
+
+createCard(gridStructural, '#132: Hash Collision Pattern',
+    'Hash mod 16: some buckets overfull due to collision. Nearly uniform with spikes.',
+    () => { let d=[]; let weights=[1.2,0.9,1.5,0.8,1.1,0.7,1.8,1.0,0.9,1.3,0.6,1.4,1.0,0.8,1.1,0.9];
+    for(let i=0;i<1000;i++) { let r=rng(),cum=0,total=weights.reduce((a,b)=>a+b);
+    for(let j=0;j<16;j++) { cum+=weights[j]/total; if(r<cum) { d.push(j+randn()*0.05); break; } } } return d; },
+    {tags:['hash','near-uniform'], bins:16});
+
+createCard(gridStructural, '#133: Memory Allocation Sizes',
+    'Powers of 2: 64, 128, 256, 512, 1024, 2048, 4096 bytes.',
+    () => { let d=[]; let sizes=[64,128,256,512,1024,2048,4096]; let probs=[0.05,0.15,0.30,0.25,0.15,0.07,0.03];
+    for(let i=0;i<1000;i++) { let r=rng(),cum=0; for(let j=0;j<7;j++) { cum+=probs[j]; if(r<cum) { d.push(sizes[j]+randn()*2); break; } } } return d; },
+    {tags:['power-of-2','allocation']});
+
+createCard(gridStructural, '#134: Rate Limiting Artifacts',
+    'Values capped at 100 req/s. Natural traffic below, pile-up at limit.',
+    () => { let d=[]; for(let i=0;i<700;i++) d.push(randExp(0.02)+5);
+    return d.map(v=>Math.min(100, v)); },
+    {tags:['rate-limited','ceiling']});
+
+createCard(gridStructural, '#135: Retry Backoff (Exponential)',
+    'Retry delays: 1s, 2s, 4s, 8s, 16s with jitter. Clusters at powers.',
+    () => { let d=[]; for(let attempt=0;attempt<5;attempt++) {
+    let base=Math.pow(2, attempt); let n=[300,200,150,100,50][attempt];
+    for(let i=0;i<n;i++) d.push(base+rng()*base*0.3); } return d; },
+    {tags:['backoff','retry']});
+
+createCard(gridStructural, '#136: Batch Size Effects',
+    'Processing in batches of 32. Latency depends on batch fill level.',
+    () => { let d=[]; for(let i=0;i<1000;i++) {
+    let fillLevel = (i%32)/32; d.push(10+fillLevel*20+randn()*2); } return d; },
+    {tags:['batch-processing','uniform-like']});
+
+createCard(gridStructural, '#137: Thread Contention',
+    'Response time bimodal: fast when no contention, slow when waiting.',
+    () => { let d=[]; for(let i=0;i<600;i++) d.push(randn()*2+5);
+    for(let i=0;i<300;i++) d.push(randn()*5+25);
+    for(let i=0;i<100;i++) d.push(randn()*10+50); return d; },
+    {tags:['contention','multimodal']});
+
+createCard(gridStructural, '#138: GC Pause Distribution',
+    'Mostly short minor GCs, occasional long major GC pauses.',
+    () => { let d=[]; for(let i=0;i<800;i++) d.push(randExp(5)+0.5);
+    for(let i=0;i<150;i++) d.push(randExp(0.2)+10);
+    for(let i=0;i<50;i++) d.push(randUniform(50,200)); return d; },
+    {tags:['gc-pauses','heavy-tail']});
+
+createCard(gridStructural, '#139: Compression Ratio',
+    'Most files compress to 30-50%. Incompressible files at ~100%. Already-compressed near 100%.',
+    () => { let d=[]; for(let i=0;i<600;i++) d.push(randn()*8+40);
+    for(let i=0;i<200;i++) d.push(randn()*3+15);
+    for(let i=0;i<200;i++) d.push(randn()*2+98); return d; },
+    {tags:['compression','trimodal']});
+
+// ============ CATEGORY 15: FINANCIAL & ECONOMIC ============
+const catFinancial = document.createElement('div');
+catFinancial.className = 'category';
+catFinancial.id = 'cat-financial';
+catFinancial.innerHTML = '<h2>15. Financial &amp; Economic</h2><div class="grid" id="grid-financial"></div>';
+catStructural.after(catFinancial);
+const gridFinancial = document.getElementById('grid-financial');
+
+createCard(gridFinancial, '#140: Daily Returns (Fat-Tailed Normal)',
+    'Stock returns: looks normal but tails are 5-10x fatter than Gaussian.',
+    () => { let d=[]; for(let i=0;i<1000;i++) {
+    let v=randn(); if(rng()<0.05) v*=5; d.push(v*2); } return d; },
+    {tags:['returns','fat-tails']});
+
+createCard(gridFinancial, '#141: Bid-Ask Spread',
+    'Tight spread for liquid stocks, wide for illiquid. Right-skewed with floor.',
+    () => { let d=[]; for(let i=0;i<700;i++) d.push(0.01+randExp(50));
+    for(let i=0;i<200;i++) d.push(0.05+randExp(10));
+    for(let i=0;i<100;i++) d.push(randUniform(0.1, 0.5)); return d; },
+    {tags:['spread','microstructure']});
+
+createCard(gridFinancial, '#142: Transaction Amounts (Stratified)',
+    'Micro (<$1), small ($1-50), medium ($50-500), large ($500+).',
+    () => { let d=[]; for(let i=0;i<200;i++) d.push(rng()*0.99+0.01);
+    for(let i=0;i<400;i++) d.push(randExp(0.05)+1);
+    for(let i=0;i<250;i++) d.push(randExp(0.005)+50);
+    for(let i=0;i<150;i++) d.push(randExp(0.001)+500); return d; },
+    {tags:['transactions','stratified']});
+
+createCard(gridFinancial, '#143: Loan Default (Time-to-Event)',
+    'Most loans don\'t default (censored). Those that do: early or at specific terms.',
+    () => { let d=[]; for(let i=0;i<600;i++) d.push(360); // full term, no default
+    for(let i=0;i<150;i++) d.push(randExp(0.1)+1); // early defaults
+    for(let i=0;i<100;i++) d.push(randn()*5+60); // 5-year mark
+    for(let i=0;i<80;i++) d.push(randn()*5+120); // 10-year mark
+    for(let i=0;i<70;i++) d.push(randUniform(1,360)); return d; },
+    {tags:['default','survival']});
+
+createCard(gridFinancial, '#144: Portfolio Volatility',
+    'Regime switching: low-vol periods (majority) and high-vol crisis periods.',
+    () => { let d=[]; for(let i=0;i<700;i++) d.push(Math.abs(randn()*1.5));
+    for(let i=0;i<200;i++) d.push(Math.abs(randn()*5));
+    for(let i=0;i<100;i++) d.push(Math.abs(randn()*12)); return d; },
+    {tags:['volatility','regime-switch']});
+
+createCard(gridFinancial, '#145: Interest Rate Changes',
+    'Most periods: tiny change. Occasional jumps at Fed meetings.',
+    () => { let d=[]; for(let i=0;i<900;i++) d.push(randn()*0.02);
+    for(let i=0;i<100;i++) d.push(randn()*0.1+ (rng()>0.5?0.25:-0.25)); return d; },
+    {tags:['rate-changes','mixed-normal']});
+
+// ============ CATEGORY 16: BIOLOGICAL & NATURAL ============
+const catBio = document.createElement('div');
+catBio.className = 'category';
+catBio.id = 'cat-bio';
+catBio.innerHTML = '<h2>16. Biological &amp; Natural</h2><div class="grid" id="grid-bio"></div>';
+catFinancial.after(catBio);
+const gridBio = document.getElementById('grid-bio');
+
+createCard(gridBio, '#146: Gene Expression (Zero-Inflated)',
+    'Many genes not expressed (zero). Expressed ones follow right_skew.',
+    () => { let d=[]; for(let i=0;i<600;i++) d.push(0);
+    for(let i=0;i<400;i++) d.push(Math.exp(randn()*1.5+2)); return d; },
+    {tags:['gene-expression','zero-inflated']});
+
+createCard(gridBio, '#147: Cell Size Distribution',
+    'Dividing cells: bimodal with small (just divided) and large (about to divide).',
+    () => { let d=[]; for(let i=0;i<400;i++) d.push(randn()*1+8);
+    for(let i=0;i<350;i++) d.push(randn()*1.5+12);
+    for(let i=0;i<250;i++) d.push(randn()*2+15); return d; },
+    {tags:['cell-cycle','growth']});
+
+createCard(gridBio, '#148: Earthquake Magnitudes',
+    'Gutenberg-Richter law: exponential decrease with magnitude. Rare large events.',
+    () => { let d=[]; for(let i=0;i<1000;i++) d.push(2+randExp(0.5)); return d; },
+    {tags:['seismology','exponential']});
+
+createCard(gridBio, '#149: Species Abundance',
+    'Few dominant species, many rare species. Hollow curve.',
+    () => { let d=[]; for(let i=0;i<1000;i++) d.push(Math.floor(randPareto(1.5, 1))); return d; },
+    {tags:['ecology','hollow-curve']});
+
+createCard(gridBio, '#150: Heart Rate Variability',
+    'RR intervals: main mode at ~800ms, secondary at ~600ms (ectopic beats).',
+    () => { let d=[]; for(let i=0;i<800;i++) d.push(randn()*50+800);
+    for(let i=0;i<100;i++) d.push(randn()*30+600);
+    for(let i=0;i<100;i++) d.push(randn()*80+900); return d; },
+    {tags:['HRV','physiological']});
+
+createCard(gridBio, '#151: Reaction Time (Ex-Gaussian)',
+    'Normal component + exponential tail. Classic cognitive psych pattern.',
+    () => { let d=[]; for(let i=0;i<1000;i++) d.push(randn()*30+250 + randExp(0.01)); return d; },
+    {tags:['reaction-time','ex-gaussian']});
+
+createCard(gridBio, '#152: Rainfall (Mixed Zero)',
+    'Many dry days (0mm). Rainy days follow gamma distribution.',
+    () => { let d=[]; for(let i=0;i<500;i++) d.push(0);
+    for(let i=0;i<500;i++) { let v=0; for(let j=0;j<3;j++) v+=randExp(0.3); d.push(v); } return d; },
+    {tags:['rainfall','zero-inflated']});
+
+createCard(gridBio, '#153: Tree Diameters (Reverse-J)',
+    'Many small/young trees, few large/old ones. Classic ecology pattern.',
+    () => { let d=[]; for(let i=0;i<1000;i++) d.push(5+randExp(0.08)); return d; },
+    {tags:['forestry','reverse-J']});
+
+createCard(gridBio, '#154: Pollen Count (Seasonal Burst)',
+    'Zero most of year, extreme spike during bloom season.',
+    () => { let d=[]; for(let i=0;i<700;i++) d.push(rng()*5);
+    for(let i=0;i<200;i++) d.push(randn()*50+200);
+    for(let i=0;i<100;i++) d.push(randn()*100+400); return d.map(v=>Math.max(0,v)); },
+    {tags:['seasonal-burst','zero-heavy']});
+
+// ============ CATEGORY 17: COMPOUND & HIERARCHICAL ============
+const catCompound = document.createElement('div');
+catCompound.className = 'category';
+catCompound.id = 'cat-compound';
+catCompound.innerHTML = '<h2>17. Compound &amp; Hierarchical</h2><div class="grid" id="grid-compound"></div>';
+catBio.after(catCompound);
+const gridCompound = document.getElementById('grid-compound');
+
+createCard(gridCompound, '#155: Gamma-Poisson (Negative Binomial)',
+    'Random rate per person, then Poisson counts. Overdispersed.',
+    () => { let d=[]; for(let i=0;i<1000;i++) {
+    let rate=randExp(0.3)+0.5; let count=0;
+    for(let j=0;j<20;j++) if(rng()<rate/20) count++; d.push(count); } return d; },
+    {tags:['hierarchical','overdispersed']});
+
+createCard(gridCompound, '#156: Mixture of Experts',
+    'Three subpopulations each with own distribution shape.',
+    () => { let d=[]; for(let i=0;i<300;i++) d.push(Math.abs(randn()*3)); // half-normal
+    for(let i=0;i<400;i++) d.push(randn()*5+30); // normal
+    for(let i=0;i<300;i++) d.push(60-randExp(0.15)); // left-skew
+    return d.map(v=>Math.max(0,v)); },
+    {tags:['mixture','heterogeneous']});
+
+createCard(gridCompound, '#157: Nested Categories',
+    'Department A (uniform 20-40), B (normal at 60), C (bimodal 80 and 95).',
+    () => { let d=[]; for(let i=0;i<300;i++) d.push(randUniform(20,40));
+    for(let i=0;i<400;i++) d.push(randn()*5+60);
+    for(let i=0;i<150;i++) d.push(randn()*3+80);
+    for(let i=0;i<150;i++) d.push(randn()*2+95); return d; },
+    {tags:['nested','department']});
+
+createCard(gridCompound, '#158: Random Walk End Points',
+    'Where 1000 random walks end up after 100 steps. Normal by CLT.',
+    () => { let d=[]; for(let i=0;i<1000;i++) {
+    let pos=0; for(let j=0;j<100;j++) pos+=randn(); d.push(pos); } return d; },
+    {tags:['random-walk','CLT']});
+
+createCard(gridCompound, '#159: Sum of Uniforms (Irwin-Hall)',
+    'Sum of 3 uniforms — triangular-ish. Sum of 12 — nearly Gaussian.',
+    () => { let d=[]; for(let i=0;i<1000;i++) {
+    let s=0; for(let j=0;j<4;j++) s+=rng(); d.push(s); } return d; },
+    {tags:['sum','convergence']});
+
+createCard(gridCompound, '#160: Product of Normals (Heavy-Tailed)',
+    'Product of two independent normals. Heavier tails than either alone.',
+    () => { let d=[]; for(let i=0;i<1000;i++) d.push(randn()*randn()*5); return d; },
+    {tags:['product','heavy-tail']});
+
+createCard(gridCompound, '#161: Max of N Samples (Extreme Value)',
+    'Maximum of 10 normal samples. Shifted right, Gumbel-like.',
+    () => { let d=[]; for(let i=0;i<1000;i++) {
+    let mx=-Infinity; for(let j=0;j<10;j++) { let v=randn()*10+50; if(v>mx) mx=v; } d.push(mx); } return d; },
+    {tags:['extreme-value','gumbel']});
+
+createCard(gridCompound, '#162: Min of N Samples (Weibull-like)',
+    'Minimum of 5 exponential samples. Models first-failure time.',
+    () => { let d=[]; for(let i=0;i<1000;i++) {
+    let mn=Infinity; for(let j=0;j<5;j++) { let v=randExp(0.5); if(v<mn) mn=v; } d.push(mn); } return d; },
+    {tags:['minimum','first-failure']});
+
+createCard(gridCompound, '#163: Conditional Distribution',
+    'X|Y<0 is left-normal, X|Y>0 is right-normal. Marginal looks odd.',
+    () => { let d=[]; for(let i=0;i<500;i++) d.push(-Math.abs(randn()*10)+50);
+    for(let i=0;i<500;i++) d.push(Math.abs(randn()*10)+50); return d; },
+    {tags:['conditional','asymmetric']});
+
+createCard(gridCompound, '#164: Censored Mixture',
+    'Two populations: one observed fully, one right-censored at threshold.',
+    () => { let d=[]; for(let i=0;i<500;i++) d.push(randn()*8+30);
+    for(let i=0;i<500;i++) d.push(Math.min(60, randn()*15+55)); return d; },
+    {tags:['censored','mixture']});
+
+// Add count summary
+const total = document.querySelectorAll('.card').length;
+document.querySelector('.subtitle').textContent += ` (${total} examples shown)`;
+</script>
+</body>
+</html>

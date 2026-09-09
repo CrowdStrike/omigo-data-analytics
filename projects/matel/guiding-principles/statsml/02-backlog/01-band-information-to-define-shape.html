@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Using Band Information to Define Shape — Discussion Backlog</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #fff;
+            color: #2c3e50;
+            padding: 40px;
+            line-height: 1.6;
+        }
+        h1 {
+            font-size: 2rem;
+            color: #1a5276;
+            margin-bottom: 8px;
+            border-bottom: 2px solid #2980b9;
+            padding-bottom: 8px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 32px;
+            font-size: 0.95rem;
+        }
+        .intro {
+            background: #f0f4f8;
+            border-left: 3px solid #2980b9;
+            padding: 8px 12px;
+            margin-bottom: 32px;
+            font-size: 0.9rem;
+        }
+        .lang-section {
+            margin-bottom: 40px;
+        }
+        .lang-section h2 {
+            font-size: 1.3rem;
+            color: #1a5276;
+            margin-bottom: 12px;
+            border-bottom: 2px solid #2980b9;
+            padding-bottom: 4px;
+        }
+        table.layout {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+        }
+        table.layout td {
+            vertical-align: top;
+            padding: 12px;
+        }
+        table.layout td.text-col {
+            width: 45%;
+        }
+        table.layout td.viz-col {
+            width: 55%;
+        }
+        canvas {
+            width: 100%;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px; height: auto; }
+        .key-point {
+            background: #f8f9fa;
+            border-left: 3px solid #e74c3c;
+            padding: 8px 12px;
+            margin-top: 12px;
+            font-size: 0.9rem;
+        }
+        .example {
+            font-style: italic;
+            color: #555;
+            margin-top: 8px;
+            font-size: 0.9rem;
+        }
+        ul {
+            margin: 8px 0 8px 20px;
+            font-size: 0.92rem;
+        }
+        li { margin-bottom: 4px; }
+        pre {
+            background: #f4f4f4;
+            padding: 12px 16px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            margin-bottom: 12px;
+        }
+        code {
+            background: #e8f0f8;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.85em;
+            color: #1a5276;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Using Band Information to Define Shape</h1>
+<p class="subtitle">The SE band as a rigorous threshold for real structure vs sampling noise</p>
+
+<div class="intro">A "shape" entirely within the uncertainty band isn't a shape &mdash; it's noise. The SE band provides a rigorous threshold for distinguishing real structure from sampling variation.</div>
+
+<!-- Section 1: Shape Significance Rules -->
+<div class="lang-section">
+    <h2>1. Shape Significance Rules</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <ul>
+                    <li><strong>Bimodal:</strong> valley must be BELOW lower band of both peaks</li>
+                    <li><strong>Spike:</strong> peak must rise ABOVE upper band of surrounding bins</li>
+                    <li><strong>Heavy tail:</strong> tail bins ABOVE upper band of body</li>
+                    <li><strong>Bell:</strong> density fits Gaussian template within band everywhere</li>
+                </ul>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+                <p class="example">Valley within band &mdash; NOT significant (noise)</p>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<!-- Section 2: Implication -->
+<div class="lang-section">
+    <h2>2. Implication</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>This means "confidently bimodal" requires the valley to drop below the noise floor &mdash; not just be lower than the peaks. Many apparent bimodals at small n are just noise.</p>
+                <div class="key-point">
+                    <strong>Key Question:</strong> Does this replace the CNN or become a confidence layer on top? The CNN detects candidate shapes; the band validates them.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+                <p class="example">Valley below band &mdash; IS significant (real bimodal)</p>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var dpr = window.devicePixelRatio || 1;
+function setupCanvas(id) {
+    var c = document.getElementById(id);
+    var w = 720, h = 300;
+    c.style.maxWidth = w + 'px';
+    var __cssW = c.getBoundingClientRect().width || w;
+    var __scale = (__cssW / w) * dpr;
+    c.width = Math.round(w * __scale);
+    c.height = Math.round(h * __scale);
+    var ctx = c.getContext('2d');
+    ctx.scale(__scale, __scale);
+    return {ctx: ctx, w: w, h: h};
+}
+
+// Canvas 1: Bimodal with valley WITHIN band (not significant)
+(function() {
+    var s = setupCanvas('c1'), ctx = s.ctx, w = s.w, h = s.h;
+    var margin = {top: 30, right: 20, bottom: 40, left: 50};
+    var pw = w - margin.left - margin.right;
+    var ph = h - margin.top - margin.bottom;
+
+    // Generate bimodal-ish data where valley is within the band
+    var bins = 20;
+    var data = [];
+    for (var i = 0; i < bins; i++) {
+        var x = i / (bins - 1);
+        // Mild bimodal: peaks at 0.3 and 0.7, shallow valley
+        var v = 0.5 * Math.exp(-Math.pow((x - 0.3) / 0.15, 2)) +
+                0.45 * Math.exp(-Math.pow((x - 0.7) / 0.15, 2)) + 0.1;
+        data.push(v);
+    }
+    var maxVal = Math.max.apply(null, data);
+
+    // SE band (wide — simulating small n)
+    var n = 50;
+    var bandWidth = [];
+    for (var i = 0; i < bins; i++) {
+        bandWidth.push(1.96 * Math.sqrt(data[i] * (1 - data[i] / maxVal)) / Math.sqrt(n) * maxVal * 0.8 + 0.06 * maxVal);
+    }
+
+    // Title
+    ctx.font = 'bold 16px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('NOT Significant — Valley Within Noise Band', w / 2, 18);
+
+    // Draw bars
+    var barW = pw / bins - 2;
+    for (var i = 0; i < bins; i++) {
+        var bx = margin.left + i * (pw / bins) + 1;
+        var bh = (data[i] / maxVal) * ph;
+        ctx.fillStyle = 'rgba(26,82,118,0.35)';
+        ctx.fillRect(bx, margin.top + ph - bh, barW, bh);
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(bx, margin.top + ph - bh, barW, bh);
+    }
+
+    // Draw band (upper and lower)
+    ctx.beginPath();
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 3]);
+    for (var i = 0; i < bins; i++) {
+        var bx = margin.left + i * (pw / bins) + barW / 2 + 1;
+        var upper = margin.top + ph - ((data[i] + bandWidth[i]) / maxVal) * ph;
+        if (i === 0) ctx.moveTo(bx, upper); else ctx.lineTo(bx, upper);
+    }
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    for (var i = 0; i < bins; i++) {
+        var bx = margin.left + i * (pw / bins) + barW / 2 + 1;
+        var lower = margin.top + ph - ((data[i] - bandWidth[i]) / maxVal) * ph;
+        if (lower > margin.top + ph) lower = margin.top + ph;
+        if (i === 0) ctx.moveTo(bx, lower); else ctx.lineTo(bx, lower);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Fill band region
+    ctx.beginPath();
+    for (var i = 0; i < bins; i++) {
+        var bx = margin.left + i * (pw / bins) + barW / 2 + 1;
+        var upper = margin.top + ph - ((data[i] + bandWidth[i]) / maxVal) * ph;
+        if (i === 0) ctx.moveTo(bx, upper); else ctx.lineTo(bx, upper);
+    }
+    for (var i = bins - 1; i >= 0; i--) {
+        var bx = margin.left + i * (pw / bins) + barW / 2 + 1;
+        var lower = margin.top + ph - ((data[i] - bandWidth[i]) / maxVal) * ph;
+        if (lower > margin.top + ph) lower = margin.top + ph;
+        ctx.lineTo(bx, lower);
+    }
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(230, 126, 34, 0.15)';
+    ctx.fill();
+
+    // Arrow pointing to valley with label
+    var valleyIdx = 10;
+    var valleyX = margin.left + valleyIdx * (pw / bins) + barW / 2 + 1;
+    var valleyY = margin.top + ph - (data[valleyIdx] / maxVal) * ph;
+    ctx.beginPath();
+    ctx.moveTo(valleyX, valleyY - 30);
+    ctx.lineTo(valleyX, valleyY - 5);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([]);
+    ctx.stroke();
+    ctx.font = '14px -apple-system, sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText('valley inside band', valleyX, valleyY - 35);
+
+    // Axis
+    ctx.beginPath();
+    ctx.moveTo(margin.left, margin.top + ph);
+    ctx.lineTo(margin.left + pw, margin.top + ph);
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Legend
+    ctx.font = '14px -apple-system, sans-serif';
+    ctx.fillStyle = '#e67e22';
+    ctx.fillRect(w - 180, margin.top + 5, 12, 12);
+    ctx.fillStyle = '#2c3e50';
+    ctx.textAlign = 'left';
+    ctx.fillText('SE Band (±1.96σ)', w - 164, margin.top + 15);
+})();
+
+// Canvas 2: Bimodal with valley BELOW band (significant)
+(function() {
+    var s = setupCanvas('c2'), ctx = s.ctx, w = s.w, h = s.h;
+    var margin = {top: 30, right: 20, bottom: 40, left: 50};
+    var pw = w - margin.left - margin.right;
+    var ph = h - margin.top - margin.bottom;
+
+    // Generate clearly bimodal data with deep valley
+    var bins = 20;
+    var data = [];
+    for (var i = 0; i < bins; i++) {
+        var x = i / (bins - 1);
+        var v = 0.7 * Math.exp(-Math.pow((x - 0.25) / 0.1, 2)) +
+                0.65 * Math.exp(-Math.pow((x - 0.75) / 0.1, 2)) + 0.05;
+        data.push(v);
+    }
+    var maxVal = Math.max.apply(null, data);
+
+    // SE band (narrower — larger n)
+    var n = 200;
+    var bandWidth = [];
+    for (var i = 0; i < bins; i++) {
+        bandWidth.push(1.96 * Math.sqrt(data[i] * (1 - data[i] / maxVal)) / Math.sqrt(n) * maxVal * 0.5 + 0.025 * maxVal);
+    }
+
+    // Title
+    ctx.font = 'bold 16px -apple-system, sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText('IS Significant — Valley Below Both Peaks\' Lower Band', w / 2, 18);
+
+    // Draw bars
+    var barW = pw / bins - 2;
+    for (var i = 0; i < bins; i++) {
+        var bx = margin.left + i * (pw / bins) + 1;
+        var bh = (data[i] / maxVal) * ph;
+        ctx.fillStyle = 'rgba(26,82,118,0.35)';
+        ctx.fillRect(bx, margin.top + ph - bh, barW, bh);
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(bx, margin.top + ph - bh, barW, bh);
+    }
+
+    // Draw band
+    ctx.beginPath();
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 3]);
+    for (var i = 0; i < bins; i++) {
+        var bx = margin.left + i * (pw / bins) + barW / 2 + 1;
+        var upper = margin.top + ph - ((data[i] + bandWidth[i]) / maxVal) * ph;
+        if (i === 0) ctx.moveTo(bx, upper); else ctx.lineTo(bx, upper);
+    }
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    for (var i = 0; i < bins; i++) {
+        var bx = margin.left + i * (pw / bins) + barW / 2 + 1;
+        var lower = margin.top + ph - ((data[i] - bandWidth[i]) / maxVal) * ph;
+        if (lower > margin.top + ph) lower = margin.top + ph;
+        if (i === 0) ctx.moveTo(bx, lower); else ctx.lineTo(bx, lower);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Fill band
+    ctx.beginPath();
+    for (var i = 0; i < bins; i++) {
+        var bx = margin.left + i * (pw / bins) + barW / 2 + 1;
+        var upper = margin.top + ph - ((data[i] + bandWidth[i]) / maxVal) * ph;
+        if (i === 0) ctx.moveTo(bx, upper); else ctx.lineTo(bx, upper);
+    }
+    for (var i = bins - 1; i >= 0; i--) {
+        var bx = margin.left + i * (pw / bins) + barW / 2 + 1;
+        var lower = margin.top + ph - ((data[i] - bandWidth[i]) / maxVal) * ph;
+        if (lower > margin.top + ph) lower = margin.top + ph;
+        ctx.lineTo(bx, lower);
+    }
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.12)';
+    ctx.fill();
+
+    // Draw horizontal line at valley showing it's below lower band of peaks
+    var valleyIdx = 10;
+    var valleyY = margin.top + ph - (data[valleyIdx] / maxVal) * ph;
+
+    // Find peak lower bands
+    var peak1Idx = 5;
+    var peak2Idx = 15;
+    var peak1Lower = margin.top + ph - ((data[peak1Idx] - bandWidth[peak1Idx]) / maxVal) * ph;
+    var peak2Lower = margin.top + ph - ((data[peak2Idx] - bandWidth[peak2Idx]) / maxVal) * ph;
+    var highestLower = Math.min(peak1Lower, peak2Lower); // min because Y is inverted
+
+    // Dashed line at peak lower band level
+    ctx.beginPath();
+    ctx.setLineDash([6, 4]);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 1.5;
+    ctx.moveTo(margin.left, highestLower);
+    ctx.lineTo(margin.left + pw, highestLower);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Arrow from valley
+    var valleyX = margin.left + valleyIdx * (pw / bins) + barW / 2 + 1;
+    ctx.beginPath();
+    ctx.moveTo(valleyX + 40, valleyY);
+    ctx.lineTo(valleyX + 80, valleyY);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.font = '14px -apple-system, sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'left';
+    ctx.fillText('valley BELOW peak bands', valleyX + 85, valleyY + 4);
+
+    // Label lower band line
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'right';
+    ctx.fillText('peaks\' lower band', margin.left + pw - 5, highestLower - 5);
+
+    // Axis
+    ctx.beginPath();
+    ctx.moveTo(margin.left, margin.top + ph);
+    ctx.lineTo(margin.left + pw, margin.top + ph);
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Legend
+    ctx.font = '14px -apple-system, sans-serif';
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(margin.left + 5, margin.top + 5, 12, 12);
+    ctx.fillStyle = '#2c3e50';
+    ctx.textAlign = 'left';
+    ctx.fillText('SE Band (±1.96σ)', margin.left + 22, margin.top + 15);
+})();
+</script>
+
+</body>
+</html>

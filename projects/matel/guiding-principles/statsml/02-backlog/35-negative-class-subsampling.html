@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Negative Class Subsampling</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #fff;
+            color: #2c3e50;
+            padding: 40px;
+            line-height: 1.6;
+        }
+        h1 {
+            font-size: 2rem;
+            color: #1a5276;
+            margin-bottom: 8px;
+            border-bottom: 2px solid #2980b9;
+            padding-bottom: 8px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 32px;
+            font-size: 0.95rem;
+        }
+        .intro {
+            background: #f0f4f8;
+            border-left: 3px solid #2980b9;
+            padding: 8px 12px;
+            margin-bottom: 32px;
+            font-size: 0.9rem;
+        }
+        .lang-section {
+            margin-bottom: 40px;
+        }
+        .lang-section h2 {
+            font-size: 1.3rem;
+            color: #1a5276;
+            margin-bottom: 12px;
+            border-bottom: 2px solid #2980b9;
+            padding-bottom: 4px;
+        }
+        table.layout {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+        }
+        table.layout td {
+            vertical-align: top;
+            padding: 12px;
+        }
+        table.layout td.text-col {
+            width: 45%;
+        }
+        table.layout td.viz-col {
+            width: 55%;
+        }
+        canvas {
+            width: 100%;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px; height: auto; }
+        .key-point {
+            background: #f8f9fa;
+            border-left: 3px solid #e74c3c;
+            padding: 8px 12px;
+            margin-top: 12px;
+            font-size: 0.9rem;
+        }
+        .example {
+            font-style: italic;
+            color: #555;
+            margin-top: 8px;
+            font-size: 0.9rem;
+        }
+        ul {
+            margin: 8px 0 8px 20px;
+            font-size: 0.92rem;
+        }
+        li { margin-bottom: 4px; }
+        pre {
+            background: #f4f4f4;
+            padding: 12px 16px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            margin-bottom: 12px;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Negative Class Subsampling</h1>
+<p class="subtitle">The sampling ratio is a hyperparameter with no principled science behind its selection</p>
+
+<div class="intro">When the positive class is extremely rare, models require subsampling of the negative class. The ratio everyone picks (1:1, 1:5, 1:10) is chosen by gut feel &mdash; nobody asks what properties of the data determine the right ratio.</div>
+
+<!-- Section 1: The Problem -->
+<div class="lang-section">
+    <h2>1. The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p><strong>Rare positive class &rarr; must subsample negatives</strong></p>
+                <ul>
+                    <li>Many ML models (logistic regression, neural nets, trees) need both pos and neg examples</li>
+                    <li>Fraud: 0.1% positive. 1M transactions &rarr; 1000 fraud, 999,000 legit.</li>
+                    <li>Training on raw ratio: model learns "predict negative always" (99.9% accurate, useless)</li>
+                    <li>Standard fix: subsample negatives to some ratio (1:1, 1:3, 1:5, 1:10...)</li>
+                </ul>
+                <div class="key-point">
+                    The ratio is a hyperparameter chosen by gut feel, not science.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<!-- Section 2: Current State of Practice -->
+<div class="lang-section">
+    <h2>2. Current State of Practice</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p><strong>What people do (no principled basis)</strong></p>
+                <ul>
+                    <li><strong>1:1 ratio:</strong> Most common default. Maximizes pos signal, discards 99%+ of negative data. Loses negative class structure.</li>
+                    <li><strong>1:5 or 1:10:</strong> "Feels like a good compromise." No theoretical justification beyond "more data is better."</li>
+                    <li><strong>Grid search:</strong> Try [1:1, 1:3, 1:5, 1:10], pick by validation AUC. Expensive, no insight into WHY one ratio works.</li>
+                    <li><strong>SMOTE/oversampling pos:</strong> Synthesizes fake positives instead of discarding negatives. Creates data that doesn't exist.</li>
+                    <li><strong>Class weights:</strong> Weight loss function by inverse frequency. Mathematically equivalent to subsampling but keeps all data.</li>
+                </ul>
+                <div class="key-point">
+                    None of these approaches ask: <strong>what properties of the negative class distribution determine the optimal ratio?</strong>
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<!-- Section 3: Why This Is Hard -->
+<div class="lang-section">
+    <h2>3. Why This Is Hard</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p><strong>The optimal ratio depends on things nobody measures</strong></p>
+                <ul>
+                    <li><strong>Decision boundary complexity:</strong> Simple boundary &rarr; fewer negatives needed near it. Complex boundary &rarr; need dense negative coverage everywhere.</li>
+                    <li><strong>Negative class structure:</strong> If negatives are uniform, random subsampling works. If negatives have clusters, subsampling may eliminate entire clusters.</li>
+                    <li><strong>Overlap region density:</strong> The only negatives that matter for the decision boundary are those NEAR positives. Far-away negatives are wasted computation.</li>
+                    <li><strong>Feature space dimensionality:</strong> Higher dimensions &rarr; need exponentially more negatives to cover the space. Curse of dimensionality hits subsampled data harder.</li>
+                    <li><strong>Model capacity:</strong> A high-capacity model can memorize all positives regardless of ratio. A low-capacity model needs the ratio to control what it learns.</li>
+                </ul>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<!-- Section 4: Directions to Explore -->
+<div class="lang-section">
+    <h2>4. Directions to Explore</h2>
+    <ul>
+        <li><strong>Profile-driven subsampling:</strong> Use feature profiling (shape, separation, overlap) to determine which negatives are "near the boundary" vs "trivially far away." Keep all near-boundary negatives, subsample the rest aggressively. The ratio becomes feature-dependent, not a global constant.</li>
+        <li><strong>Negative class stratified subsampling:</strong> Profile the negative class distribution structure (clusters, modes, density regions). Subsample proportional to structure &mdash; maintain representation from each mode. A bimodal negative class needs samples from both peaks regardless of ratio.</li>
+        <li><strong>Information-theoretic ratio selection:</strong> The optimal ratio is the one that maximizes information gain per training example. At some point, additional negatives add zero information (they're already "correctly trivial"). Detect the saturation point &mdash; that's your ratio.</li>
+        <li><strong>Adaptive ratio via learning curve:</strong> Train with 1:1, 1:2, 1:4, 1:8... Plot validation metric vs ratio. The curve has diminishing returns &mdash; the elbow is the optimal ratio. But this is just grid search with a plot. Need a faster predictor.</li>
+    </ul>
+</div>
+
+<!-- Section 5: Connection to Our Pipeline -->
+<div class="lang-section">
+    <h2>5. Connection to Our Pipeline</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p><strong>What we already know that's relevant</strong></p>
+                <ul>
+                    <li><strong>Bucket purity:</strong> Buckets that are 99.9% negative are "trivially far." Subsample these aggressively.</li>
+                    <li><strong>Overlap buckets:</strong> Buckets with mixed pos/neg are the decision boundary. Keep ALL negatives here.</li>
+                    <li><strong>Shape of negative class:</strong> If negative is multimodal, each mode needs representation.</li>
+                    <li><strong>Effective n per bucket:</strong> After subsampling, must still have n&ge;30 per class per bucket for profiling to work.</li>
+                </ul>
+                <div class="key-point">
+                    <strong>The link:</strong> Our feature profiling tells us the shape and separation structure of each feature for pos vs neg. This is exactly the information needed to determine which negatives are "informative" (near the boundary) vs "trivial" (far from any positive). A principled subsampling strategy should use the separation profile, not a magic number.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<!-- Section 6: Open Questions -->
+<div class="lang-section">
+    <h2>6. Open Questions</h2>
+    <ul>
+        <li>Does the optimal ratio depend more on the model or the data?</li>
+        <li>Can we predict the optimal ratio from the feature profile without training?</li>
+        <li>Should the ratio be per-feature (in a bagging ensemble) or global?</li>
+        <li>How does subsampling interact with feature profiling &mdash; do we profile before or after subsampling?</li>
+        <li>Is "ratio" even the right framing? Maybe it should be "keep all negatives within distance d of any positive" &mdash; where d is the bandwidth.</li>
+    </ul>
+</div>
+
+<script>var __charts = [];
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    if (!c.dataset.w) { c.dataset.w = c.getAttribute('width') || '720'; c.dataset.h = c.getAttribute('height') || '300'; }
+    var w = parseInt(c.dataset.w), h = parseInt(c.dataset.h);
+    var dpr = window.devicePixelRatio || 1;
+    c.style.maxWidth = w + 'px';
+    var cssW = c.getBoundingClientRect().width || w;
+    var scale = (cssW / w) * dpr;
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    var ctx = c.getContext('2d'); ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, w, h);
+    return {ctx:ctx, w:w, h:h};
+}
+
+// 1. The imbalance problem
+__charts.push(function(){
+    var s = setup('c1'); if (!s) return; var ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 16px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Class Imbalance: 0.1% Positive (Fraud Detection)', w/2, 18);
+
+    // Full bar
+    var barY = 50, barH = 40, barL = 60, barR = w - 60;
+    var barW = barR - barL;
+    ctx.fillStyle = 'rgba(41,128,185,0.4)';
+    ctx.fillRect(barL, barY, barW, barH);
+    ctx.strokeStyle = '#2980b9'; ctx.lineWidth = 1.5;
+    ctx.strokeRect(barL, barY, barW, barH);
+    // Tiny positive sliver
+    var posW = Math.max(3, barW * 0.001);
+    ctx.fillStyle = 'rgba(231,76,60,0.8)';
+    ctx.fillRect(barL, barY, posW, barH);
+    ctx.fillStyle = '#333'; ctx.font = '15px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('Pos: 0.1%', barL, barY + barH + 16);
+    ctx.textAlign = 'right';
+    ctx.fillText('Neg: 99.9%', barR, barY + barH + 16);
+
+    // Subsampled versions
+    var ratios = [{label:'1:1', neg:1}, {label:'1:5', neg:5}, {label:'1:10', neg:10}, {label:'1:100', neg:100}];
+    var rowY = 120, rowH = 30, gap = 8;
+    ratios.forEach(function(r, i) {
+        var y = rowY + i * (rowH + gap);
+        var total = 1 + r.neg;
+        var posRatio = 1 / total;
+        var pW = barW * posRatio;
+        var nW = barW * (r.neg / total);
+        ctx.fillStyle = 'rgba(231,76,60,0.7)';
+        ctx.fillRect(barL, y, pW, rowH);
+        ctx.fillStyle = 'rgba(41,128,185,0.4)';
+        ctx.fillRect(barL + pW, y, nW, rowH);
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 0.5;
+        ctx.strokeRect(barL, y, barW, rowH);
+        ctx.fillStyle = '#333'; ctx.font = '15px -apple-system'; ctx.textAlign = 'right';
+        ctx.fillText(r.label, barL - 8, y + rowH/2 + 4);
+        // Data loss
+        var kept = (1 + r.neg) / 1000;
+        ctx.textAlign = 'left'; ctx.fillStyle = '#e74c3c';
+        ctx.fillText((kept*100).toFixed(1) + '% data kept', barR + 8, y + rowH/2 + 4);
+    });
+});
+
+// 2. Current practice — no science
+__charts.push(function(){
+    var s = setup('c2'); if (!s) return; var ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 16px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('How Ratios Are Actually Chosen (Spoiler: Guessing)', w/2, 18);
+
+    var methods = [
+        {name: '"Just use 1:1"', score: '?', color: '#e74c3c'},
+        {name: '"Try 1:5, worked last time"', score: '?', color: '#e67e22'},
+        {name: 'Grid search [1:1..1:20]', score: '$$$', color: '#f39c12'},
+        {name: 'SMOTE (synthesize positives)', score: 'fake data', color: '#8e44ad'},
+        {name: 'Class weights in loss', score: 'implicit', color: '#2980b9'},
+    ];
+
+    var startY = 45, rowH = 38;
+    methods.forEach(function(m, i) {
+        var y = startY + i * rowH;
+        ctx.fillStyle = m.color; ctx.globalAlpha = 0.12;
+        ctx.fillRect(60, y, w - 120, 32); ctx.globalAlpha = 1;
+        ctx.strokeStyle = m.color; ctx.lineWidth = 1.5;
+        ctx.strokeRect(60, y, w - 120, 32);
+        ctx.fillStyle = '#333'; ctx.font = '15px -apple-system'; ctx.textAlign = 'left';
+        ctx.fillText(m.name, 75, y + 20);
+        ctx.fillStyle = m.color; ctx.font = 'bold 15px -apple-system'; ctx.textAlign = 'right';
+        ctx.fillText(m.score, w - 75, y + 20);
+    });
+
+    ctx.fillStyle = '#c0392b'; ctx.font = 'bold 15px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('None ask: what properties of the data determine the right ratio?', w/2, h - 12);
+});
+
+// 3. Why it's hard — boundary vs trivial negatives
+__charts.push(function(){
+    var s = setup('c3'); if (!s) return; var ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 16px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Only Negatives Near the Boundary Matter', w/2, 18);
+
+    // Scatter: positives as cluster, negatives everywhere
+    var rng = function(s){return function(){s=(s*16807)%2147483647;return s/2147483647;}}(42);
+    // Positives: tight cluster
+    ctx.fillStyle = 'rgba(231,76,60,0.7)';
+    for (var i = 0; i < 30; i++) {
+        var x = 250 + (rng()-0.5)*80, y = 130 + (rng()-0.5)*60;
+        ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI*2); ctx.fill();
+    }
+    // Negatives: spread everywhere
+    ctx.fillStyle = 'rgba(41,128,185,0.4)';
+    for (var i = 0; i < 150; i++) {
+        var x = 60 + rng()*600, y = 40 + rng()*200;
+        ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI*2); ctx.fill();
+    }
+    // Boundary region
+    ctx.strokeStyle = '#e67e22'; ctx.lineWidth = 2; ctx.setLineDash([5,3]);
+    ctx.beginPath(); ctx.ellipse(250, 130, 70, 55, 0, 0, Math.PI*2); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e67e22'; ctx.font = '14px -apple-system'; ctx.textAlign = 'left';
+    ctx.fillText('boundary zone', 325, 90);
+    ctx.fillText('(informative negatives)', 325, 105);
+    ctx.fillStyle = '#555'; ctx.font = '14px -apple-system';
+    ctx.fillText('trivial negatives', 500, 50);
+    ctx.fillText('(wasted computation)', 500, 65);
+
+    // Legend
+    ctx.fillStyle = 'rgba(231,76,60,0.7)'; ctx.beginPath(); ctx.arc(80, h-15, 4, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#333'; ctx.font = '14px -apple-system'; ctx.textAlign = 'left'; ctx.fillText('Positive', 90, h-11);
+    ctx.fillStyle = 'rgba(41,128,185,0.5)'; ctx.beginPath(); ctx.arc(160, h-15, 4, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#333'; ctx.fillText('Negative', 170, h-11);
+});
+
+// 4. Connection — bucket purity drives subsampling
+__charts.push(function(){
+    var s = setup('c4'); if (!s) return; var ctx = s.ctx, w = s.w, h = s.h;
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 16px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Profile-Driven: Subsample by Bucket Purity', w/2, 18);
+
+    var buckets = [
+        {label:'B1', posPct:0.0, action:'aggressive'},
+        {label:'B2', posPct:0.01, action:'aggressive'},
+        {label:'B3', posPct:0.05, action:'moderate'},
+        {label:'B4', posPct:0.15, action:'keep'},
+        {label:'B5', posPct:0.35, action:'keep'},
+        {label:'B6', posPct:0.60, action:'keep all'},
+        {label:'B7', posPct:0.20, action:'keep'},
+        {label:'B8', posPct:0.03, action:'moderate'},
+        {label:'B9', posPct:0.01, action:'aggressive'},
+        {label:'B10', posPct:0.0, action:'aggressive'},
+    ];
+
+    var barL = 80, barW = (w - 140) / buckets.length, barMaxH = 140, barBottom = 200;
+    buckets.forEach(function(b, i) {
+        var x = barL + i * barW;
+        var posH = b.posPct * barMaxH;
+        var negH = (1 - b.posPct) * barMaxH;
+        // Neg portion
+        ctx.fillStyle = b.action === 'aggressive' ? 'rgba(41,128,185,0.15)' :
+                        b.action === 'moderate' ? 'rgba(41,128,185,0.3)' : 'rgba(41,128,185,0.5)';
+        ctx.fillRect(x + 2, barBottom - negH, barW - 4, negH);
+        // Pos portion
+        if (posH > 0) {
+            ctx.fillStyle = 'rgba(231,76,60,0.7)';
+            ctx.fillRect(x + 2, barBottom - barMaxH, barW - 4, posH);
+        }
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 0.5;
+        ctx.strokeRect(x + 2, barBottom - barMaxH, barW - 4, barMaxH);
+        // Label
+        ctx.fillStyle = '#333'; ctx.font = '13px -apple-system'; ctx.textAlign = 'center';
+        ctx.fillText(b.label, x + barW/2, barBottom + 14);
+        // Action
+        var actionColor = b.action === 'aggressive' ? '#e74c3c' : b.action === 'moderate' ? '#e67e22' : '#27ae60';
+        ctx.fillStyle = actionColor; ctx.font = '12px -apple-system';
+        ctx.fillText(b.action === 'keep all' ? 'keep all' : b.action === 'keep' ? 'keep' : b.action === 'moderate' ? '1:5' : '1:50', x + barW/2, barBottom + 26);
+    });
+
+    ctx.fillStyle = '#333'; ctx.font = '15px -apple-system'; ctx.textAlign = 'center';
+    ctx.fillText('Pure-neg buckets: subsample 1:50. Mixed buckets: keep all negatives. Ratio = f(purity).', w/2, h - 12);
+});
+
+__charts.forEach(function(f){ f(); });
+var __redrawTimer;
+window.addEventListener('resize', function(){
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function(){ __charts.forEach(function(f){ f(); }); }, 150);
+});
+</script>
+
+</body>
+</html>

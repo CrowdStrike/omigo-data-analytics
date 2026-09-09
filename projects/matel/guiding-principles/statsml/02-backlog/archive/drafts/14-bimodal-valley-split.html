@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bimodal Valley Split — Real Twin Peaks vs Noise</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f0;
+            color: #2a2a2a;
+            padding: 40px;
+            line-height: 1.6;
+        }
+        h1 { color: #1a5276; margin-bottom: 8px; font-size: 1.8em; }
+        h2 { color: #1a3a4a; margin: 50px 0 16px 0; font-size: 1.4em; border-bottom: 2px solid #1a5276; padding-bottom: 8px; }
+        h3 { color: #1a5276; margin: 30px 0 12px 0; font-size: 1.1em; }
+        .breadcrumb { margin-bottom: 20px; font-size: 0.9em; }
+        .breadcrumb a { color: #1a5276; text-decoration: none; }
+        p { margin-bottom: 14px; color: #3a3a3a; max-width: 900px; }
+
+        .chart-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin: 20px 0 30px 0;
+        }
+        .chart-cell {
+            background: #fafcfe;
+            border-radius: 10px;
+            border: 1px solid #e0e0e0;
+            padding: 0 0 12px 0;
+            text-align: center;
+            overflow: hidden;
+        }
+        .chart-cell canvas {
+            display: block;
+            width: 100%;
+            margin: 0 0 8px 0;
+        }
+        .chart-cell .cell-title {
+            font-size: 0.85em;
+            font-weight: 600;
+            color: #1a5276;
+            padding: 0 10px;
+        }
+        .chart-cell .cell-sub {
+            font-size: 0.75em;
+            color: #888;
+            margin-top: 3px;
+            padding: 0 10px;
+        }
+        .chart-cell .cell-verdict {
+            font-size: 0.8em;
+            font-weight: 700;
+            margin-top: 5px;
+            padding: 0 10px;
+        }
+        .chart-cell .cell-verdict.split { color: #2e7d32; }
+        .chart-cell .cell-verdict.nosplit { color: #c62828; }
+        .chart-cell.yes { border-top: none; }
+        .chart-cell.no { border-top: none; }
+        .chart-cell.maybe { border-top: none; }
+        .chart-cell.info { border-top: none; }
+
+        .algo-steps {
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 24px 30px;
+            margin: 20px 0;
+            max-width: 800px;
+        }
+        .algo-steps ol {
+            padding-left: 20px;
+        }
+        .algo-steps li {
+            margin: 10px 0;
+            font-size: 0.9em;
+        }
+        .algo-steps li strong { color: #1a5276; }
+
+        .note {
+            background: #e8f5e9;
+            border-left: 4px solid #2e7d32;
+            padding: 14px 18px;
+            margin: 18px 0;
+            border-radius: 0 8px 8px 0;
+            font-size: 0.9em;
+            max-width: 800px;
+        }
+        .warn {
+            background: #fff3e0;
+            border-left: 4px solid #e65100;
+            padding: 14px 18px;
+            margin: 18px 0;
+            border-radius: 0 8px 8px 0;
+            font-size: 0.9em;
+            max-width: 800px;
+        }
+
+        .decision-table {
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 0.85em;
+        }
+        .decision-table th, .decision-table td {
+            border: 1px solid #ddd;
+            padding: 10px 14px;
+            text-align: left;
+        }
+        .decision-table th {
+            background: #1a5276;
+            color: #fff;
+        }
+        .decision-table tr:nth-child(even) { background: #f8f9fa; }
+
+        @media (max-width: 900px) {
+            .chart-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 600px) {
+            body { padding: 20px; }
+            .chart-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <h1>Bimodal Valley Split — Real Twin Peaks vs Noise</h1>
+    <p>When a histogram shows two peaks with data between them (a valley, not a gap), is it genuinely bimodal or just random variation in a single distribution? Splitting incorrectly creates two fake half-distributions. Not splitting means you can't apply t-test to what might be two real normals.</p>
+
+    <!-- ============ THE PROBLEM ============ -->
+    <h2>The Problem: Valley ≠ Bimodal</h2>
+    <p>Many things create two peaks that aren't real bimodal: sampling noise at low n, heavy tails, skewed distributions with a bump, plateaus with slight dips. Only split when confident.</p>
+    <div class="chart-grid" id="problemGrid"></div>
+
+    <!-- ============ REAL BIMODAL ============ -->
+    <h2>Real Bimodal: Two Populations Sharing a Feature</h2>
+    <p>These have a genuine physical reason for two peaks — different subgroups generating data from different processes.</p>
+    <div class="chart-grid" id="realGrid"></div>
+
+    <!-- ============ FAKE BIMODAL ============ -->
+    <h2>Fake Bimodal: Noise That Looks Like Two Peaks</h2>
+    <p>These look bimodal but are actually one distribution with artifacts. Splitting them would create meaningless segments.</p>
+    <div class="chart-grid" id="fakeGrid"></div>
+
+    <!-- ============ ALGORITHM ============ -->
+    <h2>The Valley Split Algorithm</h2>
+    <div class="algo-steps">
+        <ol>
+            <li><strong>Find the two highest peaks</strong> in the histogram (local maxima)</li>
+            <li><strong>Find the valley</strong> — lowest bin between the two peaks</li>
+            <li><strong>Valley depth test:</strong> valley must drop ≥ 25% from left peak AND ≥ 25% from right peak</li>
+            <li><strong>Sample size test:</strong> n on each side of valley ≥ 30 (enough for downstream t-test)</li>
+            <li><strong>If both pass → SPLIT</strong> at the valley minimum</li>
+            <li><strong>Classify each side</strong> independently (expect bell-shaped if truly two normals)</li>
+        </ol>
+    </div>
+
+    <div class="note">
+        <strong>Why 25% from BOTH peaks?</strong> Requiring the drop from both sides prevents splitting when you have one real peak + a minor shoulder. A shoulder barely rises above the valley, so it fails the depth test on that side.
+    </div>
+
+    <h3>Valley depth criterion visualized</h3>
+    <p>Same scenario, different valley depths. Watch the verdict change.</p>
+    <div class="chart-grid" id="depthGrid"></div>
+
+    <!-- ============ SAMPLE SIZE ============ -->
+    <h2>Sample Size Effect</h2>
+    <p>The same true bimodal distribution looks different at different n. At low n, the histogram is noisy and peaks may not be stable. The minimum-n-per-side guard prevents splitting on noise.</p>
+    <div class="chart-grid" id="sampleGrid"></div>
+
+    <!-- ============ THRESHOLD ============ -->
+    <h2>Adaptive Threshold</h2>
+    <p>Optionally: tighten the threshold at low n where histograms are noisier.</p>
+    <table class="decision-table">
+        <tr><th>n per side</th><th>Valley drop threshold</th><th>Reason</th></tr>
+        <tr><td>30-100</td><td>30%</td><td>Noisy histogram, need strong signal</td></tr>
+        <tr><td>100-200</td><td>25%</td><td>Moderate stability</td></tr>
+        <tr><td>200+</td><td>20%</td><td>Stable histogram, subtle dips are meaningful</td></tr>
+    </table>
+
+    <!-- ============ INTERACTION WITH DOC 16 ============ -->
+    <h2>Relationship to Gap Splitting (Doc 16)</h2>
+    <p>Two splitting mechanisms run in sequence:</p>
+    <table class="decision-table">
+        <tr><th></th><th>Gap Split (Doc 16)</th><th>Valley Split (Doc 17)</th></tr>
+        <tr><td><strong>Signal</strong></td><td>Empty bins (zero density)</td><td>Low-but-nonzero valley</td></tr>
+        <tr><td><strong>Criterion</strong></td><td>Consecutive empty ≥ x%</td><td>Valley drop ≥ 25% from both peaks</td></tr>
+        <tr><td><strong>Order</strong></td><td>Check first</td><td>Check only if no gap found</td></tr>
+        <tr><td><strong>Split point</strong></td><td>Proportional to σ_L / (σ_L + σ_R)</td><td>Valley minimum (lowest bin)</td></tr>
+        <tr><td><strong>Confidence</strong></td><td>High — physical separation</td><td>Moderate — statistical judgment</td></tr>
+    </table>
+
+    <div class="chart-grid" id="comparisonGrid"></div>
+
+    <!-- ============ AFTER SPLIT ============ -->
+    <h2>After Split: What Each Side Should Look Like</h2>
+    <p>If the split is correct (real bimodal from two normals), each side should classify as bell-shaped. If a side comes out looking skewed or uniform, the split may have been wrong — or the components aren't normal.</p>
+    <div class="chart-grid" id="afterGrid"></div>
+
+    <!-- ============ EDGE CASES ============ -->
+    <h2>Edge Cases</h2>
+    <div class="chart-grid" id="edgeGrid"></div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+
+    var dpr = window.devicePixelRatio || 1;
+
+    function mulberry32(seed) {
+        return function() {
+            seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+            var t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+            t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+            return ((t ^ t >>> 14) >>> 0) / 4294967296;
+        };
+    }
+
+    function genNormal(rng, mu, sigma) {
+        var u1 = rng(), u2 = rng();
+        if (u1 < 0.0001) u1 = 0.0001;
+        return mu + sigma * Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+    }
+
+    function renderChart(canvas, data, opts) {
+        opts = opts || {};
+        var numBins = opts.bins || 25;
+        var w = opts.width || 280;
+        var h = opts.height || Math.round(w * 0.4);
+        var color = opts.color || '#1a5276';
+        var splitLine = opts.splitLine;
+        var valleyHighlight = opts.valleyHighlight;
+
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
+        canvas.style.width = '100%';
+        canvas.style.height = 'auto';
+        var ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+
+        ctx.fillStyle = '#fafcfe';
+        ctx.fillRect(0, 0, w, h);
+
+        if (data.length < 2) return;
+
+        var dMin = data[0], dMax = data[0];
+        for (var i = 1; i < data.length; i++) {
+            if (data[i] < dMin) dMin = data[i];
+            if (data[i] > dMax) dMax = data[i];
+        }
+        if (dMax === dMin) dMax = dMin + 1;
+
+        var binW = (dMax - dMin) / numBins;
+        var bins = new Array(numBins).fill(0);
+        for (var i = 0; i < data.length; i++) {
+            var idx = Math.floor((data[i] - dMin) / binW);
+            if (idx >= numBins) idx = numBins - 1;
+            if (idx < 0) idx = 0;
+            bins[idx]++;
+        }
+
+        var maxRaw = Math.max.apply(null, bins);
+        if (maxRaw === 0) return;
+
+        // Gaussian smoothing (matching 05 style)
+        var sigma = 1.2;
+        var kernelR = Math.ceil(sigma * 3);
+        var smoothed = new Array(numBins);
+        for (var i = 0; i < numBins; i++) {
+            var sum = 0, wsum = 0;
+            for (var j = Math.max(0, i - kernelR); j <= Math.min(numBins - 1, i + kernelR); j++) {
+                var wt = Math.exp(-0.5 * ((j - i) / sigma) * ((j - i) / sigma));
+                sum += bins[j] * wt;
+                wsum += wt;
+            }
+            smoothed[i] = sum / wsum;
+        }
+
+        var margin = {l: 10, r: 10, t: 10, b: 12};
+        var plotW = w - margin.l - margin.r;
+        var plotH = h - margin.t - margin.b;
+        var barW = plotW / numBins;
+        var baseY = h - margin.b;
+
+        // Valley highlight
+        if (valleyHighlight) {
+            var vx1 = margin.l + ((valleyHighlight[0] - dMin) / (dMax - dMin)) * plotW;
+            var vx2 = margin.l + ((valleyHighlight[1] - dMin) / (dMax - dMin)) * plotW;
+            ctx.fillStyle = 'rgba(255, 152, 0, 0.12)';
+            ctx.fillRect(vx1, margin.t, vx2 - vx1, plotH);
+        }
+
+        // Histogram bars (0.5 alpha like 05)
+        ctx.fillStyle = color; ctx.globalAlpha = 0.5;
+        for (var i = 0; i < numBins; i++) {
+            if (bins[i] === 0) continue;
+            var bh = (bins[i] / maxRaw) * plotH;
+            ctx.fillRect(margin.l + i * barW, baseY - bh, barW - 1, bh);
+        }
+        ctx.globalAlpha = 1;
+
+        // SE band (orange, matching 05)
+        var effN = Math.min(200, Math.max(30, data.length));
+        ctx.fillStyle = 'rgba(230, 126, 34, 0.18)';
+        ctx.beginPath();
+        for (var i = 0; i < numBins; i++) {
+            var px = margin.l + (i + 0.5) * barW;
+            var upper = smoothed[i] + 1.96 * smoothed[i] / Math.sqrt(effN);
+            var py = baseY - (upper / maxRaw) * plotH;
+            if (py < margin.t) py = margin.t;
+            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        for (var i = numBins - 1; i >= 0; i--) {
+            var px = margin.l + (i + 0.5) * barW;
+            var lower = Math.max(0, smoothed[i] - 1.96 * smoothed[i] / Math.sqrt(effN));
+            var py = baseY - (lower / maxRaw) * plotH;
+            if (py > baseY) py = baseY;
+            ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
+
+        // Smoothed density line
+        ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        for (var i = 0; i < numBins; i++) {
+            var px = margin.l + (i + 0.5) * barW;
+            var py = baseY - (smoothed[i] / maxRaw) * plotH;
+            if (py < margin.t) py = margin.t;
+            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+
+        // Axis line
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(margin.l, baseY); ctx.lineTo(margin.l + plotW, baseY); ctx.stroke();
+
+        // Split line
+        if (splitLine !== undefined) {
+            var sx = margin.l + ((splitLine - dMin) / (dMax - dMin)) * plotW;
+            ctx.beginPath();
+            ctx.moveTo(sx, margin.t);
+            ctx.lineTo(sx, baseY);
+            ctx.strokeStyle = '#c62828';
+            ctx.lineWidth = 2.5;
+            ctx.setLineDash([6, 4]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+    }
+
+    // Helper to make a cell
+    function makeCell(grid, canvas, title, sub, verdict, cls) {
+        var cell = document.createElement('div');
+        cell.className = 'chart-cell ' + (cls || '');
+        cell.appendChild(canvas);
+        var t = document.createElement('div'); t.className = 'cell-title'; t.textContent = title;
+        cell.appendChild(t);
+        if (sub) { var s = document.createElement('div'); s.className = 'cell-sub'; s.textContent = sub; cell.appendChild(s); }
+        if (verdict) {
+            var v = document.createElement('div');
+            v.className = 'cell-verdict ' + (verdict.indexOf('SPLIT') >= 0 ? 'split' : 'nosplit');
+            v.textContent = verdict;
+            cell.appendChild(v);
+        }
+        grid.appendChild(cell);
+    }
+
+    // ============ PROBLEM ============
+    (function() {
+        var grid = document.getElementById('problemGrid');
+        var rng1 = mulberry32(100);
+        // Real bimodal
+        var d1 = [];
+        for (var i = 0; i < 400; i++) d1.push(genNormal(rng1, 30, 5));
+        for (var i = 0; i < 400; i++) d1.push(genNormal(rng1, 60, 6));
+        var c1 = document.createElement('canvas');
+        makeCell(grid, c1, 'Real bimodal: two populations', 'Heights (children + adults)', 'SPLIT — two real normals', 'yes');
+        renderChart(c1, d1, { splitLine: 45, color: '#16a085' });
+
+        // Noisy unimodal
+        var rng2 = mulberry32(201);
+        var d2 = [];
+        for (var i = 0; i < 80; i++) d2.push(genNormal(rng2, 50, 12));
+        var c2 = document.createElement('canvas');
+        makeCell(grid, c2, 'Noise: bell at n=80', 'Random dip looks like two peaks', 'NO SPLIT — sampling noise', 'no');
+        renderChart(c2, d2, { color: '#e74c3c' });
+
+        // Heavy-tail creating shoulder
+        var rng3 = mulberry32(302);
+        var d3 = [];
+        for (var i = 0; i < 600; i++) { var z=genNormal(rng3,0,1);var chi=0;for(var j=0;j<3;j++){var g=genNormal(rng3,0,1);chi+=g*g;} d3.push(50+z/Math.sqrt(chi/3)*10); }
+        var c3 = document.createElement('canvas');
+        makeCell(grid, c3, 'Heavy-tail: NOT bimodal', 'Fat tails create bumps that look like peaks', 'NO SPLIT — single distribution', 'no');
+        renderChart(c3, d3, { color: '#8e44ad' });
+    })();
+
+    // ============ REAL BIMODAL ============
+    (function() {
+        var grid = document.getElementById('realGrid');
+
+        var rng1 = mulberry32(110);
+        var d1 = [];
+        for (var i = 0; i < 300; i++) d1.push(genNormal(rng1, 165, 6));
+        for (var i = 0; i < 350; i++) d1.push(genNormal(rng1, 178, 5));
+        var c1 = document.createElement('canvas');
+        makeCell(grid, c1, 'Height: women + men', 'Two normals, μ=165cm vs 178cm', 'Valley drop: 45% from both peaks', 'yes');
+        renderChart(c1, d1, { splitLine: 172, color: '#2980b9' });
+
+        var rng2 = mulberry32(220);
+        var d2 = [];
+        for (var i = 0; i < 300; i++) d2.push(genNormal(rng2, 20, 3));
+        for (var i = 0; i < 350; i++) d2.push(genNormal(rng2, 38, 4));
+        var c2 = document.createElement('canvas');
+        makeCell(grid, c2, 'Commute: bike vs car', 'Bike ~20min, car ~38min', 'Valley drop: 40% / 35%', 'yes');
+        renderChart(c2, d2, { splitLine: 29, color: '#e67e22' });
+
+        var rng3 = mulberry32(330);
+        var d3 = [];
+        for (var i = 0; i < 350; i++) d3.push(genNormal(rng3, 3.2, 0.4));
+        for (var i = 0; i < 300; i++) d3.push(genNormal(rng3, 4.6, 0.3));
+        var c3 = document.createElement('canvas');
+        makeCell(grid, c3, 'GPA: arts vs engineering', 'Different grading cultures', 'Valley drop: 55% from both peaks', 'yes');
+        renderChart(c3, d3, { splitLine: 3.9, color: '#27ae60' });
+
+        var rng4 = mulberry32(440);
+        var d4 = [];
+        for (var i = 0; i < 300; i++) d4.push(genNormal(rng4, 6, 1.5));
+        for (var i = 0; i < 350; i++) d4.push(genNormal(rng4, 14, 2));
+        var c4 = document.createElement('canvas');
+        makeCell(grid, c4, 'Sleep onset: early birds + night owls', 'Two chronotype groups', 'Valley drop: 42% / 35%', 'yes');
+        renderChart(c4, d4, { splitLine: 10, color: '#8e44ad' });
+
+        var rng5 = mulberry32(550);
+        var d5 = [];
+        for (var i = 0; i < 400; i++) d5.push(genNormal(rng5, 118, 6));
+        for (var i = 0; i < 250; i++) d5.push(genNormal(rng5, 148, 7));
+        var c5 = document.createElement('canvas');
+        makeCell(grid, c5, 'Systolic BP: normal + hypertensive', 'Two clinical groups, ~30 units apart', 'Valley drop: 42% / 35%', 'yes');
+        renderChart(c5, d5, { splitLine: 133, color: '#e74c3c' });
+
+        var rng6 = mulberry32(660);
+        var d6 = [];
+        for (var i = 0; i < 300; i++) d6.push(genNormal(rng6, 2500, 300));
+        for (var i = 0; i < 350; i++) d6.push(genNormal(rng6, 3800, 400));
+        var c6 = document.createElement('canvas');
+        makeCell(grid, c6, 'Birth weight: preterm + term', 'Different gestational ages', 'Valley drop: 48% / 40%', 'yes');
+        renderChart(c6, d6, { splitLine: 3100, color: '#16a085' });
+    })();
+
+    // ============ FAKE BIMODAL ============
+    (function() {
+        var grid = document.getElementById('fakeGrid');
+
+        // Small n noise
+        var rng1 = mulberry32(111);
+        var d1 = [];
+        for (var i = 0; i < 60; i++) d1.push(genNormal(rng1, 50, 10));
+        var c1 = document.createElement('canvas');
+        makeCell(grid, c1, 'Normal, n=60: random two-peak illusion', 'Same seed, same distribution — just noisy', 'NO SPLIT — n too low, histogram unstable', 'no');
+        renderChart(c1, d1, { color: '#3498db' });
+
+        // Skewed with plateau
+        var rng2 = mulberry32(222);
+        var d2 = [];
+        for (var i = 0; i < 500; i++) { var s=0;for(var j=0;j<4;j++){var u=rng2();if(u<0.0001)u=0.0001;s+=-Math.log(u);}d2.push(s*3); }
+        var c2 = document.createElement('canvas');
+        makeCell(grid, c2, 'Gamma(4): skewed with a shoulder', 'Peak + flat region looks bimodal', 'NO SPLIT — valley only 12% drop from shoulder', 'no');
+        renderChart(c2, d2, { color: '#e67e22' });
+
+        // Uniform with edge bump
+        var rng3 = mulberry32(333);
+        var d3 = [];
+        for (var i = 0; i < 500; i++) d3.push(20 + rng3() * 60);
+        for (var i = 0; i < 50; i++) d3.push(genNormal(rng3, 22, 2));
+        var c3 = document.createElement('canvas');
+        makeCell(grid, c3, 'Uniform + edge accumulation', 'Slight pile-up at left boundary', 'NO SPLIT — right "peak" is just flat uniform', 'no');
+        renderChart(c3, d3, { color: '#9b59b6' });
+
+        // Heavy-tail bumps
+        var rng4 = mulberry32(444);
+        var d4 = [];
+        for (var i = 0; i < 800; i++) { var z=genNormal(rng4,0,1);var chi=0;for(var j=0;j<2;j++){var g=genNormal(rng4,0,1);chi+=g*g;} d4.push(50+z/Math.sqrt(chi/2)*8); }
+        var c4 = document.createElement('canvas');
+        makeCell(grid, c4, 'Student-t (df=2): tail bumps', 'Heavy tails create secondary humps', 'NO SPLIT — bumps at <20% of main peak', 'no');
+        renderChart(c4, d4, { color: '#e74c3c' });
+
+        // Mixture where one group is tiny
+        var rng5 = mulberry32(555);
+        var d5 = [];
+        for (var i = 0; i < 500; i++) d5.push(genNormal(rng5, 50, 8));
+        for (var i = 0; i < 30; i++) d5.push(genNormal(rng5, 75, 3));
+        var c5 = document.createElement('canvas');
+        makeCell(grid, c5, 'Main peak + tiny group (n=30)', 'Second peak exists but too small', 'NO SPLIT — right side n=30, marginal', 'no');
+        renderChart(c5, d5, { color: '#16a085' });
+
+        // Rounding artifact
+        var rng6 = mulberry32(666);
+        var d6 = [];
+        for (var i = 0; i < 600; i++) d6.push(Math.round(genNormal(rng6, 50, 8) / 5) * 5);
+        var c6 = document.createElement('canvas');
+        makeCell(grid, c6, 'Rounding to nearest 5: fake peaks', 'Regular spikes are rounding, not bimodal', 'NO SPLIT — peaks are equispaced (rounding flag)', 'no');
+        renderChart(c6, d6, { color: '#7f8c8d' });
+    })();
+
+    // ============ DEPTH CRITERION ============
+    (function() {
+        var grid = document.getElementById('depthGrid');
+
+        // Deep valley — clear bimodal
+        var rng1 = mulberry32(1100);
+        var d1 = [];
+        for (var i = 0; i < 400; i++) d1.push(genNormal(rng1, 30, 4));
+        for (var i = 0; i < 400; i++) d1.push(genNormal(rng1, 55, 4));
+        var c1 = document.createElement('canvas');
+        makeCell(grid, c1, 'Deep valley: 60% drop from both', 'Well-separated peaks, valley near zero', 'SPLIT', 'yes');
+        renderChart(c1, d1, { splitLine: 42, color: '#27ae60' });
+
+        // Moderate valley
+        var rng2 = mulberry32(1200);
+        var d2 = [];
+        for (var i = 0; i < 400; i++) d2.push(genNormal(rng2, 35, 7));
+        for (var i = 0; i < 400; i++) d2.push(genNormal(rng2, 55, 7));
+        var c2 = document.createElement('canvas');
+        makeCell(grid, c2, 'Moderate valley: 30% drop from both', 'Overlapping but distinct — borderline', 'SPLIT (just passes 25% threshold)', 'yes');
+        renderChart(c2, d2, { splitLine: 45, color: '#e67e22' });
+
+        // Shallow valley — no split
+        var rng3 = mulberry32(1300);
+        var d3 = [];
+        for (var i = 0; i < 400; i++) d3.push(genNormal(rng3, 40, 9));
+        for (var i = 0; i < 400; i++) d3.push(genNormal(rng3, 55, 9));
+        var c3 = document.createElement('canvas');
+        makeCell(grid, c3, 'Shallow valley: 15% drop', 'Peaks too close relative to spread', 'NO SPLIT — below 25% threshold', 'no');
+        renderChart(c3, d3, { color: '#e74c3c' });
+    })();
+
+    // ============ SAMPLE SIZE ============
+    (function() {
+        var grid = document.getElementById('sampleGrid');
+        // Same bimodal at different n
+        var sizes = [
+            { n: 40, title: 'n=40: peaks barely visible', sub: 'Too noisy — min_n guard prevents split', cls: 'no', verdict: 'NO SPLIT — n per side < 30 threshold', color: '#e74c3c' },
+            { n: 150, title: 'n=150: peaks emerging', sub: '~75 per side, histogram stabilizing', cls: 'maybe', verdict: 'SPLIT — 25% drop met, n=75 per side', color: '#e67e22' },
+            { n: 600, title: 'n=600: clear bimodal', sub: '~300 per side, unambiguous', cls: 'yes', verdict: 'SPLIT — 40% drop, n=300 per side', color: '#27ae60' },
+        ];
+        for (var i = 0; i < sizes.length; i++) {
+            var sz = sizes[i];
+            var rng = mulberry32(2000 + i * 77);
+            var data = [];
+            for (var j = 0; j < Math.round(sz.n * 0.5); j++) data.push(genNormal(rng, 35, 5));
+            for (var j = 0; j < Math.round(sz.n * 0.5); j++) data.push(genNormal(rng, 55, 5));
+            var c = document.createElement('canvas');
+            makeCell(grid, c, sz.title, sz.sub, sz.verdict, sz.cls);
+            renderChart(c, data, sz.cls === 'yes' || sz.cls === 'maybe' ? { splitLine: 45, color: sz.color } : { color: sz.color });
+        }
+    })();
+
+    // ============ COMPARISON (doc 16 vs 17) ============
+    (function() {
+        var grid = document.getElementById('comparisonGrid');
+
+        // Gap split case (doc 16)
+        var rng1 = mulberry32(3100);
+        var d1 = [];
+        for (var i = 0; i < 350; i++) d1.push(genNormal(rng1, 20, 3));
+        for (var i = 0; i < 350; i++) d1.push(genNormal(rng1, 70, 5));
+        var c1 = document.createElement('canvas');
+        makeCell(grid, c1, 'Gap split (Doc 16): empty bins between', 'No data in 28-60 range → gap criterion triggers first', 'GAP SPLIT at σ-proportional point', 'yes');
+        renderChart(c1, d1, { splitLine: 38, color: '#2980b9' });
+
+        // Valley split case (doc 17)
+        var rng2 = mulberry32(3200);
+        var d2 = [];
+        for (var i = 0; i < 350; i++) d2.push(genNormal(rng2, 35, 6));
+        for (var i = 0; i < 350; i++) d2.push(genNormal(rng2, 58, 6));
+        var c2 = document.createElement('canvas');
+        makeCell(grid, c2, 'Valley split (Doc 17): data in between', 'Valley has data but drops 35% from both peaks', 'VALLEY SPLIT at minimum bin', 'yes');
+        renderChart(c2, d2, { splitLine: 46, color: '#16a085' });
+
+        // Neither triggers
+        var rng3 = mulberry32(3300);
+        var d3 = [];
+        for (var i = 0; i < 350; i++) d3.push(genNormal(rng3, 40, 10));
+        for (var i = 0; i < 350; i++) d3.push(genNormal(rng3, 55, 10));
+        var c3 = document.createElement('canvas');
+        makeCell(grid, c3, 'Neither triggers: too much overlap', 'No empty bins, valley <20% drop', 'NO SPLIT — classify as-is (broad bell or bimodal)', 'no');
+        renderChart(c3, d3, { color: '#7f8c8d' });
+    })();
+
+    // ============ AFTER SPLIT ============
+    (function() {
+        var grid = document.getElementById('afterGrid');
+        var rng = mulberry32(4000);
+        var full = [];
+        for (var i = 0; i < 400; i++) full.push(genNormal(rng, 32, 5));
+        for (var i = 0; i < 350; i++) full.push(genNormal(rng, 58, 6));
+
+        var c1 = document.createElement('canvas');
+        makeCell(grid, c1, 'Before split: bimodal', 'Two peaks, valley at ~44', null, 'info');
+        renderChart(c1, full, { splitLine: 44, color: '#8e44ad' });
+
+        var left = full.filter(function(v) { return v < 44; });
+        var c2 = document.createElement('canvas');
+        makeCell(grid, c2, 'Left segment: bell (μ=32, σ=5)', 'Passes normality → ready for t-test', null, 'yes');
+        renderChart(c2, left, { color: '#2e7d32' });
+
+        var right = full.filter(function(v) { return v >= 44; });
+        var c3 = document.createElement('canvas');
+        makeCell(grid, c3, 'Right segment: bell (μ=58, σ=6)', 'Passes normality → ready for t-test', null, 'yes');
+        renderChart(c3, right, { color: '#2980b9' });
+    })();
+
+    // ============ EDGE CASES ============
+    (function() {
+        var grid = document.getElementById('edgeGrid');
+
+        // Asymmetric peaks
+        var rng1 = mulberry32(5100);
+        var d1 = [];
+        for (var i = 0; i < 600; i++) d1.push(genNormal(rng1, 40, 6));
+        for (var i = 0; i < 150; i++) d1.push(genNormal(rng1, 68, 4));
+        var c1 = document.createElement('canvas');
+        makeCell(grid, c1, 'Asymmetric: big peak + small peak', 'Left peak 4x taller. Valley drops 25% from small peak?', 'CHECK — small peak must still show 25% drop', 'maybe');
+        renderChart(c1, d1, { color: '#e67e22' });
+
+        // Three peaks
+        var rng2 = mulberry32(5200);
+        var d2 = [];
+        for (var i = 0; i < 250; i++) d2.push(genNormal(rng2, 20, 3));
+        for (var i = 0; i < 250; i++) d2.push(genNormal(rng2, 45, 4));
+        for (var i = 0; i < 250; i++) d2.push(genNormal(rng2, 70, 3));
+        var c2 = document.createElement('canvas');
+        makeCell(grid, c2, 'Three peaks: split first valley only', 'Recursive split (doc 16 style) handles the rest', 'SPLIT at first valley, then recurse', 'yes');
+        renderChart(c2, d2, { splitLine: 33, color: '#8e44ad' });
+
+        // Non-normal components
+        var rng3 = mulberry32(5300);
+        var d3 = [];
+        for (var i = 0; i < 350; i++) { var u=rng3(); if(u<0.0001)u=0.0001; d3.push(-Math.log(u)*4); }
+        for (var i = 0; i < 300; i++) d3.push(genNormal(rng3, 35, 5));
+        var c3 = document.createElement('canvas');
+        makeCell(grid, c3, 'Exponential + normal: not two normals', 'Valley exists but left side won\'t be bell after split', 'SPLIT valid — but left classifies as descending, not bell', 'maybe');
+        renderChart(c3, d3, { splitLine: 18, color: '#16a085' });
+    })();
+
+    }); // DOMContentLoaded
+    </script>
+</body>
+</html>

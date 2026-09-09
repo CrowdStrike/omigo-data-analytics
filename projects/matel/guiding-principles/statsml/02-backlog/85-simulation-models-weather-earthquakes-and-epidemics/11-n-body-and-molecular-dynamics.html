@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>N-body &amp; Molecular Dynamics — Particles, Forces, and the O(N&sup2;) Wall</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #fff;
+            color: #2c3e50;
+            padding: 40px;
+            line-height: 1.6;
+        }
+        h1 {
+            font-size: 2rem;
+            color: #1a5276;
+            margin-bottom: 8px;
+            border-bottom: 2px solid #2980b9;
+            padding-bottom: 8px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 32px;
+            font-size: 0.95rem;
+        }
+        .intro {
+            background: #f0f4f8;
+            border-left: 3px solid #2980b9;
+            padding: 8px 12px;
+            margin-bottom: 32px;
+            font-size: 0.9rem;
+        }
+        .lang-section {
+            margin-bottom: 40px;
+        }
+        .lang-section h2 {
+            font-size: 1.3rem;
+            color: #1a5276;
+            margin-bottom: 12px;
+            border-bottom: 2px solid #2980b9;
+            padding-bottom: 4px;
+        }
+        table.layout {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+        }
+        table.layout td {
+            vertical-align: top;
+            padding: 12px;
+        }
+        table.layout td.text-col {
+            width: 50%;
+        }
+        table.layout td.viz-col {
+            width: 50%;
+        }
+        canvas {
+            width: 100%;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px; height: auto; }
+        .key-point {
+            background: #f8f9fa;
+            border-left: 3px solid #e74c3c;
+            padding: 8px 12px;
+            margin-top: 12px;
+            font-size: 0.9rem;
+        }
+        ul {
+            margin: 8px 0 8px 20px;
+            font-size: 0.92rem;
+        }
+        li { margin-bottom: 4px; }
+        li strong { color: #1a5276; }
+    </style>
+</head>
+<body>
+    <h1>N-body &amp; Molecular Dynamics</h1>
+    <p class="subtitle">The same recipe simulates galaxies and proteins — compute the force on every particle from every other, step positions forward, repeat — and the whole field is a fight against that recipe's cost.</p>
+
+    <div class="intro">N-body simulation is physics at its most literal: no mesh, no aggregate equations, just particles and the forces between them. The catch is arithmetic — naive pairwise forces cost O(N&sup2;) per step, and both cosmology and chemistry need billions of steps over millions of particles.</div>
+
+<div class="lang-section">
+    <h2>1. The recipe: forces, then a step</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>One loop drives everything from star clusters to solvated proteins: sum the forces on each particle, advance positions and velocities by one small timestep, and repeat until the physics of interest has played out.</p>
+                <ul>
+                    <li><strong>Universal recipe:</strong> Each particle feels a force from every other — gravity for stars, electrostatics and bonds for atoms.</li>
+                    <li><strong>Sum then step:</strong> Every step sums all forces on each particle and nudges its position and velocity forward.</li>
+                    <li><strong>Symplectic integrators:</strong> Leapfrog and velocity Verlet are the workhorses because they respect the geometry of mechanics.</li>
+                    <li><strong>Energy stays bounded:</strong> A symplectic scheme keeps energy oscillating around the truth instead of drifting away over long runs.</li>
+                    <li><strong>Timestep tyranny:</strong> The step must resolve the fastest motion in the system, not the motion you actually care about.</li>
+                    <li><strong>Naive cost:</strong> N particles means roughly N&sup2;/2 pairwise force evaluations at every single step.</li>
+                    <li><strong>The field in one line:</strong> Everything after the recipe is tricks to cut that cost without corrupting the physics.</li>
+                </ul>
+                <div class="key-point">The force loop is trivially simple and brutally expensive — O(N&sup2;) per step, with the timestep dictated by the fastest motion present, is the wall the entire field is organized around.</div>
+            </td>
+            <td class="viz-col"><canvas id="c1" width="720" height="340"></canvas></td>
+        </tr>
+    </table>
+</div>
+
+<div class="lang-section">
+    <h2>2. Beating O(N&sup2;)</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>The pairwise sum is exact but unaffordable, so every production code replaces most of it with structured approximations whose error is measured, bounded, and tuned below the physics of interest.</p>
+                <ul>
+                    <li><strong>Barnes-Hut trees:</strong> A tree groups distant particles into single pseudo-masses, dropping the cost to O(N log N).</li>
+                    <li><strong>Opening angle:</strong> One tunable knob decides when a distant cell is far enough to collapse into its center of mass.</li>
+                    <li><strong>Fast multipole:</strong> Multipole expansions push the cost further, toward O(N) for large systems.</li>
+                    <li><strong>Cutoff radii:</strong> Molecular dynamics simply stops evaluating short-range forces beyond a few nanometers.</li>
+                    <li><strong>Neighbor lists:</strong> Each atom keeps a cached list of nearby atoms so the cutoff never requires a full scan.</li>
+                    <li><strong>Long-range electrostatics:</strong> Grid-based Ewald-style methods handle the slowly decaying Coulomb tail that cutoffs would butcher.</li>
+                    <li><strong>Controlled error:</strong> These are not hacks — the approximation error is tuned so the physics of interest survives.</li>
+                </ul>
+                <div class="key-point">Approximation is the price of scale, but it is a negotiated price — tree openings, cutoffs, and grid resolutions are dials with known error bounds, set so the corruption stays below the signal.</div>
+            </td>
+            <td class="viz-col"><canvas id="c2" width="720" height="400"></canvas></td>
+        </tr>
+    </table>
+</div>
+
+<div class="lang-section">
+    <h2>3. Galaxies to proteins</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>The same recipe, with different force laws and timesteps, spans about sixty orders of magnitude in mass — from dark-matter particles tracing the cosmic web to atoms folding a protein around a drug molecule.</p>
+                <ul>
+                    <li><strong>Cosmology:</strong> Billions of dark-matter particles reproduce the cosmic web of filaments and voids from nearly uniform initial conditions.</li>
+                    <li><strong>Solar system:</strong> Long integrations of the planets reveal chaos — orbits are predictable for millions, not billions, of years.</li>
+                    <li><strong>Molecular dynamics:</strong> Atomistic runs show proteins folding, membranes assembling, and drug molecules binding to their targets.</li>
+                    <li><strong>Force fields:</strong> The interatomic forces are fitted functions, calibrated against quantum-mechanical calculations.</li>
+                    <li><strong>Materials:</strong> Crack propagation, alloy behavior, and battery chemistry are studied at atomic resolution.</li>
+                    <li><strong>Validation differs:</strong> Cosmology checks the statistics of structure; chemistry checks against experiment and quantum references.</li>
+                    <li><strong>No single truth test:</strong> Neither field can compare a run against the one true trajectory — both validate distributions and observables.</li>
+                </ul>
+                <div class="key-point">One recipe spans the universe and the test tube, but the ground truth differs — cosmologists validate statistical structure, chemists validate against measured and quantum-computed observables, and neither can check a single trajectory.</div>
+            </td>
+            <td class="viz-col"><canvas id="c3" width="720" height="380"></canvas></td>
+        </tr>
+    </table>
+</div>
+
+<div class="lang-section">
+    <h2>4. The timescale wall — and the ML shortcut</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Molecular dynamics is limited less by system size than by time: femtosecond steps chasing millisecond events leave a trillion-step gap that hardware, sampling tricks, and now machine learning each close only partly.</p>
+                <ul>
+                    <li><strong>Femtosecond steps:</strong> The timestep must resolve bond vibrations, and those oscillate on femtosecond scales.</li>
+                    <li><strong>Millisecond goals:</strong> Protein folding and many binding events take microseconds to milliseconds to happen.</li>
+                    <li><strong>Trillion-step gap:</strong> Twelve orders of magnitude separate the step size from the event of interest.</li>
+                    <li><strong>Enhanced sampling:</strong> Biasing methods push the simulation toward rare transitions, then reweight the statistics afterward.</li>
+                    <li><strong>Special hardware:</strong> Purpose-built machines bought orders of magnitude of speed — but not the whole gap.</li>
+                    <li><strong>ML force fields:</strong> Learned potentials now approximate quantum-accurate forces at nearly classical cost.</li>
+                    <li><strong>Endpoint vs path:</strong> Learned structure predictors answer the endpoint question without simulating the journey.</li>
+                    <li><strong>Dynamics still simulates:</strong> Mechanisms, rates, and pathways still require actually integrating the motion.</li>
+                </ul>
+                <div class="key-point">ML collapsed the endpoint problem — predicting the folded structure — but the pathway problem remains a simulation problem, because rates and mechanisms live in the trajectory that structure predictors never compute.</div>
+            </td>
+            <td class="viz-col"><canvas id="c4" width="720" height="340"></canvas></td>
+        </tr>
+    </table>
+</div>
+
+    <script>
+    const dpr = window.devicePixelRatio || 1;
+    function setupCanvas(id, hh) {
+        const c = document.getElementById(id);
+        const w = 720, h = hh;
+        c.style.maxWidth = w + 'px';
+        var __cssW = c.getBoundingClientRect().width || w;
+        var __scale = (__cssW / w) * dpr;
+        c.width = Math.round(w * __scale);
+        c.height = Math.round(h * __scale);
+        const ctx = c.getContext('2d');
+        ctx.scale(__scale, __scale);
+        return { ctx, w, h };
+    }
+
+    function arrow(ctx, x1, y1, x2, y2, color, lw) {
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = lw;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+        const ang = Math.atan2(y2 - y1, x2 - x1);
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - 9 * Math.cos(ang - 0.5), y2 - 9 * Math.sin(ang - 0.5));
+        ctx.lineTo(x2 - 9 * Math.cos(ang + 0.5), y2 - 9 * Math.sin(ang + 0.5));
+        ctx.fill();
+    }
+
+    // C1: pairwise force cluster + leapfrog staggered timeline
+    (function() {
+        const { ctx, w, h } = setupCanvas('c1', 340);
+
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Every particle pulls on every other — then take one small step', w / 2, 22);
+
+        // Left panel: particle cluster
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.fillText('EVERY PAIR INTERACTS', 195, 55);
+
+        const hx = 170, hy = 185;
+        const others = [
+            [90, 100], [240, 85], [315, 145], [265, 245],
+            [120, 270], [55, 195], [215, 150], [330, 265]
+        ];
+        // sort by distance to assign fading strength: 2 nearest, 4 mid, 2 far
+        const withD = others.map(p => {
+            const d = Math.hypot(p[0] - hx, p[1] - hy);
+            return { p, d };
+        }).sort((a, b) => a.d - b.d);
+        withD.forEach((o, i) => {
+            let color, lw;
+            if (i < 2)      { color = 'rgba(26,82,118,0.85)'; lw = 2; }
+            else if (i < 6) { color = 'rgba(26,82,118,0.55)'; lw = 1.5; }
+            else            { color = 'rgba(26,82,118,0.3)';  lw = 1; }
+            const ang = Math.atan2(hy - o.p[1], hx - o.p[0]);
+            const ex = hx - 12 * Math.cos(ang);
+            const ey = hy - 12 * Math.sin(ang);
+            arrow(ctx, o.p[0], o.p[1], ex, ey, color, lw);
+        });
+        // other particles
+        others.forEach(p => {
+            ctx.fillStyle = 'rgba(26,82,118,0.35)';
+            ctx.beginPath();
+            ctx.arc(p[0], p[1], 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#1a5276';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        });
+        // highlighted particle
+        ctx.fillStyle = '#e74c3c';
+        ctx.beginPath();
+        ctx.arc(hx, hy, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#666';
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillText('force on one particle sums all the others', 195, 300);
+
+        // Right panel: leapfrog
+        ctx.fillStyle = '#27ae60';
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.fillText('LEAPFROG INTEGRATOR', 550, 55);
+
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 1;
+        [140, 215].forEach(y => {
+            ctx.beginPath();
+            ctx.moveTo(425, y);
+            ctx.lineTo(685, y);
+            ctx.stroke();
+        });
+        ctx.fillStyle = '#666';
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('x', 408, 144);
+        ctx.fillText('v', 408, 219);
+        ctx.textAlign = 'center';
+
+        // zigzag arrows
+        arrow(ctx, 450, 140, 495, 215, '#999', 1.5);
+        arrow(ctx, 495, 215, 540, 140, '#999', 1.5);
+        arrow(ctx, 540, 140, 585, 215, '#999', 1.5);
+        arrow(ctx, 585, 215, 630, 140, '#999', 1.5);
+        arrow(ctx, 630, 140, 675, 215, '#999', 1.5);
+
+        // position dots
+        ctx.fillStyle = '#1a5276';
+        [450, 540, 630].forEach(x => {
+            ctx.beginPath();
+            ctx.arc(x, 140, 5, 0, Math.PI * 2);
+            ctx.fill();
+        });
+        // velocity dots
+        ctx.fillStyle = '#27ae60';
+        [495, 585, 675].forEach(x => {
+            ctx.beginPath();
+            ctx.arc(x, 215, 5, 0, Math.PI * 2);
+            ctx.fill();
+        });
+        ctx.fillStyle = '#999';
+        ctx.font = '9px -apple-system, sans-serif';
+        ctx.fillText('t', 450, 126);
+        ctx.fillText('t+Δt', 540, 126);
+        ctx.fillText('t+2Δt', 630, 126);
+        ctx.fillText('t+Δt/2', 495, 236);
+        ctx.fillText('t+3Δt/2', 585, 236);
+        ctx.fillText('t+5Δt/2', 675, 236);
+
+        ctx.fillStyle = '#666';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillText('positions and velocities alternate on a staggered grid', 550, 268);
+        ctx.fillStyle = '#999';
+        ctx.fillText('symplectic — energy stays bounded over long runs', 550, 284);
+
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.fillText('Same loop for galaxies and proteins — only the force law and the timestep change', w / 2, h - 14);
+    })();
+
+    // C2: Barnes-Hut quadtree — fine cells nearby, distant group collapsed to one pseudo-particle
+    (function() {
+        const { ctx, w, h } = setupCanvas('c2', 400);
+
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Group the far away, keep the nearby exact', w / 2, 22);
+
+        // quadtree frame
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(60, 50, 320, 320);
+        ctx.lineWidth = 1;
+        // level-1 split
+        ctx.beginPath();
+        ctx.moveTo(220, 50);  ctx.lineTo(220, 370);
+        ctx.moveTo(60, 210);  ctx.lineTo(380, 210);
+        ctx.stroke();
+        // lower-left quadrant subdivided
+        ctx.beginPath();
+        ctx.moveTo(140, 210); ctx.lineTo(140, 370);
+        ctx.moveTo(60, 290);  ctx.lineTo(220, 290);
+        ctx.stroke();
+        // its lower-left subcell subdivided again
+        ctx.strokeStyle = '#ddd';
+        ctx.beginPath();
+        ctx.moveTo(100, 290); ctx.lineTo(100, 370);
+        ctx.moveTo(60, 330);  ctx.lineTo(140, 330);
+        ctx.stroke();
+
+        // far group: faint members
+        ctx.fillStyle = 'rgba(26,82,118,0.2)';
+        [[290, 95], [325, 90], [335, 120], [300, 135], [315, 105], [285, 120], [330, 140], [295, 110], [320, 128]].forEach(p => {
+            ctx.beginPath();
+            ctx.arc(p[0], p[1], 2.5, 0, Math.PI * 2);
+            ctx.fill();
+        });
+        // pseudo-particle arrow to highlighted particle (stop 12px short)
+        (function() {
+            const x1 = 300, y1 = 125, tx = 115, ty = 315;
+            const ang = Math.atan2(ty - y1, tx - x1);
+            arrow(ctx, x1, y1, tx - 12 * Math.cos(ang), ty - 12 * Math.sin(ang), '#8e44ad', 1.5);
+        })();
+        // pseudo-particle
+        ctx.fillStyle = '#8e44ad';
+        ctx.beginPath();
+        ctx.arc(310, 115, 9, 0, Math.PI * 2);
+        ctx.fill();
+        // annotation
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillText('distant group ≈ one pseudo-particle', 310, 68);
+        ctx.fillStyle = '#666';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillText('one force instead of nine', 310, 82);
+
+        // nearby cluster
+        [[80, 305], [95, 345], [125, 310], [130, 350], [70, 330], [150, 330], [115, 295], [160, 355]].forEach(p => {
+            ctx.fillStyle = 'rgba(26,82,118,0.35)';
+            ctx.beginPath();
+            ctx.arc(p[0], p[1], 3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#1a5276';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        });
+        // highlighted particle
+        ctx.fillStyle = '#e74c3c';
+        ctx.beginPath();
+        ctx.arc(105, 325, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.font = 'bold 10px -apple-system, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('our particle', 115, 318);
+
+        // cost panel
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.fillText('COST PER STEP', 560, 70);
+        ctx.textAlign = 'left';
+        const entries = [
+            ['#e74c3c', 'naive pairwise — O(N²)',        'every pair, every step',              105],
+            ['#1a5276', 'Barnes-Hut tree — O(N log N)',       'distant cells become pseudo-masses',  150],
+            ['#27ae60', 'fast multipole — toward O(N)',       'expansions, not pairs',               195],
+            ['#e67e22', 'MD cutoffs + neighbor lists',        'ignore beyond a few nanometers',      240],
+            ['#8e44ad', 'Ewald-style grids',                  'long-range electrostatics on a mesh', 285]
+        ];
+        entries.forEach(e => {
+            ctx.fillStyle = e[0];
+            ctx.font = 'bold 11px -apple-system, sans-serif';
+            ctx.fillText(e[1], 460, e[3]);
+            ctx.fillStyle = '#666';
+            ctx.font = '10px -apple-system, sans-serif';
+            ctx.fillText(e[2], 460, e[3] + 15);
+        });
+        ctx.fillStyle = '#999';
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillText('each dial trades measured error for speed', 460, 335);
+
+        ctx.textAlign = 'center';
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.fillText('The tree keeps nearby forces exact and collapses the distant sky into a handful of terms', w / 2, h - 14);
+    })();
+
+    // C3: cosmic web (left) and protein + ligand (right)
+    (function() {
+        const { ctx, w, h } = setupCanvas('c3', 380);
+
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('The same recipe at both ends of the scale', w / 2, 22);
+
+        // Left: cosmic web
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.fillText('COSMIC WEB — DARK MATTER', 190, 50);
+        ctx.fillStyle = '#1c2833';
+        ctx.fillRect(40, 62, 300, 240);
+
+        const nodes = [[110, 130], [255, 105], [185, 210], [95, 255], [275, 255]];
+        const filaments = [[0, 1], [0, 2], [1, 2], [2, 3], [2, 4]];
+        // filament lines
+        ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+        ctx.lineWidth = 1;
+        filaments.forEach(f => {
+            ctx.beginPath();
+            ctx.moveTo(nodes[f[0]][0], nodes[f[0]][1]);
+            ctx.lineTo(nodes[f[1]][0], nodes[f[1]][1]);
+            ctx.stroke();
+        });
+        // particle dots along filaments with perpendicular wiggle
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        filaments.forEach((f, fi) => {
+            const [a, b] = [nodes[f[0]], nodes[f[1]]];
+            const dx = b[0] - a[0], dy = b[1] - a[1];
+            const len = Math.hypot(dx, dy);
+            const px = -dy / len, py = dx / len; // unit perpendicular
+            for (let s = 1; s <= 9; s++) {
+                const t = s / 10;
+                const off = 4 * Math.sin(7 * t + fi);
+                const x = a[0] + dx * t + px * off;
+                const y = a[1] + dy * t + py * off;
+                ctx.beginPath();
+                ctx.arc(x, y, 1, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        });
+        // sparse void dots
+        ctx.fillStyle = 'rgba(255,255,255,0.25)';
+        [[70, 100], [300, 160], [140, 285], [60, 200], [310, 90], [230, 165]].forEach(p => {
+            ctx.beginPath();
+            ctx.arc(p[0], p[1], 1, 0, Math.PI * 2);
+            ctx.fill();
+        });
+        // bright nodes
+        ctx.fillStyle = '#fff';
+        nodes.forEach(p => {
+            ctx.beginPath();
+            ctx.arc(p[0], p[1], 3, 0, Math.PI * 2);
+            ctx.fill();
+        });
+        ctx.fillStyle = '#666';
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillText('filaments and voids emerge from near-uniform start', 190, 322);
+
+        // Right: protein ribbon + ligand
+        ctx.fillStyle = '#27ae60';
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.fillText('PROTEIN & LIGAND', 540, 50);
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(440, 260);
+        ctx.quadraticCurveTo(470, 120, 530, 250);
+        ctx.quadraticCurveTo(585, 110, 620, 245);
+        ctx.quadraticCurveTo(655, 150, 665, 220);
+        ctx.stroke();
+        ctx.lineCap = 'butt';
+        // ligand docking into the pocket
+        arrow(ctx, 560, 150, 560, 168, '#e67e22', 1.5);
+        ctx.fillStyle = '#e67e22';
+        ctx.beginPath();
+        ctx.arc(560, 178, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.font = 'bold 10px -apple-system, sans-serif';
+        ctx.fillText('ligand docks into the pocket', 560, 140);
+        ctx.fillStyle = '#666';
+        ctx.font = '11px -apple-system, sans-serif';
+        ctx.fillText('atoms, bonds, and a drug finding its target', 540, 322);
+
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.fillText('Sixty orders of magnitude apart in mass — validated by statistics on one side, experiment on the other', w / 2, h - 14);
+    })();
+
+    // C4: log timescale bar — fs to ms, reachable bracket, sampling arrow, ML note
+    (function() {
+        const { ctx, w, h } = setupCanvas('c4', 340);
+
+        ctx.font = 'bold 14px -apple-system, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText('Twelve orders of magnitude between the step and the event', w / 2, 22);
+
+        // axis
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(60, 180);
+        ctx.lineTo(660, 180);
+        ctx.stroke();
+        // minor decade ticks
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 1;
+        for (let x = 60; x <= 660; x += 50) {
+            ctx.beginPath();
+            ctx.moveTo(x, 180);
+            ctx.lineTo(x, 186);
+            ctx.stroke();
+        }
+        // major labels
+        const majors = [[60, '10⁻¹⁵ s', 'fs'], [210, '10⁻¹² s', 'ps'], [360, '10⁻⁹ s', 'ns'], [510, '10⁻⁶ s', 'µs'], [660, '10⁻³ s', 'ms']];
+        majors.forEach(m => {
+            ctx.fillStyle = '#999';
+            ctx.font = '10px -apple-system, sans-serif';
+            ctx.fillText(m[1], m[0], 202);
+            ctx.fillStyle = '#bbb';
+            ctx.font = '9px -apple-system, sans-serif';
+            ctx.fillText(m[2], m[0], 216);
+        });
+
+        // motion labels with upward ticks
+        const motions = [[85, 'bond vibration', 150], [225, 'side-chain motion', 132], [375, 'loop motion', 150], [570, 'folding µs–ms', 132]];
+        motions.forEach(m => {
+            ctx.strokeStyle = '#555';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(m[0], 180);
+            ctx.lineTo(m[0], 170);
+            ctx.stroke();
+            ctx.fillStyle = '#555';
+            ctx.font = 'bold 10px -apple-system, sans-serif';
+            ctx.fillText(m[1], m[0], m[2]);
+        });
+
+        // gap annotation with double arrow
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillText('femtosecond steps, millisecond goals — a trillion-step gap', 360, 66);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(90, 80);
+        ctx.lineTo(630, 80);
+        ctx.stroke();
+        ctx.fillStyle = '#e74c3c';
+        [[90, 1], [630, -1]].forEach(a => {
+            ctx.beginPath();
+            ctx.moveTo(a[0], 80);
+            ctx.lineTo(a[0] + a[1] * 7, 76);
+            ctx.lineTo(a[0] + a[1] * 7, 84);
+            ctx.fill();
+        });
+
+        // blue bracket: brute-force MD
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(60, 232);
+        ctx.lineTo(60, 240);
+        ctx.lineTo(510, 240);
+        ctx.lineTo(510, 232);
+        ctx.stroke();
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillText('brute-force MD — reachable', 285, 260);
+
+        // orange arrow: enhanced sampling + hardware
+        arrow(ctx, 510, 282, 650, 282, '#e67e22', 2);
+        ctx.fillStyle = '#e67e22';
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillText('enhanced sampling + special hardware', 540, 302);
+
+        // green note: ML endpoint
+        ctx.fillStyle = '#27ae60';
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillText('ML predicts the endpoint, not the path', 665, 120);
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(655, 126);
+        ctx.lineTo(655, 168);
+        ctx.stroke();
+
+        ctx.textAlign = 'center';
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = '#999';
+        ctx.fillText('Hardware and sampling stretch the reach — ML jumps to the answer but skips the mechanism', w / 2, h - 14);
+    })();
+    </script>
+</body>
+</html>

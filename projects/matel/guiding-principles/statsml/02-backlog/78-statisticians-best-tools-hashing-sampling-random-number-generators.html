@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Statisticians' Best Tools — Hashing, Sampling, Random Number Generators</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #fff;
+            color: #2c3e50;
+            padding: 40px;
+            line-height: 1.6;
+        }
+        h1 {
+            font-size: 2rem;
+            color: #1a5276;
+            margin-bottom: 8px;
+            border-bottom: 2px solid #2980b9;
+            padding-bottom: 8px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 32px;
+            font-size: 0.95rem;
+        }
+        .intro {
+            background: #f0f4f8;
+            border-left: 3px solid #2980b9;
+            padding: 8px 12px;
+            margin-bottom: 32px;
+            font-size: 0.9rem;
+        }
+        .lang-section {
+            margin-bottom: 40px;
+        }
+        .lang-section h2 {
+            font-size: 1.3rem;
+            color: #1a5276;
+            margin-bottom: 12px;
+            border-bottom: 2px solid #2980b9;
+            padding-bottom: 4px;
+        }
+        table.layout {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+        }
+        table.layout td {
+            vertical-align: top;
+            padding: 12px;
+        }
+        table.layout td.text-col {
+            width: 50%;
+        }
+        table.layout td.viz-col {
+            width: 50%;
+        }
+        canvas {
+            width: 100%;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px; height: auto; }
+        .key-point {
+            background: #f8f9fa;
+            border-left: 3px solid #e74c3c;
+            padding: 8px 12px;
+            margin-top: 12px;
+            font-size: 0.9rem;
+        }
+        .example {
+            font-style: italic;
+            color: #555;
+            margin-top: 8px;
+            font-size: 0.9rem;
+        }
+        ul {
+            margin: 8px 0 8px 20px;
+            font-size: 0.92rem;
+        }
+        li { margin-bottom: 4px; }
+        .status {
+            display: inline-block;
+            background: #fef9e7;
+            border: 1px solid #f39c12;
+            color: #b7950b;
+            padding: 2px 10px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            margin-left: 12px;
+            vertical-align: middle;
+        }
+    </style>
+</head>
+<body>
+    <h1>Statisticians' Best Tools — Hashing, Sampling, Random Number Generators <span class="status">BACKLOG</span></h1>
+    <p class="subtitle">Hashing, sampling, and random number generators do most of the work in large-scale statistics — and each fails in a way that looks like a valid result.</p>
+
+    <div class="intro">Three primitives carry almost every large-scale analysis: hashing turns an identity into a deterministic bucket without storing a table, sampling turns an intractable population into a tractable estimate, and a generator turns a seed into the randomness that simulation and randomization need. All three are cheap, which is why they are reached for before anyone checks the precondition each one quietly assumes.</div>
+
+<div class="lang-section">
+    <h2>1. Hashing as Deterministic Assignment</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>A hash is a lookup table you never have to store: the same identifier always lands in the same bucket.</p>
+                <ul>
+                    <li><strong>No state to keep</strong> — <code>bucket = hash(user_id + salt) mod 100</code> reproduces the same arm on every host.</li>
+                    <li><strong>Stateless is the point</strong> — no assignment table to replicate, migrate, or keep consistent under retries.</li>
+                    <li><strong>Avalanche matters</strong> — sequential ids need a mixed hash; a weak one leaves id structure in the bucket.</li>
+                    <li><strong>Uniform, not equal</strong> — 10,000 users over 100 buckets gives 100 expected, SD √(10000·0.01·0.99) = 9.95.</li>
+                    <li><strong>Observed spread agrees</strong> — the plotted buckets range 79 to 119 with SD 9.84, right at that 9.95.</li>
+                    <li><strong>A 50/50 split lands at 49.68/50.32</strong> — buckets 0–49 hold 4,968 users, buckets 50–99 hold 5,032.</li>
+                    <li><strong>Never a cryptographic claim</strong> — a bucketing hash is fast and non-secret, not a commitment or a MAC.</li>
+                </ul>
+                <div class="key-point">
+                    Bucket imbalance of a few percent is the expected binomial spread, not a broken hash.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="340"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="lang-section">
+    <h2>2. One Salt, Correlated Arms</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Re-using a single hash across sequential experiments makes the second experiment a copy of the first.</p>
+                <ul>
+                    <li><strong>The bug is invisible</strong> — each experiment alone shows a clean, well-balanced 50/50 split.</li>
+                    <li><strong>Same input, same output</strong> — <code>hash(user_id) mod 100</code> is a function, so experiment 2 repeats experiment 1.</li>
+                    <li><strong>Cross-tab collapses</strong> — every user is A/A or B/B; the off-diagonal cells hold exactly 0 users.</li>
+                    <li><strong>φ = 1 exactly</strong> — perfect arm correlation, so experiment 2 measures the carry-over, not its own treatment.</li>
+                    <li><strong>Per-experiment salt fixes it</strong> — <code>hash(user_id + experiment_id)</code> re-randomizes each assignment.</li>
+                    <li><strong>With distinct salts</strong> — the four cells hold 2,490 / 2,497 / 2,554 / 2,459 of 10,000 users.</li>
+                    <li><strong>That residue is noise</strong> — φ = −0.0102, so χ² = 10000·φ² = 1.04 on 1 df, p ≈ 0.31.</li>
+                </ul>
+                <div class="key-point">
+                    The salt is what makes the assignment independent; without it the hash is deterministic <em>across</em> experiments too.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="340"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="lang-section">
+    <h2>3. Sketches: Kilobytes for a Bounded Error</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Hash-based sketches answer "how many distinct?" and "how often?" in fixed memory, giving up exactness.</p>
+                <ul>
+                    <li><strong>HyperLogLog</strong> — hashes each key, tracks the longest leading-zero run per register, then averages.</li>
+                    <li><strong>Its error is a formula</strong> — relative standard error ≈ 1.04/√m for m registers, independent of cardinality.</li>
+                    <li><strong>m = 16,384 registers</strong> — 1.04/√16384 = 0.813% error in 16384·5/8 = 10,240 bytes = 10.0 KB.</li>
+                    <li><strong>m = 65,536 registers</strong> — error halves to 0.406%, memory quadruples to 40,960 bytes = 40.0 KB.</li>
+                    <li><strong>The exact alternative</strong> — a billion 8-byte ids is 8 GB, about 195,000× the 40 KB sketch.</li>
+                    <li><strong>Count-min sketch</strong> — d hash rows of w counters; per-key overcount only, never an undercount.</li>
+                    <li><strong>Sizing it</strong> — ε = 0.001, δ = 0.01 needs w = ⌈e/ε⌉ = 2,719 and d = ⌈ln(1/δ)⌉ = 5, so 53.1 KB.</li>
+                    <li><strong>Where it bites</strong> — collisions inflate rare keys, so a sketch is safe for heavy hitters, wrong for the tail.</li>
+                </ul>
+                <div class="key-point">
+                    A sketch's error is a design parameter, so state it beside the estimate rather than reporting the estimate alone.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="340"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="lang-section">
+    <h2>4. Reservoir Sampling on an Unbounded Stream</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Reservoir sampling draws k items uniformly from a stream whose length is unknown until it ends.</p>
+                <ul>
+                    <li><strong>Algorithm R</strong> — keep the first k; for item i &gt; k, admit it with probability k/i, evicting a uniform slot.</li>
+                    <li><strong>One pass, k slots</strong> — memory is the sample size, not the stream length, so length can stay unknown.</li>
+                    <li><strong>The invariant</strong> — after i items, every item so far is in the reservoir with probability exactly k/i.</li>
+                    <li><strong>At the end</strong> — with k = 10 and n = 200 every position has inclusion probability 10/200 = 5%.</li>
+                    <li><strong>The lazy alternative</strong> — "first 10 rows" gives positions 1–10 probability 100% and the rest 0%.</li>
+                    <li><strong>Why that is fatal</strong> — streams are time-ordered, so the truncated sample is a sample of one hour.</li>
+                    <li><strong>Simulated check</strong> — 4,000 seeded replications give mean inclusion 5.000% across the 200 positions.</li>
+                    <li><strong>Spread is Monte Carlo noise</strong> — SE = √(0.05·0.95/4000) = 0.345pp, and 12 of 200 fall outside ±1.96 SE.</li>
+                </ul>
+                <div class="key-point">
+                    Under-coverage from truncating a stream is a bias no sample-size increase can remove.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="340"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="lang-section">
+    <h2>5. Stratified Beats Simple When the Tail Carries the Mean</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Simple random sampling is unbiased but can be uselessly noisy when a tiny stratum dominates the total.</p>
+                <ul>
+                    <li><strong>Illustrative population</strong> — 1% enterprise accounts at mean 1,000 (SD 200), 99% small at mean 10 (SD 5).</li>
+                    <li><strong>Population mean</strong> — 0.01·1000 + 0.99·10 = 19.9 per account.</li>
+                    <li><strong>Population SD</strong> — √(E[X²] − μ²) = 100.64, driven almost entirely by the 1% stratum.</li>
+                    <li><strong>That 1% is half the total</strong> — 0.01·1000 / 19.9 = 50.25% of all revenue sits in the enterprise stratum.</li>
+                    <li><strong>Simple random, n = 10,000</strong> — SE = 100.64/√10000 = 1.006, a 5.06% coefficient of variation.</li>
+                    <li><strong>Proportional stratified, n = 10,000</strong> — SE = √((0.01·200² + 0.99·5²)/10000) = 0.206, CV 1.04%.</li>
+                    <li><strong>4.88× tighter for free</strong> — matching that SE with simple random sampling needs n ≈ 238,000.</li>
+                    <li><strong>Small samples miss it entirely</strong> — at n = 200, P(zero enterprise accounts) = 0.99²⁰⁰ = 13.4%.</li>
+                </ul>
+                <div class="key-point">
+                    Stratifying removes between-stratum variance from the estimator, so the gain grows with how unequal the strata are.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c5" width="720" height="340"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="lang-section">
+    <h2>6. Sampling a Join Is Not the Join of the Samples</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Independently sampling two tables at rate p leaves only p² of the matching pairs, and the survivors are not a random subset.</p>
+                <ul>
+                    <li><strong>The rate collapses</strong> — two tables at 10% each retain 0.10² = 1% of joined rows, a 10× undercount.</li>
+                    <li><strong>The bias is worse than the loss</strong> — survival is not uniform across the entities being joined.</li>
+                    <li><strong>Illustrative population</strong> — 800 customers with 2 orders each, 200 with 20 orders each; 5,600 orders total.</li>
+                    <li><strong>True mean</strong> — 5,600 / 1,000 = 5.6 orders per customer.</li>
+                    <li><strong>Sample orders at 10%</strong> — a light customer appears with probability 1 − 0.9² = 19.0%.</li>
+                    <li><strong>A heavy customer appears</strong> — with probability 1 − 0.9²⁰ = 87.8%, so heavy accounts nearly always survive.</li>
+                    <li><strong>The join skews</strong> — heavy customers are 20% of the population but 53.6% of the 327.7 expected survivors.</li>
+                    <li><strong>The estimate breaks</strong> — 560 sampled orders / 327.7 customers ÷ 0.1 = 17.1, a 3.05× overstatement.</li>
+                    <li><strong>The fix</strong> — sample on the join key: hash the customer id, keep every row for the chosen customers.</li>
+                </ul>
+                <div class="key-point">
+                    Sample the join key, not the rows, so each retained entity keeps its complete fan-out.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c6" width="720" height="340"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="lang-section">
+    <h2>7. Seeding: When Parallel Workers Share One Stream</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>A fixed seed makes a simulation reproducible; the same fixed seed on every worker makes it a single replicate.</p>
+                <ul>
+                    <li><strong>Reproducibility needs a seed</strong> — an unseeded run cannot be re-derived, audited, or bisected.</li>
+                    <li><strong>The failure</strong> — each worker calls the same fixed seed value, so all W workers draw an identical stream.</li>
+                    <li><strong>Nothing looks wrong</strong> — the run completes, the histogram looks fine, the estimate has the right sign.</li>
+                    <li><strong>Effective sample size</strong> — W identical replicates carry the information of 1, not of W.</li>
+                    <li><strong>SE is understated by √W</strong> — with 8 workers the reported interval is 2.83× narrower than the truth.</li>
+                    <li><strong>Coverage collapses</strong> — a nominal 95% interval covers 83.4% at W = 2, 51.2% at W = 8, 37.6% at W = 16.</li>
+                    <li><strong>Coverage formula</strong> — 2Φ(1.96/√W) − 1; the true error is √W times the reported SE.</li>
+                    <li><strong>The fix</strong> — derive per-worker seeds from one master seed, or use a generator with a stream/counter parameter.</li>
+                </ul>
+                <div class="key-point">
+                    Reproducibility requires one recorded master seed, not one identical seed per worker.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c7" width="720" height="340"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="lang-section">
+    <h2>8. Modulo Bias and the Rejection Fix</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Reducing a random integer to a range with <code>mod</code> splits the range into slightly-likelier and slightly-less-likely values.</p>
+                <ul>
+                    <li><strong>The mechanism</strong> — 256 equally likely bytes over 100 buckets leaves 256 = 2·100 + 56 unevenly split.</li>
+                    <li><strong>Two tiers</strong> — buckets 0–55 have 3 preimages (1.1719% each), buckets 56–99 have 2 (0.7813% each).</li>
+                    <li><strong>The ratio is 1.5</strong> — a bucket-0 assignment is 50% likelier than a bucket-99 one, from arithmetic alone.</li>
+                    <li><strong>A 50/50 split is not 50/50</strong> — buckets 0–49 collect 58.59% of users, buckets 50–99 get 41.41%.</li>
+                    <li><strong>Wide sources hide it</strong> — a 32-bit value mod 100 has relative excess 1/42,949,672 ≈ 2.3×10⁻⁸, negligible.</li>
+                    <li><strong>Narrow sources do not</strong> — the bias scales as range/source-size, so it bites when the range is large.</li>
+                    <li><strong>The rejection fix</strong> — discard draws ≥ 200 (the largest multiple of 100 ≤ 256), then take mod 100.</li>
+                    <li><strong>Its cost is small</strong> — acceptance is 200/256 = 78.125%, so 256/200 = 1.28 draws per usable value.</li>
+                </ul>
+                <div class="key-point">
+                    Modulo is only unbiased when the source size is an exact multiple of the range; otherwise reject the overhang.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c8" width="720" height="340"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+    <script>
+    var __charts = [];
+
+    // Seeded Park-Miller LCG — deterministic, never Math.random()
+    function lcg(seed) {
+        var s = seed;
+        return function () { s = (s * 16807) % 2147483647; return s / 2147483647; };
+    }
+
+    // Canvas setup with devicePixelRatio
+    function setup(id) {
+        var c = document.getElementById(id); if (!c) return null;
+        if (!c.dataset.w) { c.dataset.w = c.getAttribute('width') || '720'; c.dataset.h = c.getAttribute('height') || '340'; }
+        var w = parseInt(c.dataset.w), h = parseInt(c.dataset.h);
+        var dpr = window.devicePixelRatio || 1;
+        c.style.maxWidth = w + 'px';
+        var cssW = c.getBoundingClientRect().width || w;
+        var scale = (cssW / w) * dpr;
+        c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+        var ctx = c.getContext('2d'); ctx.scale(scale, scale);
+        ctx.clearRect(0, 0, w, h);
+        return { ctx: ctx, w: w, h: h };
+    }
+
+    function axes(ctx, x, y, ww, hh) {
+        ctx.strokeStyle = '#95a5a6';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x, y + hh);
+        ctx.lineTo(x + ww, y + hh);
+        ctx.stroke();
+    }
+
+    function title(ctx, w, t, sub) {
+        ctx.font = 'bold 16px system-ui, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText(t, w / 2, 24);
+        if (sub) {
+            ctx.font = '12px system-ui, sans-serif';
+            ctx.fillStyle = '#7f8c8d';
+            ctx.fillText(sub, w / 2, 42);
+        }
+    }
+
+    // ---- C1: 10,000 users into 100 hash buckets
+    __charts.push(function () {
+        var s = setup('c1'); var ctx = s.ctx, w = s.w, h = s.h;
+        title(ctx, w, '10,000 Users, 100 Hash Buckets', 'Illustrative Example — FNV-1a with murmur3 finalizer, salt fixed');
+
+        var counts = [95,96,112,111,93,98,81,89,103,108,103,88,102,107,109,96,97,115,102,103,98,93,93,104,104,104,92,113,113,100,101,92,107,107,82,108,96,83,112,119,93,86,93,88,98,86,112,102,97,84,90,94,92,118,97,116,119,103,100,95,80,110,107,83,98,92,97,100,106,108,86,97,92,113,97,104,103,104,95,103,95,99,113,107,118,103,107,99,111,97,98,119,79,115,86,98,92,109,107,81];
+        var n = 0, i;
+        for (i = 0; i < counts.length; i++) n += counts[i];
+        var p = 1 / counts.length;
+        var expected = n * p;
+        var sdPred = Math.sqrt(n * p * (1 - p));
+        var mean = expected;
+        var acc = 0;
+        for (i = 0; i < counts.length; i++) acc += (counts[i] - mean) * (counts[i] - mean);
+        var sdObs = Math.sqrt(acc / counts.length);
+        var mn = Math.min.apply(null, counts), mx = Math.max.apply(null, counts);
+
+        var plotX = 64, plotY = 76, plotW = w - 110, plotH = h - 146;
+        axes(ctx, plotX, plotY, plotW, plotH);
+        var yMax = 130;
+        function py(v) { return plotY + plotH - (v / yMax) * plotH; }
+
+        ctx.font = '12px system-ui, sans-serif';
+        ctx.fillStyle = '#5a6875';
+        ctx.textAlign = 'right';
+        for (var v = 0; v <= yMax + 0.01; v += 26) ctx.fillText(String(Math.round(v)), plotX - 8, py(v) + 4);
+
+        var slot = plotW / counts.length, bw = slot * 0.8;
+        ctx.fillStyle = 'rgba(26,82,118,0.35)';
+        for (i = 0; i < counts.length; i++) {
+            var bh = (counts[i] / yMax) * plotH;
+            ctx.fillRect(plotX + slot * i + (slot - bw) / 2, plotY + plotH - bh, bw, bh);
+        }
+
+        // expected line
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(plotX, py(expected));
+        ctx.lineTo(plotX + plotW, py(expected));
+        ctx.stroke();
+        ctx.font = '12px system-ui, sans-serif';
+        ctx.fillStyle = '#27ae60';
+        ctx.textAlign = 'right';
+        ctx.fillText('expected ' + expected, plotX + plotW - 4, py(expected) - 6);
+
+        // +/- 1 SD band (predicted)
+        ctx.setLineDash([4, 4]);
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(plotX, py(expected + sdPred)); ctx.lineTo(plotX + plotW, py(expected + sdPred));
+        ctx.moveTo(plotX, py(expected - sdPred)); ctx.lineTo(plotX + plotW, py(expected - sdPred));
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.font = '12px system-ui, sans-serif';
+        ctx.fillStyle = '#4a5866';
+        ctx.textAlign = 'center';
+        var xt = [0, 25, 50, 75, 99];
+        for (i = 0; i < xt.length; i++) ctx.fillText(String(xt[i]), plotX + slot * xt[i] + slot / 2, plotY + plotH + 18);
+        ctx.font = '13px system-ui, sans-serif';
+        ctx.fillText('Hash bucket', plotX + plotW / 2, plotY + plotH + 38);
+
+        ctx.font = '12px system-ui, sans-serif';
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillText('min ' + mn + ' · max ' + mx + ' · observed SD ' + sdObs.toFixed(2) +
+                     ' · predicted SD ' + sdPred.toFixed(2), plotX + plotW / 2, plotY + plotH + 58);
+    });
+
+    // ---- C2: shared salt vs per-experiment salt cross-tabs
+    __charts.push(function () {
+        var s = setup('c2'); var ctx = s.ctx, w = s.w, h = s.h;
+        title(ctx, w, 'Same Salt Twice vs a Salt per Experiment', 'Illustrative Example — 10,000 simulated users');
+
+        var shared = [4968, 0, 0, 5032];
+        var distinct = [2490, 2497, 2554, 2459];
+        var panels = [
+            { cells: shared, cap: 'one shared salt', col: '#e74c3c', x: 96 },
+            { cells: distinct, cap: 'salt per experiment', col: '#27ae60', x: w - 96 - 132 }
+        ];
+        var side = 132, top = 104, half = side / 2;
+        var maxAll = 0, i, k;
+        for (i = 0; i < panels.length; i++)
+            for (k = 0; k < 4; k++) if (panels[i].cells[k] > maxAll) maxAll = panels[i].cells[k];
+
+        function phi(o) {
+            var r1 = o[0] + o[1], r2 = o[2] + o[3], c1 = o[0] + o[2], c2 = o[1] + o[3];
+            return (o[0] * o[3] - o[1] * o[2]) / Math.sqrt(r1 * r2 * c1 * c2);
+        }
+
+        for (i = 0; i < panels.length; i++) {
+            var pn = panels[i], gx = pn.x, total = 0;
+            for (k = 0; k < 4; k++) total += pn.cells[k];
+
+            ctx.font = 'bold 13px system-ui, sans-serif';
+            ctx.fillStyle = pn.col;
+            ctx.textAlign = 'center';
+            ctx.fillText(pn.cap, gx + half, 94);
+
+            for (k = 0; k < 4; k++) {
+                var r = Math.floor(k / 2), c = k % 2;
+                var cx = gx + c * half, cy = top + r * half;
+                var alpha = 0.10 + 0.70 * (pn.cells[k] / maxAll);
+                ctx.fillStyle = 'rgba(26,82,118,' + alpha.toFixed(3) + ')';
+                ctx.fillRect(cx, cy, half, half);
+                ctx.strokeStyle = '#95a5a6';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(cx, cy, half, half);
+
+                ctx.textAlign = 'center';
+                ctx.fillStyle = alpha > 0.55 ? '#fff' : '#1a5276';
+                ctx.font = 'bold 13px system-ui, sans-serif';
+                ctx.fillText(pn.cells[k].toLocaleString('en-US'), cx + half / 2, cy + half / 2 - 2);
+                ctx.font = '11px system-ui, sans-serif';
+                ctx.fillText((pn.cells[k] / total * 100).toFixed(2) + '%', cx + half / 2, cy + half / 2 + 14);
+            }
+
+            // left axis label rotated
+            ctx.save();
+            ctx.translate(gx - 12, top + half);
+            ctx.rotate(-Math.PI / 2);
+            ctx.font = '12px system-ui, sans-serif';
+            ctx.fillStyle = '#4a5866';
+            ctx.textAlign = 'center';
+            ctx.fillText('exp 1:  A  /  B', 0, 0);
+            ctx.restore();
+
+            ctx.font = '12px system-ui, sans-serif';
+            ctx.fillStyle = '#4a5866';
+            ctx.textAlign = 'center';
+            ctx.fillText('exp 2:  A  /  B', gx + half, top + side + 20);
+
+            var ph = phi(pn.cells);
+            ctx.font = '12px system-ui, sans-serif';
+            ctx.fillStyle = pn.col;
+            ctx.fillText('φ = ' + ph.toFixed(4).replace('-', '−'), gx + half, top + side + 42);
+        }
+    });
+
+    // ---- C3: HyperLogLog error vs memory (log-log)
+    __charts.push(function () {
+        var s = setup('c3'); var ctx = s.ctx, w = s.w, h = s.h;
+        title(ctx, w, 'HyperLogLog: Error Halves as Memory Quadruples', null);
+
+        var ms = [256, 1024, 4096, 16384, 65536, 262144];
+        var pts = ms.map(function (m) {
+            return { m: m, bytes: m * 5 / 8, err: 1.04 / Math.sqrt(m) * 100 };
+        });
+
+        var plotX = 76, plotY = 72, plotW = w - 140, plotH = h - 140;
+        axes(ctx, plotX, plotY, plotW, plotH);
+
+        var bx0 = Math.log10(128), bx1 = Math.log10(262144);
+        var ey0 = Math.log10(0.15), ey1 = Math.log10(8);
+        function px(b) { return plotX + (Math.log10(b) - bx0) / (bx1 - bx0) * plotW; }
+        function py(e) { return plotY + plotH - (Math.log10(e) - ey0) / (ey1 - ey0) * plotH; }
+
+        function fmtBytes(b) { return b >= 1024 ? (b / 1024).toFixed(b / 1024 < 10 ? 1 : 0) + ' KB' : b + ' B'; }
+
+        ctx.font = '12px system-ui, sans-serif';
+        ctx.fillStyle = '#4a5866';
+        ctx.textAlign = 'center';
+        for (var i = 0; i < pts.length; i++) ctx.fillText(fmtBytes(pts[i].bytes), px(pts[i].bytes), plotY + plotH + 18);
+        ctx.font = '13px system-ui, sans-serif';
+        ctx.fillText('Sketch size', plotX + plotW / 2, plotY + plotH + 40);
+
+        ctx.font = '12px system-ui, sans-serif';
+        ctx.fillStyle = '#5a6875';
+        ctx.textAlign = 'right';
+        var yt = [0.2, 0.5, 1, 2, 5];
+        for (i = 0; i < yt.length; i++) ctx.fillText(yt[i] + '%', plotX - 8, py(yt[i]) + 4);
+        ctx.save();
+        ctx.translate(22, plotY + plotH / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.font = '13px system-ui, sans-serif';
+        ctx.fillStyle = '#4a5866';
+        ctx.textAlign = 'center';
+        ctx.fillText('Relative standard error', 0, 0);
+        ctx.restore();
+
+        ctx.beginPath();
+        for (i = 0; i < pts.length; i++) {
+            var X = px(pts[i].bytes), Y = py(pts[i].err);
+            i === 0 ? ctx.moveTo(X, Y) : ctx.lineTo(X, Y);
+        }
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        ctx.fillStyle = '#1a5276';
+        for (i = 0; i < pts.length; i++) {
+            ctx.beginPath();
+            ctx.arc(px(pts[i].bytes), py(pts[i].err), 5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // highlight m = 16384
+        var hi = null;
+        for (i = 0; i < pts.length; i++) if (pts[i].m === 16384) hi = pts[i];
+        ctx.beginPath();
+        ctx.arc(px(hi.bytes), py(hi.err), 7, 0, Math.PI * 2);
+        ctx.strokeStyle = '#e67e22';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+        ctx.font = '13px system-ui, sans-serif';
+        ctx.fillStyle = '#e67e22';
+        ctx.textAlign = 'left';
+        ctx.fillText(fmtBytes(hi.bytes) + ' → ' + hi.err.toFixed(2) + '%', px(hi.bytes) + 10, py(hi.err) - 4);
+
+        // verified slope label
+        var ok = true;
+        for (i = 1; i < pts.length; i++) {
+            var sl = Math.log(pts[i].err / pts[i - 1].err) / Math.log(pts[i].bytes / pts[i - 1].bytes);
+            if (Math.abs(sl + 0.5) > 0.01) ok = false;
+        }
+        if (ok) {
+            var ref = pts[2];
+            ctx.font = '12px system-ui, sans-serif';
+            ctx.fillStyle = '#27ae60';
+            ctx.textAlign = 'left';
+            ctx.fillText('slope −1/2 on log–log', px(ref.bytes) - 10, py(ref.err) + 22);
+        }
+    });
+
+    // ---- C4: reservoir sampling inclusion rates (seeded)
+    __charts.push(function () {
+        var s = setup('c4'); var ctx = s.ctx, w = s.w, h = s.h;
+        title(ctx, w, 'Inclusion Probability by Stream Position',
+              'Illustrative Example — Algorithm R, k = 10, n = 200, 4,000 seeded replications');
+
+        var n = 200, k = 10, trials = 4000;
+        var rnd = lcg(20260908);
+        var cnt = new Array(n), i, t, j;
+        for (i = 0; i < n; i++) cnt[i] = 0;
+        for (t = 0; t < trials; t++) {
+            var res = [];
+            for (i = 0; i < n; i++) {
+                if (i < k) { res.push(i); }
+                else if (rnd() < k / (i + 1)) { res[Math.floor(rnd() * k)] = i; }
+            }
+            for (j = 0; j < k; j++) cnt[res[j]]++;
+        }
+        var rate = cnt.map(function (c) { return c / trials; });
+        var target = k / n;
+        var se = Math.sqrt(target * (1 - target) / trials);
+        var band = 1.96 * se;
+        var sum = 0, outside = 0;
+        for (i = 0; i < n; i++) { sum += rate[i]; if (Math.abs(rate[i] - target) > band) outside++; }
+        var meanRate = sum / n;
+        var mnR = Math.min.apply(null, rate), mxR = Math.max.apply(null, rate);
+
+        var plotX = 70, plotY = 82, plotW = w - 124, plotH = h - 152;
+        axes(ctx, plotX, plotY, plotW, plotH);
+        var yMax = 0.08;
+        function py(v) { return plotY + plotH - (v / yMax) * plotH; }
+        function px(pos) { return plotX + (pos / (n - 1)) * plotW; }
+
+        ctx.font = '12px system-ui, sans-serif';
+        ctx.fillStyle = '#5a6875';
+        ctx.textAlign = 'right';
+        for (var v = 0; v <= yMax + 1e-9; v += 0.02) ctx.fillText((v * 100).toFixed(0) + '%', plotX - 8, py(v) + 4);
+
+        // truncation baseline
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(px(0), py(yMax));
+        ctx.lineTo(px(k - 1), py(yMax));
+        ctx.lineTo(px(k - 1), py(0));
+        ctx.lineTo(px(n - 1), py(0));
+        ctx.stroke();
+
+        // Monte Carlo band
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 1.2;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(plotX, py(target + band)); ctx.lineTo(plotX + plotW, py(target + band));
+        ctx.moveTo(plotX, py(target - band)); ctx.lineTo(plotX + plotW, py(target - band));
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // reservoir series
+        ctx.beginPath();
+        for (i = 0; i < n; i++) { i === 0 ? ctx.moveTo(px(i), py(rate[i])) : ctx.lineTo(px(i), py(rate[i])); }
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+
+        // target line
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(plotX, py(target)); ctx.lineTo(plotX + plotW, py(target));
+        ctx.stroke();
+
+        ctx.font = '12px system-ui, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#27ae60';
+        ctx.fillText('uniform target k/n = ' + (target * 100).toFixed(1) + '%', plotX + 8, py(target) - 8);
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillText('take first ' + k + ': 100% then 0%', plotX + 8, plotY + 16);
+
+        ctx.font = '12px system-ui, sans-serif';
+        ctx.fillStyle = '#4a5866';
+        ctx.textAlign = 'center';
+        var xt = [1, 50, 100, 150, 200];
+        for (i = 0; i < xt.length; i++) ctx.fillText(String(xt[i]), px(xt[i] - 1), plotY + plotH + 18);
+        ctx.font = '13px system-ui, sans-serif';
+        ctx.fillText('Position in stream', plotX + plotW / 2, plotY + plotH + 38);
+
+        ctx.font = '12px system-ui, sans-serif';
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillText('mean ' + (meanRate * 100).toFixed(3) + '% · min ' + (mnR * 100).toFixed(2) +
+                     '% · max ' + (mxR * 100).toFixed(2) + '% · outside ±1.96 SE: ' + outside + '/' + n,
+                     plotX + plotW / 2, plotY + plotH + 58);
+    });
+
+    // ---- C5: SE simple random vs proportional stratified
+    __charts.push(function () {
+        var s = setup('c5'); var ctx = s.ctx, w = s.w, h = s.h;
+        title(ctx, w, 'Standard Error: Simple Random vs Proportional Stratified',
+              'Illustrative Example — 1% of accounts at mean 1,000 (SD 200), 99% at mean 10 (SD 5)');
+
+        var Wa = 0.01, Wb = 0.99, ma = 1000, sa = 200, mb = 10, sb = 5;
+        var mu = Wa * ma + Wb * mb;
+        var varPop = Wa * (sa * sa + ma * ma) + Wb * (sb * sb + mb * mb) - mu * mu;
+        var varWithin = Wa * sa * sa + Wb * sb * sb;
+        var ns = [1000, 5000, 10000, 50000];
+        var srs = ns.map(function (n) { return Math.sqrt(varPop / n); });
+        var str = ns.map(function (n) { return Math.sqrt(varWithin / n); });
+
+        var plotX = 70, plotY = 84, plotW = w - 124, plotH = h - 156;
+        axes(ctx, plotX, plotY, plotW, plotH);
+        var yMax = 3.4;
+        function py(v) { return plotY + plotH - (v / yMax) * plotH; }
+
+        ctx.font = '12px system-ui, sans-serif';
+        ctx.fillStyle = '#5a6875';
+        ctx.textAlign = 'right';
+        for (var v = 0; v <= yMax + 1e-9; v += 0.85) ctx.fillText(v.toFixed(2), plotX - 8, py(v) + 4);
+        ctx.save();
+        ctx.translate(20, plotY + plotH / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.font = '13px system-ui, sans-serif';
+        ctx.fillStyle = '#4a5866';
+        ctx.textAlign = 'center';
+        ctx.fillText('Standard error of the mean', 0, 0);
+        ctx.restore();
+
+        var slot = plotW / ns.length, bw = slot * 0.34;
+        for (var i = 0; i < ns.length; i++) {
+            var cx = plotX + slot * i + slot / 2;
+
+            var ah = (srs[i] / yMax) * plotH;
+            ctx.fillStyle = 'rgba(231,76,60,0.50)';
+            ctx.fillRect(cx - bw - 2, plotY + plotH - ah, bw, ah);
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 1.4;
+            ctx.strokeRect(cx - bw - 2, plotY + plotH - ah, bw, ah);
+            ctx.font = '11px system-ui, sans-serif';
+            ctx.fillStyle = '#e74c3c';
+            ctx.textAlign = 'center';
+            ctx.fillText(srs[i].toFixed(3), cx - bw / 2 - 2, plotY + plotH - ah - 6);
+
+            var bh = (str[i] / yMax) * plotH;
+            ctx.fillStyle = 'rgba(39,174,96,0.50)';
+            ctx.fillRect(cx + 2, plotY + plotH - bh, bw, bh);
+            ctx.strokeStyle = '#27ae60';
+            ctx.strokeRect(cx + 2, plotY + plotH - bh, bw, bh);
+            ctx.fillStyle = '#27ae60';
+            ctx.fillText(str[i].toFixed(3), cx + bw / 2 + 2, plotY + plotH - bh - 6);
+
+            ctx.font = '13px system-ui, sans-serif';
+            ctx.fillStyle = '#4a5866';
+            ctx.fillText('n = ' + ns[i].toLocaleString('en-US'), cx, plotY + plotH + 20);
+        }
+
+        ctx.font = '13px system-ui, sans-serif';
+        ctx.fillStyle = '#4a5866';
+        ctx.textAlign = 'center';
+        ctx.fillText('Sample size', plotX + plotW / 2, plotY + plotH + 42);
+
+        // legend
+        ctx.fillStyle = 'rgba(231,76,60,0.50)';
+        ctx.fillRect(plotX + 12, plotY + 8, 14, 12);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 1.4;
+        ctx.strokeRect(plotX + 12, plotY + 8, 14, 12);
+        ctx.fillStyle = '#2c3e50';
+        ctx.textAlign = 'left';
+        ctx.fillText('simple random', plotX + 32, plotY + 19);
+        ctx.fillStyle = 'rgba(39,174,96,0.50)';
+        ctx.fillRect(plotX + 150, plotY + 8, 14, 12);
+        ctx.strokeStyle = '#27ae60';
+        ctx.strokeRect(plotX + 150, plotY + 8, 14, 12);
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillText('proportional stratified', plotX + 170, plotY + 19);
+
+        // ratio annotation over n = 10,000
+        var idx = ns.indexOf(10000);
+        var rc = plotX + slot * idx + slot / 2;
+        var top = plotY + plotH - (srs[idx] / yMax) * plotH;
+        ctx.font = '13px system-ui, sans-serif';
+        ctx.fillStyle = '#1a5276';
+        ctx.textAlign = 'center';
+        ctx.fillText((srs[idx] / str[idx]).toFixed(2) + '× tighter', rc, top - 26);
+    });
+
+    // ---- C6: who survives a naive 10% x 10% sample
+    __charts.push(function () {
+        var s = setup('c6'); var ctx = s.ctx, w = s.w, h = s.h;
+        title(ctx, w, 'Who Survives a Naive 10% Sample of Both Tables',
+              'Illustrative Example — 800 customers × 2 orders, 200 customers × 20 orders');
+
+        var nL = 800, oL = 2, nH = 200, oH = 20, p = 0.1;
+        var custs = nL + nH, orders = nL * oL + nH * oH;
+        var trueMean = orders / custs;
+        var pL = 1 - Math.pow(1 - p, oL), pH = 1 - Math.pow(1 - p, oH);
+        var retL = nL * pL, retH = nH * pH, ret = retL + retH;
+        var sampOrders = p * orders;
+        var naiveMean = (sampOrders / ret) / p;
+
+        var trueShare = [nL / custs * 100, nH / custs * 100];
+        var sampShare = [retL / ret * 100, retH / ret * 100];
+
+        var plotX = 70, plotY = 90, plotW = w - 140, plotH = h - 162;
+        axes(ctx, plotX, plotY, plotW, plotH);
+
+        var pctMax = 100, meanMax = 20;
+        function pyPct(v) { return plotY + plotH - (v / pctMax) * plotH; }
+        function pyMean(v) { return plotY + plotH - (v / meanMax) * plotH; }
+
+        ctx.font = '12px system-ui, sans-serif';
+        ctx.fillStyle = '#5a6875';
+        ctx.textAlign = 'right';
+        for (var v = 0; v <= 100.01; v += 25) ctx.fillText(v + '%', plotX - 8, pyPct(v) + 4);
+        ctx.textAlign = 'left';
+        for (var m = 0; m <= 20.01; m += 5) ctx.fillText(String(m), plotX + plotW + 8, pyMean(m) + 4);
+
+        var cats = ['light customers\n(2 orders)', 'heavy customers\n(20 orders)', 'mean orders\nper customer'];
+        var slot = plotW / 3, bw = slot * 0.30;
+
+        // separator before third slot
+        ctx.strokeStyle = '#e0e0e0';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(plotX + slot * 2, plotY);
+        ctx.lineTo(plotX + slot * 2, plotY + plotH);
+        ctx.stroke();
+
+        for (var i = 0; i < 3; i++) {
+            var cx = plotX + slot * i + slot / 2;
+            var tv, sv, fmt, topFn;
+            if (i < 2) { tv = trueShare[i]; sv = sampShare[i]; fmt = 1; topFn = pyPct; }
+            else { tv = trueMean; sv = naiveMean; fmt = 2; topFn = pyMean; }
+
+            var ty = topFn(tv);
+            ctx.fillStyle = 'rgba(26,82,118,0.35)';
+            ctx.fillRect(cx - bw - 3, ty, bw, plotY + plotH - ty);
+            ctx.strokeStyle = '#1a5276';
+            ctx.lineWidth = 1.4;
+            ctx.strokeRect(cx - bw - 3, ty, bw, plotY + plotH - ty);
+            ctx.font = '11px system-ui, sans-serif';
+            ctx.fillStyle = '#1a5276';
+            ctx.textAlign = 'center';
+            ctx.fillText(tv.toFixed(fmt), cx - bw / 2 - 3, ty - 6);
+
+            var sy = topFn(sv);
+            ctx.fillStyle = 'rgba(230,126,34,0.50)';
+            ctx.fillRect(cx + 3, sy, bw, plotY + plotH - sy);
+            ctx.strokeStyle = '#e67e22';
+            ctx.strokeRect(cx + 3, sy, bw, plotY + plotH - sy);
+            ctx.fillStyle = '#e67e22';
+            ctx.fillText(sv.toFixed(fmt), cx + bw / 2 + 3, sy - 6);
+
+            var lines = cats[i].split('\n');
+            ctx.font = '12px system-ui, sans-serif';
+            ctx.fillStyle = '#4a5866';
+            for (var L = 0; L < lines.length; L++) ctx.fillText(lines[L], cx, plotY + plotH + 18 + L * 15);
+        }
+
+        // legend
+        ctx.font = '13px system-ui, sans-serif';
+        ctx.fillStyle = 'rgba(26,82,118,0.35)';
+        ctx.fillRect(plotX + 12, plotY + 8, 14, 12);
+        ctx.strokeStyle = '#1a5276';
+        ctx.lineWidth = 1.4;
+        ctx.strokeRect(plotX + 12, plotY + 8, 14, 12);
+        ctx.fillStyle = '#2c3e50';
+        ctx.textAlign = 'left';
+        ctx.fillText('true population', plotX + 32, plotY + 19);
+        ctx.fillStyle = 'rgba(230,126,34,0.50)';
+        ctx.fillRect(plotX + 152, plotY + 8, 14, 12);
+        ctx.strokeStyle = '#e67e22';
+        ctx.strokeRect(plotX + 152, plotY + 8, 14, 12);
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillText('naive 10% × 10% sample', plotX + 172, plotY + 19);
+
+        // overstatement annotation
+        var cx3 = plotX + slot * 2 + slot / 2;
+        ctx.font = '13px system-ui, sans-serif';
+        ctx.fillStyle = '#e74c3c';
+        ctx.textAlign = 'center';
+        ctx.fillText((naiveMean / trueMean).toFixed(2) + '× overstated', cx3 + bw / 2 + 3, pyMean(naiveMean) - 24);
+    });
+
+    // ---- C7: coverage when workers share a seed
+    __charts.push(function () {
+        var s = setup('c7'); var ctx = s.ctx, w = s.w, h = s.h;
+        title(ctx, w, 'Coverage of a Nominal 95% Interval When Workers Share a Seed', null);
+
+        function erf(x) {
+            var sg = x < 0 ? -1 : 1; x = Math.abs(x);
+            var a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741,
+                a4 = -1.453152027, a5 = 1.061405429, pp = 0.3275911;
+            var t = 1 / (1 + pp * x);
+            var y = 1 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+            return sg * y;
+        }
+        function Phi(z) { return 0.5 * (1 + erf(z / Math.SQRT2)); }
+
+        var Ws = [1, 2, 4, 8, 16, 32];
+        var cov = Ws.map(function (W) { return 2 * Phi(1.96 / Math.sqrt(W)) - 1; });
+
+        var plotX = 70, plotY = 76, plotW = w - 124, plotH = h - 148;
+        axes(ctx, plotX, plotY, plotW, plotH);
+        function py(v) { return plotY + plotH - v * plotH; }
+
+        ctx.font = '12px system-ui, sans-serif';
+        ctx.fillStyle = '#5a6875';
+        ctx.textAlign = 'right';
+        for (var v = 0; v <= 1.0001; v += 0.2) ctx.fillText(Math.round(v * 100) + '%', plotX - 8, py(v) + 4);
+
+        var slot = plotW / Ws.length, bw = slot * 0.5;
+        for (var i = 0; i < Ws.length; i++) {
+            var cx = plotX + slot * i + slot / 2;
+            var c = cov[i];
+            var fill, stroke;
+            if (c >= 0.90) { fill = 'rgba(26,82,118,0.35)'; stroke = '#1a5276'; }
+            else if (c >= 0.60) { fill = 'rgba(230,126,34,0.50)'; stroke = '#e67e22'; }
+            else { fill = 'rgba(231,76,60,0.50)'; stroke = '#e74c3c'; }
+            var top = py(c);
+            ctx.fillStyle = fill;
+            ctx.fillRect(cx - bw / 2, top, bw, plotY + plotH - top);
+            ctx.strokeStyle = stroke;
+            ctx.lineWidth = 1.4;
+            ctx.strokeRect(cx - bw / 2, top, bw, plotY + plotH - top);
+
+            ctx.font = '12px system-ui, sans-serif';
+            ctx.fillStyle = stroke;
+            ctx.textAlign = 'center';
+            ctx.fillText((c * 100).toFixed(1) + '%', cx, top - 8);
+
+            ctx.font = '13px system-ui, sans-serif';
+            ctx.fillStyle = '#4a5866';
+            ctx.fillText(String(Ws[i]), cx, plotY + plotH + 20);
+        }
+
+        ctx.font = '13px system-ui, sans-serif';
+        ctx.fillStyle = '#4a5866';
+        ctx.textAlign = 'center';
+        ctx.fillText('Workers sharing one seed', plotX + plotW / 2, plotY + plotH + 42);
+
+        // nominal line
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.moveTo(plotX, py(0.95)); ctx.lineTo(plotX + plotW, py(0.95));
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.font = '12px system-ui, sans-serif';
+        ctx.fillStyle = '#27ae60';
+        ctx.textAlign = 'right';
+        ctx.fillText('nominal 95%', plotX + plotW - 4, py(0.95) - 6);
+
+        // annotation at W = 16
+        var idx = Ws.indexOf(16);
+        var ax = plotX + slot * idx + slot / 2;
+        ctx.font = '12px system-ui, sans-serif';
+        ctx.fillStyle = '#e74c3c';
+        ctx.textAlign = 'center';
+        ctx.fillText('reported SE is ' + Math.sqrt(Ws[idx]).toFixed(2) + '× too small', ax - slot / 2, py(cov[idx]) - 30);
+    });
+
+    // ---- C8: modulo bias, 256 values into 100 buckets
+    __charts.push(function () {
+        var s = setup('c8'); var ctx = s.ctx, w = s.w, h = s.h;
+        title(ctx, w, 'Modulo Bias: 256 Byte Values into 100 Buckets', null);
+
+        var src = 256, range = 100;
+        var base = Math.floor(src / range), rem = src % range;
+        var prob = [], pre = [], i;
+        for (i = 0; i < range; i++) {
+            var c = base + (i < rem ? 1 : 0);
+            pre.push(c);
+            prob.push(c / src * 100);
+        }
+        var lowSum = 0, highSum = 0;
+        for (i = 0; i < range; i++) { if (i < range / 2) lowSum += prob[i]; else highSum += prob[i]; }
+        var accept = Math.floor(src / range) * range / src * 100;
+
+        var plotX = 76, plotY = 80, plotW = w - 130, plotH = h - 152;
+        axes(ctx, plotX, plotY, plotW, plotH);
+        var yMax = 1.4;
+        function py(v) { return plotY + plotH - (v / yMax) * plotH; }
+
+        ctx.font = '12px system-ui, sans-serif';
+        ctx.fillStyle = '#5a6875';
+        ctx.textAlign = 'right';
+        for (var v = 0; v <= yMax + 1e-9; v += 0.35) ctx.fillText(v.toFixed(2) + '%', plotX - 8, py(v) + 4);
+
+        var slot = plotW / range, bw = slot * 0.85;
+        for (i = 0; i < range; i++) {
+            var bh = plotY + plotH - py(prob[i]);
+            if (pre[i] > base) { ctx.fillStyle = 'rgba(231,76,60,0.50)'; ctx.strokeStyle = '#e74c3c'; }
+            else { ctx.fillStyle = 'rgba(26,82,118,0.35)'; ctx.strokeStyle = '#1a5276'; }
+            ctx.fillRect(plotX + slot * i + (slot - bw) / 2, py(prob[i]), bw, bh);
+            ctx.lineWidth = 0.8;
+            ctx.strokeRect(plotX + slot * i + (slot - bw) / 2, py(prob[i]), bw, bh);
+        }
+
+        // uniform target
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(plotX, py(100 / range)); ctx.lineTo(plotX + plotW, py(100 / range));
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.font = '12px system-ui, sans-serif';
+        ctx.fillStyle = '#27ae60';
+        ctx.textAlign = 'right';
+        ctx.fillText('uniform ' + (100 / range).toFixed(2) + '%', plotX + plotW - 4, py(100 / range) - 6);
+
+        ctx.font = '12px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillText((base + 1) + ' preimages: ' + prob[25].toFixed(4) + '%', plotX + slot * 25, py(prob[25]) - 26);
+        ctx.fillStyle = '#1a5276';
+        ctx.fillText(base + ' preimages: ' + prob[78].toFixed(4) + '%', plotX + slot * 78, py(prob[78]) - 12);
+
+        ctx.fillStyle = '#4a5866';
+        var xt = [0, 25, 50, 55, 75, 99];
+        ctx.font = '11px system-ui, sans-serif';
+        for (i = 0; i < xt.length; i++) ctx.fillText(String(xt[i]), plotX + slot * xt[i] + slot / 2, plotY + plotH + 18);
+        ctx.font = '13px system-ui, sans-serif';
+        ctx.fillText('Bucket (value mod 100)', plotX + plotW / 2, plotY + plotH + 38);
+
+        ctx.font = '12px system-ui, sans-serif';
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillText('buckets 0–49: ' + lowSum.toFixed(2) + '% of draws · buckets 50–99: ' +
+                     highSum.toFixed(2) + '% · rejection sampling accepts ' + accept.toFixed(3) + '%',
+                     plotX + plotW / 2, plotY + plotH + 58);
+    });
+
+    __charts.forEach(function (f) { f(); });
+    var __redrawTimer;
+    window.addEventListener('resize', function () {
+        clearTimeout(__redrawTimer);
+        __redrawTimer = setTimeout(function () { __charts.forEach(function (f) { f(); }); }, 150);
+    });
+    </script>
+</body>
+</html>
