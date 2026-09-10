@@ -1,7 +1,7 @@
-# Manufactured Reference Frame: Someone Else Chose What Counts as Normal
+# Reference-Class Substitution: Someone Else Chose What Counts as Normal
 
 **Page type:** detail page — card-section template (see `statistical-paradoxes/03-berksons-paradox.html`)
-**HTML title tag:** Manufactured Reference Frame — Cognitive Biases
+**HTML title tag:** Reference-Class Substitution — Cognitive Biases
 
 **Subtitle:** Show a person sixty real examples out of six hundred and they will tell you what is typical. They will be describing the sixty, and they will believe they are describing the six hundred.
 

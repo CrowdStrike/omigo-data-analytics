@@ -1,7 +1,7 @@
-# Attachment to AI Personas: Nobody Got Worse, the Comparison Moved
+# ELIZA Effect: Nobody Got Worse, the Comparison Moved
 
 **Page type:** detail page — card-section template (see `statistical-paradoxes/03-berksons-paradox.html`)
-**HTML title tag:** Attachment to AI Personas — Cognitive Biases
+**HTML title tag:** ELIZA Effect — Cognitive Biases
 
 **Subtitle:** Something that is always awake, never short with you and never has a bad week of its own quietly becomes the thing every real conversation is measured against.
 

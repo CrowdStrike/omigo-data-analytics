@@ -1,7 +1,7 @@
-# Nobody Counts What Never Breaks: The Baseline Goes Invisible
+# Absence Blindness: The Baseline Goes Invisible
 
-**Page type:** detail page — card-section template (see `05-cognitive-biases/25-familiarity-feels-like-quality.html`)
-**HTML title tag:** Nobody Counts What Never Breaks — Cognitive Biases
+**Page type:** detail page — card-section template (see `05-cognitive-biases/25-mere-exposure-effect.html`)
+**HTML title tag:** Absence Blindness — Cognitive Biases
 
 **Subtitle:** The thing that always works stops being noticed within a few weeks, and the work that keeps it working never shows up in any number anyone reports.
 
@@ -166,7 +166,7 @@ A weekly level rising across four quarters with the silently expected level chas
 
 ## Regeneration instructions
 
-- **Template:** copied verbatim from `05-cognitive-biases/25-familiarity-feels-like-quality.html` — the
+- **Template:** copied verbatim from `05-cognitive-biases/25-mere-exposure-effect.html` — the
   whole `<style>` block, the `setup(id)` canvas helper, the `lcg(seed)` Park–Miller generator, the `P`
   palette object, the `__charts` array and its debounced resize tail, and the `table.layout` /
   `td.text-col` 50% / `td.viz-col` 50% structure. Only the content differs.

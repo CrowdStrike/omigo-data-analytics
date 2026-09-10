@@ -1,7 +1,7 @@
-# Newer, Bigger, Pricier: The Price Tag Is Read as a Quality Rating
+# Price–Quality Heuristic: The Price Tag Is Read as a Quality Rating
 
 **Page type:** detail page — card-section template (see `cognitive-biases/05-clustering-illusion.html`)
-**HTML title tag:** Newer, Bigger, Pricier — Cognitive Biases
+**HTML title tag:** Price–Quality Heuristic — Cognitive Biases
 
 **Subtitle:** Nobody sets the price except the seller, and nothing stops them setting it high. We read it as a verdict on the product anyway.
 

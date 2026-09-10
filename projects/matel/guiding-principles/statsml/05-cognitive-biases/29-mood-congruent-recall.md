@@ -1,7 +1,7 @@
-# A Bad Week Rewrites the Year: When You Ask Decides What Happened
+# Mood-Congruent Recall: When You Ask Decides What Happened
 
-**Page type:** detail page — card-section template (see `05-cognitive-biases/25-familiarity-feels-like-quality.html`)
-**HTML title tag:** A Bad Week Rewrites the Year — Cognitive Biases
+**Page type:** detail page — card-section template (see `05-cognitive-biases/25-mere-exposure-effect.html`)
+**HTML title tag:** Mood-Congruent Recall — Cognitive Biases
 
 **Subtitle:** Ask someone about the past year a few days after something went wrong and you get a heavy year. Ask the same person in a calm stretch and the same year comes back light.
 
@@ -183,7 +183,7 @@ Bars for how many of the twelve can still be named, year by year, against two li
 
 ## Regeneration instructions
 
-- **Template:** copy `05-cognitive-biases/25-familiarity-feels-like-quality.html` verbatim for the
+- **Template:** copy `05-cognitive-biases/25-mere-exposure-effect.html` verbatim for the
   `<style>` block, the `setup()` canvas helper, the `lcg()` seeded PRNG, the `P` palette object, the
   `__charts` array and its debounced resize tail, the `table.layout` / `text-col` / `viz-col` 50/50
   structure, the `.tags` pill classes, `.key-point` and `.src`. Only the content differs.
@@ -228,6 +228,6 @@ Bars for how many of the twelve can still be named, year by year, against two li
   "Going over it in your head", never the clinical word for it.
 - **Scope discipline.** This page is about *when* you ask and what gets dragged forward with the
   question. It must not drift into how bad and good events are weighted against each other — that is
-  `26-one-bad-thing-outweighs-five-good`. It must not become about people with bad outcomes searching
+  `26-negativity-dominance`. It must not become about people with bad outcomes searching
   their history harder — that is `15-recall-bias`. It must not become uniform recency weighting — that
   is `10-recency-bias`.

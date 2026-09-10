@@ -1,7 +1,7 @@
-# The Judgment-Free Chatbot: People Own Up to a Box, Not to a Person
+# Social Desirability Bias: People Own Up to a Box, Not to a Person
 
 **Page type:** detail page — card-section template (see `statistical-paradoxes/03-berksons-paradox.html`)
-**HTML title tag:** The Judgment-Free Chatbot — Cognitive Biases
+**HTML title tag:** Social Desirability Bias — Cognitive Biases
 
 **Subtitle:** Ask the same question two ways and you get two answers. The people did not change — the thing on the other end did.
 

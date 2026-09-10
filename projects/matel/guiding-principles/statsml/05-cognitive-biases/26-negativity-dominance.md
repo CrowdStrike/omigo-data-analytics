@@ -1,7 +1,7 @@
-# One Bad Thing Outweighs Five Good Ones: The Ledger Nobody Keeps Fairly
+# Negativity Dominance: The Ledger Nobody Keeps Fairly
 
-**Page type:** detail page — card-section template (see `05-cognitive-biases/25-familiarity-feels-like-quality.html`)
-**HTML title tag:** One Bad Thing Outweighs Five Good Ones — Cognitive Biases
+**Page type:** detail page — card-section template (see `05-cognitive-biases/25-mere-exposure-effect.html`)
+**HTML title tag:** Negativity Dominance — Cognitive Biases
 
 **Subtitle:** One complaint colours a whole review, while the twenty quiet successes that surround it average into nothing.
 
@@ -168,7 +168,7 @@ A wedge showing how much good the alarm rule throws away, plotted against what o
 
 ## Regeneration instructions
 
-- **Template:** copied from `05-cognitive-biases/25-familiarity-feels-like-quality.html` — the entire
+- **Template:** copied from `05-cognitive-biases/25-mere-exposure-effect.html` — the entire
   `<style>` block, the `setup()` canvas helper, the `lcg()` seeded generator, the `P` palette object,
   the `__charts` array with its debounced resize tail, and the `table.layout` / `.text-col` /
   `.viz-col` 50/50 structure, all verbatim. Only the content differs.

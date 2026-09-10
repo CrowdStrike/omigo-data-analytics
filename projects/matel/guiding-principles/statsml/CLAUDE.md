@@ -152,7 +152,7 @@ Work only inside statsml directory. Dont go to parent or other outside directori
   `grep -rln "Math\.random()" 04-domain-pitfalls --include="*.html"`
   Four of the hits are comment-only (`// … never Math.random()`) in already-converted pages —
   `034-crypto-defi`, `081-real-time-sports-analytics`, `150-schema-compliance-not-equals-data-compliance`,
-  `159-job-seeker-visibility-bias`. Same for `05-cognitive-biases/23-the-judgment-free-chatbot.html`.
+  `159-job-seeker-visibility-bias`. Same for `05-cognitive-biases/23-social-desirability-bias.html`.
 
   Remaining, by call count: `103-world-events-as-data-regime-breaks` (14),
   `035-prediction-markets-kalshi-polymarket` (4), `A-cross-domain-patterns` (3),

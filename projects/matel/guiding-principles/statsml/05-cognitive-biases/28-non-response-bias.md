@@ -1,7 +1,7 @@
-# The People Who Can't Complain: Your Feedback Is Filtered by Who Can Afford to Give It
+# Non-Response Bias: Your Feedback Is Filtered by Who Can Afford to Give It
 
-**Page type:** detail page — card-section template (see `05-cognitive-biases/25-familiarity-feels-like-quality.html`)
-**HTML title tag:** The People Who Can't Complain — Cognitive Biases
+**Page type:** detail page — card-section template (see `05-cognitive-biases/25-mere-exposure-effect.html`)
+**HTML title tag:** Non-Response Bias — Cognitive Biases
 
 **Subtitle:** Ask for feedback and you get answers from whoever can afford to give them. The people the problem lands on hardest are usually the ones least able to say so out loud.
 
@@ -170,7 +170,7 @@ A rising line of reported complaint rate across six steps of easier exit, drawn 
 
 ## Regeneration instructions
 
-- **Template:** copied verbatim from `05-cognitive-biases/25-familiarity-feels-like-quality.html` —
+- **Template:** copied verbatim from `05-cognitive-biases/25-mere-exposure-effect.html` —
   the entire `<style>` block, the `setup(id)` canvas helper, the `lcg(seed)` PRNG, the `P` palette
   object, the `__charts` array with its debounced resize tail, the `table.layout` /
   `td.text-col` / `td.viz-col` 50/50 structure, the `.tags` pills, `.key-point` and `.src`
@@ -220,8 +220,8 @@ A rising line of reported complaint rate across six steps of easier exit, drawn 
   reasoning mistake by the person staying silent; the defect belongs to whoever collects the
   feedback and reads the average as the population.
 - **Scope boundaries.** How bad news is weighted against good belongs to
-  `26-one-bad-thing-outweighs-five-good`; a steady good level going unremarked belongs to
-  `27-nobody-counts-what-never-breaks`. Neither is discussed here, and neither is linked.
+  `26-negativity-dominance`; a steady good level going unremarked belongs to
+  `27-absence-blindness`. Neither is discussed here, and neither is linked.
 - **Language.** Plain and physical throughout. No survey-methodology or social-science terminology
   in the prose — "they saw it, they just were not going to say it to your face" rather than a named
   effect. Organisations are `Vendor A` / `Team A` style if named at all; no real companies, no

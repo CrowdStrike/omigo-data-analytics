@@ -1,7 +1,7 @@
-# The Fault You Watched Fail Jumps the Queue: Nothing Else on the List Was Ever Counted
+# Salience Bias: Nothing Else on the List Was Ever Counted
 
-**Page type:** detail page — card-section template (see `05-cognitive-biases/25-familiarity-feels-like-quality.html`)
-**HTML title tag:** The Fault You Watched Fail Jumps the Queue — Cognitive Biases
+**Page type:** detail page — card-section template (see `05-cognitive-biases/25-mere-exposure-effect.html`)
+**HTML title tag:** Salience Bias — Cognitive Biases
 
 **Subtitle:** A fault somebody watched break gets fixed first, and because nothing else on the list was ever counted, queue position ends up set by who happened to be in the room.
 
@@ -141,7 +141,7 @@ People helped by the same half-day, plotted against how likely the suspected fau
   what people *name* when asked what is risky. This page is about action ordering: what gets *fixed*
   first and which fixing capacity is spent. Keep every framing here on queue position and spent days.
   No link between the two pages — the repo forbids cross-page links; the angle alone keeps them apart.
-- **Template:** the card-section layout copied verbatim from `05-cognitive-biases/25-familiarity-feels-like-quality.html`
+- **Template:** the card-section layout copied verbatim from `05-cognitive-biases/25-mere-exposure-effect.html`
   — the whole `<style>` block, the `setup()` canvas helper, the `lcg()` seeded PRNG, the `P` palette
   object, the `__charts` array and the debounced resize-redraw tail. Three `.card-section` blocks, each
   holding an `<h2>` (1.3rem `#1a5276`, `border-bottom: 2px solid #2980b9`, 4px bottom padding) and a

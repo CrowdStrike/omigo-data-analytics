@@ -1,7 +1,7 @@
-# Display Framing: How a Number Is Drawn Decides What It Means
+# Framing Effect: How a Number Is Drawn Decides What It Means
 
 **Page type:** detail page — card-section template (see `statistical-paradoxes/03-berksons-paradox.html`)
-**HTML title tag:** Display Framing — Cognitive Biases
+**HTML title tag:** Framing Effect — Cognitive Biases
 
 **Subtitle:** One list of figures, drawn two ways, read as a crisis and as a quiet year. Nobody changed a number.
 

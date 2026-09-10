@@ -1,27 +1,27 @@
-# Familiarity Feels Like Quality: You Are Rating Your Own Retraining Bill
+# Mere-Exposure Effect: You Are Rating Your Own Retraining Bill
 
 **Page type:** detail page — card-section template (see `statistical-paradoxes/03-berksons-paradox.html`)
-**HTML title tag:** Familiarity Feels Like Quality — Cognitive Biases
+**HTML title tag:** Mere-Exposure Effect — Cognitive Biases
 
 **Subtitle:** Change a tool someone uses every day and they will tell you it got worse. Show the same change to a stranger and they prefer it on the spot.
 
 ---
 
-## Section 1 — Two Rooms, One Redesign, Opposite Verdicts
+## Section 1 — Two Rater Groups, One Redesign, Opposite Verdicts
 
-**Tags:** `core idea` (violet), `two rooms` (blue), `same design` (magenta)
+**Tags:** `core idea` (violet), `two groups` (blue), `same design` (magenta)
 
 **Bullets:**
-- **The setup** — one redesign, one score sheet out of ten, and two rooms that never meet
-- **Room one** — forty people who used the old version every working day for two years
-- **Room two** — forty people meeting either version for the first time this morning
-- **The mark to beat** — the old version scores five out of ten from both rooms alike
+- **The setup** — one redesign, one 0–10 score sheet, two rater groups scored independently
+- **Group one** — forty people who used the old version every working day for two years
+- **Group two** — forty people meeting either version for the first time this morning
+- **The mark to beat** — the old version scores five out of ten from both groups alike
 - **What the daily users said** — an average of 3.3, and 34 of the forty put it below the old
 - **What the newcomers said** — an average of 6.5, and only 3 of the forty rated it down
-- **What differs between the rooms** — nothing but the hours already spent on the old version
+- **What differs between the groups** — nothing but the hours already spent on the old version
 - **What the daily users measured** — the cost of unlearning their own fingers, not the design
 
-**Key point:** The two rooms saw an identical design and split by more than three points. A verdict that moves that far on the rater's history is measuring the rater, not the thing being rated.
+**Key point:** The two groups saw an identical design and split by more than three points. A verdict that moves that far on the rater's history is measuring the rater, not the thing being rated.
 
 **Source note (`.src`):** Illustrative Example — eighty seeded score sheets; both averages and both counts are read back out of the plotted bars.
 
@@ -38,7 +38,7 @@ Two score distributions side by side over the same 0–10 axis, with the old ver
 - **Data:** two panels of 40. Daily users at `visits = 800`, newcomers at `visits = 0`, both scoring
   the same genuinely-better redesign. Daily users average **3.3** with **34 of 40** below five;
   newcomers average **6.5** with **3 of 40** below five. All four figures counted in the draw function.
-- **Title (bold 15px `P.ink`, centered, y=21):** "Two Rooms Score the Same Redesign"
+- **Title (bold 15px `P.ink`, centered, y=21):** "Two Rater Groups Score the Same Redesign"
 - **Legend (bold 12px, y=42):** `P.violet` "daily users — 34 of 40 rated it below the old" at x=56;
   `P.blue` "newcomers — 3 of 40 did" at x=430. Both counts printed from the tally.
 - **Bars:** plot box `PX=56`, width `w−90`, `TOPY=78`, `BASEY=218`. Eleven score slots; each slot
@@ -50,7 +50,7 @@ Two score distributions side by side over the same 0–10 axis, with the old ver
 - **Average strip** at `BASEY + 64`: a 2px `P.grid` rule spanning the same score axis, a violet
   triangle at 3.3 and a blue triangle at 6.5, each with its figure in bold 19px beneath, plus
   12px `P.mute` "average score" at the left. Both positions come from the computed means.
-- **Caption (bold 13px `P.violet`, centered, `h−10`):** "One design, one form — the rooms differ only in habit."
+- **Caption (bold 13px `P.violet`, centered, `h−10`):** "One design, one form — the groups differ only in habit."
 
 ---
 
@@ -59,8 +59,8 @@ Two score distributions side by side over the same 0–10 axis, with the old ver
 **Tags:** `the dial` (orange), `where it flips` (yellow), `habit only` (blue)
 
 **Bullets:**
-- **One redesign, seven rooms** — sorted only by how often each rater used the old version
-- **Nobody in any room** — is told which version is newer or what anyone else scored
+- **One redesign, seven groups** — sorted only by how often each rater used the old version
+- **Nobody in any group** — is told which version is newer or what anyone else scored
 - **First-timers** — have no habit to protect, and they hand it 6.0 out of ten
 - **Five prior visits** — 5.5, a mild preference, and the redesign is still the better one
 - **A hundred prior visits** — 4.6, and the redesign has quietly become the worse one
@@ -148,28 +148,28 @@ A weekly line rising from well below the old version's score up past it, with th
 **Tags:** `cuts both ways` (magenta), `no signal` (blue), `the real problem` (red)
 
 **Bullets:**
-- **A second redesign** — genuinely worse than the old version, shown to the same two rooms
+- **A second redesign** — genuinely worse than the old version, shown to the same two groups
 - **Daily users, better redesign** — 72 in a hundred call it worse than what they had
 - **Daily users, worse redesign** — 94 in a hundred, only 22 points away from the good one
 - **Newcomers, better redesign** — 14 in a hundred call it worse
 - **Newcomers, worse redesign** — 53 in a hundred, a 39-point gap that separates the two cases
 - **Why the boos sound alike** — habit swamps quality, so both land as the same complaint
-- **The practical problem** — a room that boos everything cannot say which one to keep
-- **Where the signal went** — to the room with nothing to unlearn, whose answers still split
+- **The practical problem** — a group that boos everything cannot say which one to keep
+- **Where the signal went** — to the group with nothing to unlearn, whose answers still split
 
 **Key point:** The bias is not that daily users dislike change — it is that they dislike improvement and damage by almost the same amount. Their reaction is honest and nearly useless, because it barely moves when quality does.
 
-**Source note (`.src`):** Illustrative Example — four seeded panels of 400, one per room-and-redesign pair; every share and both gaps are counted in the draw function.
+**Source note (`.src`):** Illustrative Example — four seeded panels of 400, one per group-and-redesign pair; every share and both gaps are counted in the draw function.
 
 ### Visualization — canvas `c4`, 720×330
 
-Four bars in two labelled groups showing the share who call the redesign worse than the old version, with the within-room gap between the good and bad redesign printed beside them.
+Four bars in two labelled groups showing the share who call the redesign worse than the old version, with the within-group gap between the good and bad redesign printed beside them.
 
 - **Data:** four panels of 400. Daily users (`visits = 800`) and newcomers (`visits = 0`), each scoring
   a genuinely-better redesign (`gain = +1.2`) and a genuinely-worse one (`gain = −0.5`). Shares scoring
   it under five: daily users **72%** and **94%**; newcomers **14%** and **53%**. Group averages
   **3.6 / 2.0** and **6.2 / 4.4**.
-- **The gaps:** **22 points** inside the daily-user room, **39 points** inside the newcomer room, each
+- **The gaps:** **22 points** inside the daily-user group, **39 points** inside the newcomer group, each
   computed as the difference of the two rounded shares actually printed on the bars.
 - **Title (bold 15px `P.ink`, centered, y=21):** "Share Who Call the Redesign Worse Than the Old Version"
 - **Legend (bold 12px, y=42):** `P.blue` "redesign is genuinely better" at x=58, `P.magenta`
@@ -182,7 +182,7 @@ Four bars in two labelled groups showing the share who call the redesign worse t
 - **Side panel** at `PX + PW + 26`: bold 13px `P.ink` "HOW FAR THE TWO / CASES PULL APART", then bold
   19px `P.blue` "22 points" over 12px `P.mute` "for daily users", and bold 19px `P.magenta` "39 points"
   over "for newcomers"; then bold 12px `P.blue` "daily users vote / it down either way".
-- **Caption (bold 13px `P.magenta`, centered, `h−10`):** "The room that always says worse cannot tell you when it is."
+- **Caption (bold 13px `P.magenta`, centered, `h−10`):** "The group that always says worse cannot tell you when it is."
 
 ---
 
@@ -198,7 +198,7 @@ Four bars in two labelled groups showing the share who call the redesign worse t
 - **Week one on the new one** — slower, because the users are still hunting for everything
 - **Week three** — already quicker than the old version on the clock, for the same people
 - **Their opinion in week three** — still below the old version, and it stays there in week four
-- **The two-week window** — the clock says keep it, the room says bin it, and the clock is right
+- **The two-week window** — the clock says keep it, the group says bin it, and the clock is right
 - **The method** — measure outcomes not opinions, and let a few weeks pass before you ask
 
 **Key point:** Two things break the tie that a survey cannot. Measure what people accomplish rather than what they report, and wait long enough for retraining to finish. A dislike that survives both is about the design.
@@ -230,8 +230,8 @@ Two stacked panels over one week axis — task seconds above, score out of ten b
   12px `P.orange` "liked better than the old version from week 5"; week numbers 1–10 in 12px `P.mute`.
 - **Disagreement window:** a `rgba(213,81,129,0.10)` fill with a dashed 1.5px `P.magenta` outline
   spanning both panels from the clock's crossing week to opinion's, labelled bold 12px `P.magenta`
-  "2 weeks when the clock says better and the room says worse" between the panels.
-- **Caption (bold 13px `P.green`, centered, `h−10`):** "Ask the stopwatch first and the room later."
+  "2 weeks when the clock says better and the group says worse" between the panels.
+- **Caption (bold 13px `P.green`, centered, `h−10`):** "Ask the stopwatch first and the group later."
 
 ---
 
@@ -246,7 +246,7 @@ Two stacked panels over one week axis — task seconds above, score out of ten b
   one `.key-point` callout → `.src` note. No paragraph blocks, no data tables, no `.math-box`.
 - **Bullet form:** each is ONE line that does not wrap at 50% column width (≤95 characters including
   the bold label), opening with a `<b>bold label</b>` then an em dash and the fact. Bullet count
-  follows the content — eight or nine here because the construction needs both rooms named and both
+  follows the content — eight or nine here because the construction needs both groups named and both
   figures given; never padded to a quota, and no line restates another.
 - **Section titles:** name the content. No role labels, no phrasing reused from another page.
 - **Page CSS:** body system-ui, white, `#2c3e50`, padding 40px, line-height 1.6. h1 2rem `#1a5276`
