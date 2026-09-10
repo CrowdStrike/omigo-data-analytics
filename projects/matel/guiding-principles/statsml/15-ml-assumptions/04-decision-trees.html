@@ -54,7 +54,7 @@ h1 {
     color: #555;
     margin-top: 8px;
 }
-canvas { display: block; margin: 0 auto; }
+canvas { display: block; margin: 0 auto; width: 100%; height: auto; }
 strong { color: #1a5276; }
 .good { color: #27ae60; font-weight: 600; }
 .bad { color: #e74c3c; font-weight: 600; }
@@ -96,7 +96,7 @@ strong { color: #1a5276; }
 <td>
 <div class="obj-title">Axis-Aligned Splits Only</div>
 <p class="obj-desc">Decision trees can only split <strong>perpendicular to feature axes</strong> — horizontal or vertical cuts. A diagonal decision boundary (e.g., "risk = age + BMI > 50") requires many staircase-like splits to approximate. Each additional split fragments the data, reducing sample size per leaf and increasing variance.</p>
-<p class="obj-detail"><span class="bad">Breaks:</span> True boundary is diagonal (age + cholesterol > 300). Tree needs 8–12 axis-aligned cuts to approximate it, creating jagged rectangular regions that overfit and generalize poorly.</p>
+<p class="obj-detail"><span class="bad">Breaks:</span> True boundary is diagonal (age + cholesterol > 300). The staircase shown uses 11 axis-aligned cuts and still misclassifies 4 of the 70 plotted points (94.3% accuracy), fragmenting the space into thin rectangles.</p>
 <p class="obj-detail"><span class="tag tag-check">Verify:</span> Visualize 2D feature interactions — if boundary looks diagonal, tree will struggle</p>
 <p class="obj-detail"><span class="tag tag-fix">Fix:</span> Create interaction features (age+BMI), use oblique trees, or SVM/logistic regression</p>
 </td>
@@ -109,8 +109,8 @@ strong { color: #1a5276; }
 <tr>
 <td>
 <div class="obj-title">No Statistical Validation at Splits</div>
-<p class="obj-desc">A decision tree will split on <strong>any information gain > 0</strong>, even if the split is based on n=5 observations and is pure random noise. There is no built-in hypothesis test, no minimum confidence level. The tree treats "100% positive with n=3" as a perfect leaf — indistinguishable from "100% positive with n=3000".</p>
-<p class="obj-detail"><span class="bad">Breaks:</span> Tree creates a leaf with 3 observations (all positive) and declares it "100% pure". This is random chance, not signal. On new data, this leaf predicts randomly — but the tree shows no uncertainty.</p>
+<p class="obj-desc">A decision tree will split on <strong>any information gain > 0</strong>, even if the split is based on n=5 observations and is pure random noise. There is no built-in hypothesis test, no minimum confidence level. The tree treats "100% positive with n=3" as a perfect leaf — indistinguishable from a 100%-positive leaf with n=2897.</p>
+<p class="obj-detail"><span class="bad">Breaks:</span> A leaf with 3 positives is called "100% pure", but against a 50% base rate that happens by chance with probability 0.5³ = 0.125 — roughly one node in eight. The tree shows no uncertainty.</p>
 <p class="obj-detail"><span class="tag tag-check">Verify:</span> Post-hoc binomial test on leaf purities vs. base rate, cross-validation</p>
 <p class="obj-detail"><span class="tag tag-fix">Fix:</span> CHAID (chi-squared at splits), min_samples_leaf ≥ 20, pruning, or validate ranges statistically</p>
 </td>
@@ -124,7 +124,7 @@ strong { color: #1a5276; }
 <td>
 <div class="obj-title">Greedy Split Selection (Locally Optimal)</div>
 <p class="obj-desc">Trees pick the <strong>best single split at each node</strong> without lookahead. A feature that is globally informative but only becomes useful after another split is never discovered. The greedy algorithm can't see that splitting on feature B first would unlock a perfect split on feature A — it picks whatever reduces impurity most right now.</p>
-<p class="obj-detail"><span class="bad">Breaks:</span> XOR-like pattern — disease occurs when (high age + low BP) OR (low age + high BP). Neither age nor BP alone has information gain. Tree picks a random noisy feature first, missing the interaction entirely.</p>
+<p class="obj-detail"><span class="bad">Breaks:</span> XOR-like pattern — disease occurs when (high age + low BP) OR (low age + high BP). In the plotted sample both single-feature stumps score exactly 50.0% (the base rate), so the true cut yields zero information gain while the best noise cut still gains 0.070 bits — the greedy tree splits on noise.</p>
 <p class="obj-detail"><span class="tag tag-check">Verify:</span> Compare single-tree performance with ensembles (Random Forest) — large gap suggests greedy limitation</p>
 <p class="obj-detail"><span class="tag tag-fix">Fix:</span> Random Forest (samples feature subsets), interaction features, or exhaustive search (CART with lookahead)</p>
 </td>
@@ -155,11 +155,20 @@ var dpr = window.devicePixelRatio || 1;
 function setupCanvas(id) {
     var c = document.getElementById(id);
     var w = c.width, h = c.height;
-    c.width = w * dpr; c.height = h * dpr;
-    c.style.width = w + 'px'; c.style.height = h + 'px';
+    c.style.maxWidth = w + 'px';
+    var __cssW = c.getBoundingClientRect().width || w;
+    var __scale = (__cssW / w) * dpr;
+    c.width = Math.round(w * __scale);
+    c.height = Math.round(h * __scale);
     var ctx = c.getContext('2d');
-    ctx.scale(dpr, dpr);
+    ctx.scale(__scale, __scale);
     return {ctx: ctx, w: w, h: h};
+}
+
+// Seeded Park-Miller LCG — deterministic, never Math.random()
+function lcg(seed) {
+    var s = seed;
+    return function () { s = (s * 16807) % 2147483647; return s / 2147483647; };
 }
 
 // 0. Intro — simple tree structure with split points and leaf predictions
@@ -269,11 +278,14 @@ function setupCanvas(id) {
     var xS = function(v) { return pad + v / 100 * (w - pad - 40); };
     var yS = function(v) { return h - 35 - v / 100 * (h - 65); };
 
-    // Data points
-    for (var i = 0; i < 70; i++) {
-        var x = 5 + Math.random() * 90;
-        var y = 5 + Math.random() * 90;
+    // Data points — seeded, so the counts printed below are reproducible
+    var rnd = lcg(20250401);
+    var N1 = 70, pts = [];
+    for (var i = 0; i < N1; i++) {
+        var x = 5 + rnd() * 90;
+        var y = 5 + rnd() * 90;
         var cls = (x + y > 95) ? 1 : 0;
+        pts.push([x, y, cls]);
         ctx.fillStyle = cls ? 'rgba(231,76,60,0.65)' : 'rgba(41,128,185,0.6)';
         ctx.beginPath(); ctx.arc(xS(x), yS(y), 4, 0, Math.PI*2); ctx.fill();
     }
@@ -282,29 +294,53 @@ function setupCanvas(id) {
     ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 2.5;
     ctx.beginPath(); ctx.moveTo(xS(0), yS(95)); ctx.lineTo(xS(95), yS(0)); ctx.stroke();
 
-    // Tree's staircase approximation
+    // Tree's staircase approximation — vertices drive both the drawing and the counts
+    var stair = [[0,95],[0,80],[15,80],[15,65],[30,65],[30,50],[45,50],[45,35],
+                 [60,35],[60,20],[75,20],[75,5],[95,5]];
     ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.setLineDash([5, 3]);
     ctx.beginPath();
-    ctx.moveTo(xS(0), yS(95));
-    ctx.lineTo(xS(0), yS(80)); ctx.lineTo(xS(15), yS(80));
-    ctx.lineTo(xS(15), yS(65)); ctx.lineTo(xS(30), yS(65));
-    ctx.lineTo(xS(30), yS(50)); ctx.lineTo(xS(45), yS(50));
-    ctx.lineTo(xS(45), yS(35)); ctx.lineTo(xS(60), yS(35));
-    ctx.lineTo(xS(60), yS(20)); ctx.lineTo(xS(75), yS(20));
-    ctx.lineTo(xS(75), yS(5)); ctx.lineTo(xS(95), yS(5));
+    ctx.moveTo(xS(stair[0][0]), yS(stair[0][1]));
+    for (var k = 1; k < stair.length; k++) ctx.lineTo(xS(stair[k][0]), yS(stair[k][1]));
     ctx.stroke();
     ctx.setLineDash([]);
+
+    // Count distinct thresholds the staircase implies (interior cuts only)
+    var xCuts = {}, yCuts = {};
+    for (var k = 1; k < stair.length; k++) {
+        if (stair[k][0] === stair[k-1][0]) { if (stair[k][0] > 0 && stair[k][0] < 95) xCuts[stair[k][0]] = 1; }
+        else { if (stair[k][1] > 0 && stair[k][1] < 95) yCuts[stair[k][1]] = 1; }
+    }
+    var nCuts = Object.keys(xCuts).length + Object.keys(yCuts).length;
+
+    // Staircase prediction and its realized error on the plotted points
+    function stepY(x) {
+        var yv = stair[stair.length-1][1];
+        for (var k = 1; k < stair.length; k++) {
+            if (stair[k][0] !== stair[k-1][0] && x < stair[k][0]) { yv = stair[k][1]; break; }
+        }
+        return yv;
+    }
+    var mis = 0, posN = 0;
+    for (var i = 0; i < pts.length; i++) {
+        if (pts[i][2]) posN++;
+        if (((pts[i][1] > stepY(pts[i][0])) ? 1 : 0) !== pts[i][2]) mis++;
+    }
+    var accPct = (100 * (pts.length - mis) / pts.length).toFixed(1);
 
     // Legend
     ctx.font = '13px system-ui'; ctx.textAlign = 'left';
     ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 2.5; ctx.setLineDash([]);
-    ctx.beginPath(); ctx.moveTo(w-230, 30); ctx.lineTo(w-205, 30); ctx.stroke();
-    ctx.fillStyle = '#27ae60'; ctx.fillText('True boundary (diagonal)', w-200, 34);
+    ctx.beginPath(); ctx.moveTo(w-260, 30); ctx.lineTo(w-235, 30); ctx.stroke();
+    ctx.fillStyle = '#27ae60'; ctx.fillText('True boundary (diagonal)', w-230, 34);
 
     ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2; ctx.setLineDash([5,3]);
-    ctx.beginPath(); ctx.moveTo(w-230, 50); ctx.lineTo(w-205, 50); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(w-260, 50); ctx.lineTo(w-235, 50); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = '#e74c3c'; ctx.fillText('Tree approx (8+ splits)', w-200, 54);
+    ctx.fillStyle = '#e74c3c'; ctx.fillText('Tree approx (' + nCuts + ' cuts)', w-230, 54);
+
+    ctx.fillStyle = '#555'; ctx.font = '12px system-ui';
+    ctx.fillText(pts.length + ' points: ' + posN + ' red / ' + (pts.length - posN) + ' blue', w-230, 74);
+    ctx.fillText('staircase misses ' + mis + ' of ' + pts.length + ' (' + accPct + '% acc)', w-230, 90);
 
     ctx.fillStyle = '#e67e22'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
     ctx.fillText('Each step = one split = smaller n per leaf', w/2, h - 22);
@@ -335,19 +371,30 @@ function setupCanvas(id) {
         }
     }
 
+    // Node counts — children must sum to their parent
+    var nRoot = 5000, nLeft = 2100, nRight = nRoot - nLeft;   // 2900
+    var nTiny = 3, nBig = nRight - nTiny;                      // 2897
+    var pBase = 0.5;                                           // base rate the leaf is compared against
+    var bigPos = 2057;                                         // observed positives in the large leaf
+    var bigPct = Math.round(100 * bigPos / nBig);              // 71
+    // P(all positive | base rate) for each leaf size
+    var pTiny = Math.pow(pBase, nTiny);                        // 0.125
+    var log10Big = nBig * Math.log10(pBase);                   // ≈ -872
+
     // Tree structure
-    drawNode(w*0.4, 15, 'chol < 245?', 'n = 5000', '#f0f4f8', '#2980b9');
+    drawNode(w*0.4, 15, 'chol < 245?', 'n = ' + nRoot, '#f0f4f8', '#2980b9');
+    ctx.textAlign = 'center';
     drawEdge(w*0.4 - 30, 55, w*0.2, 70, 'Yes');
     drawEdge(w*0.4 + 30, 55, w*0.6, 70, 'No');
 
-    drawNode(w*0.2, 75, 'age < 55?', 'n = 2100', '#f0f4f8', '#2980b9');
-    drawNode(w*0.6, 75, 'chol < 291?', 'n = 2900', '#f0f4f8', '#2980b9');
+    drawNode(w*0.2, 75, 'age < 55?', 'n = ' + nLeft, '#f0f4f8', '#2980b9');
+    drawNode(w*0.6, 75, 'chol < 291?', 'n = ' + nRight, '#f0f4f8', '#2980b9');
 
     drawEdge(w*0.6 + 30, 115, w*0.75, 130, 'No');
-    drawNode(w*0.75, 135, '100% pos !!!', 'n = 3', '#fdedec', '#e74c3c');
+    drawNode(w*0.75, 135, '100% pos !!!', 'n = ' + nTiny, '#fdedec', '#e74c3c');
 
     drawEdge(w*0.6 - 30, 115, w*0.45, 130, 'Yes');
-    drawNode(w*0.45, 135, '71% pos', 'n = 1800', '#eafaf1', '#27ae60');
+    drawNode(w*0.45, 135, bigPct + '% pos', 'n = ' + nBig, '#eafaf1', '#27ae60');
 
     // Highlight the problematic leaf
     ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3;
@@ -357,18 +404,20 @@ function setupCanvas(id) {
     ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
     ctx.fillText('← Random chance!', w*0.75 + nodeW/2 + 10, 152);
     ctx.font = '13px system-ui'; ctx.fillStyle = '#555';
-    ctx.fillText('3 samples = no statistical', w*0.75 + nodeW/2 + 10, 170);
+    ctx.fillText(nTiny + ' samples = no statistical', w*0.75 + nodeW/2 + 10, 170);
     ctx.fillText('power whatsoever', w*0.75 + nodeW/2 + 10, 185);
 
     // Comparison box at bottom
     ctx.fillStyle = '#f8f9fa'; ctx.fillRect(30, 210, w - 60, 75);
     ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1; ctx.strokeRect(30, 210, w - 60, 75);
     ctx.fillStyle = '#1a5276'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
-    ctx.fillText('The tree cannot distinguish:', 50, 232);
+    ctx.fillText('Both leaves are "100% positive" — vs a 50% base rate:', 50, 232);
     ctx.font = '13px system-ui'; ctx.fillStyle = '#e74c3c';
-    ctx.fillText('• "100% positive, n=3" — random noise (binomial p=0.12)', 70, 252);
+    ctx.fillText('• n = ' + nTiny + '  → P(all pos by chance) = 0.5^' + nTiny + ' = '
+                 + pTiny.toFixed(3) + ' — random noise', 70, 252);
     ctx.fillStyle = '#27ae60';
-    ctx.fillText('• "100% positive, n=3000" — real signal (binomial p < 1e-100)', 70, 272);
+    ctx.fillText('• n = ' + nBig + '  → P(all pos by chance) ≈ 10^' + log10Big.toFixed(0)
+                 + ' — real signal', 70, 272);
 })();
 
 // 3. Greedy Selection — misses XOR-like interactions
@@ -388,15 +437,74 @@ function setupCanvas(id) {
     var yS = function(v) { return h - 35 - v / 100 * (h - 65); };
 
     // XOR pattern: positive in (high age, low BP) and (low age, high BP)
-    for (var i = 0; i < 60; i++) {
-        var x = 10 + Math.random() * 80;
-        var y = 10 + Math.random() * 80;
-        var cls = ((x > 50 && y < 50) || (x < 50 && y > 50)) ? 1 : 0;
-        // Add some noise
-        if (Math.random() < 0.1) cls = 1 - cls;
+    // Seeded so the flip count and per-side rates printed below are reproducible.
+    var rnd = lcg(20251005);
+    var N3 = 60, P = [], flips = 0;
+    for (var i = 0; i < N3; i++) {
+        var x = 10 + rnd() * 80;
+        var y = 10 + rnd() * 80;
+        var base = ((x > 50 && y < 50) || (x < 50 && y > 50)) ? 1 : 0;
+        var cls = base;
+        // Design label-noise rate 0.1; realized count is measured, not assumed
+        if (rnd() < 0.1) { cls = 1 - cls; flips++; }
+        P.push({x: x, y: y, base: base, cls: cls});
         ctx.fillStyle = cls ? 'rgba(231,76,60,0.7)' : 'rgba(41,128,185,0.65)';
         ctx.beginPath(); ctx.arc(xS(x), yS(y), 4.5, 0, Math.PI*2); ctx.fill();
     }
+
+    // Measured statistics of the plotted points
+    function frac(f) {
+        var a = P.filter(f), p = a.filter(function(z) { return z.cls === 1; }).length;
+        return {n: a.length, pos: p, pct: a.length ? 100 * p / a.length : 0};
+    }
+    var ageLo = frac(function(p) { return p.x < 50; });
+    var ageHi = frac(function(p) { return p.x > 50; });
+    var bpLo  = frac(function(p) { return p.y < 50; });
+    var bpHi  = frac(function(p) { return p.y > 50; });
+    var totPos = P.filter(function(p) { return p.cls === 1; }).length;
+    var flipPct = (100 * flips / P.length).toFixed(1);
+    // Accuracy of the interaction rule against the (noisy) plotted labels
+    var xorCorrect = P.filter(function(p) { return p.base === p.cls; }).length;
+    var xorAcc = (100 * xorCorrect / P.length).toFixed(1);
+    function stumpAcc(key) {
+        function maj(a) {
+            var p = a.filter(function(z) { return z.cls === 1; }).length;
+            return Math.max(p, a.length - p);
+        }
+        var L = P.filter(function(p) { return p[key] < 50; });
+        var R = P.filter(function(p) { return p[key] > 50; });
+        return 100 * (maj(L) + maj(R)) / P.length;
+    }
+    var accAge = stumpAcc('x').toFixed(1);
+    var accBP = stumpAcc('y').toFixed(1);
+    // Best information gain any single-feature threshold can reach (pure noise-fitting)
+    function ent(a) {
+        if (!a.length) return 0;
+        var p = a.filter(function(z) { return z.cls === 1; }).length / a.length;
+        if (p <= 0 || p >= 1) return 0;
+        return -(p * Math.log(p) + (1-p) * Math.log(1-p)) / Math.log(2);
+    }
+    var rootEnt = ent(P);
+    function bestIG(key) {
+        var vals = P.map(function(p) { return p[key]; }).sort(function(a, b) { return a - b; });
+        var g = 0;
+        for (var j = 0; j < vals.length - 1; j++) {
+            var t = (vals[j] + vals[j+1]) / 2;
+            var L = P.filter(function(p) { return p[key] < t; });
+            var R = P.filter(function(p) { return p[key] >= t; });
+            var gain = rootEnt - (L.length / P.length * ent(L) + R.length / P.length * ent(R));
+            if (gain > g) g = gain;
+        }
+        return g;
+    }
+    var maxIG = Math.max(bestIG('x'), bestIG('y'));
+    // Information gain at the two true XOR cuts (x = 50, y = 50)
+    function igAt(key, t) {
+        var L = P.filter(function(p) { return p[key] < t; });
+        var R = P.filter(function(p) { return p[key] > t; });
+        return rootEnt - (L.length / P.length * ent(L) + R.length / P.length * ent(R));
+    }
+    var igTrue = Math.max(igAt('x', 50), igAt('y', 50));
 
     // Midpoint lines showing the XOR boundary
     ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 1.5; ctx.setLineDash([4,3]);
@@ -414,25 +522,32 @@ function setupCanvas(id) {
     // Right side: explanation
     var rx = w/2 + 30;
     ctx.fillStyle = '#1a5276'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
-    ctx.fillText('Why greedy fails on XOR:', rx, 35);
+    ctx.fillText('Why greedy fails on XOR:', rx, 30);
 
     ctx.font = '13px system-ui'; ctx.fillStyle = '#555';
-    ctx.fillText('Step 1: Tree evaluates Age alone', rx, 60);
-    ctx.fillText('  → ~50% positive on both sides', rx, 78);
-    ctx.fillText('  → Information gain ≈ 0', rx, 96);
+    ctx.fillText('Step 1: split on Age alone', rx, 52);
+    ctx.fillText('  → ' + ageLo.pos + '/' + ageLo.n + ' = ' + ageLo.pct.toFixed(0) + '% pos left, '
+                        + ageHi.pos + '/' + ageHi.n + ' = ' + ageHi.pct.toFixed(0) + '% pos right', rx, 70);
+    ctx.fillText('  → stump accuracy ' + accAge + '% (= base rate)', rx, 88);
 
-    ctx.fillText('Step 2: Tree evaluates BP alone', rx, 122);
-    ctx.fillText('  → ~50% positive on both sides', rx, 140);
-    ctx.fillText('  → Information gain ≈ 0', rx, 158);
+    ctx.fillText('Step 2: split on BP alone', rx, 112);
+    ctx.fillText('  → ' + bpLo.pos + '/' + bpLo.n + ' = ' + bpLo.pct.toFixed(0) + '% pos low, '
+                        + bpHi.pos + '/' + bpHi.n + ' = ' + bpHi.pct.toFixed(0) + '% pos high', rx, 130);
+    ctx.fillText('  → stump accuracy ' + accBP + '% (= base rate)', rx, 148);
 
     ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 13px system-ui';
-    ctx.fillText('Result: picks a random noisy feature!', rx, 188);
+    ctx.fillText('IG at the true cut = ' + igTrue.toFixed(3) + ' bits', rx, 174);
     ctx.font = '13px system-ui'; ctx.fillStyle = '#555';
-    ctx.fillText('Neither feature alone has signal —', rx, 210);
-    ctx.fillText('only the INTERACTION matters.', rx, 228);
+    ctx.fillText('Best noise cut still gains ' + maxIG.toFixed(3) + ' bits →', rx, 194);
+    ctx.fillText('greedy tree splits on noise instead.', rx, 212);
 
     ctx.fillStyle = '#27ae60'; ctx.font = 'bold 13px system-ui';
-    ctx.fillText('Fix: create age×BP interaction feature', rx, 258);
+    ctx.fillText('Age×BP interaction: ' + xorAcc + '% accuracy', rx, 240);
+
+    ctx.font = '12px system-ui'; ctx.fillStyle = '#555';
+    ctx.fillText('Plotted: ' + P.length + ' pts, ' + totPos + ' red / ' + (P.length - totPos) + ' blue', rx, 264);
+    ctx.fillText('Label noise: designed 10%, realized ' + flips + '/' + P.length
+                 + ' = ' + flipPct + '%', rx, 280);
 })();
 
 // 4. Class Imbalance — majority dominates splits
@@ -440,24 +555,30 @@ function setupCanvas(id) {
     var s = setupCanvas('c4'), ctx = s.ctx, w = s.w, h = s.h;
     var pad = 55;
 
+    // Class shares drive every printed number below
+    var pMin = 0.05, pMaj = 1 - pMin;
+    var gini = 2 * pMaj * pMin;
+    var majPct = (100 * pMaj).toFixed(0), minPct = (100 * pMin).toFixed(0);
+
     // Left: imbalanced bar showing the problem
     ctx.fillStyle = '#1a5276'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
-    ctx.fillText('Class Distribution: 95% Negative / 5% Positive', w/2, 20);
+    ctx.fillText('Class Distribution: ' + majPct + '% Negative / ' + minPct + '% Positive', w/2, 20);
 
     // Full dataset bar
     var barX = pad, barY = 40, barW = w - pad - 30, barH = 30;
-    ctx.fillStyle = 'rgba(41,128,185,0.6)'; ctx.fillRect(barX, barY, barW * 0.95, barH);
-    ctx.fillStyle = 'rgba(231,76,60,0.7)'; ctx.fillRect(barX + barW * 0.95, barY, barW * 0.05, barH);
+    ctx.fillStyle = 'rgba(41,128,185,0.6)'; ctx.fillRect(barX, barY, barW * pMaj, barH);
+    ctx.fillStyle = 'rgba(231,76,60,0.7)'; ctx.fillRect(barX + barW * pMaj, barY, barW * pMin, barH);
     ctx.strokeStyle = '#888'; ctx.lineWidth = 1; ctx.strokeRect(barX, barY, barW, barH);
 
     ctx.fillStyle = '#2980b9'; ctx.font = '13px system-ui'; ctx.textAlign = 'center';
-    ctx.fillText('Negative: 95%', barX + barW * 0.47, barY + 20);
+    ctx.fillText('Negative: ' + majPct + '%', barX + barW * pMaj / 2, barY + 20);
     ctx.fillStyle = '#e74c3c'; ctx.font = '13px system-ui';
-    ctx.fillText('5%', barX + barW * 0.975, barY + 20);
+    ctx.fillText(minPct + '%', barX + barW * (pMaj + pMin/2), barY + 20);
 
     // Gini calculation
     ctx.fillStyle = '#555'; ctx.font = '13px system-ui'; ctx.textAlign = 'left';
-    ctx.fillText('Gini before any split = 2 × 0.95 × 0.05 = 0.095', pad, 95);
+    ctx.fillText('Gini before any split = 2 × ' + pMaj.toFixed(2) + ' × ' + pMin.toFixed(2)
+                 + ' = ' + gini.toFixed(3), pad, 95);
     ctx.fillStyle = '#e67e22'; ctx.font = 'bold 13px system-ui';
     ctx.fillText('Already "almost pure" — tree has little incentive to split further!', pad, 115);
 
@@ -476,7 +597,7 @@ function setupCanvas(id) {
     ctx.fillStyle = '#1a5276'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
     ctx.fillText('Predict "Not Fraud"', bx1 + boxW/2, predY + 35);
     ctx.fillStyle = '#27ae60'; ctx.font = '13px system-ui';
-    ctx.fillText('Accuracy: 95% ✓', bx1 + boxW/2, predY + 55);
+    ctx.fillText('Accuracy: ' + majPct + '% ✓', bx1 + boxW/2, predY + 55);
 
     // "Actual outcome" box
     ctx.fillStyle = '#fdedec'; ctx.fillRect(bx2, predY + 15, boxW, boxH);
