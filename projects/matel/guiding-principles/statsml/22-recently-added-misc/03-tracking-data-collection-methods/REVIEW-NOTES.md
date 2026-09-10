@@ -1,6 +1,6 @@
 # Tracking Pages — Review Findings (temporary notes)
 
-Review of all pages under `backlog/tracking/` for professional, non-controversial
+Review of all pages under `02-backlog/tracking/` for professional, non-controversial
 language and examples. Six parallel reviewers, all findings spot-checked verbatim
 against the files. **Nothing in this file has been fixed yet** except the section-08
 removal noted at the bottom.
@@ -407,7 +407,7 @@ as a by-product of managing traffic." Hub card label `PUBLIC SPACE` → `TRAFFIC
 ### Flat grid replaces the section-page layer
 
 `sections/` is **deleted**. All 67 cards now live in the hub
-(`backlog/61-tracking-data-collection-methods.html`) in one flat grid, grouped under seven
+(`02-backlog/61-tracking-data-collection-methods.html`) in one flat grid, grouped under seven
 `.section-title` headings with `.section-blurb` lines, preceded by a `.toc` block linking
 to each heading anchor with its card range.
 
