@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Numerical Stability</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Numerical Stability</h1>
+<p class="subtitle">Computers do arithmetic with ~16 digits, and some computations quietly amplify the rounding — the classic self-inflicted wound is computing a matrix inverse when solving the system would do</p>
+
+<div class="card-section">
+    <h2>Two Coffee Blends, One Rounded Penny</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">core idea</span><span class="tag orange">ill-conditioning</span><span class="tag green">running example</span></div>
+                <ul>
+                    <li><b>The blends</b> — blend A: 2 kg arabica + 1 kg robusta = $9.00; blend B: 4 kg + 2.01 kg = $18.03</li>
+                    <li><b>The unknowns</b> — two equations, two unknowns: the per-kg prices of arabica and robusta beans</li>
+                    <li><b>The clean answer</b> — solving the system exactly gives arabica $3.00/kg and robusta $3.00/kg</li>
+                    <li><b>The typo</b> — a clerk rounds the $18.03 invoice down to $18.00, a 0.2% change in one number</li>
+                    <li><b>The blow-up</b> — the solved prices jump to arabica $4.50/kg and robusta $0.00/kg</li>
+                    <li><b>The name</b> — the system is ill-conditioned: blend B is almost exactly two bags of blend A</li>
+                </ul>
+                <p class="example">A 3-cent rounding on an $18 invoice moved the computed arabica price by $1.50 — a 50% swing from a 0.2% input change.</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> Numerical stability asks how much tiny input and rounding errors grow inside a computation. This problem is touchy on its own — a stable algorithm must not add fuel.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Solving the Blends Without an Inverse</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">worked example</span><span class="tag green">rule of thumb</span></div>
+                <ul>
+                    <li><b>By hand</b> — double blend A to get 4 kg + 2 kg = $18.00, then subtract it from blend B</li>
+                    <li><b>What remains</b> — 0.01 kg of robusta explains the leftover $0.03, so robusta = $3.00/kg</li>
+                    <li><b>Back-substitute</b> — plug $3.00 into blend A: 2a + 3.00 = 9.00, so arabica = $3.00/kg</li>
+                    <li><b>That is solve</b> — elimination plus back-substitution is exactly what np.linalg.solve does</li>
+                    <li><b>Digit budget</b> — float64 carries ~16 digits; each power of ten in the condition number eats one</li>
+                    <li><b>The inverse tax</b> — routing through A&#8315;&sup1; typically burns 1–2 extra digits on top of that loss</li>
+                </ul>
+                <p class="example">At condition number 10&#8312;, solve keeps ~8 correct digits while the inv(A) route keeps ~6 (illustrative).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> x = A&#8315;&sup1;b is math notation, not a computation plan — in code it should always become solve(A, b), never inv(A) @ b.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Where Regression Hits It</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag blue">where it's used</span><span class="tag orange">regression</span><span class="tag red">failure mode</span></div>
+                <ul>
+                    <li><b>The formula</b> — every textbook prints &beta; = (X&#7488;X)&#8315;&sup1;X&#7488;y, which both forms X&#7488;X and inverts it</li>
+                    <li><b>Squaring</b> — forming X&#7488;X squares the condition number: &kappa;(X) = 10&sup3; becomes &kappa;(X&#7488;X) = 10&#8310;</li>
+                    <li><b>Twin features</b> — near-duplicate columns (height in cm and inches) inflate &kappa;(X) from the start</li>
+                    <li><b>The fix</b> — np.linalg.lstsq factors X directly (SVD under the hood) and never forms X&#7488;X</li>
+                    <li><b>The symptom</b> — coefficients that flip sign or explode when a handful of rows change slightly</li>
+                </ul>
+                <p class="example">With &kappa;(X) = 10&sup3;, lstsq keeps ~13 correct digits; the normal-equations route keeps ~10 (illustrative).</p>
+                <div class="key-point">
+                    <strong>Key point:</strong> If regression coefficients swing wildly between nearly identical reruns, suspect conditioning and the (X&#7488;X)&#8315;&sup1; recipe before suspecting the data.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Inverse Nobody Needed</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">common mistake</span><span class="tag green">rule of thumb</span></div>
+                <ul>
+                    <li><b>The excuse</b> — "I have many right-hand sides, so I need A&#8315;&sup1;" — no: factor A once and reuse it</li>
+                    <li><b>The flop bill</b> — at n = 2,000: LU solve &asymp; 5.3 GFLOP, invert-then-multiply &asymp; 16 GFLOP (~3&times;)</li>
+                    <li><b>Reuse</b> — after one factorization, each extra right-hand side costs &asymp; 0.008 GFLOP — near free</li>
+                    <li><b>Sparsity</b> — a mostly-zero A usually has a fully dense A&#8315;&sup1;, so inverting can explode memory too</li>
+                    <li><b>Real exceptions</b> — compute A&#8315;&sup1; only when its entries are themselves the answer you must report</li>
+                </ul>
+                <p class="example">An analyst cached inv(A) "for speed" and paid 3&times; the flops up front for answers with fewer correct digits.</p>
+                <div class="key-point">
+                    <strong>Common mistake:</strong> Caching inv(A) "for reuse". The reusable object is the factorization — factor once, then every new b is a cheap pair of triangular solves.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c4" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>
+var __charts = [];
+var P = {
+  blue: '#2a78d6', green: '#008300', magenta: '#d55181', yellow: '#c98500',
+  aqua: '#199e70', orange: '#d95926', violet: '#4a3aa7',
+  ink: '#1a5276', text: '#2c3e50', mute: '#6b7280', grid: '#e5e9ef'
+};
+
+function setup(id) {
+    var canvas = document.getElementById(id);
+    var dpr = window.devicePixelRatio || 1;
+    var rect = { width: 720, height: 300 };
+    canvas.style.maxWidth = rect.width + 'px';
+    var cssW = canvas.getBoundingClientRect().width || rect.width;
+    var scale = (cssW / rect.width) * dpr;
+    canvas.width = Math.round(rect.width * scale);
+    canvas.height = Math.round(rect.height * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    return { ctx: ctx, w: rect.width, h: rect.height };
+}
+
+// c1: two nearly parallel blend equations in price space
+__charts.push(function() {
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Two Nearly Parallel Blend Equations: a 3¢ Nudge Moves the Answer $1.50', w / 2, 24);
+
+    var ox = 70, oy = 245, xEnd = 630, yTop = 50;
+    var xMin = 0, xMax = 6, yMin = 0, yMax = 9;
+    function px(v) { return ox + (v - xMin) / (xMax - xMin) * (xEnd - ox); }
+    function py(v) { return oy - (v - yMin) / (yMax - yMin) * (oy - yTop); }
+
+    // gridlines
+    ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+    for (var gx = 0; gx <= 6; gx++) {
+        ctx.beginPath(); ctx.moveTo(px(gx), yTop); ctx.lineTo(px(gx), oy); ctx.stroke();
+    }
+    var yTicks = [0, 3, 6, 9];
+    for (var t = 0; t < yTicks.length; t++) {
+        ctx.beginPath(); ctx.moveTo(ox, py(yTicks[t])); ctx.lineTo(xEnd, py(yTicks[t])); ctx.stroke();
+    }
+
+    // axes
+    ctx.strokeStyle = P.ink; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox, yTop); ctx.lineTo(ox, oy); ctx.lineTo(xEnd, oy); ctx.stroke();
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+    for (var gx = 0; gx <= 6; gx++) ctx.fillText(String(gx), px(gx), oy + 14);
+    ctx.textAlign = 'right';
+    for (var t = 0; t < yTicks.length; t++) ctx.fillText(String(yTicks[t]), ox - 6, py(yTicks[t]) + 4);
+    ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('arabica $/kg', (ox + xEnd) / 2, oy + 30);
+    ctx.save();
+    ctx.translate(20, (yTop + oy) / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText('robusta $/kg', 0, 0);
+    ctx.restore();
+
+    // clip lines to the plot area
+    ctx.save();
+    ctx.beginPath(); ctx.rect(ox, yTop, xEnd - ox, oy - yTop); ctx.clip();
+
+    // line A: r = 9 - 2a, from (0,9) to (4.5,0)
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(px(0), py(9)); ctx.lineTo(px(4.5), py(0)); ctx.stroke();
+
+    // line B: r = (18.03 - 4a)/2.01, from (0, 8.97) to (4.5075, 0)
+    ctx.strokeStyle = P.green; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(px(0), py(8.97)); ctx.lineTo(px(4.5075), py(0)); ctx.stroke();
+
+    // line B rounded: r = (18.00 - 4a)/2.01, from (0, 8.955) to (4.5, 0), dashed
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 3; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(px(0), py(8.955)); ctx.lineTo(px(4.5), py(0)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    // line labels
+    ctx.fillStyle = P.blue; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('blend A: 2a + 1r = $9.00', px(0.55), py(8.35));
+    ctx.fillStyle = P.green;
+    ctx.fillText('blend B: 4a + 2.01r = $18.03', px(1.45), py(6.0));
+
+    // dots
+    ctx.fillStyle = P.green;
+    ctx.beginPath(); ctx.arc(px(3), py(3), 6, 0, 2 * Math.PI); ctx.fill();
+    ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('true prices ($3.00, $3.00)', px(3) + 12, py(3) - 8);
+    ctx.fillStyle = P.orange;
+    ctx.beginPath(); ctx.arc(px(4.5), py(0), 6, 0, 2 * Math.PI); ctx.fill();
+    ctx.textAlign = 'center';
+    ctx.fillText('after 3¢ rounding ($4.50, $0.00)', px(4.5), py(0) - 14);
+
+    // annotation
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('the three lines are almost the same line —', px(0.3), py(4.4));
+    ctx.fillText('the crossing point is fragile', px(0.3), py(3.85));
+
+    // caption
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('shallow crossings slide far; this is what a large condition number looks like', w - 12, h - 8);
+});
+
+// c2: grouped bars — correct digits after solve vs invert, four condition numbers
+__charts.push(function() {
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Correct Digits Left: solve(A, b) vs inv(A) @ b (illustrative)', w / 2, 24);
+
+    var kappas = ['κ = 10²', 'κ = 10⁵', 'κ = 10⁸', 'κ = 10¹¹'];
+    var solveD = [14, 11, 8, 5];
+    var invD = [12, 9, 6, 3];
+    var groupX = [140, 295, 450, 605];
+
+    var oy = 240, yTop = 55;
+    var dMax = 16;
+    function py(d) { return oy - d / dMax * (oy - yTop); }
+
+    // gridlines + y ticks
+    var ticks = [0, 4, 8, 12, 16];
+    for (var t = 0; t < ticks.length; t++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(60, py(ticks[t])); ctx.lineTo(690, py(ticks[t])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(ticks[t]), 54, py(ticks[t]) + 4);
+    }
+    // axes
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(60, yTop); ctx.lineTo(60, oy); ctx.lineTo(690, oy); ctx.stroke();
+    ctx.save();
+    ctx.translate(20, (yTop + oy) / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('correct digits', 0, 0);
+    ctx.restore();
+
+    // float64 ceiling
+    ctx.strokeStyle = P.mute; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(60, py(16)); ctx.lineTo(690, py(16)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.mute; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('float64 budget ≈ 16 digits', 688, py(16) - 6);
+
+    // bars
+    var bw = 44, gap = 8;
+    for (var g = 0; g < 4; g++) {
+        var cx = groupX[g];
+        var sx = cx - bw - gap / 2, ix = cx + gap / 2;
+        // solve bar
+        var sy = py(solveD[g]);
+        ctx.fillStyle = 'rgba(42,120,214,0.55)';
+        ctx.fillRect(sx, sy, bw, oy - sy);
+        ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+        ctx.strokeRect(sx, sy, bw, oy - sy);
+        ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+        ctx.fillText(String(solveD[g]), sx + bw / 2, sy - 6);
+        // invert bar
+        var iy = py(invD[g]);
+        ctx.fillStyle = 'rgba(217,89,38,0.55)';
+        ctx.fillRect(ix, iy, bw, oy - iy);
+        ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+        ctx.strokeRect(ix, iy, bw, oy - iy);
+        ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui';
+        ctx.fillText(String(invD[g]), ix + bw / 2, iy - 6);
+        // group label
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+        ctx.fillText(kappas[g], cx, oy + 16);
+    }
+
+    // legend
+    ctx.fillStyle = 'rgba(42,120,214,0.55)'; ctx.fillRect(75, 62, 14, 12);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 1; ctx.strokeRect(75, 62, 14, 12);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'left';
+    ctx.fillText('solve', 94, 72);
+    ctx.fillStyle = 'rgba(217,89,38,0.55)'; ctx.fillRect(140, 62, 14, 12);
+    ctx.strokeStyle = P.orange; ctx.strokeRect(140, 62, 14, 12);
+    ctx.fillStyle = '#444';
+    ctx.fillText('invert then multiply', 159, 72);
+
+    // annotation right of last group
+    ctx.fillStyle = P.orange; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('inverting throws away ~2', 700, 150);
+    ctx.fillText('extra digits at every κ', 700, 167);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('each power of ten in κ costs about one digit; the inverse route pays a surcharge', w - 12, h - 8);
+});
+
+// c3: normal equations square the condition number (left); digits kept (right)
+__charts.push(function() {
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Normal Equations Square the Condition Number (illustrative)', w / 2, 24);
+
+    // divider
+    ctx.strokeStyle = '#bdc3c7'; ctx.setLineDash([4, 3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(360, 40); ctx.lineTo(360, h - 12); ctx.stroke();
+    ctx.setLineDash([]);
+
+    var oy = 240, chH = 175, yTop = oy - chH;
+
+    // ---- left panel: powers of ten in kappa (0-8) ----
+    var lx = 60, lw = 250;
+    function lpy(v) { return oy - v / 8 * chH; }
+    var lTicks = [0, 2, 4, 6, 8];
+    for (var t = 0; t < lTicks.length; t++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(lx, lpy(lTicks[t])); ctx.lineTo(lx + lw, lpy(lTicks[t])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(lTicks[t]), lx - 6, lpy(lTicks[t]) + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(lx, yTop); ctx.lineTo(lx, oy); ctx.lineTo(lx + lw, oy); ctx.stroke();
+    ctx.save();
+    ctx.translate(22, (yTop + oy) / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('powers of ten in κ', 0, 0);
+    ctx.restore();
+
+    var lbw = 70;
+    // X bar: height 3
+    var xy = lpy(3);
+    ctx.fillStyle = 'rgba(42,120,214,0.55)';
+    ctx.fillRect(130 - lbw / 2, xy, lbw, oy - xy);
+    ctx.strokeStyle = P.blue; ctx.lineWidth = 2;
+    ctx.strokeRect(130 - lbw / 2, xy, lbw, oy - xy);
+    ctx.fillStyle = P.blue; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('κ = 10³', 130, xy - 8);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('X', 130, oy + 16);
+
+    // XᵀX bar: height 6
+    var xxy = lpy(6);
+    ctx.fillStyle = 'rgba(217,89,38,0.55)';
+    ctx.fillRect(250 - lbw / 2, xxy, lbw, oy - xxy);
+    ctx.strokeStyle = P.orange; ctx.lineWidth = 2;
+    ctx.strokeRect(250 - lbw / 2, xxy, lbw, oy - xxy);
+    ctx.fillStyle = P.orange; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('κ = 10⁶', 250, xxy - 8);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui';
+    ctx.fillText('XᵀX', 250, oy + 16);
+
+    // "squared" annotation between bars
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('squared', 190, lpy(4.5));
+
+    // ---- right panel: digits kept (0-16) ----
+    var rx = 410, rw = 250;
+    function rpy(v) { return oy - v / 16 * chH; }
+    var rTicks = [0, 4, 8, 12, 16];
+    for (var t = 0; t < rTicks.length; t++) {
+        ctx.strokeStyle = P.grid; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(rx, rpy(rTicks[t])); ctx.lineTo(rx + rw, rpy(rTicks[t])); ctx.stroke();
+        ctx.fillStyle = '#444'; ctx.font = '11px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(String(rTicks[t]), rx - 6, rpy(rTicks[t]) + 4);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(rx, yTop); ctx.lineTo(rx, oy); ctx.lineTo(rx + rw, oy); ctx.stroke();
+    ctx.save();
+    ctx.translate(376, (yTop + oy) / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('correct digits in β', 0, 0);
+    ctx.restore();
+
+    // lstsq bar: height 13
+    var ly = rpy(13);
+    ctx.fillStyle = 'rgba(0,131,0,0.5)';
+    ctx.fillRect(480 - lbw / 2, ly, lbw, oy - ly);
+    ctx.strokeStyle = P.green; ctx.lineWidth = 2;
+    ctx.strokeRect(480 - lbw / 2, ly, lbw, oy - ly);
+    ctx.fillStyle = P.green; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('13', 480, ly - 8);
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+    ctx.fillText('lstsq on X', 480, oy + 16);
+
+    // normal equations bar: height 10
+    var ny = rpy(10);
+    ctx.fillStyle = 'rgba(213,81,129,0.45)';
+    ctx.fillRect(600 - lbw / 2, ny, lbw, oy - ny);
+    ctx.strokeStyle = P.magenta; ctx.lineWidth = 2;
+    ctx.strokeRect(600 - lbw / 2, ny, lbw, oy - ny);
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 12px system-ui';
+    ctx.fillText('10', 600, ny - 8);
+    ctx.fillStyle = '#444'; ctx.font = '11px system-ui';
+    ctx.fillText('(XᵀX)⁻¹Xᵀy', 600, oy + 16);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('same data, same model — the recipe alone decides how many digits survive', w / 2, h - 8);
+});
+
+// c4: horizontal bars — cost per route through the same n = 2,000 system
+__charts.push(function() {
+    var s = setup('c4');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 15px system-ui'; ctx.fillStyle = P.ink; ctx.textAlign = 'center';
+    ctx.fillText('Cost per Route, n = 2,000 System (GFLOP)', w / 2, 24);
+
+    var bx = 250, maxLen = 420, barH = 26;
+    var bars = [
+        { y: 80,  label: 'invert A, then A⁻¹b', len: 420, fill: 'rgba(217,89,38,0.55)', edge: P.orange,
+          val: '16.0 GFLOP' },
+        { y: 140, label: 'LU factor + solve one b', len: 139, fill: 'rgba(42,120,214,0.55)', edge: P.blue,
+          val: '5.3 GFLOP' },
+        { y: 200, label: 'each extra b (factors reused)', len: 5, fill: 'rgba(0,131,0,0.6)', edge: P.green,
+          val: '0.008 GFLOP — near free' }
+    ];
+
+    for (var i = 0; i < bars.length; i++) {
+        var b = bars[i];
+        ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+        ctx.fillText(b.label, 240, b.y + barH / 2 + 4);
+        ctx.fillStyle = b.fill;
+        ctx.fillRect(bx, b.y, b.len, barH);
+        ctx.strokeStyle = b.edge; ctx.lineWidth = 2;
+        ctx.strokeRect(bx, b.y, b.len, barH);
+        ctx.fillStyle = b.edge; ctx.font = 'bold 12px system-ui'; ctx.textAlign = 'left';
+        ctx.fillText(b.val, bx + b.len + 8, b.y + barH / 2 + 4);
+    }
+
+    ctx.fillStyle = P.magenta; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('~3× the work for a less accurate answer — solve, don\'t invert', w / 2, 250);
+
+    ctx.fillStyle = '#444'; ctx.font = '12px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('LU ≈ (2/3)n³ flops; explicit inverse ≈ 2n³; a reused solve ≈ 2n²', w - 12, h - 8);
+});
+
+
+__charts.forEach(function(f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function() {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function() {
+        __charts.forEach(function(f) { f(); });
+    }, 150);
+});
+
+</script>
+
+</body>
+</html>
