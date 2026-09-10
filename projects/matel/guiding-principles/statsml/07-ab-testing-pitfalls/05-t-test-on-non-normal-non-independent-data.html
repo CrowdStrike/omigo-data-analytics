@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T-Test on Non-Normal / Non-Independent Data — A/B Testing Pitfalls</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 20px 10px; line-height: 1.6; }
+h1 { font-size: 1.6em; margin-bottom: 10px; color: #1a5276; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.0em; margin-bottom: 20px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; margin-right: 15px; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 6px 0; }
+strong { color: #1a5276; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 40%; }
+.obj-table td:last-child { width: 60%; text-align: center; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; width: 100%; height: auto; }
+</style>
+</head>
+<body>
+<h1>T-Test on Non-Normal / Non-Independent Data</h1>
+<p class="subtitle">Statistical Sin — Apply t-test blindly regardless of data distribution or independence.</p>
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">The Problem</div>
+<ul>
+<li><strong>T-test assumes:</strong> (1) Data is approximately normal (or N large enough for CLT). (2) Observations are independent. (3) Variances are comparable.</li>
+<li><strong>Non-normal violations:</strong> Revenue data is extremely heavy-tailed. Time-on-site is right-skewed. Conversion is binary (0/1). The CLT helps with MEANS but NOT with heavy tails — you need enormous N.</li>
+<li><strong>Non-independence violations:</strong> Same user appears multiple times. Users in social networks influence each other. Pageviews from the same session are correlated. Treating correlated observations as independent INFLATES sample size and underestimates variance.</li>
+<li><strong>The consequence:</strong> Wrong test on wrong data = wrong p-value. Your "p=0.02" might actually be p=0.15 after accounting for non-independence.</li>
+</ul>
+<p><strong>Correct approach:</strong> For heavy-tailed data: use Mann-Whitney, bootstrap, or trimmed means. For non-independent: cluster-robust standard errors or mixed-effects models. For binary outcomes: proportion test or chi-squared. NEVER default to t-test without checking assumptions.</p>
+<p><strong>The tell:</strong> Ask "what does the distribution of this metric look like?" and "are observations independent?" If nobody checked — the test is invalid.</p>
+</td><td><canvas id="c1" width="720" height="340"></canvas></td></tr>
+<tr><td>
+<div class="obj-title">Real Example: Revenue and the One Big Spender</div>
+<ul>
+<li>Money-per-user data at web companies looks nothing like a bell curve: most users spend exactly $0, many spend a little, and a tiny handful spend thousands.</li>
+<li>With data this lopsided, one huge spender landing in one group can single-handedly flip which version looks better, and the standard average-comparison test gets fooled because its assumptions are badly violated.</li>
+<li>Ron Kohavi's book on online experiments, along with engineering blogs at large web companies, recommends capping extreme values (winsorizing) or using resampling methods (the bootstrap) so a single "whale" cannot decide the test.</li>
+</ul>
+</td><td><canvas id="c2" width="720" height="300"></canvas></td></tr>
+</table>
+<script>var __charts = [];
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    if (!c.dataset.w) { c.dataset.w = c.getAttribute('width') || '720'; c.dataset.h = c.getAttribute('height') || '300'; }
+    var w = parseInt(c.dataset.w), h = parseInt(c.dataset.h);
+    var dpr = window.devicePixelRatio || 1;
+    c.style.maxWidth = w + 'px';
+    var cssW = c.getBoundingClientRect().width || w;
+    var scale = (cssW / w) * dpr;
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    var ctx = c.getContext('2d'); ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, w, h);
+    return {ctx:ctx, w:w, h:h};
+}
+__charts.push(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+// Three distribution shapes side by side
+var pw=200,ph=130,py=40,gap=25;
+var sx=(w-3*pw-2*gap)/2;
+function gauss(x,mu,sig){return Math.exp(-0.5*Math.pow((x-mu)/sig,2));}
+
+// 1. Normal (what t-test assumes)
+var x1=sx;
+ctx.fillStyle='#27ae60';ctx.font='bold 18px sans-serif';ctx.textAlign='center';
+ctx.fillText('Normal (t-test assumes)',x1+pw/2,py-10);
+ctx.beginPath();ctx.strokeStyle='#27ae60';ctx.lineWidth=2;
+for(var i=0;i<=100;i++){
+    var t=(i-50)/15;
+    var y=gauss(t,0,1)*ph*0.9;
+    var px2=x1+i*pw/100;
+    var py2=py+ph-y;
+    if(i===0)ctx.moveTo(px2,py2);else ctx.lineTo(px2,py2);
+}
+ctx.stroke();
+ctx.lineTo(x1+pw,py+ph);ctx.lineTo(x1,py+ph);ctx.closePath();
+ctx.fillStyle='rgba(39,174,96,0.2)';ctx.fill();
+// Checkmark
+ctx.fillStyle='#27ae60';ctx.font='bold 18px sans-serif';
+ctx.fillText('✓',x1+pw/2,py+ph+20);
+
+// 2. Heavy-tailed (revenue)
+var x2=sx+pw+gap;
+ctx.fillStyle='#e74c3c';ctx.font='bold 18px sans-serif';ctx.textAlign='center';
+ctx.fillText('Heavy-tailed (revenue)',x2+pw/2,py-10);
+ctx.beginPath();ctx.strokeStyle='#e74c3c';ctx.lineWidth=2;
+for(var i=0;i<=100;i++){
+    var t=i/100*5;
+    var y=(t<0.3?t/0.3:Math.exp(-0.8*(t-0.3)))*ph*0.85;
+    var px2=x2+i*pw/100;
+    var py2=py+ph-y;
+    if(i===0)ctx.moveTo(px2,py2);else ctx.lineTo(px2,py2);
+}
+ctx.stroke();
+ctx.lineTo(x2+pw,py+ph);ctx.lineTo(x2,py+ph);ctx.closePath();
+ctx.fillStyle='rgba(231,76,60,0.15)';ctx.fill();
+// X mark
+ctx.fillStyle='#e74c3c';ctx.font='bold 18px sans-serif';
+ctx.fillText('✗',x2+pw/2,py+ph+20);
+
+// 3. Binary (conversion)
+var x3=sx+2*(pw+gap);
+ctx.fillStyle='#e74c3c';ctx.font='bold 18px sans-serif';ctx.textAlign='center';
+ctx.fillText('Binary (conversion)',x3+pw/2,py-10);
+// Two bars
+var barW2=40,barGap=60;
+var bx1=x3+pw/2-barGap/2-barW2,bx2=x3+pw/2+barGap/2;
+ctx.fillStyle='rgba(231,76,60,0.4)';
+ctx.fillRect(bx1,py+20,barW2,ph-20);
+ctx.fillRect(bx2,py+ph*0.55,barW2,ph*0.45);
+ctx.strokeStyle='#e74c3c';ctx.lineWidth=1.5;
+ctx.strokeRect(bx1,py+20,barW2,ph-20);
+ctx.strokeRect(bx2,py+ph*0.55,barW2,ph*0.45);
+ctx.fillStyle='#666';ctx.font='16px sans-serif';
+ctx.fillText('0',bx1+barW2/2,py+ph+12);
+ctx.fillText('1',bx2+barW2/2,py+ph+12);
+// X mark
+ctx.fillStyle='#e74c3c';ctx.font='bold 18px sans-serif';ctx.textAlign='center';
+ctx.fillText('✗',x3+pw/2,py+ph+20);
+
+// Bottom label
+ctx.fillStyle='#666';ctx.font='italic 14px sans-serif';ctx.textAlign='center';
+ctx.fillText('T-test is valid for LEFT only. Applied to all three anyway. Wrong test = wrong answer.',w/2,h-6);
+});
+__charts.push(function(){var s=setup('c2');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+// Two grouped bar panels: average revenue per user without vs with one whale
+ctx.fillStyle='#2a2a2a';ctx.font='bold 17px sans-serif';ctx.textAlign='center';
+ctx.fillText('One Big Spender Flips the "Winner"',360,28);
+var baseY=210,maxVal=3.5,plotH=140;
+function bar(x,val,color,fill,label){
+    var bh=val/maxVal*plotH;
+    ctx.fillStyle=fill;ctx.fillRect(x,baseY-bh,80,bh);
+    ctx.strokeStyle=color;ctx.lineWidth=2;ctx.strokeRect(x,baseY-bh,80,bh);
+    ctx.fillStyle=color;ctx.font='bold 16px sans-serif';ctx.textAlign='center';
+    ctx.fillText('$'+val.toFixed(2),x+40,baseY-bh-8);
+    ctx.fillStyle='#666';ctx.font='14px sans-serif';
+    ctx.fillText(label,x+40,baseY+18);
+}
+// Panel 1: without the whale — control ahead
+bar(90,2.20,'#1a5276','rgba(26,82,118,0.35)','Control');
+bar(200,2.05,'#e67e22','rgba(230,126,34,0.25)','Treatment');
+ctx.fillStyle='#333';ctx.font='bold 15px sans-serif';ctx.textAlign='center';
+ctx.fillText('Without the $5,000 user',185,baseY+44);
+// Panel 2: with the whale in treatment — treatment "wins"
+bar(440,2.20,'#1a5276','rgba(26,82,118,0.35)','Control');
+bar(550,3.10,'#e74c3c','rgba(231,76,60,0.25)','Treatment');
+ctx.fillStyle='#333';ctx.font='bold 15px sans-serif';ctx.textAlign='center';
+ctx.fillText('Same test, one whale lands in treatment',535,baseY+44);
+// Whale marker
+ctx.fillStyle='#e74c3c';ctx.font='bold 15px sans-serif';
+ctx.fillText('whale',590,baseY-3.10/maxVal*plotH-28);
+// Baselines
+ctx.strokeStyle='#999';ctx.lineWidth=1;
+ctx.beginPath();ctx.moveTo(70,baseY);ctx.lineTo(300,baseY);ctx.stroke();
+ctx.beginPath();ctx.moveTo(420,baseY);ctx.lineTo(650,baseY);ctx.stroke();
+// Divider
+ctx.strokeStyle='#ddd';ctx.lineWidth=1;
+ctx.beginPath();ctx.moveTo(360,55);ctx.lineTo(360,baseY+50);ctx.stroke();
+// Takeaway
+ctx.fillStyle='#333';ctx.font='15px sans-serif';ctx.textAlign='center';
+ctx.fillText('Averages of skewed money data can hinge on one user — cap extremes or use sturdier comparisons',360,h-10);
+});
+
+__charts.forEach(function(f){ f(); });
+var __redrawTimer;
+window.addEventListener('resize', function(){
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function(){ __charts.forEach(function(f){ f(); }); }, 150);
+});
+</script>
+</body>
+</html>

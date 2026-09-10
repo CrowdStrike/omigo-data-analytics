@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ratio Metric Traps — A/B Testing Pitfalls</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 20px 10px; line-height: 1.6; }
+h1 { font-size: 1.6em; margin-bottom: 10px; color: #1a5276; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.0em; margin-bottom: 20px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; margin-right: 15px; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 6px 0; }
+strong { color: #1a5276; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 40%; }
+.obj-table td:last-child { width: 60%; text-align: center; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; width: 100%; height: auto; }
+</style>
+</head>
+<body>
+<h1>Ratio Metric Traps</h1>
+<p class="subtitle">Design Flaw — ARPU up! Because you lost your cheapest customers.</p>
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Denominator Composition Change Fakes Improvement</div>
+<ul>
+<li>Treatment: ARPU $50 (1000 users). Control: ARPU $40 (1200 users). "ARPU +25%!" But: treatment LOST 200 low-spenders (averaging $10 each, churned from a worse experience). Survivors are higher-spending.</li>
+<li>Total revenue: Treatment $50,000 vs Control $48,000 &mdash; only +4.2%, against a 16.7% customer loss.</li>
+<li><strong>Decompose the +25%:</strong> the 1000 survivors already averaged $46 in control, so dropping the $10 cohort alone lifts ARPU 15% for free.</li>
+<li>Real spending rose just 8.7% ($46 &rarr; $50). And 1.15 &times; 1.087 = 1.25 &mdash; most of the headline is denominator composition, not customers spending more.</li>
+<li>Note the direction: with 17% fewer users, revenue could only rise at all <em>because</em> spend genuinely increased. Rising revenue does not excuse the churn.</li>
+</ul>
+<p><strong>Correct approach:</strong> Track BOTH ratio AND absolute totals. Check for differential attrition. Report total revenue not just per-user.</p>
+<p><strong>The tell:</strong> If treatment has fewer users AND higher per-user metric &rarr; survivorship in the metric itself.</p>
+</td><td><canvas id="c1" width="720" height="340"></canvas></td></tr>
+<tr><td>
+<div class="obj-title">Real Example: LinkedIn's Two CTR Answers</div>
+<ul>
+<li>LinkedIn's experimentation team published how they handle metrics like click-through rate, because there are two natural ways to compute it: average each user's personal rate, or divide total clicks by total views across everyone.</li>
+<li>A few heavy users with thousands of views can pull the totals-based number one way while the typical user's experience points the other way, so the two methods can genuinely disagree on the exact same data.</li>
+<li>Their answer was to decide up front which question the test is asking — "did the average user improve?" versus "did the average view improve?" — and to use math that accounts for users contributing unequal amounts of data (the delta method).</li>
+</ul>
+</td><td><canvas id="c2" width="720" height="320"></canvas></td></tr>
+</table>
+<script>var __charts = [];
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    if (!c.dataset.w) { c.dataset.w = c.getAttribute('width') || '720'; c.dataset.h = c.getAttribute('height') || '300'; }
+    var w = parseInt(c.dataset.w), h = parseInt(c.dataset.h);
+    var dpr = window.devicePixelRatio || 1;
+    c.style.maxWidth = w + 'px';
+    var cssW = c.getBoundingClientRect().width || w;
+    var scale = (cssW / w) * dpr;
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    var ctx = c.getContext('2d'); ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, w, h);
+    return {ctx:ctx, w:w, h:h};
+}
+// Seeded Park-Miller LCG — deterministic, never Math.random()
+function lcg(seed) {
+    var s = seed;
+    return function () { s = (s * 16807) % 2147483647; return s / 2147483647; };
+}
+function mean(a) { var t = 0; for (var i = 0; i < a.length; i++) t += a[i]; return t / a.length; }
+function sum(a) { var t = 0; for (var i = 0; i < a.length; i++) t += a[i]; return t; }
+__charts.push(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+// Literal spend-per-segment values (dollars). Each bar = 50 users.
+// Chosen so control mean is exactly $40 and the 20 retained segments (>$20)
+// average exactly $50 after the +$4 treatment lift. Not random: the tall/short
+// split IS the ratio being taught, so it is fixed data, not a coin flip.
+var CONTROL = [52,48,10,55,41,50,38,44,10,50,46,43,57,39,49,10,47,42,51,45,36,10,53,34];
+var USERS_PER_BAR = 50;
+var LIFT = 4;                       // genuine per-retained-user spend increase
+var CHURN_CUT = 20;                 // segments at or below this churn in treatment
+var retained = [], churned = [];
+for (var i = 0; i < CONTROL.length; i++) {
+    (CONTROL[i] > CHURN_CUT ? retained : churned).push(CONTROL[i]);
+}
+var TREATMENT = retained.map(function (v) { return v + LIFT; });
+
+var cUsers = CONTROL.length * USERS_PER_BAR;          // 1200
+var tUsers = TREATMENT.length * USERS_PER_BAR;        // 1000
+var cArpu = mean(CONTROL);                            // 40
+var tArpu = mean(TREATMENT);                          // 50
+var cRev = sum(CONTROL) * USERS_PER_BAR;              // 48000
+var tRev = sum(TREATMENT) * USERS_PER_BAR;            // 50000
+var arpuPct = (tArpu / cArpu - 1) * 100;              // 25
+var userPct = (tUsers / cUsers - 1) * 100;            // -16.67
+var revPct = (tRev / cRev - 1) * 100;                 // 4.17
+var compPct = (mean(retained) / cArpu - 1) * 100;     // 15  (composition only)
+var realPct = (tArpu / mean(retained) - 1) * 100;     // 8.7 (actual spending)
+
+var PX = 0.62;                                        // pixels per dollar
+var SLOT = 40, BW = 12, GAP = 18, PER_ROW = 12;
+
+function money(v) { return '$' + (Math.round(v * 100) / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+function pct(v) { return (v >= 0 ? '' : '-') + Math.abs(v).toFixed(1) + '%'; }
+
+// Control group panel
+ctx.fillStyle = '#1a5276';
+ctx.font = 'bold 16px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('Control: ' + cUsers + ' users', 180, 20);
+ctx.font = '16px sans-serif';
+ctx.fillText('ARPU = ' + money(cArpu), 180, 36);
+
+for (var i = 0; i < CONTROL.length; i++) {
+    var bx = 70 + (i % PER_ROW) * GAP;
+    var baseY = 70 + Math.floor(i / PER_ROW) * 60;
+    var barH = CONTROL[i] * PX;
+    var stays = CONTROL[i] > CHURN_CUT;
+    ctx.fillStyle = stays ? 'rgba(26,82,118,0.7)' : 'rgba(26,82,118,0.4)';
+    ctx.fillRect(bx, baseY + (SLOT - barH), BW, barH);
+}
+
+// Treatment group panel — only the retained segments, each lifted by $LIFT
+ctx.fillStyle = '#27ae60';
+ctx.font = 'bold 16px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('Treatment: ' + tUsers + ' users', 520, 20);
+ctx.font = '16px sans-serif';
+ctx.fillText('ARPU = ' + money(tArpu), 520, 36);
+
+for (var i = 0; i < TREATMENT.length; i++) {
+    var bx = 420 + (i % 10) * 20;
+    var baseY = 70 + Math.floor(i / 10) * 60;
+    var barH = TREATMENT[i] * PX;
+    ctx.fillStyle = 'rgba(39,174,96,0.7)';
+    ctx.fillRect(bx, baseY + (SLOT - barH), 14, barH);
+}
+
+// The churned segments, drawn to scale and crossed out
+ctx.fillStyle = '#e74c3c';
+ctx.font = '16px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText(churned.length * USERS_PER_BAR + ' low-spend users LEFT (' + money(mean(churned)) + ' each)', 520, 195);
+
+for (var i = 0; i < churned.length; i++) {
+    var bx = 480 + i * 18;
+    var barH = churned[i] * PX;                // same $/px scale as both panels
+    var bottom = 216;
+    ctx.fillStyle = 'rgba(231,76,60,0.5)';
+    ctx.fillRect(bx, bottom - barH, BW, barH);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(bx + 1, bottom - barH - 3);
+    ctx.lineTo(bx + BW - 1, bottom + 3);
+    ctx.moveTo(bx + BW - 1, bottom - barH - 3);
+    ctx.lineTo(bx + 1, bottom + 3);
+    ctx.stroke();
+}
+
+// Middle annotation
+ctx.fillStyle = '#666';
+ctx.font = '16px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('Each bar = ' + USERS_PER_BAR + ' users, height = their spend.', 360, 155);
+ctx.fillText('Short bars LEFT.', 360, 172);
+
+// Bottom summary — every figure computed from the arrays above
+ctx.fillStyle = '#e74c3c';
+ctx.font = 'bold 16px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('ARPU up ' + pct(arpuPct) + '.   Customers down ' + pct(-userPct) + '.   Revenue up ' + pct(revPct) + '.', 360, 240);
+
+ctx.fillStyle = '#333';
+ctx.font = '15px sans-serif';
+ctx.fillText('Revenue: ' + money(cRev) + ' → ' + money(tRev), 360, 266);
+ctx.fillText('The ' + pct(arpuPct) + ' ARPU gain = ' + pct(compPct) + ' denominator composition × ' + pct(realPct) + ' real spending', 360, 288);
+ctx.fillStyle = '#666';
+ctx.font = '14px sans-serif';
+ctx.fillText('(1 + ' + (compPct / 100).toFixed(4) + ') × (1 + ' + (realPct / 100).toFixed(4) + ') = ' + (tArpu / cArpu).toFixed(2) + '   — Illustrative Example', 360, 308);
+});
+__charts.push(function(){var s=setup('c2');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+// Literal three-user dataset. Every printed rate is derived from it.
+var USERS = [
+    {name: 'User A', clicks: 1,  views: 10,   heavy: false},
+    {name: 'User B', clicks: 1,  views: 10,   heavy: false},
+    {name: 'User C', clicks: 10, views: 1000, heavy: true}
+];
+var totClicks = 0, totViews = 0, rateSum = 0;
+for (var i = 0; i < USERS.length; i++) {
+    totClicks += USERS[i].clicks;
+    totViews += USERS[i].views;
+    rateSum += USERS[i].clicks / USERS[i].views;   // per-user rate; views > 0 for all rows
+}
+var perUser = rateSum / USERS.length * 100;        // 7.0%
+var pooled = totClicks / totViews * 100;           // 1.176...%
+var foldGap = perUser / pooled;                    // 5.95
+
+ctx.fillStyle = '#2a2a2a';
+ctx.font = 'bold 17px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('Same Three Users, Two Different CTR Answers', 360, 26);
+
+// The tiny dataset (left side)
+ctx.font = '15px sans-serif';
+ctx.textAlign = 'left';
+for (var i = 0; i < USERS.length; i++) {
+    var u = USERS[i];
+    ctx.fillStyle = u.heavy ? '#e67e22' : '#333';
+    ctx.fillText(u.name + ':  ' + u.clicks + (u.clicks === 1 ? ' click / ' : ' clicks / ') + u.views +
+                 ' views  =  ' + (u.clicks / u.views * 100).toFixed(0) + '%', 50, 80 + i * 28);
+}
+ctx.fillStyle = '#e67e22';
+ctx.font = 'bold 15px sans-serif';
+ctx.fillText('(one heavy user)', 50, 160);
+ctx.fillStyle = '#333';
+ctx.font = '15px sans-serif';
+ctx.fillText('Totals:  ' + totClicks + ' clicks / ' + totViews + ' views', 50, 190);
+
+// Bars (right side)
+var baseY = 235;
+var yMax = Math.ceil(perUser);                     // axis top, in percent
+var PXP = 145 / yMax;                              // pixels per percentage point
+ctx.strokeStyle = '#999';
+ctx.lineWidth = 1;
+ctx.beginPath();
+ctx.moveTo(370, baseY);
+ctx.lineTo(700, baseY);
+ctx.stroke();
+
+function bar(x, val, fill, stroke, cap1, cap2) {
+    var bh = val * PXP;
+    ctx.fillStyle = fill;
+    ctx.fillRect(x, baseY - bh, 110, bh);
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, baseY - bh, 110, bh);
+    ctx.fillStyle = stroke;
+    ctx.font = 'bold 18px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(val.toFixed(1) + '%', x + 55, baseY - bh - 10);
+    ctx.font = '14px sans-serif';
+    ctx.fillStyle = '#666';
+    ctx.fillText(cap1, x + 55, baseY + 20);
+    ctx.fillText(cap2, x + 55, baseY + 38);
+}
+
+// Bar 1: average of the three per-user rates
+bar(400, perUser, 'rgba(26,82,118,0.35)', '#1a5276', 'average of', 'each user’s rate');
+// Bar 2: total clicks / total views
+bar(560, pooled, 'rgba(230,126,34,0.35)', '#e67e22', 'total clicks ÷', 'total views');
+
+// Gap note — the multiple is computed, not asserted
+ctx.fillStyle = '#e74c3c';
+ctx.font = 'bold 15px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText(foldGap.toFixed(1) + 'x apart on identical data', 535, 55);
+
+// Takeaway
+ctx.fillStyle = '#e74c3c';
+ctx.font = 'bold 16px sans-serif';
+ctx.fillText('Decide which average answers your question BEFORE the test', 360, h - 14);
+});
+
+__charts.forEach(function(f){ f(); });
+var __redrawTimer;
+window.addEventListener('resize', function(){
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function(){ __charts.forEach(function(f){ f(); }); }, 150);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Asymmetric Infrastructure — A/B Testing Pitfalls</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 20px 10px; line-height: 1.6; }
+h1 { font-size: 1.6em; margin-bottom: 10px; color: #1a5276; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.0em; margin-bottom: 20px; }
+.nav { margin-bottom: 20px; }
+.nav a { color: #2980b9; text-decoration: none; font-size: 0.9em; margin-right: 15px; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 6px 0; }
+strong { color: #1a5276; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 40%; }
+.obj-table td:last-child { width: 60%; text-align: center; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; width: 100%; height: auto; }
+</style>
+</head>
+<body>
+<h1>Asymmetric Infrastructure</h1>
+<p class="subtitle">Deliberate — Treatment on fast servers. Control on degraded legacy. You tested infra, not the feature.</p>
+<table class="obj-table">
+<tr><td>
+<div class="obj-title">Confounding Feature With Infrastructure</div>
+<ul>
+<li>Treatment runs on new fast servers. Control on legacy. "Treatment improved latency and conversion!" &mdash; because better INFRASTRUCTURE, not the feature. Feature and infra confounded.</li>
+<li>Variant: treatment gets bug fix control doesn't. Treatment has fewer ads. Treatment has splash screen delaying measurement (excluding impatient users).</li>
+<li>Sometimes accidental (feature only deployable on new infra). Sometimes deliberate.</li>
+</ul>
+<p><strong>Correct approach:</strong> EVERYTHING besides the feature must be identical between arms. Infra, latency, error rates, ad load &mdash; all same.</p>
+<p><strong>The tell:</strong> Check if anything besides the feature differs. Compare error rates, latency distributions, ad load between arms.</p>
+</td><td><canvas id="c1" width="720" height="340"></canvas></td></tr>
+<tr><td>
+<div class="obj-title">Real Example: Google and Bing Slow Themselves Down</div>
+<ul>
+<li>Google ran an experiment where it deliberately delayed its own search results by just 100 to 400 milliseconds — too brief to consciously notice — and users measurably ran fewer searches, with the drop growing the longer the delay stayed on.</li>
+<li>Bing published a similar experiment showing that adding a couple of seconds of delay cut revenue per user by several percent, even though the search results shown were completely identical.</li>
+<li>The lesson for A/B tests: if the treatment build carries extra logging or unoptimized code, it starts the race slower, and it can lose (or win) for speed reasons that have nothing to do with the feature itself.</li>
+</ul>
+</td><td><canvas id="c2" width="720" height="300"></canvas></td></tr>
+</table>
+<script>var __charts = [];
+var dpr = window.devicePixelRatio || 1;
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    if (!c.dataset.w) { c.dataset.w = c.getAttribute('width') || '720'; c.dataset.h = c.getAttribute('height') || '300'; }
+    var w = parseInt(c.dataset.w), h = parseInt(c.dataset.h);
+    var dpr = window.devicePixelRatio || 1;
+    c.style.maxWidth = w + 'px';
+    var cssW = c.getBoundingClientRect().width || w;
+    var scale = (cssW / w) * dpr;
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    var ctx = c.getContext('2d'); ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, w, h);
+    return {ctx:ctx, w:w, h:h};
+}
+__charts.push(function(){var s=setup('c1');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+// Treatment server stack (left)
+ctx.fillStyle = '#1a5276';
+ctx.font = 'bold 17px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('Treatment', 180, 20);
+
+// New server boxes (green)
+for (var i = 0; i < 3; i++) {
+    var sy = 40 + i * 45;
+    ctx.fillStyle = 'rgba(39,174,96,0.2)';
+    ctx.fillRect(110, sy, 140, 35);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(110, sy, 140, 35);
+    // LED dots
+    ctx.fillStyle = '#27ae60';
+    ctx.beginPath();
+    ctx.arc(125, sy + 17, 4, 0, Math.PI * 2);
+    ctx.fill();
+}
+ctx.fillStyle = '#27ae60';
+ctx.font = 'bold 17px sans-serif';
+ctx.fillText('10ms', 180, 190);
+ctx.font = '16px sans-serif';
+ctx.fillText('New hardware', 180, 210);
+
+// Control server stack (right)
+ctx.fillStyle = '#1a5276';
+ctx.font = 'bold 17px sans-serif';
+ctx.fillText('Control', 540, 20);
+
+// Old server boxes (red)
+for (var i = 0; i < 3; i++) {
+    var sy = 40 + i * 45;
+    ctx.fillStyle = 'rgba(231,76,60,0.15)';
+    ctx.fillRect(470, sy, 140, 35);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(470, sy, 140, 35);
+    // LED dots (some off)
+    ctx.fillStyle = i < 2 ? '#e74c3c' : '#999';
+    ctx.beginPath();
+    ctx.arc(485, sy + 17, 4, 0, Math.PI * 2);
+    ctx.fill();
+    // Rust marks
+    if (i > 0) {
+        ctx.fillStyle = 'rgba(231,76,60,0.3)';
+        ctx.fillRect(500, sy + 5, 20, 3);
+        ctx.fillRect(530, sy + 25, 15, 3);
+    }
+}
+ctx.fillStyle = '#e74c3c';
+ctx.font = 'bold 17px sans-serif';
+ctx.fillText('80ms', 540, 190);
+ctx.font = '16px sans-serif';
+ctx.fillText('Legacy hardware', 540, 210);
+
+// Middle section
+ctx.fillStyle = '#666';
+ctx.font = '17px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('Same feature test', 360, 80);
+
+// Bracket
+ctx.strokeStyle = '#666';
+ctx.lineWidth = 1;
+ctx.beginPath();
+ctx.moveTo(300, 90);
+ctx.lineTo(300, 140);
+ctx.lineTo(420, 140);
+ctx.lineTo(420, 90);
+ctx.stroke();
+
+// Bottom label
+ctx.fillStyle = '#e74c3c';
+ctx.font = 'bold 16px sans-serif';
+ctx.fillText('Testing infrastructure, not the feature', 360, 232);
+});
+__charts.push(function(){var s=setup('c2');if(!s)return;var ctx=s.ctx,w=s.w,h=s.h;
+ctx.fillStyle = '#2a2a2a';
+ctx.font = 'bold 17px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('Google Speed Experiment: Delay Alone Cut Searching', 360, 26);
+
+var zeroY = 90;
+// Zero line (baseline = no added delay)
+ctx.strokeStyle = '#999';
+ctx.lineWidth = 1;
+ctx.beginPath();
+ctx.moveTo(80, zeroY);
+ctx.lineTo(640, zeroY);
+ctx.stroke();
+ctx.fillStyle = '#666';
+ctx.font = '14px sans-serif';
+ctx.textAlign = 'left';
+ctx.fillText('normal speed', 80, zeroY - 10);
+
+// Bar 1: +100ms delay -> -0.2% searches (below line)
+var h1 = 0.2 / 0.6 * 130;
+ctx.fillStyle = 'rgba(230,126,34,0.35)';
+ctx.fillRect(200, zeroY, 120, h1);
+ctx.strokeStyle = '#e67e22';
+ctx.lineWidth = 2;
+ctx.strokeRect(200, zeroY, 120, h1);
+ctx.fillStyle = '#e67e22';
+ctx.font = 'bold 17px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('-0.2%', 260, zeroY + h1 + 24);
+ctx.fillStyle = '#333';
+ctx.font = '15px sans-serif';
+ctx.fillText('+100 ms delay', 260, zeroY + h1 + 46);
+
+// Bar 2: +400ms delay -> -0.6% searches (below line)
+var h2 = 130;
+ctx.fillStyle = 'rgba(231,76,60,0.35)';
+ctx.fillRect(440, zeroY, 120, h2);
+ctx.strokeStyle = '#e74c3c';
+ctx.lineWidth = 2;
+ctx.strokeRect(440, zeroY, 120, h2);
+ctx.fillStyle = '#e74c3c';
+ctx.font = 'bold 17px sans-serif';
+ctx.fillText('-0.6%', 500, zeroY + h2 + 24);
+ctx.fillStyle = '#333';
+ctx.font = '15px sans-serif';
+ctx.fillText('+400 ms delay', 500, zeroY + h2 + 46);
+
+// Y meaning
+ctx.fillStyle = '#1a5276';
+ctx.font = '15px sans-serif';
+ctx.textAlign = 'left';
+ctx.save();
+ctx.translate(50, 200);
+ctx.rotate(-Math.PI / 2);
+ctx.textAlign = 'center';
+ctx.fillText('searches per user', 0, 0);
+ctx.restore();
+
+// Takeaway
+ctx.fillStyle = '#e74c3c';
+ctx.font = 'bold 16px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('Milliseconds move metrics — equalize speed between arms before crediting the feature', 360, h - 12);
+});
+
+__charts.forEach(function(f){ f(); });
+var __redrawTimer;
+window.addEventListener('resize', function(){
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function(){ __charts.forEach(function(f){ f(); }); }, 150);
+});
+</script>
+</body>
+</html>
