@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Label Maturity (Censoring Window)</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px; height: auto; }
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+code { font-family: ui-monospace, Menlo, monospace; font-size: 0.86rem; background: #f4f6f7; padding: 0 3px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Label Maturity (Censoring Window)</h1>
+<p class="subtitle">The outcome has not had time to happen yet, so "not yet" is recorded as "no".</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">right-censoring</span></div>
+                <ul>
+                    <li><b>Windowed label</b> — a 90-day-default or 30-day-churn label needs its full observation window to close</li>
+                    <li><b>Young rows</b> — an account only 12 days old cannot yet show a 30-day event, however it behaves</li>
+                    <li><b>Not wrong, not missing</b> — the label is present and plausible, it is simply not yet knowable</li>
+                    <li><b>Recorded as zero</b> — the ETL writes <code>0</code> for "no event found", conflating "no" with "not yet"</li>
+                    <li><b>One-directional error</b> — censoring only ever manufactures false negatives, so the positive rate is biased downward</li>
+                    <li><b>Recency gradient</b> — the newest cohorts look safest purely because they are the youngest, a recency artifact</li>
+                    <li><b>This is right-censoring</b> — the event time exceeds the observation time, so the true outcome stays unseen</li>
+                </ul>
+                <p class="example">Illustrative Example — pooling seven cohorts aged 15 to 120 days gives a 11.1% default rate against a matured 18.0%, hiding 391 events.</p>
+                <div class="key-point">
+                    <strong>Impact:</strong> 80.7% of rows are immature, so the pooled positive rate reads 11.1% instead of 18.0% — understated by 6.9 points, a 1.62x error.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">passes every check</span></div>
+                <ul>
+                    <li><b>Nothing is null</b> — a censored label is a valid <code>0</code>, so null checks and range checks all pass</li>
+                    <li><b>Balance looks plausible</b> — 11.1% positives reads as "a bit low", not as a broken column</li>
+                    <li><b>No age column</b> — the training table rarely carries cohort age, so nobody can group the rate by it</li>
+                    <li><b>Spurious protection</b> — the model learns "recent = safe" because recency correlates with a written 0</li>
+                    <li><b>Confidence inversion</b> — it is most certain about exactly the rows where it has least information</li>
+                    <li><b>"Use all data"</b> — the naive fix keeps immature rows and bakes the censoring straight into the weights</li>
+                    <li><b>Dropping is costly</b> — excluding them discards the freshest, most on-distribution signal you have</li>
+                    <li><b>Real tension</b> — completeness and recency trade off directly, which is why censoring has no free fix</li>
+                </ul>
+                <p class="example">Illustrative Example — account A-6 is 12 days into a 30-day churn window, so <code>churn_30d = 0</code> is not an observation, it is an absence of one.</p>
+                <div class="key-point">
+                    <strong>Root Cause:</strong> A fixed observation window meets rows younger than it, and the pipeline encodes "event not observed yet" with the same symbol it uses for "event will not occur".
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">survival analysis</span></div>
+                <ul>
+                    <li><b>Declare the window</b> — write the maturity period for each label as an explicit, versioned constant</li>
+                    <li><b>Gate on age</b> — exclude rows younger than the window from training, but never from scoring</li>
+                    <li><b>Point-in-time join</b> — attach a label only once its observation window has actually closed</li>
+                    <li><b>Rate by cohort age</b> — plot positive rate against age; a rising curve exposes censoring immediately</li>
+                    <li><b>Convergence check</b> — the curve should flatten at the window, and here it holds 18.0% from day 90 on</li>
+                    <li><b>Survival analysis</b> — Kaplan-Meier and Cox proportional hazards models are built for censored time-to-event data</li>
+                    <li><b>Discrete-time hazard</b> — reframing as per-period hazard uses partial windows without the downward bias</li>
+                    <li><b>Never mix ages</b> — comparing a 15-day cohort's rate against a 120-day cohort's rate is meaningless</li>
+                </ul>
+                <p class="example">Illustrative Example — the 90-day and 120-day cohorts both land at exactly 18.0%, confirming 90 days is where the label matures.</p>
+                <div class="key-point">
+                    <strong>Fix:</strong> Define the maturity window per label, train only on matured rows via point-in-time joins, monitor positive rate by cohort age, and model the censoring directly with survival analysis when you cannot afford to wait.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>var __charts = [];
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    if (!c.dataset.w) { c.dataset.w = c.getAttribute('width') || '720'; c.dataset.h = c.getAttribute('height') || '300'; }
+    var w = parseInt(c.dataset.w), h = parseInt(c.dataset.h);
+    var dpr = window.devicePixelRatio || 1;
+    c.style.maxWidth = w + 'px';
+    var cssW = c.getBoundingClientRect().width || w;
+    var scale = (cssW / w) * dpr;
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    var ctx = c.getContext('2d'); ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, w, h);
+    return {ctx:ctx, w:w, h:h};
+}
+
+// Canvas 1: Gantt ladder of 90-day observation windows sliced by "today".
+// All data hardcoded literals; every printed share computed at draw time.
+__charts.push(function(){
+    var s = setup('c1'); if (!s) return;
+    var ctx = s.ctx, w = s.w;
+
+    var WINDOW = 90, TODAY = 100;
+    var opened = [0, 8, 35, 58, 76, 88];   // literal open days
+    var x0 = 70, pxPerDay = 2.5;           // days 0..180 -> x 70..520
+    var px = function(d){ return x0 + d * pxPerDay; };
+    var baseY = 252;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText("90-Day Observation Windows Cut Short by 'Today'", w/2, 22);
+
+    // day axis
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, baseY); ctx.lineTo(px(180), baseY); ctx.stroke();
+    ctx.font = '10px system-ui'; ctx.fillStyle = '#666'; ctx.textAlign = 'center';
+    [0, 30, 60, 90, 120, 150, 180].forEach(function(d){
+        ctx.beginPath(); ctx.moveTo(px(d), baseY); ctx.lineTo(px(d), baseY + 4); ctx.stroke();
+        ctx.fillText('d' + d, px(d), baseY + 16);
+    });
+
+    var truncated = 0;
+    opened.forEach(function(op, i){
+        var y = 64 + i * 30, barH = 16;
+        var end = op + WINDOW;
+        var obs = Math.min(end, TODAY) - op;
+        var matured = end <= TODAY;
+        if (!matured) truncated++;
+
+        // row label
+        ctx.font = '10px system-ui'; ctx.fillStyle = '#2c3e50'; ctx.textAlign = 'right';
+        ctx.fillText('A-' + (i + 1), 62, y + 12);
+
+        // full expected window, dashed outline
+        ctx.strokeStyle = '#999'; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
+        ctx.strokeRect(px(op), y, px(end) - px(op), barH);
+        ctx.setLineDash([]);
+
+        // observed portion
+        ctx.fillStyle = matured ? 'rgba(39,174,96,0.45)' : 'rgba(231,76,60,0.35)';
+        ctx.fillRect(px(op), y, obs * pxPerDay, barH);
+        ctx.strokeStyle = matured ? '#27ae60' : '#e74c3c'; ctx.lineWidth = 1;
+        ctx.strokeRect(px(op), y, obs * pxPerDay, barH);
+
+        // status, computed
+        ctx.font = '9px system-ui'; ctx.textAlign = 'left';
+        if (matured) {
+            ctx.fillStyle = '#27ae60';
+            ctx.fillText('matured · label valid', 534, y + 12);
+        } else {
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillText('recorded as NO · ' + Math.round(obs / WINDOW * 100) + '% of window', 534, y + 12);
+        }
+    });
+
+    // "TODAY" slice
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(px(TODAY), 52); ctx.lineTo(px(TODAY), baseY); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(px(TODAY) - 5, baseY - 8); ctx.lineTo(px(TODAY) + 5, baseY - 8); ctx.lineTo(px(TODAY), baseY);
+    ctx.closePath(); ctx.fillStyle = '#e74c3c'; ctx.fill();
+    ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center'; ctx.fillStyle = '#e74c3c';
+    ctx.fillText('TODAY', px(TODAY), 46);
+
+    ctx.font = 'bold 11px system-ui'; ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'center';
+    ctx.fillText(truncated + ' of ' + opened.length + ' windows are still open — each writes a 0 the data cannot support.', w/2, 284);
+});
+
+// Canvas 2: same row read two ways, "NO" vs "NOT YET", over the checks it passes.
+__charts.push(function(){
+    var s = setup('c2'); if (!s) return;
+    var ctx = s.ctx, w = s.w;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText("One Row, Two Readings: 'NO' vs 'NOT YET'", w/2, 22);
+
+    // source row card
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#2980b9'; ctx.lineWidth = 2;
+    ctx.fillRect(w/2 - 210, 42, 420, 34);
+    ctx.strokeRect(w/2 - 210, 42, 420, 34);
+    ctx.fillStyle = '#1a5276'; ctx.font = '11px system-ui';
+    ctx.fillText('account A-6 · opened day 88 · age 12 d · churn_30d = 0', w/2, 64);
+
+    // elbow connectors
+    [{x: 190, c: '#e74c3c'}, {x: 530, c: '#e67e22'}].forEach(function(t){
+        ctx.strokeStyle = t.c; ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(w/2, 76); ctx.lineTo(w/2, 96); ctx.lineTo(t.x, 96); ctx.lineTo(t.x, 118);
+        ctx.stroke();
+    });
+
+    var boxes = [
+        { x: 190, color: '#e74c3c', stamp: 'NO', says: 'what the label file says',
+          l1: 'trains as a confirmed negative', l2: '18 days of window unobserved' },
+        { x: 530, color: '#e67e22', stamp: 'NOT YET', says: 'what the data supports',
+          l1: 'outcome is right-censored', l2: 'exclude from training, still score' }
+    ];
+    boxes.forEach(function(b){
+        ctx.fillStyle = '#fff'; ctx.strokeStyle = b.color; ctx.lineWidth = 3;
+        ctx.fillRect(b.x - 125, 118, 250, 86);
+        ctx.strokeRect(b.x - 125, 118, 250, 86);
+        ctx.fillStyle = b.color; ctx.font = 'bold 15px system-ui';
+        ctx.fillText(b.stamp, b.x, 142);
+        ctx.fillStyle = '#333'; ctx.font = '11px system-ui';
+        ctx.fillText(b.says, b.x, 162);
+        ctx.fillStyle = '#666'; ctx.font = '10px system-ui';
+        ctx.fillText(b.l1, b.x, 178);
+        ctx.fillText(b.l2, b.x, 192);
+    });
+
+    // validation checks strip
+    ctx.textAlign = 'left'; ctx.font = '10px system-ui'; ctx.fillStyle = '#666';
+    ctx.fillText('validation checks on this column:', 60, 231);
+
+    // pooled vs matured rate, computed from the same literals as canvas 3
+    var n = [1200,1000,900,800,700,600,500];
+    var ev = [42,72,99,112,112,108,90];
+    var N = n.reduce(function(a,b){return a+b;}, 0);
+    var E = ev.reduce(function(a,b){return a+b;}, 0);
+    var pooled = E / N;
+    var matured = (ev[5] + ev[6]) / (n[5] + n[6]);
+
+    var pills = [
+        { t: '0 nulls', bg: 'rgba(39,174,96,0.15)', fg: '#27ae60' },
+        { t: '0 out of range', bg: 'rgba(39,174,96,0.15)', fg: '#27ae60' },
+        { t: '0 duplicates', bg: 'rgba(39,174,96,0.15)', fg: '#27ae60' },
+        { t: (pooled*100).toFixed(1) + '% positive (expected ' + (matured*100).toFixed(1) + '%)',
+          bg: 'rgba(230,126,34,0.15)', fg: '#e67e22' }
+    ];
+    var px2 = 60;
+    ctx.font = 'bold 9px system-ui';
+    pills.forEach(function(p){
+        var tw = ctx.measureText(p.t).width + 18;
+        ctx.fillStyle = p.bg;
+        if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(px2, 240, tw, 20, 10); ctx.fill(); }
+        else { ctx.fillRect(px2, 240, tw, 20); }
+        ctx.fillStyle = p.fg;
+        ctx.fillText(p.t, px2 + 9, 254);
+        px2 += tw + 8;
+    });
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Three checks pass; the fourth is a ' + ((matured - pooled) * 100).toFixed(1) +
+                 '-point gap no schema rule can see.', w/2, 284);
+});
+
+// Canvas 3: cohort staircase. Literal counts; every rate computed at draw time.
+__charts.push(function(){
+    var s = setup('c3'); if (!s) return;
+    var ctx = s.ctx, w = s.w;
+
+    var ages = [15, 30, 45, 60, 75, 90, 120];
+    var n    = [1200, 1000, 900, 800, 700, 600, 500];
+    var ev   = [42, 72, 99, 112, 112, 108, 90];
+    var MATURITY = 90;
+
+    var N = n.reduce(function(a,b){return a+b;}, 0);       // 5700
+    var E = ev.reduce(function(a,b){return a+b;}, 0);      // 635
+    var pooled = E / N;                                    // 0.111403...
+    var mN = 0, mE = 0;
+    ages.forEach(function(a, i){ if (a >= MATURITY) { mN += n[i]; mE += ev[i]; } });
+    var truth = mE / mN;                                   // 198/1100 = 0.18
+    var missing = Math.round(truth * N) - E;               // 1026 - 635 = 391
+
+    ctx.font = 'bold 14px system-ui'; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('Apparent Default Rate Rises With Cohort Age (Illustrative Example)', w/2, 22);
+
+    var baseY = 245, x0 = 88, x1 = 668, plotH = 170, yMax = 0.20;
+    var yOf = function(r){ return baseY - r / yMax * plotH; };
+
+    // gridlines + y ticks
+    ctx.font = '9px system-ui'; ctx.textAlign = 'right';
+    for (var t = 0; t <= 20; t += 5) {
+        var yy = yOf(t / 100);
+        ctx.strokeStyle = '#eee'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x0, yy); ctx.lineTo(x1, yy); ctx.stroke();
+        ctx.fillStyle = '#666'; ctx.fillText(t + '%', x0 - 6, yy + 3);
+    }
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, baseY); ctx.lineTo(x1, baseY); ctx.stroke();
+
+    // bars
+    var slot = (x1 - x0) / ages.length, bw = 52;
+    ctx.textAlign = 'center';
+    ages.forEach(function(a, i){
+        var rate = ev[i] / n[i];
+        var cx = x0 + slot * (i + 0.5);
+        var bh = rate / yMax * plotH;
+        var mature = a >= MATURITY;
+        ctx.fillStyle = mature ? 'rgba(39,174,96,0.45)' : 'rgba(231,76,60,0.35)';
+        ctx.fillRect(cx - bw/2, baseY - bh, bw, bh);
+        ctx.strokeStyle = mature ? '#27ae60' : '#e74c3c'; ctx.lineWidth = 1;
+        ctx.strokeRect(cx - bw/2, baseY - bh, bw, bh);
+
+        ctx.fillStyle = mature ? '#27ae60' : '#e74c3c';
+        ctx.font = 'bold 10px system-ui';
+        ctx.fillText((rate * 100).toFixed(1) + '%', cx, baseY - bh - 5);
+
+        ctx.fillStyle = '#333'; ctx.font = '10px system-ui';
+        ctx.fillText(a + ' d', cx, 260);
+        ctx.fillStyle = '#666'; ctx.font = '9px system-ui';
+        ctx.fillText('n = ' + n[i].toLocaleString('en-US'), cx, 274);
+    });
+
+    // matured truth line
+    ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(x0, yOf(truth)); ctx.lineTo(x1, yOf(truth)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#27ae60'; ctx.font = 'bold 9px system-ui'; ctx.textAlign = 'right';
+    ctx.fillText('matured truth ' + (truth * 100).toFixed(1) + '%', 666, yOf(truth) - 4);
+
+    // pooled line
+    ctx.strokeStyle = '#e67e22'; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(x0, yOf(pooled)); ctx.lineTo(x1, yOf(pooled)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e67e22'; ctx.textAlign = 'left';
+    ctx.fillText('pooled ' + (pooled * 100).toFixed(1) + '%', 92, yOf(pooled) - 4);
+
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 11px system-ui'; ctx.textAlign = 'center';
+    ctx.fillText('Pooling ages understates the rate by ' + ((truth - pooled) * 100).toFixed(1) +
+                 ' pts (' + (truth / pooled).toFixed(2) + 'x); ' +
+                 missing.toLocaleString('en-US') + ' events have not happened yet.', w/2, 292);
+});
+
+__charts.forEach(function(f){ f(); });
+var __redrawTimer;
+window.addEventListener('resize', function(){
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function(){ __charts.forEach(function(f){ f(); }); }, 150);
+});
+</script>
+
+</body>
+</html>

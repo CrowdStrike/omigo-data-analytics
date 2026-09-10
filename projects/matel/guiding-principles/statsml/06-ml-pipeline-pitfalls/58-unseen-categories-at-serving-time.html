@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unseen Categories at Serving Time</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px; height: auto; }
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Unseen Categories at Serving Time</h1>
+<p class="subtitle">A category the encoder never saw in training arrives in production — and the worse outcome is not a crash but a confident score.</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">encoders</span></div>
+                <ul>
+                    <li><b>Vocabulary gap</b> — a category reaches serving that the fitted encoder vocabulary never contained</li>
+                    <li><b>Loud failure</b> — the encoder raises, the request errors, someone is paged, and the row is not scored</li>
+                    <li><b>Quiet failure</b> — the unknown label is mapped to index 0, a real category, and scoring continues</li>
+                    <li><b>Plausible output</b> — the score looks ordinary, so nothing downstream marks the row as corrupted</li>
+                    <li><b>Hash collision</b> — a hashing encoder drops the unseen value into an occupied bucket with no error</li>
+                    <li><b>All-zero one-hot</b> — every indicator column is 0, which the model reads as a valid "none of the above"</li>
+                    <li><b>Compounding</b> — the bad row feeds dashboards and retraining labels, so one gap becomes many</li>
+                </ul>
+                <p class="example">Illustrative Example — of 1,000 serving rows, the rows whose tier is absent from the training vocabulary are all scored as if they were the slot-0 category.</p>
+                <div class="key-point">
+                    <strong>Impact:</strong> A crash is recoverable because it is visible; a silent misencode ships a confident prediction computed from the wrong category.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">vocabulary drift</span></div>
+                <ul>
+                    <li><b>New enum values</b> — a new product tier, country, payment method, or vendor code appears upstream</li>
+                    <li><b>Version strings</b> — app version and build labels gain a fresh distinct value with every release</li>
+                    <li><b>Renames</b> — a renamed vendor code is a brand-new token even though the entity did not change</li>
+                    <li><b>Casing and whitespace</b> — "US", "us", "U.S.", or a trailing space each mint their own category</li>
+                    <li><b>Spelling variants</b> — a typo in a free-text field produces yet another label the encoder never saw</li>
+                    <li><b>Test split shares vocabulary</b> — a split of the same history cannot hold a genuinely new category</li>
+                    <li><b>Offline metrics stay clean</b> — validation therefore never exercises the unseen-category path</li>
+                    <li><b>Target encoding has no statistic</b> — an unseen level has no target mean, so the library's fallback value silently becomes a modelling decision nobody made</li>
+                </ul>
+                <p class="example">Illustrative Example — 2 of the 5 tier codes in the batch are unseen, so a rare-looking 40% of distinct categories corresponds to only 7.5% of rows.</p>
+                <div class="key-point">
+                    <strong>Root Cause:</strong> The encoder vocabulary is frozen at fit time while the upstream category space keeps growing, and the default unknown behaviour is substitution rather than refusal.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">unknown bucket</span></div>
+                <ul>
+                    <li><b>Reserve UNKNOWN</b> — add an explicit UNKNOWN slot to the vocabulary at training time, not later</li>
+                    <li><b>Fund the bucket</b> — fold rare training categories into it so the model learns a real response</li>
+                    <li><b>Pin the vocabulary</b> — version the fitted encoder alongside the model artifact, never refit at serving</li>
+                    <li><b>Assert membership</b> — check every incoming category against the pinned vocabulary before encoding</li>
+                    <li><b>Count, don't guess</b> — emit an unknown-rate counter instead of substituting a neighbour silently</li>
+                    <li><b>Normalize first</b> — lowercase and trim before lookup so casing variants stop minting new labels</li>
+                    <li><b>Alert on the rate</b> — treat unknown rate as a first-class data-quality metric with a threshold</li>
+                    <li><b>Principled fallback</b> — prefer encoders whose documented unseen behaviour is a deliberate choice</li>
+                </ul>
+                <p class="example">Illustrative Example — rare training tiers are folded into UNKNOWN so the bucket carries genuine training mass, and later unseen tiers route there instead of onto slot 0.</p>
+                <div class="key-point">
+                    <strong>Fix:</strong> Train a funded UNKNOWN bucket, pin the vocabulary with the model artifact, and alert on the unknown rate instead of substituting silently.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>var __charts = [];
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    if (!c.dataset.w) { c.dataset.w = c.getAttribute('width') || '720'; c.dataset.h = c.getAttribute('height') || '300'; }
+    var w = parseInt(c.dataset.w), h = parseInt(c.dataset.h);
+    var dpr = window.devicePixelRatio || 1;
+    c.style.maxWidth = w + 'px';
+    var cssW = c.getBoundingClientRect().width || w;
+    var scale = (cssW / w) * dpr;
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    var ctx = c.getContext('2d'); ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, w, h);
+    return {ctx:ctx, w:w, h:h};
+}
+
+// Hardcoded literals — the vocabulary and the counts carry the lesson. Never Math.random().
+// Encoder vocabulary fitted at training time: index 0/1/2.
+var VOCAB = ['Tier A', 'Tier B', 'Tier C'];
+// One serving batch: [category, row count].
+var BATCH = [['Tier A', 452], ['Tier B', 310], ['Tier C', 163], ['Tier D', 60], ['Tier E', 15]];
+
+// All printed statistics are computed from the literals above at render time.
+function batchStats() {
+    var total = 0, unknownRows = 0, unseenDistinct = 0;
+    BATCH.forEach(function (r) {
+        total += r[1];
+        if (VOCAB.indexOf(r[0]) === -1) { unknownRows += r[1]; unseenDistinct += 1; }
+    });
+    return {
+        total: total,
+        unknownRows: unknownRows,
+        unseenDistinct: unseenDistinct,
+        distinct: BATCH.length,
+        unknownRate: (unknownRows / total) * 100
+    };
+}
+function commas(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+
+// Canvas 1: lookup-table fall-through — unknown label lands on slot 0, a real category
+__charts.push(function(){
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w;
+    var st = batchStats();
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Unknown Label Falls Through to Slot 0 — a Real Category', w/2, 22);
+
+    // Left panel: serving batch
+    ctx.textAlign = 'left';
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#444';
+    ctx.fillText('serving batch', 30, 55);
+
+    var rowY = [78, 96, 114, 132, 150];
+    BATCH.forEach(function (r, i) {
+        var unseen = VOCAB.indexOf(r[0]) === -1;
+        ctx.font = (unseen ? 'bold ' : '') + '11px ui-monospace, monospace';
+        ctx.fillStyle = unseen ? '#e74c3c' : '#1a5276';
+        ctx.textAlign = 'left';
+        ctx.fillText(r[0], 30, rowY[i]);
+        ctx.textAlign = 'right';
+        ctx.fillText(commas(r[1]), 128, rowY[i]);
+        if (unseen) {
+            ctx.textAlign = 'left';
+            ctx.font = 'bold 9px system-ui';
+            ctx.fillText('← unseen', 133, rowY[i]);
+        }
+    });
+    ctx.textAlign = 'left';
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.fillText('total rows = ' + commas(st.total), 30, 172);
+    ctx.fillText('unseen categories: ' + st.unseenDistinct + ' of ' + st.distinct, 30, 187);
+
+    // Middle: encoder vocabulary table
+    var bx = 250, by = 90, bw = 150, bh = 110;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(bx, by, bw, bh);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(bx, by, bw, bh);
+
+    // highlight slot 0
+    ctx.fillStyle = 'rgba(230,126,34,0.18)';
+    ctx.fillRect(bx + 1, by + 36, bw - 2, 20);
+
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('encoder vocabulary', bx + bw/2, by + 22);
+
+    VOCAB.forEach(function (v, i) {
+        ctx.font = (i === 0 ? 'bold ' : '') + '11px ui-monospace, monospace';
+        ctx.fillStyle = i === 0 ? '#e67e22' : '#1a5276';
+        ctx.fillText(i + ' → ' + v, bx + bw/2, by + 51 + i * 22);
+    });
+
+    // Fall-through arrow from unseen rows around the box into slot 0
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(196, 141);
+    ctx.lineTo(222, 141);
+    ctx.lineTo(222, 216);
+    ctx.lineTo(bx + bw/2, 216);
+    ctx.lineTo(bx + bw/2, by + bh + 4);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(bx + bw/2, by + bh - 4);
+    ctx.lineTo(bx + bw/2 - 5, by + bh + 6);
+    ctx.lineTo(bx + bw/2 + 5, by + bh + 6);
+    ctx.closePath();
+    ctx.fillStyle = '#e74c3c';
+    ctx.fill();
+
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'left';
+    ctx.fillText('not found → .get(x, 0)', 230, 232);
+
+    // Right panel: scored row
+    var rx = 500, ry = 100, rw = 170, rh = 90;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(rx, ry, rw, rh);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(rx, ry, rw, rh);
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('scored as ' + VOCAB[0], rx + rw/2, ry + 20);
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText('index 0 is a real category', rx + rw/2, ry + 42);
+    ctx.fillText('model returns a normal score', rx + rw/2, ry + 58);
+    ctx.fillText('no error, no flag', rx + rw/2, ry + 74);
+
+    // arrow vocabulary -> scored row
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(bx + bw, by + 46);
+    ctx.lineTo(rx - 6, by + 46);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(rx, by + 46);
+    ctx.lineTo(rx - 9, by + 41);
+    ctx.lineTo(rx - 9, by + 51);
+    ctx.closePath();
+    ctx.fillStyle = '#e74c3c';
+    ctx.fill();
+
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'center';
+    ctx.fillText(st.unknownRate.toFixed(1) + '% of rows (' + commas(st.unknownRows) + '/' + commas(st.total) +
+                 ') scored as the wrong category — silently.', w/2, 285);
+});
+
+// Canvas 2: crash (loud) vs silent misencode (quiet, worse)
+__charts.push(function(){
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w;
+    var st = batchStats();
+    var rateStr = st.unknownRate.toFixed(1) + '% (' + commas(st.unknownRows) + '/' + commas(st.total) + ')';
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Two Failure Modes for the Same Unknown Category', w/2, 22);
+
+    var panels = [
+        { x: 35, color: '#e74c3c', head: 'CRASH — loud',
+          lines: ['encoder raises on unknown label', 'request fails, error surfaces',
+                  'row is never scored', 'on-call is paged the same minute'],
+          verdict: 'recoverable: the failure is visible', verdictColor: '#27ae60',
+          foot: 'rows rejected: ' + rateStr },
+        { x: 385, color: '#e67e22', head: 'SILENT MISENCODE — quiet',
+          lines: ['unknown label → index 0', 'row scored as a real category',
+                  'output is a plausible number', 'no error, no alert, no page'],
+          verdict: 'worse: the failure is invisible', verdictColor: '#e74c3c',
+          foot: 'rows mis-scored: ' + rateStr }
+    ];
+
+    panels.forEach(function (p) {
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(p.x, 55, 300, 195);
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(p.x, 55, 300, 195);
+
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 13px system-ui';
+        ctx.fillStyle = p.color;
+        ctx.fillText(p.head, p.x + 150, 80);
+
+        ctx.font = '11px system-ui';
+        ctx.fillStyle = '#2c3e50';
+        p.lines.forEach(function (l, i) {
+            ctx.fillText(l, p.x + 150, 106 + i * 19);
+        });
+
+        ctx.font = 'bold 11px system-ui';
+        ctx.fillStyle = p.verdictColor;
+        ctx.fillText(p.verdict, p.x + 150, 205);
+
+        ctx.font = '10px system-ui';
+        ctx.fillStyle = '#666';
+        ctx.fillText(p.foot, p.x + 150, 230);
+    });
+
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(360, 55);
+    ctx.lineTo(360, 250);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillStyle = '#e67e22';
+    ctx.textAlign = 'center';
+    ctx.fillText('A plausible score is more expensive than an exception.', w/2, 278);
+});
+
+// Canvas 3: training vocabulary with a funded UNKNOWN bucket (the page's one conventional chart)
+__charts.push(function(){
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w;
+
+    var TRAIN = [['Tier A', 4200], ['Tier B', 3100], ['Tier C', 1500], ['UNKNOWN', 1200]];
+    var total = 0, maxCount = 0;
+    TRAIN.forEach(function (r) { total += r[1]; if (r[1] > maxCount) maxCount = r[1]; });
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Training Vocabulary With a Funded UNKNOWN Bucket (Illustrative Example)', w/2, 22);
+
+    var baseY = 235, maxH = 155, barW = 90;
+    var centers = [130, 290, 450, 610];
+
+    TRAIN.forEach(function (r, i) {
+        var name = r[0], count = r[1];
+        var share = (count / total) * 100;
+        var hgt = (count / maxCount) * maxH;
+        var x = centers[i] - barW/2;
+        var isUnknown = (name === 'UNKNOWN');
+
+        ctx.fillStyle = isUnknown ? 'rgba(39,174,96,0.25)' : 'rgba(26,82,118,0.35)';
+        ctx.fillRect(x, baseY - hgt, barW, hgt);
+        ctx.strokeStyle = isUnknown ? '#27ae60' : '#1a5276';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, baseY - hgt, barW, hgt);
+
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 12px system-ui';
+        ctx.fillStyle = isUnknown ? '#27ae60' : '#1a5276';
+        ctx.fillText(share.toFixed(1) + '%', centers[i], baseY - hgt - 8);
+
+        ctx.font = '11px system-ui';
+        ctx.fillStyle = '#333';
+        ctx.fillText(name, centers[i], baseY + 18);
+
+        ctx.font = '10px system-ui';
+        ctx.fillStyle = '#666';
+        ctx.fillText('n = ' + commas(count), centers[i], baseY + 33);
+
+        if (isUnknown) {
+            ctx.font = '10px system-ui';
+            ctx.fillStyle = '#27ae60';
+            ctx.fillText('rare tiers folded in', centers[i], baseY + 48);
+        }
+    });
+
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(60, baseY);
+    ctx.lineTo(670, baseY);
+    ctx.stroke();
+
+    var unknownShare = (TRAIN[3][1] / total) * 100;
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText('UNKNOWN holds ' + unknownShare.toFixed(1) + '% of ' + commas(total) +
+                 ' training rows — the model learns a real response for it.', w/2, 290);
+});
+
+__charts.forEach(function(f){ f(); });
+var __redrawTimer;
+window.addEventListener('resize', function(){
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function(){ __charts.forEach(function(f){ f(); }); }, 150);
+});
+</script>
+
+</body>
+</html>

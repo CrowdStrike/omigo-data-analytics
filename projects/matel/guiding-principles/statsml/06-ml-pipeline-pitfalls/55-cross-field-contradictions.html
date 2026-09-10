@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cross-Field Contradictions</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px; height: auto; }
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Cross-Field Contradictions</h1>
+<p class="subtitle">Every field is individually valid, but the combination is impossible.</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">row consistency</span></div>
+                <ul>
+                    <li><b>Column-scoped validation</b> — types, nulls and ranges are checked one column at a time, so nothing trips</li>
+                    <li><b>No column is wrong</b> — every value sits inside its own allowed domain; only the relation between two is broken</li>
+                    <li><b>Temporal impossibility</b> — delivered_at earlier than ordered_at, or an end_date preceding its own start_date</li>
+                    <li><b>Status contradiction</b> — status='cancelled' on a row whose delivered_at timestamp is populated anyway</li>
+                    <li><b>Arithmetic that does not close</b> — line items sum below the invoice total, or discount exceeds gross price</li>
+                    <li><b>Exclusive flags both lit</b> — is_new_customer=1 sitting next to a prior purchase count above zero</li>
+                    <li><b>Dependent-field violation</b> — dependents_count=0 with a populated dependents list, or a country/currency mismatch</li>
+                </ul>
+                <p class="example">Eight orders pass all five column checks at 100%, yet three rows are internally impossible, so whole-row validity is 62.5%.</p>
+                <div class="key-point">
+                    <strong>Impact:</strong> A per-column pass rate of 100% is reported as green while more than a third of rows are logically impossible.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">derived features</span></div>
+                <ul>
+                    <li><b>Validation is per column</b> — assertion frameworks iterate columns and never look at column pairs</li>
+                    <li><b>Invariants are undeclared</b> — the cross-field rule lives in someone's head instead of in the schema</li>
+                    <li><b>Combinatorial excuse</b> — pair checks get skipped because "there are too many pairs to enumerate"</li>
+                    <li><b>Upstream partial writes</b> — a status update lands without its companion timestamp being cleared</li>
+                    <li><b>Timezone skew</b> — two systems stamp the same event, so the ordering inverts by a few hours</li>
+                    <li><b>Derived features hide it</b> — a duration built from two contradictory fields returns a number, not an error</li>
+                    <li><b>Coercion launders it</b> — <code>abs()</code> or <code>max(0, x)</code> turns an impossible value into a confidently wrong one</li>
+                </ul>
+                <p class="example">Order 1042 was delivered 3 days before it was ordered, so delivery_days = &minus;3, which abs() silently reports as 3 days.</p>
+                <div class="key-point">
+                    <strong>Root Cause:</strong> No single column is out of range, so nothing raises; the contradiction only surfaces once two fields are read together.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">invariants</span></div>
+                <ul>
+                    <li><b>Declare invariants</b> — cross-field rules live next to the schema as first-class assertions, not tribal lore</li>
+                    <li><b>Validate the row</b> — the unit of validity is the whole row, never a single column in isolation</li>
+                    <li><b>Derive early, assert bounds</b> — compute durations and totals at ingest, then assert their sign and ceiling</li>
+                    <li><b>Never coerce</b> — no <code>abs()</code> and no clipping on a value that has already violated an invariant</li>
+                    <li><b>Quarantine, don't fix</b> — route contradictory rows to a holding table with the rule they broke attached</li>
+                    <li><b>Track the violation rate</b> — the share of rows breaking an invariant is a first-class data-quality metric</li>
+                    <li><b>Alert on jumps</b> — a sudden rise almost always means an upstream logic change, not bad luck</li>
+                </ul>
+                <p class="example">The violation rate sits at a 0.20% baseline for four days, then averages 3.30% after an upstream deploy — a 16.5&times; rise.</p>
+                <div class="key-point">
+                    <strong>Fix:</strong> Assert row invariants at ingest, quarantine the rows that break them, and alert on the violation rate rather than patching values.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>var __charts = [];
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    if (!c.dataset.w) { c.dataset.w = c.getAttribute('width') || '720'; c.dataset.h = c.getAttribute('height') || '300'; }
+    var w = parseInt(c.dataset.w), h = parseInt(c.dataset.h);
+    var dpr = window.devicePixelRatio || 1;
+    c.style.maxWidth = w + 'px';
+    var cssW = c.getBoundingClientRect().width || w;
+    var scale = (cssW / w) * dpr;
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    var ctx = c.getContext('2d'); ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, w, h);
+    return {ctx:ctx, w:w, h:h};
+}
+
+function illus(ctx, w) {
+    ctx.font = '9px system-ui'; ctx.fillStyle = '#999'; ctx.textAlign = 'right';
+    ctx.fillText('Illustrative Example', w - 10, 14);
+    ctx.textAlign = 'center';
+}
+
+// Canvas 1: every column valid, the row is not.
+// All data is a hardcoded literal array — no Math.random() anywhere.
+__charts.push(function(){
+    var s = setup('c1'); if (!s) return;
+    var ctx = s.ctx, w = s.w;
+
+    var ROWS = [
+        {id:'1041', ordered:'2026-03-04', delivered:'2026-03-07', status:'delivered', gross:200, discount:20},
+        {id:'1042', ordered:'2026-03-05', delivered:'2026-03-02', status:'delivered', gross:150, discount:15},
+        {id:'1043', ordered:'2026-03-06', delivered:'2026-03-09', status:'cancelled', gross:300, discount:30},
+        {id:'1044', ordered:'2026-03-07', delivered:'2026-03-08', status:'delivered', gross:250, discount:25},
+        {id:'1045', ordered:'2026-03-09', delivered:'2026-03-12', status:'delivered', gross:100, discount:140},
+        {id:'1046', ordered:'2026-03-10', delivered:'2026-03-13', status:'delivered', gross:400, discount:40},
+        {id:'1047', ordered:'2026-03-11', delivered:'2026-03-14', status:'delivered', gross:180, discount:18},
+        {id:'1048', ordered:'2026-03-12', delivered:'2026-03-15', status:'delivered', gross:220, discount:22}
+    ];
+
+    // Per-column predicates: each column checked in isolation, as a normal validator would.
+    function inMarch(v) { var d = new Date(v + 'T00:00:00Z'); return !isNaN(d) && v.slice(0,7) === '2026-03'; }
+    var COLS = [
+        {key:'ordered',   label:'ordered_at',   x:88,  ok:function(r){ return inMarch(r.ordered); },  txt:function(r){ return r.ordered.slice(5); }},
+        {key:'delivered', label:'delivered_at', x:158, ok:function(r){ return inMarch(r.delivered); },txt:function(r){ return r.delivered.slice(5); }},
+        {key:'status',    label:'status',       x:228, ok:function(r){ return r.status === 'delivered' || r.status === 'cancelled'; }, txt:function(r){ return r.status; }},
+        {key:'gross',     label:'gross',        x:308, ok:function(r){ return r.gross > 0; },         txt:function(r){ return String(r.gross); }},
+        {key:'discount',  label:'discount',     x:360, ok:function(r){ return r.discount >= 0; },     txt:function(r){ return String(r.discount); }}
+    ];
+
+    // Cross-field invariants: each names the two columns whose relation is broken.
+    var INV = [
+        {a:'ordered', b:'delivered', ok:function(r){ return new Date(r.delivered) >= new Date(r.ordered); }},
+        {a:'status',  b:'delivered', ok:function(r){ return !(r.status === 'cancelled' && r.delivered); }},
+        {a:'gross',   b:'discount',  ok:function(r){ return r.discount <= r.gross; }}
+    ];
+
+    // ---- computed at render time from the literals above ----
+    var colPass = COLS.map(function(c){ var n = 0; ROWS.forEach(function(r){ if (c.ok(r)) n++; }); return n; });
+    var cellChecks = COLS.length * ROWS.length;
+    var cellPass = colPass.reduce(function(a,b){ return a + b; }, 0);
+    var rowBad = ROWS.map(function(r){
+        for (var i = 0; i < INV.length; i++) { if (!INV[i].ok(r)) return INV[i]; }
+        return null;
+    });
+    var nRowBad = rowBad.filter(function(v){ return v; }).length;
+    var rowPassPct = (ROWS.length - nRowBad) / ROWS.length * 100;
+    var colPassPct = cellPass / cellChecks * 100;
+
+    illus(ctx, w);
+    ctx.font = 'bold 14px system-ui'; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('Every Column ' + colPassPct.toFixed(1) + '% Valid — Row ' + rowPassPct.toFixed(1) + '% Valid', w/2, 30);
+
+    var pitch = 20, top = 72, checkX = 430;
+
+    // header
+    ctx.font = 'bold 10px system-ui'; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'left';
+    ctx.fillText('order_id', 28, 52);
+    COLS.forEach(function(c){ ctx.fillText(c.label, c.x, 52); });
+    ctx.fillText('row', checkX, 52);
+    ctx.strokeStyle = '#e0e0e0'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(24, 58); ctx.lineTo(465, 58); ctx.stroke();
+
+    var cellCenter = {};
+    ROWS.forEach(function(r, ri) {
+        var y = top + ri * pitch;
+        // green tint on every cell: the per-column check passed
+        ctx.fillStyle = 'rgba(39,174,96,0.10)';
+        ctx.fillRect(24, y - 12, 441, pitch - 3);
+
+        ctx.textAlign = 'left';
+        ctx.font = '10px system-ui'; ctx.fillStyle = '#555';
+        ctx.fillText(r.id, 28, y);
+
+        var bad = rowBad[ri];
+        COLS.forEach(function(c){
+            var involved = bad && (bad.a === c.key || bad.b === c.key);
+            ctx.font = (involved ? 'bold ' : '') + '10px system-ui';
+            ctx.fillStyle = involved ? '#e74c3c' : '#333';
+            ctx.fillText(c.txt(r), c.x, y);
+            cellCenter[ri + '|' + c.key] = c.x + ctx.measureText(c.txt(r)).width / 2;
+        });
+
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 11px system-ui';
+        ctx.fillStyle = bad ? '#e74c3c' : '#27ae60';
+        ctx.fillText(bad ? '✗' : '✓', checkX + 8, y);
+
+        if (bad) {
+            var x1 = cellCenter[ri + '|' + bad.a], x2 = cellCenter[ri + '|' + bad.b];
+            ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1.8;
+            ctx.beginPath();
+            ctx.moveTo(x1, y + 3);
+            ctx.quadraticCurveTo((x1 + x2) / 2, y + 10, x2, y + 3);
+            ctx.stroke();
+        }
+    });
+
+    // per-column footer: pass counts computed above
+    ctx.textAlign = 'left'; ctx.font = 'bold 9px system-ui'; ctx.fillStyle = '#27ae60';
+    COLS.forEach(function(c, i){ ctx.fillText('✓ ' + colPass[i] + '/' + ROWS.length, c.x, 244); });
+
+    // summary box
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2;
+    ctx.fillRect(500, 70, 200, 120); ctx.strokeRect(500, 70, 200, 120);
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 10px system-ui'; ctx.fillStyle = '#27ae60';
+    ctx.fillText('column pass rate', 600, 92);
+    ctx.font = 'bold 15px system-ui';
+    ctx.fillText(colPassPct.toFixed(1) + '%', 600, 112);
+    ctx.font = 'bold 10px system-ui'; ctx.fillStyle = '#e74c3c';
+    ctx.fillText('whole-row pass rate', 600, 138);
+    ctx.font = 'bold 15px system-ui';
+    ctx.fillText(rowPassPct.toFixed(1) + '%', 600, 158);
+    ctx.font = '9px system-ui'; ctx.fillStyle = '#666';
+    ctx.fillText(nRowBad + ' of ' + ROWS.length + ' rows impossible', 600, 178);
+
+    ctx.font = 'bold 11px system-ui'; ctx.fillStyle = '#e74c3c';
+    ctx.fillText(COLS.length + ' columns × ' + ROWS.length + ' rows = ' + cellChecks +
+        ' cell checks pass. ' + nRowBad + ' rows are still impossible.', w/2, 285);
+});
+
+// Canvas 2: backwards timeline; the derived duration is computed from the date literals.
+__charts.push(function(){
+    var s = setup('c2'); if (!s) return;
+    var ctx = s.ctx, w = s.w;
+
+    var LANES = [
+        {id:'1041', ordered:'2026-03-04', delivered:'2026-03-07', color:'#27ae60', y:92,  tag:'valid'},
+        {id:'1042', ordered:'2026-03-05', delivered:'2026-03-02', color:'#e74c3c', y:145, tag:'impossible'}
+    ];
+    var DAY = 86400000;
+    var t0 = new Date('2026-03-01T00:00:00Z').getTime();
+    var t1 = new Date('2026-03-16T00:00:00Z').getTime();
+    var x0 = 50, x1 = 470;
+    function px(iso) {
+        var t = new Date(iso + 'T00:00:00Z').getTime();
+        return x0 + (t - t0) / (t1 - t0) * (x1 - x0);
+    }
+    function days(a, b) { // computed, never asserted
+        return (new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / DAY;
+    }
+
+    illus(ctx, w);
+    ctx.font = 'bold 14px system-ui'; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('delivered_at Before ordered_at → A Derived Feature That Cannot Exist', w/2, 30);
+
+    // axis
+    var axisY = 200;
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x0, axisY); ctx.lineTo(x1, axisY); ctx.stroke();
+    for (var d = 1; d <= 16; d++) {
+        var iso = '2026-03-' + (d < 10 ? '0' + d : d);
+        var x = px(iso);
+        ctx.strokeStyle = '#ccc'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, axisY - 4); ctx.lineTo(x, axisY + 4); ctx.stroke();
+        if ((d - 1) % 3 === 0) {
+            ctx.font = '9px system-ui'; ctx.fillStyle = '#666'; ctx.textAlign = 'center';
+            ctx.fillText('Mar ' + d, x, axisY + 17);
+        }
+    }
+
+    function arrow(fromX, toX, y, color, lw) {
+        ctx.strokeStyle = color; ctx.lineWidth = lw;
+        ctx.beginPath(); ctx.moveTo(fromX, y); ctx.lineTo(toX, y); ctx.stroke();
+        var dir = toX > fromX ? 1 : -1;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(toX, y);
+        ctx.lineTo(toX - dir * 9, y - 5);
+        ctx.lineTo(toX - dir * 9, y + 5);
+        ctx.closePath(); ctx.fill();
+    }
+
+    LANES.forEach(function(L) {
+        var xo = px(L.ordered), xd = px(L.delivered);
+        var delta = days(L.ordered, L.delivered);
+        L.delta = delta;
+
+        arrow(xo, xd, L.y, L.color, L.tag === 'valid' ? 2 : 2.5);
+
+        [[xo, 'ordered'], [xd, 'delivered']].forEach(function(m) {
+            ctx.fillStyle = '#fff'; ctx.strokeStyle = L.color; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(m[0], L.y, 5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+            ctx.font = '9px system-ui'; ctx.fillStyle = '#333'; ctx.textAlign = 'center';
+            ctx.fillText(m[1], m[0], L.y - 12);
+        });
+
+        ctx.textAlign = 'left';
+        ctx.font = 'bold 11px system-ui'; ctx.fillStyle = L.color;
+        ctx.fillText('order ' + L.id + ': delivery_days = ' + (delta >= 0 ? '+' : '−') + Math.abs(delta), 488, L.y - 4);
+        ctx.font = '9px system-ui'; ctx.fillStyle = '#666';
+        ctx.fillText(L.tag, 488, L.y + 10);
+    });
+
+    ctx.textAlign = 'center';
+    ctx.font = '9px system-ui'; ctx.fillStyle = '#27ae60';
+    ctx.fillText('ordered_at: valid date ✓    delivered_at: valid date ✓    → both columns pass', w/2, 176);
+
+    // coercion boxes, values computed from the impossible lane
+    var raw = LANES[1].delta;
+    var boxes = [
+        {t:'raw',        v:String(raw < 0 ? '−' + Math.abs(raw) : raw), note:'impossible',  c:'#e74c3c'},
+        {t:'abs(x)',     v:String(Math.abs(raw)),                           note:'fabricated',  c:'#e67e22'},
+        {t:'max(0, x)',  v:String(Math.max(0, raw)),                        note:'fabricated',  c:'#e67e22'}
+    ];
+    boxes.forEach(function(b, i) {
+        var cx = 180 + i * 180;
+        ctx.fillStyle = '#fff'; ctx.strokeStyle = b.c; ctx.lineWidth = 2;
+        ctx.fillRect(cx - 48, 232, 96, 46); ctx.strokeRect(cx - 48, 232, 96, 46);
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 10px system-ui'; ctx.fillStyle = b.c;
+        ctx.fillText(b.t, cx, 246);
+        ctx.font = 'bold 12px system-ui';
+        ctx.fillText(b.v, cx, 262);
+        ctx.font = '9px system-ui'; ctx.fillStyle = '#666';
+        ctx.fillText(b.note, cx, 274);
+    });
+
+    ctx.font = 'bold 11px system-ui'; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('The pipeline never errored. It just returned a number that is not true.', w/2, 295);
+});
+
+// Canvas 3: declared invariants + violation-rate alert. Literal daily counts; all rates computed.
+__charts.push(function(){
+    var s = setup('c3'); if (!s) return;
+    var ctx = s.ctx, w = s.w;
+
+    var INVARIANTS = [
+        'delivered_at >= ordered_at',
+        "status='cancelled' ⇒ delivered_at IS NULL",
+        'discount <= gross',
+        'sum(line_items) == invoice_total',
+        'is_new_customer=1 ⇒ prior_orders == 0'
+    ];
+    var DAILY = [
+        {d:'D1', rows:12000, v:24},  {d:'D2', rows:12000, v:18},
+        {d:'D3', rows:12000, v:30},  {d:'D4', rows:12000, v:24},
+        {d:'D5', rows:12000, v:390}, {d:'D6', rows:12000, v:402},
+        {d:'D7', rows:12000, v:378}, {d:'D8', rows:12000, v:414}
+    ];
+    var DEPLOY_AFTER = 4;
+
+    // ---- computed at render time ----
+    DAILY.forEach(function(r){ r.rate = r.v / r.rows; });
+    function mean(a) { return a.reduce(function(x,y){ return x + y; }, 0) / a.length; }
+    var pre = DAILY.slice(0, DEPLOY_AFTER), post = DAILY.slice(DEPLOY_AFTER);
+    var preV = mean(pre.map(function(r){ return r.v; }));
+    var postV = mean(post.map(function(r){ return r.v; }));
+    var preRate = preV / pre[0].rows, postRate = postV / post[0].rows;
+    var ratio = postV / preV;
+    var scaleMax = Math.max.apply(null, DAILY.map(function(r){ return r.rate; })) * 1.02;
+
+    illus(ctx, w);
+    ctx.font = 'bold 14px system-ui'; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('Declare Row Invariants · Quarantine the Row · Alert on the Rate', w/2, 30);
+
+    // left panel
+    ctx.fillStyle = '#f8f9fa'; ctx.strokeStyle = '#e0e0e0'; ctx.lineWidth = 1;
+    ctx.fillRect(25, 48, 305, 202); ctx.strokeRect(25, 48, 305, 202);
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 10px system-ui'; ctx.fillStyle = '#1a5276';
+    ctx.fillText('row invariants, declared with the schema', 38, 68);
+    INVARIANTS.forEach(function(inv, i) {
+        var y = 90 + i * 20;
+        ctx.font = 'bold 10px system-ui'; ctx.fillStyle = '#27ae60';
+        ctx.fillText('✓', 38, y);
+        ctx.font = '9px ui-monospace, Menlo, monospace'; ctx.fillStyle = '#27ae60';
+        ctx.fillText(inv, 52, y);
+    });
+    ctx.strokeStyle = '#e67e22'; ctx.lineWidth = 2;
+    ctx.strokeRect(38, 198, 279, 40);
+    ctx.font = 'bold 10px system-ui'; ctx.fillStyle = '#e67e22';
+    ctx.fillText('violating row → quarantine table', 48, 214);
+    ctx.font = '9px system-ui'; ctx.fillStyle = '#666';
+    ctx.fillText('keep the row + the rule it broke; never coerce', 48, 230);
+
+    // right panel: bars
+    var baseY = 235, barW = 26, pitch = 38, bx = 372, maxH = 150;
+    ctx.strokeStyle = '#ccc'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(bx - 8, baseY); ctx.lineTo(bx + 8 * pitch - 4, baseY); ctx.stroke();
+
+    DAILY.forEach(function(r, i) {
+        var hgt = r.rate / scaleMax * maxH;
+        var x = bx + i * pitch;
+        var isPost = i >= DEPLOY_AFTER;
+        ctx.fillStyle = isPost ? 'rgba(231,76,60,0.55)' : 'rgba(39,174,96,0.55)';
+        ctx.strokeStyle = isPost ? '#e74c3c' : '#27ae60';
+        ctx.lineWidth = 1.5;
+        ctx.fillRect(x, baseY - hgt, barW, hgt);
+        ctx.strokeRect(x, baseY - hgt, barW, hgt);
+        ctx.textAlign = 'center';
+        ctx.font = '8px system-ui'; ctx.fillStyle = '#666';
+        ctx.fillText(r.d, x + barW/2, baseY + 12);
+        ctx.font = '8px system-ui'; ctx.fillStyle = isPost ? '#e74c3c' : '#27ae60';
+        ctx.fillText((r.rate * 100).toFixed(2) + '%', x + barW/2, baseY - hgt - 5);
+    });
+
+    // deploy marker between D4 and D5
+    var dx = bx + DEPLOY_AFTER * pitch - (pitch - barW) / 2;
+    ctx.strokeStyle = '#e67e22'; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(dx, 68); ctx.lineTo(dx, baseY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 9px system-ui'; ctx.fillStyle = '#e67e22';
+    ctx.fillText('upstream deploy', dx, 62);
+
+    // group callouts, computed
+    ctx.font = 'bold 9px system-ui'; ctx.fillStyle = '#27ae60';
+    ctx.fillText('pre ' + (preRate * 100).toFixed(2) + '%', bx + 2 * pitch - 6, 100);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('post ' + (postRate * 100).toFixed(2) + '%', bx + 6 * pitch - 6, 62);
+
+    ctx.font = 'bold 11px system-ui'; ctx.fillStyle = '#e74c3c';
+    ctx.fillText(ratio.toFixed(1) + '× jump — upstream logic changed', bx + 4 * pitch - 20, 270);
+
+    ctx.font = 'bold 10px system-ui'; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('Pre-deploy mean ' + preV + ' violations/day · post-deploy mean ' + postV +
+        ' — both computed from the ' + DAILY.length + ' daily counts.', w/2, 292);
+});
+
+__charts.forEach(function(f){ f(); });
+var __redrawTimer;
+window.addEventListener('resize', function(){
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function(){ __charts.forEach(function(f){ f(); }); }, 150);
+});
+</script>
+
+</body>
+</html>

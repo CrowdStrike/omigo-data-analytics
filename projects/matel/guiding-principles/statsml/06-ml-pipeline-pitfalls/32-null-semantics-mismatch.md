@@ -24,9 +24,9 @@
 Three-column diagram: the same NULL symbol carrying three different meanings and imputations.
 
 - **Title (bold 14px, `#1a5276`, top center):** "NULL Semantics: Same Symbol, Different Meanings".
-- **Three column boxes** (170×200 each, 2px `#1a5276` stroke, starting x=50 with 180px spacing, y=60). Each box contains: a bold blue 11px column header; a bold orange (`#e67e22`) 16px "NULL"; 10px `#444` "Meaning:" plus two meaning lines; two bold green (`#27ae60`) 10px impute/feature lines.
+- **Three column boxes** (170×200 each, 2px `#1a5276` stroke, starting x=50 with 180px spacing, y=60). Each box contains: a bold blue 11px column header; a bold orange (`#e67e22`) 16px "NULL"; 10px `#444` "Meaning:" plus two meaning lines; two bold green (`#27ae60`) 10px treatment lines.
   - **Column A: phone_number** — Meaning: '"Not Applicable"' / "User has no phone"; Impute: '"no_phone"'; Feature: "has_phone=0".
-  - **Column B: last_login** — Meaning: '"Never Occurred"' / "Strong churn signal"; Impute: "days=-999"; Feature: "never_login=1".
+  - **Column B: last_login** — Meaning: '"Never Occurred"' / "Strong churn signal"; Flag: "never_login=1"; Fill: "median (neutral)" — the boolean flag carries the signal, never a numeric sentinel.
   - **Column C: survey_q5** — Meaning: '"Not Yet Asked"' / "MCAR, neutral"; Impute: "median/mode"; Or: "drop column".
 - **Bottom warning (bold red `#e74c3c` 12px, centered, y=280):** "Treating all three identically destroys information!"
 
@@ -63,8 +63,10 @@ Diagram of three source systems with different NULL meanings merging into one co
 - **Missingness is data** — preserve the reason each NULL exists instead of eliminating it
 - **Document per column** — the dictionary must state what NULL means, not just nullable yes/no
 - **Indicator features** — add boolean is_missing columns that turn absence into usable signal
-- **Match imputation to type** — mean for MCAR, conditional for MAR, indicators for MNAR
-- **Reason codes** — a documented convention like -1 not applicable, -2 not collected, -3 declined
+- **Match imputation to type** — mean for MCAR, conditional for MAR, indicator plus neutral fill for MNAR
+- **Or keep the NULL** — gradient-boosted trees route a missing value down a learned side, so no fill is needed
+- **Reason codes** — a documented enum like not_applicable, not_collected, declined in its own column
+- **No numeric sentinels** — a value like -999 passes every null check yet distorts scaling, distances, and split points
 
 *Example:* A churn model replaces NULL last_login with a has_logged_in flag plus a missing_reason enum, and the never-logged-in reason becomes a top predictor.
 

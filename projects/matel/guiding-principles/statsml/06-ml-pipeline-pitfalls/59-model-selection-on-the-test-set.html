@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Model Selection on the Test Set</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px; height: auto; }
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Model Selection on the Test Set</h1>
+<p class="subtitle">The test set is consulted once per experiment and reported once at the end — the number you report is a maximum, and a maximum is biased upward.</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">adaptive overfitting</span></div>
+                <ul>
+                    <li><b>Every peek spends information</b> — each test evaluation transfers a little of the holdout into your choices</li>
+                    <li><b>The analyst is a slow optimizer</b> — a human running experiments is gradient descent on the test score</li>
+                    <li><b>The test set becomes the objective</b> — whatever you select on, you fit, whether or not you wrote a loss</li>
+                    <li><b>Max-of-N is biased upward</b> — with 40 equally good candidates, pure noise still produces a "winner"</li>
+                    <li><b>Everything gets adjudicated there</b> — architecture, hyperparameters, early-stopping rounds, preprocessing variants</li>
+                    <li><b>Early stopping on test</b> — halting at the best test epoch fits the stopping round to the holdout, silently</li>
+                    <li><b>The reported number is a maximum</b> — a maximum over noisy estimates is not an unbiased estimate of anything</li>
+                    <li><b>The gap shows up in production</b> — deployed accuracy lands near the true 85%, not the reported 86.66%</li>
+                </ul>
+                <p class="example">40 configurations all truly 85% accurate on n = 2000 give a mean observed score of 84.97%, but the winner reads 86.66% — 1.66 points of pure selection bias.</p>
+                <div class="key-point">
+                    <strong>Impact:</strong> The reported score exceeds the deployable score by the selection bias, and nothing in the training logs reveals the gap until production traffic arrives.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">search size</span></div>
+                <ul>
+                    <li><b>No single script is wrong</b> — the leak is spread across a project's history, not inside any one file</li>
+                    <li><b>Review sees one run</b> — a code reviewer reads the final notebook and finds a clean, correct split</li>
+                    <li><b>"We only looked a few times"</b> — an informal peek count is always an undercount of the real search</li>
+                    <li><b>Abandoned ideas were peeks too</b> — every discarded experiment already read the test score once</li>
+                    <li><b>The search size is never recorded</b> — nobody logs how many configurations were compared before the winner</li>
+                    <li><b>Bias grows with the number of tried configurations</b> — 5 attempts cost 0.36 pp here, 40 cost 1.66 pp</li>
+                    <li><b>Shared leaderboards multiply it</b> — one public holdout scored by many teams is adaptively overfit collectively</li>
+                    <li><b>Validation feels wasteful</b> — carving out a third split looks like throwing away scarce training rows</li>
+                </ul>
+                <p class="example">The same seeded series gives maxima of 85.36%, 86.23%, 86.32% and 86.66% after 5, 10, 20 and 40 configurations — the optimism rises with the search, monotonically.</p>
+                <div class="key-point">
+                    <strong>Root Cause:</strong> Selection bias is a property of how many times the holdout was consulted, and that count is neither logged nor visible in the code, so nothing in review can price it.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">locked holdout</span></div>
+                <ul>
+                    <li><b>Three-way split</b> — training fits, validation decides <i>everything</i>, test is read exactly once at the end</li>
+                    <li><b>All selection on validation</b> — architecture, hyperparameters, early-stopping round, preprocessing variant</li>
+                    <li><b>Nested cross-validation</b> — when data is scarce, an inner loop selects and an outer loop estimates</li>
+                    <li><b>Locked holdout with an access log</b> — record who evaluated on test, when, and for which configuration</li>
+                    <li><b>Pre-register the metric and the budget</b> — write down the selection metric and how many configurations before starting</li>
+                    <li><b>Report both numbers</b> — publish the validation-based estimate beside the single final test number</li>
+                    <li><b>A second test read needs a fresh holdout</b> — re-evaluating on the same test set restarts the bias accumulation</li>
+                    <li><b>Never report a maximum bare</b> — state the search size next to the score so the optimism can be priced</li>
+                </ul>
+                <p class="example">Selecting all 40 configurations on validation and reading test once returns roughly the true 85%, instead of the 86.66% a test-set search reports.</p>
+                <div class="key-point">
+                    <strong>Fix:</strong> Let validation absorb every comparison, keep the test set sealed behind a written access log, and report the search size alongside the one final test number.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>var __charts = [];
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    if (!c.dataset.w) { c.dataset.w = c.getAttribute('width') || '720'; c.dataset.h = c.getAttribute('height') || '300'; }
+    var w = parseInt(c.dataset.w), h = parseInt(c.dataset.h);
+    var dpr = window.devicePixelRatio || 1;
+    c.style.maxWidth = w + 'px';
+    var cssW = c.getBoundingClientRect().width || w;
+    var scale = (cssW / w) * dpr;
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    var ctx = c.getContext('2d'); ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, w, h);
+    return {ctx:ctx, w:w, h:h};
+}
+
+// Shared simulation constants. Both c1 and c2 rebuild the identical series from
+// the same fixed seed, so every printed figure reconciles between the charts.
+var P_TRUE = 0.85;      // every configuration has this same true accuracy
+var N_TEST = 2000;      // test set size
+var N_CONFIG = 40;      // configurations compared
+var SEED = 8675309;
+
+// Seeded Park-Miller LCG — deterministic, never Math.random()
+function lcg(seed) { var s = seed; return function () { s = (s * 16807) % 2147483647; return s / 2147483647; }; }
+
+// Binomial standard error of an accuracy estimate on N_TEST rows — the honest noise scale.
+function stdErr() { return Math.sqrt(P_TRUE * (1 - P_TRUE) / N_TEST); }
+
+// N_CONFIG observed scores for equally-good configurations: p + se * z (Box-Muller on the LCG).
+function drawScores() {
+    var rnd = lcg(SEED), se = stdErr(), out = [];
+    for (var i = 0; i < N_CONFIG; i++) {
+        var u1 = rnd(), u2 = rnd();
+        var z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+        out.push(P_TRUE + se * z);
+    }
+    return out;
+}
+function meanOf(a) { return a.reduce(function(x, y){ return x + y; }, 0) / a.length; }
+function maxOfFirst(a, k) { return Math.max.apply(null, a.slice(0, k)); }
+
+// Canvas 1: 40 equally-good configurations; the maximum is the reported score.
+__charts.push(function(){
+    var s = setup('c1'); if (!s) return;
+    var ctx = s.ctx, w = s.w;
+
+    var se = stdErr();
+    var scores = drawScores();
+    var mean = meanOf(scores);
+    var best = Math.max.apply(null, scores);
+    var argmax = scores.indexOf(best);
+    var gapPP = 100 * (best - P_TRUE);
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillText('40 Configurations, All Truly 85% — Noise Picks a Winner (Illustrative Example)', w/2, 20);
+    ctx.fillStyle = '#666';
+    ctx.font = '10px system-ui';
+    ctx.fillText('test set n = ' + N_TEST + ', binomial standard error = ' + (100*se).toFixed(2) + ' pp', w/2, 36);
+
+    var left = 62, right = 700, top = 52, bottom = 214;
+    var yLo = 82.4, yHi = 87.0;
+    function yOf(pct) { return bottom - (pct - yLo) / (yHi - yLo) * (bottom - top); }
+
+    // Axes
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(left, top); ctx.lineTo(left, bottom); ctx.lineTo(right, bottom);
+    ctx.stroke();
+
+    ctx.fillStyle = '#666';
+    ctx.font = '9px system-ui';
+    ctx.textAlign = 'right';
+    [83, 84, 85, 86, 87].forEach(function(t){
+        ctx.fillText(t + '%', left - 6, yOf(t) + 3);
+        ctx.strokeStyle = '#eee';
+        ctx.beginPath(); ctx.moveTo(left, yOf(t)); ctx.lineTo(right, yOf(t)); ctx.stroke();
+    });
+
+    // True accuracy line
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(left, yOf(100*P_TRUE)); ctx.lineTo(right, yOf(100*P_TRUE)); ctx.stroke();
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '9px system-ui';
+    ctx.textAlign = 'right';
+    ctx.fillText('true accuracy = ' + (100*P_TRUE).toFixed(2) + '% (identical for all ' + N_CONFIG + ')', right, yOf(100*P_TRUE) - 5);
+
+    // Mean of observed scores
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 3]);
+    ctx.beginPath(); ctx.moveTo(left, yOf(100*mean)); ctx.lineTo(right, yOf(100*mean)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#2980b9';
+    ctx.fillText('mean observed = ' + (100*mean).toFixed(2) + '%', right, yOf(100*mean) + 12);
+
+    // Points
+    var pitch = (right - left) / N_CONFIG;
+    scores.forEach(function(v, i){
+        var cx = left + pitch * (i + 0.5);
+        var cy = yOf(100 * v);
+        var win = (i === argmax);
+        ctx.beginPath();
+        ctx.arc(cx, cy, win ? 5.5 : 3.2, 0, Math.PI * 2);
+        ctx.fillStyle = win ? 'rgba(231,76,60,0.7)' : 'rgba(26,82,118,0.35)';
+        ctx.fill();
+        ctx.strokeStyle = win ? '#e74c3c' : '#1a5276';
+        ctx.lineWidth = win ? 2 : 1;
+        ctx.stroke();
+    });
+
+    // Winner annotation
+    var wx = left + pitch * (argmax + 0.5), wy = yOf(100 * best);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillText('winner: config #' + (argmax + 1) + ' @ ' + (100*best).toFixed(2) + '%', Math.min(wx, right - 90), wy - 22);
+    ctx.fillText('same model quality, luckier test split', Math.min(wx, right - 90), wy - 11);
+
+    ctx.fillStyle = '#666';
+    ctx.font = '10px system-ui';
+    ctx.fillText('configuration index (ordered by the sequence they were tried)', w/2, 230);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('Selection bias = max − true = ' + gapPP.toFixed(2) + ' pp of optimism from nothing but noise', w/2, 254);
+
+    ctx.fillStyle = '#666';
+    ctx.font = '10px system-ui';
+    ctx.fillText('Every configuration has the same true accuracy — there is no better model here to find.', w/2, 274);
+    ctx.fillText('Illustrative Example — scores drawn from a seeded generator at the computed binomial standard error.', w/2, 290);
+});
+
+// Canvas 2: the running maximum rises with the number of configurations tried.
+__charts.push(function(){
+    var s = setup('c2'); if (!s) return;
+    var ctx = s.ctx, w = s.w;
+
+    var se = stdErr();
+    var scores = drawScores();
+    var mean = meanOf(scores);
+    var milestones = [5, 10, 20, 40];
+    var maxima = milestones.map(function(k){ return maxOfFirst(scores, k); });
+    var gap40 = 100 * (maxima[3] - P_TRUE);
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillText('Optimism Grows With the Number of Configurations Tried (Illustrative Example)', w/2, 20);
+    ctx.fillStyle = '#666';
+    ctx.font = '10px system-ui';
+    ctx.fillText('running maximum of the same ' + N_CONFIG + ' scores — true accuracy ' + (100*P_TRUE).toFixed(2) + '%, standard error ' + (100*se).toFixed(2) + ' pp', w/2, 36);
+
+    var left = 62, right = 620, top = 54, bottom = 212;
+    var yLo = 84.8, yHi = 87.0;
+    function yOf(pct) { return bottom - (pct - yLo) / (yHi - yLo) * (bottom - top); }
+    function xOf(idx1) { return left + (idx1 - 1) / (N_CONFIG - 1) * (right - left); }
+
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(left, top); ctx.lineTo(left, bottom); ctx.lineTo(right, bottom);
+    ctx.stroke();
+
+    ctx.fillStyle = '#666';
+    ctx.font = '9px system-ui';
+    ctx.textAlign = 'right';
+    [85.0, 85.5, 86.0, 86.5, 87.0].forEach(function(t){
+        ctx.fillText(t.toFixed(1) + '%', left - 6, yOf(t) + 3);
+        ctx.strokeStyle = '#eee';
+        ctx.beginPath(); ctx.moveTo(left, yOf(t)); ctx.lineTo(right, yOf(t)); ctx.stroke();
+    });
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#666';
+    [1, 5, 10, 20, 30, 40].forEach(function(t){
+        ctx.fillText(String(t), xOf(t), bottom + 13);
+    });
+
+    // True accuracy
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(left, yOf(100*P_TRUE)); ctx.lineTo(right, yOf(100*P_TRUE)); ctx.stroke();
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '9px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('true = ' + (100*P_TRUE).toFixed(2) + '%', left + 4, yOf(100*P_TRUE) - 5);
+
+    // Mean of all scores
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 3]);
+    ctx.beginPath(); ctx.moveTo(left, yOf(100*mean)); ctx.lineTo(right, yOf(100*mean)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#2980b9';
+    ctx.fillText('mean ' + (100*mean).toFixed(2) + '%', left + 4, yOf(100*mean) + 12);
+
+    // Running-maximum staircase
+    var run = [], cur = -Infinity;
+    scores.forEach(function(v){ cur = Math.max(cur, v); run.push(cur); });
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (var i = 0; i < run.length; i++) {
+        var x = xOf(i + 1), y = yOf(100 * run[i]);
+        if (i === 0) { ctx.moveTo(x, y); }
+        else { ctx.lineTo(x, yOf(100 * run[i-1])); ctx.lineTo(x, y); }
+    }
+    ctx.stroke();
+
+    // Milestone markers with computed values
+    ctx.textAlign = 'center';
+    milestones.forEach(function(k, j){
+        var x = xOf(k), y = yOf(100 * maxima[j]);
+        ctx.beginPath(); ctx.arc(x, y, 4.5, 0, Math.PI * 2);
+        ctx.fillStyle = '#e74c3c'; ctx.fill();
+        ctx.font = 'bold 10px system-ui';
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillText('N=' + k, x, y - 21);
+        ctx.fillText((100 * maxima[j]).toFixed(2) + '%', x, y - 10);
+    });
+
+    // Gap bracket at N=40
+    var gx = xOf(40);
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(gx, yOf(100*P_TRUE)); ctx.lineTo(gx, yOf(100*maxima[3])); ctx.stroke();
+    ctx.fillStyle = '#e67e22';
+    ctx.font = '9px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('+' + gap40.toFixed(2) + ' pp', gx + 4, (yOf(100*P_TRUE) + yOf(100*maxima[3])) / 2);
+
+    // Legend
+    ctx.font = '9px system-ui';
+    ctx.fillStyle = '#27ae60'; ctx.fillText('— true', 634, top + 10);
+    ctx.fillStyle = '#e74c3c'; ctx.fillText('— max seen', 634, top + 24);
+    ctx.fillStyle = '#2980b9'; ctx.fillText('— mean', 634, top + 38);
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Maxima: N=5 → ' + (100*maxima[0]).toFixed(2) + '%,  N=10 → ' + (100*maxima[1]).toFixed(2) +
+                 '%,  N=20 → ' + (100*maxima[2]).toFixed(2) + '%,  N=40 → ' + (100*maxima[3]).toFixed(2) + '% — strictly rising', w/2, 246);
+
+    ctx.fillStyle = '#666';
+    ctx.font = '10px system-ui';
+    ctx.fillText('The running maximum can only rise, so more experiments always buy more apparent accuracy.', w/2, 266);
+    ctx.fillText('Illustrative Example — one seeded series; the milestone values are computed from the plotted points.', w/2, 284);
+});
+
+// Canvas 3: conceptual — validation does the selecting, the test set carries one seal.
+__charts.push(function(){
+    var s = setup('c3'); if (!s) return;
+    var ctx = s.ctx, w = s.w;
+
+    // Figures carried over from the same constants used above.
+    var scores = drawScores();
+    var best = Math.max.apply(null, scores);
+    var honestPct = 100 * P_TRUE;
+    var biasedPct = 100 * best;
+    var gapPP = biasedPct - honestPct;
+    var se = stdErr();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillText('Validation Does the Work; the Test Set Has One Seal', w/2, 20);
+
+    // Split bar
+    var bx = 40, bw = 640, by = 44, bh = 46;
+    var segs = [
+        { label: 'TRAIN (70%)', share: 0.70, fill: 'rgba(26,82,118,0.7)', stroke: '#1a5276', lw: 1.5, text: '#fff' },
+        { label: 'VALIDATION (15%)', share: 0.15, fill: 'rgba(230,126,34,0.7)', stroke: '#e67e22', lw: 1.5, text: '#fff' },
+        { label: 'TEST (15%)', share: 0.15, fill: 'rgba(39,174,96,0.18)', stroke: '#27ae60', lw: 2.5, text: '#27ae60' }
+    ];
+    var x = bx, centers = [];
+    segs.forEach(function(sg){
+        var sw = bw * sg.share;
+        ctx.fillStyle = sg.fill; ctx.fillRect(x, by, sw, bh);
+        ctx.strokeStyle = sg.stroke; ctx.lineWidth = sg.lw; ctx.strokeRect(x, by, sw, bh);
+        ctx.fillStyle = sg.text; ctx.font = 'bold 11px system-ui';
+        ctx.fillText(sg.label, x + sw/2, by + bh/2 + 4);
+        centers.push({ c: x + sw/2, x0: x, w: sw });
+        x += sw;
+    });
+
+    // Glass seal over the test segment
+    var t = centers[2];
+    ctx.strokeStyle = 'rgba(39,174,96,0.55)';
+    ctx.lineWidth = 1;
+    [0.25, 0.6].forEach(function(f){
+        ctx.beginPath();
+        ctx.moveTo(t.x0 + t.w * f, by);
+        ctx.lineTo(t.x0 + t.w * (f + 0.35), by + bh);
+        ctx.stroke();
+    });
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(t.c - 27, by + bh - 8, 54, 16);
+    ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 1.5;
+    ctx.strokeRect(t.c - 27, by + bh - 8, 54, 16);
+    ctx.fillStyle = '#27ae60'; ctx.font = 'bold 8px system-ui';
+    ctx.fillText('BREAK ONCE', t.c, by + bh + 3);
+
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#e67e22';
+    ctx.fillText('all ' + N_CONFIG + ' comparisons happen here', centers[1].c, 104);
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('read exactly once, at the end', centers[2].c, 104);
+
+    // Access log panel
+    var lx = 40, ly = 122, lw2 = 300, lh = 150;
+    ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 1.5;
+    ctx.strokeRect(lx, ly, lw2, lh);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 10px system-ui';
+    ctx.fillText('HOLDOUT ACCESS LOG', lx + 8, ly + 15);
+    ctx.fillStyle = '#666'; ctx.font = '9px system-ui';
+    ctx.fillText('experiment', lx + 8, ly + 30);
+    ctx.fillText('set', lx + 150, ly + 30);
+    ctx.fillText('status', lx + 212, ly + 30);
+    ctx.strokeStyle = '#ccc'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(lx + 6, ly + 34); ctx.lineTo(lx + lw2 - 6, ly + 34); ctx.stroke();
+
+    var log = [
+        ['arch sweep A–F', 'validation', 'allowed', false],
+        ['learning-rate grid', 'validation', 'allowed', false],
+        ['early-stopping round', 'validation', 'allowed', false],
+        ['scaler vs quantile', 'validation', 'allowed', false],
+        ['abandoned idea #7', 'validation', 'allowed', false],
+        ['FINAL model', 'test', 'SEAL BROKEN', true]
+    ];
+    log.forEach(function(r, i){
+        var ry = ly + 48 + i * 19;
+        if (i % 2 === 1) { ctx.fillStyle = 'rgba(26,82,118,0.04)'; ctx.fillRect(lx + 6, ry - 11, lw2 - 12, 19); }
+        ctx.fillStyle = r[3] ? '#e74c3c' : '#444';
+        ctx.font = (r[3] ? 'bold ' : '') + '9px system-ui';
+        ctx.fillText(r[0], lx + 8, ry);
+        ctx.fillStyle = '#666'; ctx.font = '9px system-ui';
+        ctx.fillText(r[1], lx + 150, ry);
+        ctx.fillStyle = r[3] ? '#e74c3c' : '#27ae60';
+        ctx.font = 'bold 9px system-ui';
+        ctx.fillText(r[2], lx + 212, ry);
+    });
+
+    // Comparison panel
+    var px = 360, py = 122, pw = 320, ph = 150;
+    ctx.strokeStyle = '#2980b9'; ctx.lineWidth = 1.5;
+    ctx.strokeRect(px, py, pw, ph);
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 10px system-ui';
+    ctx.fillText('WHAT GETS REPORTED', px + 10, py + 16);
+
+    ctx.fillStyle = '#27ae60'; ctx.font = 'bold 11px system-ui';
+    ctx.fillText(honestPct.toFixed(2) + '%', px + 12, py + 44);
+    ctx.fillStyle = '#333'; ctx.font = '10px system-ui';
+    ctx.fillText('test read once, after validation selection', px + 66, py + 44);
+
+    ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 11px system-ui';
+    ctx.fillText(biasedPct.toFixed(2) + '%', px + 12, py + 96);
+    ctx.fillStyle = '#333'; ctx.font = '10px system-ui';
+    ctx.fillText('best of ' + N_CONFIG + ' test evaluations (biased)', px + 66, py + 96);
+
+    ctx.strokeStyle = '#e67e22'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px + 30, py + 52); ctx.lineTo(px + 30, py + 88); ctx.stroke();
+    ctx.fillStyle = '#e67e22'; ctx.font = 'bold 9px system-ui';
+    ctx.fillText(gapPP.toFixed(2) + ' pp of search, not skill', px + 38, py + 72);
+
+    ctx.fillStyle = '#666'; ctx.font = '9px system-ui';
+    ctx.fillText('Always state the number of configurations compared.', px + 12, py + 132);
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#666'; ctx.font = '10px system-ui';
+    ctx.fillText('Illustrative Example — figures carried over from the seeded simulation above (n = ' + N_TEST + ', standard error ' + (100*se).toFixed(2) + ' pp).', w/2, 292);
+});
+
+__charts.forEach(function(f){ f(); });
+var __redrawTimer;
+window.addEventListener('resize', function(){
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function(){ __charts.forEach(function(f){ f(); }); }, 150);
+});
+</script>
+
+</body>
+</html>
