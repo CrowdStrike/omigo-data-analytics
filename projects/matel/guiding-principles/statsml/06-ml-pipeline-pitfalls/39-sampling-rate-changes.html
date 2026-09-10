@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sampling Rate Changes</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px; height: auto; }
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Sampling Rate Changes</h1>
+<p class="subtitle">When data collection frequency changes over time, creating fake trends that look like real behavior shifts.</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">sampling</span></div>
+                <ul>
+                    <li><b>The trap</b> — logging or sampling rate changes between periods, shifting event volume</li>
+                    <li><b>Misread signal</b> — analytics read the volume change as user behavior, not measurement</li>
+                    <li><b>Log sampling</b> — errors logged at 100% then downsampled to 10% show an illusory drop</li>
+                    <li><b>Instrumentation</b> — a new SDK logs every click where the old logged every 5th, faking a spike</li>
+                    <li><b>Retention policy</b> — extending "keep 7 days" to 30 days looks like a real volume increase</li>
+                    <li><b>Noise flips too</b> — absolute noise shrinks by &radic;10 but relative noise grows by &radic;10</li>
+                </ul>
+                <p class="example">A mobile app cuts click logging from 100% to 10% in Jan 2024, and the model learns a fake 90% engagement cliff.</p>
+                <div class="key-point">
+                    <strong>Impact:</strong> False trends fire drift alarms, models train on inconsistent event densities, and forecasts break at each discontinuity.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="340"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">sampling</span></div>
+                <ul>
+                    <li><b>Infra ownership</b> — sampling rates live in configs owned by teams optimizing for cost</li>
+                    <li><b>Last to know</b> — downstream data consumers usually hear about a change after the fact</li>
+                    <li><b>SDK upgrades</b> — new SDK versions ship with different default logging rates</li>
+                    <li><b>Cost cuts</b> — downsampling decisions cut storage bills without notifying ML teams</li>
+                    <li><b>A/B instrumentation</b> — test variants can log at different rates, confounding comparisons</li>
+                    <li><b>Silent changes</b> — a new data center or sampling config alters volume with no announcement</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Root Cause:</strong> Sampling rate is an infrastructure decision made independently of ML teams, and in raw counts a volume change looks identical to a behavior change.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">normalization</span></div>
+                <ul>
+                    <li><b>Carry the denominator</b> — make the sampling rate part of the data every count travels with</li>
+                    <li><b>Metadata</b> — store the sampling rate as a column beside event counts in every table</li>
+                    <li><b>Normalization</b> — divide raw counts by the rate: adjusted_count = raw_count / sampling_rate</li>
+                    <li><b>Segmentation</b> — if old rates are unrecoverable, train separately on pre- and post-change data</li>
+                    <li><b>Detection</b> — plot counts annotated with releases; aligned jumps are measurement artifacts</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Fix:</strong> Raw counts are meaningless without the sampling denominator — always normalize as raw_count / sampling_rate.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>var __charts = [];
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    if (!c.dataset.w) { c.dataset.w = c.getAttribute('width') || '720'; c.dataset.h = c.getAttribute('height') || '300'; }
+    var w = parseInt(c.dataset.w), h = parseInt(c.dataset.h);
+    var dpr = window.devicePixelRatio || 1;
+    c.style.maxWidth = w + 'px';
+    var cssW = c.getBoundingClientRect().width || w;
+    var scale = (cssW / w) * dpr;
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    var ctx = c.getContext('2d'); ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, w, h);
+    return {ctx:ctx, w:w, h:h};
+}
+
+// Seeded Park-Miller LCG — deterministic, never Math.random()
+function lcg(seed) {
+    var s = seed;
+    return function () { s = (s * 16807) % 2147483647; return s / 2147483647; };
+}
+
+// Descriptive stats computed from the actual plotted values — never a hardcoded label
+function mean(a) { return a.reduce(function (s, v) { return s + v; }, 0) / a.length; }
+function sd(a) {
+    var m = mean(a);
+    return Math.sqrt(a.reduce(function (s, v) { return s + (v - m) * (v - m); }, 0) / (a.length - 1));
+}
+function center(a) { var m = mean(a); return a.map(function (v) { return v - m; }); }
+
+__charts.push(function(){
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var rnd = lcg(20250391);
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Sampling Rate Change: Fake Trend from Measurement Shift', w/2, 25);
+
+    // Axes
+    var left = 80;
+    var right = 660;
+    var bottom = 260;
+    var top = 60;
+
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(left, top);
+    ctx.lineTo(left, bottom);
+    ctx.lineTo(right, bottom);
+    ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Time', (left + right) / 2, bottom + 20);
+
+    ctx.save();
+    ctx.translate(left - 50, (top + bottom) / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Event Count', 0, 0);
+    ctx.restore();
+
+    // Time periods
+    var changeX = left + (right - left) * 0.6;
+
+    // Plotted values (units above the axis). Noise is mean-centered so the
+    // period means land exactly on 150 and 15 — the 10x design is exact.
+    // Post-change noise amplitude is scaled by 1/sqrt(10), the Poisson-thinning
+    // law: 10x fewer events means sqrt(10)x smaller absolute noise, hence
+    // sqrt(10)x LARGER relative noise. Both figures are computed below.
+    var pts = 30;
+    var n1 = [], n2 = [], i;
+    for (i = 0; i <= pts; i++) { n1.push((rnd() - 0.5) * 10); }
+    for (i = 0; i <= pts; i++) { n2.push((rnd() - 0.5) * 10 / Math.sqrt(10)); }
+    n1 = center(n1); n2 = center(n2);
+    var v1 = n1.map(function (e) { return 150 + e; });
+    var v2 = n2.map(function (e) { return 15 + e; });
+
+    // Statistics computed from the plotted values
+    var m1 = mean(v1), m2 = mean(v2);
+    var sd1 = sd(v1), sd2 = sd(v2);
+    var dropPct = (1 - m2 / m1) * 100;
+    var cv1 = sd1 / m1 * 100, cv2 = sd2 / m2 * 100;
+
+    // Period 1: 100% sampling
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (i = 0; i <= pts; i++) {
+        var x = left + (i / pts) * (changeX - left);
+        var y = bottom - v1[i];
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Label for period 1
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('100% sampling', (left + changeX) / 2, top + 15);
+
+    // Period 2: 10% sampling (drop)
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (i = 0; i <= pts; i++) {
+        var x2 = changeX + (i / pts) * (right - changeX);
+        var y2 = bottom - v2[i]; // 10x lower
+        i === 0 ? ctx.moveTo(x2, y2) : ctx.lineTo(x2, y2);
+    }
+    ctx.stroke();
+
+    // Label for period 2
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('10% sampling', (changeX + right) / 2, top + 15);
+
+    // Vertical line at change point
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.moveTo(changeX, top + 25);
+    ctx.lineTo(changeX, bottom);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillText('Sampling rate', changeX, top + 40);
+    ctx.fillText('changed here', changeX, top + 52);
+
+    // Annotation: Fake drop (percentage computed from the plotted means)
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Looks like a ' + dropPct.toFixed(1) + '% drop', changeX + 20, bottom - 80);
+    ctx.font = '11px system-ui';
+    ctx.fillText('But: True activity unchanged!', changeX + 20, bottom - 65);
+    ctx.fillText('Only measurement changed.', changeX + 20, bottom - 50);
+
+    // True activity line (dashed)
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(left, bottom - m1);
+    ctx.lineTo(right, bottom - m1);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('True activity (constant)', right - 120, bottom - m1 - 5);
+
+    // Computed footnotes — every figure derived from the plotted points above
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Computed from plotted points: mean ' + m1.toFixed(1) + ' → ' + m2.toFixed(1)
+        + ' events = ' + dropPct.toFixed(1) + '% apparent drop', w/2, bottom + 42);
+    ctx.fillText('Noise SD ' + sd1.toFixed(2) + ' → ' + sd2.toFixed(2)
+        + ' events, but relative noise ' + cv1.toFixed(1) + '% → ' + cv2.toFixed(1)
+        + '% — the thinner sample is noisier', w/2, bottom + 58);
+});
+
+__charts.push(function(){
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var rnd = lcg(20250392);
+
+    // Dot counts drive every printed figure on this chart
+    var n1 = 60, n2 = 6;
+    var loggedPct = n2 / n1 * 100;          // 10% — the post-upgrade rate
+    var dropPct = (1 - n2 / n1) * 100;      // 90% — the apparent engagement drop
+
+    // Title
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('SDK Upgrade Changes Logging Rate — Not User Behavior', w/2, 22);
+
+    // Timeline
+    var tlY = 80;
+    var tlLeft = 60, tlRight = 660;
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(tlLeft, tlY);
+    ctx.lineTo(tlRight, tlY);
+    ctx.stroke();
+
+    // Divider
+    var divX = (tlLeft + tlRight) / 2;
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(divX, 40);
+    ctx.lineTo(divX, 180);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('SDK Upgrade', divX, 38);
+
+    // Period 1: Dense dots (100% sampling)
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('SDK v1: 100% logging (' + n1 + ' events)', (tlLeft + divX) / 2, tlY - 20);
+
+    // Draw dense event dots
+    var dotY = tlY + 30;
+    ctx.fillStyle = '#1a5276';
+    for (var i = 0; i < n1; i++) {
+        var dx = tlLeft + 20 + rnd() * (divX - tlLeft - 40);
+        var dy = dotY + rnd() * 40;
+        ctx.beginPath();
+        ctx.arc(dx, dy, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Period 2: Sparse dots (10% sampling)
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('SDK v2: ' + loggedPct.toFixed(0) + '% logging (' + n2 + ' events)',
+        (divX + tlRight) / 2, tlY - 20);
+
+    ctx.fillStyle = '#e74c3c';
+    for (var j = 0; j < n2; j++) {
+        var dx2 = divX + 20 + rnd() * (tlRight - divX - 40);
+        var dy2 = dotY + rnd() * 40;
+        ctx.beginPath();
+        ctx.arc(dx2, dy2, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // True behavior annotation
+    ctx.fillStyle = 'rgba(39,174,96,0.08)';
+    ctx.fillRect(100, 185, 520, 35);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(100, 185, 520, 35);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('True user behavior: IDENTICAL in both periods', w/2, 207);
+
+    // Bottom annotation
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Volume drop = measurement artifact, not behavior change', w/2, 248);
+
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Without metadata, ' + n2 + ' vs ' + n1 + ' logged events looks like a '
+        + dropPct.toFixed(0) + '% drop in engagement', w/2, 270);
+    ctx.fillText('Model interprets measurement change as a feature distribution shift', w/2, 286);
+});
+
+__charts.push(function(){
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Title
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Normalize by Sampling Rate Before Feature Engineering', w/2, 22);
+
+    // Pipeline flow
+    var pipeY = 65;
+    var boxes = [
+        { label: 'Raw Events', x: 50, w: 120, color: '#1a5276' },
+        { label: 'Normalize by\nsampling_rate', x: 240, w: 140, color: '#27ae60' },
+        { label: 'Adjusted\nCounts', x: 450, w: 120, color: '#1a5276' }
+    ];
+
+    for (var i = 0; i < boxes.length; i++) {
+        var b = boxes[i];
+        ctx.fillStyle = (i === 1) ? 'rgba(39,174,96,0.12)' : 'rgba(26,82,118,0.08)';
+        ctx.fillRect(b.x, pipeY, b.w, 40);
+        ctx.strokeStyle = b.color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(b.x, pipeY, b.w, 40);
+        ctx.fillStyle = b.color;
+        ctx.font = 'bold 11px system-ui';
+        ctx.textAlign = 'center';
+        var lines = b.label.split('\n');
+        for (var l = 0; l < lines.length; l++) {
+            ctx.fillText(lines[l], b.x + b.w/2, pipeY + 18 + l * 14);
+        }
+    }
+
+    // Arrows between boxes
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(boxes[0].x + boxes[0].w, pipeY + 20);
+    ctx.lineTo(boxes[1].x, pipeY + 20);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(boxes[1].x + boxes[1].w, pipeY + 20);
+    ctx.lineTo(boxes[2].x, pipeY + 20);
+    ctx.stroke();
+    // Arrowheads
+    ctx.fillStyle = '#999';
+    ctx.beginPath();
+    ctx.moveTo(boxes[1].x, pipeY + 20);
+    ctx.lineTo(boxes[1].x - 8, pipeY + 16);
+    ctx.lineTo(boxes[1].x - 8, pipeY + 24);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(boxes[2].x, pipeY + 20);
+    ctx.lineTo(boxes[2].x - 8, pipeY + 16);
+    ctx.lineTo(boxes[2].x - 8, pipeY + 24);
+    ctx.closePath();
+    ctx.fill();
+
+    // Arrow to model
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(boxes[2].x + boxes[2].w, pipeY + 20);
+    ctx.lineTo(boxes[2].x + boxes[2].w + 40, pipeY + 20);
+    ctx.stroke();
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('→ Model', boxes[2].x + boxes[2].w + 15, pipeY + 38);
+
+    // Example calculations — both rows are computed, not asserted
+    var rawA = 95, rateA = 0.10;            // thin sample
+    var rawB = 950, rateB = 1.00;           // full sample
+    var adjA = rawA / rateA, adjB = rawB / rateB;
+
+    var exY = 130;
+    ctx.fillStyle = '#444';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Example:', 60, exY);
+
+    // Row 1: 10% sampling
+    ctx.font = '11px system-ui';
+    ctx.fillText('Raw count = ' + rawA + '  at  sampling_rate = ' + (rateA * 100) + '%', 80, exY + 22);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('→  Adjusted = ' + rawA + ' / ' + rateA.toFixed(2) + ' = ' + adjA, 380, exY + 22);
+
+    // Row 2: 100% sampling
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Raw count = ' + rawB + '  at  sampling_rate = ' + (rateB * 100) + '%', 80, exY + 44);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('→  Adjusted = ' + rawB + ' / ' + rateB.toFixed(2) + ' = ' + adjB, 380, exY + 44);
+
+    // Comparison
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Both adjusted counts = ' + adjA + ' — identical signal for the model, '
+        + 'though raw counts differ ' + (rawB / rawA).toFixed(0) + 'x', w/2, exY + 72);
+
+    // Green success box
+    ctx.fillStyle = 'rgba(39,174,96,0.08)';
+    ctx.fillRect(80, 225, 560, 55);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(80, 225, 560, 55);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('✓  Model sees true activity regardless of measurement changes', w/2, 247);
+
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Store sampling_rate as metadata; normalize before feature engineering', w/2, 266);
+});
+
+__charts.forEach(function(f){ f(); });
+var __redrawTimer;
+window.addEventListener('resize', function(){
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function(){ __charts.forEach(function(f){ f(); }); }, 150);
+});
+</script>
+
+</body>
+</html>

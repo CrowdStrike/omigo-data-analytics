@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Filters and Joins That Cut a Corner — Filters That Invent Correlations</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 50%; }
+table.layout td.viz-col { width: 50%; }
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    height: auto;
+}
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+.key-point strong { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Filters and Joins That Cut a Corner</h1>
+<p class="subtitle">The everyday SQL and dataframe operations — inner joins, WHERE clauses, drop-nulls, HAVING, LIMIT — that silently act as entry rules and bend the correlation matrix without anyone writing a filter on purpose.</p>
+
+<div class="card-section">
+    <h2>An Inner Join Is an Entry Rule</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">sql</span><span class="tag blue">the mechanism</span></div>
+                <ul>
+                    <li><b>Join semantics</b> — a row survives an inner join only if it is present in BOTH tables</li>
+                    <li><b>Presence is not random</b> — a table written on activity encodes that activity</li>
+                    <li><b>The setup</b> — tenure and monthly spend are independent in the full customer table</li>
+                    <li><b>The enrichment rule</b> — a profile row is written for long-tenured OR high spenders</li>
+                    <li><b>The join becomes a door</b> — the inner join keeps only the union-driven rows</li>
+                    <li><b>The deleted corner</b> — low-tenure, low-spend customers have no profile row</li>
+                    <li><b>The invented link</b> — inside survivors, short tenure implies high spend</li>
+                    <li><b>Seeded figure</b> — all 500 rows r = +0.038; the 257 joined rows r = -0.501; 243 dropped</li>
+                </ul>
+                <p class="example">Tenure and spend drawn independently 500 times give r = +0.038, but the 257 rows that survive the inner join give r = -0.501 — a trade-off that exists in no customer's data.</p>
+                <div class="key-point">
+                    <strong>Key idea:</strong> Nobody wrote <code>WHERE</code>, yet the join was a filter — the profile table's write condition is downstream of both columns, so joining to it conditions on a collider.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The WHERE Clause and the Drop-Nulls Step</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag orange">same mechanism</span><span class="tag blue">costumes</span></div>
+                <ul>
+                    <li><b>A WHERE on a shared consequence</b> — filtering a column both features drive is a collider filter</li>
+                    <li><b>Not a harmless subset</b> — survivors carry a relationship the full table does not have</li>
+                    <li><b>"Active users only"</b> — the commonest instance, since activity sits downstream of everything</li>
+                    <li><b>dropna() per row</b> — its real condition is "was measured", which is rarely random</li>
+                    <li><b>HAVING on an aggregate</b> — the same collider filter, applied at group granularity</li>
+                    <li><b>LIMIT with ORDER BY score</b> — selecting on a composite score selects on both features</li>
+                    <li><b>Filtering on a common CAUSE</b> — controlling a confounder removes spurious correlation</li>
+                    <li><b>Filtering on a common EFFECT</b> — this alone manufactures a link between independent columns</li>
+                    <li><b>Safe by timing</b> — a column fixed before the features existed cannot be a collider</li>
+                </ul>
+                <p class="example">A filter on "has at least one support ticket" looks like a data-quality guard, but tickets rise with both tenure and spend, so the filtered table shows the two trading off; a filter on signup region touches neither and leaves the relationship intact.</p>
+                <div class="key-point">
+                    <strong>Key idea:</strong> Cause versus effect decides the sign of the damage — filtering on a common cause removes a spurious link, filtering on a common effect invents one. They are opposite operations that look identical in SQL.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="340"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Auditing a Pipeline for Corner-Cutting Filters</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">checklist</span><span class="tag blue">practice</span></div>
+                <ul>
+                    <li><b>Log row counts</b> — record rows before and after every filter, and keep the ratio</li>
+                    <li><b>Treat a large drop as risk</b> — a filter removing many rows can reshape the matrix</li>
+                    <li><b>Diff the matrix</b> — recompute correlations before and after each filter and compare cells</li>
+                    <li><b>Interrogate the filter column</b> — ask whether the features could have influenced its value</li>
+                    <li><b>Prefer pre-fixed columns</b> — filter on values determined before the features existed</li>
+                    <li><b>Keep the rejects</b> — write refused rows to a side table so the truth stays measurable</li>
+                    <li><b>Scope the claim</b> — if the filter is unavoidable, the model holds only inside that population</li>
+                    <li><b>The hardest case</b> — a filter buried in a view or upstream ETL that you never wrote</li>
+                    <li><b>How to find it</b> — read the view definition, and compare its row count to the source</li>
+                </ul>
+                <p class="example">On the seeded 500 rows, the tenure/spend cell moves from +0.038 to -0.501 after the join, while both cells involving an unrelated control column barely move — the diff points straight at the guilty pair.</p>
+                <div class="key-point">
+                    <strong>Key idea:</strong> A correlation-matrix diff around every filter is cheap and catches this class of defect automatically — the cells that move are exactly the features the filter column depends on.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="340"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>var __charts = [];
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    if (!c.dataset.w) { c.dataset.w = c.getAttribute('width') || '720'; c.dataset.h = c.getAttribute('height') || '300'; }
+    var w = parseInt(c.dataset.w), h = parseInt(c.dataset.h);
+    var dpr = window.devicePixelRatio || 1;
+    c.style.maxWidth = w + 'px';
+    var cssW = c.getBoundingClientRect().width || w;
+    var scale = (cssW / w) * dpr;
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    var ctx = c.getContext('2d'); ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, w, h);
+    return {ctx:ctx, w:w, h:h};
+}
+
+// Seeded Park-Miller LCG — deterministic, never Math.random()
+function lcg(seed) {
+    var s = seed;
+    return function () { s = (s * 16807) % 2147483647; return s / 2147483647; };
+}
+
+// Pearson correlation computed from two plotted series
+function corr(a, b) {
+    var n = a.length, sx = 0, sy = 0, i;
+    if (n < 2) return NaN;
+    for (i = 0; i < n; i++) { sx += a[i]; sy += b[i]; }
+    var mx = sx / n, my = sy / n, sxy = 0, sxx = 0, syy = 0, p, q;
+    for (i = 0; i < n; i++) { p = a[i] - mx; q = b[i] - my; sxy += p * q; sxx += p * p; syy += q * q; }
+    if (sxx === 0 || syy === 0) return NaN;
+    return sxy / Math.sqrt(sxx * syy);
+}
+
+// Least-squares fit computed from the plotted points
+function fit(pts) {
+    var n = pts.length, sx = 0, sy = 0, i;
+    for (i = 0; i < n; i++) { sx += pts[i].x; sy += pts[i].y; }
+    var mx = sx / n, my = sy / n, sxy = 0, sxx = 0, a, b;
+    for (i = 0; i < n; i++) { a = pts[i].x - mx; b = pts[i].y - my; sxy += a * b; sxx += a * a; }
+    var slope = sxx === 0 ? 0 : sxy / sxx;
+    return {slope: slope, intercept: my - slope * mx};
+}
+
+function signed(v, d) { return (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(d); }
+function rOf(pts, ka, kb) {
+    return corr(pts.map(function(p){ return p[ka]; }), pts.map(function(p){ return p[kb]; }));
+}
+
+// The one shared population: seed 42, 500 rows, tenure (x) and spend (y) independent,
+// plus an independent control column (z) from its own seeded generator.
+function population() {
+    var rng = lcg(42), pts = [], i;
+    for (i = 0; i < 500; i++) { pts.push({x: rng(), y: rng()}); }
+    var rngz = lcg(10);
+    for (i = 0; i < pts.length; i++) { pts[i].z = rngz(); }
+    return pts;
+}
+var BAR = 0.95;
+
+// Canvas 1: the same rows before and after the inner join, correlations computed at render time
+__charts.push(function(){
+    var s = setup('c1'); if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var all = population();
+    var joined = all.filter(function(p){ return p.x + p.y > BAR; });
+    var dropped = all.filter(function(p){ return p.x + p.y <= BAR; });
+
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Same 500 Customers, One Inner Join — Illustrative Example', w/2, 18);
+
+    var PW = 268, PH = 192, PY = 48;
+    var panels = [
+        {x: 48, head: 'FULL CUSTOMER TABLE — all ' + all.length, color: '#1a5276', showCut: false, pts: all},
+        {x: 404, head: 'AFTER INNER JOIN — the ' + joined.length + ' matched', color: '#e74c3c', showCut: true, pts: joined}
+    ];
+
+    panels.forEach(function(p){
+        var px = p.x, py = PY;
+        var X = function(v){ return px + v * PW; };
+        var Y = function(v){ return py + PH - v * PH; };
+
+        ctx.fillStyle = p.color;
+        ctx.font = 'bold 11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(p.head, px + PW/2, py - 10);
+
+        if (p.showCut) {
+            ctx.fillStyle = 'rgba(0,0,0,0.06)';
+            ctx.beginPath();
+            ctx.moveTo(X(0), Y(0));
+            ctx.lineTo(X(BAR), Y(0));
+            ctx.lineTo(X(0), Y(BAR));
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(px, py, PW, PH);
+
+        if (p.showCut) {
+            ctx.fillStyle = 'rgba(120,120,120,0.35)';
+            dropped.forEach(function(q){
+                ctx.beginPath(); ctx.arc(X(q.x), Y(q.y), 1.8, 0, Math.PI*2); ctx.fill();
+            });
+        }
+
+        ctx.fillStyle = p.showCut ? 'rgba(231,76,60,0.6)' : 'rgba(26,82,118,0.55)';
+        p.pts.forEach(function(q){
+            ctx.beginPath(); ctx.arc(X(q.x), Y(q.y), 2.1, 0, Math.PI*2); ctx.fill();
+        });
+
+        if (p.showCut) {
+            ctx.strokeStyle = '#e67e22';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 4]);
+            ctx.beginPath();
+            ctx.moveTo(X(0), Y(BAR));
+            ctx.lineTo(X(BAR), Y(0));
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = '#e67e22';
+            ctx.font = 'bold 9px system-ui';
+            ctx.textAlign = 'left';
+            ctx.fillText('profile written: tenure + spend > ' + BAR.toFixed(2), X(0) + 6, Y(BAR) - 6);
+        }
+
+        // least-squares fit computed from the plotted points, clipped to the box
+        var f = fit(p.pts);
+        var y0 = f.intercept, y1 = f.slope + f.intercept;
+        var cl = function(v){ return Math.max(0, Math.min(1, v)); };
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(X(0), Y(cl(y0)));
+        ctx.lineTo(X(1), Y(cl(y1)));
+        ctx.stroke();
+
+        ctx.fillStyle = '#666';
+        ctx.font = '9px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText('tenure', px + PW/2, py + PH + 12);
+        ctx.save();
+        ctx.translate(px - 8, py + PH/2);
+        ctx.rotate(-Math.PI/2);
+        ctx.fillText('monthly spend', 0, 0);
+        ctx.restore();
+
+        // computed correlation printed under the panel
+        ctx.fillStyle = p.color;
+        ctx.font = 'bold 11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText('r = ' + signed(rOf(p.pts, 'x', 'y'), 3) + '   (n = ' + p.pts.length + ')', px + PW/2, py + PH + 28);
+    });
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText(dropped.length + ' dropped + ' + joined.length + ' joined = ' + all.length +
+                 ' — the join deleted one corner and turned r = ' + signed(rOf(all, 'x', 'y'), 3) +
+                 ' into r = ' + signed(rOf(joined, 'x', 'y'), 3),
+                 w/2, h - 6);
+});
+
+// Canvas 2: schematic causal diagrams — no data, no numbers
+__charts.push(function(){
+    var s = setup('c2'); if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Collider Filter vs Safe Filter — Schematic, Not Data', w/2, 18);
+
+    function roundRect(x, y, rw, rh, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + rw - r, y); ctx.quadraticCurveTo(x + rw, y, x + rw, y + r);
+        ctx.lineTo(x + rw, y + rh - r); ctx.quadraticCurveTo(x + rw, y + rh, x + rw - r, y + rh);
+        ctx.lineTo(x + r, y + rh); ctx.quadraticCurveTo(x, y + rh, x, y + rh - r);
+        ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
+    }
+
+    function node(cx, cy, label, fill, stroke, nw) {
+        nw = nw || 108;
+        var nh = 34;
+        roundRect(cx - nw/2, cy - nh/2, nw, nh, 6);
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = stroke;
+        ctx.font = 'bold 10px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(label, cx, cy + 4);
+        return {cx: cx, cy: cy, w: nw, h: nh};
+    }
+
+    function boxedFilter(cx, cy, stroke) {
+        var nw = 150, nh = 38;
+        ctx.strokeStyle = stroke; ctx.lineWidth = 1;
+        ctx.strokeRect(cx - nw/2 - 4, cy - nh/2 - 4, nw + 8, nh + 8);
+        ctx.fillStyle = stroke === '#e74c3c' ? 'rgba(231,76,60,0.10)' : 'rgba(39,174,96,0.10)';
+        ctx.fillRect(cx - nw/2, cy - nh/2, nw, nh);
+        ctx.strokeStyle = stroke; ctx.lineWidth = 2.5;
+        ctx.strokeRect(cx - nw/2, cy - nh/2, nw, nh);
+        ctx.fillStyle = stroke;
+        ctx.font = 'bold 10px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText('row survives filter', cx, cy - 1);
+        ctx.font = '9px system-ui';
+        ctx.fillText('[conditioned on]', cx, cy + 12);
+        return {cx: cx, cy: cy, w: nw, h: nh};
+    }
+
+    function arrow(x1, y1, x2, y2, color) {
+        ctx.strokeStyle = color; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        var ang = Math.atan2(y2 - y1, x2 - x1);
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - 8 * Math.cos(ang - 0.4), y2 - 8 * Math.sin(ang - 0.4));
+        ctx.lineTo(x2 - 8 * Math.cos(ang + 0.4), y2 - 8 * Math.sin(ang + 0.4));
+        ctx.closePath(); ctx.fill();
+    }
+
+    function head(cx, text, color) {
+        ctx.fillStyle = color;
+        ctx.font = 'bold 11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(text, cx, 44);
+    }
+
+    // ---- LEFT: unsafe, filter on a common effect ----
+    var LX = 182;
+    head(LX, 'UNSAFE — filter on a common effect', '#e74c3c');
+    var a1 = node(LX - 80, 96, 'tenure', 'rgba(26,82,118,0.10)', '#1a5276');
+    var a2 = node(LX + 80, 96, 'spend', 'rgba(26,82,118,0.10)', '#1a5276');
+    var af = boxedFilter(LX, 208, '#e74c3c');
+    arrow(a1.cx + 14, a1.cy + 20, af.cx - 44, af.cy - 26, '#1a5276');
+    arrow(a2.cx - 14, a2.cy + 20, af.cx + 44, af.cy - 26, '#1a5276');
+
+    // manufactured link between the two features, dashed, arrowheads both ends
+    ctx.strokeStyle = '#e67e22'; ctx.lineWidth = 2;
+    ctx.setLineDash([5, 3]);
+    ctx.beginPath();
+    ctx.moveTo(a1.cx + a1.w/2 + 4, a1.cy);
+    ctx.quadraticCurveTo(LX, a1.cy - 30, a2.cx - a2.w/2 - 4, a2.cy);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e67e22';
+    [[a1.cx + a1.w/2 + 4, a1.cy, -1], [a2.cx - a2.w/2 - 4, a2.cy, 1]].forEach(function(t){
+        ctx.beginPath();
+        ctx.moveTo(t[0], t[1]);
+        ctx.lineTo(t[0] + t[2] * 8, t[1] - 5);
+        ctx.lineTo(t[0] + t[2] * 8, t[1] + 5);
+        ctx.closePath(); ctx.fill();
+    });
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('manufactured link', LX, a1.cy - 36);
+
+    // ---- RIGHT: safe, filter on an unrelated column ----
+    var RX = 538;
+    head(RX, 'SAFE — filter on an unrelated column', '#27ae60');
+    var b1 = node(RX - 80, 96, 'tenure', 'rgba(26,82,118,0.10)', '#1a5276');
+    var b2 = node(RX + 80, 96, 'spend', 'rgba(26,82,118,0.10)', '#1a5276');
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '9px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('independent — stays independent', RX, b1.cy - 32);
+    var b3 = node(RX, 152, 'signup region', 'rgba(39,174,96,0.10)', '#27ae60', 118);
+    var bf = boxedFilter(RX, 232, '#27ae60');
+    arrow(b3.cx, b3.cy + 20, bf.cx, bf.cy - 26, '#27ae60');
+
+    ctx.fillStyle = '#666';
+    ctx.font = '9px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('double box = column the query conditions on   ·   dashed = association created by conditioning', w/2, h - 24);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillText('The SQL looks the same in both cases; only the direction of the arrows into the filter column differs', w/2, h - 8);
+});
+
+// Canvas 3: correlation matrix before and after the filter, every cell computed at render time
+__charts.push(function(){
+    var s = setup('c3'); if (!s) return;
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var all = population();
+    var kept = all.filter(function(p){ return p.x + p.y > BAR; });
+    var keys = ['x', 'y', 'z'];
+    var labels = {x: 'tenure', y: 'spend', z: 'region'};
+
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Correlation Matrix Before and After One Filter — Illustrative Example', w/2, 18);
+
+    var CW = 82, CH = 48;
+    var grids = [
+        {gx: 98, gy: 74, pts: all, head: 'BEFORE FILTER (n = ' + all.length + ')', color: '#1a5276'},
+        {gx: 438, gy: 74, pts: kept, head: 'AFTER FILTER (n = ' + kept.length + ')', color: '#e74c3c'}
+    ];
+
+    var highlight = [];
+
+    grids.forEach(function(g){
+        ctx.fillStyle = g.color;
+        ctx.font = 'bold 11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(g.head, g.gx + 1.5 * CW, g.gy - 26);
+
+        // column headers
+        ctx.fillStyle = '#666';
+        ctx.font = '9px system-ui';
+        keys.forEach(function(k, c){
+            ctx.textAlign = 'center';
+            ctx.fillText(labels[k], g.gx + c * CW + CW/2, g.gy - 8);
+        });
+
+        keys.forEach(function(kr, r){
+            // row label
+            ctx.fillStyle = '#666';
+            ctx.font = '9px system-ui';
+            ctx.textAlign = 'right';
+            ctx.fillText(labels[kr], g.gx - 6, g.gy + r * CH + CH/2 + 3);
+
+            keys.forEach(function(kc, c){
+                var x = g.gx + c * CW, y = g.gy + r * CH;
+                var v = rOf(g.pts, kr, kc);
+                var diag = (r === c);
+                if (diag) {
+                    ctx.fillStyle = '#eee';
+                } else {
+                    var alpha = 0.10 + 0.75 * Math.min(1, Math.abs(v));
+                    ctx.fillStyle = (v >= 0 ? 'rgba(26,82,118,' : 'rgba(231,76,60,') + alpha.toFixed(3) + ')';
+                }
+                ctx.fillRect(x, y, CW, CH);
+                ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
+                ctx.strokeRect(x, y, CW, CH);
+
+                ctx.fillStyle = (!diag && Math.abs(v) > 0.45) ? '#fff' : '#2c3e50';
+                ctx.font = 'bold 10px system-ui';
+                ctx.textAlign = 'center';
+                ctx.fillText(signed(v, 3), x + CW/2, y + CH/2 + 4);
+
+                if ((kr === 'x' && kc === 'y')) {
+                    highlight.push({x: x, y: y, v: v});
+                }
+            });
+        });
+
+        ctx.strokeStyle = '#bbb'; ctx.lineWidth = 1;
+        ctx.strokeRect(g.gx, g.gy, 3 * CW, 3 * CH);
+    });
+
+    // outline the tenure/spend cell in both grids and connect them with the computed delta
+    highlight.forEach(function(cell){
+        ctx.strokeStyle = '#e67e22'; ctx.lineWidth = 2.5;
+        ctx.strokeRect(cell.x, cell.y, CW, CH);
+    });
+    if (highlight.length === 2) {
+        var a = highlight[0], b = highlight[1];
+        ctx.strokeStyle = '#e67e22'; ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 3]);
+        ctx.beginPath();
+        ctx.moveTo(a.x + CW, a.y + CH/2);
+        ctx.lineTo(b.x, b.y + CH/2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#e67e22';
+        ctx.font = 'bold 10px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText('moves by ' + signed(b.v - a.v, 3), (a.x + CW + b.x) / 2, a.y + CH/2 - 8);
+    }
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 9px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('control column cells barely move', w/2, grids[0].gy + 3 * CH + 22);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillText('One filter, one cell wrecked — tenure/spend ' + signed(rOf(all, 'x', 'y'), 3) +
+                 ' → ' + signed(rOf(kept, 'x', 'y'), 3) + ', while region stays near zero in both',
+                 w/2, h - 10);
+});
+
+__charts.forEach(function(f){ f(); });
+var __redrawTimer;
+window.addEventListener('resize', function(){
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function(){ __charts.forEach(function(f){ f(); }); }, 150);
+});
+</script>
+
+</body>
+</html>

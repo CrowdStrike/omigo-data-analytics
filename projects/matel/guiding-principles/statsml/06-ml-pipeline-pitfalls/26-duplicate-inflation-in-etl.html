@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duplicate Inflation in ETL</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px; height: auto; }
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Duplicate Inflation in ETL</h1>
+<p class="subtitle">Event retries, at-least-once delivery, and overlapping incremental loads write the same event multiple times, inflating counts and skewing analysis</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">duplicate events</span></div>
+                <ul>
+                    <li><b>Silent re-writes</b> — pipelines store one event twice via retries, redelivery, or overlap</li>
+                    <li><b>Client retries</b> — a timed-out request often succeeded, so the resend creates a second row</li>
+                    <li><b>At-least-once delivery</b> — brokers like Kafka guarantee delivery, not uniqueness</li>
+                    <li><b>Missing idempotency key</b> — without a unique event_id at write time, repeats are stored</li>
+                    <li><b>Overlapping windows</b> — incremental jobs reprocessing a safety window re-insert old rows</li>
+                    <li><b>Biased statistics</b> — every duplicate inflates counts and skews stats over raw rows</li>
+                </ul>
+                <p class="example">A nightly job appends a 3-day overlap without dedup, so the conversion rate reads 28% instead of the true 2.8%.</p>
+                <div class="key-point">
+                    <strong>Impact:</strong> Counts inflate silently, rates are biased whenever duplicates cluster in segments, and models learn distorted distributions.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">at-least-once</span></div>
+                <ul>
+                    <li><b>Reliability first</b> — delivering twice is far cheaper than exactly-once across systems</li>
+                    <li><b>At-least-once semantics</b> — brokers redeliver whenever an ack fails; dupes are expected</li>
+                    <li><b>Retry-first SDKs</b> — clients retry on timeout even though the request may have succeeded</li>
+                    <li><b>No uniqueness constraint</b> — many producers share one table with nothing rejecting repeats</li>
+                    <li><b>Overlap-by-design backfills</b> — trailing windows catch late data but re-ingest old rows</li>
+                    <li><b>Consumer's job</b> — dedup falls to the pipeline, and many pipelines never implement it</li>
+                </ul>
+                <p class="example">A payment webhook fires up to 3 times, so about 4% of events land twice and raw-row revenue sums over-report by that share.</p>
+                <div class="key-point">
+                    <strong>Root Cause:</strong> Exactly-once delivery is expensive to guarantee, so infrastructure settles for at-least-once and relies on downstream deduplication that many pipelines skip.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">idempotent writes</span></div>
+                <ul>
+                    <li><b>Accept duplicates</b> — they are inevitable at ingestion; correctness comes from dedup</li>
+                    <li><b>Idempotency keys</b> — assign a stable event_id at the producer and enforce it via upsert</li>
+                    <li><b>Dedup on ingest</b> — keep ROW_NUMBER() OVER (PARTITION BY event_id) = 1 before counting</li>
+                    <li><b>Watermark backfills</b> — merge or delete-and-insert so overlap replaces rows, not appends</li>
+                    <li><b>Detect</b> — track COUNT(*) vs COUNT(DISTINCT event_id) per stage; ratio &gt; 1.0 means dupes</li>
+                    <li><b>Locate the source</b> — stage-over-stage row deltas show where duplicates enter</li>
+                </ul>
+                <p class="example">One team added an upsert keyed on event_id and the duplicate ratio dropped from 1.2 to 1.0 overnight.</p>
+                <div class="key-point">
+                    <strong>Fix:</strong> Make every write idempotent, deduplicate before the first aggregation, and monitor the COUNT(*) / COUNT(DISTINCT id) ratio per stage.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>var __charts = [];
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    if (!c.dataset.w) { c.dataset.w = c.getAttribute('width') || '720'; c.dataset.h = c.getAttribute('height') || '300'; }
+    var w = parseInt(c.dataset.w), h = parseInt(c.dataset.h);
+    var dpr = window.devicePixelRatio || 1;
+    c.style.maxWidth = w + 'px';
+    var cssW = c.getBoundingClientRect().width || w;
+    var scale = (cssW / w) * dpr;
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    var ctx = c.getContext('2d'); ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, w, h);
+    return {ctx:ctx, w:w, h:h};
+}
+
+// Canvas 1: One real event stored multiple times (retries + redelivery)
+__charts.push(function(){
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('One Real Event, Three Stored Rows', w/2, 25);
+
+    var sendX = 90, brokerX = 320, tableX = 560;
+
+    // Producer box
+    ctx.fillStyle = 'rgba(26,82,118,0.7)';
+    ctx.fillRect(sendX - 55, 120, 110, 40);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(sendX - 55, 120, 110, 40);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('PRODUCER', sendX, 138);
+    ctx.font = '10px system-ui';
+    ctx.fillText('event e-42', sendX, 152);
+
+    // Broker box
+    ctx.fillStyle = 'rgba(230,126,34,0.7)';
+    ctx.fillRect(brokerX - 55, 120, 110, 40);
+    ctx.strokeStyle = '#e67e22';
+    ctx.strokeRect(brokerX - 55, 120, 110, 40);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('BROKER', brokerX, 138);
+    ctx.font = '10px system-ui';
+    ctx.fillText('at-least-once', brokerX, 152);
+
+    // Arrows producer -> broker: send + retry
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(sendX + 55, 128);
+    ctx.lineTo(brokerX - 55, 128);
+    ctx.stroke();
+    ctx.strokeStyle = '#e74c3c';
+    ctx.setLineDash([5, 3]);
+    ctx.beginPath();
+    ctx.moveTo(sendX + 55, 152);
+    ctx.lineTo(brokerX - 55, 152);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = '9px system-ui';
+    ctx.fillText('send', (sendX + brokerX)/2, 122);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('retry after timeout', (sendX + brokerX)/2, 166);
+
+    // Arrows broker -> table: deliver + redeliver
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(brokerX + 55, 128);
+    ctx.lineTo(tableX - 70, 105);
+    ctx.stroke();
+    ctx.strokeStyle = '#e74c3c';
+    ctx.setLineDash([5, 3]);
+    ctx.beginPath();
+    ctx.moveTo(brokerX + 55, 152);
+    ctx.lineTo(tableX - 70, 175);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.fillText('deliver', brokerX + 95, 110);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('redeliver (ack lost)', brokerX + 105, 178);
+
+    // Events table with 3 identical rows
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('EVENTS TABLE', tableX, 70);
+
+    for (var i = 0; i < 3; i++) {
+        var y = 85 + i * 40;
+        ctx.fillStyle = i === 0 ? 'rgba(39,174,96,0.5)' : 'rgba(231,76,60,0.4)';
+        ctx.fillRect(tableX - 65, y, 130, 30);
+        ctx.strokeStyle = i === 0 ? '#27ae60' : '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(tableX - 65, y, 130, 30);
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = 'bold 10px monospace';
+        ctx.fillText('event_id = e-42', tableX, y + 19);
+    }
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '9px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('real', tableX + 72, 104);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('duplicate', tableX + 72, 144);
+    ctx.fillText('duplicate', tableX + 72, 184);
+
+    // Warning
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('COUNT(*) = 3, but only 1 real event — no idempotency key enforced', w/2, 270);
+});
+
+// Canvas 2: Count inflation from retries
+__charts.push(function(){
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Duplicate Detection: Count(*) vs Count(Distinct)', w/2, 25);
+
+    var left = 80, right = 640, top = 70, bottom = 240;
+
+    // Axes
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(left, top);
+    ctx.lineTo(left, bottom);
+    ctx.lineTo(right, bottom);
+    ctx.stroke();
+
+    ctx.font = '11px system-ui';
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    ctx.fillText('Pipeline Stage', (left + right)/2, bottom + 25);
+    ctx.save();
+    ctx.translate(25, (top + bottom)/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillText('Row Count', 0, 0);
+    ctx.restore();
+
+    // Y-axis labels
+    ctx.textAlign = 'right';
+    for (var i = 0; i <= 5; i++) {
+        var val = i * 500;
+        var y = bottom - i * (bottom - top) / 5;
+        ctx.fillText(val, left - 10, y + 4);
+        ctx.strokeStyle = '#e0e0e0';
+        ctx.beginPath();
+        ctx.moveTo(left, y);
+        ctx.lineTo(right, y);
+        ctx.stroke();
+    }
+
+    // Data
+    var stages = [
+        {label: 'Source', total: 1000, distinct: 1000},
+        {label: 'After Client\nRetries', total: 1100, distinct: 1000},
+        {label: 'After Broker\nRedelivery', total: 1200, distinct: 1000},
+        {label: 'After Backfill\nOverlap', total: 1500, distinct: 1000}
+    ];
+
+    var barW = 50;
+    var spacing = (right - left - barW * stages.length * 2) / (stages.length + 1);
+
+    stages.forEach(function(stage, i) {
+        var x = left + spacing + i * (spacing + barW * 2 + 20);
+
+        // Total count bar (inflated)
+        var totalH = (stage.total / 2500) * (bottom - top);
+        ctx.fillStyle = 'rgba(231,76,60,0.7)';
+        ctx.fillRect(x, bottom - totalH, barW, totalH);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, bottom - totalH, barW, totalH);
+
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 10px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(stage.total, x + barW/2, bottom - totalH - 5);
+
+        // Distinct count bar (true)
+        var distinctH = (stage.distinct / 2500) * (bottom - top);
+        ctx.fillStyle = 'rgba(39,174,96,0.7)';
+        ctx.fillRect(x + barW + 10, bottom - distinctH, barW, distinctH);
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x + barW + 10, bottom - distinctH, barW, distinctH);
+
+        ctx.fillStyle = '#27ae60';
+        ctx.font = 'bold 10px system-ui';
+        ctx.fillText(stage.distinct, x + barW + 10 + barW/2, bottom - distinctH - 5);
+
+        // Stage label
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '10px system-ui';
+        var lines = stage.label.split('\n');
+        lines.forEach(function(line, j) {
+            ctx.fillText(line, x + barW + 5, bottom + 40 + j * 12);
+        });
+    });
+
+    // Legend
+    ctx.fillStyle = 'rgba(231,76,60,0.7)';
+    ctx.fillRect(left + 20, top + 10, 15, 15);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(left + 20, top + 10, 15, 15);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('COUNT(*)', left + 40, top + 21);
+
+    ctx.fillStyle = 'rgba(39,174,96,0.7)';
+    ctx.fillRect(left + 120, top + 10, 15, 15);
+    ctx.strokeStyle = '#27ae60';
+    ctx.strokeRect(left + 120, top + 10, 15, 15);
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('COUNT(DISTINCT id)', left + 140, top + 21);
+
+    // Alert annotation
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Ratio > 1.0 indicates duplicates', w/2, 270);
+});
+
+// Canvas 3: Correct vs inflated metrics comparison
+__charts.push(function(){
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Impact on Metrics: Duplicates vs Deduplicated', w/2, 25);
+
+    var colW = 280;
+    var leftCol = 60;
+    var rightCol = 400;
+    var startY = 70;
+    var rowH = 35;
+
+    // Left column: Wrong (inflated)
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('WRONG (with duplicates)', leftCol + colW/2, startY - 10);
+
+    var wrongMetrics = [
+        {label: 'Total Events', value: '10,000', color: '#e74c3c'},
+        {label: 'Conversions', value: '280', color: '#e74c3c'},
+        {label: 'Conversion Rate', value: '28%', color: '#e74c3c'}
+    ];
+
+    wrongMetrics.forEach(function(metric, i) {
+        var y = startY + i * rowH;
+
+        ctx.fillStyle = '#ffe5e5';
+        ctx.fillRect(leftCol, y, colW, rowH);
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(leftCol, y, colW, rowH);
+
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '11px system-ui';
+        ctx.textAlign = 'left';
+        ctx.fillText(metric.label, leftCol + 10, y + rowH/2 + 4);
+
+        ctx.fillStyle = metric.color;
+        ctx.font = 'bold 14px system-ui';
+        ctx.textAlign = 'right';
+        ctx.fillText(metric.value, leftCol + colW - 10, y + rowH/2 + 5);
+    });
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Inflated by duplicate events', leftCol + colW/2, startY + 3*rowH + 15);
+
+    // Right column: Correct (deduplicated)
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillText('CORRECT (deduplicated)', rightCol + colW/2, startY - 10);
+
+    var correctMetrics = [
+        {label: 'Total Events', value: '1,000', color: '#27ae60'},
+        {label: 'Conversions', value: '28', color: '#27ae60'},
+        {label: 'Conversion Rate', value: '2.8%', color: '#27ae60'}
+    ];
+
+    correctMetrics.forEach(function(metric, i) {
+        var y = startY + i * rowH;
+
+        ctx.fillStyle = '#f0f8f4';
+        ctx.fillRect(rightCol, y, colW, rowH);
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(rightCol, y, colW, rowH);
+
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '11px system-ui';
+        ctx.textAlign = 'left';
+        ctx.fillText(metric.label, rightCol + 10, y + rowH/2 + 4);
+
+        ctx.fillStyle = metric.color;
+        ctx.font = 'bold 14px system-ui';
+        ctx.textAlign = 'right';
+        ctx.fillText(metric.value, rightCol + colW - 10, y + rowH/2 + 5);
+    });
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('After dedup on event_id', rightCol + colW/2, startY + 3*rowH + 15);
+
+    // SQL examples
+    var sqlY = startY + 3*rowH + 45;
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('SELECT COUNT(*) FROM events', leftCol, sqlY);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('SELECT COUNT(DISTINCT event_id) FROM events', rightCol, sqlY);
+
+    // Delta annotation
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 3]);
+    ctx.beginPath();
+    ctx.moveTo(leftCol + colW/2, startY + 3*rowH + 30);
+    ctx.lineTo(rightCol + colW/2, startY + 3*rowH + 30);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('10x inflation!', (leftCol + rightCol + colW)/2, startY + 3*rowH + 27);
+
+    // Best practice callout
+    ctx.fillStyle = '#f8f9fa';
+    ctx.fillRect(60, sqlY + 20, 620, 50);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(60, sqlY + 20, 620, 50);
+
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Best Practice: Enforce idempotency keys', 75, sqlY + 38);
+
+    ctx.font = '10px system-ui';
+    ctx.fillText('Unique event_id + upsert at write time. Add COUNT(*) vs COUNT(DISTINCT id) per stage to dashboards.', 75, sqlY + 54);
+});
+
+__charts.forEach(function(f){ f(); });
+var __redrawTimer;
+window.addEventListener('resize', function(){
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function(){ __charts.forEach(function(f){ f(); }); }, 150);
+});
+</script>
+
+</body>
+</html>

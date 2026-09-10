@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Backfill Bias (Data Filled Retroactively)</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px; height: auto; }
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Backfill Bias (Data Filled Retroactively)</h1>
+<p class="subtitle">When historical data is corrected or enriched with information that was not available at the time, creating unrealistic training data.</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">backfill</span></div>
+                <ul>
+                    <li><b>The trap</b> — a backfill rewrites history with information learned only in the future</li>
+                    <li><b>Skewed training</b> — the model trains on corrected records production will never see</li>
+                    <li><b>Corrections</b> — missing 2022 geocodes are filled in 2024, hiding the 30% failure rate</li>
+                    <li><b>Schema changes</b> — "customer_segment" is backfilled to 2020 using 2024 segmentation logic</li>
+                    <li><b>Enrichments</b> — vendor data added retroactively differs from real-time coverage and accuracy</li>
+                </ul>
+                <p class="example">A 2023 bug-fix restores a credit model's NULL 2020 incomes from a recovered database, but production still sees 20% NULL incomes.</p>
+                <div class="key-point">
+                    <strong>Impact:</strong> A model trained on clean backfilled data hits 90% AUC, then drops to 75% against production's 20% missing values — a structural training-serving skew.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">mutable history</span></div>
+                <ul>
+                    <li><b>Current-truth databases</b> — tables store the best present values, not what was known when</li>
+                    <li><b>Retroactive corrections</b> — revisions update historical records long after they were written</li>
+                    <li><b>Final vs preliminary</b> — training uses revised values instead of the as-published ones</li>
+                    <li><b>Bug fixes</b> — repairs inject information that did not exist when the record was created</li>
+                    <li><b>Schema migrations</b> — new columns are backfilled with current logic, not the historical logic</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Root Cause:</strong> The table looks clean but has been silently improved over time — the current snapshot no longer represents the data as first collected.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">point-in-time</span></div>
+                <ul>
+                    <li><b>Honest reconstruction</b> — train on data as it looked on the prediction date, warts and all</li>
+                    <li><b>Point-in-time queries</b> — retrieve records exactly as they stood at the past moment</li>
+                    <li><b>Snapshots</b> — keep daily partitions or slowly changing dimensions to recover old states</li>
+                    <li><b>As-of API</b> — expose features through get_features(entity_id, as_of_date)</li>
+                    <li><b>No silent corrections</b> — train on fixed data only if production gets the same fixes</li>
+                    <li><b>Match production NULLs</b> — the model must meet the same missing values in training</li>
+                </ul>
+                <div class="key-point">
+                    <strong>Fix:</strong> Training data must reflect the same data quality and completeness that the model will encounter in production.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>var __charts = [];
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    if (!c.dataset.w) { c.dataset.w = c.getAttribute('width') || '720'; c.dataset.h = c.getAttribute('height') || '300'; }
+    var w = parseInt(c.dataset.w), h = parseInt(c.dataset.h);
+    var dpr = window.devicePixelRatio || 1;
+    c.style.maxWidth = w + 'px';
+    var cssW = c.getBoundingClientRect().width || w;
+    var scale = (cssW / w) * dpr;
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    var ctx = c.getContext('2d'); ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, w, h);
+    return {ctx:ctx, w:w, h:h};
+}
+
+__charts.push(function(){
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Backfill Bias: Training on Retroactively Cleaned Data', w/2, 25);
+
+    // Timeline
+    var timelineY = 80;
+    var left = 80;
+    var right = 640;
+    var segmentWidth = (right - left) / 3;
+
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(left, timelineY);
+    ctx.lineTo(right, timelineY);
+    ctx.stroke();
+
+    // Time markers
+    var times = ['2020', '2021', '2022', '2023\n(backfill)'];
+    ctx.fillStyle = '#444';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    for (var i = 0; i < times.length; i++) {
+        var x = left + i * segmentWidth;
+        ctx.beginPath();
+        ctx.moveTo(x, timelineY - 5);
+        ctx.lineTo(x, timelineY + 5);
+        ctx.stroke();
+        ctx.fillText(times[i], x, timelineY + 18);
+    }
+
+    // Original data quality (2020-2022)
+    ctx.fillStyle = '#e67e22';
+    ctx.globalAlpha = 0.3;
+    ctx.fillRect(left, timelineY - 35, segmentWidth * 3, 25);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#e67e22';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(left, timelineY - 35, segmentWidth * 3, 25);
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Original data: 20% missing values', left + segmentWidth * 1.5, timelineY - 20);
+
+    // Backfill arrow
+    var backfillX = right;
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(backfillX, timelineY - 50);
+    ctx.lineTo(left + segmentWidth * 1.5, timelineY - 50);
+    ctx.lineTo(left + segmentWidth * 1.5, timelineY - 35);
+    ctx.stroke();
+    // Arrowhead
+    ctx.beginPath();
+    ctx.moveTo(left + segmentWidth * 1.5, timelineY - 35);
+    ctx.lineTo(left + segmentWidth * 1.5 - 4, timelineY - 45);
+    ctx.lineTo(left + segmentWidth * 1.5 + 4, timelineY - 45);
+    ctx.closePath();
+    ctx.fillStyle = '#e74c3c';
+    ctx.fill();
+
+    ctx.font = 'bold 10px system-ui';
+    ctx.fillText('2023: Backfill fixes data', left + segmentWidth * 2.2, timelineY - 55);
+
+    // Comparison panels
+    var panelY = 120;
+
+    // Left: Training data (backfilled)
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(50, panelY, 280, 110);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('TRAINING DATA (backfilled)', 190, panelY + 20);
+
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('2020-2022 records:', 70, panelY + 45);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('• Missing values: 2%', 70, panelY + 62);
+    ctx.fillText('• Data quality: HIGH', 70, panelY + 77);
+    ctx.fillText('• Model AUC: 90%', 70, panelY + 92);
+
+    // Right: Production data (original quality)
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(390, panelY, 280, 110);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('PRODUCTION DATA (reality)', 530, panelY + 20);
+
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('New records:', 410, panelY + 45);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('• Missing values: 20%', 410, panelY + 62);
+    ctx.fillText('• Data quality: ORIGINAL', 410, panelY + 77);
+    ctx.fillText('• Model AUC: 75%', 410, panelY + 92);
+
+    // Bottom impact
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Training-serving skew: Model never sees the data quality it will face in production', w/2, 265);
+});
+
+__charts.push(function(){
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Title
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Same Data, Two Versions: Before and After Backfill', w/2, 22);
+
+    // Left table: Original 2020 Data
+    var tblY = 48, tblX1 = 30, colW = 75, rowH = 24;
+    var cols = ['user_id', 'income', 'segment'];
+    var rows = [['U01', '45000', 'NULL'], ['U02', 'NULL', 'NULL'], ['U03', '62000', 'NULL']];
+
+    ctx.fillStyle = '#e67e22';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Original 2020 Data', tblX1 + cols.length * colW / 2, tblY - 5);
+
+    for (var c = 0; c < cols.length; c++) {
+        var cx = tblX1 + c * colW;
+        ctx.fillStyle = 'rgba(230,126,34,0.15)';
+        ctx.fillRect(cx, tblY, colW, rowH);
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(cx, tblY, colW, rowH);
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 10px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(cols[c], cx + colW/2, tblY + 16);
+    }
+    for (var r = 0; r < rows.length; r++) {
+        for (var c = 0; c < cols.length; c++) {
+            var cx = tblX1 + c * colW;
+            var cy = tblY + (r + 1) * rowH;
+            var val = rows[r][c];
+            ctx.fillStyle = (val === 'NULL') ? 'rgba(231,76,60,0.08)' : '#fff';
+            ctx.fillRect(cx, cy, colW, rowH);
+            ctx.strokeStyle = '#999';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(cx, cy, colW, rowH);
+            ctx.fillStyle = (val === 'NULL') ? '#e74c3c' : '#444';
+            ctx.font = (val === 'NULL') ? 'bold 10px system-ui' : '10px system-ui';
+            ctx.textAlign = 'center';
+            ctx.fillText(val, cx + colW/2, cy + 16);
+        }
+    }
+
+    // Right table: After 2023 Backfill
+    var tblX2 = 410;
+    var rows2 = [['U01', '45000', 'Premium'], ['U02', '51000', 'Standard'], ['U03', '62000', 'Premium']];
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('After 2023 Backfill', tblX2 + cols.length * colW / 2, tblY - 5);
+
+    for (var c = 0; c < cols.length; c++) {
+        var cx = tblX2 + c * colW;
+        ctx.fillStyle = 'rgba(39,174,96,0.12)';
+        ctx.fillRect(cx, tblY, colW, rowH);
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(cx, tblY, colW, rowH);
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 10px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(cols[c], cx + colW/2, tblY + 16);
+    }
+    for (var r = 0; r < rows2.length; r++) {
+        for (var c = 0; c < cols.length; c++) {
+            var cx = tblX2 + c * colW;
+            var cy = tblY + (r + 1) * rowH;
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(cx, cy, colW, rowH);
+            ctx.strokeStyle = '#999';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(cx, cy, colW, rowH);
+            ctx.fillStyle = '#27ae60';
+            ctx.font = '10px system-ui';
+            ctx.textAlign = 'center';
+            ctx.fillText(rows2[r][c], cx + colW/2, cy + 16);
+        }
+    }
+
+    // Arrow between tables
+    var arrowY = tblY + rowH * 2;
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(tblX1 + cols.length * colW + 15, arrowY);
+    ctx.lineTo(tblX2 - 15, arrowY);
+    ctx.stroke();
+    // Arrowhead
+    ctx.beginPath();
+    ctx.moveTo(tblX2 - 15, arrowY);
+    ctx.lineTo(tblX2 - 25, arrowY - 5);
+    ctx.lineTo(tblX2 - 25, arrowY + 5);
+    ctx.closePath();
+    ctx.fillStyle = '#e74c3c';
+    ctx.fill();
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Retrospective fix', (tblX1 + cols.length * colW + tblX2) / 2, arrowY - 10);
+
+    // Bottom warning
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Production in 2024 still sees the messy version!', w/2, 210);
+
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.fillText('Model trained on clean data; deployed against dirty data', w/2, 230);
+
+    // Visual emphasis box
+    ctx.fillStyle = 'rgba(231,76,60,0.06)';
+    ctx.fillRect(100, 245, 520, 40);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(100, 245, 520, 40);
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '11px system-ui';
+    ctx.fillText('New records arrive with NULLs and missing segments — just like 2020 originally was', w/2, 265);
+    ctx.fillText('But model was trained expecting the backfilled clean version', w/2, 280);
+});
+
+__charts.push(function(){
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    // Title
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Point-in-Time Access: Train on Data As It Existed', w/2, 22);
+
+    // Timeline
+    var tlY = 75;
+    var tlLeft = 60, tlRight = 660;
+    ctx.strokeStyle = '#999';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(tlLeft, tlY);
+    ctx.lineTo(tlRight, tlY);
+    ctx.stroke();
+
+    // Snapshot markers
+    var snapshots = [
+        { label: 'T1', x: tlLeft + 100 },
+        { label: 'T2', x: tlLeft + 280 },
+        { label: 'T3', x: tlLeft + 460 },
+        { label: 'NOW', x: tlRight - 40 }
+    ];
+    for (var i = 0; i < snapshots.length; i++) {
+        var snap = snapshots[i];
+        ctx.fillStyle = '#1a5276';
+        ctx.beginPath();
+        ctx.arc(snap.x, tlY, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.font = 'bold 11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(snap.label, snap.x, tlY - 15);
+    }
+
+    // Training date pointer
+    var trainX = snapshots[1].x;
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(trainX, tlY + 15);
+    ctx.lineTo(trainX, tlY + 50);
+    ctx.stroke();
+    // Arrowhead
+    ctx.beginPath();
+    ctx.moveTo(trainX, tlY + 15);
+    ctx.lineTo(trainX - 4, tlY + 22);
+    ctx.lineTo(trainX + 4, tlY + 22);
+    ctx.closePath();
+    ctx.fillStyle = '#27ae60';
+    ctx.fill();
+
+    // Snapshot box
+    ctx.fillStyle = 'rgba(39,174,96,0.1)';
+    ctx.fillRect(trainX - 120, tlY + 52, 240, 45);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(trainX - 120, tlY + 52, 240, 45);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Snapshot at T2', trainX, tlY + 68);
+    ctx.fillStyle = '#444';
+    ctx.font = '10px system-ui';
+    ctx.fillText('(includes NULLs, messy data)', trainX, tlY + 82);
+    ctx.fillText('NOT the latest corrected version', trainX, tlY + 94);
+
+    // Cross out "latest" arrow
+    var latestX = tlRight - 40;
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(trainX + 120, tlY + 75);
+    ctx.lineTo(latestX, tlY + 75);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // X mark
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(latestX - 10, tlY + 65);
+    ctx.lineTo(latestX + 10, tlY + 85);
+    ctx.moveTo(latestX + 10, tlY + 65);
+    ctx.lineTo(latestX - 10, tlY + 85);
+    ctx.stroke();
+
+    // API pattern
+    ctx.fillStyle = 'rgba(26,82,118,0.06)';
+    ctx.fillRect(80, 185, 560, 40);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(80, 185, 560, 40);
+    ctx.fillStyle = '#1a5276';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('get_features(user, as_of=T2)  →  returns data as it existed at T2', w/2, 208);
+
+    // Green success box
+    ctx.fillStyle = 'rgba(39,174,96,0.08)';
+    ctx.fillRect(130, 240, 460, 40);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(130, 240, 460, 40);
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('✓  Training sees same data quality as production', w/2, 258);
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.fillText('No training-serving skew from retrospective corrections', w/2, 274);
+});
+
+__charts.forEach(function(f){ f(); });
+var __redrawTimer;
+window.addEventListener('resize', function(){
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function(){ __charts.forEach(function(f){ f(); }); }, 150);
+});
+</script>
+
+</body>
+</html>

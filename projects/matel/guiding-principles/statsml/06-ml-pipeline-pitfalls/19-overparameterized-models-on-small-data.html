@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Overparameterized Models on Small Data</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px; height: auto; }
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Overparameterized Models on Small Data</h1>
+<p class="subtitle">More parameters than data points causes memorization.</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">memorization</span></div>
+                <ul>
+                    <li><b>Capacity mismatch</b> — thousands of parameters on hundreds of samples enables pure memorization</li>
+                    <li><b>Neural network</b> — a 50,000-parameter net on 500 samples has 100 parameters per data point</li>
+                    <li><b>Boosting</b> — 10,000 trees on 2,000 samples give enough capacity to fit every noise quirk</li>
+                    <li><b>Random forest</b> — 500 unbounded trees on 2,000 rows memorize: perfect train, chance validation</li>
+                    <li><b>Polynomial</b> — a degree-20 fit (21 coefficients) on 100 samples chases noise between points</li>
+                </ul>
+                <p class="example">On 500 patients with 50 features, a 10,000-parameter network scores 99% train but 52% test, while logistic regression scores 82% train and 78% test.</p>
+                <div class="key-point">
+                    <strong>Impact:</strong> Training accuracy approaches 100% through memorization, while validation and test performance stay near random because memorized patterns do not transfer.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">capacity</span></div>
+                <ul>
+                    <li><b>Raw capacity</b> — a model with P parameters can fit up to roughly P training examples exactly</li>
+                    <li><b>Classic heuristic</b> — ~10 samples per parameter is a common starting point, not a hard law</li>
+                    <li><b>Extreme ratio</b> — P=10,000 on N=500 gives 0.05 samples per parameter, about 200&times; below that</li>
+                    <li><b>Interpolation</b> — too few points force interpolation of noise, not a smooth decision boundary</li>
+                    <li><b>Zero-error fits</b> — infinitely many configurations hit zero train error; most don't generalize</li>
+                    <li><b>Modern caveat</b> — dropout, early stopping, and double descent let P &gt;&gt; N generalize anyway</li>
+                </ul>
+                <p class="example">A degree-19 polynomial fitted to 20 samples passes through every point with zero training MSE, yet oscillates wildly and predicts terribly on new data.</p>
+                <div class="key-point">
+                    <strong>Root Cause:</strong> With 10k parameters and only 500 points, infinitely many configurations reach zero training error, and the data is too sparse to make the optimizer pick one that generalizes.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">model sizing</span></div>
+                <ul>
+                    <li><b>Detection</b> — a large persistent train/validation gap like 99% vs 52% signals memorization</li>
+                    <li><b>Parameter audit</b> — far more parameters than samples is a warning sign, not a disqualifier</li>
+                    <li><b>Small data</b> — for hundreds of rows, prefer linear models, shallow trees, or regularized GLMs</li>
+                    <li><b>Medium data</b> — a few thousand rows suit shallow nets, early-stopped boosting, capped forests</li>
+                    <li><b>Large data</b> — with 100k+ rows, deep models become viable; the bands are illustrative only</li>
+                    <li><b>Modern regimes</b> — L1/L2, dropout, early stopping can rescue P &gt;&gt; N; treat the ratio as caution</li>
+                </ul>
+                <p class="example">With 1,200 labeled images, a 50k-parameter shallow CNN reaches 85% train and 79% test accuracy, while ResNet-50 trained from scratch hits 99% train but 58% test.</p>
+                <div class="key-point">
+                    <strong>Fix:</strong> Match model complexity to sample size — for n=500 prefer logistic regression or a depth 3-4 tree, and if a complex model is required, regularize heavily and monitor validation closely.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>var __charts = [];
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    if (!c.dataset.w) { c.dataset.w = c.getAttribute('width') || '720'; c.dataset.h = c.getAttribute('height') || '300'; }
+    var w = parseInt(c.dataset.w), h = parseInt(c.dataset.h);
+    var dpr = window.devicePixelRatio || 1;
+    c.style.maxWidth = w + 'px';
+    var cssW = c.getBoundingClientRect().width || w;
+    var scale = (cssW / w) * dpr;
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    var ctx = c.getContext('2d'); ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, w, h);
+    return {ctx:ctx, w:w, h:h};
+}
+
+// Canvas 1: Parameters vs samples visualization
+__charts.push(function(){
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Overparameterization: 10,000 Parameters vs 500 Samples', w/2, 25);
+
+    var barY = 80;
+    var barH = 50;
+    var maxW = 600;
+
+    // Parameters bar
+    ctx.fillStyle = 'rgba(231, 76, 60, 0.4)';
+    ctx.fillRect(100, barY, maxW, barH);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(100, barY, maxW, barH);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Parameters: 10,000', 110, barY + barH/2 + 5);
+
+    // Samples bar (much shorter)
+    var sampleW = 30; // 500/10000 * maxW
+    var sampleY = barY + barH + 20;
+    ctx.fillStyle = 'rgba(39, 174, 96, 0.4)';
+    ctx.fillRect(100, sampleY, sampleW, barH);
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(100, sampleY, sampleW, barH);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 13px system-ui';
+    ctx.fillText('Samples: 500', 110, sampleY + barH/2 + 5);
+
+    // Ratio annotation
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 14px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Ratio: 0.05 samples per parameter', w/2, sampleY + barH + 40);
+    ctx.font = '11px system-ui';
+    ctx.fillText('(classic heuristic: ~10 samples per parameter as an illustrative starting point)', w/2, sampleY + barH + 58);
+
+    // Bottom warning
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.fillText('Result: Model has enough capacity to memorize every training sample', w/2, 240);
+    ctx.font = '11px system-ui';
+    ctx.fillText('Ratio is ~200× below the classic starting point — data cannot constrain the fit', w/2, 258);
+});
+
+// Canvas 2: Learning curves showing memorization
+__charts.push(function(){
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Learning Curves: Overparameterized Model Memorizes', w/2, 25);
+
+    var ox = 80, oy = 250;
+    var plotW = 600, plotH = 180;
+
+    // Axes
+    ctx.strokeStyle = '#444';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ox, oy);
+    ctx.lineTo(ox, oy - plotH);
+    ctx.moveTo(ox, oy);
+    ctx.lineTo(ox + plotW, oy);
+    ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = '#444';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Training Epochs', ox + plotW/2, oy + 20);
+    ctx.save();
+    ctx.translate(ox - 35, oy - plotH/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillText('Accuracy (%)', 0, 0);
+    ctx.restore();
+
+    // Train accuracy (goes to 100%)
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    var epochs = 50;
+    for (var i = 0; i <= epochs; i++) {
+        var x = ox + (i / epochs) * plotW;
+        var trainAcc = 50 + 49 * (1 - Math.exp(-i / 8)); // Asymptotes to 99%
+        var y = oy - (trainAcc / 100) * plotH;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Val accuracy (plateaus low)
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i <= epochs; i++) {
+        var x = ox + (i / epochs) * plotW;
+        var valAcc = 50 + 4 * (1 - Math.exp(-i / 5)) - 2 * (i / epochs); // Peaks ~53%, settles ~52%
+        var y = oy - (valAcc / 100) * plotH;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Legend
+    ctx.fillStyle = '#2980b9';
+    ctx.fillRect(500, 50, 20, 3);
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Train (→ 99%)', 525, 53);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillRect(500, 68, 20, 3);
+    ctx.fillText('Validation (plateaus ~52%)', 525, 71);
+
+    // Gap annotation
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('MASSIVE GAP = MEMORIZATION', ox + plotW/2, oy - plotH - 15);
+});
+
+// Canvas 3: Model complexity vs performance
+__charts.push(function(){
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Model Complexity vs Performance (n=500 samples)', w/2, 25);
+
+    var models = [
+        { name: 'Logistic\nRegression', params: 50, train: 82, test: 78, x: 140 },
+        { name: 'Shallow Tree\n(depth=4)', params: 200, train: 86, test: 80, x: 280 },
+        { name: 'Random Forest\n(depth=8)', params: 2000, train: 94, test: 68, x: 420 },
+        { name: 'Deep NN\n(3 layers)', params: 10000, train: 99, test: 52, x: 560 }
+    ];
+
+    var baseY = 230;
+    var maxH = 140;
+
+    models.forEach(function(m) {
+        var trainH = m.train / 100 * maxH;
+        var testH = m.test / 100 * maxH;
+        var barW = 30;
+
+        // Train bar
+        ctx.fillStyle = 'rgba(52, 152, 219, 0.5)';
+        ctx.fillRect(m.x - 35, baseY - trainH, barW, trainH);
+        ctx.strokeStyle = '#3498db';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(m.x - 35, baseY - trainH, barW, trainH);
+
+        // Test bar
+        var testColor = m.test > 75 ? '#27ae60' : (m.test > 65 ? '#e67e22' : '#e74c3c');
+        ctx.fillStyle = testColor;
+        ctx.globalAlpha = 0.7;
+        ctx.fillRect(m.x + 5, baseY - testH, barW, testH);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = testColor;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(m.x + 5, baseY - testH, barW, testH);
+
+        // Scores
+        ctx.font = 'bold 10px system-ui';
+        ctx.fillStyle = '#3498db';
+        ctx.textAlign = 'center';
+        ctx.fillText(m.train, m.x - 20, baseY - trainH - 5);
+
+        ctx.fillStyle = testColor;
+        ctx.fillText(m.test, m.x + 20, baseY - testH - 5);
+
+        // Labels
+        ctx.font = '9px system-ui';
+        ctx.fillStyle = '#444';
+        var lines = m.name.split('\n');
+        lines.forEach(function(line, idx) {
+            ctx.fillText(line, m.x, baseY + 18 + idx * 11);
+        });
+
+        ctx.fillStyle = '#666';
+        ctx.font = '8px system-ui';
+        ctx.fillText('(' + m.params + ' params)', m.x, baseY + 44);
+    });
+
+    // Legend
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#3498db';
+    ctx.fillRect(80, 55, 15, 15);
+    ctx.fillText('Train', 100, 66);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.fillRect(150, 55, 15, 15);
+    ctx.fillText('Test', 170, 66);
+
+    // Winner annotation
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([4, 4]);
+    ctx.strokeRect(models[1].x - 50, baseY - 125, 80, 140);
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('BEST', models[1].x, baseY - 130);
+    ctx.fillText('GENERALIZATION', models[1].x, baseY - 118);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Simple models win on small data', w/2, 275);
+});
+
+__charts.forEach(function(f){ f(); });
+var __redrawTimer;
+window.addEventListener('resize', function(){
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function(){ __charts.forEach(function(f){ f(); }); }, 150);
+});
+</script>
+
+</body>
+</html>

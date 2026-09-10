@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Silent Data Drift (Schema/Pipeline Changes)</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    color: #2c3e50;
+    padding: 40px;
+    line-height: 1.6;
+}
+h1 {
+    font-size: 2rem;
+    color: #1a5276;
+    margin-bottom: 8px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 8px;
+}
+.subtitle {
+    color: #666;
+    margin-bottom: 32px;
+    font-size: 0.95rem;
+}
+.card-section {
+    margin-bottom: 40px;
+}
+.card-section h2 {
+    font-size: 1.3rem;
+    color: #1a5276;
+    margin-bottom: 12px;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 4px;
+}
+
+table.layout {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+table.layout td {
+    vertical-align: top;
+    padding: 12px;
+}
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+
+canvas {
+    width: 100%;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px; height: auto; }
+
+.key-point {
+    background: #f8f9fa;
+    border-left: 3px solid #e74c3c;
+    padding: 8px 12px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+}
+
+.example {
+    font-style: italic;
+    color: #555;
+    margin-top: 8px;
+    font-size: 0.9rem;
+}
+
+ul {
+    margin: 8px 0 8px 20px;
+    font-size: 0.92rem;
+}
+li { margin-bottom: 4px; }
+.tags { margin-bottom: 8px; }
+.tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-right: 6px;
+}
+.tag.blue { background: rgba(26,82,118,0.12); color: #1a5276; }
+.tag.green { background: rgba(39,174,96,0.15); color: #27ae60; }
+.tag.red { background: rgba(231,76,60,0.12); color: #e74c3c; }
+.tag.orange { background: rgba(230,126,34,0.15); color: #e67e22; }
+li b { color: #1a5276; }
+</style>
+</head>
+<body>
+
+<h1>Pitfall: Silent Data Drift (Schema/Pipeline Changes)</h1>
+<p class="subtitle">Upstream data changes without notification, model degrades silently.</p>
+
+<div class="card-section">
+    <h2>The Problem</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag red">the trap</span><span class="tag blue">data drift</span></div>
+                <ul>
+                    <li><b>Silent break</b> — upstream data changes format without notice, yet the model keeps running</li>
+                    <li><b>Unit change</b> — a currency column switches from dollars to cents, shifting every value 100x</li>
+                    <li><b>Encoding change</b> — one-hot switches to label encoding, so the same numbers mean new things</li>
+                    <li><b>Format change</b> — dates move from YYYY-MM-DD strings to Unix timestamps</li>
+                    <li><b>Missing values</b> — the sentinel for missing entries changes from -1 to NULL</li>
+                    <li><b>Upstream scaling</b> — a new scaling step appears that the training data never went through</li>
+                </ul>
+                <p class="example">A loan model trained on income in thousands suddenly receives 65500 after an ETL change, reads it as $65.5M, and approves everyone.</p>
+                <div class="key-point">
+                    <strong>Impact:</strong> The data stays type-valid but semantically wrong, so predictions degrade silently and days of bad decisions accumulate before anyone notices.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>Why It Happens</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag orange">root cause</span><span class="tag blue">pipelines</span></div>
+                <ul>
+                    <li><b>End of the pipeline</b> — models sit downstream of long chains they neither own nor observe</li>
+                    <li><b>Split ownership</b> — pipeline and model belong to different teams with no schema contract</li>
+                    <li><b>Type-level blindness</b> — float stays float, so no type error is ever raised</li>
+                    <li><b>Invisible deploys</b> — changes ship as "internal refactoring" with no notice to the model team</li>
+                    <li><b>No distribution checks</b> — nothing compares live data against the training distribution</li>
+                    <li><b>Wrong monitoring target</b> — accuracy lags by days; input statistics shift immediately</li>
+                </ul>
+                <p class="example">Feature engineering swaps log(price) for raw price, and predictions shift by orders of magnitude with no error raised.</p>
+                <div class="key-point">
+                    <strong>Root Cause:</strong> The model applies coefficients learned at mean=50, std=10 to data now arriving at mean=5000, std=1000 — syntactically valid, semantically nonsense.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Correct Approach</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <div class="tags"><span class="tag green">the fix</span><span class="tag blue">monitoring</span></div>
+                <ul>
+                    <li><b>Detect, don't prevent</b> — upstream changes cannot be stopped, only caught immediately</li>
+                    <li><b>Baseline stats</b> — store min, max, mean, std, and cardinality of every training feature</li>
+                    <li><b>Input validation</b> — before predicting, check live stats sit within tolerance, e.g. &plusmn;20%</li>
+                    <li><b>Schema contracts</b> — enforce them with validation tools like Great Expectations or Pandera</li>
+                    <li><b>Drift alarms</b> — alert on a failed KS test or a PSI above roughly 0.2, tuned per feature</li>
+                    <li><b>Fail loudly</b> — version the pipeline, halt predictions, and page the on-call over garbage</li>
+                </ul>
+                <p class="example">Training logged income_mean=67.3; production shows 67300, so the drift detector flags a 1000x shift and halts predictions.</p>
+                <div class="key-point">
+                    <strong>Fix:</strong> Compare production input stats to the training baseline on every run, and halt predictions with an alert when drift exceeds your tolerance.
+                </div>
+            </td>
+            <td class="viz-col">
+                <canvas id="c3" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>var __charts = [];
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    if (!c.dataset.w) { c.dataset.w = c.getAttribute('width') || '720'; c.dataset.h = c.getAttribute('height') || '300'; }
+    var w = parseInt(c.dataset.w), h = parseInt(c.dataset.h);
+    var dpr = window.devicePixelRatio || 1;
+    c.style.maxWidth = w + 'px';
+    var cssW = c.getBoundingClientRect().width || w;
+    var scale = (cssW / w) * dpr;
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    var ctx = c.getContext('2d'); ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, w, h);
+    return {ctx:ctx, w:w, h:h};
+}
+
+// Canvas 1: Distribution shift (training vs production)
+__charts.push(function(){
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Income Feature: Training vs Production (After Pipeline Change)', w/2, 25);
+
+    var baseY = 250, maxH = 160;
+
+    // Training distribution (USD thousands)
+    ctx.fillStyle = '#27ae60';
+    ctx.globalAlpha = 0.5;
+    var trainValues = [20, 45, 80, 120, 95, 60, 30, 15, 8, 3];
+    var barW = 25;
+    var startX = 100;
+    for (var i = 0; i < trainValues.length; i++) {
+        var h = (trainValues[i] / 120) * maxH;
+        ctx.fillRect(startX + i * barW, baseY - h, barW - 2, h);
+    }
+    ctx.globalAlpha = 1;
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('Training: mean=67.3K, std=22.1K', startX, 60);
+
+    // Production distribution (USD dollars - 1000x larger)
+    ctx.fillStyle = '#e74c3c';
+    ctx.globalAlpha = 0.5;
+    var prodValues = [3, 8, 15, 30, 60, 95, 120, 80, 45, 20];
+    startX = 450;
+    for (var i = 0; i < prodValues.length; i++) {
+        var h = (prodValues[i] / 120) * maxH;
+        ctx.fillRect(startX + i * barW, baseY - h, barW - 2, h);
+    }
+    ctx.globalAlpha = 1;
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.textAlign = 'left';
+    ctx.fillText('Production: mean=67300 (!), std=22100', startX, 60);
+
+    // Axes and labels
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(90, baseY);
+    ctx.lineTo(700, baseY);
+    ctx.stroke();
+
+    ctx.fillStyle = '#666';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('50K', 100 + 5*barW, baseY + 15);
+    ctx.fillText('100K', 100 + 9*barW, baseY + 15);
+
+    ctx.fillText('50M', 450 + 5*barW, baseY + 15);
+    ctx.fillText('100M', 450 + 9*barW, baseY + 15);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Pipeline changed units from thousands to dollars. Model still expects thousands!', w/2, 280);
+});
+
+// Canvas 2: Timeline showing silent degradation
+__charts.push(function(){
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Model Accuracy Over Time: Silent Drift Degradation', w/2, 25);
+
+    var baseY = 220, timelineY = 240;
+    var points = [
+        { day: 0, acc: 88, label: 'Deploy' },
+        { day: 2, acc: 88, label: '' },
+        { day: 4, acc: 87, label: '' },
+        { day: 6, acc: 86, label: '' },
+        { day: 8, acc: 85, label: 'Pipeline\nchange' },
+        { day: 10, acc: 78, label: '' },
+        { day: 12, acc: 72, label: '' },
+        { day: 14, acc: 68, label: '' },
+        { day: 16, acc: 65, label: '' },
+        { day: 18, acc: 64, label: 'Finally\nnoticed!' }
+    ];
+
+    var maxDay = 18, startX = 100, endX = 650;
+    var scaleX = (endX - startX) / maxDay;
+
+    // Timeline
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(startX, timelineY);
+    ctx.lineTo(endX, timelineY);
+    ctx.stroke();
+
+    // Accuracy line
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (var i = 0; i < points.length; i++) {
+        var x = startX + points[i].day * scaleX;
+        var y = baseY - (points[i].acc - 60) * 5;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Points and labels
+    points.forEach(function(p, i) {
+        var x = startX + p.day * scaleX;
+        var y = baseY - (p.acc - 60) * 5;
+
+        var color = p.acc >= 85 ? '#27ae60' : (p.acc >= 75 ? '#e67e22' : '#e74c3c');
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(x, y, 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (p.label) {
+            ctx.fillStyle = '#1a5276';
+            ctx.font = '10px system-ui';
+            ctx.textAlign = 'center';
+            var lines = p.label.split('\n');
+            lines.forEach(function(line, li) {
+                ctx.fillText(line, x, y - 12 - (lines.length - 1 - li) * 12);
+            });
+        }
+
+        if (i === 4) {
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([4, 3]);
+            ctx.beginPath();
+            ctx.moveTo(x, timelineY - 80);
+            ctx.lineTo(x, timelineY + 10);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+    });
+
+    // Y-axis labels
+    ctx.fillStyle = '#666';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'right';
+    ctx.fillText('90%', startX - 10, baseY - (90 - 60) * 5);
+    ctx.fillText('80%', startX - 10, baseY - (80 - 60) * 5);
+    ctx.fillText('70%', startX - 10, baseY - (70 - 60) * 5);
+    ctx.fillText('60%', startX - 10, baseY - (60 - 60) * 5);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('10 days of silent degradation. No alerts. No errors. Just wrong predictions.', w/2, 270);
+});
+
+// Canvas 3: Drift detection system
+__charts.push(function(){
+    var s = setup('c3');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    ctx.font = 'bold 14px system-ui';
+    ctx.fillStyle = '#1a5276';
+    ctx.textAlign = 'center';
+    ctx.fillText('Drift Detection: Compare Production Stats to Training Baseline', w/2, 25);
+
+    // Baseline stats
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2;
+    ctx.fillRect(50, 70, 200, 140);
+    ctx.strokeRect(50, 70, 200, 140);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Training Baseline', 150, 90);
+
+    ctx.fillStyle = '#333';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'left';
+    var stats = [
+        'income_mean: 67.3',
+        'income_std: 22.1',
+        'income_min: 18.5',
+        'income_max: 185.2',
+        'age_mean: 42.6',
+        'age_std: 14.8'
+    ];
+    stats.forEach(function(s, i) {
+        ctx.fillText(s, 65, 115 + i * 18);
+    });
+
+    // Arrow
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(250, 140);
+    ctx.lineTo(300, 140);
+    ctx.stroke();
+
+    ctx.fillStyle = '#2980b9';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Compare', 275, 160);
+
+    // Production stats
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2;
+    ctx.fillRect(300, 70, 200, 140);
+    ctx.strokeRect(300, 70, 200, 140);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Production Data', 400, 90);
+
+    ctx.fillStyle = '#333';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'left';
+    var prodStats = [
+        'income_mean: 67300',
+        'income_std: 22100',
+        'income_min: 18500',
+        'income_max: 185200',
+        'age_mean: 42.8',
+        'age_std: 14.9'
+    ];
+    prodStats.forEach(function(s, i) {
+        var color = i < 4 ? '#e74c3c' : '#333';
+        ctx.fillStyle = color;
+        ctx.fillText(s, 315, 115 + i * 18);
+    });
+
+    // Arrow to verdict
+    ctx.strokeStyle = '#2980b9';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(500, 140);
+    ctx.lineTo(550, 140);
+    ctx.stroke();
+
+    // Verdict
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 3;
+    ctx.fillRect(550, 100, 140, 80);
+    ctx.strokeRect(550, 100, 140, 80);
+
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('DRIFT', 620, 125);
+    ctx.fillText('DETECTED', 620, 142);
+    ctx.font = '10px system-ui';
+    ctx.fillText('1000x shift', 620, 160);
+    ctx.fillText('HALT', 620, 172);
+
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillText('Fail fast. Alert immediately. Don\'t return garbage predictions.', w/2, 245);
+});
+
+__charts.forEach(function(f){ f(); });
+var __redrawTimer;
+window.addEventListener('resize', function(){
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function(){ __charts.forEach(function(f){ f(); }); }, 150);
+});
+</script>
+
+</body>
+</html>
