@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>No source_id Logged with Ingested Data</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, sans-serif; background: #fff; color: #2c3e50; padding: 40px; line-height: 1.6; }
+h1 { font-size: 2rem; color: #1a5276; margin-bottom: 8px; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+.subtitle { color: #666; margin-bottom: 32px; font-size: 0.95rem; }
+.card-section { margin-bottom: 40px; }
+.card-section h2 { font-size: 1.3rem; color: #1a5276; margin-bottom: 12px; border-bottom: 2px solid #2980b9; padding-bottom: 4px; }
+table.layout { width: 100%; border-collapse: collapse; margin-top: 8px; }
+table.layout td { vertical-align: top; padding: 12px; }
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+canvas { width: 100%; border: 1px solid #e0e0e0; border-radius: 4px; height: auto; }
+.key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 8px 12px; margin-top: 12px; font-size: 0.9rem; }
+.example { font-style: italic; color: #555; margin-top: 8px; font-size: 0.9rem; }
+ul { margin: 8px 0 8px 20px; font-size: 0.92rem; }
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>No source_id Logged with Ingested Data</h1>
+<p class="subtitle">5 upstream systems &rarr; one table. When something looks wrong, you can&rsquo;t trace which source produced it</p>
+
+<div class="card-section">
+    <h2>The Anti-Pattern</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Data flows from multiple upstream systems into a single combined table with no provenance metadata. When anomalies appear, there is no way to investigate which source produced the problematic rows.</p>
+                <p class="example">Illustrative Example: of the five rows shown, one carries <code>val: 812.4</code> on a measure bounded 0&ndash;100. Five feeds could have written it, so every one of the five must be audited.</p>
+                <div class="key-point">Without source identification, debugging data quality issues becomes a guessing game across all upstream systems simultaneously.</div>
+                <p style="margin-top: 12px; font-weight: 600; font-size: 0.92rem;">Domain examples:</p>
+                <ul>
+                    <li>Multi-hospital lab results merged into one analytics table</li>
+                    <li>Cross-region billing feeds combined without origin tags</li>
+                    <li>Merged datasets from partner organizations with no lineage</li>
+                </ul>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Design Pattern</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Tag every row with <code>source_system_id</code> + <code>ingestion_timestamp</code> at the point of ingestion. Filter by source to profile each feed independently and isolate anomalies to their origin.</p>
+                <p class="example">Illustrative Example: the same five rows, now tagged. The <code>val: 812.4</code> row carries <code>source_id = C</code>, so the audit is one feed (Src C) instead of five.</p>
+                <div class="key-point" style="border-left-color: #27ae60;">Provenance makes every data quality investigation a scoped, tractable problem instead of a haystack search.</div>
+                <p style="margin-top: 12px; font-weight: 600; font-size: 0.92rem;">Steps:</p>
+                <ul>
+                    <li>Add <code>source_system_id</code> column to every ingestion pipeline</li>
+                    <li>Add <code>ingestion_timestamp</code> for temporal traceability</li>
+                    <li>Profile each source independently before combining</li>
+                    <li>When anomalies appear, filter by source to isolate the culprit</li>
+                    <li>Set up per-source data quality monitors</li>
+                </ul>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>var __charts = [];
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    if (!c.dataset.w) { c.dataset.w = c.getAttribute('width') || '720'; c.dataset.h = c.getAttribute('height') || '300'; }
+    var w = parseInt(c.dataset.w), h = parseInt(c.dataset.h);
+    var dpr = window.devicePixelRatio || 1;
+    c.style.maxWidth = w + 'px';
+    var cssW = c.getBoundingClientRect().width || w;
+    var scale = (cssW / w) * dpr;
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    var ctx = c.getContext('2d'); ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, w, h);
+    return {ctx:ctx, w:w, h:h};
+}
+
+// Fixed literal row values — deterministic, never Math.random().
+// BOTH tables render this same array, because the whole point of the page is
+// that the two tables hold the SAME rows and only source_id tells them apart.
+var ROW_VALS = [42.7, 58.3, 812.4, 37.6, 63.2];
+var VALID_MAX = 100;                       // this measure is a 0-100 score
+var BAD_ROW = (function () {                // flagged row derived from the data
+    for (var i = 0; i < ROW_VALS.length; i++) { if (ROW_VALS[i] > VALID_MAX) return i; }
+    return -1;
+})();
+var N_BAD = ROW_VALS.filter(function (v) { return v > VALID_MAX; }).length;  // counted, not asserted
+
+// Canvas 1: Anti-Pattern - No source_id
+__charts.push(function(){
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var sources = ['Src A', 'Src B', 'Src C', 'Src D', 'Src E'];
+    var srcX = 60;
+    var tableX = 420;
+    var tableW = 200;
+    var tableH = 160;
+    var tableY = (h - tableH) / 2;
+
+    // Draw source boxes and arrows
+    for (var i = 0; i < sources.length; i++) {
+        var yPos = 30 + i * 55;
+        // Source box
+        ctx.fillStyle = '#1a5276';
+        ctx.fillRect(srcX - 35, yPos - 12, 70, 24);
+        ctx.fillStyle = '#fff';
+        ctx.font = '11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(sources[i], srcX, yPos);
+
+        // Arrow
+        ctx.beginPath();
+        ctx.moveTo(srcX + 38, yPos);
+        ctx.lineTo(tableX - 10, tableY + 16 + i * 28);
+        ctx.strokeStyle = '#7f8c8d';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Arrowhead
+        var angle = Math.atan2((tableY + 16 + i * 28) - yPos, (tableX - 10) - (srcX + 38));
+        ctx.beginPath();
+        ctx.moveTo(tableX - 10, tableY + 16 + i * 28);
+        ctx.lineTo(tableX - 10 - 8 * Math.cos(angle - 0.4), tableY + 16 + i * 28 - 8 * Math.sin(angle - 0.4));
+        ctx.lineTo(tableX - 10 - 8 * Math.cos(angle + 0.4), tableY + 16 + i * 28 - 8 * Math.sin(angle + 0.4));
+        ctx.closePath();
+        ctx.fillStyle = '#7f8c8d';
+        ctx.fill();
+    }
+
+    // Draw combined table
+    ctx.fillStyle = '#f0f4f8';
+    ctx.fillRect(tableX, tableY, tableW, tableH);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(tableX, tableY, tableW, tableH);
+
+    // Table header
+    ctx.fillStyle = '#1a5276';
+    ctx.fillRect(tableX, tableY, tableW, 24);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Combined Table', tableX + tableW / 2, tableY + 12);
+
+    // Table rows (anonymous)
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'left';
+    for (var r = 0; r < ROW_VALS.length; r++) {
+        var ry = tableY + 28 + r * 26;
+        ctx.fillStyle = r === BAD_ROW ? '#fdecea' : '#fff';
+        ctx.fillRect(tableX + 2, ry, tableW - 4, 22);
+        ctx.strokeStyle = '#ddd';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(tableX + 2, ry, tableW - 4, 22);
+        ctx.fillStyle = '#2c3e50';
+        ctx.fillText('row_' + (r + 1) + '  |  val: ' + ROW_VALS[r].toFixed(1), tableX + 10, ry + 13);
+    }
+
+    // Red highlight on bad row
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(tableX + 1, tableY + 28 + BAD_ROW * 26 - 1, tableW - 2, 24);
+
+    // Red question mark
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 36px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('?', tableX + tableW + 40, tableY + 28 + BAD_ROW * 26 + 14);
+
+    // Label — anomaly threshold and value computed from the plotted data
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('val ' + ROW_VALS[BAD_ROW].toFixed(1) + ' > max ' + VALID_MAX + ' — which source?', 130, 266);
+    ctx.fillText('→ Unknown! ' + N_BAD + ' flagged row of ' + ROW_VALS.length + ', ' + sources.length + ' possible sources', 130, 284);
+});
+
+// Canvas 2: Design Pattern - With source_id
+__charts.push(function(){
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+
+    var sources = ['Src A', 'Src B', 'Src C', 'Src D', 'Src E'];
+    var colors = ['#1a5276', '#27ae60', '#e67e22', '#8e44ad', '#e74c3c'];
+    var tags = ['A', 'B', 'C', 'D', 'E'];
+    var srcX = 60;
+    var tableX = 420;
+    var tableW = 220;
+    var tableH = 160;
+    var tableY = (h - tableH) / 2;
+
+    // Draw source boxes and arrows
+    for (var i = 0; i < sources.length; i++) {
+        var yPos = 30 + i * 55;
+        // Source box
+        ctx.fillStyle = colors[i];
+        ctx.fillRect(srcX - 35, yPos - 12, 70, 24);
+        ctx.fillStyle = '#fff';
+        ctx.font = '11px system-ui';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(sources[i], srcX, yPos);
+
+        // Arrow
+        ctx.beginPath();
+        ctx.moveTo(srcX + 38, yPos);
+        ctx.lineTo(tableX - 10, tableY + 16 + i * 28);
+        ctx.strokeStyle = colors[i];
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Arrowhead
+        var angle = Math.atan2((tableY + 16 + i * 28) - yPos, (tableX - 10) - (srcX + 38));
+        ctx.beginPath();
+        ctx.moveTo(tableX - 10, tableY + 16 + i * 28);
+        ctx.lineTo(tableX - 10 - 8 * Math.cos(angle - 0.4), tableY + 16 + i * 28 - 8 * Math.sin(angle - 0.4));
+        ctx.lineTo(tableX - 10 - 8 * Math.cos(angle + 0.4), tableY + 16 + i * 28 - 8 * Math.sin(angle + 0.4));
+        ctx.closePath();
+        ctx.fillStyle = colors[i];
+        ctx.fill();
+    }
+
+    // Draw combined table
+    ctx.fillStyle = '#f0f4f8';
+    ctx.fillRect(tableX, tableY, tableW, tableH);
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(tableX, tableY, tableW, tableH);
+
+    // Table header
+    ctx.fillStyle = '#1a5276';
+    ctx.fillRect(tableX, tableY, tableW, 24);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Combined Table + source_id', tableX + tableW / 2, tableY + 12);
+
+    // Table rows with color-coded tags — same values as c1, now attributable
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'left';
+    var rowOrder = [0, 3, 2, 1, 4];
+    for (var r = 0; r < ROW_VALS.length; r++) {
+        var ry = tableY + 28 + r * 26;
+        var srcIdx = rowOrder[r];
+        ctx.fillStyle = r === BAD_ROW ? '#e8f8f0' : '#fff';
+        ctx.fillRect(tableX + 2, ry, tableW - 4, 22);
+        ctx.strokeStyle = '#ddd';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(tableX + 2, ry, tableW - 4, 22);
+
+        // Color tag
+        ctx.fillStyle = colors[srcIdx];
+        ctx.fillRect(tableX + 6, ry + 4, 18, 14);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 9px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(tags[srcIdx], tableX + 15, ry + 12);
+
+        // Row text
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = '10px system-ui';
+        ctx.textAlign = 'left';
+        ctx.fillText('row_' + (r + 1) + '  |  val: ' + ROW_VALS[r].toFixed(1), tableX + 30, ry + 13);
+    }
+
+    // Green highlight on traced row
+    ctx.strokeStyle = '#27ae60';
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(tableX + 1, tableY + 28 + BAD_ROW * 26 - 1, tableW - 2, 24);
+
+    // Green checkmark and label
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 24px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('✓', tableX + tableW + 30, tableY + 28 + BAD_ROW * 26 + 14);
+
+    // Label — culprit source read off the tag on the flagged row
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('val ' + ROW_VALS[BAD_ROW].toFixed(1) + ' > max ' + VALID_MAX + ' → source_id = ' + tags[rowOrder[BAD_ROW]], 130, 266);
+    ctx.fillText(N_BAD + ' suspect, not ' + sources.length + ' — investigate ' + sources[rowOrder[BAD_ROW]] + ' only', 130, 284);
+});
+
+__charts.forEach(function(f){ f(); });
+var __redrawTimer;
+window.addEventListener('resize', function(){
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function(){ __charts.forEach(function(f){ f(); }); }, 150);
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Use One Bin Count for All Features</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, sans-serif; background: #fff; color: #2c3e50; padding: 40px; line-height: 1.6; }
+h1 { font-size: 2rem; color: #1a5276; margin-bottom: 8px; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+.subtitle { color: #666; margin-bottom: 32px; font-size: 0.95rem; }
+.card-section { margin-bottom: 40px; }
+.card-section h2 { font-size: 1.3rem; color: #1a5276; margin-bottom: 12px; border-bottom: 2px solid #2980b9; padding-bottom: 4px; }
+table.layout { width: 100%; border-collapse: collapse; margin-top: 8px; }
+table.layout td { vertical-align: top; padding: 12px; }
+table.layout td.text-col { width: 45%; }
+table.layout td.viz-col { width: 55%; }
+canvas { width: 100%; border: 1px solid #e0e0e0; border-radius: 4px; height: auto; }
+.key-point { background: #f8f9fa; border-left: 3px solid #e74c3c; padding: 8px 12px; margin-top: 12px; font-size: 0.9rem; }
+.example { font-style: italic; color: #555; margin-top: 8px; font-size: 0.9rem; }
+ul { margin: 8px 0 8px 20px; font-size: 0.92rem; }
+li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Use One Bin Count for All Features</h1>
+<p class="subtitle">20 equal-width bins on a power-law feature: 1 bin holds 80% of the data, 11 bins are completely empty</p>
+
+<div class="card-section">
+    <h2>The Anti-Pattern</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>20 bins for everything — one-size-fits-all. Power-law feature: first bin overwhelms, the tail bins are empty.</p>
+                <div class="key-point">Equal-width bins on skewed data produce one overloaded bin and many empty ones — you learn nothing about the distribution's structure.</div>
+                <p class="example">Illustrative Example — 200 values, range 0.3 to 233, binned into 20 equal-width bins of 12 units:</p>
+                <ul>
+                    <li><b>Bin 1 (0–12):</b> 160 of 200 observations = 80.0%</li>
+                    <li><b>Bins 2–8:</b> 39 observations, thinning fast (18, 9, 5, 3, 2, 1, 1)</li>
+                    <li><b>Bins 9–19:</b> 11 bins, zero observations each</li>
+                    <li><b>Bin 20 (228–240):</b> 1 observation — the lone outlier at 233</li>
+                    <li><b>Occupied bins:</b> 9 of 20 — bin-count Gini 0.90</li>
+                </ul>
+                <p class="example">Domain examples:</p>
+                <ul>
+                    <li>Income (most clustered low, long tail to millions)</li>
+                    <li>Hospital charges (bulk under $10k, outliers to $500k)</li>
+                    <li>File sizes (many small files, few massive ones)</li>
+                    <li>Any skewed distribution with power-law or exponential tail</li>
+                </ul>
+            </td>
+            <td class="viz-col">
+                <canvas id="c1" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="card-section">
+    <h2>The Design Pattern</h2>
+    <table class="layout">
+        <tr>
+            <td class="text-col">
+                <p>Multi-resolution: run at multiple bin counts. Equal-count (percentile-width) bins: width encodes density.</p>
+                <div class="key-point">Meta-distribution Gini: if &gt; 0.7, feature needs adaptive treatment. This feature's bin-count Gini is 0.90 — well past the threshold.</div>
+                <ul>
+                    <li>Variable-width bins — narrow where data is dense, wide where sparse</li>
+                    <li>Each bin holds the same count: 8 bins × 25 obs = 200</li>
+                    <li>Narrowest bin spans 0.095 units; widest spans 211.5 units</li>
+                    <li>Width becomes the signal — a 2226× span, same count in each</li>
+                    <li>No empty bins, no wasted bins, no information loss</li>
+                </ul>
+            </td>
+            <td class="viz-col">
+                <canvas id="c2" width="720" height="300"></canvas>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<script>var __charts = [];
+function setup(id) {
+    var c = document.getElementById(id); if (!c) return null;
+    if (!c.dataset.w) { c.dataset.w = c.getAttribute('width') || '720'; c.dataset.h = c.getAttribute('height') || '300'; }
+    var w = parseInt(c.dataset.w), h = parseInt(c.dataset.h);
+    var dpr = window.devicePixelRatio || 1;
+    c.style.maxWidth = w + 'px';
+    var cssW = c.getBoundingClientRect().width || w;
+    var scale = (cssW / w) * dpr;
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    var ctx = c.getContext('2d'); ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, w, h);
+    return {ctx:ctx, w:w, h:h};
+}
+
+// Deterministic dataset — a literal, sorted array of 200 illustrative feature values
+// (e.g. support-ticket resolution hours). Literal rather than a seeded PRNG because the
+// SHAPE of this distribution IS the lesson: where the mass sits and how far the tail runs
+// determines every bin count on the page. Never Math.random().
+var DATA = [
+    0.3, 0.3, 0.3, 0.31, 0.31, 0.31, 0.31, 0.32, 0.32, 0.32, 0.33, 0.33, 0.33, 0.34, 0.34,
+    0.35, 0.35, 0.35, 0.36, 0.36, 0.37, 0.37, 0.38, 0.39, 0.39, 0.4, 0.4, 0.41, 0.42, 0.42,
+    0.43, 0.44, 0.44, 0.45, 0.46, 0.47, 0.48, 0.49, 0.49, 0.5, 0.51, 0.52, 0.53, 0.54, 0.55,
+    0.56, 0.58, 0.59, 0.6, 0.61, 0.62, 0.64, 0.65, 0.66, 0.68, 0.69, 0.71, 0.72, 0.74, 0.75,
+    0.77, 0.79, 0.8, 0.82, 0.84, 0.86, 0.88, 0.9, 0.92, 0.94, 0.96, 0.99, 1.01, 1.03, 1.06,
+    1.08, 1.11, 1.14, 1.16, 1.19, 1.22, 1.25, 1.28, 1.31, 1.35, 1.38, 1.42, 1.45, 1.49, 1.53,
+    1.57, 1.61, 1.65, 1.69, 1.74, 1.78, 1.83, 1.88, 1.93, 1.98, 2.04, 2.09, 2.15, 2.21, 2.27,
+    2.33, 2.39, 2.46, 2.53, 2.6, 2.67, 2.75, 2.83, 2.91, 2.99, 3.07, 3.16, 3.25, 3.35, 3.44,
+    3.54, 3.65, 3.75, 3.86, 3.98, 4.09, 4.22, 4.34, 4.47, 4.6, 4.74, 4.89, 5.03, 5.19, 5.34,
+    5.51, 5.67, 5.85, 6.03, 6.21, 6.41, 6.6, 6.81, 7.02, 7.24, 7.47, 7.7, 7.95, 8.2, 8.46,
+    8.73, 9.01, 9.29, 9.59, 9.9, 10.22, 10.55, 10.89, 11.25, 11.61, 13.0, 13.6, 14.2, 14.8,
+    15.3, 15.9, 16.5, 17.1, 17.7, 18.3, 18.9, 19.5, 20.1, 20.6, 21.2, 21.8, 22.4, 23.0, 25.3,
+    26.5, 27.6, 28.8, 30.0, 31.2, 32.4, 33.5, 34.7, 37.8, 39.9, 42.0, 44.1, 46.2, 50.5, 54.0,
+    57.5, 63.4, 68.7, 78.0, 90.0, 233.0
+];
+
+// Anti-pattern: 20 equal-width bins on power-law data — counts computed from DATA
+__charts.push(function(){
+    var s = setup('c1');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var marginLeft = 50, marginRight = 30, marginTop = 40, marginBottom = 50;
+    var plotW = w - marginLeft - marginRight;
+    var plotH = h - marginTop - marginBottom;
+    var numBins = 20;
+    var slotW = plotW / numBins;
+
+    // Bin DATA into numBins equal-width bins over [0, domainMax]
+    var domainMax = 240;      // covers the largest value (233.0)
+    var binValW = domainMax / numBins;   // 12 value-units per bin
+    var counts = [];
+    for (var i = 0; i < numBins; i++) counts.push(0);
+    for (var k = 0; k < DATA.length; k++) {
+        var bi = Math.floor(DATA[k] / binValW);
+        if (bi >= numBins) bi = numBins - 1;
+        counts[bi]++;
+    }
+    var total = DATA.length;
+    var maxCount = 0, emptyBins = 0;
+    for (var i = 0; i < numBins; i++) {
+        if (counts[i] > maxCount) maxCount = counts[i];
+        if (counts[i] === 0) emptyBins++;
+    }
+    var topPct = Math.round(counts[0] / total * 1000) / 10;   // % in the first bin
+    var restPct = Math.round((total - counts[0]) / total * 1000) / 10;
+
+    // Gini of the bin-count vector (how unequally the bins are loaded)
+    var meanCount = total / numBins, absSum = 0;
+    for (var a = 0; a < numBins; a++) for (var b = 0; b < numBins; b++) absSum += Math.abs(counts[a] - counts[b]);
+    var gini = absSum / (2 * numBins * numBins * meanCount);
+
+    var barMax = plotH * 0.88;   // pixel height of the tallest bar
+
+    // Draw axes
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(marginLeft, marginTop);
+    ctx.lineTo(marginLeft, marginTop + plotH);
+    ctx.lineTo(marginLeft + plotW, marginTop + plotH);
+    ctx.stroke();
+
+    // Y-axis ticks: 0 and maxCount
+    ctx.fillStyle = '#666';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'right';
+    ctx.fillText('0', marginLeft - 6, marginTop + plotH + 4);
+    ctx.fillText(String(maxCount), marginLeft - 6, marginTop + plotH - barMax + 4);
+    ctx.fillText('count', marginLeft - 6, marginTop - 12);
+
+    // Bars — every height is counts[i] scaled; a zero count draws nothing
+    for (var i = 0; i < numBins; i++) {
+        var x = marginLeft + i * slotW;
+        var barH = counts[i] / maxCount * barMax;
+        var y = marginTop + plotH - barH;
+
+        if (barH > 0) {
+            ctx.fillStyle = 'rgba(26,82,118,0.35)';
+            ctx.fillRect(x + 1, y, slotW - 2, barH);
+            ctx.strokeStyle = (i === 0) ? '#e74c3c' : '#1a5276';
+            ctx.lineWidth = (i === 0) ? 2 : 0.5;
+            ctx.strokeRect(x + 1, y, slotW - 2, barH);
+        } else {
+            // Empty bin: dashed outline at the baseline so the waste is visible
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 0.75;
+            ctx.setLineDash([2, 2]);
+            ctx.beginPath();
+            ctx.moveTo(x + 1, marginTop + plotH);
+            ctx.lineTo(x + slotW - 1, marginTop + plotH);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+    }
+
+    // Computed label on the first bin
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 13px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText(counts[0] + ' of ' + total + ' = ' + topPct + '%',
+                 marginLeft + slotW + 6, marginTop + plotH - barMax + 12);
+
+    // Arrow spanning the sparse right-hand region
+    var arrowStartX = marginLeft + slotW * 4;
+    var arrowEndX = marginLeft + plotW - 6;
+    var arrowY = marginTop + plotH - 34;
+
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(arrowStartX, arrowY);
+    ctx.lineTo(arrowEndX, arrowY);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(arrowEndX, arrowY);
+    ctx.lineTo(arrowEndX - 8, arrowY - 5);
+    ctx.lineTo(arrowEndX - 8, arrowY + 5);
+    ctx.closePath();
+    ctx.fillStyle = '#e74c3c';
+    ctx.fill();
+
+    // Computed arrow label
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = '12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText(emptyBins + ' of ' + numBins + ' bins empty · other ' + (numBins - 1) +
+                 ' bins share ' + restPct + '%',
+                 (arrowStartX + arrowEndX) / 2, arrowY - 8);
+
+    // Computed Gini of the bin loading
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'right';
+    ctx.fillText('bin-count Gini = ' + gini.toFixed(2), marginLeft + plotW, marginTop - 12);
+
+    // X-axis: bin width and range, computed
+    ctx.fillStyle = '#666';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('0', marginLeft, marginTop + plotH + 16);
+    ctx.textAlign = 'right';
+    ctx.fillText(String(domainMax), marginLeft + plotW, marginTop + plotH + 16);
+    ctx.font = '12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Feature value — ' + numBins + ' equal-width bins of ' + binValW + ' units',
+                 marginLeft + plotW / 2, h - 10);
+});
+
+// Design pattern: equal-count (variable-width) bins — edges computed from DATA quantiles
+__charts.push(function(){
+    var s = setup('c2');
+    var ctx = s.ctx, w = s.w, h = s.h;
+    var marginLeft = 50, marginRight = 30, marginTop = 40, marginBottom = 60;
+    var plotW = w - marginLeft - marginRight;
+    var plotH = h - marginTop - marginBottom;
+
+    var numBins = 8;
+    var total = DATA.length;
+    var per = total / numBins;            // 200 / 8 = 25 observations per bin
+
+    // Quantile (equal-count) edges: midpoint between the values straddling each cut
+    var edges = [DATA[0]];
+    for (var j = 1; j < numBins; j++) {
+        edges.push((DATA[j * per - 1] + DATA[j * per]) / 2);
+    }
+    edges.push(DATA[total - 1]);
+
+    // Verify the counts each edge pair actually holds
+    var counts = [];
+    for (var i = 0; i < numBins; i++) counts.push(0);
+    for (var k = 0; k < total; k++) {
+        var j = 0;
+        while (j < numBins - 1 && DATA[k] >= edges[j + 1]) j++;
+        counts[j]++;
+    }
+    var perBin = counts[0], uniform = true;
+    for (var i = 0; i < numBins; i++) if (counts[i] !== perBin) uniform = false;
+
+    // Value widths, and the pixel widths (log scale, so 4 orders of magnitude are visible)
+    var valW = [], logW = [], logTotal = 0;
+    for (var i = 0; i < numBins; i++) {
+        valW.push(edges[i + 1] - edges[i]);
+        var lw = Math.log(edges[i + 1] / edges[i]) / Math.LN10;
+        logW.push(lw); logTotal += lw;
+    }
+    var minValW = Math.min.apply(null, valW), maxValW = Math.max.apply(null, valW);
+    var widthRatio = Math.round(maxValW / minValW);
+
+    // Draw axes
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(marginLeft, marginTop);
+    ctx.lineTo(marginLeft, marginTop + plotH);
+    ctx.lineTo(marginLeft + plotW, marginTop + plotH);
+    ctx.stroke();
+
+    var barH = plotH * 0.62;
+    var barY = marginTop + (plotH - barH) / 2 - 4;
+    var x = marginLeft;
+
+    for (var i = 0; i < numBins; i++) {
+        var pxW = logW[i] / logTotal * plotW;
+
+        ctx.fillStyle = 'rgba(26,82,118,0.35)';
+        ctx.fillRect(x + 1, barY, pxW - 2, barH);
+        ctx.strokeStyle = '#27ae60';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x + 1, barY, pxW - 2, barH);
+
+        // Count inside each bar — computed, so all eight read the same number
+        ctx.fillStyle = '#1a5276';
+        ctx.font = 'bold 11px system-ui';
+        ctx.textAlign = 'center';
+        if (pxW > 22) ctx.fillText(String(counts[i]), x + pxW / 2, barY + barH / 2 + 4);
+
+        // Edge value under the first, middle and last cut
+        if (i === 0 || i === 4 || i === numBins - 1) {
+            ctx.fillStyle = '#666';
+            ctx.font = '10px system-ui';
+            ctx.fillText(edges[i].toFixed(2), x, marginTop + plotH + 12);
+        }
+        x += pxW;
+    }
+    ctx.fillStyle = '#666';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'right';
+    ctx.fillText(edges[numBins].toFixed(1), marginLeft + plotW, marginTop + plotH + 12);
+
+    // Arrow underneath: narrow=dense -> wide=sparse
+    var arrowY = marginTop + plotH + 26;
+    var arrowStartX = marginLeft + 10;
+    var arrowEndX = marginLeft + plotW - 10;
+
+    ctx.strokeStyle = '#1a5276';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(arrowStartX, arrowY);
+    ctx.lineTo(arrowEndX, arrowY);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(arrowEndX, arrowY);
+    ctx.lineTo(arrowEndX - 8, arrowY - 5);
+    ctx.lineTo(arrowEndX - 8, arrowY + 5);
+    ctx.closePath();
+    ctx.fillStyle = '#1a5276';
+    ctx.fill();
+
+    // Computed arrow label: the true value-width span
+    ctx.fillStyle = '#1a5276';
+    ctx.font = '12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('narrow ' + minValW.toFixed(3) + ' units (dense)  →  wide ' +
+                 maxValW.toFixed(1) + ' units (sparse) — ' + widthRatio + '× span',
+                 (arrowStartX + arrowEndX) / 2, arrowY + 16);
+
+    // Computed top label
+    ctx.fillStyle = '#27ae60';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText(numBins + ' bins × ' + perBin + ' obs = ' + total +
+                 (uniform ? ' — every bin equally loaded' : ' — counts differ'),
+                 marginLeft + plotW / 2, marginTop - 12);
+
+    // Note the log axis so the drawn widths are not misread as value widths
+    ctx.fillStyle = '#666';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('bin edges on a log value axis (drawn width = decades spanned)',
+                 marginLeft + plotW / 2, h - 8);
+});
+
+__charts.forEach(function(f){ f(); });
+var __redrawTimer;
+window.addEventListener('resize', function(){
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function(){ __charts.forEach(function(f){ f(); }); }, 150);
+});
+</script>
+
+</body>
+</html>
