@@ -1,4 +1,4 @@
-# applied-game-theory-behavioral-design/
+# 19-applied-game-theory-behavioral-design/
 
 Game theory and behavioral design mechanics applied to product/pricing decisions — decoys, streaks, auctions, social proof, subscriptions, charm pricing.
 
