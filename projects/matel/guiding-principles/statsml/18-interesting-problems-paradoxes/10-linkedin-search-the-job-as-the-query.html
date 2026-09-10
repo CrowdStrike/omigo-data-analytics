@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LinkedIn Search — The Job as the Query</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 40px 20px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 50%; }
+.obj-table td:last-child { width: 50%; text-align: center; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; width: 100%; height: auto; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+.math-box { background: #f8fafb; border: 1px solid #e0e0e0; border-radius: 6px; padding: 16px 20px; margin: 12px 0; font-size: 0.9em; }
+.math-box code { background: #eef2f7; padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
+.mini-table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 0.88em; }
+.mini-table th { background: #f0f4f8; padding: 6px 10px; text-align: left; border: 1px solid #e0e0e0; color: #1a5276; }
+.mini-table td { padding: 6px 10px; border: 1px solid #e0e0e0; }
+.summary-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 0.9em; }
+.summary-table th { background: #f0f4f8; padding: 10px 14px; text-align: left; border: 1px solid #e0e0e0; color: #1a5276; }
+.summary-table td { padding: 10px 14px; border: 1px solid #e0e0e0; }
+</style>
+</head>
+<body>
+
+<h1>LinkedIn Search — The Job as the Query</h1>
+<p class="subtitle">On a professional network, the job posting is a query against people and the profile is a query against jobs. The same engine runs in both directions — and that symmetry breaks almost every assumption borrowed from web search.</p>
+
+<div class="philosophy">
+<strong>The question:</strong> In web search, a document has no opinion about being retrieved. What changes when the document can decline?<br><br>
+<strong>The answer:</strong> Everything downstream of the score. A hiring marketplace runs two retrieval systems over each other's corpus: the job ranks people, the person ranks jobs. A result is only useful if it clears <em>both</em> ranking functions, so the object being optimized stops being a sorted list and becomes an assignment. And the cheapest signal for predicting whether the other side will say yes — recent activity — quietly smuggles <em>availability</em> into a score that claims to measure <em>relevance</em>.
+</div>
+
+<!-- Aspect 1 -->
+<h2>1. Two Corpora, One Engine — Run the Query Backwards</h2>
+<table class="obj-table">
+    <tr>
+        <td>
+            <div class="obj-title">The Mirror Retrieval Problem</div>
+            <p>Recruiter search takes a job description and retrieves people. Job search takes a profile and retrieves postings. These are not two products that happen to share infrastructure — they are the same inverted index, the same tokenizer, the same learned scorer, with the roles of query and document swapped.</p>
+
+            <div class="math-box">
+            <strong>The same score, read two ways:</strong> a single relevance model <code>s(job, person)</code> supports both surfaces.<br><br>
+            Recruiter side: fix <code>job</code>, rank over the people corpus → <code>top-k people</code><br>
+            Candidate side: fix <code>person</code>, rank over the postings corpus → <code>top-k jobs</code><br><br>
+            In classic ad-hoc retrieval the query is ephemeral and the document is durable. Here <strong>both sides are durable, indexed, and updated</strong> — a profile is a standing query that keeps firing after you close the tab.
+            </div>
+
+            <ul>
+                <li><strong>Query and document swap roles:</strong> a posting is a long structured query; a profile is a long structured document — and vice versa</li>
+                <li><strong>Both sides are indexed:</strong> neither side is ephemeral, so the system can precompute matches in both directions offline</li>
+                <li><strong>Both sides drift:</strong> a posting's bar moves as applicants arrive, a profile's skills move as the person works</li>
+                <li><strong>Vocabulary mismatch cuts twice:</strong> the posting's jargon and the profile's jargon must be bridged in the same shared space</li>
+                <li><strong>Length asymmetry is real:</strong> a posting is one role, a profile is a career — so a profile matches many postings by construction</li>
+                <li><strong>Recall targets differ:</strong> a recruiter wants 20 good people out of millions; a candidate wants every job they could plausibly get</li>
+            </ul>
+        </td>
+        <td>
+            <canvas id="canvas1" width="720" height="360"></canvas>
+        </td>
+    </tr>
+</table>
+
+<!-- Aspect 2 -->
+<h2>2. Both Sides Have Preferences, So One Ranking Function Isn't Enough</h2>
+<table class="obj-table">
+    <tr>
+        <td>
+            <div class="obj-title">Top-k Retrieval vs Stable Matching</div>
+            <p>A web page cannot refuse to be clicked. A candidate can ignore the message, and an employer can pass on the application. So the useful quantity is not "how relevant is this person" but "will a match actually form" — the product of two acceptances. A candidate perfectly relevant to a job that would never hire them, or who would never take it, is a <em>wrong answer</em> that scores perfectly.</p>
+
+            <div class="math-box">
+            <strong>Five candidates for one opening (illustrative).</strong> <code>r</code> = fit to the job, <code>q</code> = probability the candidate engages. Expected match value = <code>r × q</code>.
+            <table class="mini-table">
+                <tr><th>Person</th><th>r</th><th>q</th><th>r × q</th></tr>
+                <tr><td>Alice</td><td>0.95</td><td>0.10</td><td>0.0950</td></tr>
+                <tr><td>Bob</td><td>0.80</td><td>0.55</td><td>0.4400</td></tr>
+                <tr><td>Carol</td><td>0.70</td><td>0.75</td><td>0.5250</td></tr>
+                <tr><td>Dan</td><td>0.55</td><td>0.90</td><td>0.4950</td></tr>
+                <tr><td>Erin</td><td>0.35</td><td>0.95</td><td>0.3325</td></tr>
+            </table>
+            Rank by <code>r</code>: <strong>Alice, Bob, Carol, Dan, Erin.</strong> Rank by <code>r × q</code>: <strong>Carol, Dan, Bob, Erin, Alice.</strong><br>
+            The best-fitting candidate ranks <strong>last</strong> on expected outcome. Three messages sent by the <code>r</code> ranking return <code>0.095 + 0.440 + 0.525 = 1.060</code> expected engagements; by <code>r × q</code>, <code>0.525 + 0.495 + 0.440 = 1.460</code> — a <code>37.7%</code> lift with a <em>less</em> relevant slate.
+            </div>
+
+            <div class="math-box">
+            <strong>Why the objective changes shape, not just its weights.</strong> Top-k retrieval solves each query independently: the correct output is the list sorted by score, and one query's answer does not consume another's. A hiring market has capacity — the job hires one person, the person takes one job — so filling a slot <strong>removes that person from every other job's feasible set</strong>. The object being optimized is an assignment over both sides, with preference orders on both, and the correctness criterion is <em>stability</em>: no job–candidate pair who both prefer each other to their assignment. Deferred acceptance produces such an assignment; independent per-query top-k cannot, because it has no term for the externality.
+            </div>
+
+            <div class="math-box">
+            <strong>Congestion, made concrete (illustrative).</strong> 100 openings, 100 qualified people, each posting ranks independently and messages its top 1. If all 100 agree on the same person and that person answers 5 messages, at most 1 hire forms — a fill rate of <code>1/100 = 1%</code>, and 99 qualified people receive zero contacts. Spreading one contact per person can fill up to <code>100/100 = 100%</code>. Same relevance model, same candidates, two orders of magnitude apart.
+            </div>
+
+            <ul>
+                <li><strong>Relevance is necessary, not sufficient:</strong> a perfect match that never replies produces exactly zero hires</li>
+                <li><strong>The product breaks transitivity of "better":</strong> the top-<code>r</code> person is the worst expected outcome here</li>
+                <li><strong>Capacity creates an externality:</strong> every filled slot shrinks the candidate pool the other queries draw from</li>
+                <li><strong>Stability is the right correctness test:</strong> no pair should mutually prefer each other over what they got</li>
+                <li><strong>Independent ranking causes congestion:</strong> all queries pile onto the same head of the distribution</li>
+                <li><strong>Estimating <code>q</code> is a second model:</strong> predicting engagement is a different problem from predicting fit</li>
+            </ul>
+        </td>
+        <td>
+            <canvas id="canvas2" width="720" height="360"></canvas>
+        </td>
+    </tr>
+</table>
+
+<!-- Aspect 3 -->
+<h2>3. Activity Leaks Intent — and Contaminates Relevance</h2>
+<table class="obj-table">
+    <tr>
+        <td>
+            <div class="obj-title">Availability Masquerading as Relevance</div>
+            <p>Recency of profile edits, application rate, and reply rate are the strongest cheap predictors of <code>q</code>. Add them to the score and reply rate jumps immediately, which is why every such system does it. The cost is that one number now mixes two different things, and the entangled score is dominated by whichever component varies more — which is availability, by an order of magnitude.</p>
+
+            <div class="math-box">
+            <strong>1,000 retrieved profiles bucketed by days since last edit (illustrative).</strong>
+            <table class="mini-table">
+                <tr><th>Days since edit</th><th>Profiles</th><th>Reply rate</th><th>Meets the job's bar</th></tr>
+                <tr><td>0–7</td><td>120</td><td>42%</td><td>62%</td></tr>
+                <tr><td>8–30</td><td>210</td><td>31%</td><td>64%</td></tr>
+                <tr><td>31–90</td><td>260</td><td>19%</td><td>61%</td></tr>
+                <tr><td>91–180</td><td>190</td><td>11%</td><td>63%</td></tr>
+                <tr><td>181–365</td><td>140</td><td>6%</td><td>60%</td></tr>
+                <tr><td>365+</td><td>80</td><td>3%</td><td>62%</td></tr>
+                <tr><td><strong>All</strong></td><td><strong>1,000</strong></td><td><strong>19.7%</strong></td><td><strong>62.1%</strong></td></tr>
+            </table>
+            Reply rate spans <code>42 / 3 = 14.0x</code> across buckets. Qualification spans <code>0.64 / 0.60 = 1.07x</code> — essentially flat. So a score that adds activity is largely re-sorting on availability.
+            </div>
+
+            <div class="math-box">
+            <strong>What the boost buys and what it costs.</strong> Message only the two freshest buckets (<code>120 + 210 = 330</code> profiles): expected replies <code>50.4 + 65.1 = 115.5</code>, a reply rate of <code>115.5 / 330 = 35.0%</code> versus <code>196.6 / 1000 = 19.7%</code> overall — a <code>1.78x</code> lift. Qualified share barely moves: <code>208.8 / 330 = 63.3%</code> versus <code>62.1%</code>. And the discarded 670 profiles contained <code>620.7 − 208.8 = 411.9</code> qualified people.
+            </div>
+
+            <ul>
+                <li><strong>Activity predicts response, not competence:</strong> the qualification curve across recency buckets is flat within noise</li>
+                <li><strong>One score, two meanings:</strong> callers read the number as fit while it mostly encodes availability</li>
+                <li><strong>The passive-candidate inversion:</strong> the strongest engineer who is content in their job sinks below a mediocre active one</li>
+                <li><strong>The lift is real:</strong> reply rate nearly doubles, which is why the shortcut survives every review</li>
+                <li><strong>The cost is invisible:</strong> 411.9 qualified people are dropped, and no dashboard counts candidates never shown</li>
+                <li><strong>Fix by factoring, not weighting:</strong> predict fit and engagement separately, then combine explicitly per use case</li>
+            </ul>
+        </td>
+        <td>
+            <canvas id="canvas3" width="720" height="360"></canvas>
+        </td>
+    </tr>
+</table>
+
+<!-- Aspect 4 -->
+<h2>4. Findability Feeds Itself — Where the Ranks Freeze</h2>
+<table class="obj-table">
+    <tr>
+        <td>
+            <div class="obj-title">Preferential Attachment with a Threshold</div>
+            <p>Being findable produces contacts. Contacts produce activity — replies, edits, profile views. Activity raises the activity score, which raises findability. That is a closed positive loop, and because search only shows a top-<code>k</code>, the loop has a hard cutoff: profiles below the fold receive no impressions at all, so their score can only decay.</p>
+
+            <div class="math-box">
+            <strong>A deterministic six-profile loop (illustrative).</strong> Activity score <code>aᵢ</code> decays 15% per round; each round the top 3 by score receive contact boosts of <code>+6, +3, +1</code>; everyone else gets <code>0</code>.<br><br>
+            <code>aᵢ(t+1) = 0.85 · aᵢ(t) + boost(rank)</code><br><br>
+            Start: <code>[10, 9, 8, 7, 6, 5]</code> — a 1.11x gap between first and second.<br><br>
+            Because the boost depends only on rank, and the initial order never inverts, the recurrence has fixed points <code>6/0.15 = 40</code>, <code>3/0.15 = 20</code>, <code>1/0.15 = 6.67</code>, and <code>0</code> for everyone below the fold. The initial <code>1.11x</code> gap between the top two becomes a permanent <code>40/20 = 2.00x</code>; the gap to the fourth profile becomes unbounded.
+            </div>
+
+            <div class="math-box">
+            <strong>Say the mechanism precisely.</strong> This is a rank-thresholded Matthew effect, and it converges to fixed points — it is <em>not</em> a power law. A power law needs unbounded superlinear growth; here the decay term caps every profile. The defect is not a heavy tail, it is <strong>rank freezing</strong>: the initial ordering, whatever produced it, becomes self-certifying and the system stops learning about profiles 4 through 6.
+            </div>
+
+            <ul>
+                <li><strong>The loop is closed, not causal one-way:</strong> findability → contacts → activity → findability, all four arrows live</li>
+                <li><strong>Top-k is the amplifier:</strong> below-the-fold profiles get zero impressions, so their score can only decay</li>
+                <li><strong>Tiny initial gaps become permanent:</strong> 1.11x at start locks in as 2.00x at the fixed point</li>
+                <li><strong>The exploited set is self-certifying:</strong> the system only collects evidence about profiles it already shows</li>
+                <li><strong>No power law claimed:</strong> the decay term caps growth, so this converges rather than fattening a tail</li>
+                <li><strong>Break it with exploration, not reweighting:</strong> randomized impressions below the fold restore the missing data</li>
+            </ul>
+        </td>
+        <td>
+            <canvas id="canvas4" width="720" height="360"></canvas>
+        </td>
+    </tr>
+</table>
+
+<!-- Aspect 5 -->
+<h2>5. The Evaluation Trap — Offline Relevance Rewards the Worse Ranker</h2>
+<table class="obj-table">
+    <tr>
+        <td>
+            <div class="obj-title">When Two Metrics Point Opposite Ways</div>
+            <p>Offline evaluation asks a rater: was this candidate qualified for this job? It is cheap, reproducible, and available for every impression. Online evaluation asks: did a hire happen? It is the thing you actually want, it depends on the other side's decision, and it arrives weeks later on a fraction of the traffic. On a two-sided problem these two metrics can rank two candidate systems in <em>opposite</em> orders — and the offline one, being cheaper, usually wins the argument.</p>
+
+            <div class="math-box">
+            <strong>Same five candidates, two rankers, two metrics.</strong> Define "qualified" as <code>r ≥ 0.70</code>, so Alice, Bob, and Carol qualify.
+            <table class="mini-table">
+                <tr><th>Metric</th><th>Rank by r</th><th>Rank by r × q</th></tr>
+                <tr><td>Top-3 slate</td><td>Alice, Bob, Carol</td><td>Carol, Dan, Bob</td></tr>
+                <tr><td>Precision@3 (qualified)</td><td>3/3 = 100.0%</td><td>2/3 = 66.7%</td></tr>
+                <tr><td>Expected engagements</td><td>1.060</td><td>1.460</td></tr>
+            </table>
+            The <code>r</code> ranker wins the offline metric outright and loses the outcome metric by <code>37.7%</code>. Nothing here is a measurement error — both numbers are correct about different things. Precision@3 scores the slate against a one-sided notion of correctness that the market does not use.
+            </div>
+
+            <div class="math-box">
+            <strong>Why the disagreement is structural.</strong> Offline relevance is a property of the pair <code>(job, person)</code> and can be labelled in isolation. A hire is a property of the <em>assignment</em>, and depends on choices the labeller cannot see: the other applicants, the other offers, the candidate's counterfactual job. No amount of rater agreement fixes this, because the label is measuring a different object.
+            </div>
+
+            <ul>
+                <li><strong>Offline labels a pair, online labels an assignment:</strong> the two objects genuinely differ, so the metrics can disagree</li>
+                <li><strong>Cheap metric, wrong target:</strong> precision@3 is available on every impression and silently defines "good"</li>
+                <li><strong>Outcome data is thin and late:</strong> hires are rare, delayed, and confounded by the other side's alternatives</li>
+                <li><strong>Counterfactuals are unobservable:</strong> you never see whether the passed-over candidate would have accepted</li>
+                <li><strong>Interleaving does not save you:</strong> it measures one side's clicks, and clicks are not the other side's consent</li>
+                <li><strong>Use both, ranked explicitly:</strong> offline as a guardrail against irrelevance, online as the decision metric</li>
+            </ul>
+        </td>
+        <td>
+            <canvas id="canvas5" width="720" height="360"></canvas>
+        </td>
+    </tr>
+</table>
+
+<!-- Summary -->
+<h2>6. The Complete Picture</h2>
+<table class="summary-table">
+    <tr><th>Property</th><th>Ordinary web search</th><th>Two-sided hiring search</th></tr>
+    <tr><td><strong>Query</strong></td><td>Ephemeral text typed by a user</td><td>A durable, indexed posting — or a durable, indexed profile</td></tr>
+    <tr><td><strong>Document</strong></td><td>Indifferent to being retrieved</td><td>Has preferences, capacity, and the right to decline</td></tr>
+    <tr><td><strong>Objective</strong></td><td>Top-<code>k</code> list, one query at a time</td><td>A stable assignment over both sides, with capacity</td></tr>
+    <tr><td><strong>Correctness test</strong></td><td>Ordered by score, judged per pair</td><td>No blocking pair mutually preferring each other</td></tr>
+    <tr><td><strong>Cheap winning signal</strong></td><td>Clicks, dwell time</td><td>Recent activity — which encodes availability, not fit</td></tr>
+    <tr><td><strong>Positive feedback</strong></td><td>Popular pages get more links</td><td>Findability → contacts → activity → findability</td></tr>
+    <tr><td><strong>Evaluation</strong></td><td>Offline relevance tracks online clicks</td><td>Offline relevance and hires can rank systems oppositely</td></tr>
+</table>
+
+<div class="philosophy">
+<strong>One sentence:</strong> The moment the document can say no, ranking stops being retrieval and becomes matching — and the signal that best predicts "yes" is availability, which is why the most findable person on a professional network is usually the one most actively looking rather than the one most worth finding.
+</div>
+
+<script>var __charts = [];
+var FONT = '-apple-system, BlinkMacSystemFont, sans-serif';
+
+function setupCanvas(id, w, h) {
+    var c = document.getElementById(id); if (!c) return null;
+    var dpr = window.devicePixelRatio || 1;
+    c.style.maxWidth = w + 'px';
+    var cssW = c.getBoundingClientRect().width || w;
+    var scale = (cssW / w) * dpr;
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    var ctx = c.getContext('2d'); ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, w, h);
+    return ctx;
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+function arrowHead(ctx, x, y, angle, size, color) {
+    ctx.save();
+    ctx.translate(x, y); ctx.rotate(angle);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(0, 0); ctx.lineTo(-size, -size * 0.5); ctx.lineTo(-size, size * 0.5);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+}
+
+// ---------- Canvas 1: two corpora, one shared scorer, arrows both ways ----------
+__charts.push(function () {
+    var ctx = setupCanvas('canvas1', 720, 360); if (!ctx) return;
+
+    ctx.font = 'bold 14px ' + FONT; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('One Engine, Two Directions — Each Side Is the Other’s Query', 360, 22);
+
+    // Left box: people
+    roundRect(ctx, 40, 90, 190, 180, 6);
+    ctx.fillStyle = 'rgba(26,82,118,0.06)'; ctx.fill();
+    ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.font = 'bold 13px ' + FONT; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('CORPUS: PEOPLE', 135, 118);
+    ctx.font = '11px ' + FONT; ctx.fillStyle = '#666';
+    ['Alice — 8 yrs, distributed systems', 'Bob — 3 yrs, data pipelines',
+     'Carol — 6 yrs, ranking models', '… millions of profiles'].forEach(function (s, i) {
+        ctx.fillText(s, 135, 150 + i * 22);
+    });
+
+    // Right box: postings
+    roundRect(ctx, 490, 90, 190, 180, 6);
+    ctx.fillStyle = 'rgba(39,174,96,0.06)'; ctx.fill();
+    ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.font = 'bold 13px ' + FONT; ctx.fillStyle = '#27ae60';
+    ctx.fillText('CORPUS: POSTINGS', 585, 118);
+    ctx.font = '11px ' + FONT; ctx.fillStyle = '#666';
+    ['Vendor A — Backend Engineer', 'Vendor A — Data Platform Lead',
+     'Vendor B — Search Engineer', '… millions of postings'].forEach(function (s, i) {
+        ctx.fillText(s, 585, 150 + i * 22);
+    });
+
+    // Center box: shared scorer
+    roundRect(ctx, 275, 140, 170, 80, 6);
+    ctx.fillStyle = 'rgba(230,126,34,0.08)'; ctx.fill();
+    ctx.strokeStyle = '#e67e22'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.font = 'bold 13px ' + FONT; ctx.fillStyle = '#e67e22';
+    ctx.fillText('SHARED SCORER', 360, 172);
+    ctx.font = '12px ' + FONT; ctx.fillStyle = '#666';
+    ctx.fillText('s(job, person)', 360, 196);
+
+    // Arrow 1: the job is the query (postings -> people), arcs above
+    ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(490, 110);
+    ctx.quadraticCurveTo(360, 50, 238, 110);
+    ctx.stroke();
+    arrowHead(ctx, 232, 112, Math.PI * 0.75, 9, '#27ae60');
+    ctx.font = 'bold 12px ' + FONT; ctx.fillStyle = '#27ae60'; ctx.textAlign = 'center';
+    ctx.fillText('the job is the query', 360, 74);
+
+    // Arrow 2: the profile is the query (people -> postings), arcs below
+    ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(230, 250);
+    ctx.quadraticCurveTo(360, 310, 482, 250);
+    ctx.stroke();
+    arrowHead(ctx, 488, 248, -Math.PI * 0.25, 9, '#1a5276');
+    ctx.font = 'bold 12px ' + FONT; ctx.fillStyle = '#1a5276';
+    ctx.fillText('the profile is the query', 360, 302);
+
+    ctx.font = '11px ' + FONT; ctx.fillStyle = '#999';
+    ctx.fillText('Illustrative Example — same index, same scorer, two directions', 360, 338);
+});
+
+// ---------- Shared candidate table (literal: the shape carries the lesson) ----------
+var CANDS = [
+    ['Alice', 0.95, 0.10],
+    ['Bob',   0.80, 0.55],
+    ['Carol', 0.70, 0.75],
+    ['Dan',   0.55, 0.90],
+    ['Erin',  0.35, 0.95]
+];
+
+// ---------- Canvas 2: r vs q scatter with r*q iso-value curves ----------
+__charts.push(function () {
+    var ctx = setupCanvas('canvas2', 720, 360); if (!ctx) return;
+    var ox = 75, oy = 285, gw = 560, gh = 235;
+
+    function rToX(r) { return ox + r * gw; }
+    function qToY(q) { return oy - q * gh; }
+
+    ctx.font = 'bold 14px ' + FONT; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('Two Acceptances, Not One — the Best Fit Can Be the Worst Result', 360, 20);
+
+    // Gridlines
+    ctx.font = '11px ' + FONT;
+    [0, 0.25, 0.5, 0.75, 1.0].forEach(function (v) {
+        ctx.strokeStyle = '#eee'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, qToY(v)); ctx.lineTo(ox + gw, qToY(v)); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(rToX(v), oy); ctx.lineTo(rToX(v), oy - gh); ctx.stroke();
+        ctx.fillStyle = '#666';
+        ctx.textAlign = 'right'; ctx.fillText(v.toFixed(2), ox - 8, qToY(v) + 4);
+        ctx.textAlign = 'center'; ctx.fillText(v.toFixed(2), rToX(v), oy + 15);
+    });
+
+    // Axes
+    ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ox, oy); ctx.lineTo(ox + gw, oy);
+    ctx.moveTo(ox, oy); ctx.lineTo(ox, oy - gh);
+    ctx.stroke();
+
+    ctx.font = '13px ' + FONT; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('r — fit to the job', ox + gw / 2, oy + 32);
+    ctx.save(); ctx.translate(22, oy - gh / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText('q — probability the candidate engages', 0, 0); ctx.restore();
+
+    // Iso-value curves q = v / r
+    var carol = CANDS[2], isoCarol = carol[1] * carol[2];
+    [0.2, 0.4, isoCarol].forEach(function (v) {
+        ctx.strokeStyle = '#e67e22'; ctx.lineWidth = 1.25; ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        var first = true;
+        for (var r = v; r <= 1.0001; r += 0.005) {
+            var q = v / r; if (q > 1) continue;
+            var x = rToX(Math.min(r, 1)), y = qToY(q);
+            first ? (ctx.moveTo(x, y), first = false) : ctx.lineTo(x, y);
+        }
+        ctx.stroke(); ctx.setLineDash([]);
+        ctx.font = '10px ' + FONT; ctx.fillStyle = '#e67e22'; ctx.textAlign = 'right';
+        ctx.fillText('r·q = ' + v.toFixed(2), ox + gw - 4, qToY(v) - 6);
+    });
+
+    // Points
+    var maxRQ = -1, maxRQname = '', maxR = -1, maxRname = '';
+    CANDS.forEach(function (c) {
+        if (c[1] * c[2] > maxRQ) { maxRQ = c[1] * c[2]; maxRQname = c[0]; }
+        if (c[1] > maxR) { maxR = c[1]; maxRname = c[0]; }
+    });
+    CANDS.forEach(function (c) {
+        var name = c[0], r = c[1], q = c[2], prod = r * q;
+        var color = name === maxRQname ? '#27ae60'
+                  : name === maxRname ? '#e74c3c'
+                  : 'rgba(26,82,118,0.75)';
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.arc(rToX(r), qToY(q), 6, 0, Math.PI * 2); ctx.fill();
+        ctx.font = 'bold 11px ' + FONT; ctx.textAlign = 'left';
+        ctx.fillText(name + ' ' + prod.toFixed(3), rToX(r) + 10, qToY(q) - 10);
+    });
+
+    // Annotations
+    ctx.font = 'bold 12px ' + FONT; ctx.textAlign = 'right'; ctx.fillStyle = '#e74c3c';
+    ctx.fillText('best fit, worst', rToX(0.93) - 12, qToY(0.16));
+    ctx.fillText('expected outcome', rToX(0.93) - 12, qToY(0.08));
+    ctx.fillStyle = '#27ae60'; ctx.textAlign = 'right';
+    ctx.fillText('best expected match', rToX(0.68) - 12, qToY(0.80));
+
+    ctx.font = '11px ' + FONT; ctx.fillStyle = '#999'; ctx.textAlign = 'left';
+    ctx.fillText('Illustrative Example — products computed from the plotted points at render time', ox, 348);
+});
+
+// ---------- Recency buckets (literal: counts carry the lesson) ----------
+var BUCKETS = [
+    ['0–7',     120, 42, 62],
+    ['8–30',    210, 31, 64],
+    ['31–90',   260, 19, 61],
+    ['91–180',  190, 11, 63],
+    ['181–365', 140,  6, 60],
+    ['365+',     80,  3, 62]
+];
+
+// ---------- Canvas 3: reply rate vs qualified share by recency bucket ----------
+__charts.push(function () {
+    var ctx = setupCanvas('canvas3', 720, 360); if (!ctx) return;
+    var ox = 75, oy = 290, gw = 590, gh = 230, vmax = 70;
+
+    function vToY(v) { return oy - (v / vmax) * gh; }
+
+    ctx.font = 'bold 14px ' + FONT; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('Availability Varies 14x, Qualification Doesn’t — Guess Which One the Score Learns', 360, 20);
+
+    // Gridlines + y labels
+    ctx.font = '11px ' + FONT;
+    [0, 10, 20, 30, 40, 50, 60, 70].forEach(function (v) {
+        ctx.strokeStyle = '#eee'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, vToY(v)); ctx.lineTo(ox + gw, vToY(v)); ctx.stroke();
+        ctx.fillStyle = '#666'; ctx.textAlign = 'right';
+        ctx.fillText(v + '%', ox - 8, vToY(v) + 4);
+    });
+
+    // Axes
+    ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ox, oy); ctx.lineTo(ox + gw, oy);
+    ctx.moveTo(ox, oy); ctx.lineTo(ox, oy - gh);
+    ctx.stroke();
+
+    var slot = gw / BUCKETS.length, bw = 26, gap = 6;
+    BUCKETS.forEach(function (b, i) {
+        var cx = ox + slot * (i + 0.5);
+        var x1 = cx - bw - gap / 2, x2 = cx + gap / 2;
+
+        ctx.fillStyle = 'rgba(231,76,60,0.75)';
+        ctx.fillRect(x1, vToY(b[2]), bw, oy - vToY(b[2]));
+        ctx.fillStyle = 'rgba(26,82,118,0.35)';
+        ctx.fillRect(x2, vToY(b[3]), bw, oy - vToY(b[3]));
+        ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 1;
+        ctx.strokeRect(x2, vToY(b[3]), bw, oy - vToY(b[3]));
+
+        ctx.font = 'bold 10px ' + FONT; ctx.textAlign = 'center';
+        ctx.fillStyle = '#e74c3c'; ctx.fillText(b[2] + '%', x1 + bw / 2, vToY(b[2]) - 5);
+        ctx.fillStyle = '#1a5276'; ctx.fillText(b[3] + '%', x2 + bw / 2, vToY(b[3]) - 5);
+
+        ctx.font = '11px ' + FONT; ctx.fillStyle = '#666';
+        ctx.fillText(b[0], cx, oy + 15);
+        ctx.font = '10px ' + FONT; ctx.fillStyle = '#999';
+        ctx.fillText('n=' + b[1], cx, oy + 29);
+    });
+
+    ctx.font = '13px ' + FONT; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('Days since last profile edit', ox + gw / 2, oy + 48);
+    ctx.save(); ctx.translate(22, oy - gh / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Percent of bucket', 0, 0); ctx.restore();
+
+    // Count-weighted mean qualified share, computed
+    var n = 0, qw = 0;
+    BUCKETS.forEach(function (b) { n += b[1]; qw += b[1] * b[3]; });
+    var meanQual = qw / n;
+    ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 5]);
+    ctx.beginPath(); ctx.moveTo(ox, vToY(meanQual)); ctx.lineTo(ox + gw, vToY(meanQual)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = 'bold 11px ' + FONT; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'right';
+    ctx.fillText('weighted mean qualified = ' + meanQual.toFixed(1) + '%', ox + gw - 4, vToY(meanQual) - 6);
+
+    // Spreads, computed as max/min
+    var rs = BUCKETS.map(function (b) { return b[2]; });
+    var qs = BUCKETS.map(function (b) { return b[3]; });
+    var rSpread = Math.max.apply(null, rs) / Math.min.apply(null, rs);
+    var qSpread = Math.max.apply(null, qs) / Math.min.apply(null, qs);
+    ctx.font = 'bold 12px ' + FONT; ctx.textAlign = 'left';
+    var ax = ox + slot * 3.1;
+    ctx.fillStyle = '#e74c3c'; ctx.fillText('reply rate spread: ' + rSpread.toFixed(1) + 'x', ax, vToY(66));
+    ctx.fillStyle = '#1a5276'; ctx.fillText('qualified spread: ' + qSpread.toFixed(2) + 'x', ax, vToY(59));
+});
+
+// ---------- Canvas 4: rank-thresholded feedback loop converging to fixed points ----------
+__charts.push(function () {
+    var ctx = setupCanvas('canvas4', 720, 360); if (!ctx) return;
+    var ox = 70, oy = 300, gw = 560, gh = 250, vmax = 45, ROUNDS = 40;
+
+    function tToX(t) { return ox + (t / ROUNDS) * gw; }
+    function vToY(v) { return oy - (v / vmax) * gh; }
+
+    // Deterministic recurrence — no random draws
+    var a = [10, 9, 8, 7, 6, 5];
+    var boosts = [6, 3, 1, 0, 0, 0];
+    var traj = a.map(function (v) { return [v]; });
+    for (var t = 0; t < ROUNDS; t++) {
+        var order = [0, 1, 2, 3, 4, 5].slice().sort(function (i, j) { return a[j] - a[i]; });
+        var boost = [0, 0, 0, 0, 0, 0];
+        order.forEach(function (idx, rank) { boost[idx] = boosts[rank]; });
+        a = a.map(function (v, i) { return 0.85 * v + boost[i]; });
+        a.forEach(function (v, i) { traj[i].push(v); });
+    }
+
+    ctx.font = 'bold 14px ' + FONT; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('Fixed Points, Not a Power Law — the Ranking Freezes Itself', 360, 20);
+
+    ctx.font = '11px ' + FONT;
+    [0, 10, 20, 30, 40].forEach(function (v) {
+        ctx.strokeStyle = '#eee'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, vToY(v)); ctx.lineTo(ox + gw, vToY(v)); ctx.stroke();
+        ctx.fillStyle = '#666'; ctx.textAlign = 'right'; ctx.fillText(String(v), ox - 8, vToY(v) + 4);
+    });
+    ctx.textAlign = 'center'; ctx.fillStyle = '#666';
+    [0, 10, 20, 30, 40].forEach(function (t) { ctx.fillText(String(t), tToX(t), oy + 15); });
+
+    ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ox, oy); ctx.lineTo(ox + gw, oy);
+    ctx.moveTo(ox, oy); ctx.lineTo(ox, oy - gh);
+    ctx.stroke();
+
+    ctx.font = '13px ' + FONT; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('Search-and-contact rounds', ox + gw / 2, oy + 32);
+    ctx.save(); ctx.translate(20, oy - gh / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Activity score (drives findability)', 0, 0); ctx.restore();
+
+    var colors = ['#e74c3c', '#e67e22', '#1a5276', '#999', '#999', '#999'];
+    var alphaLines = ['rgba(231,76,60,0.4)', 'rgba(230,126,34,0.4)', 'rgba(26,82,118,0.4)'];
+
+    // Asymptotes at the computed final values of the top three
+    for (var k = 0; k < 3; k++) {
+        var fin = traj[k][ROUNDS];
+        ctx.strokeStyle = alphaLines[k]; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+        ctx.beginPath(); ctx.moveTo(ox, vToY(fin)); ctx.lineTo(ox + gw, vToY(fin)); ctx.stroke();
+        ctx.setLineDash([]);
+    }
+
+    traj.forEach(function (series, i) {
+        ctx.strokeStyle = colors[i]; ctx.lineWidth = i < 3 ? 2.5 : 1.5;
+        ctx.beginPath();
+        series.forEach(function (v, t) {
+            var x = tToX(t), y = vToY(v);
+            t === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+    });
+
+    // End labels — final values computed from the trajectory
+    ctx.font = 'bold 11px ' + FONT; ctx.textAlign = 'left';
+    for (var k2 = 0; k2 < 3; k2++) {
+        ctx.fillStyle = colors[k2];
+        ctx.fillText('P' + (k2 + 1) + ' → ' + traj[k2][ROUNDS].toFixed(1), ox + gw + 6, vToY(traj[k2][ROUNDS]) + 4);
+    }
+    ctx.fillStyle = '#999';
+    ctx.fillText('P4–P6 → ' + traj[5][ROUNDS].toFixed(1), ox + gw + 6, vToY(0) - 6);
+
+    ctx.font = '11px ' + FONT; ctx.fillStyle = '#666'; ctx.textAlign = 'left';
+    ctx.fillText('start: 10, 9, 8, 7, 6, 5', tToX(0.6), vToY(11) - 8);
+
+    var gap0 = traj[0][0] / traj[1][0], gapN = traj[0][ROUNDS] / traj[1][ROUNDS];
+    ctx.font = 'bold 12px ' + FONT; ctx.fillStyle = '#e74c3c';
+    ctx.fillText('P1/P2 gap: ' + gap0.toFixed(2) + 'x → ' + gapN.toFixed(2) + 'x', tToX(13), vToY(43));
+    ctx.fillText('below-the-fold profiles decay to 0', tToX(13), vToY(39.5));
+
+    ctx.font = '11px ' + FONT; ctx.fillStyle = '#999';
+    ctx.fillText('Illustrative Example — deterministic recurrence, no random draws', ox, 348);
+});
+
+// ---------- Canvas 5: offline precision vs online expected engagements ----------
+__charts.push(function () {
+    var ctx = setupCanvas('canvas5', 720, 360); if (!ctx) return;
+    var ox = 95, oy = 285, gw = 520, gh = 225;
+
+    // Both rankers and both metrics computed from CANDS
+    function top3(keyFn) {
+        return CANDS.slice().sort(function (a, b) { return keyFn(b) - keyFn(a); }).slice(0, 3);
+    }
+    var slateR = top3(function (c) { return c[1]; });
+    var slateRQ = top3(function (c) { return c[1] * c[2]; });
+    function precision(slate) {
+        return slate.filter(function (c) { return c[1] >= 0.70; }).length / slate.length * 100;
+    }
+    function expected(slate) {
+        return slate.reduce(function (s, c) { return s + c[1] * c[2]; }, 0);
+    }
+    var precR = precision(slateR), precRQ = precision(slateRQ);
+    var expR = expected(slateR), expRQ = expected(slateRQ);
+
+    var LMAX = 100, RMAX = 1.6;
+    function lToY(v) { return oy - (v / LMAX) * gh; }
+    function rToY(v) { return oy - (v / RMAX) * gh; }
+
+    ctx.font = 'bold 14px ' + FONT; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('Both Metrics Are Correct — They Are Measuring Different Objects', 360, 20);
+    ctx.font = 'bold 12px ' + FONT; ctx.fillStyle = '#e67e22';
+    ctx.fillText('the offline winner is the online loser', 360, 42);
+
+    // Gridlines + dual axis ticks
+    ctx.font = '11px ' + FONT;
+    [0, 25, 50, 75, 100].forEach(function (v) {
+        ctx.strokeStyle = '#eee'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, lToY(v)); ctx.lineTo(ox + gw, lToY(v)); ctx.stroke();
+        ctx.fillStyle = '#666'; ctx.textAlign = 'right'; ctx.fillText(String(v), ox - 8, lToY(v) + 4);
+    });
+    ctx.textAlign = 'left'; ctx.fillStyle = '#666';
+    [0, 0.4, 0.8, 1.2, 1.6].forEach(function (v) {
+        ctx.fillText(v.toFixed(1), ox + gw + 8, rToY(v) + 4);
+    });
+
+    ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ox, oy); ctx.lineTo(ox + gw, oy);
+    ctx.moveTo(ox, oy); ctx.lineTo(ox, oy - gh);
+    ctx.moveTo(ox + gw, oy); ctx.lineTo(ox + gw, oy - gh);
+    ctx.stroke();
+
+    ctx.font = '12px ' + FONT; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.save(); ctx.translate(30, oy - gh / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Precision@3 (%)', 0, 0); ctx.restore();
+    ctx.save(); ctx.translate(700, oy - gh / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Expected engagements', 0, 0); ctx.restore();
+
+    var bw = 46, gap = 10;
+    var groups = [
+        { cx: ox + 150, label: 'Offline: Precision@3',
+          a: precR, b: precRQ, y: lToY, fmt: function (v) { return v.toFixed(1) + '%'; } },
+        { cx: ox + 380, label: 'Online: Expected engagements',
+          a: expR, b: expRQ, y: rToY, fmt: function (v) { return v.toFixed(3); } }
+    ];
+    groups.forEach(function (g) {
+        var x1 = g.cx - bw - gap / 2, x2 = g.cx + gap / 2;
+        ctx.fillStyle = 'rgba(231,76,60,0.75)';
+        ctx.fillRect(x1, g.y(g.a), bw, oy - g.y(g.a));
+        ctx.fillStyle = 'rgba(39,174,96,0.75)';
+        ctx.fillRect(x2, g.y(g.b), bw, oy - g.y(g.b));
+
+        ctx.font = 'bold 11px ' + FONT; ctx.textAlign = 'center';
+        ctx.fillStyle = '#e74c3c'; ctx.fillText(g.fmt(g.a), x1 + bw / 2, g.y(g.a) - 6);
+        ctx.fillStyle = '#27ae60'; ctx.fillText(g.fmt(g.b), x2 + bw / 2, g.y(g.b) - 6);
+
+        ctx.font = 'bold 12px ' + FONT; ctx.fillStyle = '#1a5276';
+        ctx.fillText(g.label, g.cx, oy + 20);
+    });
+
+    // Legend
+    ctx.fillStyle = 'rgba(231,76,60,0.75)'; ctx.fillRect(ox + 14, oy - gh + 10, 12, 12);
+    ctx.fillStyle = 'rgba(39,174,96,0.75)'; ctx.fillRect(ox + 14, oy - gh + 30, 12, 12);
+    ctx.font = '11px ' + FONT; ctx.textAlign = 'left';
+    ctx.fillStyle = '#e74c3c'; ctx.fillText('rank by r', ox + 32, oy - gh + 20);
+    ctx.fillStyle = '#27ae60'; ctx.fillText('rank by r × q', ox + 32, oy - gh + 40);
+
+    // Computed delta
+    var delta = (expRQ / expR - 1) * 100;
+    ctx.font = '11px ' + FONT; ctx.fillStyle = '#666'; ctx.textAlign = 'left';
+    ctx.fillText('+' + delta.toFixed(1) + '%', ox + 380 + bw + gap, rToY(expRQ) + 4);
+
+    ctx.font = '11px ' + FONT; ctx.fillStyle = '#999'; ctx.textAlign = 'left';
+    ctx.fillText('Illustrative Example — both metrics computed from the same five-candidate table', ox, 340);
+});
+
+__charts.forEach(function (f) { f(); });
+var __redrawTimer;
+window.addEventListener('resize', function () {
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function () { __charts.forEach(function (f) { f(); }); }, 150);
+});
+</script>
+</body>
+</html>

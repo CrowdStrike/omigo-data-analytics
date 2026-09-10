@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Snapchat Live World Map — When the Heatmap Is the News</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 40px 20px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 50%; }
+.obj-table td:last-child { width: 50%; text-align: center; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; width: 100%; height: auto; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+.math-box { background: #f8fafb; border: 1px solid #e0e0e0; border-radius: 6px; padding: 16px 20px; margin: 12px 0; font-size: 0.9em; }
+.math-box code { background: #eef2f7; padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
+.inline-table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 0.88em; }
+.inline-table th { background: #f0f4f8; color: #1a5276; padding: 5px 8px; border: 1px solid #e0e0e0; text-align: left; }
+.inline-table td { padding: 5px 8px; border: 1px solid #e0e0e0; }
+.summary-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 0.9em; }
+.summary-table th { background: #f0f4f8; padding: 10px 14px; text-align: left; border: 1px solid #e0e0e0; color: #1a5276; }
+.summary-table td { padding: 10px 14px; border: 1px solid #e0e0e0; }
+</style>
+</head>
+<body>
+
+<h1>Snapchat Live World Map — When the Heatmap Is the News</h1>
+<p class="subtitle">Millions of expiring, geotagged clips streaming onto one zoomable map. The engineering is hard, but the statistics are harder: every design choice — grid size, sample rate, window length, colour scale — silently changes what the map appears to say.</p>
+
+<div class="philosophy">
+<strong>The question:</strong> A map that glows where activity concentrates is an anomaly detector with no detector in it — a human eye reads the bright patch. So what is the map actually measuring, and when is the bright patch a real event rather than an artifact of how the map was built?<br><br>
+<strong>The answer:</strong> An absolute-count heatmap measures <em>population</em>, not news. It lights up where people are, every night, forever. To surface events you must divide by a local baseline — and once you do, the map becomes a ratio estimator with a moving denominator, an arbitrary spatial grid, and a sample size that shrinks exactly when the story breaks.
+</div>
+
+<!-- Aspect 1 -->
+<h2>1. The Load Is Anti-Correlated With Your Ability To Serve It</h2>
+<table class="obj-table">
+    <tr>
+        <td>
+            <div class="obj-title">Sized for the Median, Fails at the Only Interesting Moment</div>
+            <p>Every other system gets to treat its spikes as a nuisance to be shed. Here the spike <em>is</em> the product. The minute the map most needs to be right is the minute the ingest path, the clustering pass, and the moderation queue all simultaneously fall behind — because all three are sized against a volume that no longer applies.</p>
+
+            <div class="math-box">
+            <strong>Illustrative Example — one cell, 61 minutes</strong> (posts/min, thousands)<br><br>
+            Median volume: <code>20k/min</code> — Peak volume: <code>140k/min</code> — Ratio: <code>7.0x</code><br>
+            Render + ingest capacity provisioned at <code>40k/min</code> (2x the median)<br><br>
+            Minutes above capacity: <code>16</code> (minute 32 → 47)<br>
+            Posts arriving in those minutes: <code>1,515k</code> — servable: <code>16 × 40k = 640k</code> = <code>42.2%</code><br>
+            Shed or delayed: <code>1,515k − 640k = 875k</code><br><br>
+            Provision at the peak instead and the median hour runs at <code>20 / 140 = 14.3%</code> utilisation — you pay 7x for 45 minutes of correctness per hour.
+            </div>
+
+            <ul>
+                <li><strong>The inversion:</strong> capacity is cheapest to justify at the median and most needed at the tail — the two never coincide</li>
+                <li><strong>Newsworthiness correlates with overload:</strong> an unremarkable evening never stresses the pipeline, so load is a proxy for interest</li>
+                <li><strong>Shedding is not neutral:</strong> dropping the overflow biases the map toward whatever arrived first, not toward a fair sample</li>
+                <li><strong>Latency is part of correctness:</strong> a map that is right about 11:04 but renders at 11:19 has answered a question nobody asked</li>
+                <li><strong>Autoscaling has a lag too:</strong> new capacity arrives minutes after the spike, i.e. roughly when the spike is subsiding</li>
+                <li><strong>The honest option:</strong> degrade gracefully to a <em>labelled</em> sample rather than silently serve a truncated count</li>
+            </ul>
+        </td>
+        <td>
+            <canvas id="canvas1" width="720" height="360"></canvas>
+        </td>
+    </tr>
+</table>
+
+<!-- Aspect 2 -->
+<h2>2. The Grid Is a Choice, and the Choice Changes the Pattern</h2>
+<table class="obj-table">
+    <tr>
+        <td>
+            <div class="obj-title">Modifiable Areal Unit Problem, Rendered at 60fps</div>
+            <p>A million points cannot be drawn, so nearby posts are merged into a cluster and the cluster gets a count. But the merge needs boundaries, and boundaries are arbitrary: shift the grid half a cell, or zoom out one level, and the <em>same</em> posts produce a different hottest cluster in a different place. This is the modifiable areal unit problem — the apparent spatial pattern is partly a property of the bins, not the data.</p>
+
+            <div class="math-box">
+            <strong>Illustrative Example — one street, eight fine cells, 120 posts</strong><br><br>
+            Fine counts: <code>4, 30, 28, 5, 20, 22, 6, 5</code> → total <code>120</code>, hottest fine cell <code>30</code><br><br>
+            Group in aligned pairs: <code>4+30=34</code>, <code>28+5=33</code>, <code>20+22=42</code>, <code>6+5=11</code> → hottest cluster <code>42</code><br>
+            Shift the grid by one cell: <code>4</code>, <code>30+28=58</code>, <code>5+20=25</code>, <code>22+6=28</code>, <code>5</code> → hottest cluster <code>58</code><br><br>
+            Both partitions total <code>120</code>. Yet <code>58 / 42 = 1.38</code> — a <code>38.1%</code> swing in the headline number, and the hotspot <em>moves</em>: the aligned grid says the peak is on the right half of the street, the shifted grid says it is on the left.
+            </div>
+
+            <ul>
+                <li><strong>Same data, two answers:</strong> the count you display is a function of the offset, and the offset is an implementation detail</li>
+                <li><strong>Zoom is re-binning:</strong> each zoom level is a different areal unit, so a cluster can appear, split, or vanish on zoom</li>
+                <li><strong>Cluster counts are not additive across levels:</strong> children of a parent cluster need not partition it if the grids differ</li>
+                <li><strong>Edge splitting hides events:</strong> an event straddling a boundary is halved into two unremarkable clusters</li>
+                <li><strong>Ranking is fragile:</strong> "top 10 hottest places" reorders under a grid shift even with identical underlying posts</li>
+                <li><strong>Mitigations, not fixes:</strong> fixed hierarchical cells, density-based clustering, or reporting counts with the cell size shown</li>
+            </ul>
+        </td>
+        <td>
+            <canvas id="canvas2" width="720" height="360"></canvas>
+        </td>
+    </tr>
+</table>
+
+<!-- Aspect 3 -->
+<h2>3. A Sample of a Spike Is Honest; a Sample Labelled a Count Is Not</h2>
+<table class="obj-table">
+    <tr>
+        <td>
+            <div class="obj-title">Coverage Falls as 1/Volume</div>
+            <p>Under a fixed latency budget the map processes a roughly fixed number of items per minute. That is a sample, and its <em>fraction</em> is inversely proportional to volume — so precision degrades exactly where the interesting cell is. The moderation queue has the identical structure: a fixed review rate means review coverage also falls as 1/volume, so the review backlog is created by the same event that makes review urgent.</p>
+
+            <div class="math-box">
+            <strong>Illustrative Example — fixed budgets, variable volume</strong><br><br>
+            Render budget: <code>10k posts/min</code> sampled. At the median <code>20k/min</code> that is <code>10/20 = 50%</code>; at the peak <code>140k/min</code> it is <code>10/140 = 7.1%</code>.<br><br>
+            Scale-up error: a cell showing <code>40</code> sampled posts at <code>f = 1/14</code> implies <code>40 × 14 = 560</code> posts. The count is Poisson-ish, so the half-width is <code>1.96 × √40 / f = 1.96 × 6.32 × 14 ≈ 174</code> — that is <code>±31%</code> on a number the UI prints as "560".<br><br>
+            Review queue: <code>2%</code> of posts need review, capacity <code>500 items/min</code>. At the median, <code>0.02 × 20,000 = 400/min</code> — clears. At the peak, <code>0.02 × 140,000 = 2,800/min</code>, so coverage is <code>500 / 2,800 = 17.9%</code>. Across the 16 overloaded minutes: <code>0.02 × 1,515,000 = 30,300</code> flagged, <code>16 × 500 = 8,000</code> reviewed = <code>26.4%</code>; backlog <code>22,300</code>.
+            </div>
+
+            <ul>
+                <li><strong>The label is the defect:</strong> sampling is fine, printing the scaled-up number without its interval is not</li>
+                <li><strong>Precision is worst where it matters:</strong> the spike cell has the smallest sample fraction on the whole map</li>
+                <li><strong>Poisson noise scales as √n:</strong> small sampled counts imply wide intervals after multiplying by a large weight</li>
+                <li><strong>Fixed rate, falling coverage:</strong> review capacity is constant, so coverage traces <code>1/volume</code> with no floor</li>
+                <li><strong>Backlog is an event, not a trend:</strong> it appears in minutes and drains over hours, long after the map has moved on</li>
+                <li><strong>Sampling under a moving frame:</strong> the weight <code>1/f</code> itself must be estimated from the same overloaded minute</li>
+            </ul>
+        </td>
+        <td>
+            <canvas id="canvas3" width="720" height="360"></canvas>
+        </td>
+    </tr>
+</table>
+
+<!-- Aspect 4 -->
+<h2>4. Ephemerality Means the Denominator Is Moving</h2>
+<table class="obj-table">
+    <tr>
+        <td>
+            <div class="obj-title">Every Statistic Is a Windowed Estimate</div>
+            <p>Content that expires turns the corpus into a sliding window. Nothing on the map is a count over a fixed population — it is a count over whatever has not yet expired, and that set changes between two page loads. Two people comparing screenshots are not disagreeing about the data; they are holding two different denominators.</p>
+
+            <div class="math-box">
+            <strong>Illustrative Example — a 20-minute window, three minutes apart</strong><br><br>
+            Alice loads at minute 42; her window covers minutes <code>22–41</code>: <code>1,299k</code> posts<br>
+            Bob loads at minute 45; his window covers minutes <code>25–44</code>: <code>1,508k</code> posts<br>
+            Shared minutes <code>25–41</code>: <code>1,238k</code> — that is <code>95.3%</code> of Alice's window and <code>82.1%</code> of Bob's<br><br>
+            Bob's cell reads <code>1,508 / 1,299 = 1.161</code>, i.e. <code>16.1%</code> hotter, from a <code>3-minute</code> clock difference and <em>zero</em> change in anyone's behaviour. Neither number is wrong; they answer different questions.
+            </div>
+
+            <ul>
+                <li><strong>No stable population:</strong> the denominator is defined by expiry time, not by any question the analyst asked</li>
+                <li><strong>Screenshots do not reproduce:</strong> the window that produced a figure is gone before anyone can re-derive it</li>
+                <li><strong>Window length is a smoother:</strong> a long window damps real spikes, a short one amplifies arrival noise</li>
+                <li><strong>Trends confound with retention:</strong> an expiry-policy change moves every metric without moving any behaviour</li>
+                <li><strong>Reconciliation needs the frame:</strong> publishing a number requires publishing its window start, end, and expiry rule</li>
+                <li><strong>Backfill is impossible:</strong> a late-arriving post may already have expired, so the window can never be repaired</li>
+            </ul>
+        </td>
+        <td>
+            <canvas id="canvas4" width="720" height="360"></canvas>
+        </td>
+    </tr>
+</table>
+
+<!-- Aspect 5 -->
+<h2>5. An Absolute Heatmap Just Draws a Population Map</h2>
+<table class="obj-table">
+    <tr>
+        <td>
+            <div class="obj-title">The Base-Rate Problem, in Colour</div>
+            <p>The map is an anomaly detector whose only classifier is the human eye, so it inherits the base-rate problem. Colour a cell by raw count and the brightest cells are simply the most populous ones — every night, whether or not anything happened. "Hot" has to mean hot <em>relative to that cell's own baseline</em>, and the moment you divide, the ranking changes.</p>
+
+            <div class="math-box">
+            <strong>Illustrative Example — four cells, tonight vs their own typical hour</strong> (posts/hour)
+            <table class="inline-table">
+                <tr><th>Cell</th><th>Baseline</th><th>Tonight</th><th>Tonight − baseline</th><th>Ratio</th></tr>
+                <tr><td>City A</td><td>900</td><td>990</td><td>+90</td><td>1.10</td></tr>
+                <tr><td>City B</td><td>400</td><td>520</td><td>+120</td><td>1.30</td></tr>
+                <tr><td>City C</td><td>120</td><td>480</td><td>+360</td><td>4.00</td></tr>
+                <tr><td>City D</td><td>60</td><td>300</td><td>+240</td><td>5.00</td></tr>
+            </table>
+            Absolute rank: <code>A (990) &gt; B (520) &gt; C (480) &gt; D (300)</code> — identical to the baseline order <code>900 &gt; 400 &gt; 120 &gt; 60</code>. The absolute map is a population map with a different legend.<br><br>
+            Ratio rank: <code>D (5.00) &gt; C (4.00) &gt; B (1.30) &gt; A (1.10)</code> — the exact reverse. The two rankings agree on nothing.<br><br>
+            Excess rank: <code>C (+360) &gt; D (+240) &gt; B (+120) &gt; A (+90)</code> — a third ordering, because "biggest surprise" and "biggest multiple" are different questions.
+            </div>
+
+            <ul>
+                <li><strong>Absolute colouring is a tautology:</strong> it ranks cells by how many people live there, which nobody needed a map for</li>
+                <li><strong>Ratio needs a per-cell baseline:</strong> the same-hour-same-weekday history of <em>that</em> cell, not a global average</li>
+                <li><strong>Small denominators explode:</strong> a cell with a baseline of 3 hits 10x from seven extra posts — variance-stabilise or floor it</li>
+                <li><strong>Ratio and excess disagree by construction:</strong> pick the one matching the decision, and say which you picked</li>
+                <li><strong>Baselines drift:</strong> yesterday's spike enters tomorrow's baseline, so a sustained event stops looking anomalous</li>
+                <li><strong>Two failure modes, both visible:</strong> false positives in sparse cells, false negatives in dense ones already near saturation</li>
+            </ul>
+        </td>
+        <td>
+            <canvas id="canvas5" width="720" height="360"></canvas>
+        </td>
+    </tr>
+</table>
+
+<!-- Summary -->
+<h2>6. The Complete Picture</h2>
+<table class="summary-table">
+    <tr><th>Design choice</th><th>Looks like an engineering knob</th><th>Is actually a statistical claim</th><th>Failure it produces</th></tr>
+    <tr><td><strong>Capacity ceiling</strong></td><td>Cost/throughput tradeoff</td><td>Which arrivals enter the estimate</td><td>Load shedding biases the map at the peak</td></tr>
+    <tr><td><strong>Cluster grid</strong></td><td>Rendering optimisation</td><td>The areal unit of every count</td><td>Hotspot moves when the grid shifts (MAUP)</td></tr>
+    <tr><td><strong>Sample rate</strong></td><td>Latency budget</td><td>A weight <code>1/f</code> applied to every cell</td><td>Scaled counts shown without their intervals</td></tr>
+    <tr><td><strong>Expiry window</strong></td><td>Storage policy</td><td>The denominator of every rate</td><td>Two viewers, two numbers, neither wrong</td></tr>
+    <tr><td><strong>Colour scale</strong></td><td>Visual design</td><td>The anomaly-detection threshold</td><td>Absolute colouring draws a population map</td></tr>
+    <tr><td><strong>Review rate</strong></td><td>Staffing plan</td><td>Coverage of the flagged stream</td><td>Coverage falls as 1/volume, backlog at the spike</td></tr>
+</table>
+
+<div class="philosophy">
+<strong>One sentence:</strong> The live map is an anomaly detector with no detector in it — so its grid, sample rate, window, and colour scale are not implementation details but the estimator itself, and the only defensible version divides by a local baseline and shows the interval it earned.
+</div>
+
+<script>var __charts = [];
+function setupCanvas(id, w, h) {
+    var c = document.getElementById(id); if (!c) return null;
+    var dpr = window.devicePixelRatio || 1;
+    c.style.maxWidth = w + 'px';
+    var cssW = c.getBoundingClientRect().width || w;
+    var scale = (cssW / w) * dpr;
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    var ctx = c.getContext('2d'); ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, w, h);
+    return ctx;
+}
+var FONT = ' -apple-system, BlinkMacSystemFont, sans-serif';
+
+// Shared per-minute volume series (thousands of posts/min) — hardcoded literal:
+// the shape (long quiet baseline, sharp ramp, slow decay) carries the lesson. No PRNG.
+var VOL = [
+    18,20,19,20,20,17,20,20,19,20,18,19,20,19,20,20,20,18,20,20,19,21,23,20,18,22,20,21,19,20,24,
+    30,44,62,85,106,124,135,140,
+    138,130,118,104,90,76,64,54,45,38,33,29,26,24,22,21,20,19,21,20,19,20
+];
+var CAP = 40; // render + ingest capacity, thousands/min
+function sumRange(arr, a, b) { var s = 0; for (var i = a; i <= b; i++) s += arr[i]; return s; }
+function medianOf(arr) { var s = arr.slice().sort(function(x, y){ return x - y; }); return s[Math.floor(s.length / 2)]; }
+
+// Canvas 1: volume vs a flat capacity ceiling; all stats computed from VOL
+__charts.push(function(){
+    var ctx = setupCanvas('canvas1', 720, 360); if (!ctx) return;
+    var ox = 72, oy = 296, gw = 596, gh = 236, VMAX = 150, n = VOL.length - 1;
+    function tToX(t) { return ox + (t / n) * gw; }
+    function vToY(v) { return oy - (v / VMAX) * gh; }
+
+    // computed statistics
+    var med = medianOf(VOL), peak = Math.max.apply(null, VOL), peakIdx = VOL.indexOf(peak);
+    var overIdx = [], overSum = 0;
+    for (var i = 0; i < VOL.length; i++) { if (VOL[i] > CAP) { overIdx.push(i); overSum += VOL[i]; } }
+    var nOver = overIdx.length;
+    var servable = nOver * CAP;
+    var pctServed = (servable / overSum * 100).toFixed(1);
+
+    // gridlines + y labels
+    ctx.font = '11px' + FONT; ctx.textAlign = 'right';
+    [0, 30, 60, 90, 120, 150].forEach(function(v) {
+        var y = vToY(v);
+        ctx.fillStyle = '#666'; ctx.fillText(String(v), ox - 8, y + 4);
+        ctx.strokeStyle = '#eee'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + gw, y); ctx.stroke();
+    });
+
+    // fill under curve where within capacity
+    ctx.fillStyle = 'rgba(26,82,118,0.35)';
+    ctx.beginPath(); ctx.moveTo(tToX(0), vToY(0));
+    for (var t = 0; t <= n; t++) ctx.lineTo(tToX(t), vToY(Math.min(VOL[t], CAP)));
+    ctx.lineTo(tToX(n), vToY(0)); ctx.closePath(); ctx.fill();
+
+    // overload region between capacity and the curve
+    ctx.fillStyle = 'rgba(231,76,60,0.18)';
+    ctx.beginPath();
+    ctx.moveTo(tToX(overIdx[0]), vToY(CAP));
+    for (var k = 0; k < nOver; k++) ctx.lineTo(tToX(overIdx[k]), vToY(VOL[overIdx[k]]));
+    ctx.lineTo(tToX(overIdx[nOver - 1]), vToY(CAP));
+    ctx.closePath(); ctx.fill();
+
+    // axes
+    ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ox, oy); ctx.lineTo(ox + gw, oy);
+    ctx.moveTo(ox, oy); ctx.lineTo(ox, oy - gh);
+    ctx.stroke();
+
+    ctx.fillStyle = '#666'; ctx.font = '11px' + FONT; ctx.textAlign = 'center';
+    [0, 10, 20, 30, 40, 50, 60].forEach(function(t) { ctx.fillText(String(t), tToX(t), oy + 15); });
+
+    ctx.fillStyle = '#1a5276'; ctx.font = '13px' + FONT;
+    ctx.fillText('Minute of the hour', ox + gw / 2, oy + 36);
+    ctx.save(); ctx.translate(20, oy - gh / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Posts per minute (thousands)', 0, 0); ctx.restore();
+
+    // volume curve
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (var t2 = 0; t2 <= n; t2++) {
+        var x = tToX(t2), y = vToY(VOL[t2]);
+        t2 === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // capacity line
+    ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 2.5; ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(ox, vToY(CAP)); ctx.lineTo(ox + gw, vToY(CAP)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = 'bold 12px' + FONT; ctx.textAlign = 'left'; ctx.fillStyle = '#27ae60';
+    ctx.fillText('render + ingest capacity: ' + CAP + 'k/min', ox + 6, vToY(CAP) - 8);
+
+    // computed annotations
+    ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'left';
+    ctx.fillText('peak ' + peak + 'k/min = ' + (peak / med).toFixed(1) + 'x median ' + med + 'k/min',
+                 tToX(6), vToY(peak) + 4);
+    ctx.fillText('only ' + pctServed + '% of arrivals servable in the ' + nOver + ' overloaded minutes',
+                 tToX(6), vToY(peak) + 22);
+
+    ctx.font = '12px' + FONT; ctx.fillStyle = '#999';
+    ctx.fillText((VOL.length - nOver) + ' quiet minutes fund the ' + nOver + ' that matter', tToX(4), vToY(58));
+
+    ctx.font = 'bold 14px' + FONT; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText("The Spike Is the Product — and the Pipeline's Worst Case", 360, 18);
+
+    // peak marker
+    ctx.setLineDash([3, 3]); ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(tToX(peakIdx), oy); ctx.lineTo(tToX(peakIdx), vToY(peak)); ctx.stroke();
+    ctx.setLineDash([]);
+});
+
+// Canvas 2: MAUP — same 8 fine cells, two groupings
+__charts.push(function(){
+    var ctx = setupCanvas('canvas2', 720, 360); if (!ctx) return;
+    var x0 = 72, x1 = 668, cw = (x1 - x0) / 8;
+    var fine = [4, 30, 28, 5, 20, 22, 6, 5];
+    var aligned = [{v: 34, s: 0, w: 2}, {v: 33, s: 2, w: 2}, {v: 42, s: 4, w: 2}, {v: 11, s: 6, w: 2}];
+    var shifted = [{v: 4, s: 0, w: 1}, {v: 58, s: 1, w: 2}, {v: 25, s: 3, w: 2}, {v: 28, s: 5, w: 2}, {v: 5, s: 7, w: 1}];
+    var SCALE_MAX = 58;
+
+    // shared cell boundaries
+    ctx.strokeStyle = '#eee'; ctx.lineWidth = 1;
+    for (var i = 0; i <= 8; i++) {
+        var x = x0 + i * cw;
+        ctx.beginPath(); ctx.moveTo(x, 40); ctx.lineTo(x, 328); ctx.stroke();
+    }
+
+    function drawRow(items, base, maxH, fill, stroke, labelColor, labelFont) {
+        var mx = 0; items.forEach(function(d){ if (d.v > mx) mx = d.v; });
+        ctx.strokeStyle = '#bbb'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x0, base); ctx.lineTo(x1, base); ctx.stroke();
+        items.forEach(function(d) {
+            var h = (d.v / SCALE_MAX) * maxH;
+            var bx = x0 + d.s * cw + 3, bw = d.w * cw - 6;
+            ctx.fillStyle = fill; ctx.fillRect(bx, base - h, bw, h);
+            ctx.strokeStyle = stroke; ctx.lineWidth = (d.v === mx ? 2.5 : 1.5);
+            ctx.strokeRect(bx, base - h, bw, h);
+            ctx.fillStyle = labelColor; ctx.font = labelFont; ctx.textAlign = 'center';
+            ctx.fillText(String(d.v), bx + bw / 2, base - h - 5);
+        });
+        return mx;
+    }
+
+    // row 1: fine cells
+    var fineItems = fine.map(function(v, i){ return {v: v, s: i, w: 1}; });
+    drawRow(fineItems, 130, 78, 'rgba(26,82,118,0.35)', '#1a5276', '#1a5276', '11px' + FONT);
+    // row 2: aligned grouping
+    var mxA = drawRow(aligned, 232, 62, 'rgba(39,174,96,0.30)', '#27ae60', '#27ae60', 'bold 12px' + FONT);
+    // row 3: shifted grouping
+    var mxS = drawRow(shifted, 320, 62, 'rgba(230,126,34,0.30)', '#e67e22', '#e67e22', 'bold 12px' + FONT);
+
+    // row labels
+    ctx.textAlign = 'left'; ctx.font = 'bold 12px' + FONT;
+    ctx.fillStyle = '#1a5276'; ctx.fillText('fine cells', 8, 130);
+    ctx.fillStyle = '#27ae60'; ctx.fillText('aligned grid', 8, 232);
+    ctx.fillStyle = '#e67e22'; ctx.fillText('grid shifted', 8, 314);
+    ctx.fillStyle = '#e67e22'; ctx.fillText('one cell', 8, 328);
+
+    // computed caption — both totals summed, not asserted
+    function total(items) { var s = 0; items.forEach(function(d){ s += d.v; }); return s; }
+    var tA = total(aligned), tS = total(shifted);
+    var same = (tA === tS) ? String(tA) : (tA + ' vs ' + tS);
+    ctx.font = 'bold 12px' + FONT; ctx.textAlign = 'center'; ctx.fillStyle = '#e74c3c';
+    ctx.fillText('both partitions total ' + same + ' posts — hottest cluster ' + mxA + ' vs ' + mxS +
+                 ' (+' + ((mxS / mxA - 1) * 100).toFixed(1) + '%)', 360, 348);
+
+    ctx.font = 'bold 14px' + FONT; ctx.fillStyle = '#1a5276';
+    ctx.fillText('Illustrative Example — Move the Grid, Move the Hotspot', 360, 20);
+});
+
+// Canvas 3: coverage falls as 1/volume for both budgets
+__charts.push(function(){
+    var ctx = setupCanvas('canvas3', 720, 360); if (!ctx) return;
+    var ox = 76, oy = 296, gw = 588, gh = 236, VLO = 20, VHI = 140;
+    function vToX(v) { return ox + ((v - VLO) / (VHI - VLO)) * gw; }
+    function pToY(p) { return oy - (p / 100) * gh; }
+    function renderCov(v) { return Math.min(100, 100 * 10 / v); }
+    function reviewCov(v) { return Math.min(100, 100 * 500 / (0.02 * 1000 * v)); }
+
+    // danger band
+    ctx.fillStyle = 'rgba(231,76,60,0.10)';
+    ctx.fillRect(vToX(100), pToY(100), vToX(140) - vToX(100), pToY(0) - pToY(100));
+    ctx.fillStyle = '#e74c3c'; ctx.font = '11px' + FONT; ctx.textAlign = 'center';
+    ctx.fillText('the newsworthy minutes', (vToX(100) + vToX(140)) / 2, pToY(100) - 6);
+
+    // gridlines + y labels
+    ctx.font = '11px' + FONT; ctx.textAlign = 'right';
+    [0, 25, 50, 75, 100].forEach(function(p) {
+        var y = pToY(p);
+        ctx.fillStyle = '#666'; ctx.fillText(p + '%', ox - 8, y + 4);
+        ctx.strokeStyle = '#eee'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + gw, y); ctx.stroke();
+    });
+
+    // axes
+    ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ox, oy); ctx.lineTo(ox + gw, oy);
+    ctx.moveTo(ox, oy); ctx.lineTo(ox, oy - gh);
+    ctx.stroke();
+
+    ctx.textAlign = 'center'; ctx.font = '11px' + FONT; ctx.fillStyle = '#666';
+    [20, 50, 80, 110, 140].forEach(function(v) { ctx.fillText(String(v), vToX(v), oy + 15); });
+    ctx.fillStyle = '#1a5276'; ctx.font = '13px' + FONT;
+    ctx.fillText('Volume in the cell (thousand posts/min)', ox + gw / 2, oy + 36);
+    ctx.save(); ctx.translate(22, oy - gh / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Coverage of arriving items (%)', 0, 0); ctx.restore();
+
+    function curve(fn, color, dash) {
+        ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.setLineDash(dash || []);
+        ctx.beginPath();
+        for (var v = VLO; v <= VHI; v += 0.5) {
+            var x = vToX(v), y = pToY(fn(v));
+            v === VLO ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.stroke(); ctx.setLineDash([]);
+    }
+    curve(renderCov, '#1a5276');
+    curve(reviewCov, '#e67e22', [7, 5]);
+
+    function point(v, fn, color, dy) {
+        var p = fn(v);
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.arc(vToX(v), pToY(p), 5, 0, Math.PI * 2); ctx.fill();
+        ctx.font = 'bold 11px' + FONT; ctx.textAlign = (v === VLO ? 'left' : 'right');
+        ctx.fillText(v + 'k → ' + p.toFixed(1) + '%', vToX(v) + (v === VLO ? 10 : -10), pToY(p) + dy);
+    }
+    point(20, renderCov, '#1a5276', -8);
+    point(140, renderCov, '#1a5276', -8);
+    point(20, reviewCov, '#e67e22', 16);
+    point(140, reviewCov, '#e67e22', 16);
+
+    ctx.font = 'bold 12px' + FONT; ctx.textAlign = 'left'; ctx.fillStyle = '#1a5276';
+    ctx.fillText('sampled for render', vToX(46), pToY(renderCov(46)) - 12);
+    ctx.fillStyle = '#e67e22';
+    ctx.fillText('reviewed by the queue', vToX(60), pToY(reviewCov(60)) + 22);
+
+    ctx.font = '12px' + FONT; ctx.fillStyle = '#999';
+    ctx.fillText('both curves are 1/volume — a fixed budget cannot hold coverage flat', vToX(48), pToY(12));
+
+    ctx.font = 'bold 14px' + FONT; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('Fixed Budget, Variable Volume — Coverage Traces 1/Volume', 360, 18);
+});
+
+// Canvas 4: two overlapping expiry windows over the same VOL series
+__charts.push(function(){
+    var ctx = setupCanvas('canvas4', 720, 360); if (!ctx) return;
+    var ox = 72, oy = 288, gw = 596, gh = 210, VMAX = 150, n = VOL.length - 1;
+    function tToX(t) { return ox + (t / n) * gw; }
+    function vToY(v) { return oy - (v / VMAX) * gh; }
+
+    var a = sumRange(VOL, 22, 41), b = sumRange(VOL, 25, 44), shared = sumRange(VOL, 25, 41);
+
+    // gridlines
+    ctx.font = '11px' + FONT; ctx.textAlign = 'right';
+    [0, 50, 100, 150].forEach(function(v) {
+        var y = vToY(v);
+        ctx.fillStyle = '#666'; ctx.fillText(String(v), ox - 8, y + 4);
+        ctx.strokeStyle = '#eee'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + gw, y); ctx.stroke();
+    });
+
+    function fillWindow(t0, t1, color) {
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.moveTo(tToX(t0), vToY(0));
+        for (var t = t0; t <= t1; t++) ctx.lineTo(tToX(t), vToY(VOL[t]));
+        ctx.lineTo(tToX(t1), vToY(0)); ctx.closePath(); ctx.fill();
+    }
+    fillWindow(22, 41, 'rgba(26,82,118,0.30)');
+    fillWindow(25, 44, 'rgba(230,126,34,0.28)');
+
+    // axes
+    ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ox, oy); ctx.lineTo(ox + gw, oy);
+    ctx.moveTo(ox, oy); ctx.lineTo(ox, oy - gh);
+    ctx.stroke();
+
+    // volume curve (muted so the windows dominate)
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (var t2 = 0; t2 <= n; t2++) {
+        var x = tToX(t2), y = vToY(VOL[t2]);
+        t2 === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    function vline(t, color) {
+        ctx.setLineDash([5, 5]); ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(tToX(t), oy); ctx.lineTo(tToX(t), oy - gh); ctx.stroke();
+        ctx.setLineDash([]);
+    }
+    vline(22, '#1a5276'); vline(42, '#1a5276');
+    vline(25, '#e67e22'); vline(45, '#e67e22');
+
+    ctx.fillStyle = '#666'; ctx.font = '11px' + FONT; ctx.textAlign = 'center';
+    [0, 10, 20, 30, 40, 50, 60].forEach(function(t) { ctx.fillText(String(t), tToX(t), oy + 15); });
+    ctx.fillStyle = '#1a5276'; ctx.font = '13px' + FONT;
+    ctx.fillText('Minute of the hour', ox + gw / 2, oy + 36);
+    ctx.save(); ctx.translate(20, oy - gh / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Posts per minute (thousands)', 0, 0); ctx.restore();
+
+    // window bars
+    function bar(t0, t1, y, color, label) {
+        ctx.strokeStyle = color; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(tToX(t0), y); ctx.lineTo(tToX(t1), y); ctx.stroke();
+        ctx.fillStyle = color; ctx.font = 'bold 11px' + FONT; ctx.textAlign = 'left';
+        ctx.fillText(label, tToX(t1) + 8, y + 4);
+    }
+    bar(22, 42, 44, '#1a5276', 'Alice — loads at minute 42');
+    bar(25, 45, 62, '#e67e22', 'Bob — loads at minute 45');
+
+    // shared bracket under the axis
+    ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(tToX(25), oy + 22); ctx.lineTo(tToX(25), oy + 28);
+    ctx.lineTo(tToX(41), oy + 28); ctx.lineTo(tToX(41), oy + 22);
+    ctx.stroke();
+    ctx.fillStyle = '#1a5276'; ctx.font = 'bold 11px' + FONT; ctx.textAlign = 'center';
+    ctx.fillText('shared: ' + shared + 'k', (tToX(25) + tToX(41)) / 2, oy + 42);
+
+    // computed readout
+    ctx.textAlign = 'left'; ctx.font = 'bold 12px' + FONT; ctx.fillStyle = '#e74c3c';
+    ctx.fillText('Alice ' + a + 'k · Bob ' + b + 'k · ' + ((b / a - 1) * 100).toFixed(1) + '% hotter', 82, 96);
+    ctx.font = '12px' + FONT; ctx.fillStyle = '#666';
+    ctx.fillText('shared ' + shared + 'k = ' + (shared / a * 100).toFixed(1) + '% of Alice, ' +
+                 (shared / b * 100).toFixed(1) + '% of Bob', 82, 112);
+
+    ctx.font = 'bold 14px' + FONT; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('Three Minutes Apart, 16% Apart — the Window Is the Denominator', 360, 20);
+});
+
+// Canvas 5: absolute count vs ratio-to-baseline; both rankings sorted in JS
+__charts.push(function(){
+    var ctx = setupCanvas('canvas5', 720, 360); if (!ctx) return;
+    var labels = ['City A', 'City B', 'City C', 'City D'];
+    var baseline = [900, 400, 120, 60];
+    var tonight = [990, 520, 480, 300];
+    var ratio = tonight.map(function(v, i){ return v / baseline[i]; });
+    var BASE_Y = 288, MAXH = 180;
+
+    function panel(px0, px1, heading) {
+        ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(px0, BASE_Y); ctx.lineTo(px1, BASE_Y);
+        ctx.moveTo(px0, BASE_Y); ctx.lineTo(px0, BASE_Y - MAXH - 10);
+        ctx.stroke();
+        ctx.fillStyle = '#1a5276'; ctx.font = 'bold 12px' + FONT; ctx.textAlign = 'center';
+        ctx.fillText(heading, (px0 + px1) / 2, BASE_Y - MAXH - 22);
+    }
+
+    // ---- left panel: absolute counts
+    var lx0 = 60, lx1 = 350, lw = (lx1 - lx0) / 4, LMAX = 1000;
+    ctx.font = '10px' + FONT; ctx.textAlign = 'right';
+    [0, 250, 500, 750, 1000].forEach(function(v) {
+        var y = BASE_Y - (v / LMAX) * MAXH;
+        ctx.fillStyle = '#666'; ctx.fillText(String(v), lx0 - 5, y + 3);
+        ctx.strokeStyle = '#eee'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(lx0, y); ctx.lineTo(lx1, y); ctx.stroke();
+    });
+    panel(lx0, lx1, 'absolute count tonight');
+    for (var i = 0; i < 4; i++) {
+        var gx = lx0 + i * lw, bw = (lw - 16) / 2;
+        var hb = (baseline[i] / LMAX) * MAXH, ht = (tonight[i] / LMAX) * MAXH;
+        ctx.fillStyle = 'rgba(26,82,118,0.35)'; ctx.fillRect(gx + 6, BASE_Y - hb, bw, hb);
+        ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 1; ctx.strokeRect(gx + 6, BASE_Y - hb, bw, hb);
+        ctx.fillStyle = '#e74c3c'; ctx.fillRect(gx + 10 + bw, BASE_Y - ht, bw, ht);
+        ctx.font = '10px' + FONT; ctx.textAlign = 'center';
+        ctx.fillText(String(tonight[i]), gx + 10 + bw + bw / 2, BASE_Y - ht - 4);
+        ctx.fillStyle = '#666'; ctx.fillText(labels[i], gx + lw / 2, BASE_Y + 14);
+    }
+    ctx.font = '10px' + FONT; ctx.textAlign = 'left';
+    ctx.fillStyle = '#1a5276'; ctx.fillText('■ baseline', lx0 + 4, BASE_Y - MAXH - 6);
+    ctx.fillStyle = '#e74c3c'; ctx.fillText('■ tonight', lx0 + 74, BASE_Y - MAXH - 6);
+
+    // ---- right panel: ratio to own baseline
+    var rx0 = 400, rx1 = 690, rw = (rx1 - rx0) / 4, RMAX = 5;
+    ctx.font = '10px' + FONT; ctx.textAlign = 'right';
+    [1, 2, 3, 4, 5].forEach(function(v) {
+        var y = BASE_Y - (v / RMAX) * MAXH;
+        ctx.fillStyle = '#666'; ctx.fillText(v + 'x', rx0 - 5, y + 3);
+        ctx.strokeStyle = '#eee'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(rx0, y); ctx.lineTo(rx1, y); ctx.stroke();
+    });
+    panel(rx0, rx1, "count ÷ that cell's own baseline");
+    for (var j = 0; j < 4; j++) {
+        var gx2 = rx0 + j * rw, bw2 = rw - 26;
+        var h2 = (ratio[j] / RMAX) * MAXH;
+        ctx.fillStyle = '#27ae60'; ctx.fillRect(gx2 + 13, BASE_Y - h2, bw2, h2);
+        ctx.fillStyle = '#27ae60'; ctx.font = 'bold 11px' + FONT; ctx.textAlign = 'center';
+        ctx.fillText(ratio[j].toFixed(2) + 'x', gx2 + rw / 2, BASE_Y - h2 - 5);
+        ctx.fillStyle = '#666'; ctx.font = '10px' + FONT;
+        ctx.fillText(labels[j], gx2 + rw / 2, BASE_Y + 14);
+    }
+    var y1 = BASE_Y - (1 / RMAX) * MAXH;
+    ctx.strokeStyle = '#e67e22'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(rx0, y1); ctx.lineTo(rx1, y1); ctx.stroke();
+    ctx.fillStyle = '#e67e22'; ctx.font = '10px' + FONT; ctx.textAlign = 'left';
+    ctx.fillText('baseline = 1.0x', rx0 + 4, y1 - 4);
+
+    // ---- rank strips, sorted in JS
+    function rankBy(keyFn) {
+        return labels.map(function(l, i){ return {l: l, k: keyFn(i)}; })
+                     .sort(function(p, q){ return q.k - p.k; })
+                     .map(function(o){ return o.l; });
+    }
+    var rankAbs = rankBy(function(i){ return tonight[i]; });
+    var rankRatio = rankBy(function(i){ return ratio[i]; });
+
+    ctx.font = 'bold 11px' + FONT; ctx.textAlign = 'center';
+    ctx.fillStyle = '#e74c3c'; ctx.fillText('rank: ' + rankAbs.join(' > '), (lx0 + lx1) / 2, 310);
+    ctx.fillStyle = '#27ae60'; ctx.fillText('rank: ' + rankRatio.join(' > '), (rx0 + rx1) / 2, 310);
+
+    var reversed = rankAbs.every(function(l, i){ return l === rankRatio[rankRatio.length - 1 - i]; });
+    var same = rankAbs.every(function(l, i){ return l === rankRatio[i]; });
+    var verdict = reversed ? 'the two rankings are exact reverses of each other'
+                          : (same ? 'the two rankings agree' : 'the two rankings differ');
+    ctx.font = 'bold 12px' + FONT; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText(verdict, 360, 336);
+
+    ctx.font = 'bold 14px' + FONT; ctx.fillStyle = '#1a5276';
+    ctx.fillText('Illustrative Example — Absolute Ranks by Population, Ratio Ranks by Anomaly', 360, 20);
+});
+
+__charts.forEach(function(f){ f(); });
+var __redrawTimer;
+window.addEventListener('resize', function(){
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function(){ __charts.forEach(function(f){ f(); }); }, 150);
+});
+</script>
+</body>
+</html>

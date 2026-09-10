@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Engineering Systems as Data Science Enablers — the Storage Layer Decides the Questions</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 40px 20px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 50%; }
+.obj-table td:last-child { width: 50%; text-align: center; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; width: 100%; height: auto; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+.math-box { background: #f8fafb; border: 1px solid #e0e0e0; border-radius: 6px; padding: 16px 20px; margin: 12px 0; font-size: 0.9em; }
+.math-box code { background: #eef2f7; padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
+.mini-table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 0.85em; }
+.mini-table th { background: #f0f4f8; color: #1a5276; padding: 6px 8px; border: 1px solid #e0e0e0; text-align: left; }
+.mini-table td { padding: 6px 8px; border: 1px solid #e0e0e0; }
+.summary-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 0.9em; }
+.summary-table th { background: #f0f4f8; padding: 10px 14px; text-align: left; border: 1px solid #e0e0e0; color: #1a5276; }
+.summary-table td { padding: 10px 14px; border: 1px solid #e0e0e0; }
+</style>
+</head>
+<body>
+
+<h1>Engineering Systems as Data Science Enablers — the Storage Layer Decides the Questions</h1>
+<p class="subtitle">Almost every method a modern analyst uses predates the modern analyst. What changed was not inference — it was reach. Treat the pipeline as the thing that fixes the question space, and the last twenty years reads differently.</p>
+
+<div class="philosophy">
+<strong>The question:</strong> If the statistics were already invented, what exactly happened? Logistic regression, the bootstrap, and gradient boosting were all published before the phrase "data science" was in common use. So why did the field arrive when it did?<br><br>
+<strong>The answer:</strong> The storage and serving layer moved, not the mathematics. A sorted, distributed key-value store made a full scan affordable, a columnar layout made a full scan cheap — and affordability is what makes a question <em>askable</em>. That reframes infrastructure design as a quietly epistemic act: the schema, the grain, and the retention window decide which hypotheses exist before an analyst is hired.
+</div>
+
+<!-- Aspect 1 -->
+<h2>1. The Claim, Stated Precisely</h2>
+<table class="obj-table">
+    <tr>
+        <td>
+            <div class="obj-title">Method Was Never the Bottleneck</div>
+            <p>The inference toolkit was largely complete decades before it was widely used. Logistic regression as a fitted model dates to the 1950s, the bootstrap to 1979, boosting to the mid-1990s, and gradient boosting to around 2001. None of them waited on a theorem. They waited on a machine that could read the rows.</p>
+
+            <div class="math-box">
+            <strong>Two timelines, same axis (published dates):</strong><br><br>
+            <em>Methods:</em> <code>1958</code> logistic regression &middot; <code>1967</code> k-means &middot; <code>1977</code> EM &middot; <code>1979</code> bootstrap &middot; <code>1984</code> CART &middot; <code>1986</code> backpropagation &middot; <code>1995</code> AdaBoost &middot; <code>1996</code> lasso &middot; <code>2001</code> random forests<br><br>
+            <em>Systems:</em> <code>1970</code> relational model &middot; <code>1996</code> LSM-tree &middot; <code>2004</code> MapReduce &middot; <code>2006</code> distributed sorted key-value store &middot; <code>2010</code> interactive columnar query &middot; <code>2013</code> open columnar file formats &middot; <code>2015</code> storage/compute separation<br><br>
+            Median method year is <code>1984</code>; median system year is <code>2006</code>. The gap is <code>22 years</code> — a generation in which the answer was computable in principle and unaffordable in practice. Both medians are computed in the chart from the plotted points.
+            </div>
+
+            <ul>
+                <li><strong>Not a math shortage:</strong> the estimator for a click-through model existed long before the click log was storable</li>
+                <li><strong>What a sorted store buys:</strong> keys adjacent in value land adjacent on disk, so a range is one sequential read</li>
+                <li><strong>What a columnar layout buys:</strong> a 3-column query touches 3 columns, not 300, so cost tracks the question's width</li>
+                <li><strong>Append-only structures:</strong> the LSM-tree traded read amplification for write throughput, which is what event logging needs</li>
+                <li><strong>Compute you can rent:</strong> separating storage from compute made an expensive scan a budget line, not a capacity plan</li>
+                <li><strong>The honest reading:</strong> methods got better too, but the discontinuity in <em>what got analyzed</em> lines up with the systems track</li>
+            </ul>
+        </td>
+        <td>
+            <canvas id="canvas1" width="720" height="360"></canvas>
+        </td>
+    </tr>
+</table>
+
+<!-- Aspect 2 -->
+<h2>2. Latency as an Epistemic Boundary</h2>
+<table class="obj-table">
+    <tr>
+        <td>
+            <div class="obj-title">Your Hypothesis Budget Is a Division</div>
+            <p>A query that takes a week gets asked once, and it gets asked about the thing the analyst was already fairly sure of. A query that takes a second gets asked a thousand times, most of them badly — and that is exactly where findings come from: iteration, not the first draft. So latency is not a convenience metric. It sets a hard ceiling on how many hypotheses a person can physically test.</p>
+
+            <div class="math-box">
+            <strong>Illustrative Example — one analyst-week of query time:</strong> <code>40 h = 144,000 s</code><br><br>
+            Hypotheses testable <code>&asymp; time budget &divide; query latency</code>
+            <table class="mini-table">
+                <tr><th>Storage tier</th><th>Latency</th><th>Hypotheses / week</th></tr>
+                <tr><td>Nightly batch scan of raw logs</td><td><code>14,400 s</code> (4 h)</td><td><code>10</code></td></tr>
+                <tr><td>Distributed row-oriented scan</td><td><code>600 s</code> (10 min)</td><td><code>240</code></td></tr>
+                <tr><td>Sorted key-value store, range scan</td><td><code>20 s</code></td><td><code>7,200</code></td></tr>
+                <tr><td>Columnar + cached aggregates</td><td><code>2 s</code></td><td><code>72,000</code></td></tr>
+            </table>
+            Top to bottom the latency improves <code>7,200x</code>, and the hypothesis budget improves by exactly the same <code>7,200x</code> — <code>10 &rarr; 72,000</code>. Every count is <code>144,000 &divide; latency</code>, computed at render time. The latency values are illustrative tier stand-ins, not measurements of any product.
+            </div>
+
+            <ul>
+                <li><strong>Ten questions is a hypothesis, not a search:</strong> at 4 hours a query you spend your week confirming a prior</li>
+                <li><strong>The first draft is usually wrong:</strong> a real finding is the tenth version of a query, so version count is the asset</li>
+                <li><strong>Interactive is a threshold, not a gradient:</strong> below roughly ten seconds the analyst stops context-switching away</li>
+                <li><strong>Exploration must be cheap enough to waste:</strong> most queries have to be allowed to return nothing useful at all</li>
+                <li><strong>Latency compounds with breadth:</strong> cheap scans also widen each query, so you get to test bigger hypotheses too</li>
+                <li><strong>The uncomfortable corollary:</strong> the budget scales with speed whether or not the hypotheses deserve testing</li>
+            </ul>
+        </td>
+        <td>
+            <canvas id="canvas2" width="720" height="360"></canvas>
+        </td>
+    </tr>
+</table>
+
+<!-- Aspect 3 -->
+<h2>3. What the Schema Forbids</h2>
+<table class="obj-table">
+    <tr>
+        <td>
+            <div class="obj-title">The Question Space Is Fixed Before You Arrive</div>
+            <p>This is the strongest form of the claim. If events are written as one row per user per day, no question about within-day ordering can ever be answered — not by a better model, not by a better statistician, not ever. The information is not noisy, it is absent. The engineer who chose the grain closed off a region of the hypothesis space, usually to save storage, usually without knowing.</p>
+
+            <div class="math-box">
+            <strong>Illustrative Example — grain destroys resolution, retention truncates horizons.</strong><br><br>
+            A day rolled up to one row collapses <code>1,440</code> minute-level slots into <code>1</code>. Ordering, gaps, and session structure are unrecoverable from the aggregate — there is no inverse.<br><br>
+            Of five common questions, a raw event log answers <code>5/5</code> (<code>100%</code>), an hourly rollup <code>2/5</code> (<code>40%</code>), a daily rollup <code>1/5</code> (<code>20%</code>). These fractions are computed in the chart from the plotted matrix.<br><br>
+            <strong>Retention is a second hard bound.</strong> With a <code>90-day</code> window, a 6-month (<code>183-day</code>) cohort curve is only <code>90 &divide; 183 = 49%</code> observable. The remaining 51% is not underpowered — it does not exist.
+            </div>
+
+            <ul>
+                <li><strong>Aggregation is lossy and irreversible:</strong> a sum has no inverse, so within-bucket questions die at write time</li>
+                <li><strong>The grain sets the finest testable unit:</strong> daily rows cannot support a claim about the first five minutes</li>
+                <li><strong>Retention bounds every longitudinal claim:</strong> the longest measurable horizon equals the window, full stop</li>
+                <li><strong>Absence looks like a modelling problem:</strong> analysts spend months on questions the schema already answered "no"</li>
+                <li><strong>The decision is made on cost:</strong> grain and retention are usually chosen from a storage bill, not a research plan</li>
+                <li><strong>Backfill does not rescue you:</strong> you can widen the schema going forward, never for the months already rolled up</li>
+            </ul>
+        </td>
+        <td>
+            <canvas id="canvas3" width="720" height="360"></canvas>
+        </td>
+    </tr>
+</table>
+
+<!-- Aspect 4 -->
+<h2>4. Sampling Decided by Engineering</h2>
+<table class="obj-table">
+    <tr>
+        <td>
+            <div class="obj-title">A Buffer Size Became a Sampling Frame</div>
+            <p>A log that drops events when its buffer fills has a sampling mechanism, and that mechanism is correlated with load — which is precisely the condition you most wanted data about. Nobody designed this sampling frame. It emerged from a queue depth chosen for memory headroom. The result is a dataset that is thinnest exactly where the interesting behaviour lives.</p>
+
+            <div class="math-box">
+            <strong>Illustrative Example — a logger draining <code>10,000 events/s</code>.</strong>
+            <table class="mini-table">
+                <tr><th>Period</th><th>Hours</th><th>Arrival rate</th><th>Retained</th><th>True error rate</th></tr>
+                <tr><td>Normal</td><td><code>20 h</code></td><td><code>4,000/s</code></td><td><code>100%</code></td><td><code>0.5%</code></td></tr>
+                <tr><td>Peak</td><td><code>4 h</code></td><td><code>25,000/s</code></td><td><code>40%</code></td><td><code>5.0%</code></td></tr>
+            </table>
+            Events: normal <code>4,000 &times; 20 &times; 3,600 = 288,000,000</code>; peak <code>25,000 &times; 4 &times; 3,600 = 360,000,000</code>.<br><br>
+            True rate <code>= (288M &times; 0.005 + 360M &times; 0.05) &divide; 648M = 19.44M &divide; 648M = 3.0%</code><br><br>
+            Logged rate <code>= (1.44M + 0.4 &times; 18M) &divide; (288M + 144M) = 8.64M &divide; 432M = 2.0%</code><br><br>
+            The dashboard reports <code>2.0%</code> against a truth of <code>3.0%</code> — it understates by a third, and it does so worst during the incident. All four quantities are computed in the chart from the two literal rows.
+            </div>
+
+            <ul>
+                <li><strong>Load-correlated loss is the worst kind:</strong> the missingness depends on the very variable under study</li>
+                <li><strong>It is not missing at random:</strong> dropped rows carry a higher error rate, so the mean shifts, not just the variance</li>
+                <li><strong>The bias is directional and predictable:</strong> healthy traffic is over-represented, so every rate looks better</li>
+                <li><strong>Nobody wrote it down:</strong> the sampling probability is a side effect of buffer depth and drain rate</li>
+                <li><strong>Reweighting needs the drop count:</strong> recoverable only if the logger records what it discarded, and most do not</li>
+                <li><strong>Same shape, other causes:</strong> client-side ad blockers, timeouts, and retry storms all sample on the outcome</li>
+            </ul>
+        </td>
+        <td>
+            <canvas id="canvas4" width="720" height="360"></canvas>
+        </td>
+    </tr>
+</table>
+
+<!-- Aspect 5 -->
+<h2>5. The Counter-Argument, Taken Seriously</h2>
+<table class="obj-table">
+    <tr>
+        <td>
+            <div class="obj-title">Necessary, Not Sufficient — and It Ships a Debt</div>
+            <p>Infrastructure is a precondition, not an answer. The same cheap query that lets you find a real effect on the tenth attempt lets you find a fake one on the two-hundredth, and the p-value threshold has no idea how many attempts preceded it. A 7,200x hypothesis budget at a fixed <code>&alpha; = 0.05</code> is a 7,200x false-positive budget. That is the bill the engineering win runs up.</p>
+
+            <div class="math-box">
+            <strong>Illustrative Example — expected spurious findings under a true null, <code>&alpha; = 0.05</code>.</strong><br><br>
+            <code>E[false positives] = N &times; &alpha;</code>
+            <table class="mini-table">
+                <tr><th>Hypotheses tested</th><th>Expected false positives at &alpha; = 0.05</th></tr>
+                <tr><td><code>10</code></td><td><code>0.5</code></td></tr>
+                <tr><td><code>240</code></td><td><code>12</code></td></tr>
+                <tr><td><code>7,200</code></td><td><code>360</code></td></tr>
+                <tr><td><code>72,000</code></td><td><code>3,600</code></td></tr>
+            </table>
+            Same N values as section 2, so the two sections reconcile. To hold the family-wise error at <code>0.05</code> across <code>72,000</code> tests, Bonferroni needs a per-test <code>&alpha; = 0.05 &divide; 72,000 = 6.9 &times; 10<sup>&minus;7</sup></code>, a two-sided threshold of <code>|z| &gt; 4.96</code> instead of <code>1.96</code>.<br><br>
+            That is not free. At 80% power the required sample per test scales as <code>(z<sub>&alpha;/2</sub> + z<sub>&beta;</sub>)&sup2;</code>, so <code>(4.96 + 0.84)&sup2; &divide; (1.96 + 0.84)&sup2; = 33.6 &divide; 7.84 &asymp; 4.3x</code> the sample. Fortunately, cheap scans are also what make 4.3x the sample affordable — the engineering win partly pays its own bill.
+            </div>
+
+            <ul>
+                <li><strong>The threshold is blind to attempt count:</strong> 0.05 means one-in-twenty per test, never one-in-twenty overall</li>
+                <li><strong>Iteration is the same act as p-hacking:</strong> the only difference is whether the attempts were declared</li>
+                <li><strong>Garden of forking paths:</strong> informal choices of filter, window, and cohort are untracked tests too</li>
+                <li><strong>Correction is the statistical debt:</strong> the engineering gain must be repaid in threshold or in preregistration</li>
+                <li><strong>Bonferroni is the crude repayment:</strong> FDR control is usually the right instrument for a wide screen</li>
+                <li><strong>The win is real but conditional:</strong> more data helps only if the analyst counts the questions asked</li>
+            </ul>
+        </td>
+        <td>
+            <canvas id="canvas5" width="720" height="360"></canvas>
+        </td>
+    </tr>
+</table>
+
+<!-- Summary -->
+<h2>6. The Complete Picture</h2>
+<table class="summary-table">
+    <tr><th>Layer decision</th><th>Looks like</th><th>Is actually</th><th>Consequence for inference</th></tr>
+    <tr><td><strong>Storage layout</strong></td><td>A cost optimisation</td><td>Which scans are affordable</td><td>Sets how wide a question can be</td></tr>
+    <tr><td><strong>Query latency</strong></td><td>A developer-experience metric</td><td>The hypothesis budget</td><td>Budget &asymp; time &divide; latency, 10 vs 72,000</td></tr>
+    <tr><td><strong>Aggregation grain</strong></td><td>A compression choice</td><td>The finest testable unit</td><td>Daily rows forbid within-day ordering, permanently</td></tr>
+    <tr><td><strong>Retention window</strong></td><td>A compliance or bill decision</td><td>The longest measurable horizon</td><td>A 90-day window sees 49% of a 183-day curve</td></tr>
+    <tr><td><strong>Buffer / drop policy</strong></td><td>A reliability tuning knob</td><td>An undocumented sampling frame</td><td>Load-correlated loss biases rates downward (3.0% &rarr; 2.0%)</td></tr>
+    <tr><td><strong>Cheap iteration</strong></td><td>Pure upside</td><td>A multiplicity problem</td><td>72,000 tests at &alpha;=0.05 expect 3,600 false positives</td></tr>
+</table>
+
+<div class="philosophy">
+<strong>One sentence:</strong> The pipeline is an epistemic instrument — it fixes the question space before any analyst arrives, so grain, retention, and drop policy deserve the scrutiny normally reserved for the model, and the cheap query it delivers must be paid for with an honest count of how many questions were asked.
+</div>
+
+<script>var __charts = [];
+var FONT = '-apple-system, BlinkMacSystemFont, sans-serif';
+
+function setupCanvas(id, w, h) {
+    var c = document.getElementById(id); if (!c) return null;
+    var dpr = window.devicePixelRatio || 1;
+    c.style.maxWidth = w + 'px';
+    var cssW = c.getBoundingClientRect().width || w;
+    var scale = (cssW / w) * dpr;
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    var ctx = c.getContext('2d'); ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, w, h);
+    return ctx;
+}
+
+function median(arr) {
+    var a = arr.slice().sort(function(x, y){ return x - y; });
+    var m = Math.floor(a.length / 2);
+    return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
+}
+
+function fmtCount(v) {
+    if (v >= 1) return Math.round(v).toLocaleString('en-US');
+    return String(Math.round(v * 100) / 100);
+}
+
+// Inverse standard normal CDF (Acklam rational approximation) — used to derive the
+// Bonferroni z threshold from the computed per-test alpha at render time.
+function invNorm(p) {
+    var a = [-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02,
+             1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00];
+    var b = [-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02,
+             6.680131188771972e+01, -1.328068155288572e+01];
+    var c = [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00,
+             -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00];
+    var d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00,
+             3.754408661907416e+00];
+    var pl = 0.02425, q, r;
+    if (p < pl) {
+        q = Math.sqrt(-2 * Math.log(p));
+        return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) /
+               ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);
+    }
+    if (p <= 1 - pl) {
+        q = p - 0.5; r = q * q;
+        return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q /
+               (((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1);
+    }
+    return -invNorm(1 - p);
+}
+
+// Canvas 1: two-track timeline of methods vs systems, medians and gap computed
+__charts.push(function(){
+    var ctx = setupCanvas('canvas1', 720, 360); if (!ctx) return;
+    var x0 = 70, x1 = 690, y0 = 1955, y1 = 2020;
+    var mTrack = 130, sTrack = 250;
+
+    var methods = [[1958,'logistic regression'],[1967,'k-means'],[1977,'EM'],[1979,'bootstrap'],
+                   [1984,'CART'],[1986,'backprop'],[1995,'AdaBoost'],[1996,'lasso'],
+                   [2001,'random forests']];
+    var systems = [[1970,'relational model'],[1996,'LSM-tree'],[2004,'MapReduce'],
+                   [2006,'sorted distributed KV'],[2010,'interactive columnar'],
+                   [2013,'columnar file formats'],[2015,'storage/compute split']];
+
+    function yrToX(y) { return x0 + ((y - y0) / (y1 - y0)) * (x1 - x0); }
+
+    // Gridlines + x ticks
+    ctx.font = '11px ' + FONT; ctx.textAlign = 'center';
+    [1960, 1970, 1980, 1990, 2000, 2010, 2020].forEach(function(y) {
+        var x = yrToX(y);
+        ctx.strokeStyle = '#eee'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, 90); ctx.lineTo(x, 300); ctx.stroke();
+        ctx.fillStyle = '#666'; ctx.fillText(String(y), x, 312);
+    });
+
+    // Tracks
+    ctx.strokeStyle = '#ccc'; ctx.lineWidth = 1.5;
+    [mTrack, sTrack].forEach(function(y) {
+        ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+    });
+
+    function drawTrack(data, baseY, color) {
+        data.forEach(function(d, i) {
+            var x = yrToX(d[0]);
+            ctx.fillStyle = color;
+            ctx.beginPath(); ctx.arc(x, baseY, 5, 0, Math.PI * 2); ctx.fill();
+            ctx.font = '10px ' + FONT; ctx.textAlign = 'center';
+            var off = (i % 2 === 0) ? -12 : 20;
+            if (i % 4 === 1) off = 32;
+            if (i % 4 === 2) off = -24;
+            ctx.fillText(d[1], x, baseY + off);
+        });
+    }
+    drawTrack(methods, mTrack, '#1a5276');
+    drawTrack(systems, sTrack, '#27ae60');
+
+    // Track titles
+    ctx.font = 'bold 12px ' + FONT; ctx.textAlign = 'left';
+    ctx.fillStyle = '#1a5276'; ctx.fillText('Statistical / ML methods', x0, 104);
+    ctx.fillStyle = '#27ae60'; ctx.fillText('Storage & serving systems', x0, 224);
+
+    // Computed medians
+    var mMed = median(methods.map(function(d){ return d[0]; }));
+    var sMed = median(systems.map(function(d){ return d[0]; }));
+    var mx = yrToX(mMed), sx = yrToX(sMed);
+
+    ctx.setLineDash([5, 5]); ctx.lineWidth = 1.5;
+    ctx.strokeStyle = '#1a5276';
+    ctx.beginPath(); ctx.moveTo(mx, mTrack - 26); ctx.lineTo(mx, mTrack + 26); ctx.stroke();
+    ctx.strokeStyle = '#27ae60';
+    ctx.beginPath(); ctx.moveTo(sx, sTrack - 26); ctx.lineTo(sx, sTrack + 26); ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.font = 'bold 12px ' + FONT; ctx.textAlign = 'center';
+    ctx.fillStyle = '#1a5276'; ctx.fillText('median ' + mMed, mx, mTrack - 32);
+    ctx.fillStyle = '#27ae60'; ctx.fillText('median ' + sMed, sx, sTrack - 32);
+
+    // Gap annotation — integer computed from the medians
+    var gap = Math.round(sMed - mMed);
+    var gy = 190;
+    ctx.strokeStyle = '#e67e22'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(mx, gy); ctx.lineTo(sx, gy); ctx.stroke();
+    [[mx, 1], [sx, -1]].forEach(function(h) {
+        ctx.beginPath();
+        ctx.moveTo(h[0], gy); ctx.lineTo(h[0] + 7 * h[1], gy - 5);
+        ctx.moveTo(h[0], gy); ctx.lineTo(h[0] + 7 * h[1], gy + 5);
+        ctx.stroke();
+    });
+    ctx.fillStyle = '#e67e22'; ctx.font = 'bold 12px ' + FONT; ctx.textAlign = 'center';
+    ctx.fillText(gap + '-year gap', (mx + sx) / 2, gy - 8);
+
+    ctx.fillStyle = '#1a5276'; ctx.font = '13px ' + FONT;
+    ctx.fillText('Year first published', (x0 + x1) / 2, 338);
+
+    ctx.font = 'bold 14px ' + FONT; ctx.fillStyle = '#1a5276';
+    ctx.fillText('The Methods Are Old — the Access Is New', (x0 + x1) / 2, 24);
+});
+
+// Canvas 2: hypotheses per analyst-week = 144000 / latency, log-scale bars
+__charts.push(function(){
+    var ctx = setupCanvas('canvas2', 720, 360); if (!ctx) return;
+    var px0 = 250, px1 = 660, barH = 34, gap = 22, top = 70;
+    var BUDGET = 144000;
+
+    var lat = [14400, 600, 20, 2];
+    var tiers = ['Nightly batch scan', 'Distributed row scan', 'Sorted KV range scan', 'Columnar + cache'];
+    var caps = ['4 h', '10 min', '20 s', '2 s'];
+    var counts = lat.map(function(L){ return BUDGET / L; });
+
+    function vToX(v) { return px0 + (Math.log(v) / Math.LN10 / 5) * (px1 - px0); }
+
+    // Gridlines
+    ctx.font = '10px ' + FONT; ctx.textAlign = 'center';
+    [1, 10, 100, 1000, 10000, 100000].forEach(function(v) {
+        var x = vToX(v);
+        ctx.strokeStyle = '#eee'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, 55); ctx.lineTo(x, 288); ctx.stroke();
+        ctx.fillStyle = '#666'; ctx.fillText(v.toLocaleString('en-US'), x, 300);
+    });
+
+    var ends = [];
+    counts.forEach(function(n, i) {
+        var y = top + i * (barH + gap);
+        var xe = vToX(n);
+        ends.push({ x: xe, y: y + barH / 2 });
+
+        ctx.fillStyle = 'rgba(26,82,118,0.35)';
+        ctx.fillRect(px0, y, xe - px0, barH);
+        ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 1.5;
+        ctx.strokeRect(px0, y, xe - px0, barH);
+
+        ctx.textAlign = 'right';
+        ctx.font = 'bold 12px ' + FONT; ctx.fillStyle = '#1a5276';
+        ctx.fillText(tiers[i], px0 - 10, y + barH / 2 - 1);
+        ctx.font = '11px ' + FONT; ctx.fillStyle = '#666';
+        ctx.fillText(caps[i], px0 - 10, y + barH / 2 + 14);
+
+        ctx.textAlign = 'left';
+        ctx.font = 'bold 12px ' + FONT; ctx.fillStyle = '#1a5276';
+        ctx.fillText(fmtCount(n), xe + 8, y + barH / 2 + 4);
+    });
+
+    // Speedup bracket — ratio computed from the plotted counts
+    var ratio = counts[counts.length - 1] / counts[0];
+    var bx = px1 - 6;
+    ctx.strokeStyle = '#e67e22'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(ends[0].x + 46, ends[0].y);
+    ctx.lineTo(bx, ends[0].y);
+    ctx.lineTo(bx, ends[ends.length - 1].y);
+    ctx.lineTo(ends[ends.length - 1].x + 58, ends[ends.length - 1].y);
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#e67e22'; ctx.font = 'bold 12px ' + FONT; ctx.textAlign = 'right';
+    ctx.fillText(fmtCount(ratio) + 'x more hypotheses', bx - 6,
+                 (ends[0].y + ends[ends.length - 1].y) / 2 - 6);
+
+    ctx.fillStyle = '#1a5276'; ctx.font = '13px ' + FONT; ctx.textAlign = 'center';
+    ctx.fillText('Hypotheses testable per analyst-week (log scale)', (px0 + px1) / 2, 330);
+
+    ctx.fillStyle = '#999'; ctx.font = '10px ' + FONT; ctx.textAlign = 'left';
+    ctx.fillText('Illustrative Example — tier latencies are stand-ins, not measured products.', 20, 352);
+
+    ctx.font = 'bold 14px ' + FONT; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('Time Budget ÷ Latency = Questions You Can Actually Ask', 360, 26);
+});
+
+// Canvas 3: question x grain answerability matrix, column fractions computed
+__charts.push(function(){
+    var ctx = setupCanvas('canvas3', 720, 360); if (!ctx) return;
+    var labX0 = 20, labX1 = 330, colX = 340, colW = 110, headY = 84, rowTop = 100, rowH = 40;
+
+    var cols = ['Raw event log', 'Hourly rollup', 'Daily rollup'];
+    var rows = [
+        ['Daily active users', true, true, true],
+        ['Peak hour of the day', true, true, false],
+        ['Did the click precede the purchase?', true, false, false],
+        ['Seconds between two events', true, false, false],
+        ['Sessions split on a 30-min idle gap', true, false, false]
+    ];
+    var tblX1 = colX + cols.length * colW;
+    var tblY1 = rowTop + rows.length * rowH;
+
+    // Header band
+    ctx.fillStyle = '#f0f4f8';
+    ctx.fillRect(labX0, headY - 20, tblX1 - labX0, 20);
+    ctx.font = 'bold 12px ' + FONT; ctx.textAlign = 'center'; ctx.fillStyle = '#1a5276';
+    cols.forEach(function(c, j) {
+        ctx.fillText(c, colX + j * colW + colW / 2, headY - 5);
+    });
+
+    // Separators
+    ctx.strokeStyle = '#e0e0e0'; ctx.lineWidth = 1;
+    for (var i = 0; i <= rows.length; i++) {
+        var y = rowTop + i * rowH;
+        ctx.beginPath(); ctx.moveTo(labX0, y); ctx.lineTo(tblX1, y); ctx.stroke();
+    }
+    ctx.beginPath(); ctx.moveTo(labX0, headY - 20); ctx.lineTo(tblX1, headY - 20); ctx.stroke();
+    for (var j = 0; j <= cols.length; j++) {
+        var x = colX + j * colW;
+        ctx.beginPath(); ctx.moveTo(x, headY - 20); ctx.lineTo(x, tblY1); ctx.stroke();
+    }
+
+    // Rows
+    rows.forEach(function(r, i) {
+        var cy = rowTop + i * rowH + rowH / 2;
+        ctx.font = '12px ' + FONT; ctx.textAlign = 'left'; ctx.fillStyle = '#333';
+        ctx.fillText(r[0], labX0 + 4, cy + 4);
+        for (var j = 0; j < cols.length; j++) {
+            var cx = colX + j * colW + colW / 2;
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            if (r[j + 1]) {
+                ctx.strokeStyle = '#27ae60';
+                ctx.moveTo(cx - 7, cy); ctx.lineTo(cx - 2, cy + 6); ctx.lineTo(cx + 7, cy - 7);
+            } else {
+                ctx.strokeStyle = '#e74c3c';
+                ctx.moveTo(cx - 6, cy - 6); ctx.lineTo(cx + 6, cy + 6);
+                ctx.moveTo(cx + 6, cy - 6); ctx.lineTo(cx - 6, cy + 6);
+            }
+            ctx.stroke();
+        }
+    });
+
+    // Column footers — fractions derived from the matrix
+    ctx.font = 'bold 12px ' + FONT; ctx.textAlign = 'center';
+    for (var j = 0; j < cols.length; j++) {
+        var ok = 0;
+        rows.forEach(function(r){ if (r[j + 1]) ok++; });
+        var frac = ok / rows.length;
+        ctx.fillStyle = (frac === 1) ? '#27ae60' : '#e67e22';
+        ctx.fillText(ok + '/' + rows.length + ' · ' + Math.round(frac * 100) + '%',
+                     colX + j * colW + colW / 2, 322);
+    }
+
+    ctx.fillStyle = '#999'; ctx.font = '10px ' + FONT; ctx.textAlign = 'left';
+    ctx.fillText('Illustrative Example — a representative question set, not an exhaustive one.', labX0, 348);
+
+    ctx.font = 'bold 14px ' + FONT; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('The Grain Decides Which Questions Are Even Expressible', 360, 26);
+});
+
+// Canvas 4: load-correlated drops, true vs logged error rate computed
+__charts.push(function(){
+    var ctx = setupCanvas('canvas4', 720, 360); if (!ctx) return;
+    var base = 280, ph = 200;
+    var lx0 = 70, lx1 = 380, rx0 = 470, rx1 = 660;
+    var CAP = 10000;
+
+    var periods = [
+        { name: 'Normal', hours: 20, rate: 4000, err: 0.005 },
+        { name: 'Peak',   hours: 4,  rate: 25000, err: 0.05 }
+    ];
+
+    // Computed quantities
+    var totAll = 0, errAll = 0, totLog = 0, errLog = 0;
+    periods.forEach(function(p) {
+        var n = p.rate * p.hours * 3600;
+        var keep = Math.min(p.rate, CAP) / p.rate;
+        p.keep = keep;
+        totAll += n; errAll += n * p.err;
+        totLog += n * keep; errLog += n * keep * p.err;
+    });
+    var trueRate = errAll / totAll;
+    var logRate = errLog / totLog;
+    var shortfall = (trueRate - logRate) / trueRate;
+
+    // ---- Left panel ----
+    var lMax = 26000;
+    function lToY(v) { return base - (v / lMax) * ph; }
+
+    ctx.font = '10px ' + FONT; ctx.textAlign = 'right';
+    [0, 10000, 20000].forEach(function(v) {
+        var y = lToY(v);
+        ctx.strokeStyle = '#eee'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(lx0, y); ctx.lineTo(lx1, y); ctx.stroke();
+        ctx.fillStyle = '#666'; ctx.fillText(v.toLocaleString('en-US'), lx0 - 6, y + 3);
+    });
+
+    var bw = 90, centers = [lx0 + 80, lx0 + 220];
+    periods.forEach(function(p, i) {
+        var cx = centers[i], x = cx - bw / 2;
+        var yTop = lToY(p.rate), yCap = lToY(Math.min(p.rate, CAP));
+
+        ctx.fillStyle = 'rgba(26,82,118,0.35)';
+        ctx.fillRect(x, yCap, bw, base - yCap);
+        ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 1.5;
+        ctx.strokeRect(x, yCap, bw, base - yCap);
+
+        if (p.rate > CAP) {
+            ctx.fillStyle = 'rgba(231,76,60,0.15)';
+            ctx.fillRect(x, yTop, bw, yCap - yTop);
+            ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
+            ctx.strokeRect(x, yTop, bw, yCap - yTop);
+            ctx.setLineDash([]);
+            ctx.fillStyle = '#e74c3c'; ctx.font = 'bold 11px ' + FONT; ctx.textAlign = 'center';
+            ctx.fillText('dropped', cx, yTop + (yCap - yTop) / 2 + 4);
+        }
+
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 12px ' + FONT; ctx.fillStyle = '#1a5276';
+        ctx.fillText(p.name, cx, base + 18);
+        ctx.font = '11px ' + FONT; ctx.fillStyle = '#666';
+        ctx.fillText(p.rate.toLocaleString('en-US') + '/s', cx, base + 33);
+
+        ctx.font = 'bold 11px ' + FONT; ctx.fillStyle = '#e67e22';
+        ctx.fillText(Math.round(p.keep * 100) + '% kept', cx, base - 10);
+    });
+
+    // Capacity line
+    ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(lx0, lToY(CAP)); ctx.lineTo(lx1, lToY(CAP)); ctx.stroke();
+    ctx.fillStyle = '#27ae60'; ctx.font = 'bold 11px ' + FONT; ctx.textAlign = 'right';
+    ctx.fillText('logger capacity 10,000/s', lx1, lToY(CAP) - 6);
+
+    ctx.font = 'bold 12px ' + FONT; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'left';
+    ctx.fillText('Arrival rate vs capacity', lx0, 66);
+
+    // ---- Right panel ----
+    var rMax = 0.04;
+    function rToY(v) { return base - (v / rMax) * ph; }
+
+    ctx.font = '10px ' + FONT; ctx.textAlign = 'right';
+    [0, 0.02, 0.04].forEach(function(v) {
+        var y = rToY(v);
+        ctx.strokeStyle = '#eee'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(rx0, y); ctx.lineTo(rx1, y); ctx.stroke();
+        ctx.fillStyle = '#666'; ctx.fillText((v * 100).toFixed(0) + '%', rx0 - 6, y + 3);
+    });
+
+    var rbw = 60, rc = [rx0 + 50, rx0 + 145];
+    var series = [
+        { v: trueRate, cap: 'truth',     fill: 'rgba(39,174,96,0.35)',  line: '#27ae60' },
+        { v: logRate,  cap: 'as logged', fill: 'rgba(231,76,60,0.35)', line: '#e74c3c' }
+    ];
+    series.forEach(function(s, i) {
+        var x = rc[i] - rbw / 2, y = rToY(s.v);
+        ctx.fillStyle = s.fill; ctx.fillRect(x, y, rbw, base - y);
+        ctx.strokeStyle = s.line; ctx.lineWidth = 1.5; ctx.strokeRect(x, y, rbw, base - y);
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 12px ' + FONT; ctx.fillStyle = s.line;
+        ctx.fillText((s.v * 100).toFixed(1) + '%', rc[i], y - 8);
+        ctx.font = '11px ' + FONT; ctx.fillStyle = '#666';
+        ctx.fillText(s.cap, rc[i], base + 18);
+    });
+
+    ctx.font = 'bold 12px ' + FONT; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'left';
+    ctx.fillText('Error rate estimate', rx0, 66);
+
+    ctx.fillStyle = '#e67e22'; ctx.font = 'bold 12px ' + FONT; ctx.textAlign = 'center';
+    ctx.fillText('understates by', (rx0 + rx1) / 2, base + 40);
+    ctx.fillText(Math.round(shortfall * 100) + '% of the truth', (rx0 + rx1) / 2, base + 56);
+
+    ctx.fillStyle = '#999'; ctx.font = '10px ' + FONT; ctx.textAlign = 'left';
+    ctx.fillText('Illustrative Example — constructed rates chosen to make the bias arithmetic exact.', 20, 352);
+
+    ctx.font = 'bold 14px ' + FONT; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('Drops Under Load Are a Sampling Design Nobody Chose', 360, 26);
+});
+
+// Canvas 5: expected false positives vs number of tests, log-log
+__charts.push(function(){
+    var ctx = setupCanvas('canvas5', 720, 360); if (!ctx) return;
+    var ox = 80, oy = 290, gw = 570, gh = 220;
+    var ALPHA = 0.05;
+
+    var Ns = [10, 240, 7200, 72000];
+    var fp = Ns.map(function(n){ return n * ALPHA; });
+
+    function nToX(n) { return ox + ((Math.log(n) / Math.LN10 - 1) / 4) * gw; }
+    function vToY(v) { return oy - ((Math.log(v) / Math.LN10 + 2) / 6) * gh; }
+
+    // Gridlines
+    ctx.font = '10px ' + FONT;
+    ctx.textAlign = 'center';
+    [10, 100, 1000, 10000, 100000].forEach(function(n) {
+        var x = nToX(n);
+        ctx.strokeStyle = '#eee'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, oy); ctx.lineTo(x, oy - gh); ctx.stroke();
+        ctx.fillStyle = '#666'; ctx.fillText(n.toLocaleString('en-US'), x, oy + 14);
+    });
+    ctx.textAlign = 'right';
+    [0.01, 0.1, 1, 10, 100, 1000, 10000].forEach(function(v) {
+        var y = vToY(v);
+        ctx.strokeStyle = '#eee'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + gw, y); ctx.stroke();
+        ctx.fillStyle = '#666';
+        ctx.fillText(v < 1 ? String(v) : v.toLocaleString('en-US'), ox - 6, y + 3);
+    });
+
+    // Axes
+    ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ox, oy); ctx.lineTo(ox + gw, oy);
+    ctx.moveTo(ox, oy); ctx.lineTo(ox, oy - gh);
+    ctx.stroke();
+
+    // Shaded gap between uncorrected and controlled
+    ctx.fillStyle = 'rgba(231,76,60,0.10)';
+    ctx.beginPath();
+    ctx.moveTo(nToX(Ns[0]), vToY(fp[0]));
+    for (var i = 1; i < Ns.length; i++) ctx.lineTo(nToX(Ns[i]), vToY(fp[i]));
+    for (var k = Ns.length - 1; k >= 0; k--) ctx.lineTo(nToX(Ns[k]), vToY(ALPHA));
+    ctx.closePath(); ctx.fill();
+
+    // Controlled line
+    ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 2.5; ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(nToX(Ns[0]), vToY(ALPHA));
+    ctx.lineTo(nToX(Ns[Ns.length - 1]), vToY(ALPHA));
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#27ae60'; ctx.font = 'bold 11px ' + FONT; ctx.textAlign = 'left';
+    ctx.fillText('family-wise error held at 0.05', nToX(Ns[0]) + 4, vToY(ALPHA) - 8);
+
+    // Uncorrected line
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    Ns.forEach(function(n, i) {
+        var x = nToX(n), y = vToY(fp[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    ctx.fillStyle = '#e74c3c';
+    Ns.forEach(function(n, i) {
+        var x = nToX(n), y = vToY(fp[i]);
+        ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
+        ctx.font = 'bold 11px ' + FONT; ctx.textAlign = 'center';
+        ctx.fillText(fmtCount(fp[i]), x, y - 12);
+    });
+
+    // Bonferroni threshold, derived from the largest plotted N
+    var nMax = Ns[Ns.length - 1];
+    var aBonf = ALPHA / nMax;
+    var zBonf = -invNorm(aBonf / 2);
+    ctx.fillStyle = '#666'; ctx.font = '11px ' + FONT; ctx.textAlign = 'left';
+    ctx.fillText('Bonferroni at N = ' + nMax.toLocaleString('en-US') + ':  α = ' +
+                 aBonf.toExponential(1), ox + 14, oy - gh + 20);
+    ctx.fillText('needs |z| > ' + zBonf.toFixed(2) + '  (vs 1.96 uncorrected)', ox + 14, oy - gh + 36);
+
+    ctx.fillStyle = '#1a5276'; ctx.font = '13px ' + FONT; ctx.textAlign = 'center';
+    ctx.fillText('Hypotheses tested (log scale)', ox + gw / 2, oy + 32);
+    ctx.save(); ctx.translate(24, oy - gh / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Expected false positives (log scale)', 0, 0); ctx.restore();
+
+    ctx.fillStyle = '#999'; ctx.font = '10px ' + FONT; ctx.textAlign = 'left';
+    ctx.fillText('Illustrative Example — N values match the latency tiers in the hypothesis-budget table.', 20, 352);
+
+    ctx.font = 'bold 14px ' + FONT; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('A 7,200x Hypothesis Budget Is a 7,200x False-Positive Budget', 360, 24);
+});
+
+__charts.forEach(function(f){ f(); });
+var __redrawTimer;
+window.addEventListener('resize', function(){
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function(){ __charts.forEach(function(f){ f(); }); }, 150);
+});
+</script>
+</body>
+</html>

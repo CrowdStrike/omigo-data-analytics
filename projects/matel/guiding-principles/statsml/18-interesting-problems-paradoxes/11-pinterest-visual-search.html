@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pinterest Visual Search — The Query Is a Rectangle, Not a String</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #ffffff; color: #2a2a2a; padding: 40px 20px; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 10px; color: #1a5276; }
+h2 { font-size: 1.4em; margin: 40px 0 15px; color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+p { margin: 10px 0; color: #333; font-size: 0.95em; }
+.subtitle { color: #666; font-size: 1.05em; margin-bottom: 30px; }
+.obj-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+.obj-table td { border: 1px solid #e0e0e0; padding: 20px 24px; vertical-align: middle; }
+.obj-table td:first-child { width: 50%; }
+.obj-table td:last-child { width: 50%; text-align: center; }
+.obj-title { font-size: 1.05em; font-weight: 600; color: #1a5276; margin-bottom: 8px; }
+canvas { display: block; margin: 0 auto; width: 100%; height: auto; }
+ul { margin: 8px 0 8px 20px; font-size: 0.9em; color: #333; }
+li { margin: 4px 0; }
+strong { color: #1a5276; }
+.philosophy { background: #f0f4f8; border-left: 4px solid #2980b9; padding: 12px 16px; margin: 20px 0; font-size: 0.9em; }
+.math-box { background: #f8fafb; border: 1px solid #e0e0e0; border-radius: 6px; padding: 16px 20px; margin: 12px 0; font-size: 0.9em; }
+.math-box code { background: #eef2f7; padding: 2px 6px; border-radius: 3px; font-size: 0.92em; }
+.summary-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 0.9em; }
+.summary-table th { background: #f0f4f8; padding: 10px 14px; text-align: left; border: 1px solid #e0e0e0; color: #1a5276; }
+.summary-table td { padding: 10px 14px; border: 1px solid #e0e0e0; }
+</style>
+</head>
+<body>
+
+<h1>Pinterest Visual Search — The Query Is a Rectangle, Not a String</h1>
+<p class="subtitle">A user drags a box around one striped chair in a room photo and expects the right products back. Treat the crop as the query and every comfortable assumption from text search breaks.</p>
+
+<div class="philosophy">
+<strong>The question:</strong> In text search you can read the query, log it, cluster it, autocomplete it, and correct its spelling. What is left of that toolkit when the query is a rectangle of pixels?<br><br>
+<strong>The answer:</strong> Almost none of it. A crop is a point in a continuous embedding space, not a token from a finite vocabulary — so there is no query log to mine, no misspelling to fix, and no way to ask the user which of four plausible intents they meant. The system must guess intent, cannot measure whether it guessed right, and then trains tomorrow's model on the clicks its own guess produced.
+</div>
+
+<!-- Aspect 1 -->
+<h2>1. A Query With No Vocabulary</h2>
+<table class="obj-table">
+    <tr>
+        <td>
+            <div class="obj-title">Discrete Tokens vs a Continuous Point</div>
+            <p>Text queries repeat. Ten strings can cover a quarter of all traffic, which is why query logs, autocomplete, and spelling correction all work — they exploit the fact that the query space is discrete, finite, and re-visited. Crops almost never repeat exactly. Two users boxing the same chair produce two different rectangles, two different pixel sets, and two nearby-but-distinct vectors.</p>
+
+            <div class="math-box">
+            <strong>Head concentration, same catalog, two query types (Illustrative Example):</strong><br><br>
+            Top 10 text queries, out of <code>10,000</code> searches: <code>2,510</code> searches → <code>25.1%</code> of traffic<br>
+            Top 10 crop clusters, out of <code>10,000</code> crops: <code>305</code> crops → <code>3.05%</code> of traffic<br><br>
+            Same total volume, same catalog. The text head is <code>8.2x</code> heavier. With no head, there is nothing to precompute, nothing to hand-curate, and no popular-query safety net to fall back on.
+            </div>
+
+            <ul>
+                <li><strong>No query log:</strong> there is no table of "what words did users type" — a crop is a vector, and vectors do not group into inspectable strings</li>
+                <li><strong>No spelling correction:</strong> a bad text query has a nearby valid string; a bad crop has no notion of "invalid", so it silently returns wrong results</li>
+                <li><strong>No autocomplete:</strong> you cannot suggest a completion for a rectangle, so intent can never be refined before retrieval runs</li>
+                <li><strong>No exact-match cache:</strong> a text head lets you serve the top queries from a precomputed list; every crop is effectively a cold query</li>
+                <li><strong>Debugging loses its handle:</strong> "search quality for query X regressed" has no analogue when X is unique to one user, one photo, one drag</li>
+                <li><strong>Curation does not scale:</strong> editors can hand-tune 500 head strings; they cannot hand-tune a continuous space</li>
+            </ul>
+        </td>
+        <td>
+            <canvas id="canvas1" width="720" height="360"></canvas>
+        </td>
+    </tr>
+</table>
+
+<!-- Aspect 2 -->
+<h2>2. The Rectangle Is Ambiguous — and You Cannot Ask</h2>
+<table class="obj-table">
+    <tr>
+        <td>
+            <div class="obj-title">Intent Underdetermined by Pixels</div>
+            <p>Alice boxes a striped chair. She might mean <em>this chair</em>, <em>striped upholstery fabric</em>, <em>mid-century furniture</em>, or <em>this blue-and-cream palette</em>. All four readings are faithful to the same pixels. A text searcher facing the same ambiguity types another word; a cropper has no second word to type, and the interface has no slot to put it in.</p>
+
+            <div class="math-box">
+            <strong>Rater study on one crop set (Illustrative Example):</strong> <code>40</code> crops, <code>5</code> raters each, question: "is this result visually similar?"<br><br>
+            Votes-for-similar per crop: <code>0</code>→6 crops, <code>1</code>→7, <code>2</code>→9, <code>3</code>→8, <code>4</code>→6, <code>5</code>→4<br>
+            Unanimous crops (all 5 agree either way): <code>10 of 40</code> = <code>25%</code><br>
+            Fleiss' kappa across the 40 crops: <code>0.23</code> — "fair" agreement, barely above chance<br><br>
+            If five trained humans cannot agree on three quarters of the cases, the disagreement is not rater sloppiness. It is the intent being genuinely absent from the input.
+            </div>
+
+            <ul>
+                <li><strong>Four faithful readings:</strong> object identity, material or pattern, design era, and color palette all sit inside one rectangle</li>
+                <li><strong>Scale is intent:</strong> a tight crop hints at the object, a loose crop hints at the scene — but users crop imprecisely, so the hint is weak</li>
+                <li><strong>No disambiguation turn:</strong> text search can offer "did you mean"; there is no rectangle equivalent, so the system must commit</li>
+                <li><strong>Context is discarded:</strong> the surrounding room often reveals intent, yet the query pipeline usually sees only the box</li>
+                <li><strong>The label is a coin flip:</strong> with kappa near 0.23, a single rater's "relevant" carries little information about the next rater</li>
+                <li><strong>Averaging hides the split:</strong> 50% mean relevance can mean "half-good for everyone" or "perfect for half the users"</li>
+            </ul>
+        </td>
+        <td>
+            <canvas id="canvas2" width="720" height="360"></canvas>
+        </td>
+    </tr>
+</table>
+
+<!-- Aspect 3 -->
+<h2>3. Two Embeddings, Both Correct, Completely Disagreeing</h2>
+<table class="obj-table">
+    <tr>
+        <td>
+            <div class="obj-title">Style Space vs Object Space</div>
+            <p>Train one encoder to pull together images of the same product and it learns object identity. Train another on pattern and color statistics and it learns style. Query both with the same crop of a striped chair: the object space returns the same chair in plain and floral fabric; the style space returns a striped sofa, a striped lamp, and a striped table. Neither is wrong. Neither can be preferred without knowing intent.</p>
+
+            <div class="math-box">
+            <strong>One query, two spaces, 10 catalog items (Illustrative Example):</strong><br><br>
+            Object-space top 4: <code>chair/plain</code>, <code>chair/floral</code>, <code>chair/plain-2</code>, <code>chair/striped</code> — all chairs, 3 of 4 not striped<br>
+            Style-space top 4: <code>sofa/striped</code>, <code>table/striped</code>, <code>chair/striped</code>, <code>lamp/striped</code> — all striped, 3 of 4 not chairs<br><br>
+            Overlap between the two top-4 lists: <code>1 item</code> (<code>chair/striped</code>). The single item both spaces agree on is the only one that matches on <em>both</em> axes — and it is ranked 4th in one list and 3rd in the other, so a top-3 cutoff drops it from one side.
+            </div>
+
+            <ul>
+                <li><strong>Disagreement is structural:</strong> the two spaces optimize different invariances, so their neighbor sets can share almost nothing</li>
+                <li><strong>A blend hides both:</strong> averaging the two embeddings returns items that are mediocre on each axis rather than strong on one</li>
+                <li><strong>Ranking cannot resolve it:</strong> no reranker fixes a retrieval set that answered a different question than the user asked</li>
+                <li><strong>Slot diversification is the honest fallback:</strong> show results from both spaces and let the click reveal the intent</li>
+                <li><strong>But diversification costs the top slot:</strong> every hedged position is one fewer chance to nail the actual intent</li>
+                <li><strong>Metric choice leaks in too:</strong> cosine on a style vector is dominated by texture energy, which quietly favors busy patterns</li>
+            </ul>
+        </td>
+        <td>
+            <canvas id="canvas3" width="720" height="360"></canvas>
+        </td>
+    </tr>
+</table>
+
+<!-- Aspect 4 -->
+<h2>4. The Closed Loop: What Gets Shown Shapes What Gets Cropped</h2>
+<table class="obj-table">
+    <tr>
+        <td>
+            <div class="obj-title">The Sampling Distribution Is Model Output</div>
+            <p>This is the statistical trap. In ordinary supervised learning the training distribution is fixed by the world and the model is fitted to it. Here the model's output <em>is</em> the mechanism that generates next week's inputs. Items the model retrieves well get impressions; impressions get clicks; clicks become positive pairs; the next model retrieves those items even better. Items the model retrieves poorly are never shown, so they never earn a click, so they never enter training — their absence looks like irrelevance rather than like censoring.</p>
+
+            <div class="math-box">
+            <strong>A minimal closed loop (Illustrative Example).</strong> 10 item classes, each starting with an equal <code>10%</code> share of impressions and a fixed <em>true</em> match quality <code>q</code> from <code>0.90</code> down to <code>0.22</code>. Two deterministic update rules, iterated 12 times:<br><br>
+            <code>share_i ← share_i · (1 + (q_i − q̄))</code>, renormalized — better-matching classes win impressions<br>
+            <code>q_i ← q_i + 0.8 · (share_i − 0.10)</code>, clipped to <code>[0.05, 0.98]</code> — training on your own impressions improves what you already show and lets the rest rot<br><br>
+            Offline metric measured on logged traffic (impression-weighted): <code>0.562</code> → <code>0.972</code><br>
+            The same metric measured uniformly over all 10 classes: <code>0.562</code> → <code>0.395</code><br>
+            Impression concentration (Herfindahl index): <code>0.100</code> → <code>0.352</code><br><br>
+            Both series start at the identical value because impressions start uniform. Twelve generations later the dashboard reports a <code>+73%</code> improvement while true coverage has fallen <code>30%</code>. Nothing in the logs can distinguish these two worlds — the logs <em>are</em> the thing that narrowed.
+            </div>
+
+            <ul>
+                <li><strong>The metric and the harm move oppositely:</strong> logged similarity rises exactly because the denominator shrank to the easy cases</li>
+                <li><strong>Censoring masquerades as irrelevance:</strong> an item never retrieved has no clicks, which the next training round reads as a negative</li>
+                <li><strong>Crops narrow too, not just clicks:</strong> users crop what the interface rewards, so even the query distribution collapses toward the model</li>
+                <li><strong>Concentration is the leading indicator:</strong> the Herfindahl index rises before any quality metric turns, so watch it directly</li>
+                <li><strong>Random exploration is the only real fix:</strong> hold out a slice of slots for uniformly sampled candidates and log those separately</li>
+                <li><strong>Propensity weighting needs the propensity:</strong> you can only debias logged clicks if the serving policy's probabilities were recorded</li>
+                <li><strong>A held-out set from logs is not held out:</strong> it inherits the same censoring, so it certifies the loop instead of catching it</li>
+            </ul>
+        </td>
+        <td>
+            <canvas id="canvas4" width="720" height="360"></canvas>
+        </td>
+    </tr>
+</table>
+
+<!-- Aspect 5 -->
+<h2>5. Some Missing Results Are an Index Artifact, Not a Model Bug</h2>
+<table class="obj-table">
+    <tr>
+        <td>
+            <div class="obj-title">Approximate Nearest Neighbor Is a Correctness Decision</div>
+            <p>Exact nearest-neighbor search over a large catalog is too slow to serve, so production uses an approximate index that probes only some partitions of the space. Whatever lives in an unprobed partition is invisible regardless of how good the embedding is. That makes the index a source of <em>ranking errors</em> — not just of latency — and the two failure modes look identical from the outside.</p>
+
+            <div class="math-box">
+            <strong>Recall at 10 vs partitions probed (Illustrative Example).</strong> <code>10</code> held-out crops; for each, the exact top-10 neighbors are known by brute force. Hits recovered by the approximate index, summed over all 10 crops (max <code>100</code>):<br><br>
+            <code>1 probe</code>: <code>61</code> hits → recall@10 = <code>0.61</code>, p50 latency <code>3.1 ms</code><br>
+            <code>4 probes</code>: <code>81</code> hits → <code>0.81</code>, <code>6.4 ms</code><br>
+            <code>16 probes</code>: <code>95</code> hits → <code>0.95</code>, <code>18.0 ms</code><br>
+            <code>64 probes</code>: <code>99</code> hits → <code>0.99</code>, <code>61.0 ms</code><br><br>
+            At the 16-probe setting, <code>5 of 100</code> correct neighbors are absent from the response. A rater marking those queries "bad results" is measuring the index, not the embedding — and no amount of encoder retraining will move them.
+            </div>
+
+            <ul>
+                <li><strong>Recall loss is not uniform:</strong> it concentrates on items near partition boundaries, so specific product types silently under-retrieve</li>
+                <li><strong>It feeds the closed loop above:</strong> index-invisible items get no impressions, so the loop treats them as unpopular</li>
+                <li><strong>Diminishing returns are steep:</strong> the last 4 recall points cost <code>43 ms</code> more, ~<code>14x</code> the <code>3.1 ms</code> that bought the first 61</li>
+                <li><strong>Rebuilds shift the boundaries:</strong> re-clustering the index moves which items are missable, so quality jumps without a model change</li>
+                <li><strong>Ablate the index before the model:</strong> re-run a failing query set with brute-force search to see which failures survive</li>
+                <li><strong>Report both numbers together:</strong> a recall figure without its latency budget is not a comparable measurement</li>
+            </ul>
+        </td>
+        <td>
+            <canvas id="canvas5" width="720" height="360"></canvas>
+        </td>
+    </tr>
+</table>
+
+<!-- Summary -->
+<h2>6. The Complete Picture</h2>
+<table class="summary-table">
+    <tr><th>Search property</th><th>Text query</th><th>Crop query</th></tr>
+    <tr><td><strong>Query object</strong></td><td>A string from a finite vocabulary</td><td>A point in a continuous embedding space</td></tr>
+    <tr><td><strong>Repeat structure</strong></td><td>Heavy head — top 10 strings carry 25.1% here</td><td>Almost no head — top 10 clusters carry 3.05%</td></tr>
+    <tr><td><strong>Error correction</strong></td><td>Spelling correction, autocomplete, synonyms</td><td>None — a wrong crop is silently a valid query</td></tr>
+    <tr><td><strong>Intent disambiguation</strong></td><td>Add a word, pick a suggestion</td><td>Impossible — object, material, era, palette all fit</td></tr>
+    <tr><td><strong>Ground truth</strong></td><td>Clickable relevance judgments are teachable</td><td>Fleiss' kappa 0.23 across 5 raters on 40 crops</td></tr>
+    <tr><td><strong>Retrieval correctness</strong></td><td>Inverted index returns all matches</td><td>Approximate index hides 5 of 100 true neighbors at 16 probes</td></tr>
+    <tr><td><strong>Distribution shift</strong></td><td>Query mix drifts with the world</td><td>Query mix is a function of the model's own past output</td></tr>
+</table>
+
+<div class="philosophy">
+<strong>One sentence:</strong> A crop is a query with no vocabulary, no ground truth, and no way to ask a follow-up question — so the hard part of visual search is not the encoder but the closed loop, where the model's output becomes the sampling distribution of its next training set and every offline metric improves while coverage shrinks.
+</div>
+
+<script>var __charts = [];
+var FONT = ' -apple-system, BlinkMacSystemFont, sans-serif';
+function setupCanvas(id, w, h) {
+    var c = document.getElementById(id); if (!c) return null;
+    var dpr = window.devicePixelRatio || 1;
+    c.style.maxWidth = w + 'px';
+    var cssW = c.getBoundingClientRect().width || w;
+    var scale = (cssW / w) * dpr;
+    c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    var ctx = c.getContext('2d'); ctx.scale(scale, scale);
+    ctx.clearRect(0, 0, w, h);
+    return ctx;
+}
+function sum(a) { return a.reduce(function(x, y) { return x + y; }, 0); }
+
+// Canvas 1: head concentration, text vs crop (literal arrays, computed head shares)
+__charts.push(function(){
+    var ctx = setupCanvas('canvas1', 720, 360);
+    var ox = 70, oy = 300, gw = 600, gh = 240;
+
+    var text = [620, 410, 330, 260, 215, 180, 150, 130, 115, 100];
+    var crop = [48, 41, 37, 33, 30, 28, 25, 23, 21, 19];
+    var TOTAL = 10000, vmax = 0.07;
+    function vToY(v) { return oy - (v / vmax) * gh; }
+
+    // gridlines + y labels
+    ctx.textAlign = 'right'; ctx.font = '11px' + FONT;
+    for (var p = 0; p <= 7; p++) {
+        var y = vToY(p / 100);
+        ctx.strokeStyle = '#eee'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + gw, y); ctx.stroke();
+        ctx.fillStyle = '#666'; ctx.fillText(p + '%', ox - 8, y + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ox, oy); ctx.lineTo(ox + gw, oy);
+    ctx.moveTo(ox, oy); ctx.lineTo(ox, oy - gh);
+    ctx.stroke();
+
+    // bars
+    var slot = gw / 10, bw = 18, gap = 4;
+    for (var i = 0; i < 10; i++) {
+        var cx = ox + slot * (i + 0.5);
+        var xt = cx - bw - gap / 2, xc = cx + gap / 2;
+        var ht = oy - vToY(text[i] / TOTAL), hc = oy - vToY(crop[i] / TOTAL);
+        ctx.fillStyle = 'rgba(26,82,118,0.35)';
+        ctx.fillRect(xt, oy - ht, bw, ht);
+        ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 1;
+        ctx.strokeRect(xt, oy - ht, bw, ht);
+        ctx.fillStyle = '#e67e22';
+        ctx.fillRect(xc, oy - hc, bw, hc);
+        ctx.fillStyle = '#666'; ctx.textAlign = 'center'; ctx.font = '11px' + FONT;
+        ctx.fillText(String(i + 1), cx, oy + 14);
+    }
+
+    ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center'; ctx.font = '13px' + FONT;
+    ctx.fillText('Query rank (most frequent first)', ox + gw / 2, oy + 34);
+    ctx.save(); ctx.translate(20, oy - gh / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Share of 10,000 searches', 0, 0); ctx.restore();
+
+    // computed head shares
+    var ts = sum(text), cs = sum(crop);
+    var tp = (ts / TOTAL * 100).toFixed(1), cp = (cs / TOTAL * 100).toFixed(2);
+    ctx.textAlign = 'right'; ctx.font = 'bold 12px' + FONT;
+    ctx.fillStyle = '#1a5276';
+    ctx.fillText('top-10 text queries = ' + tp + '% of traffic', ox + gw, oy - gh + 26);
+    ctx.fillStyle = '#e67e22';
+    ctx.fillText('top-10 crop clusters = ' + cp + '% of traffic', ox + gw, oy - gh + 44);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText((ts / cs).toFixed(1) + 'x heavier head', ox + gw, oy - gh + 62);
+
+    ctx.textAlign = 'left'; ctx.font = '11px' + FONT; ctx.fillStyle = '#999';
+    ctx.fillText('Illustrative Example — same catalog, same volume', ox + 6, oy - 8);
+
+    ctx.font = 'bold 14px' + FONT; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('A Text Head Exists. A Crop Head Barely Does.', ox + gw / 2, 18);
+});
+
+// Canvas 2: rater agreement histogram, kappa computed from plotted bars
+__charts.push(function(){
+    var ctx = setupCanvas('canvas2', 720, 360);
+    var ox = 80, oy = 300, gw = 560, gh = 240;
+
+    var bars = [6, 7, 9, 8, 6, 4];
+    var R = 5, vmax = 10;
+    var N = sum(bars);
+    function vToY(v) { return oy - (v / vmax) * gh; }
+
+    ctx.textAlign = 'right'; ctx.font = '11px' + FONT;
+    for (var v = 0; v <= vmax; v += 2) {
+        var y = vToY(v);
+        ctx.strokeStyle = '#eee'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + gw, y); ctx.stroke();
+        ctx.fillStyle = '#666'; ctx.fillText(String(v), ox - 8, y + 4);
+    }
+
+    ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ox, oy); ctx.lineTo(ox + gw, oy);
+    ctx.moveTo(ox, oy); ctx.lineTo(ox, oy - gh);
+    ctx.stroke();
+
+    var slot = gw / bars.length, bw = 56;
+    for (var i = 0; i < bars.length; i++) {
+        var cx = ox + slot * (i + 0.5);
+        var h = oy - vToY(bars[i]);
+        var unanimous = (i === 0 || i === bars.length - 1);
+        if (unanimous) { ctx.fillStyle = '#27ae60'; ctx.fillRect(cx - bw / 2, oy - h, bw, h); }
+        else {
+            ctx.fillStyle = 'rgba(26,82,118,0.35)'; ctx.fillRect(cx - bw / 2, oy - h, bw, h);
+            ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 1; ctx.strokeRect(cx - bw / 2, oy - h, bw, h);
+        }
+        ctx.fillStyle = '#333'; ctx.textAlign = 'center'; ctx.font = 'bold 11px' + FONT;
+        ctx.fillText(String(bars[i]), cx, oy - h - 6);
+        ctx.fillStyle = '#666'; ctx.font = '11px' + FONT;
+        ctx.fillText(i + '/5', cx, oy + 14);
+    }
+
+    ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center'; ctx.font = '13px' + FONT;
+    ctx.fillText('Raters calling the result similar', ox + gw / 2, oy + 34);
+    ctx.save(); ctx.translate(24, oy - gh / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Crops (of ' + N + ')', 0, 0); ctx.restore();
+
+    // Fleiss' kappa from the plotted bar heights
+    var votes = 0, pbarSum = 0;
+    for (var k = 0; k < bars.length; k++) {
+        votes += k * bars[k];
+        pbarSum += bars[k] * ((k * k + (R - k) * (R - k) - R) / (R * (R - 1)));
+    }
+    var p = votes / (R * N);
+    var Pbar = pbarSum / N;
+    var Pe = p * p + (1 - p) * (1 - p);
+    var kappa = (Pbar - Pe) / (1 - Pe);
+    var unanShare = (bars[0] + bars[bars.length - 1]) / N;
+
+    ctx.textAlign = 'right'; ctx.font = 'bold 12px' + FONT;
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('unanimous: ' + (bars[0] + bars[bars.length - 1]) + ' of ' + N + ' = ' + (unanShare * 100).toFixed(0) + '%', ox + gw, oy - gh + 26);
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText("Fleiss' kappa = " + kappa.toFixed(2) + '  (fair)', ox + gw, oy - gh + 44);
+
+    // bracket over the four middle bars
+    var x1 = ox + slot * 1 + 6, x2 = ox + slot * 5 - 6, by = vToY(9.6);
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x1, by + 8); ctx.lineTo(x1, by); ctx.lineTo(x2, by); ctx.lineTo(x2, by + 8);
+    ctx.stroke();
+    ctx.fillStyle = '#999'; ctx.textAlign = 'center'; ctx.font = '11px' + FONT;
+    ctx.fillText('no majority truth here', (x1 + x2) / 2, by - 5);
+
+    ctx.textAlign = 'left'; ctx.fillStyle = '#999'; ctx.font = '11px' + FONT;
+    ctx.fillText('Illustrative Example', ox + 6, oy - 8);
+
+    ctx.font = 'bold 14px' + FONT; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('Five Raters, One Crop, No Ground Truth', ox + gw / 2, 18);
+});
+
+// Canvas 3: object space vs style space, top-4 rings computed from plotted coords
+__charts.push(function(){
+    var ctx = setupCanvas('canvas3', 720, 360);
+    var pw = 290, ph = 230;
+    var panels = [{ ox: 60, oy: 300, idx: 0 }, { ox: 390, oy: 300, idx: 1 }];
+
+    var Q = [0.20, 0.50];
+    // name, short, striped, [objX, objY], [styleX, styleY]
+    var items = [
+        ['chair/plain',   'chair/pln',  false, [0.26, 0.44], [0.60, 0.46]],
+        ['chair/floral',  'chair/flr',  false, [0.24, 0.58], [0.88, 0.52]],
+        ['chair/striped', 'chair/str',  true,  [0.31, 0.52], [0.25, 0.44]],
+        ['sofa/striped',  'sofa/str',   true,  [0.58, 0.47], [0.23, 0.56]],
+        ['sofa/plain',    'sofa/pln',   false, [0.62, 0.55], [0.64, 0.52]],
+        ['lamp/striped',  'lamp/str',   true,  [0.90, 0.50], [0.18, 0.60]],
+        ['lamp/plain',    'lamp/pln',   false, [0.93, 0.42], [0.58, 0.58]],
+        ['chair/plain-2', 'chair/pln2', false, [0.18, 0.40], [0.66, 0.40]],
+        ['sofa/floral',   'sofa/flr',   false, [0.55, 0.60], [0.92, 0.44]],
+        ['table/striped', 'table/str',  true,  [0.75, 0.62], [0.16, 0.44]]
+    ];
+    var coordKey = [3, 4];
+
+    function dist(a, b) { return Math.sqrt(Math.pow(a[0] - b[0], 2) + Math.pow(a[1] - b[1], 2)); }
+
+    var tops = [];
+    panels.forEach(function(pn) {
+        var ox = pn.ox, oy = pn.oy, key = coordKey[pn.idx];
+        function xTo(u) { return ox + u * pw; }
+        function yTo(u) { return oy - u * ph; }
+
+        // frame
+        ctx.strokeStyle = '#e0e0e0'; ctx.lineWidth = 1;
+        ctx.strokeRect(ox, oy - ph, pw, ph);
+
+        // ranked neighbors from the plotted coordinates
+        var ranked = items.map(function(it, i) { return { i: i, d: dist(Q, it[key]) }; })
+                          .sort(function(a, b) { return a.d - b.d; });
+        var top4 = ranked.slice(0, 4);
+        tops.push(top4.map(function(r) { return r.i; }));
+
+        // rings for the top 4
+        ctx.strokeStyle = '#27ae60'; ctx.lineWidth = 2;
+        top4.forEach(function(r) {
+            var c = items[r.i][key];
+            ctx.beginPath(); ctx.arc(xTo(c[0]), yTo(c[1]), 10, 0, Math.PI * 2); ctx.stroke();
+        });
+
+        // points
+        items.forEach(function(it) {
+            var c = it[key], x = xTo(c[0]), y = yTo(c[1]);
+            if (it[2]) { ctx.fillStyle = '#e67e22'; ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill(); }
+            else {
+                ctx.fillStyle = 'rgba(26,82,118,0.35)';
+                ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 1; ctx.stroke();
+            }
+            ctx.fillStyle = '#666'; ctx.textAlign = 'left'; ctx.font = '9px' + FONT;
+            ctx.fillText(it[1], x + 12, y + 3);
+        });
+
+        // query point
+        ctx.fillStyle = '#e74c3c';
+        ctx.fillRect(xTo(Q[0]) - 5, yTo(Q[1]) - 5, 10, 10);
+        ctx.font = 'bold 11px' + FONT; ctx.textAlign = 'right';
+        ctx.fillText('crop', xTo(Q[0]) - 8, yTo(Q[1]) + 4);
+
+        // caption + computed mean top-4 distance
+        var mean = top4.reduce(function(s, r) { return s + r.d; }, 0) / top4.length;
+        ctx.textAlign = 'center'; ctx.font = 'bold 12px' + FONT;
+        ctx.fillStyle = pn.idx === 0 ? '#1a5276' : '#e67e22';
+        ctx.fillText(pn.idx === 0 ? 'object space — top 4 are all chairs'
+                                  : 'style space — top 4 are all striped', ox + pw / 2, oy - ph - 8);
+        ctx.fillStyle = '#666'; ctx.font = '11px' + FONT;
+        ctx.fillText('mean top-4 distance = ' + mean.toFixed(3), ox + pw / 2, oy + 18);
+    });
+
+    // overlap between the two computed top-4 lists
+    var overlap = tops[0].filter(function(i) { return tops[1].indexOf(i) >= 0; });
+    ctx.textAlign = 'center'; ctx.font = 'bold 12px' + FONT; ctx.fillStyle = '#e74c3c';
+    ctx.fillText('lists overlap on ' + overlap.length + ' item', 360, oy + 40);
+
+    ctx.textAlign = 'left'; ctx.fillStyle = '#999'; ctx.font = '11px' + FONT;
+    ctx.fillText('Illustrative Example — 2-D stand-in for a high-dimensional space', 60, 348);
+
+    ctx.font = 'bold 14px' + FONT; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('The Same Crop, Two Honest Answers', 360, 18);
+});
+
+// Canvas 4: the closed loop — deterministic recursion, all labels computed
+__charts.push(function(){
+    var ctx = setupCanvas('canvas4', 720, 360);
+    var ox = 70, oy = 300, gw = 570, gh = 240;
+    var GENS = 12;
+
+    var q = [0.90, 0.82, 0.75, 0.68, 0.60, 0.52, 0.45, 0.38, 0.30, 0.22];
+    var share = q.map(function() { return 0.1; });
+    var logged = [], uniform = [], hhi = [];
+
+    for (var g = 0; g <= GENS; g++) {
+        var lg = 0, hh = 0;
+        for (var i = 0; i < q.length; i++) { lg += share[i] * q[i]; hh += share[i] * share[i]; }
+        logged.push(lg);
+        uniform.push(sum(q) / q.length);
+        hhi.push(hh);
+        // share update, using the current logged mean as qbar
+        var ns = share.map(function(s, i) { return s * (1 + (q[i] - lg)); });
+        var tot = sum(ns);
+        share = ns.map(function(s) { return s / tot; });
+        // quality update, using the new share
+        q = q.map(function(v, i) { return Math.min(0.98, Math.max(0.05, v + 0.8 * (share[i] - 0.10))); });
+    }
+
+    var lmin = 0.30, lmax = 1.00, rmax = 0.40;
+    function gToX(g) { return ox + (g / GENS) * gw; }
+    function lToY(v) { return oy - ((v - lmin) / (lmax - lmin)) * gh; }
+    function rToY(v) { return oy - (v / rmax) * gh; }
+
+    // gridlines + left labels
+    ctx.textAlign = 'right'; ctx.font = '11px' + FONT;
+    for (var t = 3; t <= 10; t++) {
+        var v = t / 10, y = lToY(v);
+        ctx.strokeStyle = '#eee'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + gw, y); ctx.stroke();
+        ctx.fillStyle = '#666'; ctx.fillText(v.toFixed(1), ox - 8, y + 4);
+    }
+
+    // axes
+    ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ox, oy); ctx.lineTo(ox + gw, oy);
+    ctx.moveTo(ox, oy); ctx.lineTo(ox, oy - gh);
+    ctx.stroke();
+    ctx.strokeStyle = '#e67e22';
+    ctx.beginPath(); ctx.moveTo(ox + gw, oy); ctx.lineTo(ox + gw, oy - gh); ctx.stroke();
+    ctx.fillStyle = '#e67e22'; ctx.textAlign = 'left'; ctx.font = '11px' + FONT;
+    [0, 0.1, 0.2, 0.3, 0.4].forEach(function(v) { ctx.fillText(v.toFixed(1), ox + gw + 6, rToY(v) + 4); });
+
+    // divergence shading
+    ctx.fillStyle = 'rgba(231,76,60,0.10)';
+    ctx.beginPath();
+    ctx.moveTo(gToX(0), lToY(logged[0]));
+    for (var g = 0; g <= GENS; g++) ctx.lineTo(gToX(g), lToY(logged[g]));
+    for (var g = GENS; g >= 0; g--) ctx.lineTo(gToX(g), lToY(uniform[g]));
+    ctx.closePath(); ctx.fill();
+
+    function drawSeries(arr, color, yfn, width, dash, dot) {
+        ctx.strokeStyle = color; ctx.lineWidth = width;
+        ctx.setLineDash(dash || []);
+        ctx.beginPath();
+        for (var g = 0; g <= GENS; g++) {
+            var x = gToX(g), y = yfn(arr[g]);
+            g === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.stroke(); ctx.setLineDash([]);
+        if (dot) {
+            ctx.fillStyle = color;
+            for (var g = 0; g <= GENS; g++) {
+                ctx.beginPath(); ctx.arc(gToX(g), yfn(arr[g]), dot, 0, Math.PI * 2); ctx.fill();
+            }
+        }
+    }
+    drawSeries(logged, '#e74c3c', lToY, 2.5, null, 3);
+    drawSeries(uniform, '#27ae60', lToY, 2.5, null, 3);
+    drawSeries(hhi, '#e67e22', rToY, 2, [6, 4], 0);
+
+    // x ticks + labels
+    ctx.fillStyle = '#666'; ctx.textAlign = 'center'; ctx.font = '11px' + FONT;
+    [0, 2, 4, 6, 8, 10, 12].forEach(function(g) { ctx.fillText(String(g), gToX(g), oy + 14); });
+    ctx.fillStyle = '#1a5276'; ctx.font = '13px' + FONT;
+    ctx.fillText('Loop generations (retrain on your own impressions)', ox + gw / 2, oy + 34);
+    ctx.save(); ctx.translate(20, oy - gh / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Mean match quality', 0, 0); ctx.restore();
+
+    // computed end labels
+    ctx.textAlign = 'right'; ctx.font = 'bold 11px' + FONT;
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText('logged: ' + logged[GENS].toFixed(3), gToX(GENS) - 8, lToY(logged[GENS]) - 10);
+    ctx.fillStyle = '#27ae60';
+    ctx.fillText('true (uniform): ' + uniform[GENS].toFixed(3), gToX(GENS) - 8, lToY(uniform[GENS]) + 18);
+    ctx.fillStyle = '#e67e22';
+    ctx.fillText('HHI: ' + hhi[GENS].toFixed(3), gToX(GENS) - 8, rToY(hhi[GENS]) - 8);
+
+    // computed callout inside the shaded region
+    var up = Math.round((logged[GENS] / logged[0] - 1) * 100);
+    var down = Math.round((1 - uniform[GENS] / uniform[0]) * 100);
+    var midG = 7.5, midY = (lToY(logged[Math.round(midG)]) + lToY(uniform[Math.round(midG)])) / 2;
+    ctx.textAlign = 'center'; ctx.font = 'bold 12px' + FONT;
+    ctx.fillStyle = '#e74c3c'; ctx.fillText('dashboard: +' + up + '%', gToX(midG), midY - 6);
+    ctx.fillStyle = '#27ae60'; ctx.fillText('reality: -' + down + '%', gToX(midG), midY + 12);
+
+    // start marker
+    ctx.setLineDash([4, 4]); ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(gToX(0), oy); ctx.lineTo(gToX(0), oy - gh); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#666'; ctx.textAlign = 'left'; ctx.font = '11px' + FONT;
+    ctx.fillText('both metrics identical here', gToX(0) + 6, oy - gh - 6);
+
+    ctx.fillStyle = '#999'; ctx.textAlign = 'left'; ctx.font = '11px' + FONT;
+    ctx.fillText('Illustrative Example — deterministic recursion, no random data', ox + 6, oy - 8);
+
+    ctx.font = 'bold 14px' + FONT; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('The Metric Improves Because the Test Set Narrowed', ox + gw / 2, 18);
+});
+
+// Canvas 5: recall@10 vs probes, recall computed from literal per-crop hit arrays
+__charts.push(function(){
+    var ctx = setupCanvas('canvas5', 720, 360);
+    var ox = 75, oy = 295, gw = 545, gh = 235;
+
+    var hits = [
+        [7, 5, 6, 4, 8, 6, 5, 7, 6, 7],
+        [9, 8, 8, 7, 9, 8, 7, 9, 8, 8],
+        [10, 9, 10, 9, 10, 9, 9, 10, 10, 9],
+        [10, 10, 10, 10, 10, 9, 10, 10, 10, 10]
+    ];
+    var labels = ['1 probe', '4', '16', '64'];
+    var latency = [3.1, 6.4, 18.0, 61.0];
+    var K = 10;
+    var recall = hits.map(function(h) { return sum(h) / (h.length * K); });
+    var rmax = 70;
+    function lToY(v) { return oy - v * gh; }
+    function rToY(v) { return oy - (v / rmax) * gh; }
+
+    ctx.textAlign = 'right'; ctx.font = '11px' + FONT;
+    for (var t = 0; t <= 10; t += 2) {
+        var v = t / 10, y = lToY(v);
+        ctx.strokeStyle = '#eee'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ox, y); ctx.lineTo(ox + gw, y); ctx.stroke();
+        ctx.fillStyle = '#666'; ctx.fillText(v.toFixed(1), ox - 8, y + 4);
+    }
+
+    ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ox, oy); ctx.lineTo(ox + gw, oy);
+    ctx.moveTo(ox, oy); ctx.lineTo(ox, oy - gh);
+    ctx.stroke();
+    ctx.strokeStyle = '#e67e22';
+    ctx.beginPath(); ctx.moveTo(ox + gw, oy); ctx.lineTo(ox + gw, oy - gh); ctx.stroke();
+    ctx.fillStyle = '#e67e22'; ctx.textAlign = 'left'; ctx.font = '11px' + FONT;
+    [0, 20, 40, 60].forEach(function(v) { ctx.fillText(String(v), ox + gw + 6, rToY(v) + 4); });
+
+    var slot = gw / hits.length, bw = 62;
+    for (var i = 0; i < hits.length; i++) {
+        var cx = ox + slot * (i + 0.5);
+        var h = oy - lToY(recall[i]);
+        ctx.fillStyle = 'rgba(26,82,118,0.35)'; ctx.fillRect(cx - bw / 2, oy - h, bw, h);
+        ctx.strokeStyle = '#1a5276'; ctx.lineWidth = 1; ctx.strokeRect(cx - bw / 2, oy - h, bw, h);
+        ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center'; ctx.font = 'bold 12px' + FONT;
+        ctx.fillText(recall[i].toFixed(2), cx, oy - h - 8);
+        ctx.fillStyle = '#666'; ctx.font = '11px' + FONT;
+        ctx.fillText(labels[i], cx, oy + 14);
+    }
+
+    // latency line on the right scale
+    ctx.strokeStyle = '#e67e22'; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (var i = 0; i < latency.length; i++) {
+        var x = ox + slot * (i + 0.5), y = rToY(latency[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#e67e22'; ctx.font = '11px' + FONT; ctx.textAlign = 'left';
+    for (var i = 0; i < latency.length; i++) {
+        var x = ox + slot * (i + 0.5), y = rToY(latency[i]);
+        ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+        ctx.fillText(latency[i].toFixed(1) + ' ms', x + 8, y - 6);
+    }
+
+    ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center'; ctx.font = '13px' + FONT;
+    ctx.fillText('Index partitions probed per query', ox + gw / 2, oy + 34);
+    ctx.save(); ctx.translate(20, oy - gh / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Recall @ 10 vs brute force', 0, 0); ctx.restore();
+
+    // missing-results bracket at the 16-probe bar, count computed
+    var idx = 2, cx16 = ox + slot * (idx + 0.5);
+    var yTop = lToY(recall[idx]), yOne = lToY(1.0);
+    var bx = cx16 + bw / 2 + 10;
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(bx - 6, yTop); ctx.lineTo(bx, yTop); ctx.lineTo(bx, yOne); ctx.lineTo(bx - 6, yOne);
+    ctx.stroke();
+    var missed = hits[idx].length * K - sum(hits[idx]);
+    ctx.fillStyle = '#e74c3c'; ctx.textAlign = 'left'; ctx.font = 'bold 11px' + FONT;
+    ctx.fillText(missed + ' of 100 true neighbors invisible', bx + 6, (yTop + yOne) / 2 + 4);
+
+    ctx.fillStyle = '#999'; ctx.textAlign = 'left'; ctx.font = '11px' + FONT;
+    ctx.fillText('Illustrative Example — 10 crops, exact top-10 known by brute force', ox + 6, oy - 8);
+
+    ctx.font = 'bold 14px' + FONT; ctx.fillStyle = '#1a5276'; ctx.textAlign = 'center';
+    ctx.fillText('Recall Bought With Latency — Missing Results the Model Never Caused', ox + gw / 2, 18);
+});
+
+__charts.forEach(function(f){ f(); });
+var __redrawTimer;
+window.addEventListener('resize', function(){
+    clearTimeout(__redrawTimer);
+    __redrawTimer = setTimeout(function(){ __charts.forEach(function(f){ f(); }); }, 150);
+});
+</script>
+</body>
+</html>
