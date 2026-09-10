@@ -4,7 +4,7 @@ Each page isolates one failure mode where hidden structure breaks intuition.
 
 ## Template
 
-Copy `tutorials/llms-generative-ai/08-positional-encoding.html` — CSS, `setup()`, `P` palette,
+Copy `23-tutorials/20-llms-and-generative-ai/08-positional-encoding.html` — CSS, `setup()`, `P` palette,
 `.card-section`, tag pills, bullet form. `03-berksons-paradox` is the converted example here.
 Deltas: columns are 50/50 and the canvas is centered.
 
@@ -58,5 +58,5 @@ Reader is smart, no statistics training.
 
 ## Deduplication
 
-Birthday and Monty Hall also live in `interesting-problems-paradoxes/`, which tells the story.
+Birthday and Monty Hall also live in `18-interesting-problems-paradoxes/`, which tells the story.
 Here: the failure mode only.
